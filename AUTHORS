@@ -1,0 +1,11 @@
+# Contributors to Upipe
+# 
+# The format of this file was inspired by the Linux kernel CREDITS file.
+# Authors are listed alphabetically.
+# 
+# The fields are: name (N), email (E), web-address (W),
+# PGP key ID and fingerprint (P), description (D), and snail-mail address (S).
+
+N: Christophe Massiot
+E: massiot AT via DOT ecp DOT fr
+D: design and implementation of the core

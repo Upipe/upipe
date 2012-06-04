@@ -1,0 +1,126 @@
+@c
+@c Default template.mkdoc file for C projects copied by mkdoc
+@c
+
+@c ===== member doc =====
+
+@macro _member_doc id
+  @insert {@id@} decl_warn_sentence
+  @insert {@id@} decl_location_sentence
+  @insert {@id@} decl_homonyms_sentence
+  @insert {@id@} decl_cpp_condition_sentence
+  @insert {@id@} decl_involved_macros_sentence
+
+  @insert {@id@} decl_inline_doc
+  @insert {@id@} decl_content
+  @insert {@id@} see_related_typedefs
+
+  @insert {No documentation available} on_empty_section
+@end macro
+
+@c ===== compound members detail =====
+
+@macro _compound_details id
+
+  @foreach mid {typedef,enum,struct,function,variable,macro} {@id@} {1}
+    @section {} {@mid@}
+      @invoke {@mid@} _member_doc
+    @end section
+  @end foreach
+
+@end macro
+
+@c ===== compound documentation macro for internal use =====
+
+@macro _compound_doc id
+
+  @c short member doc with link to detailed description
+  @insert {@id@} decl_short_desc @exref {Description} {More}
+
+  @ifsymtype {@id@} {module}
+    @section e {Related headers}
+      @insert {header} {1} {@id@} compound_table 
+    @end section
+  @end if
+
+  @ifsymtype {@id@} {header}
+    @section e {Header inclusion}
+      @c @insert {@id@} {D} inclusion_diagram
+
+      @c @section e {Included files}
+        @insert {@id@} include_list
+      @c @end section
+
+      @c @section e {Including files}
+      @c  @insert {@id@} included_by_list
+      @c @end section
+    @end section
+  @end if
+
+  @section e {Members}
+    @insert {@id@} compound_member_list
+  @end section
+
+  @section e {Description}
+    @insert {@id@} decl_inline_doc
+  @end section
+
+@end macro
+
+@c ===== compound section macro for internal use =====
+
+@macro _compound_section type id name
+
+  @section P {@name@ @type@ reference} {@id@}
+    @invoke {@id@} _compound_doc
+
+    @c change this to specify where member details must be written
+    @c @ifsymtype {@id@} {namespace}
+    @ifsymtype {@id@} {header}
+      @section e {Members detail}
+        @invoke {@id@} _compound_details
+      @end section
+    @end if
+
+    @end section
+
+@end macro
+
+@c ===== compound section with documentation and member details =====
+
+@macro member_section name
+
+  @lookup id {@name@}
+    @section {} {@id@}
+      @invoke {@id@} _member_doc
+    @end section
+  @end lookup
+
+@end macro
+
+@c ===== compound section with documentation and member details =====
+
+@macro compound_section name
+
+  @lookup id mname mtype {@name@}
+    @invoke {@mtype@} {@id@} {@mname@} _compound_section
+  @end lookup
+
+@end macro
+
+@c ===== global scope section with documentation and member details =====
+
+@macro global_scope_doc
+  @invoke {::} _compound_doc
+@end macro
+
+@c ===== documentation sections for all compounds of given types =====
+
+@macro all_compound_sections types scope
+
+  @foreach id name type {@types@} {@scope@} {0}
+    @invoke {@type@} {@id@} {@name@} _compound_section
+  @end foreach
+
+@end macro
+

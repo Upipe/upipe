@@ -1,0 +1,214 @@
+/*****************************************************************************
+ * upipe_queue_test.c: unit tests for queue source and sink pipes
+ *****************************************************************************
+ * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ *
+ * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject
+ * to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *****************************************************************************/
+
+#include <stdbool.h>
+#undef NDEBUG
+#include <assert.h>
+
+#include <ev.h>
+
+#include <upipe/ulog.h>
+#include <upipe/ulog_std.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_print.h>
+#include <upipe/uref.h>
+#include <upipe/uref_std.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_block_flow.h>
+#include <upipe/upump.h>
+#include <upump-ev/upump_ev.h>
+#include <upipe/upipe.h>
+#include <upipe-modules/upipe_queue_source.h>
+#include <upipe-modules/upipe_queue_sink.h>
+
+#define UREF_POOL_DEPTH 1
+#define QUEUE_LENGTH 6
+#define ULOG_LEVEL ULOG_DEBUG
+
+static struct ev_loop *loop;
+static struct upump_mgr *upump_mgr;
+static struct upipe *upipe_qsink;
+static struct uprobe *uprobe_print;
+static uint8_t counter = 0;
+
+/** definition of our struct uprobe */
+static bool catch(struct uprobe *uprobe, struct upipe *upipe,
+                  enum uprobe_event event, va_list args)
+{
+    /* Pass the event to the print probe first, then process it. */
+    uprobe_print->uthrow(uprobe_print, upipe, event, args);
+
+    switch (event) {
+        case UPROBE_AERROR:
+        case UPROBE_UPUMP_ERROR:
+        case UPROBE_READ_END:
+        case UPROBE_WRITE_END:
+        case UPROBE_NEW_FLOW:
+        default:
+            assert(0);
+            break;
+        case UPROBE_NEED_UREF_MGR:
+        case UPROBE_NEED_UPUMP_MGR:
+            break;
+    }
+    return true;
+}
+
+/** helper phony pipe to test upipe_dup */
+static struct upipe *queue_test_alloc(struct upipe_mgr *mgr)
+{
+    struct upipe *upipe = malloc(sizeof(struct upipe));
+    if (unlikely(upipe == NULL)) return NULL;
+    upipe->mgr = mgr;
+    return upipe;
+}
+
+/** helper phony pipe to test upipe_dup */
+static bool queue_test_control(struct upipe *upipe, enum upipe_control control,
+                             va_list args)
+{
+    if (likely(control == UPIPE_INPUT)) {
+        struct uref *uref = va_arg(args, struct uref *);
+        assert(uref != NULL);
+        const char *flow;
+        assert(uref_flow_get_name(uref, &flow));
+        assert(!strcmp(flow, "source"));
+        ulog_notice(upipe->ulog, "loop %"PRIu8, counter);
+        if (counter == 0) {
+            const char *def;
+            assert(uref_flow_get_definition(uref, &def));
+        } else if (counter == 2) {
+            assert(urefcount_single(&upipe_qsink->refcount));
+            upipe_release(upipe_qsink);
+        } else if (counter == 3) {
+            assert(uref_flow_get_delete(uref));
+            upump_mgr_sink_block(upump_mgr);
+        } else {
+            uint8_t uref_counter;
+            assert(uref_attr_get_small_unsigned(uref, &uref_counter, "x.test"));
+            assert(uref_counter == counter);
+        }
+        counter++;
+        uref_release(uref);
+        return true;
+    }
+    return false;
+}
+
+/** helper phony pipe to test upipe_dup */
+static void queue_test_free(struct upipe *upipe)
+{
+    free(upipe);
+}
+
+/** helper phony pipe to test upipe_dup */
+static struct upipe_mgr queue_test_mgr = {
+    .upipe_alloc = queue_test_alloc,
+    .upipe_control = queue_test_control,
+    .upipe_free = queue_test_free,
+
+    .upipe_mgr_free = NULL
+};
+
+int main(int argc, char *argv[])
+{
+    loop = ev_default_loop(0);
+    upump_mgr = upump_ev_mgr_alloc(loop);
+
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, -1, -1);
+    struct uref *uref;
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch, NULL);
+    uprobe_print = uprobe_print_alloc(stdout, "test");
+    assert(uprobe_print != NULL);
+
+    struct upipe *upipe_sink = upipe_alloc(&queue_test_mgr, &uprobe,
+            ulog_std_alloc(stdout, ULOG_LEVEL, "sink"));
+    assert(upipe_sink != NULL);
+
+    struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
+    assert(upipe_qsrc_mgr != NULL);
+    struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr, &uprobe,
+            ulog_std_alloc(stdout, ULOG_LEVEL, "queue source"), QUEUE_LENGTH);
+    assert(upipe_qsrc != NULL);
+    assert(upipe_set_uref_mgr(upipe_qsrc, uref_mgr));
+    assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
+    assert(upipe_linear_set_output(upipe_qsrc, upipe_sink));
+
+    struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
+    assert(upipe_qsink_mgr != NULL);
+    upipe_qsink = upipe_alloc(upipe_qsink_mgr, &uprobe,
+            ulog_std_alloc(stdout, ULOG_LEVEL, "queue sink"));
+    assert(upipe_qsink != NULL);
+    assert(upipe_set_uref_mgr(upipe_qsink, uref_mgr));
+    assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
+    assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
+
+    uref = uref_block_flow_alloc_definition(uref_mgr, NULL);
+    assert(uref != NULL);
+    assert(uref_flow_set_name(&uref, "source"));
+    upipe_input(upipe_qsink, uref);
+
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    assert(uref_flow_set_name(&uref, "source"));
+    assert(uref_attr_set_small_unsigned(&uref, 1, "x.test"));
+    upipe_input(upipe_qsink, uref);
+
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    assert(uref_flow_set_name(&uref, "source"));
+    assert(uref_attr_set_small_unsigned(&uref, 2, "x.test"));
+    upipe_input(upipe_qsink, uref);
+
+    unsigned int length;
+    assert(upipe_qsrc_get_length(upipe_qsrc, &length));
+    assert(length == 3);
+    assert(upump_mgr->nb_blocked_sinks == 0);
+
+    ev_loop(loop, 0);
+
+    assert(counter == 4);
+
+    upipe_mgr_release(upipe_qsink_mgr); // nop
+
+    assert(urefcount_single(&upipe_qsrc->refcount));
+    upipe_release(upipe_qsrc);
+    upipe_mgr_release(upipe_qsrc_mgr); // nop
+
+    assert(urefcount_single(&upipe_sink->refcount));
+    upipe_release(upipe_sink);
+
+    assert(urefcount_single(&upump_mgr->refcount));
+    upump_mgr_release(upump_mgr);
+    assert(urefcount_single(&uref_mgr->refcount));
+    uref_mgr_release(uref_mgr);
+    uprobe_print_free(uprobe_print);
+
+    ev_default_destroy();
+    return 0;
+}

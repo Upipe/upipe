@@ -1,0 +1,91 @@
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ([2.61])
+AC_INIT([upipe], [0.1], [massiot@via.ecp.fr])
+AC_CONFIG_SRCDIR([lib/upipe/ulog_std.c])
+AC_CONFIG_HEADERS([include/upipe/config.h])
+AC_CONFIG_AUX_DIR([autotools])
+AC_CONFIG_MACRO_DIR([m4])
+AM_INIT_AUTOMAKE([nostdinc parallel-tests color-tests])
+
+# Checks for programs.
+AC_PROG_CXX
+AC_PROG_AWK
+AC_PROG_CC_C99
+AC_USE_SYSTEM_EXTENSIONS
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+AM_PROG_CC_C_O
+AM_PROG_LIBTOOL
+LT_INIT
+
+# Checks for libraries.
+
+# Checks for header files.
+AC_HEADER_STDC
+AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h ev.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_HEADER_STDBOOL
+AC_C_CONST
+AC_C_INLINE
+AC_TYPE_INT64_T
+AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+AC_CHECK_TYPES([ptrdiff_t])
+
+# Checks for library functions.
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_CHECK_FUNCS([memmove memset strdup strerror pipe])
+
+# Custom checks
+AC_MSG_CHECKING([for GCC atomic builtins])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]],[[
+                int i, x = 0;
+                i = __sync_add_and_fetch(&x, 1);
+        ]])
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_ATOMIC_OPS, 1, Define if gcc supports atomic operations.)
+],[
+        AC_MSG_RESULT([no])
+])
+
+AC_MSG_CHECKING(for timespec in sys/time.h)
+AC_EGREP_HEADER(timespec,sys/time.h,[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_STRUCT_TIMESPEC, 1,
+                  Define if <sys/time.h> defines struct timespec.)
+],[
+        AC_MSG_RESULT(no)
+])
+
+AC_MSG_CHECKING([for eventfd]) 
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+        [[#include <sys/eventfd.h>]],
+        [[eventfd (0, 0);]])
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_EVENTFD, 1, Define if the OS supports eventfd(2).)
+],[
+        AC_MSG_RESULT([no])
+]) 
+
+AC_CONFIG_FILES([Makefile
+                 include/Makefile
+                 lib/Makefile
+                 lib/upipe/Makefile
+                 lib/upipe/libupipe.pc
+                 lib/upump-ev/Makefile
+                 lib/upump-ev/libupump_ev.pc
+                 lib/upipe-modules/Makefile
+                 lib/upipe-modules/libupipe_modules.pc
+                 tests/Makefile])
+AC_OUTPUT

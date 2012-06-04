@@ -1,0 +1,9 @@
+Upipe is a flexible dataflow framework. It is primarily designed to be the
+core of a multimedia player, transcoder or streamer. The framework organizes
+the processing of incoming data buffer inside a pipeline of modules. It
+exposes core types for buffers and modules (called "pipes"), and the API of
+communication between pipes and between the application and pipes.
+
+The API documentation is written as a mkdoc file. Install mkdoc
+(http://www.nongnu.org/mkdoc/) and type
+        ./configure && make doc

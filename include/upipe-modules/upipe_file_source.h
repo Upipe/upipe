@@ -1,0 +1,121 @@
+/*****************************************************************************
+ * upipe_file_source.h: application interface for file source module
+ *****************************************************************************
+ * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ *
+ * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject
+ * to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *****************************************************************************/
+
+#ifndef _UPIPE_MODULES_UPIPE_FILE_SOURCE_H_
+/** @hidden */
+#define _UPIPE_MODULES_UPIPE_FILE_SOURCE_H_
+
+#include <upipe/upipe.h>
+
+#define UPIPE_FSRC_SIGNATURE 0x0F000011U
+
+/** @This extends upipe_control with specific commands for file source. */
+enum upipe_fsrc_control {
+    UPIPE_FSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the path of the currently opened file (const char **) */
+    UPIPE_FSRC_GET_PATH,
+    /** asks to open the given path (const char *) */
+    UPIPE_FSRC_SET_PATH,
+    /** returns the size of the currently opened file, in octets (uint64_t *) */
+    UPIPE_FSRC_GET_SIZE,
+    /** returns the reading position of the currently opened file, in octets
+     * (uint64_t *) */
+    UPIPE_FSRC_GET_POSITION,
+    /** asks to read at the given position (uint64_t) */
+    UPIPE_FSRC_SET_POSITION
+};
+
+/** @This returns the management structure for all file sources.
+ *
+ * @return pointer to manager
+ */
+struct upipe_mgr *upipe_fsrc_mgr_alloc(void);
+
+/** @This returns the path of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param path_p filled in with the path of the file
+ * @return false in case of error
+ */
+static inline bool upipe_fsrc_get_path(struct upipe *upipe, const char **path_p)
+{
+    return upipe_control(upipe, UPIPE_FSRC_GET_PATH, UPIPE_FSRC_SIGNATURE,
+                         path_p);
+}
+
+/** @This asks to open the given file.
+ *
+ * @param upipe description structure of the pipe
+ * @param path relative or absolute path of the file
+ * @return false in case of error
+ */
+static inline bool upipe_fsrc_set_path(struct upipe *upipe, const char *path)
+{
+    return upipe_control(upipe, UPIPE_FSRC_SET_PATH, UPIPE_FSRC_SIGNATURE,
+                         path);
+}
+
+/** @This returns the size of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param size_p filled in with the size of the file, in octets
+ * @return false in case of error
+ */
+static inline bool upipe_fsrc_get_size(struct upipe *upipe, uint64_t *size_p)
+{
+    return upipe_control(upipe, UPIPE_FSRC_GET_SIZE, UPIPE_FSRC_SIGNATURE,
+                         size_p);
+}
+
+/** @This returns the reading position of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param position_p filled in with the reading position, in octets
+ * @return false in case of error
+ */
+static inline bool upipe_fsrc_get_position(struct upipe *upipe,
+                                           uint64_t *position_p)
+{
+    return upipe_control(upipe, UPIPE_FSRC_GET_POSITION, UPIPE_FSRC_SIGNATURE,
+                         position_p);
+}
+
+/** @This asks to read at the given position.
+ *
+ * @param upipe description structure of the pipe
+ * @param position new reading position, in octets (between 0 and the size)
+ * @return false in case of error
+ */
+static inline bool upipe_fsrc_set_position(struct upipe *upipe,
+                                           uint64_t position)
+{
+    return upipe_control(upipe, UPIPE_FSRC_SET_POSITION, UPIPE_FSRC_SIGNATURE,
+                         position);
+}
+
+#endif

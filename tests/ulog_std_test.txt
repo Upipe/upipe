@@ -1,0 +1,6 @@
+test error: This is an error
+test warning: This is a composite warning with 66
+test notice: This is a notice
+test debug: This is a debug, next error is an allocation failure
+test error: allocation failure at
+test[2] error: This is another error with 67

@@ -1,0 +1,20 @@
+Unstable APIs:
+ - flows
+ - uprobe
+
+Plans for core:
+ - build on uprobe to implement exceptions such as need_uref_mgr or need_ubuf_mgr or need_output
+ - fast memcpy/memset ?
+ - bitstream parsing helpers (startcode lookup)
+
+Other plans:
+ - avformat
+ - avcodec
+ - swscale
+ - avresample
+ - x264
+
+Bugs documentation:
+ - doubly declared functions (due to __attribute__((format)))
+ - @hidden doesn't work for #define
+ - "TM" unicode char

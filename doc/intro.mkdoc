@@ -1,0 +1,34 @@
+
+@section TPH {Introduction}
+
+Upipe is a flexible dataflow framework. It is primarily designed to be the
+core of a multimedia player, transcoder or streamer. The framework organizes
+the processing of incoming data buffer inside a pipeline of modules. It
+exposes core types for buffers and modules (called "pipes"), and the API of
+communication between pipes and between the application and pipes.
+
+Unlike most multimedia frameworks, Upipe was specified bottom-up. It implies
+that an application using Upipe is not restricted to a single high-level API,
+but can also implement and use any of the lower-level programming interfaces.
+It is also always possible to build higher-level interfaces. Its core
+data structures are expected to work efficiently without needlessly depending
+on each other, and are independantly unit-tested.
+
+The concept was completely designed and created in 2012, with today's
+computing architectures in mind. In particular, all platforms are nowadays
+more or less super-scalar (even your cell phone), and Upipe has been written
+to take advantage of several cores when needed. It may at first be surprising
+to notice that none of the core modules of Upipe deal with threads. However,
+the basic data structures have been implemented with lock-less or wait-less
+algorithms and therefore do not depend on the number of threads. Upipe's
+philosophy is to let the application (or higher-level APIs) create FIFOs and
+threads when it is necessary, not when the developer of the framework found
+it fancy to put a thread there, that would end up using 0.01% of a core and
+add unwanted latency.
+
+Since it doesn't require its own thread architecture, it also doesn't
+require a specific main loop manager. It can therefore be incorporated quite
+easily into main loops coming from other projects, like glib, Qt or Ecore.
+By default it comes with an optional libev support.
+
+@end section

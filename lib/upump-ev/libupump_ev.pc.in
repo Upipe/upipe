@@ -1,0 +1,9 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@     
+Name: libupipe_ev
+Description: upipe multimedia framework, libev event loop wrapper
+Version: @VERSION@
+Libs: -L${libdir} -lupipe -lev
+Cflags: -I${includedir}

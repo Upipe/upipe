@@ -1,0 +1,171 @@
+
+@section TPH {Overview}
+
+  Upipe provides an extensive set of header files, to be used by pipes and
+  applications. Applications will also generally want to link with optional
+  libraries, which allow to create and manage some core data structures.
+
+  @section T {Data structures}
+
+    Upipe's data structures can be classified into four groups:
+
+    @section {Core structures}
+
+      Core structures provide services for all other groups:
+
+      @list
+
+        @item chained lists (@ref uchain and @ref ulist)
+        @item lock-less reference counting (@ref urefcount)
+        @item lock-less LIFOs (@ref ulifo) with one thread performing the removals
+        @item lock-less FIFOs (@ref ufifo) with one thread performing the removals
+        @item lock-less buffer pools (@ref upool) with one thread performing the allocations
+        @item lock-less buffer queues (@ref uqueue) with one thread performing the removals
+        @item access to monotonic or real-time system clock (@ref uclock)
+
+      @end list
+
+    @end section
+
+    @section {Buffer management}
+
+      Buffer management structures define how data is carried across inside a pipeline. There are three levels of indirection:
+
+      @list
+
+        @item a plane of data (@ref ubuf_plane) pointing to a buffer space containing arbitrary data, a chromatic component of a picture, or an audio channel
+        @item a list of pointers to planes (@ref ubuf) with an atomic refcount allowing to share the same buffer space at several places in the pipeline
+        @item a reference to a ubuf (@ref uref), unically used in the pipeline, with arbitrary attributes (name, type, value triplets)
+
+      @end list
+
+      Pipes and applications typically only manipulate the latter (@ref uref). The @ref ubuf abstraction allows to implement windowing of data, zero-copy duplication and copy-on-write, but is generally hidden behind higher level interfaces. Upipe is bundled with abstractions layers for three types of buffers:
+
+      @list
+
+        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref uref_block_alloc
+        @item pictures, defined by their chromatic planes, pixel sizes and subsampling, with arbitrary width and height: @ref uref_pic_alloc
+        @item sounds, defined by their channels layout: @ref uref_sound_alloc
+
+      @end list
+
+      Most of the time, a pipe only needs to use these uref abstractions. Higher-level interfaces take advantage of the arbitrary attributes feature. An attribute is defined by a name (string), a type and a value. Attribute name start by convention with a letter indicating the category of the attribute, and a dot. Categories are for instance b for block allocator, p for picture allocator, c for clocks, f for flow information, or x for custom attributes. The standard uref allocator includes a list of common attribute names defined as "shorthands", which are stored and retrieved more efficiently.
+
+    @end section
+
+    @section {Pipes}
+
+      Pipes are provided by specialized modules, possibly delivered by third-parties. A @ref upipe may expose input and control methods (with standard and custom commands), and would typically take data from its input, process it and output it, possibly using a different buffer, to its output(s).
+
+      As a convenience, Upipe provides standard interfaces for common cases of pipes:
+
+      @list
+
+        @item linear pipes, pipes that only have one output: @ref upipe_linear_init
+        @item source pipes, having no input, but relying instead on external events to retrieve incoming data: @ref upipe_source_init
+        @item split pipes, pipes that have several outputs, such as a demux: @ref upipe_split_init
+        @item sink pipes, having no output: @ref upipe_sink_init
+
+      @end list
+
+      When created, pipes are passed with two structures for logging (@ref ulog) and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.). Functions from a pipe may only be called from a single thread, so locking and reentrancy isn't required.
+
+      The standard Upipe distribution currently contains the following pipe types (though third-party modules may also be used):
+
+      @table 4
+
+        @item API name @item description @item number of flows @item link with
+
+        @item @ref upipe_fsrc_mgr_alloc @item source pipe opening for reading a file or special file characterized by its path @item one @item @tt -lupipe-modules
+        @item @ref upipe_fsink_mgr_alloc @item sink pipe opening for writing a file or special file characterized by its path @item any of block type @item @tt -lupipe-modules
+        @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item any @item @tt -lupipe-modules
+        @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item any @item @tt -lupipe-modules
+        @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item any @item @tt -lupipe-modules
+
+      @end table
+
+      The generic @ref upipe_control call provides to the application an interface to modify the pipe's property. The counterpart of this function is provided by @ref uprobe, which allows the pipe to send messages to the application. It is possible to build upon this messaging system to dynamically take actions on the pipe or the pipeline. The standard Upipe distribution currently contains the following catchers:
+
+      @table 3
+
+        @item API name @item description @item link with
+
+        @item @ref uprobe_print_alloc @item print all received messages, for debug purposes @item @tt -lupipe
+
+      @end table
+
+    @end section
+
+    @section {External events}
+
+      Source pipes and sink pipes (but not exclusively) rely on external events to retrieve or dispatch data. For instance, one may want to wait on a UDP socket for packets. Or to wait until a system pipe (mkfifo) can be written again. Or more simply, wait for a timeout.
+
+      Pipes which need those interactions can create pumps with the built-in primitives. The @ref upump abstraction layer then maps the events to the API of the event loop which is used by the application. It supports the following types of events:
+
+      @list
+
+        @item idlers are executed whenever there is nothing else to do: @ref upump_alloc_idler
+        @item timers are executed after a given timeout: @ref upump_alloc_timer
+        @item read (resp. write) file descriptor watchers are executed whenever data is ready to be read from (resp. written to) a file descriptor: @ref upump_alloc_fd_read (resp. @ref upump_alloc_fd_write)
+
+      @end list
+
+      It is expected that more event types get added in the future, especially for Microsoft Windows(tm)-specific objects.
+
+      When creating a pump, the pipe must specify whether it would operate as a source, ie. whether the call-back would output packets to outgoing modules. A sink pipe which can no longer write to its output may block the whole pipeline, and in that case pumps marked as sources will be temporarily disabled.
+
+      Upipe currently provides abstraction layers for these event loops:
+
+      @table 3
+
+        @item event loop @item API @item link with
+
+        @item libev @item @ref upump_ev_mgr_alloc @item @tt -lupump-ev -lev
+
+      @end table
+
+    @end section
+
+  @end section
+
+  @section T {Managers}
+
+    To deal with structures efficiently, Upipe has a notion of "managers", which are similar to factories in object-oriented programming. Consequently, @ref ubuf are created by a @ref ubuf_mgr, @ref uref by @ref uref_mgr, @ref upump by @ref upump_mgr and @ref upipe by @ref upipe_mgr. Managers typically deal with memory pools or hardware resources such as access to video memory or hardware decoding.
+
+    Upipe provides standard implementations of @ref ubuf_mgr (for blocks, pictures and sounds) and @ref uref_mgr in the libupipe library (link with -lupipe). It must be noted that, although @ref uref and @ref ubuf can be released from any thread, due to the lockless implementation of memory pools, a manager can only allocate structures from a single thread. When using different threads to allocate buffers, one must instanciate different managers (and thus different memory pools).
+
+    The @ref upump_mgr implementations are supplied by dedicated, API-specific libraries such as libupump-ev. Finally, @ref upipe_mgr managers allow to create the pipes themselves and are either provided by the libupipe-modules library for standard pipes, or by third-party libraries.
+
+    To instanciate managers it is necessary to link with some libraries; however there is no dependancy associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
+
+    Upon initialization, a new pipe may be passed the managers for its @ref uref, @ref ubuf and @ref upump structures, if it requires to create them. If it has no need for a manager (for instance it just changes an attribute to all uref structures passing by), then it needs not be passed.
+
+  @end section
+
+  @section T {Flows}
+
+    Quite often one need to handle data coming from different sources, or of different nature, such as pictures and sounds. Some parts of the pipeline would be common (like demux or mux), and some would be different (like decoding or encoding). Upipe defines a notion of "flows" (similar to the elementary stream concept in the multimedia realm) defined by an arbitrary string. For instance it is possible to use "video" and "audio" as flow names, or "0", "1", etc.
+
+    When the flow enters a split pipe, such as a demux, resulting flows will be created with the name of the input, appended with a suffix identifying the component, such as "0.0", "0.1", etc.
+
+    An attribute containing the flow name must be added to all @ref uref structures with @ref uref_flow_set_name, so that other pipes know what they are dealing with. Before sending a buffer on a new flow, the source of the flow must send a flow definition buffer describing the content of the flow and how it is stored (@ref uref_block_flow_alloc_definition, @ref uref_pic_flow_alloc_definition, @ref uref_sound_flow_alloc_definition). At the end of the flow, a flow deletion buffer is sent in-band, so that it is only handled with after all buffers of the flow (@ref uref_flow_alloc_delete).
+
+    Please note that some pipes (such as linear pipes in general) only support one input flow. Also, flow management requires an uref manager; a lot of modules will ask for it. Setting the uref manager to NULL may lead to unexpected results and is not recommended.
+
+  @end section
+
+  @section T {Clocks}
+
+    All timestamps in Upipe are represented, by convention, as ticks of a 27 MHz clock. The origin and pace of the clock depends on the nature of the timestamp:
+
+    @list
+
+      @item sysdate timestamps are expressed using the monotonic or real-time clock of the system; they are typically used for bridging flows from different sources with different clocks, or for sinks
+      @item pts timestamps are expressed using a fictional monotonic clock retrieved from the input stream; they must not contain gaps and do not loop; they must start at a "high-enough" value so that all values are positive (by convention 2^33)
+      @item pts_orig timestamps are directly retrieved from the input source; they are typically used when one wants to remux a stream with the exact same timestamps
+
+    @end list
+
+  @end section
+
+@end section

@@ -1,0 +1,32 @@
+# libtool
+
+libtool
+*.lo
+*.la
+
+# http://www.gnu.org/software/automake
+
+Makefile.in
+
+# http://www.gnu.org/software/autoconf
+
+/autom4te.cache
+/aclocal.m4
+/autotools
+/config.log
+/config.status
+/configure
+Makefile
+/include/upipe/config.h
+/include/upipe/stamp-h1
+
+# pkg-config
+*.pc
+
+# built files
+*.o
+*.log
+*.swp
+*~
+.libs
+.deps

@@ -1,0 +1,184 @@
+/*****************************************************************************
+ * upipe_file_test.c: unit tests for file source and sink pipes
+ *****************************************************************************
+ * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ *
+ * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject
+ * to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *****************************************************************************/
+
+#include <stdbool.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <inttypes.h>
+
+#undef NDEBUG
+#include <assert.h>
+
+#include <ev.h>
+
+#include <upipe/ulog.h>
+#include <upipe/ulog_std.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_print.h>
+#include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
+#include <upipe/uref.h>
+#include <upipe/uref_std.h>
+#include <upipe/ubuf.h>
+#include <upipe/ubuf_block.h>
+#include <upipe/upump.h>
+#include <upump-ev/upump_ev.h>
+#include <upipe/upipe.h>
+#include <upipe/upipe_linear.h>
+#include <upipe-modules/upipe_file_source.h>
+#include <upipe-modules/upipe_file_sink.h>
+
+#define UREF_POOL_DEPTH 10
+#define UBUF_POOL_DEPTH 10
+#define READ_SIZE 4096
+#define ULOG_LEVEL ULOG_DEBUG
+
+static struct uprobe *uprobe_print;
+
+static void usage(const char *argv0) {
+    fprintf(stdout, "Usage: %s [-d <delay>] [-a|-o] <source file> <sink file>\n", argv0);
+    fprintf(stdout, "-a : append\n");
+    fprintf(stdout, "-o : overwrite\n");
+    exit(EXIT_FAILURE);
+}
+
+/** definition of our struct uprobe */
+static bool catch(struct uprobe *uprobe, struct upipe *upipe,
+                  enum uprobe_event event, va_list args)
+{
+    /* Pass the event to the print probe first, then process it. */
+    uprobe_print->uthrow(uprobe_print, upipe, event, args);
+
+    switch (event) {
+        case UPROBE_AERROR:
+        case UPROBE_UPUMP_ERROR:
+        case UPROBE_WRITE_END:
+        case UPROBE_NEW_FLOW:
+        default:
+            assert(0);
+            break;
+        case UPROBE_READ_END:
+        case UPROBE_NEED_UREF_MGR:
+        case UPROBE_NEED_UPUMP_MGR:
+            break;
+    }
+    return true;
+}
+
+int main(int argc, char *argv[])
+{
+    const char *src_file, *sink_file;
+    uint64_t delay = 0;
+    enum upipe_fsink_mode mode = UPIPE_FSINK_CREATE;
+    int opt;
+    while ((opt = getopt(argc, argv, "d:ao")) != -1) {
+        switch (opt) {
+            case 'd':
+                delay = atoi(optarg);
+                break;
+            case 'a':
+                mode = UPIPE_FSINK_APPEND;
+                break;
+            case 'o':
+                mode = UPIPE_FSINK_OVERWRITE;
+                break;
+            default:
+                usage(argv[0]);
+        }
+    }
+    if (optind >= argc -1)
+        usage(argv[0]);
+    src_file = argv[optind++];
+    sink_file = argv[optind++];
+
+    struct ev_loop *loop = ev_default_loop(0);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, -1, -1);
+    struct ubuf_mgr *ubuf_mgr = ubuf_block_mgr_alloc(UBUF_POOL_DEPTH,
+                                                     UBUF_POOL_DEPTH, READ_SIZE,
+                                                     -1, -1, -1, 0);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct uclock *uclock = uclock_std_alloc(0);
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch, NULL);
+    uprobe_print = uprobe_print_alloc(stdout, "test");
+    assert(uprobe_print != NULL);
+
+    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+    assert(upipe_fsink_mgr != NULL);
+    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr, &uprobe,
+            ulog_std_alloc(stdout, ULOG_LEVEL, "file sink"));
+    assert(upipe_fsink != NULL);
+    assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
+    if (delay) {
+        assert(upipe_set_uclock(upipe_fsink, uclock));
+        assert(upipe_sink_set_delay(upipe_fsink, delay));
+    }
+    assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
+
+    struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
+    assert(upipe_fsrc_mgr != NULL);
+    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr, &uprobe,
+            ulog_std_alloc(stdout, ULOG_LEVEL, "file source"));
+    assert(upipe_fsrc != NULL);
+    assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
+    assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
+    assert(upipe_linear_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
+    assert(upipe_linear_set_output(upipe_fsrc, upipe_fsink));
+    assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
+    assert(upipe_source_set_flow(upipe_fsrc, "0"));
+    if (delay)
+        assert(upipe_set_uclock(upipe_fsrc, uclock));
+    assert(upipe_fsrc_set_path(upipe_fsrc, src_file));
+    uint64_t size;
+    if (upipe_fsrc_get_size(upipe_fsrc, &size))
+        fprintf(stdout, "source file has size %"PRIu64"\n", size);
+    else
+        fprintf(stdout, "source path is not a regular file\n");
+
+    ev_loop(loop, 0);
+
+    assert(urefcount_single(&upipe_fsrc->refcount));
+    upipe_release(upipe_fsrc);
+    upipe_mgr_release(upipe_fsrc_mgr); // nop
+
+    assert(urefcount_single(&upipe_fsink->refcount));
+    upipe_release(upipe_fsink);
+    upipe_mgr_release(upipe_fsink_mgr); // nop
+
+    assert(urefcount_single(&upump_mgr->refcount));
+    upump_mgr_release(upump_mgr);
+    assert(urefcount_single(&uref_mgr->refcount));
+    uref_mgr_release(uref_mgr);
+    assert(urefcount_single(&ubuf_mgr->refcount));
+    ubuf_mgr_release(ubuf_mgr);
+    assert(urefcount_single(&uclock->refcount));
+    uclock_release(uclock);
+    uprobe_print_free(uprobe_print);
+
+    ev_default_destroy();
+    return 0;
+}
