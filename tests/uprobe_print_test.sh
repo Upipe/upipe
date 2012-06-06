@@ -1,7 +1,7 @@
 #!/bin/sh
 
 srcdir="$1"
-TMPDIR="`mktemp -d`"
+TMPDIR="`mktemp -d tmp.XXXXXXXXXX`"
 ./uprobe_print_test > "$TMPDIR"/logs
 RET=$?
 if test $RET -ne 0; then
@@ -23,7 +23,8 @@ if ! which valgrind >/dev/null 2>&1; then
 	exit 1
 fi
 
-TMPFILE="`mktemp`"
+unset TMPDIR
+TMPFILE="`mktemp tmp.XXXXXXXXXX`"
 libtool --mode=execute valgrind -q --leak-check=full ./uprobe_print_test > /dev/null 2> "$TMPFILE"
 RET=$?
 if test -s "$TMPFILE"; then

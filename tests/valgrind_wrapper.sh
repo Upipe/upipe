@@ -21,7 +21,7 @@ if ! which valgrind >/dev/null 2>&1; then
 fi
 
 # Run in valgrind, with leak checking enabled
-TMPFILE="`mktemp`"
+TMPFILE="`mktemp tmp.XXXXXXXXXX`"
 libtool --mode=execute valgrind -q --leak-check=full "$@" > /dev/null 2> "$TMPFILE"
 RET=$?
 if test -s "$TMPFILE"; then

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-TMPDIR="`mktemp -d`"
+TMPDIR="`mktemp -d tmp.XXXXXXXXXX`"
 if ! ./upipe_file_test Makefile "$TMPDIR"/test; then
 	rm -rf "$TMPDIR"
 	exit 1
