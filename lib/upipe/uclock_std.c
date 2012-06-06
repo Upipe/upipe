@@ -28,6 +28,11 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
@@ -70,6 +75,16 @@ static inline struct uclock_std *uclock_std_from_uclock(struct uclock *uclock)
 static uint64_t uclock_std_now(struct uclock *uclock)
 {
     struct uclock_std *std = uclock_std_from_uclock(uclock);
+
+#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
+    clock_serv_t cclock;
+    mach_timespec_t ts;
+    if (unlikely(host_get_clock_service(mach_host_self(), unlikely(std->flags & UCLOCK_FLAG_REALTIME) ? CALENDAR_CLOCK : REALTIME_CLOCK, &cclock) < 0)) {
+        return 0;
+    }
+    clock_get_time(cclock, &ts);
+    mach_port_deallocate(mach_task_self(), cclock);
+#else
     struct timespec ts;
 
     if (unlikely(clock_gettime(unlikely(std->flags & UCLOCK_FLAG_REALTIME) ?
@@ -77,6 +92,7 @@ static uint64_t uclock_std_now(struct uclock *uclock)
         /* this should not happen as we have checked the clock existed
          * in alloc */
         return 0;
+#endif
 
     uint64_t now = ts.tv_sec * UCLOCK_FREQ +
                    ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
@@ -100,10 +116,22 @@ static void uclock_std_free(struct uclock *uclock)
  */
 struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
 {
+#ifdef __MACH__
+    clock_serv_t cclock;
+    mach_timespec_t ts;
+    if (unlikely(host_get_clock_service(mach_host_self(), unlikely(flags & UCLOCK_FLAG_REALTIME) ? CALENDAR_CLOCK : REALTIME_CLOCK, &cclock) < 0)) {
+        return NULL;
+    }
+    if(unlikely(clock_get_time(cclock, &ts) < 0)) {
+        return NULL;
+    }
+    mach_port_deallocate(mach_task_self(), cclock);
+#else
     struct timespec ts;
     if (unlikely(clock_gettime(unlikely(flags & UCLOCK_FLAG_REALTIME) ?
                                CLOCK_REALTIME : CLOCK_MONOTONIC, &ts) == -1))
         return NULL;
+#endif
 
     struct uclock_std *uclock_std = malloc(sizeof(struct uclock_std));
     if (unlikely(uclock_std == NULL)) return NULL;

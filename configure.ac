@@ -23,6 +23,8 @@ AM_PROG_LIBTOOL
 LT_INIT
 
 # Checks for libraries.
+AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
+AC_SUBST(libadd_rt_lib)
 
 # Checks for header files.
 AC_HEADER_STDC
