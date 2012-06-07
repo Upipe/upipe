@@ -21,12 +21,12 @@ if ! which valgrind >/dev/null 2>&1; then
 fi
 
 # Run in valgrind, with leak checking enabled
-TMPFILE="`mktemp tmp.XXXXXXXXXX`"
-libtool --mode=execute valgrind -q --leak-check=full "$@" > /dev/null 2> "$TMPFILE"
+FILE="`mktemp tmp.XXXXXXXXXX`"
+libtool --mode=execute valgrind -q --leak-check=full "$@" > /dev/null 2> "$FILE"
 RET=$?
-if test -s "$TMPFILE"; then
-        cat "$TMPFILE" >&2
+if test -s "$FILE"; then
+        cat "$FILE" >&2
         RET=1
 fi
-rm -f "$TMPFILE"
+rm -f "$FILE"
 exit $RET

@@ -1,18 +1,18 @@
 #!/bin/sh
 
 srcdir="$1"
-TMPDIR="`mktemp -d tmp.XXXXXXXXXX`"
-./ulog_std_test > "$TMPDIR"/logs
+DIR="`mktemp -d tmp.XXXXXXXXXX`"
+./ulog_std_test > "$DIR"/logs
 RET=$?
 if test $RET -ne 0; then
-	rm -rf "$TMPDIR"
+	rm -rf "$DIR"
 	exit $RET
 fi
 
-sed -e "s/^\(test error: allocation failure at\) .*$/\1/" < "$TMPDIR"/logs > "$TMPDIR"/logs2
-diff -q "$TMPDIR"/logs2 "$srcdir"/ulog_std_test.txt
+sed -e "s/^\(test error: allocation failure at\) .*$/\1/" < "$DIR"/logs > "$DIR"/logs2
+diff -q "$DIR"/logs2 "$srcdir"/ulog_std_test.txt
 RET=$?
-rm -rf "$TMPDIR"
+rm -rf "$DIR"
 if test $RET -ne 0; then
 	exit $RET
 fi
@@ -22,13 +22,13 @@ if ! which valgrind >/dev/null 2>&1; then
 	exit 1
 fi
 
-unset TMPDIR
-TMPFILE="`mktemp tmp.XXXXXXXXXX`"
-libtool --mode=execute valgrind -q --leak-check=full ./ulog_std_test > /dev/null 2> "$TMPFILE"
+unset DIR
+FILE="`mktemp tmp.XXXXXXXXXX`"
+libtool --mode=execute valgrind -q --leak-check=full ./ulog_std_test > /dev/null 2> "$FILE"
 RET=$?
-if test -s "$TMPFILE"; then
-        cat "$TMPFILE" >&2
+if test -s "$FILE"; then
+        cat "$FILE" >&2
         RET=1
 fi
-rm -f "$TMPFILE"
+rm -f "$FILE"
 exit $RET
