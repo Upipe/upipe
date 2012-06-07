@@ -1,6 +1,6 @@
-# libtool
+# http://www.gnu.org/software/libtool
 
-libtool
+/libtool
 *.lo
 *.la
 
@@ -19,6 +19,10 @@ Makefile.in
 Makefile
 /include/upipe/config.h
 /include/upipe/stamp-h1
+
+# mkdoc
+
+/doc/html
 
 # pkg-config
 *.pc
