@@ -216,14 +216,13 @@ static struct ubuf *ubuf_pic_alloc_inner(struct ubuf_mgr *mgr, size_t hmsize,
                                          size_t vsize)
 {
     struct ubuf_pic_mgr *pic_mgr = ubuf_pic_mgr_from_ubuf_mgr(mgr);
-    size_t extra_space = 0;
+    size_t extra_space = pic_mgr->align;
     size_t vstrides[pic_mgr->nb_planes];
     size_t plane_sizes[pic_mgr->nb_planes];
     for (uint8_t plane = 0; plane < pic_mgr->nb_planes; plane++) {
         vstrides[plane] = (hmsize + pic_mgr->hmprepend + pic_mgr->hmappend) /
                               pic_mgr->planes[plane]->hsub *
-                              pic_mgr->planes[plane]->macropixel_size +
-                          pic_mgr->align;
+                              pic_mgr->planes[plane]->macropixel_size;
         plane_sizes[plane] = (vsize + pic_mgr->vprepend + pic_mgr->vappend) /
                                  pic_mgr->planes[plane]->vsub * vstrides[plane];
         extra_space += plane_sizes[plane];
