@@ -7,3 +7,6 @@ communication between pipes and between the application and pipes.
 The API documentation is written as a mkdoc file. Install mkdoc
 (http://www.nongnu.org/mkdoc/) and type
         ./configure && make doc
+
+The latest code is available from:
+        http://upipe.org/
