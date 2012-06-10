@@ -26,9 +26,15 @@ LT_INIT
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
 AC_SUBST(libadd_rt_lib)
 
+AC_CHECK_LIB(ev, ev_loop, [
+        AC_CHECK_HEADERS([ev.h],
+                AM_CONDITIONAL(HAVE_EV, true),
+                AM_CONDITIONAL(HAVE_EV, false))],
+        AM_CONDITIONAL(HAVE_EV, false))
+
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h ev.h])
+AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
