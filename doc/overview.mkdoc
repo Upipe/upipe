@@ -16,11 +16,13 @@
       @list
 
         @item chained lists (@ref uchain and @ref ulist)
-        @item lock-less reference counting (@ref urefcount)
+        @item lock-less counters (@ref ucounter) and reference counters (@ref urefcount)
         @item lock-less LIFOs (@ref ulifo) with one thread performing the removals
         @item lock-less FIFOs (@ref ufifo) with one thread performing the removals
         @item lock-less buffer pools (@ref upool) with one thread performing the allocations
         @item lock-less buffer queues (@ref uqueue) with one thread performing the removals
+        @item lock-less exclusive access to non-reentrant resources (@ref udeal)
+        @item objects to pass event information between threads (@ref ueventfd)
         @item access to monotonic or real-time system clock (@ref uclock)
 
       @end list
@@ -94,6 +96,8 @@
 
       @end table
 
+      In Upipe's design, decision taking happens inside probes, while data processing is done in pipes with no intelligence whatsoever.
+
     @end section
 
     @section {External events}
@@ -110,7 +114,7 @@
 
       @end list
 
-      It is expected that more event types get added in the future, especially for Microsoft Windows(tm)-specific objects.
+      It is expected that more event types get added in the future, especially for Microsoft Windows(tm)-specific objects. Some core objects, which require being able to wait on a condition, propose their own API to allocate an adequate upump (@ref uqueue_upump_alloc_pop or @ref udeal_upump_alloc). In turn, they rely on the @ref ueventfd object provided by Upipe.
 
       When creating a pump, the pipe must specify whether it would operate as a source, ie. whether the call-back would output packets to outgoing modules. A sink pipe which can no longer write to its output may block the whole pipeline, and in that case pumps marked as sources will be temporarily disabled.
 

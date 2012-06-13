@@ -39,6 +39,7 @@ if HAVE_EV
 check_PROGRAMS += \
 	upump_ev_test \
 	upool_uqueue_test \
+	udeal_test \
 	upipe_file_test \
 	upipe_dup_test \
 	upipe_queue_test
@@ -46,6 +47,7 @@ check_PROGRAMS += \
 TESTS += \
 	upump_ev_test \
 	upool_uqueue_test \
+	udeal_test \
 	upipe_file_test.sh \
 	upipe_dup_test \
 	upipe_queue_test
@@ -58,6 +60,8 @@ LDADD = $(top_builddir)/lib/upipe/libupipe.la
 upump_ev_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upool_uqueue_test_CFLAGS = -pthread
 upool_uqueue_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+udeal_test_CFLAGS = -pthread
+udeal_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(top_builddir)/lib/upipe/libupipe.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
