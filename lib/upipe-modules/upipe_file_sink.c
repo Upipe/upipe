@@ -456,7 +456,8 @@ static void upipe_fsink_free(struct upipe *upipe)
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     upipe_flows_clean(&upipe_fsink->flows);
     if (likely(upipe_fsink->fd != -1)) {
-        ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
+        if (likely(upipe_fsink->path != NULL))
+            ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
         close(upipe_fsink->fd);
     }
     free(upipe_fsink->path);

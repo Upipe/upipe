@@ -380,7 +380,8 @@ static void upipe_fsrc_free(struct upipe *upipe)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (likely(upipe_fsrc->fd != -1)) {
-        ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
+        if (likely(upipe_fsrc->path != NULL))
+            ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
         close(upipe_fsrc->fd);
     }
     free(upipe_fsrc->path);
