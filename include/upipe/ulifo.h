@@ -166,7 +166,8 @@ static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
         ulifo->counter--;
     }
     sem_post(&ulifo->lock);
-    element->next = NULL;
+    if (likely(element != NULL))
+        element->next = NULL;
     return element;
 }
 
