@@ -101,6 +101,7 @@ static inline void urefcount_clean(urefcount *refcount)
  */
 
 #include <semaphore.h>
+#include <limits.h>
 
 typedef sem_t urefcount;
 
