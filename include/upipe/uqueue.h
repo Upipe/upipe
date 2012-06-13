@@ -34,12 +34,8 @@
 #include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/ufifo.h>
+#include <upipe/ueventfd.h>
 #include <upipe/upump.h>
-
-#ifdef HAVE_EVENTFD
-
-#include <unistd.h>
-#include <sys/eventfd.h>
 
 /** @This is the implementation of a queue. */
 struct uqueue {
@@ -47,10 +43,10 @@ struct uqueue {
     struct ufifo fifo;
     /** maximum number of elements in the FIFO */
     unsigned int max_length;
-    /** eventfd triggered when data can be pushed */
-    int event_push;
-    /** eventfd triggered when data can be popped */
-    int event_pop;
+    /** ueventfd triggered when data can be pushed */
+    ueventfd event_push;
+    /** ueventfd triggered when data can be popped */
+    ueventfd event_pop;
 };
 
 /** @This initializes a uqueue.
@@ -62,12 +58,10 @@ struct uqueue {
 static inline bool uqueue_init(struct uqueue *uqueue, unsigned int max_length)
 {
     assert(max_length);
-    uqueue->event_push = eventfd(1, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (unlikely(uqueue->event_push == -1))
+    if (unlikely(!ueventfd_init(&uqueue->event_push, true)))
         return false;
-    uqueue->event_pop = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (unlikely(uqueue->event_pop == -1)) {
-        close(uqueue->event_push);
+    if (unlikely(!ueventfd_init(&uqueue->event_pop, false))) {
+        ueventfd_clean(&uqueue->event_push);
         return false;
     }
 
@@ -88,8 +82,8 @@ static inline struct upump *uqueue_upump_alloc_push(struct uqueue *uqueue,
                                                     struct upump_mgr *upump_mgr,
                                                     upump_cb cb, void *opaque)
 {
-    return upump_alloc_fd_read(upump_mgr, cb, opaque, false,
-                               uqueue->event_push);
+    return ueventfd_upump_alloc(&uqueue->event_push, upump_mgr, cb, opaque,
+                                false);
 }
 
 /** @This allocates a watcher triggering when data is ready to be popped.
@@ -104,7 +98,8 @@ static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
                                                    struct upump_mgr *upump_mgr,
                                                    upump_cb cb, void *opaque)
 {
-    return upump_alloc_fd_read(upump_mgr, cb, opaque, true, uqueue->event_pop);
+    return ueventfd_upump_alloc(&uqueue->event_pop, upump_mgr, cb, opaque,
+                                true);
 }
 
 /** @This pushes an element into the queue. It may be called from any thread.
@@ -118,18 +113,17 @@ static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
     unsigned int counter_before;
     ufifo_push(&uqueue->fifo, element, &counter_before);
     if (unlikely(counter_before == 0))
-        eventfd_write(uqueue->event_pop, 1);
+        ueventfd_write(&uqueue->event_pop);
 
     while (unlikely(ufifo_length(&uqueue->fifo) >= uqueue->max_length)) {
-        eventfd_t event;
-        eventfd_read(uqueue->event_push, &event);
+        ueventfd_read(&uqueue->event_push);
 
         /* double-check */
         if (likely(ufifo_length(&uqueue->fifo) >= uqueue->max_length))
             return false;
 
         /* try again */
-        eventfd_write(uqueue->event_push, 1);
+        ueventfd_write(&uqueue->event_push);
     }
     return true;
 }
@@ -143,22 +137,30 @@ static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
 static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 {
     while (unlikely(ufifo_length(&uqueue->fifo) == 0)) {
-        eventfd_t event;
-        eventfd_read(uqueue->event_pop, &event);
+        ueventfd_read(&uqueue->event_pop);
 
         /* double-check */
         if (likely(ufifo_length(&uqueue->fifo) == 0))
             return NULL;
 
         /* try again */
-        eventfd_write(uqueue->event_pop, 1);
+        ueventfd_write(&uqueue->event_pop);
     }
 
     unsigned int counter_after;
     struct uchain *uchain = ufifo_pop(&uqueue->fifo, &counter_after);
     if (unlikely(counter_after == uqueue->max_length - 1))
-        eventfd_write(uqueue->event_push, 1);
+        ueventfd_write(&uqueue->event_push);
     return uchain;
+}
+
+/** @This returns the number of elements in the queue.
+ *
+ * @param uqueue pointer to a uqueue structure
+ */
+static inline unsigned int uqueue_length(struct uqueue *uqueue)
+{
+    return ufifo_length(&uqueue->fifo);
 }
 
 /** @This cleans up the queue data structure. Please note that it is the
@@ -169,199 +171,8 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 static inline void uqueue_clean(struct uqueue *uqueue)
 {
     ufifo_clean(&uqueue->fifo);
-    close(uqueue->event_push);
-    close(uqueue->event_pop);
-}
-
-#elif defined(HAVE_PIPE) /* mkdoc:skip */
-
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-
-#ifndef FD_CLOEXEC
-#   define FD_CLOEXEC 0
-#endif
-
-struct uqueue {
-    /** FIFO */
-    struct ufifo fifo;
-    unsigned int max_length;
-    int event_push[2];
-    int event_pop[2];
-};
-
-static inline bool uqueue_init(struct uqueue *uqueue, unsigned int max_length)
-{
-    long flags;
-    assert(max_length);
-
-    if (unlikely(pipe(uqueue->event_push) == -1))
-        return false;
-    if (unlikely(pipe(uqueue->event_pop) == -1)) {
-        close(uqueue->event_push[0]);
-        close(uqueue->event_push[1]);
-        return false;
-    }
-
-    fcntl(uqueue->event_push[0], F_SETFD,
-          fcntl(uqueue->event_push[0], F_GETFD) | FD_CLOEXEC);
-    fcntl(uqueue->event_push[1], F_SETFD,
-          fcntl(uqueue->event_push[1], F_GETFD) | FD_CLOEXEC);
-    fcntl(uqueue->event_pop[0], F_SETFD,
-          fcntl(uqueue->event_pop[0], F_GETFD) | FD_CLOEXEC);
-    fcntl(uqueue->event_pop[1], F_SETFD,
-          fcntl(uqueue->event_pop[1], F_GETFD) | FD_CLOEXEC);
-
-    fcntl(uqueue->event_push[0], F_SETFL,
-          fcntl(uqueue->event_push[0], F_GETFL) | O_NONBLOCK);
-    fcntl(uqueue->event_push[1], F_SETFL,
-          fcntl(uqueue->event_push[1], F_GETFL) | O_NONBLOCK);
-    fcntl(uqueue->event_pop[0], F_SETFL,
-          fcntl(uqueue->event_pop[0], F_GETFL) | O_NONBLOCK);
-    fcntl(uqueue->event_pop[1], F_SETFL,
-          fcntl(uqueue->event_pop[1], F_GETFL) | O_NONBLOCK);
-
-    ufifo_init(&uqueue->fifo);
-    uqueue->max_length = max_length;
-    return true;
-}
-
-static inline struct upump *uqueue_upump_alloc_push(struct uqueue *uqueue,
-                                                    struct upump_mgr *upump_mgr,
-                                                    upump_cb cb, void *opaque)
-{
-    return upump_alloc_fd_read(upump_mgr, cb, opaque, false,
-                               uqueue->event_push[0]);
-}
-
-static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
-                                                   struct upump_mgr *upump_mgr,
-                                                   upump_cb cb, void *opaque)
-{
-    return upump_alloc_fd_read(upump_mgr, cb, opaque, true,
-                               uqueue->event_pop[0]);
-}
-
-/* not part of the public API */
-static inline bool uqueue_read(int fd)
-{
-    for ( ; ; ) {
-        char buf[256];
-        ssize_t ret = read(fd, buf, sizeof(buf));
-        if (unlikely(ret == 0)) return true;
-        if (likely(ret == -1)) {
-            switch (errno) {
-                case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-                case EWOULDBLOCK:
-#endif
-                    return true;
-                case EINTR:
-                    break;
-                default:
-                    return false;
-            }
-        }
-    }
-}
-
-/* not part of the public API */
-static inline bool uqueue_write(int fd)
-{
-    for ( ; ; ) {
-        char buf[1];
-        buf[0] = 0;
-        ssize_t ret = write(fd, buf, sizeof(buf));
-        if (likely(ret == 1)) return true;
-        if (likely(ret == -1)) {
-            switch (errno) {
-                case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-                case EWOULDBLOCK:
-#endif
-                    return true;
-                case EINTR:
-                    break;
-                default:
-                    return false;
-            }
-        }
-    }
-}
-
-static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
-{
-    bool ret;
-    unsigned int counter_before;
-    ufifo_push(&uqueue->fifo, element, &counter_before);
-    if (unlikely(counter_before == 0)) {
-        ret = uqueue_write(uqueue->event_pop[1]);
-        assert(ret);
-    }
-
-    while (unlikely(ufifo_length(&uqueue->fifo) >= uqueue->max_length)) {
-        ret = uqueue_read(uqueue->event_push[0]);
-        assert(ret);
-
-        /* double-check */
-        if (likely(ufifo_length(&uqueue->fifo) >= uqueue->max_length))
-            return false;
-
-        /* try again */
-        ret = uqueue_write(uqueue->event_push[1]);
-        assert(ret);
-    }
-    return true;
-}
-
-static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
-{
-    bool ret;
-    while (unlikely(ufifo_length(&uqueue->fifo) == 0)) {
-        ret = uqueue_read(uqueue->event_pop[0]);
-        assert(ret);
-
-        /* double-check */
-        if (likely(ufifo_length(&uqueue->fifo) == 0))
-            return NULL;
-
-        /* try again */
-        ret = uqueue_write(uqueue->event_pop[1]);
-        assert(ret);
-    }
-
-    unsigned int counter_after;
-    struct uchain *uchain = ufifo_pop(&uqueue->fifo, &counter_after);
-    if (unlikely(counter_after == uqueue->max_length - 1)) {
-        ret = uqueue_write(uqueue->event_push[1]);
-        assert(ret);
-    }
-    return uchain;
-}
-
-static inline void uqueue_clean(struct uqueue *uqueue)
-{
-    ufifo_clean(&uqueue->fifo);
-    close(uqueue->event_push[0]);
-    close(uqueue->event_push[1]);
-    close(uqueue->event_pop[0]);
-    close(uqueue->event_pop[1]);
-}
-
-#else /* mkdoc:skip */
-
-#error no queue implementation
-
-#endif
-
-/** @This returns the number of elements in the queue.
- *
- * @param uqueue pointer to a uqueue structure
- */
-static inline unsigned int uqueue_length(struct uqueue *uqueue)
-{
-    return ufifo_length(&uqueue->fifo);
+    ueventfd_clean(&uqueue->event_push);
+    ueventfd_clean(&uqueue->event_pop);
 }
 
 #endif

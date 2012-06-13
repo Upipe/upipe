@@ -6,6 +6,7 @@ nobase_include_HEADERS = \
 	upipe/ubuf_sound.h \
 	upipe/uclock.h \
 	upipe/uclock_std.h \
+	upipe/ueventfd.h \
 	upipe/ufifo.h \
 	upipe/ulifo.h \
 	upipe/ulist.h \
