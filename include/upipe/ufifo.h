@@ -159,16 +159,18 @@ static inline void ufifo_init(struct ufifo *ufifo)
     ufifo->counter = 0;
 }
 
-static inline void ufifo_push(struct ufifo *ufifo, struct uchain *element)
+static inline void ufifo_push(struct ufifo *ufifo, struct uchain *element,
+                              unsigned int *counter_before)
 {
     while (sem_wait(&ufifo->lock) == -1);
     element->prev = ufifo->tail;
     ufifo->tail = element;
-    ufifo->counter++;
+    *counter_before = ufifo->counter++;
     sem_post(&ufifo->lock);
 }
 
-static inline struct uchain *ufifo_pop(struct ufifo *ufifo)
+static inline struct uchain *ufifo_pop(struct ufifo *ufifo,
+                                       unsigned int *counter_after)
 {
     struct uchain *element;
     while (sem_wait(&ufifo->lock) == -1);
@@ -176,7 +178,7 @@ static inline struct uchain *ufifo_pop(struct ufifo *ufifo)
     if (likely(element != NULL)) {
         if (unlikely(element->prev == NULL))
             ufifo->tail = NULL;
-        ufifo->counter--;
+        *counter_after = --ufifo->counter;
     }
     sem_post(&ufifo->lock);
 
