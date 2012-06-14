@@ -29,9 +29,9 @@
 /** @hidden */
 #define _UPIPE_UPROBE_PRINT_H_
 
-#include <stdio.h>
-
 #include <upipe/uprobe.h>
+
+#include <stdio.h>
 
 /** @This frees a uprobe print structure.
  *

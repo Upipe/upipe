@@ -29,15 +29,15 @@
 /** @hidden */
 #define _UPIPE_UPIPE_LINEAR_H_
 
-#include <stdarg.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
+
+#include <stdarg.h>
+#include <assert.h>
 
 /** super-set of the upipe structure with additional members */
 struct upipe_linear {

@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UBASE_H_
 
+#include <upipe/config.h>
+
+#include <features.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
 #include <stddef.h>
-
-#include <upipe/config.h>
 
 #ifdef __GNUC__
 

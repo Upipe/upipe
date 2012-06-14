@@ -31,6 +31,8 @@
 
 #include <upipe/ubase.h>
 
+#include <stdbool.h>
+
 /** @This is the implementation of local list data structure. Please note
  * that it is not thread-safe. */
 struct ulist {

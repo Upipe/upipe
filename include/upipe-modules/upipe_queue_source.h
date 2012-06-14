@@ -29,11 +29,11 @@
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_
 
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/uqueue.h>
 #include <upipe/upipe.h>
+
+#include <assert.h>
 
 #define UPIPE_QSRC_SIGNATURE 0x0F000021U
 

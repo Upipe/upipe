@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UDEAL_H_
 
-#include <assert.h>
-
 #include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/ucounter.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upump.h>
+
+#include <assert.h>
 
 /** @This is the implementation of a structure that deals access to a
  * non-reentrant resource. */

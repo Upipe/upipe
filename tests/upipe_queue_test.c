@@ -25,11 +25,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdbool.h>
 #undef NDEBUG
-#include <assert.h>
-
-#include <ev.h>
 
 #include <upipe/ulog.h>
 #include <upipe/ulog_std.h>
@@ -44,6 +40,12 @@
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_queue_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
+
+#include <ev.h>
 
 #define UREF_POOL_DEPTH 1
 #define QUEUE_LENGTH 6

@@ -29,9 +29,9 @@
 /** @hidden */
 #define _UPIPE_EV_UPUMP_EV_H_
 
-#include <ev.h>
-
 #include <upipe/upump.h>
+
+#include <ev.h>
 
 /** @This allocates and initializes a upump_mgr structure with libev
  * support.

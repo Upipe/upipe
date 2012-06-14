@@ -25,15 +25,15 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
-
 #undef NDEBUG
-#include <assert.h>
 
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
+
+#include <stdio.h>
+#include <inttypes.h>
+#include <string.h>
+#include <assert.h>
 
 #define UREF_POOL_DEPTH 1
 

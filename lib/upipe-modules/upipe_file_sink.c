@@ -25,19 +25,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
@@ -52,6 +39,19 @@
 #include <upipe/upipe_flows.h>
 #include <upipe/upipe_sink.h>
 #include <upipe-modules/upipe_file_sink.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+#include <assert.h>
 
 #ifndef O_CLOEXEC
 #   define O_CLOEXEC 0

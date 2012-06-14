@@ -29,11 +29,6 @@
 /** @hidden */
 #define _UPIPE_UPIPE_SPLIT_H_
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdarg.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
@@ -41,6 +36,11 @@
 #include <upipe/uref_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <assert.h>
 
 /*
  * Definitions for one output

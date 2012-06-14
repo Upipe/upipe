@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UPIPE_H_
 
-#include <stdint.h>
-#include <stdarg.h>
-
 #include <upipe/urefcount.h>
 #include <upipe/ulog.h>
 #include <upipe/uprobe.h>
+
+#include <stdint.h>
+#include <stdarg.h>
 
 /** @hidden */
 struct uref;

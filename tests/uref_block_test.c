@@ -25,17 +25,17 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdio.h>
-#include <string.h>
-
 #undef NDEBUG
-#include <assert.h>
 
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
 #define UREF_POOL_DEPTH     1
 #define UBUF_POOL_DEPTH     1

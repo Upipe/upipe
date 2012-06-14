@@ -25,6 +25,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
+#include <upipe/ubase.h>
+#include <upipe/urefcount.h>
+#include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
+
 #include <stdlib.h>
 #include <time.h>
 
@@ -32,11 +37,6 @@
 #include <mach/clock.h>
 #include <mach/mach.h>
 #endif
-
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
 
 /** super-set of the uclock structure with additional local members */
 struct uclock_std {

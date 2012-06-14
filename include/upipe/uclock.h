@@ -29,11 +29,11 @@
 /** @hidden */
 #define _UPIPE_UCLOCK_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
+
+#include <stdint.h>
+#include <stdbool.h>
 
 #define UCLOCK_FREQ UINT64_C(27000000)
 

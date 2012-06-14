@@ -25,15 +25,15 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdlib.h>
-
-#include <ev.h>
-
 #include <upipe/ubase.h>
 #include <upipe/uclock.h>
 #include <upipe/upump.h>
 #include <upipe/upump_common.h>
 #include <upump-ev/upump_ev.h>
+
+#include <stdlib.h>
+
+#include <ev.h>
 
 /** @This stores management parameters and local structures.
  */

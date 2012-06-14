@@ -29,10 +29,10 @@
 /** @hidden */
 #define _UPIPE_UREF_CLOCK_H_
 
-#include <stdint.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+
+#include <stdint.h>
 
 UREF_ATTR_TEMPLATE(clock, systime, "k.systime", unsigned, uint64_t, reception time)
 UREF_ATTR_TEMPLATE(clock, pts, "k.pts", unsigned, uint64_t, presentation timestamp)

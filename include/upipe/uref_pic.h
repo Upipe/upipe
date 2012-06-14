@@ -29,14 +29,14 @@
 /** @hidden */
 #define _UPIPE_UREF_PIC_H_
 
-#include <stdint.h>
-#include <assert.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
 #include <upipe/uref_pic_flow.h>
+
+#include <stdint.h>
+#include <assert.h>
 
 UREF_ATTR_TEMPLATE(pic, hoffset, "p.hoffset", unsigned, uint64_t, horizontal offset)
 UREF_ATTR_TEMPLATE(pic, voffset, "p.voffset", unsigned, uint64_t, vertical offset)

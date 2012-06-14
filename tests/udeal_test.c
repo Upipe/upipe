@@ -25,23 +25,24 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <time.h>
-
 #undef NDEBUG
-#include <assert.h>
-
-#include <ev.h>
-#include <pthread.h>
 
 #include <upipe/ubase.h>
 #include <upipe/udeal.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <time.h>
+#include <pthread.h>
+#include <assert.h>
+
+#include <ev.h>
 
 #define NB_LOOPS 1000
 #define NB_TIMEOUTS 10

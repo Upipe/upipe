@@ -39,16 +39,16 @@
  * numbers or sample size options.
  */
 
+#include <upipe/ubase.h>
+#include <upipe/ubuf.h>
+#include <upipe/upool.h>
+#include <upipe/ubuf_sound.h>
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
-
-#include <upipe/ubase.h>
-#include <upipe/ubuf.h>
-#include <upipe/upool.h>
-#include <upipe/ubuf_sound.h>
 
 /** default extra samples before buffer when unspecified */
 #define UBUF_DEFAULT_PREPEND        8

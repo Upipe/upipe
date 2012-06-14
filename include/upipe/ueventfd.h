@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UEVENTFD_H_
 
-#include <assert.h>
-#include <errno.h>
-
 #include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/upump.h>
+
+#include <assert.h>
+#include <errno.h>
 
 #ifdef HAVE_EVENTFD
 

@@ -25,15 +25,15 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdio.h>
-#include <string.h>
-
 #undef NDEBUG
-#include <assert.h>
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/upipe.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
 static struct upipe test_pipe;
 

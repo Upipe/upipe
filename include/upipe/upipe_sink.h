@@ -29,14 +29,14 @@
 /** @hidden */
 #define _UPIPE_UPIPE_SINK_H_
 
-#include <stdarg.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
+
+#include <stdarg.h>
+#include <assert.h>
 
 /** super-set of the upipe structure with additional members */
 struct upipe_sink {

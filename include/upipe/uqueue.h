@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UQUEUE_H_
 
-#include <assert.h>
-
 #include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/ufifo.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upump.h>
+
+#include <assert.h>
 
 /** @This is the implementation of a queue. */
 struct uqueue {

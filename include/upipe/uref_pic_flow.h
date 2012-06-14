@@ -29,14 +29,14 @@
 /** @hidden */
 #define _UPIPE_UREF_PIC_FLOW_H_
 
+#include <upipe/uref.h>
+#include <upipe/uref_attr.h>
+#include <upipe/uref_flow.h>
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <assert.h>
-
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_flow.h>
 
 /** @internal flow definition prefix for pic allocator */
 #define UREF_PIC_FLOW_DEFINITION "pic."

@@ -25,19 +25,19 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
+#undef NDEBUG
+
+#include <upipe/upump.h>
+#include <upump-ev/upump_ev.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-
-#undef NDEBUG
 #include <assert.h>
 
 #include <ev.h>
-
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
 
 static uint64_t timeout = UINT64_C(27000000); /* 1 s */
 static const char *padding = "This is an initialized bit of space used to pad sufficiently !";

@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UREF_BLOCK_H_
 
-#include <stdint.h>
-#include <assert.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
+
+#include <stdint.h>
+#include <assert.h>
 
 UREF_ATTR_TEMPLATE(block, offset, "b.offset", unsigned, uint64_t, block offset)
 UREF_ATTR_TEMPLATE(block, size, "b.size", unsigned, uint64_t, block size)

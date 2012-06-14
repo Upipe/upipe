@@ -39,14 +39,14 @@
  * numbers, subsampling or macropixel options.
  */
 
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
 #include <upipe/upool.h>
 #include <upipe/ubuf_pic.h>
+
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
 
 /** default extra macropixels before lines when unspecified */
 #define UBUF_DEFAULT_HPREPEND       8

@@ -29,8 +29,6 @@
 /** @hidden */
 #define _UPIPE_UCLOCK_STD_H_
 
-#include <stdbool.h>
-
 #include <upipe/uclock.h>
 
 /** flags for the creation of a uclock_t structure */

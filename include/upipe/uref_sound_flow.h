@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UREF_SOUND_FLOW_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_flow.h>
+
+#include <stdint.h>
+#include <stdbool.h>
 
 /** @internal flow definition prefix for sound allocator */
 #define UREF_SOUND_FLOW_DEFINITION "sound."

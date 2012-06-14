@@ -29,9 +29,9 @@
 /** @hidden */
 #define _UPIPE_ULOG_STD_H_
 
-#include <stdio.h>
-
 #include <upipe/ulog.h>
+
+#include <stdio.h>
 
 /** @This allocates a new ulog structure.
  *

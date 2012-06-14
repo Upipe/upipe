@@ -31,14 +31,14 @@
  * allocations (structures can be released from any thread though).
  */
 
-#include <stdlib.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/upool.h>
 #include <upipe/uref_std.h>
+
+#include <stdlib.h>
+#include <assert.h>
 
 /** default minimal size of the attributes structure */
 #define UREF_ATTR_MINSIZE 128

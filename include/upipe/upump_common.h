@@ -29,10 +29,10 @@
 /** @hidden */
 #define _UPIPE_UPUMP_COMMON_H_
 
+#include <upipe/upump.h>
+
 #include <stdbool.h>
 #include <stdarg.h>
-
-#include <upipe/upump.h>
 
 /** @This stores management parameters invisible from modules but usually
  * common.

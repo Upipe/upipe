@@ -25,14 +25,14 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
+#include <upipe/ubase.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_print.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
 
 /** @hidden */
 struct upipe;

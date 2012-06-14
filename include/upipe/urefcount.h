@@ -29,10 +29,10 @@
 /** @hidden */
 #define _UPIPE_UREFCOUNT_H_
 
-#include <stdbool.h>
-
 #include <upipe/ubase.h>
 #include <upipe/config.h>
+
+#include <stdbool.h>
 
 #ifdef HAVE_ATOMIC_OPS
 

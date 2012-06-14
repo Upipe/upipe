@@ -25,11 +25,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <string.h>
-
 #include <upipe/ubase.h>
 #include <upipe/upump_common.h>
+
+#include <stdlib.h>
+#include <string.h>
 
 /** @This dispatches an event to a watcher.
  *

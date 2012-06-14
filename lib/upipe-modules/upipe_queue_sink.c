@@ -25,13 +25,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uqueue.h>
@@ -44,6 +37,13 @@
 #include <upipe/upipe_flows.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <assert.h>
 
 static void upipe_qsink_watcher(struct upump *upump);
 

@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UBUF_H_
 
+#include <upipe/ubase.h>
+#include <upipe/urefcount.h>
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
-
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 
 /** @This stores a plane of data. */
 struct ubuf_plane {

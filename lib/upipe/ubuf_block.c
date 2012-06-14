@@ -38,16 +38,16 @@
  * options are different.
  */
 
+#include <upipe/ubase.h>
+#include <upipe/ubuf.h>
+#include <upipe/upool.h>
+#include <upipe/ubuf_block.h>
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
-
-#include <upipe/ubase.h>
-#include <upipe/ubuf.h>
-#include <upipe/upool.h>
-#include <upipe/ubuf_block.h>
 
 /** default size of buffers when unspecified */
 #define UBUF_DEFAULT_SIZE           4096

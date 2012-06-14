@@ -29,11 +29,11 @@
 /** @hidden */
 #define _UPIPE_UREF_FLOW_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+
+#include <stdint.h>
+#include <stdbool.h>
 
 UREF_ATTR_TEMPLATE(flow, name, "f.flow", string, const char *, flow name)
 UREF_ATTR_TEMPLATE(flow, definition, "f.def", string, const char *, flow definition)

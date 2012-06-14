@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UREF_BLOCK_FLOW_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <inttypes.h>
-
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_flow.h>
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <inttypes.h>
 
 /** @internal flow definition prefix for block allocator */
 #define UREF_BLOCK_FLOW_DEFINITION "block."

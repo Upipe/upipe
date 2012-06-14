@@ -29,11 +29,11 @@
 /** @hidden */
 #define _UPIPE_UPUMP_H_
 
-#include <stdint.h>
-#include <stdarg.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
+
+#include <stdint.h>
+#include <stdarg.h>
 
 /** @hidden */
 struct upump_mgr;

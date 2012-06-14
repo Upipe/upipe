@@ -29,10 +29,10 @@
 /** @hidden */
 #define _UPIPE_UPROBE_H_
 
+#include <upipe/ubase.h>
+
 #include <stdbool.h>
 #include <stdarg.h>
-
-#include <upipe/ubase.h>
 
 /** @hidden */
 struct uprobe;

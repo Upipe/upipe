@@ -29,12 +29,12 @@
 /** @hidden */
 #define _UPIPE_UREF_ATTR_H_
 
+#include <upipe/ubase.h>
+#include <upipe/uref.h>
+
 #include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
-
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
 
 /** @internal basic attribute types */
 enum uref_attrtype {

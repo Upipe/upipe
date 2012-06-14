@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UPIPE_FLOWS_H_
 
-#include <stdbool.h>
-
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/ulog.h>
+
+#include <stdbool.h>
 
 /** @This initializes a upipe_flows structure.
  *

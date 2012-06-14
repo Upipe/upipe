@@ -29,13 +29,13 @@
 /** @hidden */
 #define _UPIPE_UREF_H_
 
-#include <stdint.h>
-#include <string.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/ubuf.h>
+
+#include <stdint.h>
+#include <string.h>
+#include <assert.h>
 
 /** @hidden */
 struct uref_mgr;

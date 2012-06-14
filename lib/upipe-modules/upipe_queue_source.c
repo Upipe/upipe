@@ -25,13 +25,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
@@ -40,6 +33,13 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_flows.h>
 #include <upipe-modules/upipe_queue_source.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <assert.h>
 
 /** super-set of the upipe structure with additional local members - upipe_qsrc
  * isn't a super-set of upipe_source because it is not linear (can have

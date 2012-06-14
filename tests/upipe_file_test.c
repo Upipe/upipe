@@ -25,15 +25,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
-
 #undef NDEBUG
-#include <assert.h>
-
-#include <ev.h>
 
 #include <upipe/ulog.h>
 #include <upipe/ulog_std.h>
@@ -51,6 +43,15 @@
 #include <upipe/upipe_linear.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
+
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <inttypes.h>
+#include <assert.h>
+
+#include <ev.h>
 
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
