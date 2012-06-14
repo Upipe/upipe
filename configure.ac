@@ -26,11 +26,21 @@ LT_INIT
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
 AC_SUBST(libadd_rt_lib)
 
-AC_CHECK_LIB(ev, ev_loop, [
-        AC_CHECK_HEADERS([ev.h],
-                AM_CONDITIONAL(HAVE_EV, true),
-                AM_CONDITIONAL(HAVE_EV, false))],
+#AC_CHECK_LIB(ev, ev_loop, [
+#        AC_CHECK_HEADERS([ev.h],
+#                AM_CONDITIONAL(HAVE_EV, true),
+#                AM_CONDITIONAL(HAVE_EV, false))],
+#        AM_CONDITIONAL(HAVE_EV, false))
+
+# Check for header, then libev3 (ev_loop), then libev4 (ev_run)
+AC_CHECK_HEADERS([ev.h], [
+        AC_CHECK_LIB(ev, ev_loop,
+                AM_CONDITIONAL(HAVE_EV, true),[
+                AC_CHECK_LIB(ev, ev_run,
+                        AM_CONDITIONAL(HAVE_EV, true),
+                        AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
+
 
 # Checks for header files.
 AC_HEADER_STDC
