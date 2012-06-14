@@ -222,7 +222,7 @@ write_buffer:
             }
             uref_block_release(uref);
             ulog_warning(upipe->ulog, "write error to %s (%s)",
-                         upipe_fsink->path, strerror(errno));
+                         upipe_fsink->path, ulog_strerror(upipe->ulog, errno));
             upipe_sink_set_upump(upipe, NULL);
             upipe_throw_write_end(upipe, upipe_fsink->path);
             return;
@@ -373,13 +373,13 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
                                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         if (unlikely(upipe_fsink->fd == -1)) {
             ulog_error(upipe->ulog, "can't open file %s (%s)",
-                       path, strerror(errno));
+                       path, ulog_strerror(upipe->ulog, errno));
             return false;
         }
         if (likely(mode == UPIPE_FSINK_APPEND))
             if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END)) == -1) {
                 ulog_error(upipe->ulog, "can't append to file %s (%s)",
-                           path, strerror(errno));
+                           path, ulog_strerror(upipe->ulog, errno));
                 close(upipe_fsink->fd);
                 upipe_fsink->fd = -1;
                 return false;

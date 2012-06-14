@@ -164,7 +164,7 @@ static void upipe_fsrc_worker(struct upump *upump)
                 break;
         }
         ulog_error(upipe->ulog, "read error from %s (%s)", upipe_fsrc->path,
-                   strerror(errno));
+                   ulog_strerror(upipe->ulog, errno));
         upipe_source_set_upump(upipe, NULL);
         upipe_throw_read_end(upipe, upipe_fsrc->path);
         return;
@@ -222,7 +222,7 @@ static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
         upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (unlikely(upipe_fsrc->fd == -1)) {
             ulog_error(upipe->ulog, "can't open file %s (%s)", path,
-                       strerror(errno));
+                       ulog_strerror(upipe->ulog, errno));
             return false;
         }
 

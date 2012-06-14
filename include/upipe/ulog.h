@@ -29,9 +29,11 @@
 /** @hidden */
 #define _UPIPE_ULOG_H_
 
-#include <stdarg.h>
-
 #include <upipe/ubase.h>
+
+#include <features.h>
+#include <stdarg.h>
+#include <string.h>
 
 /** levels of log messages */
 enum ulog_level {
@@ -41,12 +43,19 @@ enum ulog_level {
     ULOG_ERROR
 };
 
+/** size of the pipe-specific buffer for temporary storage for strerror_r()
+ * calls and the like */
+#define ULOG_BUFFER_SIZE 1024
+
 /** @This is a structure passed to a module upon initializing a new pipe. */
 struct ulog {
     /** function to print messages to console */
     void (*ulog)(struct ulog *, enum ulog_level, const char *format, va_list);
     /** function to release the structure */
     void (*ulog_free)(struct ulog *);
+    /** pipe-specific (therefore thread-specific) buffer for temporary
+     * storage for strerror_r() calls and the like */
+    char ulog_buffer[ULOG_BUFFER_SIZE];
 };
 
 #define ULOG_TEMPLATE(name, NAME)                                           \
@@ -75,6 +84,26 @@ ULOG_TEMPLATE(debug, DEBUG)
  */
 #define ulog_aerror(ulog)                                                   \
     ulog_error(ulog, "allocation failure at %s:%d", __FILE__, __LINE__)
+
+/** @This is a wrapper around incompatible strerror_r() implementations,
+ * using ulog storage.
+ *
+ * @param ulog utility structure passed to the module
+ * @param errnum errno value
+ */
+static inline const char *ulog_strerror(struct ulog *ulog, int errnum)
+{
+    if (likely(ulog != NULL)) {
+#ifndef _GNU_SOURCE
+        if (likely(strerror_r(errnum, ulog->ulog_buffer,
+                              ULOG_BUFFER_SIZE) != -1))
+            return ulog->ulog_buffer;
+#else
+        return strerror_r(errnum, ulog->ulog_buffer, ULOG_BUFFER_SIZE);
+#endif
+    }
+    return "description unavailable";
+}
 
 /** @This frees memory occupied by the struct ulog structure.
  *
