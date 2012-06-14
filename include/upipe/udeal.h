@@ -96,7 +96,7 @@ static inline bool udeal_start(struct udeal *udeal, struct upump *upump)
 /** @This tries to grab the resource.
  *
  * @param udeal pointer to a udeal structure
- * @return true of the resource may be exclusively used
+ * @return true if the resource may be exclusively used
  */
 static inline bool udeal_grab(struct udeal *udeal)
 {
