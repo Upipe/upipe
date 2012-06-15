@@ -26,12 +26,6 @@ LT_INIT
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
 AC_SUBST(libadd_rt_lib)
 
-#AC_CHECK_LIB(ev, ev_loop, [
-#        AC_CHECK_HEADERS([ev.h],
-#                AM_CONDITIONAL(HAVE_EV, true),
-#                AM_CONDITIONAL(HAVE_EV, false))],
-#        AM_CONDITIONAL(HAVE_EV, false))
-
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
         AC_CHECK_LIB(ev, ev_loop,
@@ -40,7 +34,6 @@ AC_CHECK_HEADERS([ev.h], [
                         AM_CONDITIONAL(HAVE_EV, true),
                         AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
-
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -61,7 +54,8 @@ AC_CHECK_TYPES([ptrdiff_t])
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memmove memset strdup strerror pipe])
+AC_FUNC_STRERROR_R
+AC_CHECK_FUNCS([memmove memset strdup pipe])
 
 # Custom checks
 AC_MSG_CHECKING([for GCC atomic builtins])

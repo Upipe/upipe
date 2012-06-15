@@ -92,11 +92,12 @@ ULOG_TEMPLATE(debug, DEBUG)
  *
  * @param ulog utility structure passed to the module
  * @param errnum errno value
+ * @return pointer to a buffer containing a description of the error
  */
 static inline const char *ulog_strerror(struct ulog *ulog, int errnum)
 {
     if (likely(ulog != NULL)) {
-#ifndef _GNU_SOURCE
+#ifndef STRERROR_R_CHAR_P
         if (likely(strerror_r(errnum, ulog->ulog_buffer,
                               ULOG_BUFFER_SIZE) != -1))
             return ulog->ulog_buffer;
@@ -107,7 +108,7 @@ static inline const char *ulog_strerror(struct ulog *ulog, int errnum)
     return "description unavailable";
 }
 
-/** @This frees memory occupied by the struct ulog structure.
+/** @This frees memory occupied by the ulog structure.
  *
  * @param ulog utility structure passed to the module
  */
