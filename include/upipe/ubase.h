@@ -31,7 +31,9 @@
 
 #include <upipe/config.h>
 
+#ifdef HAVE_FEATURES_H
 #include <features.h>
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>

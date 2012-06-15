@@ -31,7 +31,9 @@
 
 #include <upipe/ubase.h>
 
+#ifdef HAVE_FEATURES_H
 #include <features.h>
+#endif
 #include <stdarg.h>
 #include <string.h>
 
