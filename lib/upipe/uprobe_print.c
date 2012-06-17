@@ -82,6 +82,11 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_print *uprobe_print = uprobe_print_from_uprobe(uprobe);
 
     switch (event) {
+        case UPROBE_READY:
+            fprintf(uprobe_print->stream,
+                    "%s probe: received ready event from pipe %p\n",
+                    uprobe_print->name, upipe);
+            break;
         case UPROBE_AERROR:
             fprintf(uprobe_print->stream,
                     "%s probe: received allocation error from pipe %p\n",
@@ -123,13 +128,23 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     "%s probe: pipe %p required a upump manager\n",
                     uprobe_print->name, upipe);
             break;
+        case UPROBE_LINEAR_NEED_UBUF_MGR:
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p required a ubuf manager\n",
+                    uprobe_print->name, upipe);
+            break;
+        case UPROBE_SOURCE_NEED_FLOW_NAME:
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p required a flow name\n",
+                    uprobe_print->name, upipe);
+            break;
         default:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p threw an unknown, uncaught event (%d)\n",
                     uprobe_print->name, upipe, event);
             break;
     }
-    return true;
+    return false;
 }
 
 /** @This frees a uprobe print structure.
@@ -145,29 +160,34 @@ void uprobe_print_free(struct uprobe *uprobe)
 
 /** @This allocates a new uprobe print structure.
  *
+ * @param next next probe to test if this one doesn't catch the event
  * @param stream file stream to write to (eg. stderr)
  * @param name prefix appended to all messages by this probe (informative)
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc(FILE *stream, const char *name)
+struct uprobe *uprobe_print_alloc(struct uprobe *next, FILE *stream,
+                                  const char *name)
 {
     struct uprobe_print *uprobe_print = malloc(sizeof(struct uprobe_print));
-    if (unlikely(uprobe_print == NULL)) return NULL;
+    if (unlikely(uprobe_print == NULL))
+        return NULL;
     struct uprobe *uprobe = uprobe_print_to_uprobe(uprobe_print);
     uprobe_print->stream = stream;
     uprobe_print->name = strdup(name);
-    uprobe_init(uprobe, uprobe_print_throw, NULL);
+    uprobe_init(uprobe, uprobe_print_throw, next);
     return uprobe;
 }
 
 /** @This allocates a new uprobe print structure, with composite name.
  *
+ * @param next next probe to test if this one doesn't catch the event
  * @param stream file stream to write to (eg. stderr)
  * @param format printf-format string used for the prefix appended to all
  * messages by this probe, followed by optional arguments
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc_va(FILE *stream, const char *format, ...)
+struct uprobe *uprobe_print_alloc_va(struct uprobe *next, FILE *stream,
+                                     const char *format, ...)
 {
     size_t len;
     va_list args;
@@ -179,7 +199,7 @@ struct uprobe *uprobe_print_alloc_va(FILE *stream, const char *format, ...)
         va_start(args, format);
         vsnprintf(name, len + 1, format, args);
         va_end(args);
-        return uprobe_print_alloc(stream, name);
+        return uprobe_print_alloc(next, stream, name);
     }
-    return uprobe_print_alloc(stream, "unknown");
+    return uprobe_print_alloc(next, stream, "unknown");
 }

@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 {
     printf("%p\n", &test_pipe);
 
-    struct uprobe *uprobe = uprobe_print_alloc(stdout, "test");
+    struct uprobe *uprobe = uprobe_print_alloc(NULL, stdout, "test");
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
 
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
     upipe_throw_write_end(&test_pipe, "pouet");
 
     uprobe_print_free(uprobe);
-    uprobe = uprobe_print_alloc_va(stdout, "test %d", 2);
+    uprobe = uprobe_print_alloc_va(NULL, stdout, "test %d", 2);
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
 

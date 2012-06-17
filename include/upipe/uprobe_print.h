@@ -41,19 +41,23 @@ void uprobe_print_free(struct uprobe *uprobe);
 
 /** @This allocates a new uprobe print structure.
  *
+ * @param next next probe to test if this one doesn't catch the event
  * @param stream file stream to write to (eg. stderr)
  * @param name prefix appended to all messages by this probe (informative)
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc(FILE *stream, const char *name);
+struct uprobe *uprobe_print_alloc(struct uprobe *next, FILE *stream,
+                                  const char *name);
 
 /** @This allocates a new uprobe print structure, with composite name.
  *
+ * @param next next probe to test if this one doesn't catch the event
  * @param stream file stream to write to (eg. stderr)
  * @param format printf-format string used for the prefix appended to all
  * messages by this probe, followed by optional arguments
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc_va(FILE *stream, const char *format, ...);
+struct uprobe *uprobe_print_alloc_va(struct uprobe *next, FILE *stream,
+                                     const char *format, ...);
 
 #endif

@@ -45,27 +45,26 @@
 #define UREF_POOL_DEPTH 10
 #define ULOG_LEVEL ULOG_DEBUG
 
-static struct uprobe *uprobe_print;
 static int counter = 0;
 
 /** definition of our struct uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
-    /* Pass the event to the print probe first, then process it. */
-    uprobe_print->uthrow(uprobe_print, upipe, event, args);
-
     switch (event) {
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
         case UPROBE_READ_END:
         case UPROBE_WRITE_END:
         case UPROBE_NEW_FLOW:
+        case UPROBE_NEED_UREF_MGR:
+        case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_LINEAR_NEED_UBUF_MGR:
+        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_READY:
             break;
     }
     return true;
@@ -134,22 +133,22 @@ int main(int argc, char *argv[])
     struct uref *uref;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    uprobe_print = uprobe_print_alloc(stdout, "test");
+    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
 
-    struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, &uprobe,
+    struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "sink 0"));
     assert(upipe_sink0 != NULL);
     dup_test_set_flow(upipe_sink0, "source.0");
 
-    struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, &uprobe,
+    struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "sink 1"));
     assert(upipe_sink1 != NULL);
     dup_test_set_flow(upipe_sink1, "source.1");
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
-    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, &uprobe,
+    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
     assert(upipe_set_uref_mgr(upipe_dup, uref_mgr));

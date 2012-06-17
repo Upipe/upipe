@@ -54,25 +54,24 @@
 static struct ev_loop *loop;
 static struct upump_mgr *upump_mgr;
 static struct upipe *upipe_qsink;
-static struct uprobe *uprobe_print;
 static uint8_t counter = 0;
 
 /** definition of our struct uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
-    /* Pass the event to the print probe first, then process it. */
-    uprobe_print->uthrow(uprobe_print, upipe, event, args);
-
     switch (event) {
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
         case UPROBE_READ_END:
         case UPROBE_WRITE_END:
         case UPROBE_NEW_FLOW:
+        case UPROBE_LINEAR_NEED_UBUF_MGR:
+        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
+        case UPROBE_READY:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:
             break;
@@ -145,16 +144,16 @@ int main(int argc, char *argv[])
     struct uref *uref;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    uprobe_print = uprobe_print_alloc(stdout, "test");
+    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&queue_test_mgr, &uprobe,
+    struct upipe *upipe_sink = upipe_alloc(&queue_test_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     assert(upipe_qsrc_mgr != NULL);
-    struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr, &uprobe,
+    struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
     assert(upipe_set_uref_mgr(upipe_qsrc, uref_mgr));
@@ -163,7 +162,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
-    upipe_qsink = upipe_alloc(upipe_qsink_mgr, &uprobe,
+    upipe_qsink = upipe_alloc(upipe_qsink_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "queue sink"));
     assert(upipe_qsink != NULL);
     assert(upipe_set_uref_mgr(upipe_qsink, uref_mgr));

@@ -41,10 +41,15 @@ struct upipe;
 
 /** common types of events */
 enum uprobe_event {
-    /** an allocation error occurred, data may be lost (void) */
+    /** a pipe is ready to process data and respond to control commands
+     * asking for info about the processing (void) */
+    UPROBE_READY,
+    /** an allocation error occurred, data may be lost (void); from now on
+     * the behaviour of the pipe is undefined, except @ref upipe_release */
     UPROBE_AERROR,
     /** a upump error occurred, a watcher couldn't be created, the
-     * application will not run properly (void) */
+     * application will not run properly (void); from now on the behaviour of
+     * the pipe is undefined, except @ref upipe_release */
     UPROBE_UPUMP_ERROR,
     /** unable to read from an input because the end of file was reached, or
      * because of an error (const char *) */
@@ -52,13 +57,16 @@ enum uprobe_event {
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
     UPROBE_WRITE_END,
-    /** a demux pipe declares a new output flow (const char *,
-     * struct uchain *) */
+    /** a pipe declares a new output flow (const char *, struct uref *) */
     UPROBE_NEW_FLOW,
     /** a uref manager is necessary to operate (void) */
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (void) */
-    UPROBE_NEED_UPUMP_MGR
+    UPROBE_NEED_UPUMP_MGR,
+    /** a ubuf manager is necessary to operate (void) */
+    UPROBE_LINEAR_NEED_UBUF_MGR,
+    /** a flow name is necessary to operate (void) */
+    UPROBE_SOURCE_NEED_FLOW_NAME
 };
 
 /** @This is the call-back type for uprobe events; it returns true if the

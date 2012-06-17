@@ -58,8 +58,6 @@
 #define READ_SIZE 4096
 #define ULOG_LEVEL ULOG_DEBUG
 
-static struct uprobe *uprobe_print;
-
 static void usage(const char *argv0) {
     fprintf(stdout, "Usage: %s [-d <delay>] [-a|-o] <source file> <sink file>\n", argv0);
     fprintf(stdout, "-a : append\n");
@@ -71,20 +69,20 @@ static void usage(const char *argv0) {
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
-    /* Pass the event to the print probe first, then process it. */
-    uprobe_print->uthrow(uprobe_print, upipe, event, args);
-
     switch (event) {
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
         case UPROBE_WRITE_END:
         case UPROBE_NEW_FLOW:
+        case UPROBE_NEED_UREF_MGR:
+        case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_LINEAR_NEED_UBUF_MGR:
+        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
+        case UPROBE_READY:
         case UPROBE_READ_END:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
             break;
     }
     return true;
@@ -125,12 +123,12 @@ int main(int argc, char *argv[])
     struct uclock *uclock = uclock_std_alloc(0);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    uprobe_print = uprobe_print_alloc(stdout, "test");
+    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
 
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr, &uprobe,
+    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "file sink"));
     assert(upipe_fsink != NULL);
     assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
@@ -142,7 +140,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
-    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr, &uprobe,
+    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
