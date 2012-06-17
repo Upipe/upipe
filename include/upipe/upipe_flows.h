@@ -97,7 +97,7 @@ static inline bool upipe_flows_get_definition(struct ulist *upipe_flows,
 
 /** @This deletes the flow definition of a given flow.
  *
- * @param upipe_flows pointer to the struct ulist structure
+ * @param upipe_flows pointer to the upipe_flows structure
  * @param flow name of the flow
  * @return true if the flow was found and deleted
  */
