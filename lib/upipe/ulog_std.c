@@ -80,6 +80,8 @@ static void ulog_std_ulog(struct ulog *ulog, enum ulog_level level,
     struct ulog_std *ulog_std = ulog_std_from_ulog(ulog);
     if (level < ulog_std->min_level) return;
 
+    size_t name_len = likely(ulog_std->name != NULL) ?
+                      strlen(ulog_std->name) : 0;
     const char *level_name;
     switch (level) {
         case ULOG_DEBUG: level_name = "debug"; break;
@@ -88,9 +90,11 @@ static void ulog_std_ulog(struct ulog *ulog, enum ulog_level level,
         case ULOG_ERROR: level_name = "error"; break;
         default: level_name = "unknown"; break;
     }
-    char new_format[strlen(format) + strlen(level_name) +
-                    strlen(ulog_std->name) + strlen(" : \n") + 1];
-    sprintf(new_format, "%s %s: %s\n", ulog_std->name, level_name, format);
+    char new_format[strlen(format) + strlen(level_name) + name_len +
+                    strlen(" : \n") + 1];
+    sprintf(new_format, "%s %s: %s\n",
+            likely(ulog_std->name != NULL) ? ulog_std->name : "unknown",
+            level_name, format);
 
     vfprintf(ulog_std->stream, new_format, args);
 }
@@ -119,7 +123,12 @@ struct ulog *ulog_std_alloc(FILE *stream, enum ulog_level log_level,
     struct ulog_std *ulog_std = malloc(sizeof(struct ulog_std));
     if (unlikely(ulog_std == NULL)) return NULL;
     ulog_std->stream = stream;
-    ulog_std->name = strdup(name);
+    if (likely(name != NULL)) {
+        ulog_std->name = strdup(name);
+        if (unlikely(ulog_std->name == NULL))
+            fprintf(stream, "ulog_std: couldn't allocate a string\n");
+    } else
+        ulog_std->name = NULL;
     ulog_std->min_level = log_level;
     ulog_std->ulog.ulog = ulog_std_ulog;
     ulog_std->ulog.ulog_free = ulog_std_free;
