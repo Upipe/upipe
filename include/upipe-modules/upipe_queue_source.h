@@ -44,7 +44,7 @@ struct upipe_queue {
     /** queue */
     struct uqueue uqueue;
 
-    /** structure exported by the source module to the application */
+    /** public upipe structure */
     struct upipe upipe;
 };
 

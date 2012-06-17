@@ -37,7 +37,10 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_flows.h>
-#include <upipe/upipe_sink.h>
+#include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_uclock.h>
+#include <upipe/upipe_helper_sink_delay.h>
 #include <upipe-modules/upipe_file_sink.h>
 
 #include <stdlib.h>
@@ -65,8 +68,17 @@
 
 static void upipe_fsink_watcher(struct upump *upump);
 
-/** super-set of the upipe_sink structure with additional local members */
+/** @internal @This is the private context of a file sink pipe. */
 struct upipe_fsink {
+    /** upump manager */
+    struct upump_mgr *upump_mgr;
+    /** write watcher */
+    struct upump *upump;
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** delay applied to systime attribute when uclock is provided */
+    uint64_t delay;
+
     /** list of input flows */
     struct ulist flows;
     /** file descriptor */
@@ -77,31 +89,17 @@ struct upipe_fsink {
     struct ulist urefs;
     /** true if the sink currently blocks the pipe */
     bool blocked;
+    /** true if we have thrown the ready event */
+    bool ready;
 
-    /** members common to sink pipes */
-    struct upipe_sink upipe_sink;
+    /** public upipe structure */
+    struct upipe upipe;
 };
 
-/** @internal @This returns the high-level upipe structure.
- *
- * @param upipe_fsink pointer to the upipe_fsink structure
- * @return pointer to the upipe structure
- */
-static inline struct upipe *upipe_fsink_to_upipe(struct upipe_fsink *upipe_fsink)
-{
-    return upipe_sink_to_upipe(&upipe_fsink->upipe_sink);
-}
-
-/** @internal @This returns the private struct upipe_fsink structure.
- *
- * @param upipe description structure of the pipe
- * @return pointer to the upipe_fsink structure
- */
-static inline struct upipe_fsink *upipe_fsink_from_upipe(struct upipe *upipe)
-{
-    struct upipe_sink *upipe_sink = upipe_sink_from_upipe(upipe);
-    return container_of(upipe_sink, struct upipe_fsink, upipe_sink);
-}
+UPIPE_HELPER_UPIPE(upipe_fsink, upipe)
+UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr, upump)
+UPIPE_HELPER_UCLOCK(upipe_fsink, uclock)
+UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
 
 /** @internal @This allocates a file sink pipe.
  *
@@ -113,13 +111,16 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr)
     struct upipe_fsink *upipe_fsink = malloc(sizeof(struct upipe_fsink));
     if (unlikely(upipe_fsink == NULL)) return NULL;
     struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
-    upipe_sink_init(upipe, SYSTIME_DELAY);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
+    upipe_fsink_init_upump_mgr(upipe);
+    upipe_fsink_init_uclock(upipe);
+    upipe_fsink_init_delay(upipe, SYSTIME_DELAY);
     upipe->signature = UPIPE_FSINK_SIGNATURE;
     upipe_flows_init(&upipe_fsink->flows);
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
     upipe_fsink->blocked = false;
+    upipe_fsink->ready = false;
     ulist_init(&upipe_fsink->urefs);
     return upipe;
 }
@@ -133,13 +134,13 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr)
 static void upipe_fsink_wait(struct upipe *upipe, uint64_t timeout)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    struct upump_mgr *mgr = upipe_sink_upump_mgr(upipe);
     struct upump *upump;
     if (unlikely(timeout != 0))
-        upump = upump_alloc_timer(mgr, upipe_fsink_watcher, upipe, false,
-                                  timeout, 0);
+        upump = upump_alloc_timer(upipe_fsink->upump_mgr, upipe_fsink_watcher,
+                                  upipe, false, timeout, 0);
     else
-        upump = upump_alloc_fd_write(mgr, upipe_fsink_watcher, upipe, false,
+        upump = upump_alloc_fd_write(upipe_fsink->upump_mgr,
+                                     upipe_fsink_watcher, upipe, false,
                                      upipe_fsink->fd);
     if (unlikely(upump == NULL)) {
         ulog_error(upipe->ulog, "can't create watcher");
@@ -147,10 +148,10 @@ static void upipe_fsink_wait(struct upipe *upipe, uint64_t timeout)
         return;
     }
 
-    upipe_sink_set_upump(upipe, upump);
+    upipe_fsink_set_upump(upipe, upump);
     upump_start(upump);
     if (!upipe_fsink->blocked) {
-        upump_mgr_sink_block(mgr);
+        upump_mgr_sink_block(upipe_fsink->upump_mgr);
         upipe_fsink->blocked = true;
     }
 }
@@ -175,8 +176,7 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
         return;
     }
 
-    struct uclock *uclock = upipe_sink_uclock(upipe);
-    if (likely(uclock == NULL))
+    if (likely(upipe_fsink->uclock == NULL))
         goto write_buffer;
 
     uint64_t systime = 0;
@@ -185,9 +185,8 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
         goto write_buffer;
     }
 
-    uint64_t delay = upipe_sink_delay(upipe);
-    uint64_t now = uclock_now(uclock);
-    systime += delay;
+    uint64_t now = uclock_now(upipe_fsink->uclock);
+    systime += upipe_fsink->delay;
     if (unlikely(now < systime)) {
         ulist_add(&upipe_fsink->urefs, uref_to_uchain(uref));
         upipe_fsink_wait(upipe, systime - now);
@@ -223,7 +222,7 @@ write_buffer:
             uref_block_release(uref);
             ulog_warning(upipe->ulog, "write error to %s (%s)",
                          upipe_fsink->path, ulog_strerror(upipe->ulog, errno));
-            upipe_sink_set_upump(upipe, NULL);
+            upipe_fsink_set_upump(upipe, NULL);
             upipe_throw_write_end(upipe, upipe_fsink->path);
             return;
         }
@@ -249,7 +248,7 @@ static void upipe_fsink_watcher(struct upump *upump)
     struct ulist urefs = upipe_fsink->urefs;
 
     ulist_init(&upipe_fsink->urefs);
-    upipe_sink_set_upump(upipe, NULL);
+    upipe_fsink_set_upump(upipe, NULL);
     upump_mgr_sink_unblock(mgr);
     upipe_fsink->blocked = false;
 
@@ -342,10 +341,9 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     }
     free(upipe_fsink->path);
     upipe_fsink->path = NULL;
-    upipe_sink_set_upump(upipe, NULL);
+    upipe_fsink_set_upump(upipe, NULL);
     if (upipe_fsink->blocked) {
-        struct upump_mgr *mgr = upipe_sink_upump_mgr(upipe);
-        upump_mgr_sink_unblock(mgr);
+        upump_mgr_sink_unblock(upipe_fsink->upump_mgr);
         upipe_fsink->blocked = false;
     }
 
@@ -400,15 +398,35 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
  * @return false in case of error
  */
 static bool _upipe_fsink_control(struct upipe *upipe,
-                                 enum upipe_control control,
-                                 va_list args)
+                                 enum upipe_control control, va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_fsink_input(upipe, uref);
-    }
     switch (control) {
+        case UPIPE_GET_UPUMP_MGR: {
+            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
+            return upipe_fsink_get_upump_mgr(upipe, p);
+        }
+        case UPIPE_SET_UPUMP_MGR: {
+            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            return upipe_fsink_set_upump_mgr(upipe, upump_mgr);
+        }
+        case UPIPE_GET_UCLOCK: {
+            struct uclock **p = va_arg(args, struct uclock **);
+            return upipe_fsink_get_uclock(upipe, p);
+        }
+        case UPIPE_SET_UCLOCK: {
+            struct uclock *uclock = va_arg(args, struct uclock *);
+            return upipe_fsink_set_uclock(upipe, uclock);
+        }
+
+        case UPIPE_SINK_GET_DELAY: {
+            uint64_t *p = va_arg(args, uint64_t *);
+            return upipe_fsink_get_delay(upipe, p);
+        }
+        case UPIPE_SINK_SET_DELAY: {
+            uint64_t delay = va_arg(args, uint64_t);
+            return upipe_fsink_set_delay(upipe, delay);
+        }
+
         case UPIPE_FSINK_GET_PATH: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_FSINK_SIGNATURE);
@@ -423,7 +441,7 @@ static bool _upipe_fsink_control(struct upipe *upipe,
             return _upipe_fsink_set_path(upipe, path, mode);
         }
         default:
-            return upipe_sink_control(upipe, control, args);
+            return false;
     }
 }
 
@@ -438,11 +456,27 @@ static bool _upipe_fsink_control(struct upipe *upipe,
 static bool upipe_fsink_control(struct upipe *upipe, enum upipe_control control,
                                 va_list args)
 {
+    if (likely(control == UPIPE_INPUT)) {
+        struct uref *uref = va_arg(args, struct uref *);
+        assert(uref != NULL);
+        return upipe_fsink_input(upipe, uref);
+    }
+
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     bool ret = _upipe_fsink_control(upipe, control, args);
 
-    if (unlikely(!ulist_empty(&upipe_fsink->urefs)))
-        upipe_fsink_wait(upipe, 0);
+    if (unlikely(upipe_fsink->upump_mgr != NULL)) {
+        if (unlikely(!ulist_empty(&upipe_fsink->urefs)))
+            upipe_fsink_wait(upipe, 0);
+        if (likely(!upipe_fsink->ready)) {
+            upipe_throw_ready(upipe);
+            upipe_fsink->ready = true;
+        }
+
+    } else {
+        upipe_fsink->ready = false;
+        upipe_throw_need_upump_mgr(upipe);
+    }
 
     return ret;
 }
@@ -461,7 +495,9 @@ static void upipe_fsink_free(struct upipe *upipe)
         close(upipe_fsink->fd);
     }
     free(upipe_fsink->path);
-    upipe_sink_cleanup(upipe);
+    upipe_fsink_clean_delay(upipe);
+    upipe_fsink_clean_uclock(upipe);
+    upipe_fsink_clean_upump_mgr(upipe);
     free(upipe_fsink);
 }
 

@@ -99,9 +99,9 @@ enum upipe_control {
      * Source elements commands (upipe/upipe_source.h)
      */
     /** gets name of the source flow (const char **) */
-    UPIPE_SOURCE_GET_FLOW,
+    UPIPE_SOURCE_GET_FLOW_NAME,
     /** sets name of the source flow (const char *) */
-    UPIPE_SOURCE_SET_FLOW,
+    UPIPE_SOURCE_SET_FLOW_NAME,
     /** gets read buffer size (unsigned int *) */
     UPIPE_SOURCE_GET_READ_SIZE,
     /** sets read buffer size (unsigned int) */
@@ -239,7 +239,7 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, upump_mgr, UPUMP_MGR, struct upump_mgr *, u
 UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, output, OUTPUT, struct upipe *, pipe acting as output)
 UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, ubuf_mgr, UBUF_MGR, struct ubuf_mgr *, ubuf manager)
 
-UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, flow, FLOW, const char *, flow name of the source)
+UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, flow_name, FLOW_NAME, const char *, flow name of the source)
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE, unsigned int, read size of the source)
 
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t, delay applied to systime attribute)
@@ -437,8 +437,20 @@ static inline void upipe_throw(struct upipe *upipe,
     }
 }
 
+/** @This throws a ready event. This event is thrown whenever a
+ * pipe is ready to process data or respond to control commands asking
+ * for information about the processing.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_ready(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_READY);
+}
+
 /** @This throws an allocation error event. This event is thrown whenever a
- * pipe is unable to allocate required data.
+ * pipe is unable to allocate required data. After this event, the behaviour
+ * of a pipe is undefined, except for calls to @ref upipe_release.
  *
  * @param upipe description structure of the pipe
  */
@@ -448,7 +460,8 @@ static inline void upipe_throw_aerror(struct upipe *upipe)
 }
 
 /** @This throws a upump error event. This event is thrown whenever a pipe
- * is unable to allocate a watcher.
+ * is unable to allocate a watcher. After this event, the behaviour of a
+ * pipe is undefined, except for calls to @ref upipe_release.
  *
  * @param upipe description structure of the pipe
  */
@@ -482,21 +495,22 @@ static inline void upipe_throw_write_end(struct upipe *upipe,
     upipe_throw(upipe, UPROBE_WRITE_END, location);
 }
 
-/** @This throws a new flow event. This event is thrown whenever a demux pipe
+/** @This throws a new flow event. This event is thrown whenever a pipe
  * declares a new output flow.
  *
  * @param upipe description structure of the pipe
- * @param flow_suffix suffix appended to the flow name for this output
+ * @param flow_suffix suffix appended to the flow name for this output, or NULL
+ * in case of a linear pipe
  * @param flow_def_head head of list of flow definitions supported by the output
  */
 static inline void upipe_throw_new_flow(struct upipe *upipe,
                                         const char *flow_suffix,
-                                        struct uchain *flow_def_head)
+                                        struct uref *flow_def_head)
 {
     upipe_throw(upipe, UPROBE_NEW_FLOW, flow_suffix, flow_def_head);
 }
 
-/** @This throws a event asking for a uref manager.
+/** @This throws an event asking for a uref manager.
  *
  * @param upipe description structure of the pipe
  */
@@ -505,13 +519,31 @@ static inline void upipe_throw_need_uref_mgr(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
 }
 
-/** @This throws a event asking for a upump manager.
+/** @This throws an event asking for a upump manager.
  *
  * @param upipe description structure of the pipe
  */
 static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
 {
     upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
+}
+
+/** @This throws an event asking for a ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_linear_need_ubuf_mgr(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_LINEAR_NEED_UBUF_MGR);
+}
+
+/** @This throws an event asking for a source flow name.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_source_need_flow_name(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_SOURCE_NEED_FLOW_NAME);
 }
 
 /** @This increments the reference count of a upipe_mgr.

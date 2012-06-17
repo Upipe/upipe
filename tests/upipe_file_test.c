@@ -40,7 +40,6 @@
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_linear.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
 
@@ -148,7 +147,7 @@ int main(int argc, char *argv[])
     assert(upipe_linear_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
     assert(upipe_linear_set_output(upipe_fsrc, upipe_fsink));
     assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
-    assert(upipe_source_set_flow(upipe_fsrc, "0"));
+    assert(upipe_source_set_flow_name(upipe_fsrc, "0"));
     if (delay)
         assert(upipe_set_uclock(upipe_fsrc, uclock));
     assert(upipe_fsrc_set_path(upipe_fsrc, src_file));

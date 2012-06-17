@@ -14,12 +14,18 @@ nobase_include_HEADERS = \
 	upipe/ulist.h \
 	upipe/ulog.h \
 	upipe/ulog_std.h \
-	upipe/upipe_flows.h \
 	upipe/upipe.h \
-	upipe/upipe_linear.h \
-	upipe/upipe_sink.h \
-	upipe/upipe_source.h \
-	upipe/upipe_split.h \
+	upipe/upipe_flows.h \
+	upipe/upipe_helper_upipe.h \
+	upipe/upipe_helper_uref_mgr.h \
+	upipe/upipe_helper_upump_mgr.h \
+	upipe/upipe_helper_uclock.h \
+	upipe/upipe_helper_linear_output.h \
+	upipe/upipe_helper_linear_ubuf_mgr.h \
+	upipe/upipe_helper_source_flow_name.h \
+	upipe/upipe_helper_source_read_size.h \
+	upipe/upipe_helper_sink_delay.h \
+	upipe/upipe_helper_split_outputs.h \
 	upipe/upool.h \
 	upipe/uprobe.h \
 	upipe/uprobe_print.h \
