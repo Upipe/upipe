@@ -8,6 +8,7 @@ AC_CONFIG_HEADERS([include/upipe/config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([nostdinc parallel-tests color-tests])
+PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
 AC_PROG_CXX
@@ -34,6 +35,8 @@ AC_CHECK_HEADERS([ev.h], [
                         AM_CONDITIONAL(HAVE_EV, true),
                         AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
+
+PKG_CHECK_UPIPE(AVFORMAT, [libavformat > 54.0.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
 
 # Checks for header files.
 AC_HEADER_STDC
