@@ -384,6 +384,13 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
             }
 
         upipe_fsink->path = strdup(path);
+        if (unlikely(upipe_fsink->path == NULL)) {
+            close(upipe_fsink->fd);
+            upipe_fsink->fd = -1;
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+            return false;
+        }
         ulog_notice(upipe->ulog, "opening file %s in %s mode",
                     upipe_fsink->path, mode_desc);
     }
@@ -462,15 +469,16 @@ static bool upipe_fsink_control(struct upipe *upipe, enum upipe_control control,
         return upipe_fsink_input(upipe, uref);
     }
 
-    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    bool ret = _upipe_fsink_control(upipe, control, args);
+    if (unlikely(!_upipe_fsink_control(upipe, control, args)))
+        return false;
 
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (unlikely(upipe_fsink->upump_mgr != NULL)) {
         if (unlikely(!ulist_empty(&upipe_fsink->urefs)))
             upipe_fsink_wait(upipe, 0);
         if (likely(!upipe_fsink->ready)) {
-            upipe_throw_ready(upipe);
             upipe_fsink->ready = true;
+            upipe_throw_ready(upipe);
         }
 
     } else {
@@ -478,7 +486,7 @@ static bool upipe_fsink_control(struct upipe *upipe, enum upipe_control control,
         upipe_throw_need_upump_mgr(upipe);
     }
 
-    return ret;
+    return true;
 }
 
 /** @internal @This frees all resources allocated.
