@@ -205,7 +205,7 @@ static bool SUBSTRUCT##_init(struct upipe *upipe, struct SUBSTRUCT *output, \
  * @param upipe description structure of the pipe                           \
  * @param output pointer to output-specific substructure                    \
  */                                                                         \
-static void SBUSTRUCT##_flow_delete(struct upipe *upipe,                    \
+static void SUBSTRUCT##_flow_delete(struct upipe *upipe,                    \
                                     struct SUBSTRUCT *output)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
@@ -256,7 +256,7 @@ static void SUBSTRUCT##_output(struct upipe *upipe,                         \
                                struct SUBSTRUCT *output, struct uref *uref) \
 {                                                                           \
     if (unlikely(!output->FLOW_DEF_SENT))                                   \
-        output##_flow_definition(upipe);                                    \
+        SUBSTRUCT##_flow_definition(upipe, output);                         \
     if (unlikely(!output->FLOW_DEF_SENT)) {                                 \
         uref_release(uref);                                                 \
         return;                                                             \
@@ -266,9 +266,9 @@ static void SUBSTRUCT##_output(struct upipe *upipe,                         \
     if (unlikely(!output->FLOW_DEF_SENT ||                                  \
                  !uref_flow_get_name(output->FLOW_DEF, &flow_name) ||       \
                  !uref_flow_set_name(&uref, flow_name))) {                  \
+        uref_release(uref);                                                 \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
-        uref_release(uref);                                                 \
         return;                                                             \
     }                                                                       \
     upipe_input(output->OUTPUT, uref);                                      \
@@ -288,7 +288,7 @@ static void SUBSTRUCT##_set_flow_def(struct upipe *upipe,                   \
 {                                                                           \
     if (unlikely(output->FLOW_DEF != NULL)) {                               \
         if (unlikely(output->FLOW_DEF_SENT && flow_def == NULL))            \
-            output##_flow_delete(upipe);                                    \
+            SUBSTRUCT##_flow_delete(upipe, output);                         \
         uref_release(output->FLOW_DEF);                                     \
         output->FLOW_DEF_SENT = false;                                      \
     }                                                                       \
@@ -344,7 +344,7 @@ static void SUBSTRUCT##_clean(struct upipe *upipe, struct SUBSTRUCT *output)\
     free(output->FLOW_SUFFIX);                                              \
     if (likely(output->OUTPUT != NULL)) {                                   \
         if (likely(output->FLOW_DEF_SENT))                                  \
-            SUBSTRUCT##_flow_delete(upipe);                                 \
+            SUBSTRUCT##_flow_delete(upipe, output);                         \
         upipe_release(output->OUTPUT);                                      \
     }                                                                       \
     if (likely(output->FLOW_DEF != NULL))                                   \
