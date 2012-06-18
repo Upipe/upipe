@@ -72,7 +72,7 @@ enum upipe_control {
     UPIPE_SET_UPUMP_MGR,
 
     /*
-     * Linear elements commandsa (upipe/upipe_linear.h)
+     * Linear elements commands
      */
     /** gets output (struct upipe **) */
     UPIPE_LINEAR_GET_OUTPUT,
@@ -84,19 +84,21 @@ enum upipe_control {
     UPIPE_LINEAR_SET_UBUF_MGR,
 
     /*
-     * Split elements commands (upipe/upipe_split.h)
+     * Split elements commands
      */
     /** gets output for given flow suffix (struct upipe **, const char *) */
     UPIPE_SPLIT_GET_OUTPUT,
     /** sets output for given flow suffix (struct upipe *, const char *) */
     UPIPE_SPLIT_SET_OUTPUT,
-    /** gets ubuf manager for given flow suffix (struct ubuf_mgr **, const char *) */
+    /** gets ubuf manager for given flow suffix (struct ubuf_mgr **,
+     * const char *) */
     UPIPE_SPLIT_GET_UBUF_MGR,
-    /** sets ubuf manager for given flow suffix (struct ubuf_mgr *, const char *) */
+    /** sets ubuf manager for given flow suffix (struct ubuf_mgr *,
+     * const char *) */
     UPIPE_SPLIT_SET_UBUF_MGR,
 
     /*
-     * Source elements commands (upipe/upipe_source.h)
+     * Source elements commands
      */
     /** gets name of the source flow (const char **) */
     UPIPE_SOURCE_GET_FLOW_NAME,
@@ -108,7 +110,7 @@ enum upipe_control {
     UPIPE_SOURCE_SET_READ_SIZE,
 
     /*
-     * Sink elements commands (upipe/upipe_source.h)
+     * Sink elements commands
      */
     /** gets delay applied to systime attribute (uint64_t *) */
     UPIPE_SINK_GET_DELAY,
@@ -143,7 +145,7 @@ struct upipe_mgr {
 
     /** function to create a pipe */
     struct upipe *(*upipe_alloc)(struct upipe_mgr *);
-    /** control function for standard or arbitrary commands */
+    /** control function for standard or local commands */
     bool (*upipe_control)(struct upipe *, enum upipe_control, va_list);
     /** function to free a pipe structure */
     void (*upipe_free)(struct upipe *);
@@ -232,17 +234,25 @@ static inline bool group##_set_##name(struct upipe *upipe, type s)          \
     return upipe_control(upipe, GROUP##_SET_##NAME, s);                     \
 }
 
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uclock, UCLOCK, struct uclock *, uclock structure)
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uref_mgr, UREF_MGR, struct uref_mgr *, uref manager)
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, upump_mgr, UPUMP_MGR, struct upump_mgr *, upump manager)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uclock, UCLOCK, struct uclock *,
+                       uclock structure)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uref_mgr, UREF_MGR, struct uref_mgr *,
+                       uref manager)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, upump_mgr, UPUMP_MGR, struct upump_mgr *,
+                       upump manager)
 
-UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, output, OUTPUT, struct upipe *, pipe acting as output)
-UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, ubuf_mgr, UBUF_MGR, struct ubuf_mgr *, ubuf manager)
+UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, output, OUTPUT,
+                       struct upipe *, pipe acting as output)
+UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, ubuf_mgr, UBUF_MGR,
+                       struct ubuf_mgr *, ubuf manager)
 
-UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, flow_name, FLOW_NAME, const char *, flow name of the source)
-UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE, unsigned int, read size of the source)
+UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, flow_name, FLOW_NAME,
+                       const char *, flow name of the source)
+UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
+                       unsigned int, read size of the source)
 
-UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t, delay applied to systime attribute)
+UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
+                       delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
 
 /** @internal @This allows to easily define accessors for split control
@@ -315,8 +325,10 @@ static inline bool upipe_split_set_##name##_va(struct upipe *upipe, type s, \
     UBASE_VARARG(upipe_split_set_##name(upipe, s, string))                  \
 }
 
-UPIPE_SPLIT_CONTROL_TEMPLATE(output, OUTPUT, struct upipe *, pipe acting as output)
-UPIPE_SPLIT_CONTROL_TEMPLATE(ubuf_mgr, UBUF_MGR, struct ubuf_mgr *, ubuf manager)
+UPIPE_SPLIT_CONTROL_TEMPLATE(output, OUTPUT, struct upipe *,
+                             pipe acting as output)
+UPIPE_SPLIT_CONTROL_TEMPLATE(ubuf_mgr, UBUF_MGR, struct ubuf_mgr *,
+                             ubuf manager)
 #undef UPIPE_SPLIT_CONTROL_TEMPLATE
 
 /** @This increments the reference count of a upipe.
@@ -329,7 +341,9 @@ static inline void upipe_use(struct upipe *upipe)
 }
 
 /** @This decrements the reference count of a upipe, and frees it when
- * it gets down to 0.
+ * it gets down to 0. Please note that this function may not be called from a
+ * uprobe call-back, when the probe has been triggered by event on the same
+ * pipe.
  *
  * @param upipe pointer to struct upipe
  */
@@ -353,70 +367,6 @@ static inline bool upipe_single(struct upipe *upipe)
     return urefcount_single(&upipe->refcount);
 }
 
-/** @internal @This allows to define accessors to upipe super-set structures.
- *
- * @param structure name of the super-set structure
- * @param name name of the member
- * @param type type of the member
- */
-#define UPIPE_STRUCT_TEMPLATE(structure, name, type)                        \
-/** @This returns the name structure.                                       \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- * @return name structure                                                   \
- */                                                                         \
-static inline type upipe_##structure##_##name(struct upipe *upipe)          \
-{                                                                           \
-    struct upipe_##structure *p = upipe_##structure##_from_upipe(upipe);    \
-    return p->name;                                                         \
-}
-
-/** @internal @This allows to define parts of ref upipe_init that
- * initialize upipe objects supporting the use/release semantics.
- *
- * @param structure name of the structure containing pointers
- * @param name name of the object
- */
-#define UPIPE_OBJ_INIT_TEMPLATE(structure, name)                            \
-    structure->name = NULL;
-
-/** @internal @This allows to define parts of @ref upipe_control that
- * get/set upipe objects supporting the use/release semantics.
- *
- * @param structure name of the structure containing pointers
- * @param GROUP group of control commands, in upper case
- * @param name name of the object, in lower case
- * @param NAME name of the object, in upper case
- * @param type type of the object, such as in struct type *
- */
-#define UPIPE_OBJ_CONTROL_TEMPLATE(structure, GROUP, name, NAME, type)      \
-    case GROUP##_GET_##NAME: {                                              \
-        struct type **p = va_arg(args, struct type **);                     \
-        assert(p != NULL);                                                  \
-        *p = structure->name;                                               \
-        return true;                                                        \
-    }                                                                       \
-    case GROUP##_SET_##NAME: {                                              \
-        struct type *s = va_arg(args, struct type *);                       \
-        if (unlikely(structure->name != NULL))                              \
-            type##_release(structure->name);                                \
-        structure->name = s;                                                \
-        if (likely(structure->name != NULL))                                \
-            type##_use(structure->name);                                    \
-        return true;                                                        \
-    }
-
-/** @internal @This allows to define parts of ref upipe_free that
- * release upipe objects supporting the use/release semantics.
- *
- * @param structure name of the structure containing pointers
- * @param name name of the object
- * @param type type of the object, such as in struct type *
- */
-#define UPIPE_OBJ_CLEAN_TEMPLATE(structure, name, type)                     \
-    if (likely(structure->name != NULL))                                    \
-        type##_release(structure->name);
-
 /** @internal @This throws generic events with optional arguments.
  *
  * @param upipe description structure of the pipe
@@ -439,7 +389,9 @@ static inline void upipe_throw(struct upipe *upipe,
 
 /** @This throws a ready event. This event is thrown whenever a
  * pipe is ready to process data or respond to control commands asking
- * for information about the processing.
+ * for information about the processing. If a packet is input into a pipe
+ * before the ready event was thrown, the behaviour of the pipe is undefined,
+ * except for calls to @ref upipe_release.
  *
  * @param upipe description structure of the pipe
  */
