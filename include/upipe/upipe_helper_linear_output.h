@@ -189,9 +189,9 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT ||                               \
                  !uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name) ||    \
                  !uref_flow_set_name(&uref, flow_name))) {                  \
+        uref_release(uref);                                                 \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
-        uref_release(uref);                                                 \
         return;                                                             \
     }                                                                       \
     upipe_input(STRUCTURE->OUTPUT, uref);                                   \
