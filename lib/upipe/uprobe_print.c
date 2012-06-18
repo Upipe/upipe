@@ -80,68 +80,70 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                                enum uprobe_event event, va_list args)
 {
     struct uprobe_print *uprobe_print = uprobe_print_from_uprobe(uprobe);
+    const char *name = likely(uprobe_print->name != NULL) ? uprobe_print->name :
+                       "unknown";
 
     switch (event) {
         case UPROBE_READY:
             fprintf(uprobe_print->stream,
                     "%s probe: received ready event from pipe %p\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_AERROR:
             fprintf(uprobe_print->stream,
                     "%s probe: received allocation error from pipe %p\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_UPUMP_ERROR:
             fprintf(uprobe_print->stream,
                     "%s probe: received upump error from pipe %p\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_READ_END: {
             const char *location = va_arg(args, const char *);
             fprintf(uprobe_print->stream,
                     "%s probe: received read end from pipe %p on %s\n",
-                    uprobe_print->name, upipe, location);
+                    name, upipe, location);
             break;
         }
         case UPROBE_WRITE_END: {
             const char *location = va_arg(args, const char *);
             fprintf(uprobe_print->stream,
                     "%s probe: received write end from pipe %p on %s\n",
-                    uprobe_print->name, upipe, location);
+                    name, upipe, location);
             break;
         }
         case UPROBE_NEW_FLOW: {
             const char *flow_name = va_arg(args, const char *);
             fprintf(uprobe_print->stream,
                     "%s probe: received new flow from pipe %p on output %s\n",
-                    uprobe_print->name, upipe, flow_name);
+                    name, upipe, flow_name);
             break;
         }
         case UPROBE_NEED_UREF_MGR:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p required a uref manager\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_NEED_UPUMP_MGR:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p required a upump manager\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_LINEAR_NEED_UBUF_MGR:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p required a ubuf manager\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         case UPROBE_SOURCE_NEED_FLOW_NAME:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p required a flow name\n",
-                    uprobe_print->name, upipe);
+                    name, upipe);
             break;
         default:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p threw an unknown, uncaught event (%d)\n",
-                    uprobe_print->name, upipe, event);
+                    name, upipe, event);
             break;
     }
     return false;
@@ -173,7 +175,12 @@ struct uprobe *uprobe_print_alloc(struct uprobe *next, FILE *stream,
         return NULL;
     struct uprobe *uprobe = uprobe_print_to_uprobe(uprobe_print);
     uprobe_print->stream = stream;
-    uprobe_print->name = strdup(name);
+    if (likely(name != NULL)) {
+        uprobe_print->name = strdup(name);
+        if (unlikely(uprobe_print->name == NULL))
+            fprintf(stream, "uprobe_print: couldn't allocate a string\n");
+    } else
+        uprobe_print->name = NULL;
     uprobe_init(uprobe, uprobe_print_throw, next);
     return uprobe;
 }
