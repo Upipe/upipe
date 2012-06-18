@@ -33,6 +33,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
+#include <upipe/upipe.h>
 #include <upipe/ulog.h>
 
 #include <stdbool.h>
@@ -137,24 +138,24 @@ static inline bool upipe_flows_set(struct ulist *upipe_flows, struct uref *uref)
 /** @This checks an incoming uref for validity and control messages.
  *
  * @param upipe_flows pointer to the upipe_flows structure
- * @param ulog structure used to output logs
+ * @param upipe description structure of the pipe
  * @param uref_mgr management structure allowing to create urefs
  * @param uref uref structure to check
  * @return false if the uref is invalid and should be dropped
  */
 static inline bool upipe_flows_input(struct ulist *upipe_flows,
-                                     struct ulog *ulog,
+                                     struct upipe *upipe,
                                      struct uref_mgr *uref_mgr,
                                      struct uref *uref)
 {
     const char *flow, *def;
     if (unlikely(uref_mgr == NULL)) {
-        ulog_warning(ulog, "received a buffer without a uref mgr");
+        ulog_warning(upipe->ulog, "received a buffer without a uref mgr");
         return false;
     }
 
     if (unlikely(!uref_flow_get_name(uref, &flow))) {
-        ulog_warning(ulog, "received a buffer outside of a flow");
+        ulog_warning(upipe->ulog, "received a buffer outside of a flow");
         return false;
     }
 
@@ -162,12 +163,16 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
         struct uref *new_uref = uref_dup(uref_mgr, uref);
         if (likely(new_uref != NULL)) {
             upipe_flows_set(upipe_flows, new_uref);
-            ulog_debug(ulog, "flow definition for %s: %s", flow, def);
-        } else
-            ulog_aerror(ulog);
+            ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
+        } else {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+            return false;
+        }
     }
     else if (unlikely(!upipe_flows_get_definition(upipe_flows, flow, &def))) {
-        ulog_warning(ulog, "received a buffer without a flow definition");
+        ulog_warning(upipe->ulog,
+                     "received a buffer without a flow definition");
         return false;
     }
     else if (unlikely(uref_flow_get_delete(uref)))
@@ -179,31 +184,34 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
 /** @This walks through a upipe_flows structure to replay all flow definitions.
  *
  * @param upipe_flows pointer to a upipe_flows structure
- * @param ulog structure used to output logs
+ * @param upipe description structure of the pipe
  * @param uref_mgr management structure allowing to create urefs
  * @param uref name of the new uref flow definition to use in action
  * @param action line of code to execute for every new uref
  */
-#define upipe_flows_foreach_replay(upipe_flows, ulog, uref_mgr, uref,       \
+#define upipe_flows_foreach_replay(upipe_flows, upipe, uref_mgr, uref,      \
                                    action)                                  \
     struct uref *upipe_flows_replay_uref;                                   \
     upipe_flows_foreach (upipe_flows, upipe_flows_replay_uref) {            \
         struct uref *uref = uref_dup(uref_mgr, upipe_flows_replay_uref);    \
         if (likely(uref != NULL))                                           \
             action;                                                         \
-        else                                                                \
-            ulog_aerror(ulog);                                              \
+        else {                                                              \
+            ulog_aerror(upipe->ulog);                                       \
+            upipe_throw_aerror(upipe);                                      \
+            break;                                                          \
+        }                                                                   \
     }
 
 /** @This walks through a upipe_flows structure to play flow deletions.
  *
  * @param upipe_flows pointer to a upipe_flows structure
- * @param ulog structure used to output logs
+ * @param upipe description structure of the pipe
  * @param uref_mgr management structure allowing to create urefs
  * @param uref name of the new uref flow deletion to use in action
  * @param action line of code to execute for every new uref
  */
-#define upipe_flows_foreach_delete(upipe_flows, ulog, uref_mgr, uref,       \
+#define upipe_flows_foreach_delete(upipe_flows, upipe, uref_mgr, uref,      \
                                    action)                                  \
     struct uref *upipe_flows_delete_uref;                                   \
     upipe_flows_foreach (upipe_flows, upipe_flows_delete_uref) {            \
@@ -213,8 +221,11 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
         struct uref *uref = uref_flow_alloc_delete(uref_mgr, flow);         \
         if (likely(uref != NULL))                                           \
             action;                                                         \
-        else                                                                \
-            ulog_aerror(ulog);                                              \
+        else {                                                              \
+            ulog_aerror(upipe->ulog);                                       \
+            upipe_throw_aerror(upipe);                                      \
+            break;                                                          \
+        }                                                                   \
     }
 
 /** @This cleans up a struct ulist structure.

@@ -63,7 +63,7 @@ struct upipe_dup {
 UPIPE_HELPER_UPIPE(upipe_dup, upipe)
 UPIPE_HELPER_UREF_MGR(upipe_dup, uref_mgr)
 
-/** @internal @This is the private of an output of a dup pipe. */
+/** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
     /** structure for double-linked lists */
     struct uchain uchain;
@@ -115,9 +115,8 @@ static inline bool upipe_dup_output_match(struct upipe_dup_output *output,
  * substructure.
  *
  * @param upipe description structure of the pipe
- * @param output pointer to output-specific substructure
  * @param flow_suffix flow suffix
- * @return false in case of allocation failure
+ * @return pointer to allocated substructure
  */
 static struct upipe_dup_output *upipe_dup_output_alloc(struct upipe *upipe,
                                                        const char *flow_suffix)
@@ -205,7 +204,7 @@ static bool upipe_dup_output_set_output(struct upipe *upipe,
     if (unlikely(output->output != NULL)) {
         if (likely(upipe_dup->uref_mgr != NULL)) {
             /* change of output, signal flow deletions on old output */
-            upipe_flows_foreach_delete(&upipe_dup->flows, upipe->ulog,
+            upipe_flows_foreach_delete(&upipe_dup->flows, upipe,
                                        upipe_dup->uref_mgr, uref,
                               upipe_dup_output_output(upipe, output, uref));
         }
@@ -217,7 +216,7 @@ static bool upipe_dup_output_set_output(struct upipe *upipe,
         upipe_use(o);
         if (likely(upipe_dup->uref_mgr != NULL)) {
             /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_dup->flows, upipe->ulog,
+            upipe_flows_foreach_replay(&upipe_dup->flows, upipe,
                                        upipe_dup->uref_mgr, uref,
                               upipe_dup_output_output(upipe, output, uref));
         }
@@ -228,7 +227,7 @@ static bool upipe_dup_output_set_output(struct upipe *upipe,
 /** @internal @This frees up an output-specific substructure.
  *
  * @param upipe description structure of the pipe
- * @param output substructure to clean
+ * @param output substructure to free
  */
 static void upipe_dup_output_free(struct upipe *upipe,
                                   struct upipe_dup_output *output)
@@ -237,7 +236,7 @@ static void upipe_dup_output_free(struct upipe *upipe,
     free(output->flow_suffix);
     if (likely(output->output != NULL)) {
         if (likely(upipe_dup->uref_mgr != NULL)) {
-            upipe_flows_foreach_delete(&upipe_dup->flows, upipe->ulog,
+            upipe_flows_foreach_delete(&upipe_dup->flows, upipe,
                                        upipe_dup->uref_mgr, uref,
                               upipe_dup_output_output(upipe, output, uref));
         }
@@ -280,12 +279,12 @@ static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
     if (unlikely(upipe_dup->uref_mgr == NULL)) {
         ulog_warning(upipe->ulog,
                      "received a buffer while the pipe is not ready");
-        upipe_throw_need_uref_mgr(upipe);
         uref_release(uref);
+        upipe_throw_need_uref_mgr(upipe);
         return false;
     }
 
-    if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe->ulog,
+    if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe,
                                     upipe_dup->uref_mgr, uref))) {
         uref_release(uref);
         return false;
@@ -298,8 +297,10 @@ static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
         if (likely(new_uref != NULL))
             upipe_dup_output_output(upipe, output, new_uref);
         else {
+            uref_release(uref);
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
+            return false;
         }
     }
     uref_release(uref);
@@ -394,13 +395,14 @@ static bool upipe_dup_control(struct upipe *upipe, enum upipe_control control,
         return upipe_dup_input(upipe, uref);
     }
 
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    bool ret = _upipe_dup_control(upipe, control, args);
+    if (unlikely(!_upipe_dup_control(upipe, control, args)))
+        return false;
 
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (unlikely(upipe_dup->uref_mgr != NULL)) {
         if (likely(!upipe_dup->ready)) {
-            upipe_throw_ready(upipe);
             upipe_dup->ready = true;
+            upipe_throw_ready(upipe);
         }
 
     } else {
@@ -410,7 +412,7 @@ static bool upipe_dup_control(struct upipe *upipe, enum upipe_control control,
             upipe_throw_need_uref_mgr(upipe);
     }
 
-    return ret;
+    return true;
 }
 
 /** @internal @This frees all resources allocated.
