@@ -82,6 +82,11 @@ enum upipe_control {
     UPIPE_LINEAR_GET_UBUF_MGR,
     /** sets ubuf manager (struct ubuf_mgr *) */
     UPIPE_LINEAR_SET_UBUF_MGR,
+     /** get output flow definition (struct uref **) */
+     UPIPE_LINEAR_GET_FLOW_DEF,
+     /** set output flow definition (struct uref *) */
+     UPIPE_LINEAR_SET_FLOW_DEF,
+
 
     /*
      * Split elements commands
@@ -245,6 +250,8 @@ UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, output, OUTPUT,
                        struct upipe *, pipe acting as output)
 UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, ubuf_mgr, UBUF_MGR,
                        struct ubuf_mgr *, ubuf manager)
+UPIPE_CONTROL_TEMPLATE(upipe_linear, UPIPE_LINEAR, flow_def, FLOW_DEF,
+                       struct uref *, flow definition of the output)
 
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, flow_name, FLOW_NAME,
                        const char *, flow name of the source)
