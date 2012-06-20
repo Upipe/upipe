@@ -74,6 +74,9 @@ struct uref_mgr {
     /** function to free a uref */
     void (*uref_free)(struct uref *);
 
+    /** function to get the name and type of the next attribute */
+    void (*uref_attr_iterate)(struct uref *, const char **,
+                              enum uref_attrtype *);
     /** function to get an attribute */
     const uint8_t *(*uref_attr_get)(struct uref *, const char *,
                                     enum uref_attrtype, size_t *);

@@ -30,6 +30,9 @@
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
+#include <upipe/uref_dump.h>
+#include <upipe/ulog.h>
+#include <upipe/ulog_std.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -72,6 +75,10 @@ int main(int argc, char **argv)
     assert(!strcmp(string, "pouet"));
     assert(!uref_attr_get_void(uref1, NULL, "f.eof"));
     assert(uref_attr_get_void(uref1, NULL, "f.error"));
+
+    struct ulog *ulog = ulog_std_alloc(stdout, ULOG_DEBUG, "uref test");
+    uref_dump(uref1, ulog);
+    ulog_free(ulog);
 
     assert(uref_attr_delete_void(uref1, "f.error"));
     assert(uref_attr_delete_string(uref1, "f.def"));

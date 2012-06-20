@@ -37,6 +37,7 @@ nobase_include_HEADERS = \
 	upipe/uref_block.h \
 	upipe/uref_clock.h \
 	upipe/urefcount.h \
+	upipe/uref_dump.h \
 	upipe/uref_flow.h \
 	upipe/uref.h \
 	upipe/uref_pic_flow.h \

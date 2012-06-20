@@ -74,6 +74,21 @@ struct urational {
 };
 
 /** @internal @This finds an attribute of the given name and type and returns
+ * the name and type of the next attribute.
+ *
+ * @param uref pointer to the uref
+ * @param name_p reference to the name of the attribute to find, changed during
+ * execution to the name of the next attribute, or NULL if it was the last
+ * attribute; if it was NULL, it is changed to the name of the first attribute
+ * @param type_p reference to the type of the attribute, if the name is valid
+ */
+static inline void uref_attr_iterate(struct uref *uref, const char **name_p,
+                                     enum uref_attrtype *type_p)
+{
+    return uref->mgr->uref_attr_iterate(uref, name_p, type_p);
+}
+
+/** @internal @This finds an attribute of the given name and type and returns
  * a pointer to the beginning of its value.
  *
  * @param uref pointer to the uref

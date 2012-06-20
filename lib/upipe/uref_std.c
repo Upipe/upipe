@@ -371,6 +371,63 @@ static uint8_t *uref_std_attr_find_name(struct uref *uref, const char *name,
 }
 
 /** @internal @This finds an attribute (shorthand or not) of the given name
+ * and type and returns a pointer to its beginning.
+ *
+ * @param uref pointer to the uref
+ * @param name name of the attribute
+ * @param type type of the attribute (excluding std_shorthands)
+ * @return pointer to the attribute, or NULL
+ */
+static uint8_t *uref_std_attr_find(struct uref *uref, const char *name,
+                                   enum uref_attrtype type)
+{
+    const struct std_shorthand *shorthand = uref_std_attr_shorthand(name, type);
+    if (likely(shorthand != NULL))
+        return uref_std_attr_find_type(uref, shorthand->type);
+
+    return uref_std_attr_find_name(uref, name, type);
+}
+
+/** @internal @This finds an attribute (shorthand or not) of the given name
+ * and type and returns the name and type of the next attribute.
+ *
+ * @param uref pointer to the uref
+ * @param name_p reference to the name of the attribute to find, changed during
+ * execution to the name of the next attribute, or NULL if it was the last
+ * attribute; if it was NULL, it is changed to the name of the first attribute
+ * @param type_p reference to the type of the attribute, if the name is valid
+ */
+static void uref_std_attr_iterate(struct uref *uref, const char **name_p,
+                                  enum uref_attrtype *type_p)
+{
+    assert(name_p != NULL);
+    assert(type_p != NULL);
+    struct uref_std *std = uref_std_from_uref(uref);
+    uint8_t *attr;
+
+    if (unlikely(*name_p == NULL))
+        attr = std->attr;
+    else
+        attr = uref_std_attr_find(uref, *name_p, *type_p);
+    if (unlikely(attr == NULL || (attr = uref_std_attr_next(attr)) == NULL ||
+                 *attr == UREF_ATTRTYPE_END)) {
+        *name_p = NULL;
+        return;
+    }
+
+    if (likely(*attr > UREF_ATTRTYPE_SHORTHAND)) {
+        const struct std_shorthand *shorthand = std_shorthands +
+                (*attr - UREF_ATTRTYPE_SHORTHAND - 1);
+        *name_p = shorthand->name;
+        *type_p = shorthand->base_type;
+        return;
+    }
+
+    *name_p = (const char *)(attr + 3);
+    *type_p = *attr;
+}
+
+/** @internal @This finds an attribute (shorthand or not) of the given name
  * and type and returns a pointer to the beginning of its value.
  *
  * @param uref pointer to the uref
@@ -574,6 +631,7 @@ struct uref_mgr *uref_std_mgr_alloc(unsigned int pool_depth,
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_dup = uref_std_dup;
     std_mgr->mgr.uref_free = uref_std_free;
+    std_mgr->mgr.uref_attr_iterate = uref_std_attr_iterate;
     std_mgr->mgr.uref_attr_get = uref_std_attr_get;
     std_mgr->mgr.uref_attr_set = uref_std_attr_set;
     std_mgr->mgr.uref_attr_delete = uref_std_attr_delete;
