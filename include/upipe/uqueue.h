@@ -149,7 +149,7 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 
     unsigned int counter_after;
     struct uchain *uchain = ufifo_pop(&uqueue->fifo, &counter_after);
-    if (unlikely(counter_after == uqueue->max_length - 1))
+    if (unlikely(uchain != NULL && counter_after == uqueue->max_length - 1))
         ueventfd_write(&uqueue->event_push);
     return uchain;
 }
