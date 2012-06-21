@@ -5,7 +5,7 @@ endif
 libupump_ev_la_SOURCES = upump_ev.c
 libupump_ev_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupump_ev_la_CFLAGS = -Wall
-libupump_ev_la_LIBS = $(top_builddir)/lib/upipe/libupipe.la -lev
+libupump_ev_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la -lev
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupump_ev.pc
