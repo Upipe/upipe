@@ -63,34 +63,43 @@ static inline void uref_dump(struct uref *uref, struct ulog *ulog)
 
         switch (type) {
             default:
-                ulog_debug(ulog, " - %s [unknown]", name);
+                ulog_debug(ulog, " - \"%s\" [unknown]", name);
                 break;
 
             case UREF_ATTRTYPE_OPAQUE:
-                ulog_debug(ulog, " - %s [opaque]", name);
+                ulog_debug(ulog, " - \"%s\" [opaque]", name);
                 break;
 
+            case UREF_ATTRTYPE_STRING: {
+                const char *val;
+                if (likely(uref_attr_get_string(uref, &val, name)))
+                    ulog_debug(ulog, " - \"%s\" [string]: \"%s\"", name, val);
+                else
+                    ulog_debug(ulog, " - \"%s\" [string]: [invalid]", name);
+                break;
+            }
+
             case UREF_ATTRTYPE_VOID:
-                ulog_debug(ulog, " - %s [void]", name);
+                ulog_debug(ulog, " - \"%s\" [void]", name);
                 break;
 
             case UREF_ATTRTYPE_BOOL: {
                 bool val;
                 if (likely(uref_attr_get_bool(uref, &val, name)))
-                    ulog_debug(ulog, " - %s [bool]: %s", name,
+                    ulog_debug(ulog, " - \"%s\" [bool]: %s", name,
                                val ? "true" : "false");
                 else
-                    ulog_debug(ulog, " - %s [bool]: [invalid]", name);
+                    ulog_debug(ulog, " - \"%s\" [bool]: [invalid]", name);
                 break;
             }
 
             case UREF_ATTRTYPE_RATIONAL: {
                 struct urational val;
                 if (likely(uref_attr_get_rational(uref, &val, name)))
-                    ulog_debug(ulog, " - %s [rational]: %"PRId64"/%"PRIu64,
+                    ulog_debug(ulog, " - \"%s\" [rational]: %"PRId64"/%"PRIu64,
                                name, val.num, val.den);
                 else
-                    ulog_debug(ulog, " - %s [rational]: [invalid]", name);
+                    ulog_debug(ulog, " - \"%s\" [rational]: [invalid]", name);
                 break;
             }
 
@@ -98,14 +107,14 @@ static inline void uref_dump(struct uref *uref, struct ulog *ulog)
             case UREF_ATTRTYPE_##TYPE: {                                    \
                 ctype val;                                                  \
                 if (likely(uref_attr_get_##type(uref, &val, name)))         \
-                    ulog_debug(ulog, " - %s [" #type "]: " ftype, name,     \
+                    ulog_debug(ulog, " - \"%s\" [" #type "]: " ftype, name, \
                                val);                                        \
                 else                                                        \
-                    ulog_debug(ulog, " - %s [" #type "]: [invalid]", name); \
+                    ulog_debug(ulog, " - \"%s\" [" #type "]: [invalid]",    \
+                               name);                                       \
                 break;                                                      \
             }
 
-            UREF_DUMP_TEMPLATE(STRING, string, const char *, "%s")
             UREF_DUMP_TEMPLATE(SMALL_UNSIGNED, small_unsigned, uint8_t,
                                "%"PRIu8)
             UREF_DUMP_TEMPLATE(SMALL_INT, small_int, int8_t, "%"PRId8)
