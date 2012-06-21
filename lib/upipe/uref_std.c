@@ -405,12 +405,13 @@ static void uref_std_attr_iterate(struct uref *uref, const char **name_p,
     struct uref_std *std = uref_std_from_uref(uref);
     uint8_t *attr;
 
-    if (unlikely(*name_p == NULL))
-        attr = std->attr;
-    else
+    if (likely(*name_p != NULL)) {
         attr = uref_std_attr_find(uref, *name_p, *type_p);
-    if (unlikely(attr == NULL || (attr = uref_std_attr_next(attr)) == NULL ||
-                 *attr == UREF_ATTRTYPE_END)) {
+        if (likely(attr != NULL))
+            attr = uref_std_attr_next(attr);
+    } else
+        attr = std->attr;
+    if (unlikely(attr == NULL || *attr == UREF_ATTRTYPE_END)) {
         *name_p = NULL;
         return;
     }
