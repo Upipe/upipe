@@ -91,8 +91,8 @@
  * to the designated output, and is used by the other declared functions.
  *
  * @item @code
- *  void upipe_foo_output_flow_definition(struct upipe *upipe,
- *                                        struct upipe_foo_output *output)
+ *  void upipe_foo_output_flow_def(struct upipe *upipe,
+ *                                 struct upipe_foo_output *output)
  * @end code
  * Not normally called from your functions. It sends a flow definition packet
  * to the designated output, and is used by the other declared functions.
@@ -230,8 +230,8 @@ static void SUBSTRUCT##_flow_delete(struct upipe *upipe,                    \
  * @param upipe description structure of the pipe                           \
  * @param output pointer to output-specific substructure                    \
  */                                                                         \
-static void SUBSTRUCT##_flow_definition(struct upipe *upipe,                \
-                                        struct SUBSTRUCT *output)           \
+static void SUBSTRUCT##_flow_def(struct upipe *upipe,                       \
+                                 struct SUBSTRUCT *output)                  \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
@@ -256,7 +256,7 @@ static void SUBSTRUCT##_output(struct upipe *upipe,                         \
                                struct SUBSTRUCT *output, struct uref *uref) \
 {                                                                           \
     if (unlikely(!output->FLOW_DEF_SENT))                                   \
-        SUBSTRUCT##_flow_definition(upipe, output);                         \
+        SUBSTRUCT##_flow_def(upipe, output);                                \
     if (unlikely(!output->FLOW_DEF_SENT)) {                                 \
         uref_release(uref);                                                 \
         return;                                                             \
@@ -376,13 +376,15 @@ static void SUBSTRUCT##_clean(struct upipe *upipe, struct SUBSTRUCT *output)\
  * Finds an output given by its flow suffix.
  *
  * @item @code
- *  bool upipe_foo_delete_output(struct upipe *upipe, const char *flow_suffix)
+ *  bool upipe_foo_delete_output(struct upipe *upipe, const char *flow_suffix,
+                void (*output_free)(struct upipe *, struct upipe_foo_output *))
  * @end code
  * Deletes an output given by its flow suffix, and returns true if it was found.
+ * You must pass a function pointer releasing upipe_foo_output substructures.
  *
  * @item @code
  *  struct upipe_foo_output *upipe_foo_add_output(struct upipe *upipe,
- *                                                const char *flow_suffix)
+ *                                         struct upipe_foo_output *output)
  * @end code
  * Add a new output for a flow suffix.
  *

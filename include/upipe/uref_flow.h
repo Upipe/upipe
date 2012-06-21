@@ -36,7 +36,7 @@
 #include <stdbool.h>
 
 UREF_ATTR_TEMPLATE(flow, name, "f.flow", string, const char *, flow name)
-UREF_ATTR_TEMPLATE(flow, definition, "f.def", string, const char *, flow definition)
+UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
 UREF_ATTR_TEMPLATE_VOID(flow, delete, "f.delete", flow delete flag)
 UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag)
 

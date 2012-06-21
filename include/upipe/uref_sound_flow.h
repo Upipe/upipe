@@ -37,7 +37,7 @@
 #include <stdbool.h>
 
 /** @internal flow definition prefix for sound allocator */
-#define UREF_SOUND_FLOW_DEFINITION "sound."
+#define UREF_SOUND_FLOW_DEF "sound."
 
 UREF_ATTR_TEMPLATE(sound_flow, channels, "s.channels", small_unsigned, uint8_t, number of channels)
 UREF_ATTR_TEMPLATE(sound_flow, sample_size, "s.sample_size", small_unsigned, uint8_t, size in octets of a sample of an audio channel)
@@ -55,13 +55,13 @@ UREF_ATTR_TEMPLATE(sound_flow, align_offset, "s.align_offset", int, int64_t, off
  * @param sample_size size in octets of a sample of an audio channel
  * @return pointer to uref control packet, or NULL in case of error
  */
-static inline struct uref *uref_sound_flow_alloc_definition(struct uref_mgr *mgr,
-                                                            uint8_t channels,
-                                                            uint8_t sample_size)
+static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
+                                                     uint8_t channels,
+                                                     uint8_t sample_size)
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_definition(&uref, UREF_SOUND_FLOW_DEFINITION) &&
+    if (unlikely(!(uref_flow_set_def(&uref, UREF_SOUND_FLOW_DEF) &&
                    uref_sound_flow_set_channels(&uref, channels) &&
                    uref_sound_flow_set_sample_size(&uref, sample_size)))) {
         uref_release(uref);
@@ -70,6 +70,6 @@ static inline struct uref *uref_sound_flow_alloc_definition(struct uref_mgr *mgr
     return uref;
 }
 
-#undef UREF_SOUND_FLOW_DEFINITION
+#undef UREF_SOUND_FLOW_DEF
 
 #endif

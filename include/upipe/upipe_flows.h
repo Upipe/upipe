@@ -87,13 +87,12 @@ static inline struct uref *upipe_flows_get(struct ulist *upipe_flows,
  * @param def_p reference to a string, will be written with the flow definition
  * @return false if the flow was not found
  */
-static inline bool upipe_flows_get_definition(struct ulist *upipe_flows,
-                                              const char *flow,
-                                              const char **def_p)
+static inline bool upipe_flows_get_def(struct ulist *upipe_flows,
+                                       const char *flow, const char **def_p)
 {
     struct uref *uref = upipe_flows_get(upipe_flows, flow);
     if (unlikely(uref == NULL)) return false;
-    return uref_flow_get_definition(uref, def_p);
+    return uref_flow_get_def(uref, def_p);
 }
 
 /** @This deletes the flow definition of a given flow.
@@ -159,7 +158,7 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
         return false;
     }
 
-    if (unlikely(uref_flow_get_definition(uref, &def))) {
+    if (unlikely(uref_flow_get_def(uref, &def))) {
         struct uref *new_uref = uref_dup(uref_mgr, uref);
         if (likely(new_uref != NULL)) {
             upipe_flows_set(upipe_flows, new_uref);
@@ -170,7 +169,7 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
             return false;
         }
     }
-    else if (unlikely(!upipe_flows_get_definition(upipe_flows, flow, &def))) {
+    else if (unlikely(!upipe_flows_get_def(upipe_flows, flow, &def))) {
         ulog_warning(upipe->ulog,
                      "received a buffer without a flow definition");
         return false;

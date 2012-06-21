@@ -39,7 +39,7 @@
 #include <assert.h>
 
 /** @internal flow definition prefix for pic allocator */
-#define UREF_PIC_FLOW_DEFINITION "pic."
+#define UREF_PIC_FLOW_DEF "pic."
 
 UREF_ATTR_TEMPLATE(pic_flow, macropixel, "p.macropixel", small_unsigned, uint8_t, number of pixels in a macropixel)
 UREF_ATTR_TEMPLATE(pic_flow, planes, "p.planes", small_unsigned, uint8_t, number of planes)
@@ -65,12 +65,12 @@ UREF_ATTR_TEMPLATE(pic_flow, align_hmoffset, "p.align_hmoffset", int, int64_t, h
  * @param planes number of planes
  * @return pointer to uref control packet, or NULL in case of error
  */
-static inline struct uref *uref_pic_flow_alloc_definition(struct uref_mgr *mgr,
-                                                          uint8_t macropixel)
+static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
+                                                   uint8_t macropixel)
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_definition(&uref, UREF_PIC_FLOW_DEFINITION) &&
+    if (unlikely(!(uref_flow_set_def(&uref, UREF_PIC_FLOW_DEF) &&
                    uref_pic_flow_set_macropixel(&uref, macropixel) &&
                    uref_pic_flow_set_planes(&uref, 0)))) {
         uref_release(uref);
@@ -135,6 +135,6 @@ static inline bool uref_pic_flow_find_chroma(struct uref *uref,
     return false;
 }
 
-#undef UREF_PIC_FLOW_DEFINITION
+#undef UREF_PIC_FLOW_DEF
 
 #endif

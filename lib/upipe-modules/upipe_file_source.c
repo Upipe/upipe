@@ -425,8 +425,8 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_control control,
     if (unlikely(upipe_fsrc->uref_mgr != NULL &&
                  upipe_fsrc->flow_name != NULL &&
                  upipe_fsrc->flow_def == NULL)) {
-        struct uref *flow_def =
-            uref_block_flow_alloc_definition(upipe_fsrc->uref_mgr, NULL);
+        struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
+                                                          NULL);
         if (unlikely(flow_def == NULL)) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);

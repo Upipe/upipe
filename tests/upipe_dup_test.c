@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
     assert(upipe_set_uref_mgr(upipe_dup, uref_mgr));
     assert(upipe_split_set_output(upipe_dup, upipe_sink0, "0"));
 
-    uref = uref_block_flow_alloc_definition(uref_mgr, NULL);
+    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     assert(uref_flow_set_name(&uref, "source"));
     upipe_input(upipe_dup, uref);

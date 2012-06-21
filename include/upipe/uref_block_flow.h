@@ -38,7 +38,7 @@
 #include <inttypes.h>
 
 /** @internal flow definition prefix for block allocator */
-#define UREF_BLOCK_FLOW_DEFINITION "block."
+#define UREF_BLOCK_FLOW_DEF "block."
 
 UREF_ATTR_TEMPLATE(block_flow, octetrate, "b.octetrate", unsigned, uint64_t, octets per second)
 UREF_ATTR_TEMPLATE(block_flow, max_octetrate, "b.max_octetrate", unsigned, uint64_t, maximum octets per second for profile/level)
@@ -56,23 +56,36 @@ UREF_ATTR_TEMPLATE(block_flow, align_offset, "b.align_offset", int, int64_t, off
  * @param def_suffix suffix to append to "block." flow definition
  * @return pointer to uref control packet, or NULL in case of error
  */
-static inline struct uref *uref_block_flow_alloc_definition(struct uref_mgr *mgr,
-                                                            const char *def_suffix)
+static inline struct uref *uref_block_flow_alloc_def(struct uref_mgr *mgr,
+                                                     const char *def_suffix)
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
     if (unlikely(def_suffix == NULL))
         def_suffix = "";
 
-    char def[sizeof(UREF_BLOCK_FLOW_DEFINITION) + strlen(def_suffix)];
-    sprintf(def, UREF_BLOCK_FLOW_DEFINITION "%s", def_suffix);
-    if (unlikely(!uref_flow_set_definition(&uref, def))) {
+    char def[sizeof(UREF_BLOCK_FLOW_DEF) + strlen(def_suffix)];
+    sprintf(def, UREF_BLOCK_FLOW_DEF "%s", def_suffix);
+    if (unlikely(!uref_flow_set_def(&uref, def))) {
         uref_release(uref);
         return NULL;
     }
     return uref;
 }
 
-#undef UREF_BLOCK_FLOW_DEFINITION
+/** @This allocates a control packet to define a new block flow, with
+ * printf-style definition suffix generation
+ *
+ * @param mgr uref management structure
+ * @param def_suffix suffix to append to "block." flow definition
+ * @return pointer to uref control packet, or NULL in case of error
+ */
+static inline struct uref *uref_block_flow_alloc_def_va(struct uref_mgr *mgr,
+                                                        const char *format, ...)
+{
+    UBASE_VARARG(uref_block_flow_alloc_def(mgr, string))
+}
+
+#undef UREF_BLOCK_FLOW_DEF
 
 #endif

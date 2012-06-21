@@ -64,7 +64,7 @@
  * packet */
 #define SYSTIME_DELAY               (0.01 * UCLOCK_FREQ)
 /** expected flow definition on all flows */
-#define EXPECTED_FLOW_DEFINITION    "block."
+#define EXPECTED_FLOW_DEF    "block."
 
 static void upipe_fsink_watcher(struct upump *upump);
 
@@ -273,14 +273,13 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
         return false;
     }
 
-    if (unlikely(uref_flow_get_definition(uref, &def))) {
+    if (unlikely(uref_flow_get_def(uref, &def))) {
         upipe_flows_set(&upipe_fsink->flows, uref);
         ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
         return true;
     }
 
-    if (unlikely(!upipe_flows_get_definition(&upipe_fsink->flows, flow,
-                                             &def))) {
+    if (unlikely(!upipe_flows_get_def(&upipe_fsink->flows, flow, &def))) {
         ulog_warning(upipe->ulog, "received a buffer without a flow definition");
         uref_release(uref);
         return false;
@@ -292,8 +291,7 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
         return true;
     }
 
-    if (unlikely(strncmp(def, EXPECTED_FLOW_DEFINITION,
-                         strlen(EXPECTED_FLOW_DEFINITION)))) {
+    if (unlikely(strncmp(def, EXPECTED_FLOW_DEF, strlen(EXPECTED_FLOW_DEF)))) {
         ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
         uref_release(uref);
         return false;

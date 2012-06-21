@@ -101,7 +101,7 @@ static bool queue_test_control(struct upipe *upipe, enum upipe_control control,
         ulog_notice(upipe->ulog, "loop %"PRIu8, counter);
         if (counter == 0) {
             const char *def;
-            assert(uref_flow_get_definition(uref, &def));
+            assert(uref_flow_get_def(uref, &def));
         } else if (counter == 2) {
             assert(urefcount_single(&upipe_qsink->refcount));
             upipe_release(upipe_qsink);
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
     assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
 
-    uref = uref_block_flow_alloc_definition(uref_mgr, NULL);
+    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     assert(uref_flow_set_name(&uref, "source"));
     upipe_input(upipe_qsink, uref);

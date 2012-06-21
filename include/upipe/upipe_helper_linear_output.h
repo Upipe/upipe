@@ -62,7 +62,7 @@
  * to the current output, and is used by the other declared functions.
  *
  * @item @code
- *  void upipe_foo_flow_definition(struct upipe *upipe)
+ *  void upipe_foo_flow_def(struct upipe *upipe)
  * @end code
  * Not normally called from your functions. It sends a flow definition packet
  * to the current output, and is used by the other declared functions.
@@ -155,7 +155,7 @@ static void STRUCTURE##_flow_delete(struct upipe *upipe)                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_flow_definition(struct upipe *upipe)                \
+static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
@@ -179,7 +179,7 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
-        STRUCTURE##_flow_definition(upipe);                                 \
+        STRUCTURE##_flow_def(upipe);                                        \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
         uref_release(uref);                                                 \
         return;                                                             \

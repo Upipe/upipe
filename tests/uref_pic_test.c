@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 2, 2, 1));
     assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 2, 2, 1));
 
-    pic_flow = uref_pic_flow_alloc_definition(uref_mgr, 1);
+    pic_flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(pic_flow != NULL);
     assert(uref_pic_flow_add_plane(&pic_flow, 1, 1, 1, "y8"));
     assert(uref_pic_flow_add_plane(&pic_flow, 2, 2, 1, "u8"));
@@ -166,7 +166,7 @@ int main(int argc, char **argv)
     assert(ubuf_mgr != NULL);
     assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 1, 1, 4));
 
-    pic_flow = uref_pic_flow_alloc_definition(uref_mgr, 2);
+    pic_flow = uref_pic_flow_alloc_def(uref_mgr, 2);
     assert(pic_flow != NULL);
     assert(uref_pic_flow_add_plane(&pic_flow, 1, 1, 4, "y8u8y8v8"));
 
