@@ -62,7 +62,6 @@
 
 /** @internal @This is a helper to simplify printf-style functions. */
 #define UBASE_VARARG(command)                                               \
-    bool ret = false;                                                       \
     size_t len;                                                             \
     va_list args;                                                           \
     va_start(args, format);                                                 \
@@ -73,9 +72,11 @@
         va_start(args, format);                                             \
         vsnprintf(string, len + 1, format, args);                           \
         va_end(args);                                                       \
-        ret = command;                                                      \
-    }                                                                       \
-    return ret;
+        return command;                                                     \
+    } else {                                                                \
+        char *string = NULL;                                                \
+        return command;                                                     \
+    }
 
 /** @This is a structure designed to chain uref and ubuf in a list. */
 struct uchain {
