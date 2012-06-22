@@ -199,6 +199,7 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
 /** @internal @This sets the flow definition to use on the output. If set   \
  * to NULL, also output a flow deletion packet. Otherwise, schedule a       \
  * flow definition packet next time a packet must be output.                \
+ * It can handle the set_flow_def control command.                          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param flow_def control packet describing the output                     \
@@ -214,6 +215,19 @@ static void STRUCTURE##_set_flow_def(struct upipe *upipe,                   \
         STRUCTURE->FLOW_DEF_SENT = false;                                   \
     }                                                                       \
     STRUCTURE->FLOW_DEF = flow_def;                                         \
+}                                                                           \
+/** @internal @This handles the get_flow_def control command.               \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param p filled in with the flow definition (to use on the output)       \
+ * @return false in case of error                                           \
+ */                                                                         \
+static bool STRUCTURE##_get_flow_def(struct upipe *upipe, struct uref **p)  \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(p != NULL);                                                      \
+    *p = STRUCTURE->FLOW_DEF;                                               \
+    return true;                                                            \
 }                                                                           \
 /** @internal @This handles the get_output control command.                 \
  *                                                                          \
