@@ -45,7 +45,7 @@ struct udeal {
     /** number of accesses to the resource (0 or 1) */
     ucounter access;
     /** ueventfd triggered when a waiter may be unblocked */
-    ueventfd event;
+    struct ueventfd event;
 };
 
 /** @This initializes a udeal.

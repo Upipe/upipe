@@ -44,9 +44,9 @@ struct uqueue {
     /** maximum number of elements in the FIFO */
     unsigned int max_length;
     /** ueventfd triggered when data can be pushed */
-    ueventfd event_push;
+    struct ueventfd event_push;
     /** ueventfd triggered when data can be popped */
-    ueventfd event_pop;
+    struct ueventfd event_pop;
 };
 
 /** @This initializes a uqueue.
