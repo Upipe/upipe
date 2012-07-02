@@ -39,6 +39,21 @@ UREF_ATTR_TEMPLATE(flow, name, "f.flow", string, const char *, flow name)
 UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
 UREF_ATTR_TEMPLATE_VOID(flow, delete, "f.delete", flow delete flag)
 UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag)
+UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)
+
+/** @This sets the flow name attribute of a uref, with printf-style name
+ * generation.
+ *
+ * @param uref_p reference to the pointer to the uref (possibly modified)
+ * @param format printf-style format of the flow name, followed by a variable
+ * list of arguments
+ * @return true if no allocation failure occurred
+ */
+static inline bool uref_flow_set_name_va(struct uref **uref_p,
+                                         const char *format, ...)
+{
+    UBASE_VARARG(uref_flow_set_name(uref_p, string))
+}
 
 /** @This duplicates a uref and sets the flow name attribute.
  *

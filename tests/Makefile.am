@@ -53,6 +53,11 @@ TESTS += \
 	upipe_queue_test
 endif
 
+if HAVE_AVFORMAT
+check_PROGRAMS += \
+	upipe_avformat_test
+endif
+
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
@@ -65,3 +70,5 @@ udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD)  -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
+upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@

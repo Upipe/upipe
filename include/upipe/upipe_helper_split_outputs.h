@@ -376,6 +376,12 @@ static void SUBSTRUCT##_clean(struct upipe *upipe, struct SUBSTRUCT *output)\
  * Finds an output given by its flow suffix.
  *
  * @item @code
+ *  struct upipe_foo_output *upipe_foo_find_output_va(struct upipe *upipe,
+ *                                                    const char *format, ...)
+ * @end code
+ * Finds an output given by its flow suffix, with printf-style name generation.
+ *
+ * @item @code
  *  bool upipe_foo_delete_output(struct upipe *upipe, const char *flow_suffix,
                 void (*output_free)(struct upipe *, struct upipe_foo_output *))
  * @end code
@@ -468,6 +474,22 @@ static struct SUBSTRUCT *STRUCTURE##_find_output(struct upipe *upipe,       \
     }                                                                       \
     return NULL;                                                            \
 }                                                                           \
+/** @internal @This returns the output substructure for a given flow suffix,\
+ * with printf-style name generation.                                       \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param format printf-style format of the flow suffix, followed by a      \
+ * variable list of arguments                                               \
+ * @return pointer to the output substructure, or NULL if not found         \
+ */                                                                         \
+static struct SUBSTRUCT *STRUCTURE##_find_output_va(struct upipe *upipe,    \
+                                                    const char *format, ...)\
+                   __attribute__ ((format(printf, 2, 3)));                  \
+static struct SUBSTRUCT *STRUCTURE##_find_output_va(struct upipe *upipe,    \
+                                                    const char *format, ...)\
+{                                                                           \
+    UBASE_VARARG(STRUCTURE##_find_output(upipe, string))                    \
+}                                                                           \
 /** @internal @This deletes the output for a given flow suffix.             \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -524,8 +546,8 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
 /** @internal @This gets a pointer to the output for the given flow suffix. \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param flow_suffix flow suffix                                           \
  * @param p filled in with the output                                       \
+ * @param flow_suffix flow suffix                                           \
  * @return false in case of error                                           \
  */                                                                         \
 static bool STRUCTURE##_get_output(struct upipe *upipe, struct upipe **p,   \
@@ -541,8 +563,8 @@ static bool STRUCTURE##_get_output(struct upipe *upipe, struct upipe **p,   \
 /** @internal @This sets the output for the given flow suffix.              \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param flow_suffix flow suffix                                           \
  * @param o new output                                                      \
+ * @param flow_suffix flow suffix                                           \
  * @return false in case of error                                           \
  */                                                                         \
 static bool STRUCTURE##_set_output(struct upipe *upipe, struct upipe *o,    \
