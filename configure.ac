@@ -11,6 +11,7 @@ AM_INIT_AUTOMAKE([nostdinc parallel-tests color-tests])
 PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
+AC_CHECK_PROG(PERL, perl, perl)
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC_C99
