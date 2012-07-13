@@ -35,3 +35,6 @@ Makefile
 *~
 .libs
 .deps
+
+# cscope files
+cscope.*
