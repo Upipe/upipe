@@ -1,1 +1,1 @@
-SUBDIRS = upipe upipe-modules upump-ev upipe-av
+SUBDIRS = upipe upipe-modules upump-ev upipe-av upipe-swscale

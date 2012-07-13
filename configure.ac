@@ -38,6 +38,7 @@ AC_CHECK_HEADERS([ev.h], [
         AM_CONDITIONAL(HAVE_EV, false))
 
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 54.0.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
+PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.100 libavutil, [libswscale/swscale.h libavutil/avutil.h])
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -101,6 +102,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe/libupipe.pc
                  lib/upump-ev/Makefile
                  lib/upump-ev/libupump_ev.pc
+                 lib/upipe-swscale/Makefile
+                 lib/upipe-swscale/libupipe_sws.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
                  lib/upipe-av/Makefile
