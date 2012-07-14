@@ -15,11 +15,10 @@
 
       @list
 
-        @item chained lists (@ref uchain and @ref ulist)
+        @item chained lists (@ref uchain and @ref ulist) and rings allowing pointer tagging (@ref uring)
         @item lock-less counters (@ref ucounter) and reference counters (@ref urefcount)
-        @item lock-less LIFOs (@ref ulifo) with one thread performing the removals
+        @item lock-less LIFOs (@ref ulifo) without thread limitations
         @item lock-less FIFOs (@ref ufifo) with one thread performing the removals
-        @item lock-less buffer pools (@ref upool) with one thread performing the allocations
         @item lock-less buffer queues (@ref uqueue) with one thread performing the removals
         @item lock-less exclusive access to non-reentrant resources (@ref udeal)
         @item objects to pass event information between threads (@ref ueventfd)
@@ -159,7 +158,7 @@
 
     To deal with structures efficiently, Upipe has a notion of "managers", which are similar to factories in object-oriented programming. Consequently, @ref ubuf are created by a @ref ubuf_mgr, @ref uref by @ref uref_mgr, @ref upump by @ref upump_mgr and @ref upipe by @ref upipe_mgr. Managers typically deal with memory pools or hardware resources such as access to video memory or hardware decoding.
 
-    Upipe provides standard implementations of @ref ubuf_mgr (for blocks, pictures and sounds) and @ref uref_mgr in the libupipe library (link with -lupipe). It must be noted that, although @ref uref and @ref ubuf can be released from any thread, due to the lockless implementation of memory pools, a manager can only allocate structures from a single thread. When using different threads to allocate buffers, one must instanciate different managers (and thus different memory pools).
+    Upipe provides standard implementations of @ref ubuf_mgr (for blocks, pictures and sounds) and @ref uref_mgr in the libupipe library (link with -lupipe).
 
     The @ref upump_mgr implementations are supplied by dedicated, API-specific libraries such as libupump-ev. Finally, @ref upipe_mgr managers allow to create the pipes themselves and are either provided by the libupipe-modules library for standard pipes, or by third-party libraries.
 
@@ -175,7 +174,7 @@
 
     When the flow enters a split pipe, such as a demux, resulting flows will be created with the name of the input, appended with a suffix identifying the component, such as "0.0", "0.1", etc.
 
-    An attribute containing the flow name must be added to all @ref uref structures with @ref uref_flow_set_name, so that other pipes know what they are dealing with. Before sending a buffer on a new flow, the source of the flow must send a flow definition buffer describing the content of the flow and how it is stored (@ref uref_block_flow_alloc_definition, @ref uref_pic_flow_alloc_definition, @ref uref_sound_flow_alloc_definition). At the end of the flow, a flow deletion buffer is sent in-band, so that it is only handled with after all buffers of the flow (@ref uref_flow_alloc_delete).
+    An attribute containing the flow name must be added to all @ref uref structures with @ref uref_flow_set_name, so that other pipes know what they are dealing with. Before sending a buffer on a new flow, the source of the flow must send a flow definition buffer describing the content of the flow and how it is stored (@ref uref_block_flow_alloc_def, @ref uref_pic_flow_alloc_def, @ref uref_sound_flow_alloc_def). At the end of the flow, a flow deletion buffer is sent in-band, so that it is only handled with after all buffers of the flow (@ref uref_flow_alloc_delete).
 
     Please note that some pipes (such as linear pipes in general) only support one input flow. Also, flow management requires an uref manager; a lot of modules will ask for it. Setting the uref manager to NULL may lead to unexpected results and is not recommended.
 

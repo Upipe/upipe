@@ -1,5 +1,5 @@
 /*****************************************************************************
- * upool_uqueue_test.c: unit tests for upools and uqueues (using libev)
+ * ulifo_uqueue_test.c: unit tests for ulifos and uqueues (using libev)
  *****************************************************************************
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
@@ -29,7 +29,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
-#include <upipe/upool.h>
+#include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
@@ -46,17 +46,12 @@
 
 #include <ev.h>
 
-#define UPOOL_MAX_DEPTH 10
-#define UQUEUE_MAX_DEPTH 9
+#define ULIFO_MAX_DEPTH 10
+#define UQUEUE_MAX_DEPTH 8
 #define NB_LOOPS 1000
-
-static const long nsec_timeouts[UPOOL_MAX_DEPTH] = {
-    0, 1000000, 5000000, 0, 50000, 0, 0, 10000000, 5000, 0
-};
 
 struct elem {
     struct uchain uchain;
-    struct upool *upool;
     struct timespec timeout;
     unsigned int loop;
     unsigned int thread;
@@ -65,15 +60,15 @@ struct elem {
 struct thread {
     pthread_t id;
     unsigned int thread;
-    struct elem elems[UPOOL_MAX_DEPTH];
-    struct upool upool;
     struct upump_mgr *upump_mgr;
     struct upump *upump;
     unsigned int loop;
 };
 
 static urefcount refcount;
+static struct ulifo ulifo;
 static struct uqueue uqueue;
+struct elem elems[ULIFO_MAX_DEPTH];
 static unsigned int nb_loops = NB_LOOPS;
 static unsigned int loop[2] = {0, 0};
 
@@ -87,7 +82,7 @@ static void push_ready(struct upump *upump)
 static void push(struct upump *upump)
 {
     struct thread *thread = upump_get_opaque(upump, struct thread *);
-    struct uchain *uchain = upool_pop(&thread->upool);
+    struct uchain *uchain = ulifo_pop(&ulifo);
     assert(uchain != NULL);
     struct elem *elem = container_of(uchain, struct elem, uchain);
 
@@ -120,14 +115,6 @@ static void *push_thread(void *_thread)
                                             push_ready, thread);
     assert(thread->upump != NULL);
 
-    upool_init(&thread->upool, UPOOL_MAX_DEPTH);
-    for (int i = 0; i < UPOOL_MAX_DEPTH; i++) {
-        thread->elems[i].upool = &thread->upool;
-        thread->elems[i].timeout.tv_sec = 0;
-        thread->elems[i].timeout.tv_nsec = nsec_timeouts[i];
-        upool_push(&thread->upool, &thread->elems[i].uchain);
-    }
-
     struct upump *upump = upump_alloc_idler(thread->upump_mgr, push, thread,
                                             true);
     assert(upump != NULL);
@@ -141,9 +128,6 @@ static void *push_thread(void *_thread)
     upump_mgr_release(thread->upump_mgr);
     ev_loop_destroy(loop);
 
-    /* defer cleaning the pool to the main thread because buffers may still
-     * be used in the queue */
-
     return NULL;
 }
 
@@ -156,13 +140,18 @@ static void pop(struct upump *upump)
         loop[elem->thread] = elem->loop + 1;
         if (likely(elem->timeout.tv_nsec))
             assert(!nanosleep(&elem->timeout, NULL));
-        upool_push(elem->upool, uchain);
+        ulifo_push(&ulifo, uchain);
     } else if (likely(urefcount_single(&refcount)))
         upump_stop(upump);
 }
 
 int main(int argc, char **argv)
 {
+    static const long nsec_timeouts[ULIFO_MAX_DEPTH] = {
+        0, 1000000, 5000000, 0, 50000, 0, 0, 10000000, 5000, 0
+    };
+    uint8_t ulifo_buffer[ulifo_sizeof(ULIFO_MAX_DEPTH)];
+
     if (argc > 1)
         nb_loops = atoi(argv[1]);
 
@@ -171,6 +160,13 @@ int main(int argc, char **argv)
     assert(upump_mgr != NULL);
 
     urefcount_init(&refcount);
+
+    ulifo_init(&ulifo, ULIFO_MAX_DEPTH, ulifo_buffer);
+    for (int i = 0; i < ULIFO_MAX_DEPTH; i++) {
+        elems[i].timeout.tv_sec = 0;
+        elems[i].timeout.tv_nsec = nsec_timeouts[i];
+        ulifo_push(&ulifo, &elems[i].uchain);
+    }
 
     assert(uqueue_init(&uqueue, UQUEUE_MAX_DEPTH));
     struct upump *upump = uqueue_upump_alloc_pop(&uqueue, upump_mgr, pop, NULL);
@@ -192,8 +188,7 @@ int main(int argc, char **argv)
     upump_mgr_release(upump_mgr);
     ev_default_destroy();
 
-    upool_clean(&threads[0].upool);
-    upool_clean(&threads[1].upool);
+    ulifo_clean(&ulifo);
     uqueue_clean(&uqueue);
 
     urefcount_clean(&refcount);

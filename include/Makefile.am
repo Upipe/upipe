@@ -27,7 +27,6 @@ nobase_include_HEADERS = \
 	upipe/upipe_helper_sink_delay.h \
 	upipe/upipe_helper_split_outputs.h \
 	upipe/upipe_helper_split_ubuf_mgr.h \
-	upipe/upool.h \
 	upipe/uprobe.h \
 	upipe/uprobe_print.h \
 	upipe/upump_common.h \
@@ -46,6 +45,7 @@ nobase_include_HEADERS = \
 	upipe/uref_sound_flow.h \
 	upipe/uref_sound.h \
 	upipe/uref_std.h \
+	upipe/uring.h \
 	upipe-modules/upipe_dup.h \
 	upipe-modules/upipe_file_sink.h \
 	upipe-modules/upipe_file_source.h \

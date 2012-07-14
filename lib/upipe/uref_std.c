@@ -25,16 +25,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-/*
- * Please note that you must maintain at least one manager per thread,
- * because due to the pool implementation, only one thread can make
- * allocations (structures can be released from any thread though).
- */
-
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
-#include <upipe/upool.h>
+#include <upipe/ulifo.h>
 #include <upipe/uref_std.h>
 
 #include <stdlib.h>
@@ -127,8 +121,8 @@ struct uref_std_mgr {
     /** extra space added at allocation and re-allocation */
     size_t attr_size;
 
-    /** struct uref pool */
-    struct upool pool;
+    /** uref pool */
+    struct ulifo pool;
 
     /** common management structure */
     struct uref_mgr mgr;
@@ -214,7 +208,7 @@ static struct uref *uref_std_alloc(struct uref_mgr *mgr, size_t attr_size)
     struct uref_std *std = NULL;
 
     if (likely(attr_size < std_mgr->mgr.control_attr_size)) {
-        struct uchain *uchain = upool_pop(&std_mgr->pool);
+        struct uchain *uchain = ulifo_pop(&std_mgr->pool);
         if (likely(uchain != NULL)) {
             std = uref_std_from_uref(uref_from_uchain(uchain));
             if (unlikely(std->attr_size < std_mgr->attr_size + attr_size)) {
@@ -278,7 +272,7 @@ static void uref_std_free(struct uref *uref)
     struct uref_std *std = uref_std_from_uref(uref);
     if (likely(std->attr_size < std_mgr->mgr.control_attr_size +
                                 std_mgr->attr_size)) {
-        if (likely(upool_push(&std_mgr->pool, uref_to_uchain(uref))))
+        if (likely(ulifo_push(&std_mgr->pool, uref_to_uchain(uref))))
             uref = NULL;
     }
     if (unlikely(uref != NULL))
@@ -596,11 +590,11 @@ static void uref_std_mgr_free(struct uref_mgr *mgr)
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = upool_pop(&std_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&std_mgr->pool)) != NULL) {
         struct uref_std *std = uref_std_from_uref(uref_from_uchain(uchain));
         free(std);
     }
-    upool_clean(&std_mgr->pool);
+    ulifo_clean(&std_mgr->pool);
 
     urefcount_clean(&std_mgr->mgr.refcount);
     free(std_mgr);
@@ -619,10 +613,12 @@ static void uref_std_mgr_free(struct uref_mgr *mgr)
 struct uref_mgr *uref_std_mgr_alloc(unsigned int pool_depth,
                                int attr_size, int control_attr_size)
 {
-    struct uref_std_mgr *std_mgr = malloc(sizeof(struct uref_std_mgr));
+    struct uref_std_mgr *std_mgr = malloc(sizeof(struct uref_std_mgr) +
+                                          ulifo_sizeof(pool_depth));
     if (unlikely(std_mgr == NULL)) return NULL;
 
-    upool_init(&std_mgr->pool, pool_depth);
+    ulifo_init(&std_mgr->pool, pool_depth,
+               (void *)std_mgr + sizeof(struct uref_std_mgr));
     std_mgr->attr_size = attr_size > 0 ? attr_size : UREF_ATTR_MINSIZE;
 
     urefcount_init(&std_mgr->mgr.refcount);
