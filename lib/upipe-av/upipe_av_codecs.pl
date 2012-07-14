@@ -13,8 +13,6 @@ open(FILE, '<', $file) or die "couldn't open $file";
 
 print <<EOF;
 /* Auto-generated file from libavcodec/avcodec.h */
-#include "upipe_av_internal.h"
-#include <libavcodec/avcodec.h>
 const struct {
     enum CodecID id;
     const char *flow_def;
@@ -31,22 +29,6 @@ while (<FILE>) {
 print <<EOF;
     { 0, NULL }
 };
-
-const char *upipe_av_to_flow_def(enum CodecID id)
-{
-    for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
-        if (upipe_av_codecs[i].id == id)
-            return upipe_av_codecs[i].flow_def;
-    return NULL;
-}
-
-enum CodecID upipe_av_from_flow_def(const char *flow_def)
-{
-    for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
-        if (!strcmp(upipe_av_codecs[i].flow_def, flow_def))
-            return upipe_av_codecs[i].id;
-    return 0;
-}
 EOF
 
 close FILE;

@@ -1,10 +1,9 @@
 /*****************************************************************************
- * upipe_av.c: upipe-av flow def/libavcodec codec_id translation
+ * upipe_sws.h: application interface for sws module
  *****************************************************************************
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
- *          Benjamin Cohen     <bencoh@notk.org>
+ * Authors: Benjamin Cohen <bencoh@notk.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -26,22 +25,29 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
-#include "upipe_av_internal.h"
-#include <libavcodec/avcodec.h>
-#include <upipe_av_codecs.h> // auto-generated header
+#ifndef _UPIPE_MODULES_UPIPE_SWS_H_
+/** @hidden */
+#define _UPIPE_MODULES_UPIPE_SWS_H_
 
-const char *upipe_av_to_flow_def(enum CodecID id)
-{
-    for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
-        if (upipe_av_codecs[i].id == id)
-            return upipe_av_codecs[i].flow_def;
-    return NULL;
-}
+#include <upipe/upipe.h>
 
-enum CodecID upipe_av_from_flow_def(const char *flow_def)
-{
-    for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
-        if (!strcmp(upipe_av_codecs[i].flow_def, flow_def))
-            return upipe_av_codecs[i].id;
-    return 0;
-}
+#define UPIPE_SWS_SIGNATURE 0x0F020001U
+
+/** @This sets a new output flow definition along with the
+ * output picture size
+ *
+ * @param upipe description structure of the pipe
+ * @param flow output flow definition
+ * @param hsize horizontal size
+ * @param vsize vertical size
+ * @return false in case of error
+ */
+bool upipe_sws_set_out_flow(struct upipe *upipe, struct uref* flow, uint64_t hsize, uint64_t vsize);
+
+/** @This returns the management structure for sws pipes.
+ *
+ * @return pointer to manager
+ */
+struct upipe_mgr *upipe_sws_mgr_alloc(void);
+
+#endif
