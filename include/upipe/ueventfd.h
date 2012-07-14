@@ -54,16 +54,22 @@
 #   define FD_CLOEXEC 0
 #endif
 
-/** object allowing to wait on a condition */
+/** @This is a list of the available allocation modes for the ueventfd. */
 enum ueventfd_mode {
+    /** uses the eventfd() system call */
     UEVENTFD_MODE_EVENTFD,
+    /** uses the pipe() system call */
     UEVENTFD_MODE_PIPE,
 };
 
+/** @This allows to wait on a condition in a upump event loop. */
 struct ueventfd {
+    /** mode of allocation of the ueventfd */
     enum ueventfd_mode mode;
-    union{
+    union {
+        /** used when eventfd() is available */
         int event_fd;
+        /** used when pipe() is available */
         int pipe_fds[2];
     };
 };
@@ -239,7 +245,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 #endif
 }
 
-/** @This released any data and file descriptors associated with the ueventfd.
+/** @This releases any data and file descriptors associated with the ueventfd.
  *
  * @param fd pointer to a ueventfd
  */
