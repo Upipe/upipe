@@ -47,7 +47,7 @@
 #include <ev.h>
 
 #define ULIFO_MAX_DEPTH 10
-#define UQUEUE_MAX_DEPTH 8
+#define UQUEUE_MAX_DEPTH 6
 #define NB_LOOPS 1000
 
 struct elem {
