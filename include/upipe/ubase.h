@@ -78,7 +78,7 @@
         return command;                                                     \
     }
 
-/** @This is a structure designed to chain uref and ubuf in a list. */
+/** @This is designed to chain uref and ubuf in a list. */
 struct uchain {
     /** pointer to next element */
     struct uchain *next;

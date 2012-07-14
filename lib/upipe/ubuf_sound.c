@@ -26,12 +26,6 @@
  *****************************************************************************/
 
 /*
- * Please note that you must maintain at least one manager per thread,
- * because due to the pool implementation, only one thread can make
- * allocations (structures can be released from any thread though).
- */
-
-/*
  * NB: Not all sound managers are compatible in the manner requested by
  * ubuf_writable() and ubuf_sound_resize() for the new manager. If two different
  * managers are used, they can only differ in the prepend, align and
@@ -41,7 +35,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
-#include <upipe/upool.h>
+#include <upipe/ulifo.h>
 #include <upipe/ubuf_sound.h>
 
 #include <stdlib.h>
@@ -68,8 +62,8 @@ struct ubuf_sound_mgr {
     /** offset for the aligned sample */
     int align_offset;
 
-    /** struct ubuf pool */
-    struct upool pool;
+    /** ubuf pool */
+    struct ulifo pool;
 
     /** common management structure */
     struct ubuf_mgr mgr;
@@ -139,7 +133,7 @@ static struct ubuf *ubuf_sound_alloc_inner(struct ubuf_mgr *mgr, size_t samples)
                              sound_mgr->channels * sound_mgr->sample_size +
                          sound_mgr->align;
     struct ubuf_sound *sound = NULL;
-    struct uchain *uchain = upool_pop(&sound_mgr->pool);
+    struct uchain *uchain = ulifo_pop(&sound_mgr->pool);
     if (likely(uchain != NULL))
         sound = ubuf_sound_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -234,7 +228,7 @@ static void _ubuf_sound_free(struct ubuf *ubuf)
     struct ubuf_sound_mgr *sound_mgr = ubuf_sound_mgr_from_ubuf_mgr(ubuf->mgr);
     struct ubuf_sound *sound = ubuf_sound_from_ubuf(ubuf);
 
-    if (likely(upool_push(&sound_mgr->pool, &ubuf->uchain)))
+    if (likely(ulifo_push(&sound_mgr->pool, &ubuf->uchain)))
         sound = NULL;
     if (unlikely(sound != NULL))
         _ubuf_sound_free_inner(sound);
@@ -360,11 +354,11 @@ static void _ubuf_sound_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_sound_mgr *sound_mgr = ubuf_sound_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = upool_pop(&sound_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&sound_mgr->pool)) != NULL) {
         struct ubuf_sound *sound = ubuf_sound_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_sound_free_inner(sound);
     }
-    upool_clean(&sound_mgr->pool);
+    ulifo_clean(&sound_mgr->pool);
 
     urefcount_clean(&sound_mgr->mgr.refcount);
     free(sound_mgr);
@@ -387,7 +381,8 @@ struct ubuf_mgr *ubuf_sound_mgr_alloc(unsigned int pool_depth, uint8_t channels,
                                       int align, int align_offset)
 {
     if (unlikely(!channels || !sample_size)) return NULL;
-    struct ubuf_sound_mgr *sound_mgr = malloc(sizeof(struct ubuf_sound_mgr));
+    struct ubuf_sound_mgr *sound_mgr = malloc(sizeof(struct ubuf_sound_mgr) +
+                                              ulifo_sizeof(pool_depth));
     if (unlikely(sound_mgr == NULL)) return NULL;
 
     sound_mgr->channels = channels;
@@ -396,7 +391,8 @@ struct ubuf_mgr *ubuf_sound_mgr_alloc(unsigned int pool_depth, uint8_t channels,
     sound_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     sound_mgr->align_offset = align_offset;
 
-    upool_init(&sound_mgr->pool, pool_depth);
+    ulifo_init(&sound_mgr->pool, pool_depth,
+               (void *)sound_mgr + sizeof(struct ubuf_sound_mgr));
 
     urefcount_init(&sound_mgr->mgr.refcount);
     sound_mgr->mgr.ubuf_alloc = _ubuf_sound_alloc;

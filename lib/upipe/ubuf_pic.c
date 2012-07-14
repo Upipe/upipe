@@ -26,12 +26,6 @@
  *****************************************************************************/
 
 /*
- * Please note that you must maintain at least one manager per thread,
- * because due to the pool implementation, only one thread can make
- * allocations (structures can be released from any thread though).
- */
-
-/*
  * NB: Not all picture managers are compatible in the manner requested by
  * ubuf_writable() and ubuf_pic_resize() for the new manager. If two different
  * managers are used, they can only differ in the prepend, append, align and
@@ -41,7 +35,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
-#include <upipe/upool.h>
+#include <upipe/ulifo.h>
 #include <upipe/ubuf_pic.h>
 
 #include <stdlib.h>
@@ -91,8 +85,8 @@ struct ubuf_pic_mgr {
     /** planes description */
     struct ubuf_pic_mgr_plane **planes;
 
-    /** struct ubuf pool */
-    struct upool pool;
+    /** ubuf pool */
+    struct ulifo pool;
 
     /** common management structure */
     struct ubuf_mgr mgr;
@@ -229,7 +223,7 @@ static struct ubuf *ubuf_pic_alloc_inner(struct ubuf_mgr *mgr, size_t hmsize,
     }
 
     struct ubuf_pic *pic = NULL;
-    struct uchain *uchain = upool_pop(&pic_mgr->pool);
+    struct uchain *uchain = ulifo_pop(&pic_mgr->pool);
     if (likely(uchain != NULL))
         pic = ubuf_pic_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -355,7 +349,7 @@ static void _ubuf_pic_free(struct ubuf *ubuf)
     struct ubuf_pic_mgr *pic_mgr = ubuf_pic_mgr_from_ubuf_mgr(ubuf->mgr);
     struct ubuf_pic *pic = ubuf_pic_from_ubuf(ubuf);
 
-    if (likely(upool_push(&pic_mgr->pool, &ubuf->uchain)))
+    if (likely(ulifo_push(&pic_mgr->pool, &ubuf->uchain)))
         pic = NULL;
     if (unlikely(pic != NULL))
         _ubuf_pic_free_inner(pic);
@@ -518,11 +512,11 @@ static void _ubuf_pic_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_pic_mgr *pic_mgr = ubuf_pic_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = upool_pop(&pic_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&pic_mgr->pool)) != NULL) {
         struct ubuf_pic *pic = ubuf_pic_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_pic_free_inner(pic);
     }
-    upool_clean(&pic_mgr->pool);
+    ulifo_clean(&pic_mgr->pool);
 
     for (uint8_t plane = 0; plane < pic_mgr->nb_planes; plane++)
         free(pic_mgr->planes[plane]);
@@ -556,7 +550,8 @@ struct ubuf_mgr *ubuf_pic_mgr_alloc(unsigned int pool_depth, uint8_t macropixel,
                                     int align, int align_hmoffset)
 {
     if (unlikely(!macropixel)) return NULL;
-    struct ubuf_pic_mgr *pic_mgr = malloc(sizeof(struct ubuf_pic_mgr));
+    struct ubuf_pic_mgr *pic_mgr = malloc(sizeof(struct ubuf_pic_mgr) +
+                                          ulifo_sizeof(pool_depth));
     if (unlikely(pic_mgr == NULL)) return NULL;
 
     pic_mgr->macropixel = macropixel;
@@ -567,7 +562,8 @@ struct ubuf_mgr *ubuf_pic_mgr_alloc(unsigned int pool_depth, uint8_t macropixel,
     pic_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     pic_mgr->align_hmoffset = align_hmoffset;
 
-    upool_init(&pic_mgr->pool, pool_depth);
+    ulifo_init(&pic_mgr->pool, pool_depth,
+               (void *)pic_mgr + sizeof(struct ubuf_pic_mgr));
     pic_mgr->nb_planes = 0;
     pic_mgr->planes = NULL;
 

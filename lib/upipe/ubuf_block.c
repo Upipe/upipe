@@ -26,12 +26,6 @@
  *****************************************************************************/
 
 /*
- * Please note that you must maintain at least one manager per thread,
- * because due to the pool implementation, only one thread can make
- * allocations (structures can be released from any thread though).
- */
-
-/*
  * NB: All block managers are compatible in the manner requested by
  * ubuf_writable() and ubuf_block_resize() for the new manager, ie. they
  * store data "in the same manner", even if the prepend, append and align
@@ -40,7 +34,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
-#include <upipe/upool.h>
+#include <upipe/ulifo.h>
 #include <upipe/ubuf_block.h>
 
 #include <stdlib.h>
@@ -71,11 +65,11 @@ struct ubuf_block_mgr {
     /** alignment offset */
     int align_offset;
 
-    /** struct ubuf pool for packets <= size */
-    struct upool small_pool;
+    /** ubuf pool for packets <= size */
+    struct ulifo small_pool;
 
-    /** struct ubuf pool for packets > size */
-    struct upool big_pool;
+    /** ubuf pool for packets > size */
+    struct ulifo big_pool;
 
     /** common management structure */
     struct ubuf_mgr mgr;
@@ -146,9 +140,9 @@ static struct ubuf *ubuf_block_alloc_inner(struct ubuf_mgr *mgr, size_t size)
     struct ubuf_block *block = NULL;
     struct uchain *uchain;
     if (likely(size <= block_mgr->size))
-        uchain = upool_pop(&block_mgr->small_pool);
+        uchain = ulifo_pop(&block_mgr->small_pool);
     else
-        uchain = upool_pop(&block_mgr->big_pool);
+        uchain = ulifo_pop(&block_mgr->big_pool);
     if (likely(uchain != NULL))
         block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -244,10 +238,10 @@ static void _ubuf_block_free(struct ubuf *ubuf)
 
     if (likely(block->extra_space <= block_mgr->size + block_mgr->prepend +
                                      block_mgr->append + block_mgr->align)) {
-        if (likely(upool_push(&block_mgr->small_pool, &ubuf->uchain)))
+        if (likely(ulifo_push(&block_mgr->small_pool, &ubuf->uchain)))
             block = NULL;
     } else {
-        if (likely(upool_push(&block_mgr->big_pool, &ubuf->uchain)))
+        if (likely(ulifo_push(&block_mgr->big_pool, &ubuf->uchain)))
             block = NULL;
     }
     if (unlikely(block != NULL))
@@ -370,17 +364,17 @@ static void _ubuf_block_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_block_mgr *block_mgr = ubuf_block_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = upool_pop(&block_mgr->small_pool)) != NULL) {
+    while ((uchain = ulifo_pop(&block_mgr->small_pool)) != NULL) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_block_free_inner(block);
     }
-    upool_clean(&block_mgr->small_pool);
+    ulifo_clean(&block_mgr->small_pool);
 
-    while ((uchain = upool_pop(&block_mgr->big_pool)) != NULL) {
+    while ((uchain = ulifo_pop(&block_mgr->big_pool)) != NULL) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_block_free_inner(block);
     }
-    upool_clean(&block_mgr->big_pool);
+    ulifo_clean(&block_mgr->big_pool);
 
     urefcount_clean(&block_mgr->mgr.refcount);
     free(block_mgr);
@@ -407,11 +401,16 @@ struct ubuf_mgr *ubuf_block_mgr_alloc(unsigned int small_pool_depth,
                                       int prepend, int append, int align,
                                       int align_offset)
 {
-    struct ubuf_block_mgr *block_mgr = malloc(sizeof(struct ubuf_block_mgr));
+    struct ubuf_block_mgr *block_mgr = malloc(sizeof(struct ubuf_block_mgr) +
+                                              ulifo_sizeof(small_pool_depth) +
+                                              ulifo_sizeof(big_pool_depth));
     if (unlikely(block_mgr == NULL)) return NULL;
 
-    upool_init(&block_mgr->small_pool, small_pool_depth);
-    upool_init(&block_mgr->big_pool, big_pool_depth);
+    ulifo_init(&block_mgr->small_pool, small_pool_depth,
+               (void *)block_mgr + sizeof(struct ubuf_block_mgr));
+    ulifo_init(&block_mgr->big_pool, big_pool_depth,
+               (void *)block_mgr + sizeof(struct ubuf_block_mgr) +
+               ulifo_sizeof(small_pool_depth));
     block_mgr->size = size >= 0 ? size : UBUF_DEFAULT_SIZE;
     block_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
     block_mgr->append = append >= 0 ? append : UBUF_DEFAULT_APPEND;

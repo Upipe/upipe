@@ -1,6 +1,5 @@
 /*****************************************************************************
- * ulifo.h: upipe efficient and thread-safe LIFO implementation (multiple
- * writers but only ONE reader)
+ * ulifo.h: upipe efficient and thread-safe LIFO implementation
  *****************************************************************************
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
@@ -31,38 +30,48 @@
 #define _UPIPE_ULIFO_H_
 
 #include <upipe/ubase.h>
-#include <upipe/config.h>
+
+#include <stdint.h>
 
 #ifdef HAVE_ATOMIC_OPS
 
+#include <upipe/uring.h>
+
 /*
  * Preferred method: gcc atomic operations
- *
- * Please note that in this version, the counter and top pointer are not
- * atomically protected, so they can be off by a small value at a given time
- * (and fixed later). This is not a problem as in our use case, the counter
- * is only indicative.
- *
- * Also please note that it is thread-safe for multiple writers, but for
- * only one reader thread (otherwise we fall into the ABA problem).
  */
 
 /** @This is the implementation of last-in first-out data structure. */
 struct ulifo {
-    /** last queued pointer, and first to be dequeued, or NULL */
-    struct uchain *top;
-    /* number of elements in the queue */
-    unsigned int counter;
+    /** ring structure */
+    struct uring uring;
+    /** last queued utag carrying a uchain, and first to be dequeued,
+     * or UTAG_NULL if no uchain is available */
+    uint64_t top_carrier;
+    /** last queued utag not carrying a uchain, and first to be dequeued,
+     * or UTAG_NULL if the LIFO is full */
+    uint64_t top_empty;
 };
+
+/** @This returns the required size of extra data space for ulifo.
+ *
+ * @param length maximum number of elements in the LIFO
+ * @return size in octets to allocate
+ */
+#define ulifo_sizeof(length) uring_sizeof(length)
 
 /** @This initializes a ulifo.
  *
  * @param ulifo pointer to a ulifo structure
+ * @param length maximum number of elements in the LIFO
+ * @param extra mandatory extra space allocated by the caller, with the size
+ * returned by @ref #ulifo_sizeof
  */
-static inline void ulifo_init(struct ulifo *ulifo)
+static inline void ulifo_init(struct ulifo *ulifo, uint32_t length,
+                              void *extra)
 {
-    ulifo->top = NULL;
-    ulifo->counter = 0;
+    ulifo->top_empty = uring_init(&ulifo->uring, length, extra);
+    ulifo->top_carrier = UTAG_NULL;
     __sync_synchronize();
 }
 
@@ -70,17 +79,18 @@ static inline void ulifo_init(struct ulifo *ulifo)
  *
  * @param ulifo pointer to a ulifo structure
  * @param element pointer to element to push
+ * @return false if the maximum number of elements was reached and the
+ * element couldn't be queued
  */
-static inline void ulifo_push(struct ulifo *ulifo, struct uchain *element)
+static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
 {
-    struct uchain *next;
-    __sync_add_and_fetch(&ulifo->counter, 1);
-    do {
-        __sync_synchronize();
-        next = ulifo->top;
-        element->next = next;
-    } while (unlikely(!__sync_bool_compare_and_swap(&ulifo->top, next,
-                                                    element)));
+    uint64_t utag = uring_pop(&ulifo->uring, &ulifo->top_empty);
+    if (utag == UTAG_NULL)
+        return false;
+    bool ret = uring_set_elem(&ulifo->uring, &utag, element);
+    assert(ret);
+    uring_push(&ulifo->uring, &ulifo->top_carrier, utag);
+    return true;
 }
 
 /** @This pops an element.
@@ -91,33 +101,18 @@ static inline void ulifo_push(struct ulifo *ulifo, struct uchain *element)
 static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
 {
     struct uchain *element;
-    do {
-        __sync_synchronize();
-        element = ulifo->top;
-        if (unlikely(element == NULL)) return NULL;
-        /* There can only be one reader here, otherwise another thread could
-         * have dequeued two elements and re-queued the first, and we'd have
-         * an erroneous element->next (ABA problem). */
-    } while (unlikely(!__sync_bool_compare_and_swap(&ulifo->top, element,
-                                                    element->next)));
-    element->next = NULL;
-    __sync_sub_and_fetch(&ulifo->counter, 1);
+    uint64_t utag = uring_pop(&ulifo->uring, &ulifo->top_carrier);
+    if (utag == UTAG_NULL)
+        return NULL;
+    bool ret = uring_get_elem(&ulifo->uring, utag, &element);
+    assert(ret);
+    uring_push(&ulifo->uring, &ulifo->top_empty, utag);
     return element;
 }
 
-/** @This returns the number of elements in the LIFO.
- *
- * @param ulifo pointer to a ulifo structure
- * @return number of elements in the LIFO (approximately)
- */
-static inline unsigned int ulifo_depth(struct ulifo *ulifo)
-{
-    __sync_synchronize();
-    return ulifo->counter;
-}
-
 /** @This cleans up the ulifo data structure. Please note that it is the
- * caller's responsibility to empty the LIFO first.
+ * caller's responsibility to empty the LIFO first, and to release the
+ * extra data passed to @ref ulifo_init.
  *
  * @param ulifo pointer to a ulifo structure
  */
@@ -137,23 +132,33 @@ static inline void ulifo_clean(struct ulifo *ulifo)
 struct ulifo {
     sem_t lock;
     struct uchain *top;
-    unsigned int counter;
+    uint32_t length, counter;
 };
 
-static inline void ulifo_init(struct ulifo *ulifo)
+#define ulifo_sizeof(length) 0
+
+static inline void ulifo_init(struct ulifo *ulifo, uint32_t length,
+                              void *extra)
 {
     sem_init(&ulifo->lock, 0, 1);
     ulifo->top = NULL;
+    ulifo->length = length;
     ulifo->counter = 0;
 }
 
-static inline void ulifo_push(struct ulifo *ulifo, struct uchain *element)
+static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
 {
+    bool ret;
     while (sem_wait(&ulifo->lock) == -1);
-    element->next = ulifo->top;
-    ulifo->top = element;
-    ulifo->counter++;
+    if (ulifo->counter < ulifo->length) {
+        element->next = ulifo->top;
+        ulifo->top = element;
+        ulifo->counter++;
+        ret = true;
+    } else
+        ret = false;
     sem_post(&ulifo->lock);
+    return ret;
 }
 
 static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
@@ -169,15 +174,6 @@ static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
     if (likely(element != NULL))
         element->next = NULL;
     return element;
-}
-
-static inline unsigned int ulifo_depth(struct ulifo *ulifo)
-{
-    unsigned int counter;
-    while (sem_wait(&ulifo->lock) == -1);
-    counter = ulifo->counter;
-    sem_post(&ulifo->lock);
-    return counter;
 }
 
 static inline void ulifo_clean(struct ulifo *ulifo)
