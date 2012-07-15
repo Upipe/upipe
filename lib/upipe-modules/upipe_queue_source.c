@@ -57,6 +57,8 @@ struct upipe_qsrc {
     struct upipe *output;
     /** list of input flows */
     struct ulist flows;
+    /** extra data for the queue structure */
+    void *uqueue_extra;
     /** true if we have thrown the ready event */
     bool ready;
 
@@ -85,6 +87,7 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr)
     upipe_qsrc_init_upump_mgr(upipe);
     upipe_qsrc->output = NULL;
     upipe_flows_init(&upipe_qsrc->flows);
+    upipe_qsrc->uqueue_extra = NULL;
     upipe_qsrc->ready = false;
     upipe_qsrc->upipe_queue.max_length = 0;
     return upipe;
@@ -201,7 +204,11 @@ static bool _upipe_qsrc_set_max_length(struct upipe *upipe, unsigned int length)
     if (unlikely(!length || upipe_queue_max_length(upipe)))
         return false;
 
-    if (unlikely(!uqueue_init(upipe_queue(upipe), length)))
+    upipe_qsrc->uqueue_extra = malloc(uqueue_sizeof(length));
+    if (unlikely(upipe_qsrc->uqueue_extra == NULL))
+        return false;
+    if (unlikely(!uqueue_init(upipe_queue(upipe), length,
+                              upipe_qsrc->uqueue_extra)))
         return false;
     upipe_qsrc->upipe_queue.max_length = length;
     ulog_notice(upipe->ulog, "queue source %p is ready with length %u",
@@ -364,6 +371,7 @@ static void upipe_qsrc_free(struct upipe *upipe)
         uref_release(uref);
     }
     uqueue_clean(uqueue);
+    free(upipe_qsrc->uqueue_extra);
     free(upipe_qsrc);
 }
 

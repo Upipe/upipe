@@ -91,14 +91,15 @@ static void push(struct upump *upump)
 
     elem->loop = thread->loop++;
     elem->thread = thread->thread;
-    if (unlikely(thread->loop >= nb_loops)) {
+    if (unlikely(!uqueue_push(&uqueue, uchain))) {
+        ulifo_push(&ulifo, uchain);
+        thread->loop--;
+        upump_mgr_sink_block(thread->upump_mgr);
+        upump_start(thread->upump);
+    } else if (unlikely(thread->loop >= nb_loops)) {
         /* make it stop */
         upump_stop(upump);
         urefcount_release(&refcount);
-        uqueue_push(&uqueue, uchain);
-    } else if (unlikely(!uqueue_push(&uqueue, uchain))) {
-        upump_mgr_sink_block(thread->upump_mgr);
-        upump_start(thread->upump);
     }
 }
 
@@ -151,6 +152,7 @@ int main(int argc, char **argv)
         0, 1000000, 5000000, 0, 50000, 0, 0, 10000000, 5000, 0
     };
     uint8_t ulifo_buffer[ulifo_sizeof(ULIFO_MAX_DEPTH)];
+    uint8_t uqueue_buffer[uqueue_sizeof(UQUEUE_MAX_DEPTH)];
 
     if (argc > 1)
         nb_loops = atoi(argv[1]);
@@ -168,7 +170,7 @@ int main(int argc, char **argv)
         ulifo_push(&ulifo, &elems[i].uchain);
     }
 
-    assert(uqueue_init(&uqueue, UQUEUE_MAX_DEPTH));
+    assert(uqueue_init(&uqueue, UQUEUE_MAX_DEPTH, uqueue_buffer));
     struct upump *upump = uqueue_upump_alloc_pop(&uqueue, upump_mgr, pop, NULL);
     assert(upump != NULL);
 

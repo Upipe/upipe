@@ -1,6 +1,5 @@
 /*****************************************************************************
- * ufifo.h: upipe efficient and thread-safe FIFO implementation (multiple
- * writers but only ONE reader)
+ * ufifo.h: upipe efficient and thread-safe FIFO implementation
  *****************************************************************************
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
@@ -31,38 +30,47 @@
 #define _UPIPE_UFIFO_H_
 
 #include <upipe/ubase.h>
-#include <upipe/config.h>
+
+#include <stdint.h>
 
 #ifdef HAVE_ATOMIC_OPS
 
+#include <upipe/uring.h>
+
 /*
  * Preferred method: gcc atomic operations
- *
- * Please note that in this version, the counter and top pointer are not
- * atomically protected, so they can be off by a small value at a given time
- * (and fixed later). This is not a problem as in our use case, the counter
- * is only indicative.
- *
- * Also please note that it is thread-safe for multiple writers, but for
- * only one reader thread (otherwise it is much more complicated).
  */
 
 /** @This is the implementation of first-in first-out data structure. */
 struct ufifo {
-    /** last queued pointer, or NULL */
-    struct uchain *tail;
-    /* number of elements in the queue */
-    unsigned int counter;
+    /** ring structure */
+    struct uring uring;
+    /** last queued utag carrying a uchain, and last to be dequeued,
+     * or UTAG_NULL if no uchain is available */
+    uint64_t tail_carrier;
+    /** last queued utag not carrying a uchain, and first to be dequeued,
+     * or UTAG_NULL if the FIFO is full */
+    uint64_t top_empty;
 };
+
+/** @This returns the required size of extra data space for ufifo.
+ *
+ * @param length maximum number of elements in the FIFO
+ * @return size in octets to allocate
+ */
+#define ufifo_sizeof(length) uring_sizeof(length)
 
 /** @This initializes a ufifo.
  *
  * @param ufifo pointer to a ufifo structure
+ * @param length maximum number of elements in the FIFO
+ * @param extra mandatory extra space allocated by the caller, with the size
+ * returned by @ref #ufifo_sizeof
  */
-static inline void ufifo_init(struct ufifo *ufifo)
+static inline void ufifo_init(struct ufifo *ufifo, uint32_t length, void *extra)
 {
-    ufifo->tail = NULL;
-    ufifo->counter = 0;
+    ufifo->top_empty = uring_init(&ufifo->uring, length, extra);
+    ufifo->tail_carrier = UTAG_NULL;
     __sync_synchronize();
 }
 
@@ -70,62 +78,37 @@ static inline void ufifo_init(struct ufifo *ufifo)
  *
  * @param ufifo pointer to a ufifo structure
  * @param element pointer to element to push
- * @param counter_before filled with the number of elements before pushing
+ * @return false if the maximum number of elements was reached and the
+ * element couldn't be queued
  */
-static inline void ufifo_push(struct ufifo *ufifo, struct uchain *element,
-                              unsigned int *counter_before)
+static inline bool ufifo_push(struct ufifo *ufifo, struct uchain *element)
 {
-    struct uchain *prev;
-    *counter_before = __sync_fetch_and_add(&ufifo->counter, 1);
-    do {
-        __sync_synchronize();
-        prev = ufifo->tail;
-        element->prev = prev;
-    } while (unlikely(!__sync_bool_compare_and_swap(&ufifo->tail, prev,
-                                                    element)));
+    uint64_t utag = uring_pop(&ufifo->uring, &ufifo->top_empty);
+    if (utag == UTAG_NULL)
+        return false;
+    bool ret = uring_set_elem(&ufifo->uring, &utag, element);
+    assert(ret);
+    uring_push(&ufifo->uring, &ufifo->tail_carrier, utag);
+    return true;
 }
 
 /** @This pops an element.
  *
  * @param ufifo pointer to a ufifo structure
- * @param counter_after filled with the number of elements after pushing
  * @return pointer to element, or NULL if the FIFO is empty
  */
-static inline struct uchain *ufifo_pop(struct ufifo *ufifo,
-                                       unsigned int *counter_after)
+static inline struct uchain *ufifo_pop(struct ufifo *ufifo)
 {
     struct uchain *element;
-    do {
-        __sync_synchronize();
-        element = ufifo->tail;
-        if (unlikely(element == NULL)) return NULL;
-        if (likely(element->prev != NULL))
-            break;
-    } while (unlikely(!__sync_bool_compare_and_swap(&ufifo->tail, element,
-                                                    NULL)));
-
-    if (likely(element->prev != NULL)) {
-        struct uchain **next = &element->prev;
-        while (likely((*next)->prev != NULL))
-            next = &(*next)->prev;
-        /* no need for a barrier here because we are the only thread accessing
-         * packets before tail */
-        element = *next;
-        *next = NULL;
-    }
-    *counter_after = __sync_sub_and_fetch(&ufifo->counter, 1);
+    uint64_t utag = uring_shift(&ufifo->uring, &ufifo->tail_carrier);
+    if (utag == UTAG_NULL)
+        return NULL;
+    bool ret = uring_get_elem(&ufifo->uring, utag, &element);
+    assert(ret);
+    ret = uring_set_elem(&ufifo->uring, &utag, NULL);
+    assert(ret);
+    uring_push(&ufifo->uring, &ufifo->top_empty, utag);
     return element;
-}
-
-/** @This returns the number of elements in the FIFO.
- *
- * @param ufifo pointer to a ufifo structure
- * @return number of elements in the FIFO (approximately)
- */
-static inline unsigned int ufifo_length(struct ufifo *ufifo)
-{
-    __sync_synchronize();
-    return ufifo->counter;
 }
 
 /** @This cleans up the ufifo data structure. Please note that it is the
@@ -149,56 +132,50 @@ static inline void ufifo_clean(struct ufifo *ufifo)
 struct ufifo {
     sem_t lock;
     struct uchain *tail;
-    unsigned int counter;
+    uint32_t length, counter;
 };
 
-static inline void ufifo_init(struct ufifo *ufifo)
+#define ufifo_sizeof(length) 0
+
+static inline void ufifo_init(struct ufifo *ufifo, uint32_t length, void *extra)
 {
     sem_init(&ufifo->lock, 0, 1);
     ufifo->tail = NULL;
+    ufifo->length = length;
     ufifo->counter = 0;
 }
 
-static inline void ufifo_push(struct ufifo *ufifo, struct uchain *element,
-                              unsigned int *counter_before)
+static inline bool ufifo_push(struct ufifo *ufifo, struct uchain *element)
 {
+    bool ret;
     while (sem_wait(&ufifo->lock) == -1);
-    element->prev = ufifo->tail;
-    ufifo->tail = element;
-    *counter_before = ufifo->counter++;
+    if (ufifo->counter < ufifo->length) {
+        element->prev = ufifo->tail;
+        ufifo->tail = element;
+        ufifo->counter++;
+        ret = true;
+    } else
+        ret = false;
     sem_post(&ufifo->lock);
+    return ret;
 }
 
-static inline struct uchain *ufifo_pop(struct ufifo *ufifo,
-                                       unsigned int *counter_after)
+static inline struct uchain *ufifo_pop(struct ufifo *ufifo)
 {
     struct uchain *element;
     while (sem_wait(&ufifo->lock) == -1);
     element = ufifo->tail;
     if (likely(element != NULL)) {
-        if (unlikely(element->prev == NULL))
-            ufifo->tail = NULL;
-        *counter_after = --ufifo->counter;
+        struct uchain **prev_p = &ufifo->tail;
+        while (element->prev != NULL) {
+            prev_p = &element->prev;
+            element = element->prev;
+        }
+        ufifo->counter--;
+        *prev_p = NULL;
     }
     sem_post(&ufifo->lock);
-
-    if (likely(element != NULL && element->prev != NULL)) {
-        struct uchain **next = &element->prev;
-        while (likely((*next)->prev != NULL))
-            next = &(*next)->prev;
-        element = *next;
-        *next = NULL;
-    }
     return element;
-}
-
-static inline unsigned int ufifo_length(struct ufifo *ufifo)
-{
-    unsigned int counter;
-    while (sem_wait(&ufifo->lock) == -1);
-    counter = ufifo->counter;
-    sem_post(&ufifo->lock);
-    return counter;
 }
 
 static inline void ufifo_clean(struct ufifo *ufifo)

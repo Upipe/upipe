@@ -18,8 +18,8 @@
         @item chained lists (@ref uchain and @ref ulist) and rings allowing pointer tagging (@ref uring)
         @item lock-less counters (@ref ucounter) and reference counters (@ref urefcount)
         @item lock-less LIFOs (@ref ulifo) without thread limitations
-        @item lock-less FIFOs (@ref ufifo) with one thread performing the removals
-        @item lock-less buffer queues (@ref uqueue) with one thread performing the removals
+        @item lock-less FIFOs (@ref ufifo) without thread limitations
+        @item lock-less buffer queues (@ref uqueue) without thread limitations
         @item lock-less exclusive access to non-reentrant resources (@ref udeal)
         @item objects to pass event information between threads (@ref ueventfd)
         @item access to monotonic or real-time system clock (@ref uclock)

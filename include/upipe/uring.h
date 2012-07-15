@@ -127,16 +127,49 @@ static inline uint64_t uring_init(struct uring *uring, uint32_t length,
 static inline uint64_t uring_pop(struct uring *uring, uint64_t *top)
 {
     uint64_t utag, next_utag;
+    __sync_synchronize();
     do {
-        __sync_synchronize();
         utag = *top;
         if (unlikely(utag == UTAG_NULL))
             return UTAG_NULL;
+
         uint32_t index = utag_to_index(utag);
         assert(index <= uring->length);
         struct uring_elem *elem = &uring->elems[index - 1];
         next_utag = elem->next_utag;
     } while (unlikely(!__sync_bool_compare_and_swap(top, utag, next_utag)));
+    return utag;
+}
+
+/** @This returns the last element of a stack in a thread-safe manner.
+ *
+ * @param uring pointer to uring structure
+ * @param top pointer to top utag
+ * @return bottom utag value, or UTAG_NULL
+ */
+static inline uint64_t uring_shift(struct uring *uring, uint64_t *top)
+{
+    uint64_t utag;
+    uint64_t *prev_utag_p;
+    __sync_synchronize();
+    do {
+        prev_utag_p = top;
+        utag = *prev_utag_p;
+        if (unlikely(utag == UTAG_NULL))
+            return UTAG_NULL;
+
+        for ( ; ; ) {
+            uint32_t index = utag_to_index(utag);
+            assert(index <= uring->length);
+            struct uring_elem *elem = &uring->elems[index - 1];
+            uint64_t next_utag = elem->next_utag;
+            if (unlikely(next_utag == UTAG_NULL))
+                break;
+            prev_utag_p = &elem->next_utag;
+            utag = next_utag;
+        }
+    } while (unlikely(!__sync_bool_compare_and_swap(prev_utag_p, utag,
+                                                    UTAG_NULL)));
     return utag;
 }
 
@@ -150,9 +183,9 @@ static inline void uring_push(struct uring *uring, uint64_t *top, uint64_t utag)
 {
     uint32_t index = utag_to_index(utag);
     assert(index <= uring->length);
+    __sync_synchronize();
     struct uring_elem *elem = &uring->elems[index - 1];
     do {
-        __sync_synchronize();
         elem->next_utag = *top;
     } while (unlikely(!__sync_bool_compare_and_swap(top, elem->next_utag,
                                                     utag)));

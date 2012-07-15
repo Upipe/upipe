@@ -1,5 +1,5 @@
 /*****************************************************************************
- * uqueue.h: upipe queue of buffers (multiple writers but only ONE reader)
+ * uqueue.h: upipe thread-safe queue of elements
  *****************************************************************************
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
@@ -32,32 +32,45 @@
 #include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/ufifo.h>
+#include <upipe/ucounter.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upump.h>
 
+#include <stdint.h>
 #include <assert.h>
 
 /** @This is the implementation of a queue. */
 struct uqueue {
     /** FIFO */
     struct ufifo fifo;
-    /** maximum number of elements in the FIFO */
-    unsigned int max_length;
+    /** number of elements in the queue */
+    ucounter counter;
+    /** maximum number of elements in the queue */
+    uint32_t length;
     /** ueventfd triggered when data can be pushed */
     struct ueventfd event_push;
     /** ueventfd triggered when data can be popped */
     struct ueventfd event_pop;
 };
 
+/** @This returns the required size of extra data space for uqueue.
+ *
+ * @param length maximum number of elements in the queue
+ * @return size in octets to allocate
+ */
+#define uqueue_sizeof(length) ufifo_sizeof(length)
+
 /** @This initializes a uqueue.
  *
  * @param uqueue pointer to a uqueue structure
- * @param max_length maximum number of elements in the queue
+ * @param length maximum number of elements in the queue
+ * @param extra mandatory extra space allocated by the caller, with the size
+ * returned by @ref #ufifo_sizeof
  * @return false in case of failure
  */
-static inline bool uqueue_init(struct uqueue *uqueue, unsigned int max_length)
+static inline bool uqueue_init(struct uqueue *uqueue, uint32_t length,
+                               void *extra)
 {
-    assert(max_length);
     if (unlikely(!ueventfd_init(&uqueue->event_push, true)))
         return false;
     if (unlikely(!ueventfd_init(&uqueue->event_pop, false))) {
@@ -65,8 +78,9 @@ static inline bool uqueue_init(struct uqueue *uqueue, unsigned int max_length)
         return false;
     }
 
-    ufifo_init(&uqueue->fifo);
-    uqueue->max_length = max_length;
+    ufifo_init(&uqueue->fifo, length, extra);
+    ucounter_init(&uqueue->counter, 0);
+    uqueue->length = length;
     return true;
 }
 
@@ -102,54 +116,55 @@ static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
                                 true);
 }
 
-/** @This pushes an element into the queue. It may be called from any thread.
+/** @This pushes an element into the queue.
  *
  * @param uqueue pointer to a uqueue structure
  * @param element pointer to element to push
- * @return false if no more element should be pushed afterwards
+ * @return false if the queue is full and the element couldn't be queued
  */
 static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
 {
-    unsigned int counter_before;
-    ufifo_push(&uqueue->fifo, element, &counter_before);
-    if (unlikely(counter_before == 0))
-        ueventfd_write(&uqueue->event_pop);
-
-    while (unlikely(ufifo_length(&uqueue->fifo) >= uqueue->max_length)) {
+    if (unlikely(!ufifo_push(&uqueue->fifo, element))) {
+        /* signal that we are full */
         ueventfd_read(&uqueue->event_push);
 
         /* double-check */
-        if (likely(ufifo_length(&uqueue->fifo) >= uqueue->max_length))
+        if (likely(!ufifo_push(&uqueue->fifo, element)))
             return false;
 
-        /* try again */
+        /* signal that we're alright again */
         ueventfd_write(&uqueue->event_push);
     }
+
+    unsigned int counter_before = ucounter_add(&uqueue->counter, 1);
+    if (unlikely(counter_before == 0))
+        ueventfd_write(&uqueue->event_pop);
     return true;
 }
 
-/** @This pops an element from the queue. It may only be called by the thread
- * which "owns" the structure, otherwise there is a race condition.
+/** @This pops an element from the queue.
  *
  * @param uqueue pointer to a uqueue structure
  * @return pointer to element, or NULL if the LIFO is empty
  */
 static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 {
-    while (unlikely(ufifo_length(&uqueue->fifo) == 0)) {
+    struct uchain *uchain = ufifo_pop(&uqueue->fifo);
+    if (unlikely(uchain == NULL)) {
+        /* signal that we starve */
         ueventfd_read(&uqueue->event_pop);
 
         /* double-check */
-        if (likely(ufifo_length(&uqueue->fifo) == 0))
+        uchain = ufifo_pop(&uqueue->fifo);
+        if (likely(uchain == NULL))
             return NULL;
 
-        /* try again */
+        /* signal that we're alright again */
         ueventfd_write(&uqueue->event_pop);
     }
 
-    unsigned int counter_after;
-    struct uchain *uchain = ufifo_pop(&uqueue->fifo, &counter_after);
-    if (unlikely(uchain != NULL && counter_after == uqueue->max_length - 1))
+    unsigned int counter_before = ucounter_sub(&uqueue->counter, 1);
+    if (unlikely(counter_before == uqueue->length))
         ueventfd_write(&uqueue->event_push);
     return uchain;
 }
@@ -160,7 +175,7 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
  */
 static inline unsigned int uqueue_length(struct uqueue *uqueue)
 {
-    return ufifo_length(&uqueue->fifo);
+    return ucounter_value(&uqueue->counter);
 }
 
 /** @This cleans up the queue data structure. Please note that it is the
@@ -170,6 +185,7 @@ static inline unsigned int uqueue_length(struct uqueue *uqueue)
  */
 static inline void uqueue_clean(struct uqueue *uqueue)
 {
+    ucounter_clean(&uqueue->counter);
     ufifo_clean(&uqueue->fifo);
     ueventfd_clean(&uqueue->event_push);
     ueventfd_clean(&uqueue->event_pop);

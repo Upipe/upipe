@@ -67,8 +67,7 @@ struct ulifo {
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #ulifo_sizeof
  */
-static inline void ulifo_init(struct ulifo *ulifo, uint32_t length,
-                              void *extra)
+static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
 {
     ulifo->top_empty = uring_init(&ulifo->uring, length, extra);
     ulifo->top_carrier = UTAG_NULL;
@@ -106,6 +105,8 @@ static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
         return NULL;
     bool ret = uring_get_elem(&ulifo->uring, utag, &element);
     assert(ret);
+    ret = uring_set_elem(&ulifo->uring, &utag, NULL);
+    assert(ret);
     uring_push(&ulifo->uring, &ulifo->top_empty, utag);
     return element;
 }
@@ -137,8 +138,7 @@ struct ulifo {
 
 #define ulifo_sizeof(length) 0
 
-static inline void ulifo_init(struct ulifo *ulifo, uint32_t length,
-                              void *extra)
+static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
 {
     sem_init(&ulifo->lock, 0, 1);
     ulifo->top = NULL;
