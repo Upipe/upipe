@@ -253,8 +253,10 @@ static void upipe_fsink_watcher(struct upump *upump)
     upipe_fsink->blocked = false;
 
     struct uchain *uchain;
-    ulist_foreach (&urefs, uchain)
+    ulist_delete_foreach (&urefs, uchain) {
+        ulist_delete(&urefs, uchain);
         upipe_fsink_output(upipe, uref_from_uchain(uchain));
+    }
 }
 
 /** @internal @This receives data.
@@ -504,6 +506,12 @@ static void upipe_fsink_free(struct upipe *upipe)
     upipe_fsink_clean_delay(upipe);
     upipe_fsink_clean_uclock(upipe);
     upipe_fsink_clean_upump_mgr(upipe);
+
+    struct uchain *uchain;
+    ulist_delete_foreach (&upipe_fsink->urefs, uchain) {
+        ulist_delete(&upipe_fsink->urefs, uchain);
+        uref_release(uref_from_uchain(uchain));
+    }
     free(upipe_fsink);
 }
 
