@@ -201,7 +201,8 @@ static bool _upipe_qsrc_get_max_length(struct upipe *upipe,
 static bool _upipe_qsrc_set_max_length(struct upipe *upipe, unsigned int length)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    if (unlikely(!length || upipe_queue_max_length(upipe)))
+    if (unlikely(!length || length > UINT8_MAX ||
+                 upipe_queue_max_length(upipe)))
         return false;
 
     upipe_qsrc->uqueue_extra = malloc(uqueue_sizeof(length));

@@ -68,7 +68,7 @@ struct uqueue {
  * returned by @ref #ufifo_sizeof
  * @return false in case of failure
  */
-static inline bool uqueue_init(struct uqueue *uqueue, uint32_t length,
+static inline bool uqueue_init(struct uqueue *uqueue, uint8_t length,
                                void *extra)
 {
     if (unlikely(!ueventfd_init(&uqueue->event_push, true)))

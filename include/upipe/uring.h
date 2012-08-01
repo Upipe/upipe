@@ -37,41 +37,48 @@
 #include <stdbool.h>
 #include <assert.h>
 
-/** @This returns the index of an element from a utag (multiplexed structure
- * from tag and index, used for thread-safety).
- *
- * @param utag utag multiplexed structure
- * @return index of the element in the array
+/** @This defines a multiplexed structure from an element index (top) and a tag
+ * that increments at each use of the element (single mux). This is to avoid
+ * the ABA problem in concurrent operations. The bit-field definition is:
+ * @table 2
+ * @item bits @item description
+ * @item 32 @item tag
+ * @item 32 @item index
+ * @end table
  */
-static inline uint32_t utag_to_index(uint64_t utag)
-{
-    return utag & UINT32_MAX;
-}
+typedef uint64_t uring_smux;
 
-/** @This returns a utag, composited from the index of an element in an array,
- * and from a tag value used for thread-safety. Note that the index here
- * starts at 1 (0 is the NULL element).
- *
- * @param index index of the element in the array
- * @param tag current tag of the element, used for thread-safety
- * @return utag multiplexed structure
+/** @This defines a multiplexed structure from two element indexes (head and
+ * tail) and associated tags (double mux). The bit-field definition is:
+ * @table 2
+ * @item bits @item description
+ * @item 24 @item tail tag
+ * @item 8 @item tail index
+ * @item 24 @item head description
+ * @item 8 @item head index
+ * @end table
  */
-static inline uint64_t utag_from_index(uint32_t index, uint32_t tag)
-{
-    uint64_t utag = ((uint64_t)tag << 32) | index;
-    return utag;
-}
+typedef uint64_t uring_dmux;
 
-/** @This represents the NULL utag element. */
-#define UTAG_NULL 0
+/** @This defines the position of an element in the uring array. */
+typedef uint32_t uring_index;
+
+/** @This represents a NULL smux element. */
+#define URING_SMUX_NULL 0
+
+/** @This represents a (NULL, NULL) dmux element. */
+#define URING_DMUX_NULL 0
+
+/** @This represents a NULL index position. */
+#define URING_INDEX_NULL 0
 
 /** @This is designed to create thread-safe data structures with uchains. */
 struct uring_elem {
     /** tag incremented at each use */
     uint32_t tag;
-    /** utag of the next element */
-    uint64_t next_utag;
-    /** pointer to uchain */
+    /** index of the next element */
+    uring_index next;
+    /** pointer to embedded uchain */
     struct uchain *uchain;
 };
 
@@ -91,6 +98,144 @@ struct uring {
  */
 #define uring_sizeof(length) (length * sizeof(struct uring_elem))
 
+/** @internal @This returns the index of an element from an smux.
+ *
+ * @param smux uring_smux multiplexed structure
+ * @return index of the element in the ring 
+ */
+static inline uring_index uring_smux_to_index(struct uring *uring,
+                                              uring_smux smux)
+{
+    if (unlikely(smux == URING_SMUX_NULL))
+        return URING_INDEX_NULL;
+
+    uring_index index = smux & UINT32_MAX;
+    assert(index <= uring->length);
+    return index;
+}
+
+/** @internal @This returns an smux (multiplexed tag and index) for a given
+ * element index. There is no memory barrier in this function because we
+ * assume it's been done by the caller.
+ *
+ * @param uring pointer to uring structure
+ * @param index index of the element in the ring
+ * @return uring_smux multiplexed structure
+ */
+static inline uring_smux uring_smux_from_index(struct uring *uring,
+                                               uring_index index)
+{
+    if (unlikely(index == URING_INDEX_NULL))
+        return URING_SMUX_NULL;
+
+    assert(index <= uring->length);
+    uring_smux smux = ((uring_smux)uring->elems[index - 1].tag << 32) |
+                      (uring_smux)index;
+    return smux;
+}
+
+/** @internal @This sets the index of the tail element of a dmux.
+ *
+ * @param dmux uring_dmux multiplexed structure
+ * @param index index of the tail element in the ring
+ */
+static inline void uring_dmux_set_tail(struct uring *uring, uring_dmux *dmux_p,
+                                       uring_index index)
+{
+    *dmux_p &= UINT32_MAX;
+    if (unlikely(index == URING_INDEX_NULL))
+        return;
+
+    assert(index <= uring->length);
+    *dmux_p |= ((uint64_t)uring->elems[index - 1].tag & UINT64_C(0xffffff))
+                << 40;
+    *dmux_p |= (uint64_t)index << 32;
+}
+
+/** @internal @This sets the index of the head element of a dmux.
+ *
+ * @param dmux uring_dmux multiplexed structure
+ * @param index index of the head element in the ring
+ */
+static inline void uring_dmux_set_head(struct uring *uring, uring_dmux *dmux_p,
+                                       uring_index index)
+{
+    *dmux_p &= (uint64_t)UINT32_MAX << 32;
+    if (unlikely(index == URING_INDEX_NULL))
+        return;
+
+    assert(index <= uring->length);
+    *dmux_p |= ((uint64_t)uring->elems[index - 1].tag & UINT64_C(0xffffff))
+                << 8;
+    *dmux_p |= (uint64_t)index;
+}
+
+/** @internal @This returns the index of the tail element of a dmux.
+ *
+ * @param dmux uring_dmux multiplexed structure
+ * @return index of the tail element in the ring
+ */
+static inline uring_index uring_dmux_get_tail(struct uring *uring,
+                                              uring_dmux dmux)
+{
+    uring_index index = (dmux >> 32) & UINT8_MAX;
+    assert(index <= uring->length);
+    return index;
+}
+
+/** @internal @This returns the index of the head element of a dmux.
+ *
+ * @param dmux uring_dmux multiplexed structure
+ * @return index of the head element in the ring
+ */
+static inline uring_index uring_dmux_get_head(struct uring *uring,
+                                              uring_dmux dmux)
+{
+    uring_index index = dmux & UINT8_MAX;
+    assert(index <= uring->length);
+    return index;
+}
+
+/** @internal @This returns a pointer to an element from an index.
+ *
+ * @param index of the element in the ring
+ * @return pointer to the element in the ring
+ */
+static inline struct uring_elem *uring_elem_from_index(struct uring *uring,
+                                                       uring_index index)
+{
+    assert(index != URING_INDEX_NULL);
+    assert(index <= uring->length);
+    return &uring->elems[index - 1];
+}
+
+/** @This sets the uchain of a uring element.
+ *
+ * @param uring pointer to uring structure
+ * @param index index of the element in the ring
+ * @param uchain uchain to associate with the element
+ */
+static inline void uring_elem_set(struct uring *uring, uring_index index,
+                                  struct uchain *uchain)
+{
+    struct uring_elem *elem = uring_elem_from_index(uring, index);
+    elem->tag++;
+    elem->uchain = uchain;
+}
+
+/** @This gets the uchain of a uring element.
+ *
+ * @param uring pointer to uring structure
+ * @param index index of the element in the ring
+ * @return uchain associated with the element, or NULL
+ */
+static inline struct uchain *uring_elem_get(struct uring *uring,
+                                            uring_index index)
+{
+    struct uring_elem *elem = uring_elem_from_index(uring, index);
+    return elem->uchain;
+}
+
 /** @This initializes a ring. By default all elements are chained, and the
  * first element is the head of the chain.
  *
@@ -98,10 +243,10 @@ struct uring {
  * @param length number of elements in the ring
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #uring_sizeof
- * @return utag of the first element
+ * @return smux of the first element
  */
-static inline uint64_t uring_init(struct uring *uring, uint32_t length,
-                                  void *extra)
+static inline uring_smux uring_init(struct uring *uring, uint32_t length,
+                                    void *extra)
 {
     assert(extra != NULL);
     uring->length = length;
@@ -109,125 +254,158 @@ static inline uint64_t uring_init(struct uring *uring, uint32_t length,
     /* indexes start at 1 */
     for (uint32_t i = 1; i < length; i++) {
         uring->elems[i - 1].tag = 0;
-        uring->elems[i - 1].next_utag = utag_from_index(i + 1, 0);
+        uring->elems[i - 1].next = i + 1;
         uring->elems[i - 1].uchain = NULL;
     }
     uring->elems[length - 1].tag = 0;
-    uring->elems[length - 1].next_utag = UTAG_NULL;
+    uring->elems[length - 1].next = URING_INDEX_NULL;
     uring->elems[length - 1].uchain = NULL;
-    return utag_from_index(1, 0);
+    return uring_smux_from_index(uring, 1);
 }
 
-/** @This pops an element from a stack in a thread-safe manner.
+/** @This pops an element from lifo of a LIFO in a thread-safe manner.
  *
  * @param uring pointer to uring structure
- * @param top pointer to top utag
- * @return top utag value, or UTAG_NULL
+ * @param lifo pointer to the smux containing the lifo of the LIFO
+ * @return index of the first LIFO element, or URING_INDEX_NULL
  */
-static inline uint64_t uring_pop(struct uring *uring, uint64_t *top)
+static inline uring_index uring_lifo_pop(struct uring *uring, uring_smux *lifo)
 {
-    uint64_t utag, next_utag;
+    uring_smux old_smux, new_smux;
+    uring_index index;
     __sync_synchronize();
-    do {
-        utag = *top;
-        if (unlikely(utag == UTAG_NULL))
-            return UTAG_NULL;
 
-        uint32_t index = utag_to_index(utag);
-        assert(index <= uring->length);
-        struct uring_elem *elem = &uring->elems[index - 1];
-        next_utag = elem->next_utag;
-    } while (unlikely(!__sync_bool_compare_and_swap(top, utag, next_utag)));
-    return utag;
+    do {
+        old_smux = *lifo;
+        if (old_smux == URING_SMUX_NULL)
+            return URING_INDEX_NULL;
+
+        index = uring_smux_to_index(uring, old_smux);
+        struct uring_elem *elem = uring_elem_from_index(uring, index);
+        new_smux = uring_smux_from_index(uring, elem->next);
+    } while (unlikely(!__sync_bool_compare_and_swap(lifo, old_smux, new_smux)));
+
+    return index;
 }
 
-/** @This returns the last element of a stack in a thread-safe manner.
+/** @This pushes an element into the lifo of a LIFO in a thread-safe manner.
  *
  * @param uring pointer to uring structure
- * @param top pointer to top utag
- * @return bottom utag value, or UTAG_NULL
+ * @param lifo pointer to the smux containing the lifo of the LIFO
+ * @param index index of the element to push
  */
-static inline uint64_t uring_shift(struct uring *uring, uint64_t *top)
+static inline void uring_lifo_push(struct uring *uring, uring_smux *lifo,
+                                   uring_index index)
 {
-    uint64_t utag;
-    uint64_t *prev_utag_p;
+    struct uring_elem *elem = uring_elem_from_index(uring, index);
+    uring_smux old_smux, new_smux = uring_smux_from_index(uring, index);
     __sync_synchronize();
-    do {
-        prev_utag_p = top;
-        utag = *prev_utag_p;
-        if (unlikely(utag == UTAG_NULL))
-            return UTAG_NULL;
 
-        for ( ; ; ) {
-            uint32_t index = utag_to_index(utag);
-            assert(index <= uring->length);
-            struct uring_elem *elem = &uring->elems[index - 1];
-            uint64_t next_utag = elem->next_utag;
-            if (unlikely(next_utag == UTAG_NULL))
-                break;
-            prev_utag_p = &elem->next_utag;
-            utag = next_utag;
+    do {
+        old_smux = *lifo;
+        elem->next = uring_smux_to_index(uring, old_smux);
+    } while (unlikely(!__sync_bool_compare_and_swap(lifo, old_smux, new_smux)));
+}
+
+/** @internal @This finds in a chained list of elements the one pointing to a
+ * given index.
+ *
+ * @param uring pointer to uring structure
+ * @param start index of the first element of the list
+ * @param find index to find
+ * @return index of the element pointing to find, or URING_INDEX_NULL if not
+ * found
+ */
+static inline uring_index uring_fifo_find(struct uring *uring,
+                                          uring_index start, uring_index find)
+{
+    uint32_t tries = uring->length;
+    uring_index index = start;
+    do {
+        struct uring_elem *elem = uring_elem_from_index(uring, index);
+        uring_index next = elem->next;
+        if (next == find)
+            return index;
+        index = next;
+    } while (index != URING_INDEX_NULL && tries--);
+
+    /* We arrive here if the list is inconsistent, and has been modified by
+     * another thread. */
+    return URING_INDEX_NULL;
+}
+
+/** @This pops an element from head of a FIFO in a thread-safe manner.
+ *
+ * @param uring pointer to uring structure
+ * @param fifo pointer to the dmux containing the tail and head of the FIFO
+ * @return index of the first FIFO element, or URING_INDEX_NULL
+ */
+static inline uring_index uring_fifo_pop(struct uring *uring, uring_dmux *fifo)
+{
+    __sync_synchronize();
+
+    for ( ; ; ) {
+        uring_dmux old_dmux = *fifo;
+        if (old_dmux == URING_DMUX_NULL)
+            return URING_INDEX_NULL;
+
+        uring_index tail = uring_dmux_get_tail(uring, old_dmux);
+        uring_index head = uring_dmux_get_head(uring, old_dmux);
+
+        if (head == tail) {
+            /* one-element FIFO */
+            if (likely(__sync_bool_compare_and_swap(fifo, old_dmux,
+                                                    URING_DMUX_NULL)))
+                return head;
+
+        } else {
+            /* multiple elements FIFO */
+            uring_dmux new_dmux = old_dmux;
+            uring_index prev = uring_fifo_find(uring, tail, head);
+            if (prev == URING_INDEX_NULL) {
+                /* The search failed: the FIFO was modified by another
+                 * thread. */
+                __sync_synchronize();
+                continue;
+            }
+
+            for ( ; ; ) {
+                uring_dmux_set_head(uring, &new_dmux, prev);
+                if (likely(__sync_bool_compare_and_swap(fifo, old_dmux,
+                                                        new_dmux)))
+                    return head;
+
+                new_dmux = old_dmux = *fifo;
+                /* Check if only the tail was changed (and then try again),
+                 * or if we need to restart everything. */
+                if (unlikely(head != uring_dmux_get_head(uring, old_dmux)))
+                    break;
+            }
         }
-    } while (unlikely(!__sync_bool_compare_and_swap(prev_utag_p, utag,
-                                                    UTAG_NULL)));
-    return utag;
+    }
 }
 
-/** @This pushes an element into a stack in a thread-safe manner.
+/** @This pushes an element into the tail of a FIFO in a thread-safe manner.
  *
  * @param uring pointer to uring structure
- * @param top pointer to top utag
- * @param utag utag to push
+ * @param fifo pointer to the dmux containing the tail and head of the FIFO
+ * @param index index of the element to push
  */
-static inline void uring_push(struct uring *uring, uint64_t *top, uint64_t utag)
+static inline void uring_fifo_push(struct uring *uring, uring_dmux *fifo,
+                                   uring_index index)
 {
-    uint32_t index = utag_to_index(utag);
-    assert(index <= uring->length);
+    struct uring_elem *elem = uring_elem_from_index(uring, index);
+    uring_dmux old_dmux, new_dmux;
     __sync_synchronize();
-    struct uring_elem *elem = &uring->elems[index - 1];
+
     do {
-        elem->next_utag = *top;
-    } while (unlikely(!__sync_bool_compare_and_swap(top, elem->next_utag,
-                                                    utag)));
-}
-
-/** @This sets the uchain and the next utag of a uring element.
- *
- * @param uring pointer to uring structure
- * @param utag_p reference to utag of the element, is changed during execution
- * @param uchain uchain to associate with the element
- * @return false in case the element doesn't exist
- */
-static inline bool uring_set_elem(struct uring *uring, uint64_t *utag_p,
-                                  struct uchain *uchain)
-{
-    uint32_t index = utag_to_index(*utag_p);
-    if (index == UTAG_NULL || index > uring->length)
-        return false;
-    struct uring_elem *elem = &uring->elems[index - 1];
-    elem->tag++;
-    elem->uchain = uchain;
-    *utag_p = utag_from_index(index, elem->tag);
-    return true;
-}
-
-/** @This gets the uchain and the next utag of a uring element.
- *
- * @param uring pointer to uring structure
- * @param utag utag of the element
- * @param uchain_p reference to a uchain written on execution
- * @return false in case the element doesn't exist
- */
-static inline bool uring_get_elem(struct uring *uring, uint64_t utag,
-                                  struct uchain **uchain_p)
-{
-    assert(uchain_p != NULL);
-    uint32_t index = utag_to_index(utag);
-    if (index == UTAG_NULL || index > uring->length)
-        return false;
-    struct uring_elem *elem = &uring->elems[index - 1];
-    *uchain_p = elem->uchain;
-    return true;
+        old_dmux = new_dmux = *fifo;
+        uring_index tail = uring_dmux_get_tail(uring, old_dmux);
+        elem->next = tail;
+        if (tail == URING_INDEX_NULL)
+            uring_dmux_set_head(uring, &new_dmux, index);
+        uring_dmux_set_tail(uring, &new_dmux, index);
+    } while (unlikely(!__sync_bool_compare_and_swap(fifo, old_dmux, new_dmux)));
 }
 
 #else

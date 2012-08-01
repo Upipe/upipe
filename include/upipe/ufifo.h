@@ -45,12 +45,10 @@
 struct ufifo {
     /** ring structure */
     struct uring uring;
-    /** last queued utag carrying a uchain, and last to be dequeued,
-     * or UTAG_NULL if no uchain is available */
-    uint64_t tail_carrier;
-    /** last queued utag not carrying a uchain, and first to be dequeued,
-     * or UTAG_NULL if the FIFO is full */
-    uint64_t top_empty;
+    /** uring FIFO of elements carrying a uchain */
+    uring_dmux fifo_carrier;
+    /** uring LIFO of elements not carrying a uchain */
+    uring_smux lifo_empty;
 };
 
 /** @This returns the required size of extra data space for ufifo.
@@ -63,14 +61,14 @@ struct ufifo {
 /** @This initializes a ufifo.
  *
  * @param ufifo pointer to a ufifo structure
- * @param length maximum number of elements in the FIFO
+ * @param length maximum number of elements in the FIFO (max 255)
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #ufifo_sizeof
  */
-static inline void ufifo_init(struct ufifo *ufifo, uint32_t length, void *extra)
+static inline void ufifo_init(struct ufifo *ufifo, uint8_t length, void *extra)
 {
-    ufifo->top_empty = uring_init(&ufifo->uring, length, extra);
-    ufifo->tail_carrier = UTAG_NULL;
+    ufifo->lifo_empty = uring_init(&ufifo->uring, length, extra);
+    ufifo->fifo_carrier = URING_DMUX_NULL;
     __sync_synchronize();
 }
 
@@ -83,12 +81,11 @@ static inline void ufifo_init(struct ufifo *ufifo, uint32_t length, void *extra)
  */
 static inline bool ufifo_push(struct ufifo *ufifo, struct uchain *element)
 {
-    uint64_t utag = uring_pop(&ufifo->uring, &ufifo->top_empty);
-    if (utag == UTAG_NULL)
+    uring_index index = uring_lifo_pop(&ufifo->uring, &ufifo->lifo_empty);
+    if (index == URING_INDEX_NULL)
         return false;
-    bool ret = uring_set_elem(&ufifo->uring, &utag, element);
-    assert(ret);
-    uring_push(&ufifo->uring, &ufifo->tail_carrier, utag);
+    uring_elem_set(&ufifo->uring, index, element);
+    uring_fifo_push(&ufifo->uring, &ufifo->fifo_carrier, index);
     return true;
 }
 
@@ -100,14 +97,12 @@ static inline bool ufifo_push(struct ufifo *ufifo, struct uchain *element)
 static inline struct uchain *ufifo_pop(struct ufifo *ufifo)
 {
     struct uchain *element;
-    uint64_t utag = uring_shift(&ufifo->uring, &ufifo->tail_carrier);
-    if (utag == UTAG_NULL)
+    uring_index index = uring_fifo_pop(&ufifo->uring, &ufifo->fifo_carrier);
+    if (index == URING_INDEX_NULL)
         return NULL;
-    bool ret = uring_get_elem(&ufifo->uring, utag, &element);
-    assert(ret);
-    ret = uring_set_elem(&ufifo->uring, &utag, NULL);
-    assert(ret);
-    uring_push(&ufifo->uring, &ufifo->top_empty, utag);
+    element = uring_elem_get(&ufifo->uring, index);
+    uring_elem_set(&ufifo->uring, index, NULL);
+    uring_lifo_push(&ufifo->uring, &ufifo->lifo_empty, index);
     return element;
 }
 
@@ -137,7 +132,7 @@ struct ufifo {
 
 #define ufifo_sizeof(length) 0
 
-static inline void ufifo_init(struct ufifo *ufifo, uint32_t length, void *extra)
+static inline void ufifo_init(struct ufifo *ufifo, uint8_t length, void *extra)
 {
     sem_init(&ufifo->lock, 0, 1);
     ufifo->tail = NULL;

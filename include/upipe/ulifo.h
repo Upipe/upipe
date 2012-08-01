@@ -45,12 +45,10 @@
 struct ulifo {
     /** ring structure */
     struct uring uring;
-    /** last queued utag carrying a uchain, and first to be dequeued,
-     * or UTAG_NULL if no uchain is available */
-    uint64_t top_carrier;
-    /** last queued utag not carrying a uchain, and first to be dequeued,
-     * or UTAG_NULL if the LIFO is full */
-    uint64_t top_empty;
+    /** uring LIFO of elements carrying a uchain */
+    uring_smux lifo_carrier;
+    /** uring LIFO of elements not carrying a uchain */
+    uring_smux lifo_empty;
 };
 
 /** @This returns the required size of extra data space for ulifo.
@@ -69,8 +67,8 @@ struct ulifo {
  */
 static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
 {
-    ulifo->top_empty = uring_init(&ulifo->uring, length, extra);
-    ulifo->top_carrier = UTAG_NULL;
+    ulifo->lifo_empty = uring_init(&ulifo->uring, length, extra);
+    ulifo->lifo_carrier = URING_SMUX_NULL;
     __sync_synchronize();
 }
 
@@ -83,12 +81,11 @@ static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
  */
 static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
 {
-    uint64_t utag = uring_pop(&ulifo->uring, &ulifo->top_empty);
-    if (utag == UTAG_NULL)
+    uring_index index = uring_lifo_pop(&ulifo->uring, &ulifo->lifo_empty);
+    if (index == URING_INDEX_NULL)
         return false;
-    bool ret = uring_set_elem(&ulifo->uring, &utag, element);
-    assert(ret);
-    uring_push(&ulifo->uring, &ulifo->top_carrier, utag);
+    uring_elem_set(&ulifo->uring, index, element);
+    uring_lifo_push(&ulifo->uring, &ulifo->lifo_carrier, index);
     return true;
 }
 
@@ -100,14 +97,12 @@ static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
 static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
 {
     struct uchain *element;
-    uint64_t utag = uring_pop(&ulifo->uring, &ulifo->top_carrier);
-    if (utag == UTAG_NULL)
+    uring_index index = uring_lifo_pop(&ulifo->uring, &ulifo->lifo_carrier);
+    if (index == URING_INDEX_NULL)
         return NULL;
-    bool ret = uring_get_elem(&ulifo->uring, utag, &element);
-    assert(ret);
-    ret = uring_set_elem(&ulifo->uring, &utag, NULL);
-    assert(ret);
-    uring_push(&ulifo->uring, &ulifo->top_empty, utag);
+    element = uring_elem_get(&ulifo->uring, index);
+    uring_elem_set(&ulifo->uring, index, NULL);
+    uring_lifo_push(&ulifo->uring, &ulifo->lifo_empty, index);
     return element;
 }
 
