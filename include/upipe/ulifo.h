@@ -46,9 +46,9 @@ struct ulifo {
     /** ring structure */
     struct uring uring;
     /** uring LIFO of elements carrying a uchain */
-    uring_smux lifo_carrier;
+    uring_lifo lifo_carrier;
     /** uring LIFO of elements not carrying a uchain */
-    uring_smux lifo_empty;
+    uring_lifo lifo_empty;
 };
 
 /** @This returns the required size of extra data space for ulifo.
@@ -68,7 +68,7 @@ struct ulifo {
 static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
 {
     ulifo->lifo_empty = uring_init(&ulifo->uring, length, extra);
-    ulifo->lifo_carrier = URING_SMUX_NULL;
+    ulifo->lifo_carrier = URING_LIFO_NULL;
     __sync_synchronize();
 }
 
