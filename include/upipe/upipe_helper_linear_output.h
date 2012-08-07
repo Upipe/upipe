@@ -178,9 +178,15 @@ static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
 static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    if (unlikely(STRUCTURE->OUTPUT == NULL)) {                              \
+        ulog_error(upipe->ulog, "no output defined");                       \
+        uref_release(uref);                                                 \
+        return;                                                             \
+    }                                                                       \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
         STRUCTURE##_flow_def(upipe);                                        \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
+        ulog_error(upipe->ulog, "no flowdef defined");                      \
         uref_release(uref);                                                 \
         return;                                                             \
     }                                                                       \
