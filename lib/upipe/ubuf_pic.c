@@ -223,7 +223,7 @@ static struct ubuf *ubuf_pic_alloc_inner(struct ubuf_mgr *mgr, size_t hmsize,
     }
 
     struct ubuf_pic *pic = NULL;
-    struct uchain *uchain = ulifo_pop(&pic_mgr->pool);
+    struct uchain *uchain = ulifo_pop(&pic_mgr->pool, struct uchain *);
     if (likely(uchain != NULL))
         pic = ubuf_pic_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -512,7 +512,7 @@ static void _ubuf_pic_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_pic_mgr *pic_mgr = ubuf_pic_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = ulifo_pop(&pic_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&pic_mgr->pool, struct uchain *)) != NULL) {
         struct ubuf_pic *pic = ubuf_pic_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_pic_free_inner(pic);
     }

@@ -1,6 +1,4 @@
-/*****************************************************************************
- * udeal.h: upipe efficient exclusive access to a non-reentrant resource
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
@@ -23,7 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe exclusive access to non-reentrant resource
+ * Primitives in this file allow to run a call-back when an exclusive access
+ * to a non-reentrant resource is granted, in an asynchronous, upump-aware
+ * way.
+ */
 
 #ifndef _UPIPE_UDEAL_H_
 /** @hidden */
@@ -31,7 +36,7 @@
 
 #include <upipe/config.h>
 #include <upipe/ubase.h>
-#include <upipe/ucounter.h>
+#include <upipe/uatomic.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upump.h>
 
@@ -41,9 +46,9 @@
  * non-reentrant resource. */
 struct udeal {
     /** number of waiters */
-    ucounter waiters;
+    uatomic_uint32_t waiters;
     /** number of accesses to the resource (0 or 1) */
-    ucounter access;
+    uatomic_uint32_t access;
     /** ueventfd triggered when a waiter may be unblocked */
     struct ueventfd event;
 };
@@ -58,8 +63,8 @@ static inline bool udeal_init(struct udeal *udeal)
     if (unlikely(!ueventfd_init(&udeal->event, true)))
         return false;
 
-    ucounter_init(&udeal->waiters, 0);
-    ucounter_init(&udeal->access, 0);
+    uatomic_init(&udeal->waiters, 0);
+    uatomic_init(&udeal->access, 0);
     return true;
 }
 
@@ -88,7 +93,7 @@ static inline bool udeal_start(struct udeal *udeal, struct upump *upump)
 {
     if (unlikely(!upump_start(upump)))
         return false;
-    if (likely(ucounter_add(&udeal->waiters, 1) == 0))
+    if (likely(uatomic_fetch_add(&udeal->waiters, 1) == 0))
         upump->cb(upump);
     return true;
 }
@@ -100,11 +105,11 @@ static inline bool udeal_start(struct udeal *udeal, struct upump *upump)
  */
 static inline bool udeal_grab(struct udeal *udeal)
 {
-    while (unlikely(ucounter_add(&udeal->access, 1) > 0)) {
+    while (unlikely(uatomic_fetch_add(&udeal->access, 1) > 0)) {
         ueventfd_read(&udeal->event);
 
         /* double-check */
-        if (likely(ucounter_sub(&udeal->access, 1) > 1))
+        if (likely(uatomic_fetch_sub(&udeal->access, 1) > 1))
             return false;
 
         /* try again */
@@ -123,8 +128,8 @@ static inline bool udeal_grab(struct udeal *udeal)
  */
 static inline bool udeal_yield(struct udeal *udeal, struct upump *upump)
 {
-    ucounter_sub(&udeal->access, 1);
-    if (ucounter_sub(&udeal->waiters, 1) > 1)
+    uatomic_fetch_sub(&udeal->access, 1);
+    if (uatomic_fetch_sub(&udeal->waiters, 1) > 1)
         ueventfd_write(&udeal->event);
     return upump_stop(upump);
 }
@@ -138,7 +143,7 @@ static inline bool udeal_yield(struct udeal *udeal, struct upump *upump)
  */
 static inline bool udeal_abort(struct udeal *udeal, struct upump *upump)
 {
-    ucounter_sub(&udeal->waiters, 1);
+    uatomic_fetch_sub(&udeal->waiters, 1);
     return upump_stop(upump);
 }
 
@@ -148,8 +153,8 @@ static inline bool udeal_abort(struct udeal *udeal, struct upump *upump)
  */
 static inline void udeal_clean(struct udeal *udeal)
 {
-    ucounter_clean(&udeal->waiters);
-    ucounter_clean(&udeal->access);
+    uatomic_clean(&udeal->waiters);
+    uatomic_clean(&udeal->access);
     ueventfd_clean(&udeal->event);
 }
 

@@ -1,6 +1,4 @@
-/*****************************************************************************
- * ulifo.h: upipe efficient and thread-safe LIFO implementation
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
@@ -23,23 +21,18 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe thread-safe last-in first-out data structure
+ */
 
 #ifndef _UPIPE_ULIFO_H_
 /** @hidden */
 #define _UPIPE_ULIFO_H_
 
 #include <upipe/ubase.h>
-
-#include <stdint.h>
-
-#ifdef HAVE_ATOMIC_OPS
-
 #include <upipe/uring.h>
-
-/*
- * Preferred method: gcc atomic operations
- */
 
 /** @This is the implementation of last-in first-out data structure. */
 struct ulifo {
@@ -65,46 +58,55 @@ struct ulifo {
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #ulifo_sizeof
  */
-static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
+static inline void ulifo_init(struct ulifo *ulifo, uint16_t length, void *extra)
 {
-    ulifo->lifo_empty = uring_init(&ulifo->uring, length, extra);
-    ulifo->lifo_carrier = URING_LIFO_NULL;
-    __sync_synchronize();
+    uring_lifo_init(&ulifo->uring, &ulifo->lifo_empty,
+                    uring_init(&ulifo->uring, length, extra));
+    uring_lifo_init(&ulifo->uring, &ulifo->lifo_carrier, URING_LIFO_NULL);
 }
 
 /** @This pushes a new element.
  *
  * @param ulifo pointer to a ulifo structure
- * @param element pointer to element to push
+ * @param opaque opaque to associate with element (not NULL)
  * @return false if the maximum number of elements was reached and the
  * element couldn't be queued
  */
-static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
+static inline bool ulifo_push(struct ulifo *ulifo, void *opaque)
 {
+    assert(opaque != NULL);
     uring_index index = uring_lifo_pop(&ulifo->uring, &ulifo->lifo_empty);
     if (index == URING_INDEX_NULL)
         return false;
-    uring_elem_set(&ulifo->uring, index, element);
+    uring_elem_set(&ulifo->uring, index, opaque);
     uring_lifo_push(&ulifo->uring, &ulifo->lifo_carrier, index);
     return true;
 }
 
-/** @This pops an element.
+/** @internal @This pops an element.
  *
  * @param ulifo pointer to a ulifo structure
- * @return pointer to element, or NULL if the LIFO is empty
+ * @return pointer to opaque, or NULL if the LIFO is empty
  */
-static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
+static inline void *ulifo_pop_internal(struct ulifo *ulifo)
 {
-    struct uchain *element;
+    void *opaque;
     uring_index index = uring_lifo_pop(&ulifo->uring, &ulifo->lifo_carrier);
     if (index == URING_INDEX_NULL)
         return NULL;
-    element = uring_elem_get(&ulifo->uring, index);
+    opaque = uring_elem_get(&ulifo->uring, index);
     uring_elem_set(&ulifo->uring, index, NULL);
     uring_lifo_push(&ulifo->uring, &ulifo->lifo_empty, index);
-    return element;
+    return opaque;
 }
+
+/** @This pops an element with type checking.
+ *
+ * @param ulifo pointer to a ulifo structure
+ * @param type type of the opaque pointer
+ * @return pointer to opaque, or NULL if the LIFO is empty
+ */
+#define ulifo_pop(ulifo, type) (type)ulifo_pop_internal(ulifo)
 
 /** @This cleans up the ulifo data structure. Please note that it is the
  * caller's responsibility to empty the LIFO first, and to release the
@@ -114,77 +116,8 @@ static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
  */
 static inline void ulifo_clean(struct ulifo *ulifo)
 {
+    uring_lifo_clean(&ulifo->uring, &ulifo->lifo_empty);
+    uring_lifo_clean(&ulifo->uring, &ulifo->lifo_carrier);
 }
-
-
-#elif defined(HAVE_SEMAPHORE_H) /* mkdoc:skip */
-
-/*
- * On POSIX platforms use semaphores (slower)
- */
-
-#include <semaphore.h>
-
-struct ulifo {
-    sem_t lock;
-    struct uchain *top;
-    uint32_t length, counter;
-};
-
-#define ulifo_sizeof(length) 0
-
-static inline void ulifo_init(struct ulifo *ulifo, uint32_t length, void *extra)
-{
-    sem_init(&ulifo->lock, 0, 1);
-    ulifo->top = NULL;
-    ulifo->length = length;
-    ulifo->counter = 0;
-}
-
-static inline bool ulifo_push(struct ulifo *ulifo, struct uchain *element)
-{
-    bool ret;
-    while (sem_wait(&ulifo->lock) == -1);
-    if (ulifo->counter < ulifo->length) {
-        element->next = ulifo->top;
-        ulifo->top = element;
-        ulifo->counter++;
-        ret = true;
-    } else
-        ret = false;
-    sem_post(&ulifo->lock);
-    return ret;
-}
-
-static inline struct uchain *ulifo_pop(struct ulifo *ulifo)
-{
-    struct uchain *element;
-    while (sem_wait(&ulifo->lock) == -1);
-    element = ulifo->top;
-    if (likely(element != NULL)) {
-        ulifo->top = element->next;
-        ulifo->counter--;
-    }
-    sem_post(&ulifo->lock);
-    if (likely(element != NULL))
-        element->next = NULL;
-    return element;
-}
-
-static inline void ulifo_clean(struct ulifo *ulifo)
-{
-    sem_destroy(&ulifo->lock);
-}
-
-
-#else /* mkdoc:skip */
-
-/*
- * FIXME: TBW
- */
-
-#error no LIFO available
-
-#endif
 
 #endif

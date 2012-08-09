@@ -1,4 +1,5 @@
 nobase_include_HEADERS = \
+	upipe/uatomic.h \
 	upipe/ubase.h \
 	upipe/ubuf_block.h \
 	upipe/ubuf.h \
@@ -6,7 +7,6 @@ nobase_include_HEADERS = \
 	upipe/ubuf_sound.h \
 	upipe/uclock.h \
 	upipe/uclock_std.h \
-	upipe/ucounter.h \
 	upipe/udeal.h \
 	upipe/ueventfd.h \
 	upipe/ufifo.h \

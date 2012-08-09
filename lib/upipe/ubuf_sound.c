@@ -133,7 +133,7 @@ static struct ubuf *ubuf_sound_alloc_inner(struct ubuf_mgr *mgr, size_t samples)
                              sound_mgr->channels * sound_mgr->sample_size +
                          sound_mgr->align;
     struct ubuf_sound *sound = NULL;
-    struct uchain *uchain = ulifo_pop(&sound_mgr->pool);
+    struct uchain *uchain = ulifo_pop(&sound_mgr->pool, struct uchain *);
     if (likely(uchain != NULL))
         sound = ubuf_sound_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -354,7 +354,7 @@ static void _ubuf_sound_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_sound_mgr *sound_mgr = ubuf_sound_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = ulifo_pop(&sound_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&sound_mgr->pool, struct uchain *)) != NULL) {
         struct ubuf_sound *sound = ubuf_sound_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_sound_free_inner(sound);
     }

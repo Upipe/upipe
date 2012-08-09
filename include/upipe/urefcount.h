@@ -1,6 +1,4 @@
-/*****************************************************************************
- * urefcount.h: upipe efficient and thread-safe reference counting
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
@@ -23,25 +21,23 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe thread-safe reference counting
+ */
 
 #ifndef _UPIPE_UREFCOUNT_H_
 /** @hidden */
 #define _UPIPE_UREFCOUNT_H_
 
 #include <upipe/ubase.h>
-#include <upipe/config.h>
+#include <upipe/uatomic.h>
 
 #include <stdbool.h>
 
-#ifdef HAVE_ATOMIC_OPS
-
-/*
- * Preferred method: gcc atomic operations
- */
-
-/** number of pointers to the parent object */
-typedef unsigned int urefcount;
+/** @This contains the number of pointers to the parent object. */
+typedef uatomic_uint32_t urefcount;
 
 /** @This initializes a urefcount. It must be executed before any other
  * call to the refcount structure.
@@ -50,8 +46,7 @@ typedef unsigned int urefcount;
  */
 static inline void urefcount_init(urefcount *refcount)
 {
-    *refcount = 1;
-    __sync_synchronize();
+    uatomic_init(refcount, 1);
 }
 
 /** @This increments a reference counter.
@@ -60,7 +55,7 @@ static inline void urefcount_init(urefcount *refcount)
  */
 static inline void urefcount_use(urefcount *refcount)
 {
-    __sync_add_and_fetch(refcount, 1);
+    uatomic_fetch_add(refcount, 1);
 }
 
 /** @This decrements a reference counter.
@@ -70,8 +65,7 @@ static inline void urefcount_use(urefcount *refcount)
  */
 static inline bool urefcount_release(urefcount *refcount)
 {
-    urefcount value = __sync_sub_and_fetch(refcount, 1);
-    return !value;
+    return uatomic_fetch_sub(refcount, 1) == 1;
 }
 
 /** @This checks for more than one reference.
@@ -81,8 +75,7 @@ static inline bool urefcount_release(urefcount *refcount)
  */
 static inline bool urefcount_single(urefcount *refcount)
 {
-    __sync_synchronize();
-    return *refcount == 1;
+    return uatomic_load(refcount) == 1;
 }
 
 /** @This cleans up the urefcount structure.
@@ -91,56 +84,7 @@ static inline bool urefcount_single(urefcount *refcount)
  */
 static inline void urefcount_clean(urefcount *refcount)
 {
+    uatomic_clean(refcount);
 }
-
-
-#elif defined(HAVE_SEMAPHORE_H) /* mkdoc:skip */
-
-/*
- * On POSIX platforms use semaphores (slower)
- */
-
-#include <semaphore.h>
-#include <limits.h>
-
-typedef sem_t urefcount;
-
-static inline void urefcount_init(urefcount *refcount)
-{
-    sem_init(refcount, 0, SEM_VALUE_MAX);
-}
-
-static inline void urefcount_use(urefcount *refcount)
-{
-    sem_wait(refcount);
-}
-
-static inline bool urefcount_release(urefcount *refcount)
-{
-    return !!sem_post(refcount);
-}
-
-static inline bool urefcount_single(urefcount *refcount)
-{
-    int val;
-    sem_getvalue(refcount, &val);
-    return val == SEM_VALUE_MAX;
-}
-
-static inline void urefcount_clean(urefcount *refcount)
-{
-    sem_destroy(refcount);
-}
-
-
-#else /* mkdoc:skip */
-
-/*
- * FIXME: TBW
- */
-
-#error no refcounting available
-
-#endif
 
 #endif

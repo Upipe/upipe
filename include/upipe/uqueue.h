@@ -1,6 +1,4 @@
-/*****************************************************************************
- * uqueue.h: upipe thread-safe queue of elements
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe thread-safe queue of elements
+ */
 
 #ifndef _UPIPE_UQUEUE_H_
 /** @hidden */
@@ -31,8 +33,8 @@
 
 #include <upipe/config.h>
 #include <upipe/ubase.h>
+#include <upipe/uatomic.h>
 #include <upipe/ufifo.h>
-#include <upipe/ucounter.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upump.h>
 
@@ -44,7 +46,7 @@ struct uqueue {
     /** FIFO */
     struct ufifo fifo;
     /** number of elements in the queue */
-    ucounter counter;
+    uatomic_uint32_t counter;
     /** maximum number of elements in the queue */
     uint32_t length;
     /** ueventfd triggered when data can be pushed */
@@ -79,7 +81,7 @@ static inline bool uqueue_init(struct uqueue *uqueue, uint8_t length,
     }
 
     ufifo_init(&uqueue->fifo, length, extra);
-    ucounter_init(&uqueue->counter, 0);
+    uatomic_init(&uqueue->counter, 0);
     uqueue->length = length;
     return true;
 }
@@ -136,8 +138,7 @@ static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
         ueventfd_write(&uqueue->event_push);
     }
 
-    unsigned int counter_before = ucounter_add(&uqueue->counter, 1);
-    if (unlikely(counter_before == 0))
+    if (unlikely(uatomic_fetch_add(&uqueue->counter, 1) == 0))
         ueventfd_write(&uqueue->event_pop);
     return true;
 }
@@ -149,13 +150,13 @@ static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
  */
 static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 {
-    struct uchain *uchain = ufifo_pop(&uqueue->fifo);
+    struct uchain *uchain = ufifo_pop(&uqueue->fifo, struct uchain *);
     if (unlikely(uchain == NULL)) {
         /* signal that we starve */
         ueventfd_read(&uqueue->event_pop);
 
         /* double-check */
-        uchain = ufifo_pop(&uqueue->fifo);
+        uchain = ufifo_pop(&uqueue->fifo, struct uchain *);
         if (likely(uchain == NULL))
             return NULL;
 
@@ -163,8 +164,7 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
         ueventfd_write(&uqueue->event_pop);
     }
 
-    unsigned int counter_before = ucounter_sub(&uqueue->counter, 1);
-    if (unlikely(counter_before == uqueue->length))
+    if (unlikely(uatomic_fetch_sub(&uqueue->counter, 1) == uqueue->length))
         ueventfd_write(&uqueue->event_push);
     return uchain;
 }
@@ -175,7 +175,7 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
  */
 static inline unsigned int uqueue_length(struct uqueue *uqueue)
 {
-    return ucounter_value(&uqueue->counter);
+    return uatomic_load(&uqueue->counter);
 }
 
 /** @This cleans up the queue data structure. Please note that it is the
@@ -185,7 +185,7 @@ static inline unsigned int uqueue_length(struct uqueue *uqueue)
  */
 static inline void uqueue_clean(struct uqueue *uqueue)
 {
-    ucounter_clean(&uqueue->counter);
+    uatomic_clean(&uqueue->counter);
     ufifo_clean(&uqueue->fifo);
     ueventfd_clean(&uqueue->event_push);
     ueventfd_clean(&uqueue->event_pop);

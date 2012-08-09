@@ -208,7 +208,7 @@ static struct uref *uref_std_alloc(struct uref_mgr *mgr, size_t attr_size)
     struct uref_std *std = NULL;
 
     if (likely(attr_size < std_mgr->mgr.control_attr_size)) {
-        struct uchain *uchain = ulifo_pop(&std_mgr->pool);
+        struct uchain *uchain = ulifo_pop(&std_mgr->pool, struct uchain *);
         if (likely(uchain != NULL)) {
             std = uref_std_from_uref(uref_from_uchain(uchain));
             if (unlikely(std->attr_size < std_mgr->attr_size + attr_size)) {
@@ -590,7 +590,7 @@ static void uref_std_mgr_free(struct uref_mgr *mgr)
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = ulifo_pop(&std_mgr->pool)) != NULL) {
+    while ((uchain = ulifo_pop(&std_mgr->pool, struct uchain *)) != NULL) {
         struct uref_std *std = uref_std_from_uref(uref_from_uchain(uchain));
         free(std);
     }

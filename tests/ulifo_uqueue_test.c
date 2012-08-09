@@ -82,7 +82,7 @@ static void push_ready(struct upump *upump)
 static void push(struct upump *upump)
 {
     struct thread *thread = upump_get_opaque(upump, struct thread *);
-    struct uchain *uchain = ulifo_pop(&ulifo);
+    struct uchain *uchain = ulifo_pop(&ulifo, struct uchain *);
     assert(uchain != NULL);
     struct elem *elem = container_of(uchain, struct elem, uchain);
 

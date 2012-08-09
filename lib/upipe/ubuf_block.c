@@ -140,9 +140,9 @@ static struct ubuf *ubuf_block_alloc_inner(struct ubuf_mgr *mgr, size_t size)
     struct ubuf_block *block = NULL;
     struct uchain *uchain;
     if (likely(size <= block_mgr->size))
-        uchain = ulifo_pop(&block_mgr->small_pool);
+        uchain = ulifo_pop(&block_mgr->small_pool, struct uchain *);
     else
-        uchain = ulifo_pop(&block_mgr->big_pool);
+        uchain = ulifo_pop(&block_mgr->big_pool, struct uchain *);
     if (likely(uchain != NULL))
         block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
 
@@ -364,13 +364,13 @@ static void _ubuf_block_mgr_free(struct ubuf_mgr *mgr)
     struct ubuf_block_mgr *block_mgr = ubuf_block_mgr_from_ubuf_mgr(mgr);
     struct uchain *uchain;
 
-    while ((uchain = ulifo_pop(&block_mgr->small_pool)) != NULL) {
+    while ((uchain = ulifo_pop(&block_mgr->small_pool, struct uchain *)) != NULL) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_block_free_inner(block);
     }
     ulifo_clean(&block_mgr->small_pool);
 
-    while ((uchain = ulifo_pop(&block_mgr->big_pool)) != NULL) {
+    while ((uchain = ulifo_pop(&block_mgr->big_pool, struct uchain *)) != NULL) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf_from_uchain(uchain));
         _ubuf_block_free_inner(block);
     }
