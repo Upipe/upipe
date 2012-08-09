@@ -15,8 +15,9 @@
 
       @list
 
+        @item atomic operations with or without locks (@ref uatomic)
+        @item reference counters (@ref urefcount)
         @item chained lists (@ref uchain and @ref ulist) and rings allowing pointer tagging (@ref uring)
-        @item lock-less counters (@ref ucounter) and reference counters (@ref urefcount)
         @item lock-less LIFOs (@ref ulifo) without thread limitations
         @item lock-less FIFOs (@ref ufifo) without thread limitations
         @item lock-less buffer queues (@ref uqueue) without thread limitations
