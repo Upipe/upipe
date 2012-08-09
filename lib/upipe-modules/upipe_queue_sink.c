@@ -255,10 +255,10 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
  * @return false in case of error
  */
 static bool _upipe_qsink_control(struct upipe *upipe,
-                                 enum upipe_control control,
+                                 enum upipe_command command,
                                  va_list args)
 {
-    switch (control) {
+    switch (command) {
         case UPIPE_GET_UREF_MGR: {
             struct uref_mgr **p = va_arg(args, struct uref_mgr **);
             return upipe_qsink_get_uref_mgr(upipe, p);
@@ -302,16 +302,16 @@ static bool _upipe_qsink_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_qsink_control(struct upipe *upipe, enum upipe_control control,
+static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
         return upipe_qsink_input(upipe, uref);
     }
 
-    if (unlikely(!_upipe_qsink_control(upipe, control, args)))
+    if (unlikely(!_upipe_qsink_control(upipe, command, args)))
         return false;
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);

@@ -1,6 +1,4 @@
-/*****************************************************************************
- * upipe.h: upipe module-level interface (typically implemented by a module)
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe module-level interface, typically implemented by a module
+ */
 
 #ifndef _UPIPE_UPIPE_H_
 /** @hidden */
@@ -52,7 +54,7 @@ struct ubuf_mgr;
 struct upipe_mgr;
 
 /** @This defines standard commands which upipe modules may implement. */
-enum upipe_control {
+enum upipe_command {
     /*
      * Global commands
      */
@@ -151,7 +153,7 @@ struct upipe_mgr {
     /** function to create a pipe */
     struct upipe *(*upipe_alloc)(struct upipe_mgr *);
     /** control function for standard or local commands */
-    bool (*upipe_control)(struct upipe *, enum upipe_control, va_list);
+    bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
     /** function to free a pipe structure */
     void (*upipe_free)(struct upipe *);
 
@@ -183,17 +185,17 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
  * reentrancy or locking is required from the pipe.
  *
  * @param upipe description structure of the pipe
- * @param control control command to send, followed by optional read or write
+ * @param command control command to send, followed by optional read or write
  * parameters
  * @return false in case of error
  */
 static inline bool upipe_control(struct upipe *upipe,
-                                 enum upipe_control control, ...)
+                                 enum upipe_command command, ...)
 {
     bool ret;
     va_list args;
-    va_start(args, control);
-    ret = upipe->mgr->upipe_control(upipe, control, args);
+    va_start(args, command);
+    ret = upipe->mgr->upipe_control(upipe, command, args);
     va_end(args);
     return ret;
 }

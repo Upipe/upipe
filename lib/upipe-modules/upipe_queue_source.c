@@ -133,7 +133,7 @@ static void upipe_qsrc_worker(struct upump *upump)
  * @return false in case of error
  */
 static bool upipe_qsrc_get_output(struct upipe *upipe,
-                                     struct upipe **output_p)
+                                  struct upipe **output_p)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     assert(output_p != NULL);
@@ -236,14 +236,14 @@ static bool _upipe_qsrc_get_length(struct upipe *upipe, unsigned int *length_p)
 /** @internal @This processes control commands on a queue source pipe.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_control control,
+static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
-    switch (control) {
+    switch (command) {
         case UPIPE_GET_UREF_MGR: {
             struct uref_mgr **p = va_arg(args, struct uref_mgr **);
             return upipe_qsrc_get_uref_mgr(upipe, p);
@@ -298,14 +298,14 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_control control,
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_control control,
+static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    if (unlikely(!_upipe_qsrc_control(upipe, control, args)))
+    if (unlikely(!_upipe_qsrc_control(upipe, command, args)))
         return false;
 
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);

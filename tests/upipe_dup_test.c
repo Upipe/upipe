@@ -94,10 +94,10 @@ static void dup_test_set_flow(struct upipe *upipe, const char *flow)
 }
 
 /** helper phony pipe to test upipe_dup */
-static bool dup_test_control(struct upipe *upipe, enum upipe_control control,
+static bool dup_test_control(struct upipe *upipe, enum upipe_command command,
                              va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct dup_test *dup_test = container_of(upipe, struct dup_test, upipe);
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);

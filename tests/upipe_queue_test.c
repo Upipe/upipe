@@ -89,10 +89,10 @@ static struct upipe *queue_test_alloc(struct upipe_mgr *mgr)
 }
 
 /** helper phony pipe to test upipe_dup */
-static bool queue_test_control(struct upipe *upipe, enum upipe_control control,
+static bool queue_test_control(struct upipe *upipe, enum upipe_command command,
                              va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
         const char *flow;

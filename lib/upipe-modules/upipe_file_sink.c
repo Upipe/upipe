@@ -400,14 +400,14 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
 /** @internal @This processes control commands on a file sink pipe.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
 static bool _upipe_fsink_control(struct upipe *upipe,
-                                 enum upipe_control control, va_list args)
+                                 enum upipe_command command, va_list args)
 {
-    switch (control) {
+    switch (command) {
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_fsink_get_upump_mgr(upipe, p);
@@ -456,20 +456,20 @@ static bool _upipe_fsink_control(struct upipe *upipe,
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_fsink_control(struct upipe *upipe, enum upipe_control control,
+static bool upipe_fsink_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
         return upipe_fsink_input(upipe, uref);
     }
 
-    if (unlikely(!_upipe_fsink_control(upipe, control, args)))
+    if (unlikely(!_upipe_fsink_control(upipe, command, args)))
         return false;
 
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);

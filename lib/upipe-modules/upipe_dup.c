@@ -345,14 +345,14 @@ static bool _upipe_dup_set_output(struct upipe *upipe, struct upipe *o,
 /** @internal @This processes control commands on a dup pipe.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool _upipe_dup_control(struct upipe *upipe, enum upipe_control control,
-                              va_list args)
+static bool _upipe_dup_control(struct upipe *upipe, enum upipe_command command,
+                               va_list args)
 {
-    switch (control) {
+    switch (command) {
         case UPIPE_GET_UREF_MGR: {
             struct uref_mgr **p = va_arg(args, struct uref_mgr **);
             return upipe_dup_get_uref_mgr(upipe, p);
@@ -382,20 +382,20 @@ static bool _upipe_dup_control(struct upipe *upipe, enum upipe_control control,
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_dup_control(struct upipe *upipe, enum upipe_control control,
+static bool upipe_dup_control(struct upipe *upipe, enum upipe_command command,
                               va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
         return upipe_dup_input(upipe, uref);
     }
 
-    if (unlikely(!_upipe_dup_control(upipe, control, args)))
+    if (unlikely(!_upipe_dup_control(upipe, command, args)))
         return false;
 
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);

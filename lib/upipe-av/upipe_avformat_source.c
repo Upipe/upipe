@@ -748,14 +748,14 @@ static bool _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 /** @internal @This processes control commands on an avformat source pipe.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
 static bool _upipe_avfsrc_control(struct upipe *upipe,
-                                  enum upipe_control control, va_list args)
+                                  enum upipe_command command, va_list args)
 {
-    switch (control) {
+    switch (command) {
         case UPIPE_GET_UREF_MGR: {
             struct uref_mgr **p = va_arg(args, struct uref_mgr **);
             return upipe_avfsrc_get_uref_mgr(upipe, p);
@@ -858,14 +858,14 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_avfsrc_control(struct upipe *upipe, enum upipe_control control,
-                               va_list args)
+static bool upipe_avfsrc_control(struct upipe *upipe,
+                                 enum upipe_command command, va_list args)
 {
-    if (unlikely(!_upipe_avfsrc_control(upipe, control, args)))
+    if (unlikely(!_upipe_avfsrc_control(upipe, command, args)))
         return false;
 
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
