@@ -180,12 +180,12 @@ static struct upipe *sws_test_alloc(struct upipe_mgr *mgr)
 }
 
 /** helper phony pipe to test upipe_sws */
-static bool sws_test_control(struct upipe *upipe, enum upipe_control control, va_list args)
+static bool sws_test_control(struct upipe *upipe, enum upipe_command command, va_list args)
 {
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     const char *def, *name;
 
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref*);
         assert(uref != NULL);
         ulog_debug(upipe->ulog, "===> received input uref");
@@ -217,7 +217,7 @@ static bool sws_test_control(struct upipe *upipe, enum upipe_control control, va
         uref_dump(sws_test->pic, upipe->ulog);
         return true;
     }
-    switch (control) {
+    switch (command) {
         default:
             return false;
     }

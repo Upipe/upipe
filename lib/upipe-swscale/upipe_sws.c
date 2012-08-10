@@ -333,20 +333,20 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
 
-static bool _upipe_sws_control(struct upipe *upipe, enum upipe_control control,
+static bool _upipe_sws_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    if (likely(control == UPIPE_INPUT)) {
+    if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
         return upipe_sws_input(upipe, uref);
     }
-    switch (control) {
+    switch (command) {
         // generic linear stuff
         case UPIPE_GET_UREF_MGR: {
             struct uref_mgr **p = va_arg(args, struct uref_mgr **);
@@ -389,16 +389,16 @@ static bool _upipe_sws_control(struct upipe *upipe, enum upipe_control control,
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
- * @param control type of command to process
+ * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
 
-static bool upipe_sws_control(struct upipe *upipe, enum upipe_control control,
+static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    int ret = _upipe_sws_control(upipe, control, args);
+    int ret = _upipe_sws_control(upipe, command, args);
    
     // FIXME - send probes
 /*    if (unlikely(upipe_sws->uref_mgr == NULL))
