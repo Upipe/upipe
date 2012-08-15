@@ -12,6 +12,8 @@ dist_check_DATA = ulog_std_test.txt uprobe_print_test.txt
 check_PROGRAMS = \
 	ulog_std_test \
 	uprobe_print_test \
+	umem_alloc_test \
+	umem_pool_test \
 	ubuf_block_test \
 	ubuf_pic_test \
 	ubuf_sound_test \
@@ -23,6 +25,8 @@ check_PROGRAMS = \
 	uclock_std_test
 
 TESTS = \
+	umem_alloc_test \
+	umem_pool_test \
 	ubuf_block_test \
 	ubuf_pic_test \
 	ubuf_sound_test \
