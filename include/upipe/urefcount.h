@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -47,6 +47,15 @@ typedef uatomic_uint32_t urefcount;
 static inline void urefcount_init(urefcount *refcount)
 {
     uatomic_init(refcount, 1);
+}
+
+/** @This resets a urefcount to 1.
+ *
+ * @param refcount pointer to a urefcount structure
+ */
+static inline void urefcount_reset(urefcount *refcount)
+{
+    uatomic_store(refcount, 1);
 }
 
 /** @This increments a reference counter.

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -57,6 +57,17 @@ typedef volatile uint32_t uatomic_uint32_t;
  * @param value initial value
  */
 static inline void uatomic_init(uatomic_uint32_t *obj, uint32_t value)
+{
+    *obj = value;
+    __sync_synchronize();
+}
+
+/** @This sets the value of the uatomic variable.
+ *
+ * @param obj pointer to a uatomic variable
+ * @param value value to set
+ */
+static inline void uatomic_store(uatomic_uint32_t *obj, uint32_t value)
 {
     *obj = value;
     __sync_synchronize();
@@ -143,6 +154,13 @@ static inline void uatomic_init(uatomic_uint32_t *obj, uint32_t value)
 {
     obj->value = value;
     sem_init(&obj->lock, 0, 1);
+}
+
+static inline void uatomic_store(uatomic_uint32_t *obj, uint32_t value)
+{
+    while (sem_wait(&obj->lock) == -1);
+    obj->value = value;
+    sem_post(&obj->lock);
 }
 
 static inline uint32_t uatomic_load(uatomic_uint32_t *obj)
