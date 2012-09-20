@@ -7,5 +7,5 @@
 # PGP key ID and fingerprint (P), description (D), and snail-mail address (S).
 
 N: Christophe Massiot
-E: massiot AT via DOT ecp DOT fr
+E: cmassiot AT upipe DOT org
 D: design and implementation of the core
