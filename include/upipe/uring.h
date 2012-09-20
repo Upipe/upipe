@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -448,6 +448,8 @@ static inline uring_lifo_val uring_init(struct uring *uring, uint16_t length,
     assert(extra != NULL);
     uring->length = length;
     uring->elems = (struct uring_elem *)extra;
+    if (length == 0)
+        return URING_LIFO_NULL;
     /* indexes start at 1 */
     for (uint16_t i = 1; i < length; i++) {
         uring->elems[i - 1].tag = 0;
