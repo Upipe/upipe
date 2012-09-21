@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_dup.c: upipe module allowing to duplicate to several outputs
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe module allowing to duplicate to several outputs
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
@@ -56,6 +59,8 @@ struct upipe_dup {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -259,6 +264,7 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_DUP_SIGNATURE;
+    urefcount_init(&upipe_dup->refcount);
     upipe_dup_init_uref_mgr(upipe);
     upipe_dup_init_outputs(upipe);
     upipe_flows_init(&upipe_dup->flows);
@@ -415,28 +421,42 @@ static bool upipe_dup_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_dup_free(struct upipe *upipe)
+static void upipe_dup_use(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    upipe_dup_clean_outputs(upipe, upipe_dup_output_free);
-    upipe_flows_clean(&upipe_dup->flows);
-    upipe_dup_clean_uref_mgr(upipe);
-    free(upipe_dup);
+    urefcount_use(&upipe_dup->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_dup_release(struct upipe *upipe)
+{
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_dup->refcount))) {
+        upipe_dup_clean_outputs(upipe, upipe_dup_output_free);
+        upipe_flows_clean(&upipe_dup->flows);
+        upipe_dup_clean_uref_mgr(upipe);
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_dup->refcount);
+        free(upipe_dup);
+    }
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_dup_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_dup_alloc,
     .upipe_control = upipe_dup_control,
-    .upipe_free = upipe_dup_free,
+    .upipe_use = upipe_dup_use,
+    .upipe_release = upipe_dup_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all dups

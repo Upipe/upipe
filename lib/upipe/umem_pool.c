@@ -24,6 +24,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulifo.h>
 #include <upipe/umem.h>
 #include <upipe/umem_pool.h>
@@ -34,6 +35,8 @@
 
 /** @This defines the private data structures of the umem pool manager. */
 struct umem_pool_mgr {
+    /** refcount management structure */
+    urefcount refcount;
     /** common management structure */
     struct umem_mgr mgr;
 
@@ -162,12 +165,12 @@ static void umem_pool_free(struct umem *umem)
     umem->mgr = NULL;
 }
 
-/** @This instructs an existing umem pool manager to release all structures
+/** @This instructs an existing umem manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.
  *
- * @param mgr pointer to a umem_mgr structure
+ * @param mgr pointer to umem manager
  */
-void umem_pool_mgr_vacuum(struct umem_mgr *mgr)
+static void umem_pool_mgr_vacuum(struct umem_mgr *mgr)
 {
     struct umem_pool_mgr *pool_mgr = umem_pool_mgr_from_umem_mgr(mgr);
 
@@ -178,21 +181,32 @@ void umem_pool_mgr_vacuum(struct umem_mgr *mgr)
     }
 }
 
-/** @This frees a umem_mgr structure.
+/** @This increments the reference count of a umem manager.
  *
- * @param mgr pointer to a umem_mgr structure to free
+ * @param mgr pointer to umem manager
  */
-static void umem_pool_mgr_free(struct umem_mgr *mgr)
+static void umem_pool_mgr_use(struct umem_mgr *mgr)
 {
     struct umem_pool_mgr *pool_mgr = umem_pool_mgr_from_umem_mgr(mgr);
+    urefcount_use(&pool_mgr->refcount);
+}
 
-    umem_pool_mgr_vacuum(mgr);
+/** @This decrements the reference count of a umem manager or frees it.
+ *
+ * @param mgr pointer to umem manager
+ */
+static void umem_pool_mgr_release(struct umem_mgr *mgr)
+{
+    struct umem_pool_mgr *pool_mgr = umem_pool_mgr_from_umem_mgr(mgr);
+    if (unlikely(urefcount_release(&pool_mgr->refcount))) {
+        umem_pool_mgr_vacuum(mgr);
 
-    for (unsigned int i = 0; i < pool_mgr->nb_pools; i++)
-        ulifo_clean(&pool_mgr->pools[i]);
+        for (unsigned int i = 0; i < pool_mgr->nb_pools; i++)
+            ulifo_clean(&pool_mgr->pools[i]);
 
-    urefcount_clean(&pool_mgr->mgr.refcount);
-    free(pool_mgr);
+        urefcount_clean(&pool_mgr->refcount);
+        free(pool_mgr);
+    }
 }
 
 /** @This allocates a new instance of the umem pool manager allocating buffers
@@ -235,11 +249,13 @@ struct umem_mgr *umem_pool_mgr_alloc(size_t pool0_size, size_t nb_pools, ...)
         extra += ulifo_sizeof(pools_depths[i]);
     }
 
-    urefcount_init(&pool_mgr->mgr.refcount);
+    urefcount_init(&pool_mgr->refcount);
     pool_mgr->mgr.umem_alloc = umem_pool_alloc;
     pool_mgr->mgr.umem_realloc = umem_pool_realloc;
     pool_mgr->mgr.umem_free = umem_pool_free;
-    pool_mgr->mgr.umem_mgr_free = umem_pool_mgr_free;
+    pool_mgr->mgr.umem_mgr_vacuum = umem_pool_mgr_vacuum;
+    pool_mgr->mgr.umem_mgr_use = umem_pool_mgr_use;
+    pool_mgr->mgr.umem_mgr_release = umem_pool_mgr_release;
 
     return umem_pool_mgr_to_umem_mgr(pool_mgr);
 }

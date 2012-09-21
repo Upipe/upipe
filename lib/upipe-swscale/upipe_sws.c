@@ -1,6 +1,4 @@
-/*****************************************************************************
- * upipe_sws.c: upipe swscale (ffmpeg) module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
@@ -23,16 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
+/** @file
+ * @short Upipe swscale (ffmpeg) module
+ */
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
@@ -48,6 +41,15 @@
 #include <upipe/upipe_helper_linear_ubuf_mgr.h>
 #include <upipe/upipe_helper_linear_output.h>
 #include <upipe-swscale/upipe_sws.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
 
 #include <libswscale/swscale.h>
 #include <libavutil/pixdesc.h> // debug
@@ -94,6 +96,8 @@ struct upipe_sws {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -116,6 +120,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_SWS_SIGNATURE;
+    urefcount_init(&upipe_sws->refcount);
     upipe_sws_init_uref_mgr(upipe);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
@@ -420,34 +425,49 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
     return ret;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sws_free(struct upipe *upipe)
+static void upipe_sws_use(struct upipe *upipe)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    upipe_sws_clean_output(upipe);
-    upipe_sws_clean_ubuf_mgr(upipe);
-    upipe_sws_clean_uref_mgr(upipe);
-    if (upipe_sws->input_flow) {
-        uref_release(upipe_sws->input_flow);
+    urefcount_use(&upipe_sws->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_sws_release(struct upipe *upipe)
+{
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_sws->refcount))) {
+        upipe_sws_clean_output(upipe);
+        upipe_sws_clean_ubuf_mgr(upipe);
+        upipe_sws_clean_uref_mgr(upipe);
+        if (upipe_sws->input_flow) {
+            uref_release(upipe_sws->input_flow);
+        }
+        if (upipe_sws->convert_ctx) {
+            sws_freeContext(upipe_sws->convert_ctx);
+        }
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_sws->refcount);
+        free(upipe_sws);
     }
-    if (upipe_sws->convert_ctx) {
-        sws_freeContext(upipe_sws->convert_ctx);
-    }
-    free(upipe_sws);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_sws_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_sws_alloc,
     .upipe_control = upipe_sws_control,
-    .upipe_free = upipe_sws_free,
+    .upipe_use = upipe_sws_use,
+    .upipe_release = upipe_sws_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This sets a new output flow definition along with the

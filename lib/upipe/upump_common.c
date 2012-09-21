@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upump_common.c: common functions for event loop handlers
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short common functions for event loop handlers
+ */
 
 #include <upipe/ubase.h>
 #include <upipe/upump_common.h>
@@ -105,7 +107,6 @@ void upump_common_mgr_init(struct upump_mgr *mgr)
     common_mgr->source_watchers = NULL;
     common_mgr->nb_source_watchers = 0;
 
-    urefcount_init(&common_mgr->mgr.refcount);
     common_mgr->mgr.nb_blocked_sinks = 0;
 }
 
@@ -118,6 +119,5 @@ void upump_common_mgr_init(struct upump_mgr *mgr)
 void upump_common_mgr_clean(struct upump_mgr *mgr)
 {
     struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
-    urefcount_clean(&mgr->refcount);
     free(common_mgr->source_watchers);
 }

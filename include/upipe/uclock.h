@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uclock.h: structure provided by the application to retrieve system time
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,34 +21,35 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short structure provided by the application to retrieve system time
+ */
 
 #ifndef _UPIPE_UCLOCK_H_
 /** @hidden */
 #define _UPIPE_UCLOCK_H_
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 
 #include <stdint.h>
-#include <stdbool.h>
 
 #define UCLOCK_FREQ UINT64_C(27000000)
 
 /** @This is a structure allowing to retrieve system time. */
 struct uclock {
-    /** refcount management structure */
-    urefcount refcount;
-
     /** function returning the current system time */
     uint64_t (*uclock_now)(struct uclock *);
-    /** function to free this structure */
-    void (*uclock_free)(struct uclock *);
+    /** function to increment the refcount of the uclock */
+    void (*uclock_use)(struct uclock *);
+    /** function to decrement the refcount of the uclock or free it */
+    void (*uclock_release)(struct uclock *);
 };
 
 /** @This returns the current system time.
  *
- * @param uclock utility structure passed to the module
+ * @param uclock pointer to uclock
  * @return current system time in 27 MHz ticks
  */
 static inline uint64_t uclock_now(struct uclock *uclock)
@@ -60,22 +59,22 @@ static inline uint64_t uclock_now(struct uclock *uclock)
 
 /** @This increments the reference count of a uclock.
  *
- * @param uclock utility structure passed to the module
+ * @param uclock pointer to uclock
  */
 static inline void uclock_use(struct uclock *uclock)
 {
-    urefcount_use(&uclock->refcount);
+    if (likely(uclock->uclock_use != NULL))
+        uclock->uclock_use(uclock);
 }
 
-/** @This decrements the reference count of a uclock, and frees it when it
- * gets down to 0.
+/** @This decrements the reference count of a uclock or frees it.
  *
- * @param uclock utility structure passed to the module
+ * @param uclock pointer to uclock
  */
 static inline void uclock_release(struct uclock *uclock)
 {
-    if (unlikely(urefcount_release(&uclock->refcount)))
-        uclock->uclock_free(uclock);
+    if (likely(uclock->uclock_release != NULL))
+        uclock->uclock_release(uclock);
 }
 
 #endif

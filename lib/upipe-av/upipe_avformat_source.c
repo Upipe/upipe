@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_avformat_source.c: upipe source module libavformat wrapper
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe source module libavformat wrapper
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
@@ -98,6 +101,8 @@ struct upipe_avfsrc {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -195,6 +200,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_AVFSRC_SIGNATURE;
+    urefcount_init(&upipe_avfsrc->refcount);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_uclock(upipe);
@@ -908,40 +914,55 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_avfsrc_free(struct upipe *upipe)
+static void upipe_avfsrc_use(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    upipe_avfsrc_abort_av_deal(upipe);
-    if (likely(upipe_avfsrc->context != NULL)) {
-        if (likely(upipe_avfsrc->url != NULL))
-            ulog_notice(upipe->ulog, "closing URL %s", upipe_avfsrc->url);
-        avformat_close_input(&upipe_avfsrc->context);
+    urefcount_use(&upipe_avfsrc->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_release(struct upipe *upipe)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_avfsrc->refcount))) {
+        upipe_avfsrc_abort_av_deal(upipe);
+        if (likely(upipe_avfsrc->context != NULL)) {
+            if (likely(upipe_avfsrc->url != NULL))
+                ulog_notice(upipe->ulog, "closing URL %s", upipe_avfsrc->url);
+            avformat_close_input(&upipe_avfsrc->context);
+        }
+        av_dict_free(&upipe_avfsrc->options);
+
+        free(upipe_avfsrc->url);
+        free(upipe_avfsrc->flow_name);
+
+        upipe_avfsrc_clean_outputs(upipe, upipe_avfsrc_output_free);
+        upipe_avfsrc_clean_uclock(upipe);
+        upipe_avfsrc_clean_upump_mgr(upipe);
+        upipe_avfsrc_clean_uref_mgr(upipe);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_avfsrc->refcount);
+        free(upipe_avfsrc);
     }
-    av_dict_free(&upipe_avfsrc->options);
-
-    free(upipe_avfsrc->url);
-    free(upipe_avfsrc->flow_name);
-
-    upipe_avfsrc_clean_outputs(upipe, upipe_avfsrc_output_free);
-    upipe_avfsrc_clean_uclock(upipe);
-    upipe_avfsrc_clean_upump_mgr(upipe);
-    upipe_avfsrc_clean_uref_mgr(upipe);
-    free(upipe_avfsrc);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_avfsrc_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_avfsrc_alloc,
     .upipe_control = upipe_avfsrc_control,
-    .upipe_free = upipe_avfsrc_free,
+    .upipe_use = upipe_avfsrc_use,
+    .upipe_release = upipe_avfsrc_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all avformat sources

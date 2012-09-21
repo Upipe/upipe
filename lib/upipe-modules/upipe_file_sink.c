@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_file_sink.c: upipe sink module for files
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe sink module for files
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
@@ -92,6 +95,8 @@ struct upipe_fsink {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -112,10 +117,11 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr)
     if (unlikely(upipe_fsink == NULL)) return NULL;
     struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
+    upipe->signature = UPIPE_FSINK_SIGNATURE;
+    urefcount_init(&upipe_fsink->refcount);
     upipe_fsink_init_upump_mgr(upipe);
     upipe_fsink_init_uclock(upipe);
     upipe_fsink_init_delay(upipe, SYSTIME_DELAY);
-    upipe->signature = UPIPE_FSINK_SIGNATURE;
     upipe_flows_init(&upipe_fsink->flows);
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
@@ -489,41 +495,56 @@ static bool upipe_fsink_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_fsink_free(struct upipe *upipe)
+static void upipe_fsink_use(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    upipe_flows_clean(&upipe_fsink->flows);
-    if (likely(upipe_fsink->fd != -1)) {
-        if (likely(upipe_fsink->path != NULL))
-            ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
-    }
-    free(upipe_fsink->path);
-    upipe_fsink_clean_delay(upipe);
-    upipe_fsink_clean_uclock(upipe);
-    upipe_fsink_clean_upump_mgr(upipe);
+    urefcount_use(&upipe_fsink->refcount);
+}
 
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_fsink->urefs, uchain) {
-        ulist_delete(&upipe_fsink->urefs, uchain);
-        uref_release(uref_from_uchain(uchain));
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_fsink_release(struct upipe *upipe)
+{
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_fsink->refcount))) {
+        upipe_flows_clean(&upipe_fsink->flows);
+        if (likely(upipe_fsink->fd != -1)) {
+            if (likely(upipe_fsink->path != NULL))
+                ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
+            close(upipe_fsink->fd);
+        }
+        free(upipe_fsink->path);
+        upipe_fsink_clean_delay(upipe);
+        upipe_fsink_clean_uclock(upipe);
+        upipe_fsink_clean_upump_mgr(upipe);
+
+        struct uchain *uchain;
+        ulist_delete_foreach (&upipe_fsink->urefs, uchain) {
+            ulist_delete(&upipe_fsink->urefs, uchain);
+            uref_release(uref_from_uchain(uchain));
+        }
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_fsink->refcount);
+        free(upipe_fsink);
     }
-    free(upipe_fsink);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_fsink_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_fsink_alloc,
     .upipe_control = upipe_fsink_control,
-    .upipe_free = upipe_fsink_free,
+    .upipe_use = upipe_fsink_use,
+    .upipe_release = upipe_fsink_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all file sinks

@@ -1,9 +1,7 @@
-/*****************************************************************************
- * udeal_test.c: unit tests for udeals (using libev)
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short unit tests for udeals (using libev)
+ */
 
 #undef NDEBUG
 
@@ -114,7 +116,6 @@ static void *test_thread(void *_thread)
     ev_loop(loop, 0);
 
     upump_free(upump);
-    assert(urefcount_single(&upump_mgr->refcount));
     upump_mgr_release(upump_mgr);
     ev_loop_destroy(loop);
 

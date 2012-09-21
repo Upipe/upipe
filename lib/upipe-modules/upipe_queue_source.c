@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_queue_source.c: upipe source module for queues
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe source module for queues
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
 #include <upipe/uref.h>
@@ -62,6 +65,8 @@ struct upipe_qsrc {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** structure exported to the sinks */
     struct upipe_queue upipe_queue;
 };
@@ -83,6 +88,7 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_QSRC_SIGNATURE;
+    urefcount_init(&upipe_qsrc->refcount);
     upipe_qsrc_init_uref_mgr(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
     upipe_qsrc->output = NULL;
@@ -344,47 +350,62 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_qsrc_free(struct upipe *upipe)
+static void upipe_qsrc_use(struct upipe *upipe)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    ulog_notice(upipe->ulog, "freeing queue %p", upipe);
-    if (likely(upipe_qsrc->output != NULL)) {
-        if (likely(upipe_qsrc->uref_mgr != NULL)) {
-            /* signal flow deletion on old queue */
-            upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe,
-                                       upipe_qsrc->uref_mgr, uref,
-                                       upipe_qsrc_output(upipe, uref));
-        }
-        upipe_release(upipe_qsrc->output);
-    }
-    upipe_flows_clean(&upipe_qsrc->flows);
-    upipe_qsrc_clean_upump_mgr(upipe);
-    upipe_qsrc_clean_uref_mgr(upipe);
+    urefcount_use(&upipe_qsrc->refcount);
+}
 
-    struct uqueue *uqueue = upipe_queue(upipe);
-    struct uchain *uchain;
-    while ((uchain = uqueue_pop(uqueue)) != NULL) {
-        struct uref *uref = uref_from_uchain(uchain);
-        uref_release(uref);
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsrc_release(struct upipe *upipe)
+{
+    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_qsrc->refcount))) {
+        ulog_notice(upipe->ulog, "freeing queue %p", upipe);
+        if (likely(upipe_qsrc->output != NULL)) {
+            if (likely(upipe_qsrc->uref_mgr != NULL)) {
+                /* signal flow deletion on old queue */
+                upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe,
+                                           upipe_qsrc->uref_mgr, uref,
+                                           upipe_qsrc_output(upipe, uref));
+            }
+            upipe_release(upipe_qsrc->output);
+        }
+        upipe_flows_clean(&upipe_qsrc->flows);
+        upipe_qsrc_clean_upump_mgr(upipe);
+        upipe_qsrc_clean_uref_mgr(upipe);
+
+        struct uqueue *uqueue = upipe_queue(upipe);
+        struct uchain *uchain;
+        while ((uchain = uqueue_pop(uqueue)) != NULL) {
+            struct uref *uref = uref_from_uchain(uchain);
+            uref_release(uref);
+        }
+        uqueue_clean(uqueue);
+        free(upipe_qsrc->uqueue_extra);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_qsrc->refcount);
+        free(upipe_qsrc);
     }
-    uqueue_clean(uqueue);
-    free(upipe_qsrc->uqueue_extra);
-    free(upipe_qsrc);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_qsrc_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = _upipe_qsrc_alloc,
     .upipe_control = upipe_qsrc_control,
-    .upipe_free = upipe_qsrc_free,
+    .upipe_use = upipe_qsrc_use,
+    .upipe_release = upipe_qsrc_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all queue sources

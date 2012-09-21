@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upump.h: upipe event loop handling
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,16 +21,20 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe event loop handling
+ */
 
 #ifndef _UPIPE_UPUMP_H_
 /** @hidden */
 #define _UPIPE_UPUMP_H_
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdarg.h>
 
 /** @hidden */
@@ -77,10 +79,6 @@ struct upump {
 
 /** @This stores common management parameters for a given event loop. */
 struct upump_mgr {
-    /** refcount management structure
-     * NOTE: the atomicity is probably unneeded here */
-    urefcount refcount;
-
     /** number of blocked sinks */
     unsigned int nb_blocked_sinks;
 
@@ -94,8 +92,10 @@ struct upump_mgr {
     /** function to free the watcher */
     void (*upump_free)(struct upump *);
 
-    /** function to free the struct upump_mgr structure */
-    void (*upump_mgr_free)(struct upump_mgr *);
+    /** function to increment the refcount of the upump manager */
+    void (*upump_mgr_use)(struct upump_mgr *);
+    /** function to decrement the refcount of the upump manager or free it */
+    void (*upump_mgr_release)(struct upump_mgr *);
 };
 
 /** @internal @This allocates and initializes a watcher.
@@ -266,24 +266,24 @@ static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
     upump->opaque = opaque;
 }
 
-/** @This increments the reference count of a upump_mgr.
+/** @This increments the reference count of a upump manager.
  *
- * @param mgr pointer to upump_mgr
+ * @param mgr pointer to upump manager
  */
 static inline void upump_mgr_use(struct upump_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    if (likely(mgr->upump_mgr_use != NULL))
+        mgr->upump_mgr_use(mgr);
 }
 
-/** @This decrements the reference count of a upump_mgr, and frees it when
- * it gets down to 0.
+/** @This decrements the reference count of a upump manager of frees it.
  *
- * @param mgr pointer to upump_mgr
+ * @param mgr pointer to upump manager
  */
 static inline void upump_mgr_release(struct upump_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->upump_mgr_free(mgr);
+    if (likely(mgr->upump_mgr_release != NULL))
+        mgr->upump_mgr_release(mgr);
 }
 
 /** @This increments the number of blocked sinks.

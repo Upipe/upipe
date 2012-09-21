@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uclock_std.c: standard common toolbox provided by the application to modules
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short standard common toolbox provided by the application to modules
+ */
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -43,6 +45,8 @@ struct uclock_std {
     /** flags at the creation of this clock */
     enum uclock_std_flags flags;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** structure exported to modules */
     struct uclock uclock;
 };
@@ -67,7 +71,7 @@ static inline struct uclock_std *uclock_std_from_uclock(struct uclock *uclock)
     return container_of(uclock, struct uclock_std, uclock);
 }
 
-/** @internal @This returns the current system time.
+/** @This returns the current system time.
  *
  * @param uclock utility structure passed to the module
  * @return current system time in 27 MHz ticks
@@ -99,14 +103,27 @@ static uint64_t uclock_std_now(struct uclock *uclock)
     return now;
 }
 
-/** @internal @This frees a uclock structure.
+/** @This increments the reference count of a uclock.
  *
- * @param uclock structure to free
+ * @param uclock pointer to uclock
  */
-static void uclock_std_free(struct uclock *uclock)
+static void uclock_std_use(struct uclock *uclock)
 {
     struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
-    free(uclock_std);
+    urefcount_use(&uclock_std->refcount);
+}
+
+/** @This decrements the reference count of a uclock or frees it.
+ *
+ * @param uclock pointer to uclock
+ */
+static void uclock_std_release(struct uclock *uclock)
+{
+    struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
+    if (unlikely(urefcount_release(&uclock_std->refcount))) {
+        urefcount_clean(&uclock_std->refcount);
+        free(uclock_std);
+    }
 }
 
 /** @This allocates a new uclock structure.
@@ -136,8 +153,9 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
     struct uclock_std *uclock_std = malloc(sizeof(struct uclock_std));
     if (unlikely(uclock_std == NULL)) return NULL;
     uclock_std->flags = flags;
-    urefcount_init(&uclock_std->uclock.refcount);
+    urefcount_init(&uclock_std->refcount);
     uclock_std->uclock.uclock_now = uclock_std_now;
-    uclock_std->uclock.uclock_free = uclock_std_free;
+    uclock_std->uclock.uclock_use = uclock_std_use;
+    uclock_std->uclock.uclock_release = uclock_std_release;
     return uclock_std_to_uclock(uclock_std);
 }

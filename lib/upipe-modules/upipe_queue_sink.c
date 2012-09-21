@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_queue_sink.c: upipe sink module for queues
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe sink module for queues
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
@@ -69,6 +72,8 @@ struct upipe_qsink {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -90,6 +95,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_qsink_to_upipe(upipe_qsink);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_QSINK_SIGNATURE;
+    urefcount_init(&upipe_qsink->refcount);
     upipe_qsink_init_uref_mgr(upipe);
     upipe_qsink_init_upump_mgr(upipe);
     upipe_flows_init(&upipe_qsink->flows);
@@ -350,45 +356,60 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_qsink_free(struct upipe *upipe)
+static void upipe_qsink_use(struct upipe *upipe)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    urefcount_use(&upipe_qsink->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsink_release(struct upipe *upipe)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_qsink->refcount))) {
     if (likely(upipe_qsink->qsrc != NULL)) {
         ulog_notice(upipe->ulog, "releasing queue source %p",
-                    upipe_qsink->qsrc);
-        if (likely(upipe_qsink->uref_mgr != NULL)) {
-            /* signal flow deletion on old queue */
-            upipe_flows_foreach_delete(&upipe_qsink->flows, upipe,
-                                       upipe_qsink->uref_mgr, uref,
-                                       upipe_qsink_output(upipe, uref));
+                        upipe_qsink->qsrc);
+            if (likely(upipe_qsink->uref_mgr != NULL)) {
+                /* signal flow deletion on old queue */
+                upipe_flows_foreach_delete(&upipe_qsink->flows, upipe,
+                                           upipe_qsink->uref_mgr, uref,
+                                           upipe_qsink_output(upipe, uref));
+            }
+            upipe_release(upipe_qsink->qsrc);
         }
-        upipe_release(upipe_qsink->qsrc);
-    }
-    upipe_flows_clean(&upipe_qsink->flows);
-    upipe_qsink_clean_upump_mgr(upipe);
-    upipe_qsink_clean_uref_mgr(upipe);
+        upipe_flows_clean(&upipe_qsink->flows);
+        upipe_qsink_clean_upump_mgr(upipe);
+        upipe_qsink_clean_uref_mgr(upipe);
 
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
-        ulist_delete(&upipe_qsink->urefs, uchain);
-        uref_release(uref_from_uchain(uchain));
+        struct uchain *uchain;
+        ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
+            ulist_delete(&upipe_qsink->urefs, uchain);
+            uref_release(uref_from_uchain(uchain));
+        }
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_qsink->refcount);
+        free(upipe_qsink);
     }
-    free(upipe_qsink);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_qsink_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_qsink_alloc,
     .upipe_control = upipe_qsink_control,
-    .upipe_free = upipe_qsink_free,
+    .upipe_use = upipe_qsink_use,
+    .upipe_release = upipe_qsink_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all queue sinks

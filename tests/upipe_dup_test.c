@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_dup_test.c: unit tests for dup pipes
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short unit tests for dup pipes
+ */
 
 #undef NDEBUG
 
@@ -115,6 +117,7 @@ static bool dup_test_control(struct upipe *upipe, enum upipe_command command,
 static void dup_test_free(struct upipe *upipe)
 {
     struct dup_test *dup_test = container_of(upipe, struct dup_test, upipe);
+    upipe_clean(upipe);
     free(dup_test);
 }
 
@@ -122,9 +125,11 @@ static void dup_test_free(struct upipe *upipe)
 static struct upipe_mgr dup_test_mgr = {
     .upipe_alloc = dup_test_alloc,
     .upipe_control = dup_test_control,
-    .upipe_free = dup_test_free,
+    .upipe_use = NULL,
+    .upipe_release = NULL,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 int main(int argc, char *argv[])
@@ -184,14 +189,11 @@ int main(int argc, char *argv[])
     upipe_input(upipe_dup, uref);
     assert(counter == 2);
 
-    assert(urefcount_single(&upipe_dup->refcount));
     upipe_release(upipe_dup);
     upipe_mgr_release(upipe_dup_mgr); // nop
 
-    assert(urefcount_single(&upipe_sink0->refcount));
-    upipe_release(upipe_sink0);
-    assert(urefcount_single(&upipe_sink1->refcount));
-    upipe_release(upipe_sink1);
+    dup_test_free(upipe_sink0);
+    dup_test_free(upipe_sink1);
 
     assert(urefcount_single(&uref_mgr->refcount));
     uref_mgr_release(uref_mgr);

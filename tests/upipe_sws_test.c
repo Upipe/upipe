@@ -1,6 +1,4 @@
-/*****************************************************************************
- * upipe_dup_test.c: unit tests for swscale pipes
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
@@ -23,15 +21,13 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short unit tests for swscale pipes
+ */
 
 #undef NDEBUG
-
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <assert.h>
 
 #include <upipe/ulog.h>
 #include <upipe/ulog_std.h>
@@ -49,6 +45,12 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_linear_ubuf_mgr.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
 
 #include <libswscale/swscale.h>
 #include <libavutil/pixdesc.h> // debug
@@ -230,6 +232,7 @@ static void sws_test_free(struct upipe *upipe)
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     if (sws_test->pic) uref_release(sws_test->pic);
     if (sws_test->flow) uref_release(sws_test->flow);
+    upipe_clean(upipe);
     free(sws_test);
 }
 
@@ -237,9 +240,11 @@ static void sws_test_free(struct upipe *upipe)
 static struct upipe_mgr sws_test_mgr = {
     .upipe_alloc = sws_test_alloc,
     .upipe_control = sws_test_control,
-    .upipe_free = sws_test_free,
+    .upipe_use = NULL,
+    .upipe_release = NULL,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 // DEBUG - from swscale/swscale_unscaled.c
@@ -410,10 +415,8 @@ int main(int argc, char **argv)
     uref_release(pic_flow);
 
     /* release pipes */
-    assert(urefcount_single(&sws->refcount));
     upipe_release(sws);
-    assert(urefcount_single(&sws_test->refcount));
-    upipe_release(sws_test);
+    sws_test_free(sws_test);
 
     /* release uref manager */
     assert(urefcount_single(&ubuf_mgr->refcount));

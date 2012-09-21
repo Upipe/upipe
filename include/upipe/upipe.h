@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -31,7 +31,6 @@
 /** @hidden */
 #define _UPIPE_UPIPE_H_
 
-#include <upipe/urefcount.h>
 #include <upipe/ulog.h>
 #include <upipe/uprobe.h>
 
@@ -84,10 +83,10 @@ enum upipe_command {
     UPIPE_LINEAR_GET_UBUF_MGR,
     /** sets ubuf manager (struct ubuf_mgr *) */
     UPIPE_LINEAR_SET_UBUF_MGR,
-     /** get output flow definition (struct uref **) */
-     UPIPE_LINEAR_GET_FLOW_DEF,
-     /** set output flow definition (struct uref *) */
-     UPIPE_LINEAR_SET_FLOW_DEF,
+    /** get output flow definition (struct uref **) */
+    UPIPE_LINEAR_GET_FLOW_DEF,
+    /** set output flow definition (struct uref *) */
+    UPIPE_LINEAR_SET_FLOW_DEF,
 
 
     /*
@@ -131,9 +130,6 @@ enum upipe_command {
 
 /** @This stores common parameters for upipe structures. */
 struct upipe {
-    /** refcount management structure (number of pipes using this pipe as
-     * output - atomicity is not really needed) */
-    urefcount refcount;
     /** signature of the pipe allocator */
     unsigned int signature;
 
@@ -147,18 +143,19 @@ struct upipe {
 
 /** @This stores common management parameters for a pipe type. */
 struct upipe_mgr {
-    /** refcount management structure */
-    urefcount refcount;
-
     /** function to create a pipe */
     struct upipe *(*upipe_alloc)(struct upipe_mgr *);
     /** control function for standard or local commands */
     bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
-    /** function to free a pipe structure */
-    void (*upipe_free)(struct upipe *);
+    /** function to increment the refcount of the pipe */
+    void (*upipe_use)(struct upipe *);
+    /** function to decrement the refcount of the pipe or free it */
+    void (*upipe_release)(struct upipe *);
 
-    /** function to free the upipe_mgr structure */
-    void (*upipe_mgr_free)(struct upipe_mgr *);
+    /** function to increment the refcount of the upipe manager */
+    void (*upipe_mgr_use)(struct upipe_mgr *);
+    /** function to decrement the refcount of the upipe manager or free it */
+    void (*upipe_mgr_release)(struct upipe_mgr *);
 };
 
 /** @This allocates and initializes a pipe.
@@ -174,7 +171,6 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
 {
     struct upipe *upipe = mgr->upipe_alloc(mgr);
     if (unlikely(upipe == NULL)) return NULL;
-    urefcount_init(&upipe->refcount);
     upipe->uprobe = uprobe;
     upipe->ulog = ulog;
     return upipe;
@@ -342,38 +338,32 @@ UPIPE_SPLIT_CONTROL_TEMPLATE(ubuf_mgr, UBUF_MGR, struct ubuf_mgr *,
 
 /** @This increments the reference count of a upipe.
  *
- * @param upipe pointer to struct upipe
+ * @param upipe pointer to upipe
  */
 static inline void upipe_use(struct upipe *upipe)
 {
-    urefcount_use(&upipe->refcount);
+    if (likely(upipe->mgr->upipe_use != NULL))
+        upipe->mgr->upipe_use(upipe);
 }
 
-/** @This decrements the reference count of a upipe, and frees it when
- * it gets down to 0. Please note that this function may not be called from a
- * uprobe call-back, when the probe has been triggered by event on the same
- * pipe.
+/** @This decrements the reference count of a upipe or frees it.
  *
- * @param upipe pointer to struct upipe
+ * @param mgr pointer to upipe manager.
  */
 static inline void upipe_release(struct upipe *upipe)
 {
-    if (unlikely(urefcount_release(&upipe->refcount))) {
-        struct ulog *ulog = upipe->ulog;
-        urefcount_clean(&upipe->refcount);
-        upipe->mgr->upipe_free(upipe);
-        ulog_free(ulog);
-    }
+    if (likely(upipe->mgr->upipe_release != NULL))
+        upipe->mgr->upipe_release(upipe);
 }
 
-/** @This checks if we are the single owner of the upipe.
+/** @This should be called by the module writer before it disposes of its
+ * upipe structure.
  *
- * @param upipe pointer to upipe
- * @return false if other pipes reference this one
+ * @param upipe pointer to struct upipe
  */
-static inline bool upipe_single(struct upipe *upipe)
+static inline void upipe_clean(struct upipe *upipe)
 {
-    return urefcount_single(&upipe->refcount);
+    ulog_free(upipe->ulog);
 }
 
 /** @internal @This throws generic events with optional arguments.
@@ -507,26 +497,24 @@ static inline void upipe_throw_source_need_flow_name(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_SOURCE_NEED_FLOW_NAME);
 }
 
-/** @This increments the reference count of a upipe_mgr.
+/** @This increments the reference count of a upipe manager.
  *
- * @param mgr pointer to struct upipe_mgr
+ * @param mgr pointer to upipe manager
  */
 static inline void upipe_mgr_use(struct upipe_mgr *mgr)
 {
-    if (unlikely(mgr->upipe_mgr_free != NULL))
-        urefcount_use(&mgr->refcount);
+    if (unlikely(mgr->upipe_mgr_use != NULL))
+        mgr->upipe_mgr_use(mgr);
 }
 
-/** @This decrements the reference count of a upipe_mgr, and frees it when
- * it gets down to 0.
+/** @This decrements the reference count of a upipe manager or frees it.
  *
- * @param mgr pointer to struct upipe_mgr
+ * @param mgr pointer to upipe manager.
  */
 static inline void upipe_mgr_release(struct upipe_mgr *mgr)
 {
-    if (unlikely(mgr->upipe_mgr_free != NULL &&
-        urefcount_release(&mgr->refcount)))
-        mgr->upipe_mgr_free(mgr);
+    if (unlikely(mgr->upipe_mgr_release != NULL))
+        mgr->upipe_mgr_release(mgr);
 }
 
 #endif

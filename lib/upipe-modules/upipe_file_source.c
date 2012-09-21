@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_file_source.c: upipe source module for files
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe source module for files
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
 #include <upipe/uclock.h>
@@ -98,6 +101,8 @@ struct upipe_fsrc {
     /** true if we have thrown the ready event */
     bool ready;
 
+    /** refcount management structure */
+    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -125,6 +130,7 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr)
     struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_FSRC_SIGNATURE;
+    urefcount_init(&upipe_fsrc->refcount);
     upipe_fsrc_init_uref_mgr(upipe);
     upipe_fsrc_init_ubuf_mgr(upipe);
     upipe_fsrc_init_output(upipe);
@@ -484,38 +490,53 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @internal @This frees all resources allocated.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_fsrc_free(struct upipe *upipe)
+static void upipe_fsrc_use(struct upipe *upipe)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    if (likely(upipe_fsrc->fd != -1)) {
-        if (likely(upipe_fsrc->path != NULL))
-            ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
-        close(upipe_fsrc->fd);
+    urefcount_use(&upipe_fsrc->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_fsrc_release(struct upipe *upipe)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_fsrc->refcount))) {
+        if (likely(upipe_fsrc->fd != -1)) {
+            if (likely(upipe_fsrc->path != NULL))
+                ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
+            close(upipe_fsrc->fd);
+        }
+        free(upipe_fsrc->path);
+        upipe_fsrc_clean_read_size(upipe);
+        upipe_fsrc_clean_flow_name(upipe);
+        upipe_fsrc_clean_uclock(upipe);
+        upipe_fsrc_clean_upump_mgr(upipe);
+        upipe_fsrc_clean_output(upipe);
+        upipe_fsrc_clean_ubuf_mgr(upipe);
+        upipe_fsrc_clean_uref_mgr(upipe);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_fsrc->refcount);
+        free(upipe_fsrc);
     }
-    free(upipe_fsrc->path);
-    upipe_fsrc_clean_read_size(upipe);
-    upipe_fsrc_clean_flow_name(upipe);
-    upipe_fsrc_clean_uclock(upipe);
-    upipe_fsrc_clean_upump_mgr(upipe);
-    upipe_fsrc_clean_output(upipe);
-    upipe_fsrc_clean_ubuf_mgr(upipe);
-    upipe_fsrc_clean_uref_mgr(upipe);
-    free(upipe_fsrc);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_fsrc_mgr = {
-    /* no need to initialize refcount as we don't use it */
-
     .upipe_alloc = upipe_fsrc_alloc,
     .upipe_control = upipe_fsrc_control,
-    .upipe_free = upipe_fsrc_free,
+    .upipe_use = upipe_fsrc_use,
+    .upipe_release = upipe_fsrc_release,
 
-    .upipe_mgr_free = NULL
+    .upipe_mgr_use = NULL,
+    .upipe_mgr_release = NULL
 };
 
 /** @This returns the management structure for all file sources

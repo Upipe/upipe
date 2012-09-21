@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_avformat_test.c: unit tests for avformat source and sink pipes
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short unit tests for avformat source and sink pipes
+ */
 
 #undef NDEBUG
 
@@ -173,19 +175,16 @@ int main(int argc, char *argv[])
 
     ev_loop(loop, 0);
 
-    assert(urefcount_single(&upipe_avfsrc->refcount));
     upipe_release(upipe_avfsrc);
     upipe_mgr_release(upipe_avfsrc_mgr); // nop
 
 #if 0
-    assert(urefcount_single(&upipe_avfsink->refcount));
     upipe_release(upipe_avfsink);
     upipe_mgr_release(upipe_avfsink_mgr); // nop
 #endif
 
     upipe_av_clean();
 
-    assert(urefcount_single(&upump_mgr->refcount));
     upump_mgr_release(upump_mgr);
     assert(urefcount_single(&uref_mgr->refcount));
     uref_mgr_release(uref_mgr);
