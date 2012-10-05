@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref.h: upipe uref structure handling
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,29 +21,26 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe uref structure handling
+ * This file defines the API to manipulate references to buffers and attributes.
+ */
 
 #ifndef _UPIPE_UREF_H_
 /** @hidden */
 #define _UPIPE_UREF_H_
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ubuf.h>
-
-#include <stdint.h>
-#include <string.h>
-#include <assert.h>
+#include <upipe/udict.h>
+#include <upipe/upump.h>
 
 /** @hidden */
 struct uref_mgr;
-/** @hidden */
-enum uref_attrtype;
 
-/** @This stores a reference to a ubuf with related attributes.
- *
- * The structure is not refcounted and shouldn't be used by more than one
- * module at once.
+/** @This stores references to a ubuf, a udict and a upump.
  */
 struct uref {
     /** structure for double-linked lists */
@@ -53,54 +48,72 @@ struct uref {
     /** pointer to the entity responsible for the management */
     struct uref_mgr *mgr;
 
-    /** pointer to (potentially shared) buffer */
+    /** pointer to ubuf */
     struct ubuf *ubuf;
+    /** pointer to udict */
+    struct udict *udict;
+    /** pointer to upump */
+    struct upump *upump;
 };
 
 /** @This stores common management parameters for a uref pool.
  */
 struct uref_mgr {
-    /** refcount management structure */
-    urefcount refcount;
-
-    /** minimum size of a control struct uref */
+    /** minimum size of a control uref */
     size_t control_attr_size;
+    /** udict manager */
+    struct udict_mgr *udict_mgr;
 
-    /** function to allocate a uref with a given attr_size,
-     * returns NULL on error */
-    struct uref *(*uref_alloc)(struct uref_mgr *, size_t);
-    /** function to duplicate a ubuf */
-    struct uref *(*uref_dup)(struct uref_mgr *, struct uref *);
+    /** function to allocate a uref */
+    struct uref *(*uref_alloc)(struct uref_mgr *);
     /** function to free a uref */
     void (*uref_free)(struct uref *);
 
-    /** function to get the name and type of the next attribute */
-    void (*uref_attr_iterate)(struct uref *, const char **,
-                              enum uref_attrtype *);
-    /** function to get an attribute */
-    const uint8_t *(*uref_attr_get)(struct uref *, const char *,
-                                    enum uref_attrtype, size_t *);
-    /** function to set an attribute */
-    uint8_t *(*uref_attr_set)(struct uref **, const char *,
-                              enum uref_attrtype, size_t);
-    /** function to delete an attribute */
-    bool (*uref_attr_delete)(struct uref *, const char *, enum uref_attrtype);
-
-    /** function to free the uref_mgr structure */
-    void (*uref_mgr_free)(struct uref_mgr *);
+    /** function to release all buffers kept in pools */
+    void (*uref_mgr_vacuum)(struct uref_mgr *);
+    /** function to increment the refcount of the uref manager */
+    void (*uref_mgr_use)(struct uref_mgr *);
+    /** function to decrement the refcount of the uref manager or free it */
+    void (*uref_mgr_release)(struct uref_mgr *);
 };
 
-/** @This allocates and initializes a new uref_t.
+/** @This frees a uref and other sub-structures.
+ *
+ * @param uref structure to free
+ */
+static inline void uref_free(struct uref *uref)
+{
+    if (uref->ubuf != NULL)
+        ubuf_free(uref->ubuf);
+    if (uref->udict != NULL)
+        udict_free(uref->udict);
+    /* FIXME upump */
+    uref->mgr->uref_free(uref);
+}
+
+/** @This allocates and initializes a new uref.
  *
  * @param mgr management structure for this buffer pool
  * @return allocated uref or NULL in case of allocation failure
  */
 static inline struct uref *uref_alloc(struct uref_mgr *mgr)
 {
-    return mgr->uref_alloc(mgr, 0);
+    struct uref *uref = mgr->uref_alloc(mgr);
+    if (unlikely(uref == NULL))
+        return NULL;
+
+    uref->ubuf = NULL;
+    uref->upump = NULL;
+    uref->udict = udict_alloc(mgr->udict_mgr, 0);
+    if (unlikely(uref->udict == NULL)) {
+        uref_free(uref);
+        return NULL;
+    }
+
+    return uref;
 }
 
-/** @This returns a new uref (without a ubuf) with extra attributes space.
+/** @This returns a new uref with extra attributes space.
  * This is typically useful for control messages.
  *
  * @param mgr management structure for this uref pool
@@ -108,7 +121,19 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
  */
 static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
 {
-    return mgr->uref_alloc(mgr, mgr->control_attr_size);
+    struct uref *uref = mgr->uref_alloc(mgr);
+    if (unlikely(uref == NULL))
+        return NULL;
+
+    uref->ubuf = NULL;
+    uref->upump = NULL;
+    uref->udict = udict_alloc(mgr->udict_mgr, mgr->control_attr_size);
+    if (unlikely(uref->udict == NULL)) {
+        uref_free(uref);
+        return NULL;
+    }
+
+    return uref;
 }
 
 /** @This duplicates a uref.
@@ -116,20 +141,85 @@ static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
  * @param uref source structure to duplicate
  * @return duplicated uref or NULL in case of allocation failure
  */
-static inline struct uref *uref_dup(struct uref_mgr *mgr, struct uref *uref)
+static inline struct uref *uref_dup(struct uref *uref)
 {
-    return uref->mgr->uref_dup(mgr, uref);
+    struct uref *new_uref = uref->mgr->uref_alloc(uref->mgr);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    new_uref->ubuf = NULL;
+    new_uref->upump = NULL;
+    new_uref->udict = udict_dup(uref->udict);
+    if (unlikely(new_uref->udict == NULL)) {
+        uref_free(new_uref);
+        return NULL;
+    }
+
+    if (uref->ubuf != NULL) {
+        new_uref->ubuf = ubuf_dup(uref->ubuf);
+        if (unlikely(new_uref->ubuf != NULL)) {
+            uref_free(new_uref);
+            return NULL;
+        }
+    }
+
+    /* FIXME */
+    new_uref->upump = uref->upump;
+    return new_uref;
 }
 
-/** @This frees a uref and decrements the refcount of ubuf.
+/** @This attaches a ubuf to a given uref. The ubuf pointer may no longer be
+ * used by the module afterwards.
  *
- * @param uref structure to free
+ * @param uref pointer to uref structure
+ * @param ubuf pointer to ubuf structure to attach to uref
  */
-static inline void uref_release(struct uref *uref)
+static inline void uref_attach_ubuf(struct uref *uref, struct ubuf *ubuf)
 {
     if (uref->ubuf != NULL)
-        ubuf_release(uref->ubuf);
-    uref->mgr->uref_free(uref);
+        ubuf_free(uref->ubuf);
+
+    uref->ubuf = ubuf;
+}
+
+/** @This detaches a ubuf from a uref. The returned ubuf must be freed
+ * or re-attached at some point, otherwise it will leak.
+ *
+ * @param uref pointer to uref structure
+ * @return pointer to detached ubuf structure
+ */
+static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
+{
+    struct ubuf *ubuf = uref->ubuf;
+    uref->ubuf = NULL;
+    return ubuf;
+}
+
+/** @This attaches a upump to a given uref. The upump pointer may no longer be
+ * used by the module afterwards.
+ *
+ * @param uref pointer to uref structure
+ * @param upump pointer to upump structure to attach to uref
+ */
+static inline void uref_attach_upump(struct uref *uref, struct upump *upump)
+{
+/*    if (uref->upump != NULL)
+        FIXME */
+
+    uref->upump = upump;
+}
+
+/** @This detaches a upump from a uref. The returned upump must be freed
+ * or re-attached at some point, otherwise it will leak.
+ *
+ * @param uref pointer to uref structure
+ * @return pointer to detached upump structure
+ */
+static inline struct upump *uref_detach_upump(struct uref *uref)
+{
+    struct upump *upump = uref->upump;
+    uref->upump = NULL;
+    return upump;
 }
 
 /** @This returns the high-level uref structure.
@@ -152,64 +242,34 @@ static inline struct uchain *uref_to_uchain(struct uref *uref)
     return &uref->uchain;
 }
 
-/** @internal @This returns a new uref pointing to a new ubuf.
+/** @This instructs an existing uref manager to release all structures currently
+ * kept in pools. It is inteded as a debug tool only.
  *
- * @param uref_mgr management structure for this uref pool
- * @param ubuf_mgr management structure for this ubuf pool
- * @param alloc_type sentinel defining the type of buffer to allocate,
- * followed by optional arguments to the ubuf manager
- * @return pointer to struct uref or NULL in case of failure
+ * @param mgr pointer to uref manager
  */
-static inline struct uref *uref_ubuf_alloc(struct uref_mgr *uref_mgr,
-                                           struct ubuf_mgr *ubuf_mgr,
-                                           enum ubuf_alloc_type alloc_type, ...)
+static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
 {
-    va_list args;
-    struct uref *uref = uref_alloc(uref_mgr);
-    if (unlikely(uref == NULL)) return NULL;
-
-    va_start(args, alloc_type);
-    uref->ubuf = ubuf_alloc_va(ubuf_mgr, alloc_type, args);
-    va_end(args);
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_release(uref);
-        return NULL;
-    }
-    return uref;
+    mgr->uref_mgr_vacuum(mgr);
 }
 
-/** @This makes the ubuf pointed to by the uref writable.
+/** @This increments the reference count of a uref manager.
  *
- * @param uref struct uref structure
- * @param ubuf_mgr management structure in case the allocation of a new ubuf
- * is necessary (it must store data in the same manner as the original manager)
- * @return false in case of allocation error
- */
-static inline bool uref_ubuf_writable(struct uref *uref,
-                                      struct ubuf_mgr *ubuf_mgr)
-{
-    assert(uref->ubuf != NULL);
-    return ubuf_writable(ubuf_mgr, &uref->ubuf);
-}
-
-/** @This increments the reference count of a uref_mgr.
- *
- * @param mgr pointer to uref_mgr
+ * @param mgr pointer to uref manager
  */
 static inline void uref_mgr_use(struct uref_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    if (likely(mgr->uref_mgr_use != NULL))
+        mgr->uref_mgr_use(mgr);
 }
 
-/** @This decrements the reference count of a uref_mgr, and frees it when it
- * gets down to 0.
+/** @This decrements the reference count of a uref manager or frees it.
  *
- * @param mgr pointer to uref_mgr
+ * @param mgr pointer to uref manager
  */
 static inline void uref_mgr_release(struct uref_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->uref_mgr_free(mgr);
+    if (likely(mgr->uref_mgr_release != NULL))
+        mgr->uref_mgr_release(mgr);
 }
 
 #endif

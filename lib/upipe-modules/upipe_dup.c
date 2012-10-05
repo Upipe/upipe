@@ -156,19 +156,19 @@ static void upipe_dup_output_output(struct upipe *upipe,
     /* change flow */
     const char *flow_name;
     if (unlikely(!uref_flow_get_name(uref, &flow_name))) {
-        if (unlikely(!uref_flow_set_name(&uref, output->flow_suffix))) {
+        if (unlikely(!uref_flow_set_name(uref, output->flow_suffix))) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
-            uref_release(uref);
+            uref_free(uref);
             return;
         }
     } else {
         char new_flow[strlen(flow_name) + strlen(output->flow_suffix) + 2];
         sprintf(new_flow, "%s.%s", flow_name, output->flow_suffix);
-        if (unlikely(!uref_flow_set_name(&uref, new_flow))) {
+        if (unlikely(!uref_flow_set_name(uref, new_flow))) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
-            uref_release(uref);
+            uref_free(uref);
             return;
         }
     }
@@ -221,8 +221,7 @@ static bool upipe_dup_output_set_output(struct upipe *upipe,
         upipe_use(o);
         if (likely(upipe_dup->uref_mgr != NULL)) {
             /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_dup->flows, upipe,
-                                       upipe_dup->uref_mgr, uref,
+            upipe_flows_foreach_replay(&upipe_dup->flows, upipe, uref,
                               upipe_dup_output_output(upipe, output, uref));
         }
     }
@@ -285,31 +284,30 @@ static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
     if (unlikely(upipe_dup->uref_mgr == NULL)) {
         ulog_warning(upipe->ulog,
                      "received a buffer while the pipe is not ready");
-        uref_release(uref);
+        uref_free(uref);
         upipe_throw_need_uref_mgr(upipe);
         return false;
     }
 
-    if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe,
-                                    upipe_dup->uref_mgr, uref))) {
-        uref_release(uref);
+    if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe, uref))) {
+        uref_free(uref);
         return false;
     }
 
     struct uchain *uchain;
     ulist_foreach (&upipe_dup->outputs, uchain) {
         struct upipe_dup_output *output = upipe_dup_output_from_uchain(uchain);
-        struct uref *new_uref = uref_dup(upipe_dup->uref_mgr, uref);
+        struct uref *new_uref = uref_dup(uref);
         if (likely(new_uref != NULL))
             upipe_dup_output_output(upipe, output, new_uref);
         else {
-            uref_release(uref);
+            uref_free(uref);
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
     }
-    uref_release(uref);
+    uref_free(uref);
     return true;
 
     /* only to kill a gcc warning */

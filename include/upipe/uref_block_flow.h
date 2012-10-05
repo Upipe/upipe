@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref_block_flow.h: block flow definition attributes for uref
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe block flow definition attributes for uref
+ */
 
 #ifndef _UPIPE_UREF_BLOCK_FLOW_H_
 /** @hidden */
@@ -47,8 +49,7 @@ UREF_ATTR_TEMPLATE(block_flow, prepend, "b.prepend", unsigned, uint64_t, extra o
 UREF_ATTR_TEMPLATE(block_flow, append, "b.append", unsigned, uint64_t, extra octets added after buffer)
 UREF_ATTR_TEMPLATE(block_flow, align, "b.align", unsigned, uint64_t, alignment in octets)
 UREF_ATTR_TEMPLATE(block_flow, align_offset, "b.align_offset", int, int64_t, offset of the aligned octet)
-/* size may also be specified in a flow definition packet when
- * the flow has fixed block size */
+UREF_ATTR_TEMPLATE(block_flow, size, "b.size", unsigned, uint64_t, block size)
 
 /** @This allocates a control packet to define a new block flow.
  *
@@ -60,14 +61,15 @@ static inline struct uref *uref_block_flow_alloc_def(struct uref_mgr *mgr,
                                                      const char *def_suffix)
 {
     struct uref *uref = uref_alloc_control(mgr);
-    if (unlikely(uref == NULL)) return NULL;
+    if (unlikely(uref == NULL))
+        return NULL;
     if (unlikely(def_suffix == NULL))
         def_suffix = "";
 
     char def[sizeof(UREF_BLOCK_FLOW_DEF) + strlen(def_suffix)];
     sprintf(def, UREF_BLOCK_FLOW_DEF "%s", def_suffix);
-    if (unlikely(!uref_flow_set_def(&uref, def))) {
-        uref_release(uref);
+    if (unlikely(!uref_flow_set_def(uref, def))) {
+        uref_free(uref);
         return NULL;
     }
     return uref;

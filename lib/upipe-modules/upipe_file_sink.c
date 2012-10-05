@@ -172,7 +172,7 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
 
     if (unlikely(upipe_fsink->fd == -1)) {
-        uref_block_release(uref);
+        uref_free(uref);
         ulog_warning(upipe->ulog, "received a buffer before opening a file");
         return;
     }
@@ -201,9 +201,22 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
 
 write_buffer:
     for ( ; ; ) {
-        size_t size;
-        uint8_t *buffer = uref_block_buffer(uref, &size);
+        size_t ubuf_size;
+        if (!uref_block_size(uref, &ubuf_size) || !ubuf_size) {
+            uref_free(uref);
+            break;
+        }
+
+        int size = -1;
+        const uint8_t *buffer;
+        if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
+            uref_free(uref);
+            ulog_warning(upipe->ulog, "cannot read ubuf buffer");
+            break;
+        }
+
         ssize_t ret = write(upipe_fsink->fd, buffer, size);
+        uref_block_unmap(uref, 0, size);
 
         if (unlikely(ret == -1)) {
             switch (errno) {
@@ -225,7 +238,7 @@ write_buffer:
                 default:
                     break;
             }
-            uref_block_release(uref);
+            uref_free(uref);
             ulog_warning(upipe->ulog, "write error to %s (%s)",
                          upipe_fsink->path, ulog_strerror(upipe->ulog, errno));
             upipe_fsink_set_upump(upipe, NULL);
@@ -233,11 +246,11 @@ write_buffer:
             return;
         }
 
-        if (likely(ret == size)) {
-            uref_block_release(uref);
+        if (ret == ubuf_size) {
+            uref_free(uref);
             break;
         } else
-            uref_block_resize(&uref, NULL, size - ret, ret);
+            uref_block_resize(uref, ret, -1);
     }
 }
 
@@ -277,7 +290,7 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
     const char *flow, *def;
     if (unlikely(!uref_flow_get_name(uref, &flow))) {
         ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-        uref_release(uref);
+        uref_free(uref);
         return false;
     }
 
@@ -289,24 +302,24 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
 
     if (unlikely(!upipe_flows_get_def(&upipe_fsink->flows, flow, &def))) {
         ulog_warning(upipe->ulog, "received a buffer without a flow definition");
-        uref_release(uref);
+        uref_free(uref);
         return false;
     }
 
     if (unlikely(uref_flow_get_delete(uref))) {
         upipe_flows_delete(&upipe_fsink->flows, flow);
-        uref_release(uref);
+        uref_free(uref);
         return true;
     }
 
     if (unlikely(strncmp(def, EXPECTED_FLOW_DEF, strlen(EXPECTED_FLOW_DEF)))) {
         ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
-        uref_release(uref);
+        uref_free(uref);
         return false;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
-        uref_release(uref);
+        uref_free(uref);
         return true;
     }
 
@@ -527,7 +540,7 @@ static void upipe_fsink_release(struct upipe *upipe)
         struct uchain *uchain;
         ulist_delete_foreach (&upipe_fsink->urefs, uchain) {
             ulist_delete(&upipe_fsink->urefs, uchain);
-            uref_release(uref_from_uchain(uchain));
+            uref_free(uref_from_uchain(uchain));
         }
 
         upipe_clean(upipe);

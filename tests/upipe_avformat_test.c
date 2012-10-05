@@ -35,6 +35,10 @@
 #include <upipe/uprobe_print.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
+#include <upipe/umem.h>
+#include <upipe/umem_alloc.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/ubuf.h>
@@ -55,6 +59,7 @@
 
 #include <ev.h>
 
+#define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
 #define READ_SIZE 4096
@@ -118,15 +123,25 @@ int main(int argc, char *argv[])
     sink_url = argv[optind++];
 
     struct ev_loop *loop = ev_default_loop(0);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, -1, -1);
+    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
+    assert(umem_mgr != NULL);
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
+                                                         umem_mgr, -1, -1);
+    assert(udict_mgr != NULL);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+                                                   0);
+    assert(uref_mgr != NULL);
 #if 0
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mgr_alloc(UBUF_POOL_DEPTH,
                                                      UBUF_POOL_DEPTH, READ_SIZE,
                                                      -1, -1, -1, 0);
+    assert(ubuf_mgr != NULL);
 #endif
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    assert(upump_mgr != NULL);
 #if 0
     struct uclock *uclock = uclock_std_alloc(0);
+    assert(uclock != NULL);
 #endif
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -186,12 +201,11 @@ int main(int argc, char *argv[])
     upipe_av_clean();
 
     upump_mgr_release(upump_mgr);
-    assert(urefcount_single(&uref_mgr->refcount));
     uref_mgr_release(uref_mgr);
+    udict_mgr_release(udict_mgr);
+    umem_mgr_release(umem_mgr);
 #if 0
-    assert(urefcount_single(&ubuf_mgr->refcount));
     ubuf_mgr_release(ubuf_mgr);
-    assert(urefcount_single(&uclock->refcount));
     uclock_release(uclock);
 #endif
     uprobe_print_free(uprobe_print);

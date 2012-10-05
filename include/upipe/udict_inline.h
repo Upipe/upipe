@@ -24,24 +24,30 @@
  */
 
 /** @file
- * @short Upipe standard uref manager
+ * @short Upipe inline manager of dictionary of attributes
+ * This manager stores all attributes inline inside a single umem block.
+ * This is designed in order to minimize calls to memory allocators, and
+ * to transmit dictionaries over streams.
  */
 
-#ifndef _UPIPE_UREF_STD_H_
+#ifndef _UPIPE_UDICT_INLINE_H_
 /** @hidden */
-#define _UPIPE_UREF_STD_H_
+#define _UPIPE_UDICT_INLINE_H_
 
-#include <upipe/uref.h>
+#include <upipe/udict.h>
 
-/** @This allocates a new instance of the standard uref manager
+/** @This allocates a new instance of the inline udict manager.
  *
- * @param uref_pool_depth maximum number of uref structures in the pool
- * @param udict_mgr udict manager to use to allocate udict structures
- * @param control_attr_size extra attributes space for control packets
+ * @param udict_pool_depth maximum number of udict structures in the pool
+ * @param umem_mgr memory allocator to use for buffers
+ * @param min_size minimum allocated space for the udict (if set to -1, a
+ * default sensible value is used)
+ * @param extra_size extra space added when the udict needs to be resized
+ * (if set to -1, a default sensible value is used)
  * @return pointer to manager, or NULL in case of error
  */
-struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
-                                    struct udict_mgr *udict_mgr,
-                                    int control_attr_size);
+struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
+                                         struct umem_mgr *umem_mgr,
+                                         int min_size, int extra_size);
 
 #endif

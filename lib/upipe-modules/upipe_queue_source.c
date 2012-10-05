@@ -122,9 +122,8 @@ static void upipe_qsrc_worker(struct upump *upump)
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
     if (likely(uchain != NULL)) {
         struct uref *uref = uref_from_uchain(uchain);
-        if (unlikely(!upipe_flows_input(&upipe_qsrc->flows, upipe,
-                                        upipe_qsrc->uref_mgr, uref))) {
-            uref_release(uref);
+        if (unlikely(!upipe_flows_input(&upipe_qsrc->flows, upipe, uref))) {
+            uref_free(uref);
             return;
         }
 
@@ -173,8 +172,7 @@ static bool upipe_qsrc_set_output(struct upipe *upipe, struct upipe *output)
         upipe_use(upipe_qsrc->output);
         if (likely(upipe_qsrc->uref_mgr != NULL)) {
             /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_qsrc->flows, upipe,
-                                       upipe_qsrc->uref_mgr, uref,
+            upipe_flows_foreach_replay(&upipe_qsrc->flows, upipe, uref,
                                        upipe_qsrc_output(upipe, uref));
         }
     }
@@ -386,7 +384,7 @@ static void upipe_qsrc_release(struct upipe *upipe)
         struct uchain *uchain;
         while ((uchain = uqueue_pop(uqueue)) != NULL) {
             struct uref *uref = uref_from_uchain(uchain);
-            uref_release(uref);
+            uref_free(uref);
         }
         uqueue_clean(uqueue);
         free(upipe_qsrc->uqueue_extra);

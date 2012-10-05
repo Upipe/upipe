@@ -28,6 +28,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/ulog.h>
 #include <upipe/uref.h>

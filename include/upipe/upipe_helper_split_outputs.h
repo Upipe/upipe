@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_split_outputs.h: upipe helper functions for split outputs
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for split outputs
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_SPLIT_OUTPUTS_H_
 /** @hidden */
@@ -233,11 +235,9 @@ static void SUBSTRUCT##_flow_delete(struct upipe *upipe,                    \
 static void SUBSTRUCT##_flow_def(struct upipe *upipe,                       \
                                  struct SUBSTRUCT *output)                  \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
-                 output->FLOW_DEF == NULL))                                 \
+    if (unlikely(output->FLOW_DEF == NULL))                                 \
         return;                                                             \
-    struct uref *uref = uref_dup(STRUCTURE->UREF_MGR, output->FLOW_DEF);    \
+    struct uref *uref = uref_dup(output->FLOW_DEF);                         \
     if (unlikely(uref == NULL)) {                                           \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
@@ -258,15 +258,15 @@ static void SUBSTRUCT##_output(struct upipe *upipe,                         \
     if (unlikely(!output->FLOW_DEF_SENT))                                   \
         SUBSTRUCT##_flow_def(upipe, output);                                \
     if (unlikely(!output->FLOW_DEF_SENT)) {                                 \
-        uref_release(uref);                                                 \
+        uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
                                                                             \
     const char *flow_name;                                                  \
     if (unlikely(!output->FLOW_DEF_SENT ||                                  \
                  !uref_flow_get_name(output->FLOW_DEF, &flow_name) ||       \
-                 !uref_flow_set_name(&uref, flow_name))) {                  \
-        uref_release(uref);                                                 \
+                 !uref_flow_set_name(uref, flow_name))) {                   \
+        uref_free(uref);                                                    \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
@@ -289,7 +289,7 @@ static void SUBSTRUCT##_set_flow_def(struct upipe *upipe,                   \
     if (unlikely(output->FLOW_DEF != NULL)) {                               \
         if (unlikely(output->FLOW_DEF_SENT && flow_def == NULL))            \
             SUBSTRUCT##_flow_delete(upipe, output);                         \
-        uref_release(output->FLOW_DEF);                                     \
+        uref_free(output->FLOW_DEF);                                        \
         output->FLOW_DEF_SENT = false;                                      \
     }                                                                       \
     output->FLOW_DEF = flow_def;                                            \
@@ -348,7 +348,7 @@ static void SUBSTRUCT##_clean(struct upipe *upipe, struct SUBSTRUCT *output)\
         upipe_release(output->OUTPUT);                                      \
     }                                                                       \
     if (likely(output->FLOW_DEF != NULL))                                   \
-        uref_release(output->FLOW_DEF);                                     \
+        uref_free(output->FLOW_DEF);                                        \
 }
 
 /** @This declares nine functions dealing with the outputs list of a split pipe.
@@ -538,7 +538,7 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
     struct SUBSTRUCT *SUBSTRUCT = STRUCTURE##_find_output(upipe,            \
                                                           flow_suffix);     \
     if (unlikely(SUBSTRUCT == NULL)) {                                      \
-        uref_release(uref);                                                 \
+        uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
     SUBSTRUCT##_output(upipe, SUBSTRUCT, uref);                             \

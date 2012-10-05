@@ -15,7 +15,7 @@
 
       @list
 
-        @item atomic operations with or without locks (@ref uatomic)
+        @item atomic operations with or without locks (@ref uatomic_uint32_t)
         @item reference counters (@ref urefcount)
         @item chained lists (@ref uchain and @ref ulist) and rings allowing pointer tagging (@ref uring)
         @item lock-less LIFOs (@ref ulifo) without thread limitations
@@ -23,6 +23,8 @@
         @item lock-less buffer queues (@ref uqueue) without thread limitations
         @item lock-less exclusive access to non-reentrant resources (@ref udeal)
         @item objects to pass event information between threads (@ref ueventfd)
+        @item dictionaries storing key/value pairs (@ref udict)
+        @item memory allocation with or without pools (@ref umem)
         @item access to monotonic or real-time system clock (@ref uclock)
 
       @end list
@@ -31,27 +33,20 @@
 
     @section {Buffer management}
 
-      Buffer management structures define how data is carried across inside a pipeline. There are three levels of indirection:
+      Buffer management structures define how data is carried across inside a pipeline and are handled by @ref ubuf and associated managers. These structures typically point to a shared, reference counted area maintained by the manager. Upipe natively supports two types of buffers, each with a dedicated API to access and modify data :
 
       @list
 
-        @item a plane of data (@ref ubuf_plane) pointing to a buffer space containing arbitrary data, a chromatic component of a picture, or an audio channel
-        @item a list of pointers to planes (@ref ubuf) with an atomic refcount allowing to share the same buffer space at several places in the pipeline
-        @item a reference to a ubuf (@ref uref), unically used in the pipeline, with arbitrary attributes (name, type, value triplets)
+        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref ubuf_block_alloc ; the API supports windowing and resizing blocks, as well as merging and cutting out with zero-copy and copy-on-write semantics.
+        @item pictures, defined by their chromatic planes, pixel sizes and subsampling, with arbitrary width and height: @ref ubuf_pic_alloc.
 
       @end list
 
-      Pipes and applications typically only manipulate the latter (@ref uref). The @ref ubuf abstraction allows to implement windowing of data, zero-copy duplication and copy-on-write, but is generally hidden behind higher level interfaces. Upipe is bundled with abstractions layers for three types of buffers:
+      Pipes and applications however do not manipulate @ref ubuf directly, but @ref uref, which is composed of a pointer to @ref ubuf and a pointer to @ref udict. The dictionary allows to associate arbitrary attributes to the @ref ubuf.
 
-      @list
+      An attribute is defined by a name (string), a type and a value. Attribute names start by convention with a letter indicating the category of the attribute, and a dot. Categories are for instance b for block allocator, p for picture allocator, c for clocks, f for flow information, or x for custom attributes. The standard inline udict manager includes a list of common attribute names defined as "shorthands", which are stored and retrieved more efficiently.
 
-        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref uref_block_alloc
-        @item pictures, defined by their chromatic planes, pixel sizes and subsampling, with arbitrary width and height: @ref uref_pic_alloc
-        @item sounds, defined by their channels layout: @ref uref_sound_alloc
-
-      @end list
-
-      Most of the time, a pipe only needs to use these uref abstractions. Higher-level interfaces take advantage of the arbitrary attributes feature. An attribute is defined by a name (string), a type and a value. Attribute name start by convention with a letter indicating the category of the attribute, and a dot. Categories are for instance b for block allocator, p for picture allocator, c for clocks, f for flow information, or x for custom attributes. The standard uref allocator includes a list of common attribute names defined as "shorthands", which are stored and retrieved more efficiently.
+      The standard Upipe distribution provides managers for block and picture formats, relying on application memory allocation (malloc). They in turn use the @ref umem_mgr facility to allocate buffer spaces.
 
     @end section
 
@@ -157,15 +152,15 @@
 
   @section T {Managers}
 
-    To deal with structures efficiently, Upipe has a notion of "managers", which are similar to factories in object-oriented programming. Consequently, @ref ubuf are created by a @ref ubuf_mgr, @ref uref by @ref uref_mgr, @ref upump by @ref upump_mgr and @ref upipe by @ref upipe_mgr. Managers typically deal with memory pools or hardware resources such as access to video memory or hardware decoding.
+    To deal with structures efficiently, Upipe has a notion of "managers", which are similar to factories in object-oriented programming. Consequently, @ref ubuf are created by a @ref ubuf_mgr, @ref udict by @ref udict_mgr, @ref uref by @ref uref_mgr, @ref upump by @ref upump_mgr and @ref upipe by @ref upipe_mgr. Managers typically deal with memory pools or hardware resources such as access to video memory or hardware decoding.
 
-    Upipe provides standard implementations of @ref ubuf_mgr (for blocks, pictures and sounds) and @ref uref_mgr in the libupipe library (link with -lupipe).
+    Upipe provides standard implementations of @ref ubuf_mgr (for blocks and pictures), @ref udict_mgr, @ref umem_mgr and @ref uref_mgr in the libupipe library (link with -lupipe).
 
     The @ref upump_mgr implementations are supplied by dedicated, API-specific libraries such as libupump-ev. Finally, @ref upipe_mgr managers allow to create the pipes themselves and are either provided by the libupipe-modules library for standard pipes, or by third-party libraries.
 
     To instanciate managers it is necessary to link with some libraries; however there is no dependancy associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
 
-    Upon initialization, a new pipe may be passed the managers for its @ref uref, @ref ubuf and @ref upump structures, if it requires to create them. If it has no need for a manager (for instance it just changes an attribute to all uref structures passing by), then it needs not be passed.
+    Upon initialization, a new pipe may be passed the managers for its @ref uref, @ref ubuf and @ref upump structures, if it requires to create them. If it has no need for a manager (for instance it just changes an attribute to all uref structures passing by), then it need not be passed.
 
   @end section
 

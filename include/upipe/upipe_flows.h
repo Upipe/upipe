@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_flows.h: upipe structure to track input flows
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe structure to track input flows
+ */
 
 #ifndef _UPIPE_UPIPE_FLOWS_H_
 /** @hidden */
@@ -111,7 +113,7 @@ static inline bool upipe_flows_delete(struct ulist *upipe_flows,
         if (likely(uref_flow_get_name(uref, &uref_flow))) {
             if (unlikely(!strcmp(flow, uref_flow))) {
                 ulist_delete(upipe_flows, uchain);
-                uref_release(uref);
+                uref_free(uref);
                 return true;
             }
         }
@@ -138,28 +140,21 @@ static inline bool upipe_flows_set(struct ulist *upipe_flows, struct uref *uref)
  *
  * @param upipe_flows pointer to the upipe_flows structure
  * @param upipe description structure of the pipe
- * @param uref_mgr management structure allowing to create urefs
  * @param uref uref structure to check
  * @return false if the uref is invalid and should be dropped
  */
 static inline bool upipe_flows_input(struct ulist *upipe_flows,
                                      struct upipe *upipe,
-                                     struct uref_mgr *uref_mgr,
                                      struct uref *uref)
 {
     const char *flow, *def;
-    if (unlikely(uref_mgr == NULL)) {
-        ulog_warning(upipe->ulog, "received a buffer without a uref mgr");
-        return false;
-    }
-
     if (unlikely(!uref_flow_get_name(uref, &flow))) {
         ulog_warning(upipe->ulog, "received a buffer outside of a flow");
         return false;
     }
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        struct uref *new_uref = uref_dup(uref_mgr, uref);
+        struct uref *new_uref = uref_dup(uref);
         if (likely(new_uref != NULL)) {
             upipe_flows_set(upipe_flows, new_uref);
             ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
@@ -184,15 +179,13 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
  *
  * @param upipe_flows pointer to a upipe_flows structure
  * @param upipe description structure of the pipe
- * @param uref_mgr management structure allowing to create urefs
  * @param uref name of the new uref flow definition to use in action
  * @param action line of code to execute for every new uref
  */
-#define upipe_flows_foreach_replay(upipe_flows, upipe, uref_mgr, uref,      \
-                                   action)                                  \
+#define upipe_flows_foreach_replay(upipe_flows, upipe, uref, action)        \
     struct uref *upipe_flows_replay_uref;                                   \
     upipe_flows_foreach (upipe_flows, upipe_flows_replay_uref) {            \
-        struct uref *uref = uref_dup(uref_mgr, upipe_flows_replay_uref);    \
+        struct uref *uref = uref_dup(upipe_flows_replay_uref);              \
         if (likely(uref != NULL))                                           \
             action;                                                         \
         else {                                                              \
@@ -237,7 +230,7 @@ static inline void upipe_flows_clean(struct ulist *upipe_flows)
     ulist_delete_foreach (upipe_flows, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         ulist_delete(upipe_flows, uchain);
-        uref_release(uref);
+        uref_free(uref);
     }
 }
 

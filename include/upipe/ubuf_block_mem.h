@@ -24,24 +24,38 @@
  */
 
 /** @file
- * @short Upipe standard uref manager
+ * @short Upipe ubuf manager for block formats with umem storage
  */
 
-#ifndef _UPIPE_UREF_STD_H_
+#ifndef _UPIPE_UBUF_BLOCK_MEM_H_
 /** @hidden */
-#define _UPIPE_UREF_STD_H_
+#define _UPIPE_UBUF_BLOCK_MEM_H_
 
-#include <upipe/uref.h>
+#include <upipe/ubase.h>
+#include <upipe/ubuf.h>
+#include <upipe/ubuf_block.h>
 
-/** @This allocates a new instance of the standard uref manager
+#include <stdint.h>
+
+/** @This allocates a new instance of the ubuf manager for block formats
+ * using umem.
  *
- * @param uref_pool_depth maximum number of uref structures in the pool
- * @param udict_mgr udict manager to use to allocate udict structures
- * @param control_attr_size extra attributes space for control packets
+ * @param ubuf_pool_depth maximum number of ubuf structures in the pool
+ * @param shared_pool_depth maximum number of shared structures in the pool
+ * @param umem_mgr memory allocator to use for buffers
+ * @param prepend default minimum extra space before buffer (if set to -1, a
+ * default sensible value is used)
+ * @param append default minimum extra space after buffer (if set to -1, a
+ * default sensible value is used)
+ * @param align default alignment in octets (if set to -1, a default sensible
+ * value is used)
+ * @param align_offset offset of the aligned octet, in octets (may be negative)
  * @return pointer to manager, or NULL in case of error
  */
-struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
-                                    struct udict_mgr *udict_mgr,
-                                    int control_attr_size);
+struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
+                                          uint16_t shared_pool_depth,
+                                          struct umem_mgr *umem_mgr,
+                                          int prepend, int append,
+                                          int align, int align_offset);
 
 #endif

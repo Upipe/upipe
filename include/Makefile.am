@@ -1,13 +1,19 @@
 nobase_include_HEADERS = \
 	upipe/uatomic.h \
 	upipe/ubase.h \
-	upipe/ubuf_block.h \
 	upipe/ubuf.h \
+	upipe/ubuf_block.h \
+	upipe/ubuf_block_common.h \
+	upipe/ubuf_block_mem.h \
 	upipe/ubuf_pic.h \
-	upipe/ubuf_sound.h \
+	upipe/ubuf_pic_common.h \
+	upipe/ubuf_pic_mem.h \
 	upipe/uclock.h \
 	upipe/uclock_std.h \
 	upipe/udeal.h \
+	upipe/udict.h \
+	upipe/udict_dump.h \
+	upipe/udict_inline.h \
 	upipe/ueventfd.h \
 	upipe/ufifo.h \
 	upipe/ulifo.h \
@@ -40,13 +46,11 @@ nobase_include_HEADERS = \
 	upipe/uref_block.h \
 	upipe/uref_clock.h \
 	upipe/urefcount.h \
-	upipe/uref_dump.h \
 	upipe/uref_flow.h \
 	upipe/uref.h \
 	upipe/uref_pic_flow.h \
 	upipe/uref_pic.h \
 	upipe/uref_sound_flow.h \
-	upipe/uref_sound.h \
 	upipe/uref_std.h \
 	upipe/uring.h \
 	upipe-modules/upipe_dup.h \

@@ -38,7 +38,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound.h>
+//#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
@@ -270,11 +270,20 @@ static void upipe_avfsrc_worker(struct upump *upump)
     }
     uint64_t systime = upipe_avfsrc->uclock != NULL ?
                        uclock_now(upipe_avfsrc->uclock) : 0;
-    uint8_t *buffer = uref_block_buffer(uref, NULL);
+    uint8_t *buffer;
+    int read_size = -1;
+    if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
+        uref_free(uref);
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+        return;
+    }
+    assert(read_size == pkt.size);
     memcpy(buffer, pkt.data, pkt.size);
+    uref_block_unmap(uref, 0, read_size);
 
     if (upipe_avfsrc->uclock != NULL)
-        uref_clock_set_systime(&uref, systime);
+        uref_clock_set_systime(uref, systime);
     /* FIXME: fix and set PTS */
     upipe_avfsrc_output_output(upipe, output, uref);
 }
@@ -326,12 +335,12 @@ static struct uref *alloc_raw_audio_def(struct uref_mgr *uref_mgr,
     if (unlikely(flow_def == NULL))
         return NULL;
 
-    CHK(uref_sound_flow_set_rate(&flow_def, codec->sample_rate))
+    CHK(uref_sound_flow_set_rate(flow_def, codec->sample_rate))
     if (codec->block_align)
-        CHK(uref_sound_set_samples(&flow_def,
-                                   codec->block_align /
-                                   (codec->bits_per_coded_sample / 8) /
-                                   codec->channels))
+        CHK(uref_sound_flow_set_samples(flow_def,
+                                        codec->block_align /
+                                        (codec->bits_per_coded_sample / 8) /
+                                        codec->channels))
     return flow_def;
 }
 
@@ -354,12 +363,12 @@ static struct uref *alloc_audio_def(struct uref_mgr *uref_mgr,
         return NULL;
 
     if (codec->bit_rate)
-        CHK(uref_block_flow_set_octetrate(&flow_def, (codec->bit_rate + 7) / 8))
+        CHK(uref_block_flow_set_octetrate(flow_def, (codec->bit_rate + 7) / 8))
 
-    CHK(uref_sound_flow_set_channels(&flow_def, codec->channels))
-    CHK(uref_sound_flow_set_rate(&flow_def, codec->sample_rate))
+    CHK(uref_sound_flow_set_channels(flow_def, codec->channels))
+    CHK(uref_sound_flow_set_rate(flow_def, codec->sample_rate))
     if (codec->block_align)
-        CHK(uref_block_set_size(&flow_def, codec->block_align))
+        CHK(uref_block_flow_set_size(flow_def, codec->block_align))
     return flow_def;
 }
 
@@ -395,14 +404,14 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
         return NULL;
 
     if (codec->bit_rate)
-        CHK(uref_block_flow_set_octetrate(&flow_def, (codec->bit_rate + 7) / 8))
+        CHK(uref_block_flow_set_octetrate(flow_def, (codec->bit_rate + 7) / 8))
 
-    CHK(uref_pic_set_hsize(&flow_def, codec->width))
-    CHK(uref_pic_set_vsize(&flow_def, codec->height))
+    CHK(uref_pic_flow_set_hsize(flow_def, codec->width))
+    CHK(uref_pic_flow_set_vsize(flow_def, codec->height))
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
     if (codec->time_base.den)
-        CHK(uref_pic_flow_set_fps(&flow_def, codec->time_base.num * ticks /
-                                         codec->time_base.den))
+        CHK(uref_pic_flow_set_fps(flow_def, codec->time_base.num * ticks /
+                                            codec->time_base.den))
     return flow_def;
 }
 
@@ -524,9 +533,9 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         bool ret;
         if (unlikely(upipe_avfsrc->flow_name == NULL))
-            ret = uref_flow_set_name(&flow_def, output->flow_suffix);
+            ret = uref_flow_set_name(flow_def, output->flow_suffix);
         else
-            ret = uref_flow_set_name_va(&flow_def, "%s.%s",
+            ret = uref_flow_set_name_va(flow_def, "%s.%s",
                                         upipe_avfsrc->flow_name,
                                         output->flow_suffix);
         if (unlikely(!ret)) {
@@ -538,7 +547,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
         AVDictionaryEntry *lang = av_dict_get(stream->metadata, "language",
                                               NULL, 0);
         if (lang != NULL && lang->value != NULL)
-            uref_flow_set_lang(&flow_def, lang->value);
+            uref_flow_set_lang(flow_def, lang->value);
 
         upipe_avfsrc_output_set_flow_def(upipe, output, flow_def);
         upipe_throw_new_flow(upipe, output->flow_suffix, flow_def);
@@ -603,8 +612,7 @@ static bool upipe_avfsrc_set_flow_name(struct upipe *upipe,
         struct upipe_avfsrc_output *output =
             upipe_avfsrc_output_from_uchain(uchain);
         if (likely(output->flow_def != NULL)) {
-            struct uref *flow_def = uref_dup(upipe_avfsrc->uref_mgr,
-                                             output->flow_def);
+            struct uref *flow_def = uref_dup(output->flow_def);
             if (unlikely(flow_def == NULL)) {
                 ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
@@ -613,9 +621,9 @@ static bool upipe_avfsrc_set_flow_name(struct upipe *upipe,
 
             bool ret;
             if (unlikely(upipe_avfsrc->flow_name == NULL))
-                ret = uref_flow_set_name(&flow_def, output->flow_suffix);
+                ret = uref_flow_set_name(flow_def, output->flow_suffix);
             else
-                ret = uref_flow_set_name_va(&flow_def, "%s.%s",
+                ret = uref_flow_set_name_va(flow_def, "%s.%s",
                                             upipe_avfsrc->flow_name,
                                             output->flow_suffix);
             if (unlikely(!ret)) {

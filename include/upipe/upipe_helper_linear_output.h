@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_linear_output.h: upipe helper functions for output (linear)
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for output (linear)
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_LINEAR_OUTPUT_H_
 /** @hidden */
@@ -158,10 +160,9 @@ static void STRUCTURE##_flow_delete(struct upipe *upipe)                    \
 static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
-                 STRUCTURE->FLOW_DEF == NULL))                              \
+    if (unlikely(STRUCTURE->FLOW_DEF == NULL))                              \
         return;                                                             \
-    struct uref *uref = uref_dup(STRUCTURE->UREF_MGR, STRUCTURE->FLOW_DEF); \
+    struct uref *uref = uref_dup(STRUCTURE->FLOW_DEF);                      \
     if (unlikely(uref == NULL)) {                                           \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
@@ -180,22 +181,22 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->OUTPUT == NULL)) {                              \
         ulog_error(upipe->ulog, "no output defined");                       \
-        uref_release(uref);                                                 \
+        uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
         STRUCTURE##_flow_def(upipe);                                        \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
         ulog_error(upipe->ulog, "no flowdef defined");                      \
-        uref_release(uref);                                                 \
+        uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
                                                                             \
     const char *flow_name;                                                  \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT ||                               \
                  !uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name) ||    \
-                 !uref_flow_set_name(&uref, flow_name))) {                  \
-        uref_release(uref);                                                 \
+                 !uref_flow_set_name(uref, flow_name))) {                   \
+        uref_free(uref);                                                    \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
@@ -217,7 +218,7 @@ static void STRUCTURE##_set_flow_def(struct upipe *upipe,                   \
     if (unlikely(STRUCTURE->FLOW_DEF != NULL)) {                            \
         if (unlikely(STRUCTURE->FLOW_DEF_SENT && flow_def == NULL))         \
             STRUCTURE##_flow_delete(upipe);                                 \
-        uref_release(STRUCTURE->FLOW_DEF);                                  \
+        uref_free(STRUCTURE->FLOW_DEF);                                     \
         STRUCTURE->FLOW_DEF_SENT = false;                                   \
     }                                                                       \
     STRUCTURE->FLOW_DEF = flow_def;                                         \
@@ -283,7 +284,7 @@ static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
         upipe_release(STRUCTURE->OUTPUT);                                   \
     }                                                                       \
     if (likely(STRUCTURE->FLOW_DEF != NULL))                                \
-        uref_release(STRUCTURE->FLOW_DEF);                                  \
+        uref_free(STRUCTURE->FLOW_DEF);                                     \
 }
 
 #endif

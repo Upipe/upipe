@@ -174,14 +174,13 @@ static bool upipe_qsink_input(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
-    if (unlikely(!upipe_flows_input(&upipe_qsink->flows, upipe,
-                                    upipe_qsink->uref_mgr, uref))) {
-        uref_release(uref);
+    if (unlikely(!upipe_flows_input(&upipe_qsink->flows, upipe, uref))) {
+        uref_free(uref);
         return false;
     }
 
     if (unlikely(upipe_qsink->qsrc == NULL)) {
-        uref_release(uref);
+        uref_free(uref);
         ulog_warning(upipe->ulog, "received a buffer before opening a queue");
         return false;
     }
@@ -245,8 +244,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
         ulog_notice(upipe->ulog, "using queue source %p", qsrc);
         if (likely(upipe_qsink->uref_mgr != NULL)) {
             /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_qsink->flows, upipe,
-                                       upipe_qsink->uref_mgr, uref,
+            upipe_flows_foreach_replay(&upipe_qsink->flows, upipe, uref,
                                        upipe_qsink_output(upipe, uref));
         }
     }
@@ -392,7 +390,7 @@ static void upipe_qsink_release(struct upipe *upipe)
         struct uchain *uchain;
         ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
             ulist_delete(&upipe_qsink->urefs, uchain);
-            uref_release(uref_from_uchain(uchain));
+            uref_free(uref_from_uchain(uchain));
         }
 
         upipe_clean(upipe);

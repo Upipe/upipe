@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref_flow.h: flow attributes for uref and control messages
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe flow attributes for uref and control messages
+ */
 
 #ifndef _UPIPE_UREF_FLOW_H_
 /** @hidden */
@@ -44,31 +46,30 @@ UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)
 /** @This sets the flow name attribute of a uref, with printf-style name
  * generation.
  *
- * @param uref_p reference to the pointer to the uref (possibly modified)
+ * @param uref uref structure
  * @param format printf-style format of the flow name, followed by a variable
  * list of arguments
  * @return true if no allocation failure occurred
  */
-static inline bool uref_flow_set_name_va(struct uref **uref_p,
+static inline bool uref_flow_set_name_va(struct uref *uref,
                                          const char *format, ...)
 {
-    UBASE_VARARG(uref_flow_set_name(uref_p, string))
+    UBASE_VARARG(uref_flow_set_name(uref, string))
 }
 
 /** @This duplicates a uref and sets the flow name attribute.
  *
- * @param mgr uref management structure
  * @param uref uref structure
  * @param flow flow name
  * @return pointer to new uref
  */
-static inline struct uref *uref_flow_dup(struct uref_mgr *mgr,
-                                         struct uref *uref, const char *flow)
+static inline struct uref *uref_flow_dup(struct uref *uref, const char *flow)
 {
-    struct uref *new_uref = uref_dup(mgr, uref);
-    if (unlikely(new_uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_name(&new_uref, flow)))) {
-        uref_release(new_uref);
+    struct uref *new_uref = uref_dup(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+    if (unlikely(!(uref_flow_set_name(new_uref, flow)))) {
+        uref_free(new_uref);
         return NULL;
     }
     return new_uref;
@@ -84,10 +85,11 @@ static inline struct uref *uref_flow_alloc_delete(struct uref_mgr *mgr,
                                                   const char *flow)
 {
     struct uref *uref = uref_alloc_control(mgr);
-    if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_name(&uref, flow) &&
-                   uref_flow_set_delete(&uref)))) {
-        uref_release(uref);
+    if (unlikely(uref == NULL))
+        return NULL;
+    if (unlikely(!(uref_flow_set_name(uref, flow) &&
+                   uref_flow_set_delete(uref)))) {
+        uref_free(uref);
         return NULL;
     }
     return uref;

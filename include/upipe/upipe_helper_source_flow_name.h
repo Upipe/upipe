@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_source_flow_name.h: upipe helper functions for flow name
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for flow name
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_SOURCE_FLOW_NAME_H_
 /** @hidden */
@@ -121,7 +123,7 @@ static void STRUCTURE##_set_flow_name_def(struct upipe *upipe,              \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (likely(STRUCTURE->FLOW_NAME != NULL))                               \
-        uref_flow_set_name(&flow_def, STRUCTURE->FLOW_NAME);                \
+        uref_flow_set_name(flow_def, STRUCTURE->FLOW_NAME);                 \
     STRUCTURE##_set_flow_def(upipe, flow_def);                              \
 }                                                                           \
 /** @internal @This handles the get_flow_name control command.              \
@@ -158,17 +160,12 @@ static bool STRUCTURE##_set_flow_name(struct upipe *upipe,                  \
     }                                                                       \
                                                                             \
     if (unlikely(STRUCTURE->FLOW_DEF != NULL)) {                            \
-        if (likely(STRUCTURE->UREF_MGR != NULL)) {                          \
-            struct uref *uref = uref_flow_dup(STRUCTURE->UREF_MGR,          \
-                                              STRUCTURE->FLOW_DEF,          \
-                                              flow_name);                   \
-            if (unlikely(uref == NULL)) {                                   \
-                ulog_aerror(upipe->ulog);                                   \
-                upipe_throw_aerror(upipe);                                  \
-            }                                                               \
-            STRUCTURE##_set_flow_def(upipe, uref);                          \
-        } else                                                              \
-            STRUCTURE##_set_flow_def(upipe, NULL);                          \
+        struct uref *uref = uref_flow_dup(STRUCTURE->FLOW_DEF, flow_name);  \
+        if (unlikely(uref == NULL)) {                                       \
+            ulog_aerror(upipe->ulog);                                       \
+            upipe_throw_aerror(upipe);                                      \
+        }                                                                   \
+        STRUCTURE##_set_flow_def(upipe, uref);                              \
     }                                                                       \
     return true;                                                            \
 }                                                                           \

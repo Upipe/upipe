@@ -33,6 +33,10 @@
 #include <upipe/ulog_std.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
+#include <upipe/umem.h>
+#include <upipe/umem_alloc.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
@@ -49,6 +53,7 @@
 
 #include <ev.h>
 
+#define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 1
 #define QUEUE_LENGTH 6
 #define ULOG_LEVEL ULOG_DEBUG
@@ -115,7 +120,7 @@ static bool queue_test_control(struct upipe *upipe, enum upipe_command command,
             assert(uref_counter == counter);
         }
         counter++;
-        uref_release(uref);
+        uref_free(uref);
         return true;
     }
     return false;
@@ -144,7 +149,14 @@ int main(int argc, char *argv[])
     loop = ev_default_loop(0);
     upump_mgr = upump_ev_mgr_alloc(loop);
 
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, -1, -1);
+    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
+    assert(umem_mgr != NULL);
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
+                                                         umem_mgr, -1, -1);
+    assert(udict_mgr != NULL);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+                                                   0);
+    assert(uref_mgr != NULL);
     struct uref *uref;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -175,19 +187,19 @@ int main(int argc, char *argv[])
 
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_flow_set_name(&uref, "source"));
+    assert(uref_flow_set_name(uref, "source"));
     upipe_input(upipe_qsink, uref);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_name(&uref, "source"));
-    assert(uref_attr_set_small_unsigned(&uref, 1, "x.test"));
+    assert(uref_flow_set_name(uref, "source"));
+    assert(uref_attr_set_small_unsigned(uref, 1, "x.test"));
     upipe_input(upipe_qsink, uref);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_name(&uref, "source"));
-    assert(uref_attr_set_small_unsigned(&uref, 2, "x.test"));
+    assert(uref_flow_set_name(uref, "source"));
+    assert(uref_attr_set_small_unsigned(uref, 2, "x.test"));
     upipe_input(upipe_qsink, uref);
 
     unsigned int length;
@@ -207,8 +219,9 @@ int main(int argc, char *argv[])
     queue_test_free(upipe_sink);
 
     upump_mgr_release(upump_mgr);
-    assert(urefcount_single(&uref_mgr->refcount));
     uref_mgr_release(uref_mgr);
+    udict_mgr_release(udict_mgr);
+    umem_mgr_release(umem_mgr);
     uprobe_print_free(uprobe_print);
 
     ev_default_destroy();

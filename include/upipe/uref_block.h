@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref_block.h: block semantics for uref and ubuf structures
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,130 +21,164 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe wrapper for block ubuf and uref
+ */
 
 #ifndef _UPIPE_UREF_BLOCK_H_
 /** @hidden */
 #define _UPIPE_UREF_BLOCK_H_
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
+#include <upipe/uref.h>
 
 #include <stdint.h>
-#include <assert.h>
-
-UREF_ATTR_TEMPLATE(block, offset, "b.offset", unsigned, uint64_t, block offset)
-UREF_ATTR_TEMPLATE(block, size, "b.size", unsigned, uint64_t, block size)
+#include <stdbool.h>
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.
  *
- * @param uref_mgr management structure for this uref pool
- * @param ubuf_mgr management structure for this ubuf pool
+ * @param uref_mgr management structure for this uref type
+ * @param ubuf_mgr management structure for this ubuf type
  * @param size size of the buffer
  * @return pointer to uref or NULL in case of failure
  */
 static inline struct uref *uref_block_alloc(struct uref_mgr *uref_mgr,
                                             struct ubuf_mgr *ubuf_mgr,
-                                            size_t size)
+                                            int size)
 {
-    struct uref *uref = uref_ubuf_alloc(uref_mgr, ubuf_mgr,
-                                        UBUF_ALLOC_TYPE_BLOCK, size);
-    if (unlikely(uref == NULL)) return NULL;
+    struct uref *uref = uref_alloc(uref_mgr);
+    if (unlikely(uref == NULL))
+        return NULL;
 
-    if (unlikely(!uref_block_set_size(&uref, size))) {
-        uref_release(uref);
+    struct ubuf *ubuf = ubuf_block_alloc(ubuf_mgr, size);
+    if (unlikely(ubuf == NULL)) {
+        uref_free(uref);
         return NULL;
     }
+
+    uref_attach_ubuf(uref, ubuf);
     return uref;
 }
 
-/** @This returns a pointer to the buffer space.
- *
- * @param uref struct uref structure
- * @param size_p reference written with the size of the buffer space
- * @return pointer to buffer space or NULL in case of error
- */
-static inline uint8_t *uref_block_buffer(struct uref *uref, size_t *size_p)
+/** @see ubuf_block_size */
+static inline bool uref_block_size(struct uref *uref, size_t *size_p)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        *size_p = 0;
-        return NULL;
-    }
-
-    uint64_t offset = 0;
-    uref_block_get_offset(uref, &offset);
-    if (likely(size_p != NULL)) {
-        uint64_t size = 0;
-        uref_block_get_size(uref, &size);
-        *size_p = size;
-    }
-    return uref->ubuf->planes[0].buffer + offset;
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_size(uref->ubuf, size_p);
 }
 
-/** @This resizes the buffer space pointed to by a uref, in an efficient
- * manner.
+/** @see ubuf_block_read */
+static inline bool uref_block_read(struct uref *uref, int offset, int *size_p,
+                                   const uint8_t **buffer_p)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_read(uref->ubuf, offset, size_p, buffer_p);
+}
+
+/** @see ubuf_block_write */
+static inline bool uref_block_write(struct uref *uref, int offset, int *size_p,
+                                    uint8_t **buffer_p)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_write(uref->ubuf, offset, size_p, buffer_p);
+}
+
+/** @see ubuf_block_unmap */
+static inline bool uref_block_unmap(struct uref *uref, int offset, int size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_unmap(uref->ubuf, offset, size);
+}
+
+/** @see ubuf_block_insert */
+static inline bool uref_block_insert(struct uref *uref, int offset,
+                                     struct ubuf *insert)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_insert(uref->ubuf, offset, insert);
+}
+
+/** @see ubuf_block_append */
+static inline bool uref_block_append(struct uref *uref, struct ubuf *append)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_append(uref->ubuf, append);
+}
+
+/** @see ubuf_block_delete */
+static inline bool uref_block_delete(struct uref *uref, int offset, int size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_delete(uref->ubuf, offset, size);
+}
+
+/** @see ubuf_block_peek */
+static inline const uint8_t *uref_block_peek(struct uref *uref,
+                                             int offset, int size,
+                                             uint8_t *buffer)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_peek(uref->ubuf, offset, size, buffer);
+}
+
+/** @see ubuf_block_peek_unmap */
+static inline bool uref_block_peek_unmap(struct uref *uref,
+                                         int offset, int size, uint8_t *buffer,
+                                         const uint8_t *read_buffer)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_peek_unmap(uref->ubuf, offset, size, buffer, read_buffer);
+}
+
+/** @see ubuf_block_extract */
+static inline bool uref_block_extract(struct uref *uref, int offset, int size,
+                                      uint8_t *buffer)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_extract(uref->ubuf, offset, size, buffer);
+}
+
+/** @see ubuf_block_resize */
+static inline bool uref_block_resize(struct uref *uref, int skip, int new_size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_resize(uref->ubuf, skip, new_size);
+}
+
+/** @This allocates a new ubuf of size new_size, and copies part of the old
+ * (possibly segemented) ubuf to the new one, switches the ubufs and frees
+ * the old one.
  *
- * @param uref_p reference to a uref structure
- * @param ubuf_mgr ubuf management structure in case duplication is needed
- * (may be NULL if the resize is only a space reduction)
- * @param new_size final size of the buffer (if set to -1, keep same buffer
- * end)
+ * @param uref pointer to uref structure
+ * @param ubuf_mgr management structure for the new ubuf
  * @param skip number of octets to skip at the beginning of the buffer
  * (if < 0, extend buffer upwards)
- * @return true if the operation succeeded
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @return false in case of error
  */
-static inline bool uref_block_resize(struct uref **uref_p,
-                                     struct ubuf_mgr *ubuf_mgr,
-                                     int new_size, int skip)
+static inline bool uref_block_merge(struct uref *uref,
+                                    struct ubuf_mgr *ubuf_mgr,
+                                    int skip, int new_size)
 {
-    struct uref *uref = *uref_p;
-    assert(uref->ubuf != NULL);
-    bool ret;
-    uint64_t offset = 0;
-    uint64_t size = 0, max_size;
-    uref_block_get_offset(uref, &offset);
-    uref_block_get_size(uref, &size);
-    max_size = size + offset;
-    if (unlikely(new_size == -1))
-        new_size = size - skip;
-
-    if (unlikely(skip < 0 && new_size < -skip)) return false;
-    if (unlikely(skip >= 0 && size < skip)) return false;
-
-    /* if the buffer is not shared, the manager implementation is faster */
-    if (likely(ubuf_single(uref->ubuf)))
-        goto uref_block_resize_ubuf;
-
-    /* try just changing the attributes */
-    if (likely((int64_t)offset + skip >= 0 &&
-               (int64_t)offset + skip + new_size <= max_size)) {
-        if (likely(skip != 0))
-            if (unlikely(!uref_block_set_offset(uref_p, offset + skip)))
-                return false;
-        if (likely(new_size != size))
-            if (unlikely(!uref_block_set_size(uref_p, new_size)))
-                return false;
-        return true;
-    }
-
-    /* we'll have to change the ubuf */
-    assert(ubuf_mgr != NULL);
-
-uref_block_resize_ubuf:
-    ret = ubuf_block_resize(ubuf_mgr, &uref->ubuf, new_size, offset + skip);
-    if (likely(ret)) {
-        if (unlikely(!uref_block_set_size(uref_p, new_size)))
-            return false;
-        uref_block_delete_offset(*uref_p);
-    }
-    return ret;
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_merge(ubuf_mgr, &uref->ubuf, skip, new_size);
 }
-
-#define uref_block_release uref_release
-#define uref_block_writable uref_ubuf_writable
-#define uref_block_dup uref_dup
 
 #endif

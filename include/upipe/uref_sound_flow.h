@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref_sound_flow.h: sound flow definition attributes for uref
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe sound flow definition attributes for uref
+ */
 
 #ifndef _UPIPE_UREF_SOUND_FLOW_H_
 /** @hidden */
@@ -45,8 +47,7 @@ UREF_ATTR_TEMPLATE(sound_flow, rate, "s.rate", unsigned, uint64_t, samples per s
 UREF_ATTR_TEMPLATE(sound_flow, prepend, "s.prepend", small_unsigned, uint8_t, extra samples added before each channel)
 UREF_ATTR_TEMPLATE(sound_flow, align, "s.align", unsigned, uint64_t, alignment in octets)
 UREF_ATTR_TEMPLATE(sound_flow, align_offset, "s.align_offset", int, int64_t, offset of the aligned sample)
-/* samples may also be specified in a flow definition packet when
- * the flow has fixed frame size */
+UREF_ATTR_TEMPLATE(sound_flow, samples, "s.samples", unsigned, uint64_t, number of samples)
 
 /** @This allocates a control packet to define a new sound flow.
  *
@@ -61,10 +62,10 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_def(&uref, UREF_SOUND_FLOW_DEF) &&
-                   uref_sound_flow_set_channels(&uref, channels) &&
-                   uref_sound_flow_set_sample_size(&uref, sample_size)))) {
-        uref_release(uref);
+    if (unlikely(!(uref_flow_set_def(uref, UREF_SOUND_FLOW_DEF) &&
+                   uref_sound_flow_set_channels(uref, channels) &&
+                   uref_sound_flow_set_sample_size(uref, sample_size)))) {
+        uref_free(uref);
         return NULL;
     }
     return uref;

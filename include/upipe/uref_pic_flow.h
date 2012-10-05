@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uref_pic_flow.h: picture flow definition attributes for uref
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe picture flow definition attributes for uref
+ */
 
 #ifndef _UPIPE_UREF_PIC_FLOW_H_
 /** @hidden */
@@ -54,8 +56,8 @@ UREF_ATTR_TEMPLATE(pic_flow, vprepend, "p.vprepend", small_unsigned, uint8_t, ex
 UREF_ATTR_TEMPLATE(pic_flow, vappend, "p.vappend", small_unsigned, uint8_t, extra lines added after buffer)
 UREF_ATTR_TEMPLATE(pic_flow, align, "p.align", unsigned, uint64_t, alignment in octets)
 UREF_ATTR_TEMPLATE(pic_flow, align_hmoffset, "p.align_hmoffset", int, int64_t, horizontal offset of the aligned macropixel)
-/* hsize and vsize may also be specified in a flow definition packet when
- * the flow has fixed picture size */
+UREF_ATTR_TEMPLATE(pic_flow, hsize, "p.hsize", unsigned, uint64_t, horizontal size)
+UREF_ATTR_TEMPLATE(pic_flow, vsize, "p.vsize", unsigned, uint64_t, vertical size)
 
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.
@@ -69,11 +71,12 @@ static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
                                                    uint8_t macropixel)
 {
     struct uref *uref = uref_alloc_control(mgr);
-    if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_def(&uref, UREF_PIC_FLOW_DEF) &&
-                   uref_pic_flow_set_macropixel(&uref, macropixel) &&
-                   uref_pic_flow_set_planes(&uref, 0)))) {
-        uref_release(uref);
+    if (unlikely(uref == NULL))
+        return NULL;
+    if (unlikely(!(uref_flow_set_def(uref, UREF_PIC_FLOW_DEF) &&
+                   uref_pic_flow_set_macropixel(uref, macropixel) &&
+                   uref_pic_flow_set_planes(uref, 0)))) {
+        uref_free(uref);
         return NULL;
     }
     return uref;
@@ -81,14 +84,14 @@ static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
 
 /** @This registers a new plane in the picture flow definition packet.
  *
- * @param uref_p reference to the uref control packet
+ * @param uref uref control packet
  * @param hsub horizontal subsampling
  * @param vsub vertical subsampling
  * @param macropixel_size size in octets of a compound
  * @param chroma chroma type (see chroma reference)
  * @return false in case of error
  */
-static inline bool uref_pic_flow_add_plane(struct uref **uref_p,
+static inline bool uref_pic_flow_add_plane(struct uref *uref,
                                            uint8_t hsub, uint8_t vsub,
                                            uint8_t macropixel_size,
                                            const char *chroma)
@@ -97,14 +100,14 @@ static inline bool uref_pic_flow_add_plane(struct uref **uref_p,
     if (unlikely(hsub == 0 || vsub == 0 || macropixel_size == 0 ||
                  chroma == NULL))
         return false;
-    if (unlikely(!uref_pic_flow_get_planes(*uref_p, &plane)))
+    if (unlikely(!uref_pic_flow_get_planes(uref, &plane)))
         return false;
 
-    return uref_pic_flow_set_planes(uref_p, plane + 1) &&
-           uref_pic_flow_set_hsubsampling(uref_p, hsub, plane) &&
-           uref_pic_flow_set_vsubsampling(uref_p, vsub, plane) &&
-           uref_pic_flow_set_macropixel_size(uref_p, macropixel_size, plane) &&
-           uref_pic_flow_set_chroma(uref_p, chroma, plane);
+    return uref_pic_flow_set_planes(uref, plane + 1) &&
+           uref_pic_flow_set_hsubsampling(uref, hsub, plane) &&
+           uref_pic_flow_set_vsubsampling(uref, vsub, plane) &&
+           uref_pic_flow_set_macropixel_size(uref, macropixel_size, plane) &&
+           uref_pic_flow_set_chroma(uref, chroma, plane);
 }
 
 /** @internal @This finds a plane by its chroma.

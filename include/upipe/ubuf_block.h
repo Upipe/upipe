@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ubuf_block.h: declarations for the ubuf manager for block formats
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,12 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe buffer handling for block managers
+ * This file defines the block-specific API to access buffers.
+ */
 
 #ifndef _UPIPE_UBUF_BLOCK_H_
 /** @hidden */
@@ -31,59 +34,417 @@
 
 #include <upipe/ubuf.h>
 
-/*
- * Please note that you must maintain at least one manager per thread,
- * because due to the pool implementation, only one thread can make
- * allocations (structures can be released from any thread though).
- */
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 
-/** @This allocates a new instance of the ubuf manager for block formats.
+/** @This returns a new ubuf from a block allocator. This function shall not
+ * create a segmented block.
  *
- * @param small_pool_depth maximum number of small blocks in the pool
- * @param big_pool_depth maximum number of big blocks in the pool
- * @param size limit between small blocks (including) and big
- * blocks (excluding); also default block size when none indicated (if set to
- * -1, a default sensible value is used)
- * @param prepend default minimum extra space before buffer (if set to -1, a
- * default sensible value is used)
- * @param append default minimum extra space after buffer (if set to -1, a
- * default sensible value is used)
- * @param align default alignment in octets (if set to -1, a default sensible
- * value is used)
- * @param align_offset offset of the aligned octet, in octets (may be negative)
- * @return pointer to manager, or NULL in case of error
- */
-struct ubuf_mgr *ubuf_block_mgr_alloc(unsigned int small_pool_depth,
-                                      unsigned int big_pool_depth, int size,
-                                      int prepend, int append, int align,
-                                      int align_offset);
-
-/** @This returns a new struct ubuf from a block allocator.
- *
- * @param mgr management structure for this struct ubuf pool
- * @param size size of the buffer, or -1
- * @return pointer to struct ubuf or NULL in case of failure
+ * @param mgr management structure for this ubuf type
+ * @param size size of the buffer
+ * @return pointer to ubuf or NULL in case of failure
  */
 static inline struct ubuf *ubuf_block_alloc(struct ubuf_mgr *mgr, int size)
 {
-    return ubuf_alloc(mgr, UBUF_ALLOC_TYPE_BLOCK, size);
+    return ubuf_alloc(mgr, UBUF_ALLOC_BLOCK, size);
 }
 
-/** @This resizes a ubuf.
+/** @This returns the size of the buffer pointed to by a block ubuf.
  *
- * @param mgr management structure used to create a new buffer, if needed
- * (can be NULL if ubuf_single(ubuf))
- * @param ubuf_p reference to a pointer to struct ubuf (possibly modified)
- * @param new_size final size of the buffer (if set to -1, keep same buffer
- * end)
+ * @param ubuf pointer to ubuf
+ * @param size_p reference written with the size of the buffer space if not NULL
+ * @return false in case of error
+ */
+static inline bool ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
+{
+    return ubuf_control(ubuf, UBUF_SIZE_BLOCK, size_p);
+}
+
+/** @internal @This checks the offset and size parameters of a lot of functions,
+ * and transforms them into absolute offset and size.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset_p reference to the offset of the buffer space wanted in the
+ * whole block, in octets, negative values start from the end (may not be NULL)
+ * @param size_p reference to the size of the buffer space wanted, in octets,
+ * or -1 for the end of the block (may be NULL)
+ * @return false when the parameters are invalid
+ */
+static inline bool ubuf_block_check_offset(struct ubuf *ubuf, int *offset_p,
+                                           int *size_p)
+{
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) ||
+                 *offset_p > (int)ubuf_size ||
+                 (size_p != NULL && *offset_p + *size_p > (int)ubuf_size)))
+        return false;
+    if (*offset_p < 0)
+        *offset_p += ubuf_size;
+    if (size_p != NULL && *size_p == -1)
+        *size_p = ubuf_size - *offset_p;
+    return true;
+}
+
+/** @This returns a read-only pointer to the buffer space. You must call
+ * @ref ubuf_block_unmap when you're done with the pointer.
+ *
+ * The size parameter must be inited with the desired size, or -1 for up to
+ * the end of the buffer. However, if the block is segmented, it may be
+ * decreased during execution.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size_p pointer to the size of the buffer space wanted, in octets,
+ * or -1 for the end of the block, changed during execution for the actual
+ * readable size
+ * @param buffer_p reference written with a pointer to buffer space if not NULL
+ * @return false in case of error
+ */
+static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
+                                   const uint8_t **buffer_p)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, size_p)))
+        return false;
+    return ubuf_control(ubuf, UBUF_READ_BLOCK, offset, size_p, buffer_p);
+}
+
+/** @This returns a writable pointer to the buffer space, if the ubuf is not
+ * shared. You must call @ref ubuf_block_unmap when you're done with the
+ * pointer.
+ *
+ * The size parameter must be inited with the desired size, or -1 for up to
+ * the end of the buffer. However, if the block is segmented, it may be
+ * decreased during execution.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size_p pointer to the size of the buffer space wanted, in octets,
+ * or -1 for the end of the block, changed during execution for the actual
+ * @param buffer_p reference written with a pointer to buffer space if not NULL
+ * @return false in case of error, or if the ubuf is shared
+ */
+static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
+                                    uint8_t **buffer_p)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, size_p)))
+        return false;
+    return ubuf_control(ubuf, UBUF_WRITE_BLOCK, offset, size_p, buffer_p);
+}
+
+/** @This marks the buffer space as being currently unused, and the pointer
+ * will be invalid until the next time the ubuf is mapped.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @return false in case of error
+ */
+static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset, int size)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+    return ubuf_control(ubuf, UBUF_UNMAP_BLOCK, offset, size);
+}
+
+/** @This inserts a new ubuf inside a segmented-to-be block ubuf, at the given
+ * position.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset at which to insert the given ubuf.
+ * @param insert pointer to ubuf to be inserted at the given offset; it must
+ * no longer be used afterwards as it becomes included in the segmented ubuf
+ * @return false in case of error
+ */
+static inline bool ubuf_block_insert(struct ubuf *ubuf, int offset,
+                                     struct ubuf *insert)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, NULL)))
+        return false;
+    return ubuf_control(ubuf, UBUF_INSERT_BLOCK, offset, insert);
+}
+
+/** @This appends a new ubuf at the end of a segmented-to-be block ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param append pointer to ubuf to be appended; it must no longer be used
+ * afterwards as it becomes included in the segmented ubuf
+ * @return false in case of error
+ */
+static inline bool ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
+{
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size)))
+        return false;
+    return ubuf_block_insert(ubuf, ubuf_size, append);
+}
+
+/** @This deletes part of a ubuf. The ubuf may become segmented afterwards.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset at which to delete data
+ * @param size number of octets to delete
+ * @return false in case of error
+ */
+static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+    return ubuf_control(ubuf, UBUF_DELETE_BLOCK, offset, size);
+}
+
+/** @This peeks into a ubuf for the given amount of octets, and returns a
+ * read-only pointer to the buffer. If the buffer space wanted stretches
+ * across two or more segments, it is copied to a (caller-supplied) memory
+ * space, and a pointer to it is returned.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param buffer pointer to buffer space of at least size octets, only used
+ * if the requested area stretches across two or more segments
+ * @return pointer to buffer space, or NULL in case of error
+ */
+static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
+                                             int offset, int size,
+                                             uint8_t *buffer)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return NULL;
+
+    int read_size = size;
+    const uint8_t *read_buffer;
+    if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+        return NULL;
+    if (read_size == size)
+        return read_buffer;
+
+    uint8_t *write_buffer = buffer;
+    for ( ; ; ) {
+        memcpy(write_buffer, read_buffer, read_size);
+        if (unlikely(!ubuf_block_unmap(ubuf, offset, read_size)))
+            return NULL;
+        size -= read_size;
+        write_buffer += read_size;
+        offset += read_size;
+        read_size = size;
+        if (size <= 0)
+            break;
+
+        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+            return NULL;
+    }
+    return buffer;
+}
+
+/** @This unmaps the ubuf that's been peeked into, if necessary.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param buffer caller-supplied buffer space passed to @ref ubuf_block_peek
+ * @param read_buffer buffer returned by @ref ubuf_block_peek
+ * @return false in case of error
+ */
+static inline bool ubuf_block_peek_unmap(struct ubuf *ubuf,
+                                         int offset, int size, uint8_t *buffer,
+                                         const uint8_t *read_buffer)
+{
+    if (buffer == read_buffer)
+        return true;
+
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+    return ubuf_block_unmap(ubuf, offset, size);
+}
+
+/** @This extracts a ubuf to an arbitrary memory space.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param buffer pointer to buffer space of at least size octets
+ * @return false in case of error
+ */
+static inline bool ubuf_block_extract(struct ubuf *ubuf, int offset, int size,
+                                      uint8_t *buffer)
+{
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+
+    while (size > 0) {
+        int read_size = size;
+        const uint8_t *read_buffer;
+        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+            return false;
+        memcpy(buffer, read_buffer, read_size);
+        if (unlikely(!ubuf_block_unmap(ubuf, offset, read_size)))
+            return false;
+        size -= read_size;
+        buffer += read_size;
+        offset += read_size;
+    }
+    return true;
+}
+
+/** @internal @This checks the skip and new_size parameters of a lot of
+ * resizing functions, and transforms them.
+ *
+ * @param ubuf pointer to ubuf
+ * @param skip_p reference to number of octets to skip at the beginning of the
+ * buffer (if < 0, extend buffer upwards)
+ * @param new_size_p reference to final size of the buffer (if set to -1, keep
+ * same buffer end)
+ * @param ubuf_size_p filled in with the total size of the ubuf (may be NULL)
+ * @return false when the parameters are invalid
+ */
+static inline bool ubuf_block_check_resize(struct ubuf *ubuf, int *skip_p,
+                                           int *new_size_p, size_t *ubuf_size_p)
+{
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) ||
+                 *skip_p > (int)ubuf_size))
+        return false;
+    if (*new_size_p == -1)
+        *new_size_p = ubuf_size - *skip_p;
+    if (unlikely(*new_size_p < -*skip_p))
+        return false;
+    if (ubuf_size_p != NULL)
+        *ubuf_size_p = ubuf_size;
+    return true;
+}
+
+/** @This resizes a block ubuf, if possible. This will only work if:
+ * @list
+ * @item the ubuf is only shrinked in one or both directions, or
+ * @item the relevant low-level buffers are not shared with other ubuf and
+ * the block manager allows to grow the buffer (ie. prepend/append have been
+ * correctly specified at allocation, or reallocation is allowed)
+ * @end list
+ *
+ * Should this fail, @ref ubuf_block_merge may be used to achieve the same
+ * goal with an extra buffer copy.
+ *
+ * @param ubuf pointer to ubuf
  * @param skip number of octets to skip at the beginning of the buffer
  * (if < 0, extend buffer upwards)
- * @return true if the operation succeeded
+ * @param new_size final size of the buffer (if set to -1, keep same buffer
+ * end)
+ * @return false in case of error, or if the ubuf is shared, or if the operation
+ * is not possible
  */
-static inline bool ubuf_block_resize(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
-                                     int new_size, int skip)
+static inline bool ubuf_block_resize(struct ubuf *ubuf, int skip, int new_size)
 {
-    return ubuf_resize(mgr, ubuf_p, UBUF_ALLOC_TYPE_BLOCK, new_size, skip);
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_check_resize(ubuf, &skip, &new_size, &ubuf_size)))
+        return false;
+
+    int prepend = 0, append = 0;
+    if (skip < 0)
+        prepend = -skip;
+    if (new_size + skip > ubuf_size)
+        append = new_size + skip - ubuf_size;
+
+    if (prepend || append)
+        if (!ubuf_control(ubuf, UBUF_EXTEND_BLOCK, prepend, append))
+            return false;
+
+    if (new_size + skip < ubuf_size)
+        if (unlikely(!ubuf_block_delete(ubuf, new_size + skip - ubuf_size, -1)))
+            goto ubuf_block_resize_err;
+    if (skip > 0)
+        if (unlikely(!ubuf_block_delete(ubuf, 0, skip)))
+            goto ubuf_block_resize_err;
+    return true;
+
+ubuf_block_resize_err:
+    /* It is very unlikely to go there */
+    if (prepend)
+        ubuf_block_delete(ubuf, 0, prepend);
+    if (append)
+        ubuf_block_delete(ubuf, -append, -1);
+    return false;
+}
+
+/** @This copies part of a ubuf to a newly allocated ubuf.
+ *
+ * @param mgr management structure for this ubuf type
+ * @param ubuf pointer to ubuf to copy
+ * @param skip number of octets to skip at the beginning of the buffer
+ * (if < 0, extend buffer upwards)
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @return pointer to newly allocated ubuf or NULL in case of error
+ */
+static inline struct ubuf *ubuf_block_copy(struct ubuf_mgr *mgr,
+                                           struct ubuf *ubuf,
+                                           int skip, int new_size)
+{
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_check_resize(ubuf, &skip, &new_size, &ubuf_size)))
+        return NULL;
+
+    struct ubuf *new_ubuf = ubuf_block_alloc(mgr, new_size);
+    if (unlikely(new_ubuf == NULL))
+        return NULL;
+
+    int extract_offset, extract_skip;
+    if (skip < 0) {
+        extract_offset = -skip;
+        extract_skip = 0;
+    } else {
+        extract_offset = 0;
+        extract_skip = skip;
+    }
+    int extract_size = new_size - extract_offset <= ubuf_size - extract_skip ?
+                       new_size - extract_offset : ubuf_size - extract_skip;
+    uint8_t *buffer;
+    if (unlikely(!ubuf_block_write(new_ubuf, extract_offset, &extract_size,
+                                   &buffer)))
+        goto ubuf_block_copy_err;
+    bool ret = ubuf_block_extract(ubuf, extract_skip, extract_size, buffer);
+    if (unlikely(!ubuf_block_unmap(new_ubuf, extract_offset, extract_size) ||
+                 !ret))
+        goto ubuf_block_copy_err;
+    return new_ubuf;
+
+ubuf_block_copy_err:
+    ubuf_free(new_ubuf);
+    return NULL;
+}
+
+/** @This merges part of a (possibly segmented) ubuf to a newly allocated 
+ * (non-segmented) ubuf, and replaces the old ubuf with the new ubuf.
+ *
+ * @param mgr management structure for this ubuf type
+ * @param ubuf_p reference to a pointer to ubuf to replace with a non-segmented
+ * block ubuf
+ * @param skip number of octets to skip at the beginning of the buffer
+ * (if < 0, extend buffer upwards)
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @return false in case of allocation error
+ */
+static inline bool ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
+                                    int skip, int new_size)
+{
+    struct ubuf *new_ubuf = ubuf_block_copy(mgr, *ubuf_p, skip, new_size);
+    if (unlikely(new_ubuf == NULL))
+        return false;
+
+    ubuf_free(*ubuf_p);
+    *ubuf_p = new_ubuf;
+    return true;
 }
 
 #endif

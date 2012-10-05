@@ -3,6 +3,7 @@ AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
 	ulog_std_test.sh \
+	udict_inline_test.sh \
 	uprobe_print_test.sh \
 	upipe_file_test.sh \
 	valgrind_wrapper.sh
@@ -14,27 +15,19 @@ check_PROGRAMS = \
 	uprobe_print_test \
 	umem_alloc_test \
 	umem_pool_test \
-	ubuf_block_test \
-	ubuf_pic_test \
-	ubuf_sound_test \
+	udict_inline_test \
+	ubuf_block_mem_test \
+	ubuf_pic_mem_test \
 	uref_std_test \
-	uref_attr_test \
-	uref_block_test \
-	uref_pic_test \
-	uref_sound_test \
 	uclock_std_test
 
 TESTS = \
 	umem_alloc_test \
 	umem_pool_test \
-	ubuf_block_test \
-	ubuf_pic_test \
-	ubuf_sound_test \
+	udict_inline_test.sh \
+	ubuf_block_mem_test \
+	ubuf_pic_mem_test \
 	uref_std_test \
-	uref_attr_test \
-	uref_block_test \
-	uref_pic_test \
-	uref_sound_test \
 	ulog_std_test.sh \
 	uprobe_print_test.sh \
 	uclock_std_test
@@ -62,12 +55,12 @@ check_PROGRAMS += \
 	upipe_avformat_test
 endif
 
-if HAVE_SWSCALE
-check_PROGRAMS += \
-    upipe_sws_test
+#if HAVE_SWSCALE
+#check_PROGRAMS += \
+#    upipe_sws_test
 #TESTS += \
 #    upipe_sws_test
-endif
+#endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 AM_CFLAGS = -Wall

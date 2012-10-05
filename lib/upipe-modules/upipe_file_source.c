@@ -167,10 +167,21 @@ static void upipe_fsrc_worker(struct upump *upump)
         return;
     }
 
-    uint8_t *buffer = uref_block_buffer(uref, NULL);
+    uint8_t *buffer;
+    int read_size = -1;
+    if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
+        uref_free(uref);
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+        return;
+    }
+    assert(read_size == upipe_fsrc->read_size);
+
     ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->read_size);
+    uref_block_unmap(uref, 0, read_size);
+
     if (unlikely(ret == -1)) {
-        uref_block_release(uref);
+        uref_free(uref);
         switch (errno) {
             case EINTR:
             case EAGAIN:
@@ -192,7 +203,7 @@ static void upipe_fsrc_worker(struct upump *upump)
         return;
     }
     if (unlikely(ret == 0)) {
-        uref_block_release(uref);
+        uref_free(uref);
         if (likely(upipe_fsrc->uclock == NULL)) {
             ulog_notice(upipe->ulog, "end of file %s", upipe_fsrc->path);
             upipe_fsrc_set_upump(upipe, NULL);
@@ -201,9 +212,9 @@ static void upipe_fsrc_worker(struct upump *upump)
         return;
     }
     if (unlikely(upipe_fsrc->uclock != NULL))
-        uref_clock_set_systime(&uref, systime);
+        uref_clock_set_systime(uref, systime);
     if (unlikely(ret != upipe_fsrc->read_size))
-        uref_block_resize(&uref, upipe_fsrc->ubuf_mgr, ret, 0);
+        uref_block_resize(uref, 0, ret);
     upipe_fsrc_output(upipe, uref);
 }
 
