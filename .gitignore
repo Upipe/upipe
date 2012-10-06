@@ -24,6 +24,7 @@ Makefile
 # mkdoc
 
 /doc/html
+/doc/dependancies.png
 
 # pkg-config
 *.pc

@@ -7,7 +7,9 @@
 
   @section T {Data structures}
 
-    Upipe's data structures can be classified into four groups:
+    Upipe's data structures can be classified into four groups, as shown by the following graph which depicts dependancy relationships between structures (dashed lines are optional):
+
+    @image dependancies.png
 
     @section {Core structures}
 

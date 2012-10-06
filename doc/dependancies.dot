@@ -1,0 +1,105 @@
+digraph "Upipe objects dependancies" {
+	graph [bgcolor="#00000000"];
+	edge [penwidth=2, color="#203080"];
+	node [shape="oval", style="filled", fontname="Verdana Black", fontsize=11, fontcolor="white", color="#203080", fillcolor="#203080"];
+
+	subgraph cluster_pipes {
+		color="#E8F0FF";
+		style="filled";
+		label="Pipes";
+		fontname="Verdana Black";
+		fontsize=11;
+		fontcolor="#203080";
+		subgraph {
+			rank = source;
+			ulog;
+			uprobe;
+			upipe;
+		}
+	}
+
+	subgraph cluster_pumps {
+		color="#E8F0FF";
+		style="filled";
+		label="External events";
+		fontname="Verdana Black";
+		fontsize=11;
+		fontcolor="#203080";
+		upump;
+	}
+
+	subgraph cluster_buffers {
+		color="#E8F0FF";
+		style="filled";
+		label="Buffer management";
+		fontname="Verdana Black";
+		fontsize=11;
+		fontcolor="#203080";
+		ubuf;
+		uref;
+	}
+
+	subgraph cluster_core {
+		color="#E8F0FF";
+		style="filled";
+		label="Core structures";
+		fontname="Verdana Black";
+		fontsize=11;
+		fontcolor="#203080";
+		subgraph {
+			rank = same;
+			uclock;
+			ulist;
+			uqueue;
+			urefcount;
+			udict;
+			umem;
+		}
+		uchain;
+		uatomic;
+		uring;
+		ulifo;
+		ufifo;
+		udeal;
+		ueventfd;
+	}
+
+	uref->ubuf [style="dashed"];
+	uref->udict;
+	uref->upump [style="dashed"];
+	uref->uchain;
+
+	ubuf->uchain;
+	ubuf->umem [style="dashed"];
+	ubuf->urefcount [style="dashed"];
+
+	udict->umem [style="dashed"];
+
+	umem->ulifo [style="dashed"];
+
+	udeal->uatomic;
+	udeal->ueventfd;
+	urefcount->uatomic;
+
+	ufifo->uring;
+	ulifo->uring;
+	uring->uatomic;
+	uqueue->ufifo;
+	uqueue->uatomic;
+	uqueue->ueventfd;
+
+	ulist->uchain;
+
+	uprobe->upipe;
+	upipe->uprobe;
+	upipe->ulog;
+	upipe->uref;
+	upipe->urefcount;
+	upipe->upump [style="dashed"];
+	upipe->uclock [style="dashed"];
+	upipe->udeal [style="dashed"];
+	upipe->uqueue [style="dashed"];
+	upipe->ulist [style="dashed"];
+
+	upump->uchain;
+}
