@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_queue_sink.h: application interface for queue sink module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe sink module for queues
+ */
 
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SINK_H_
 /** @hidden */
@@ -33,8 +35,8 @@
 
 #define UPIPE_QSINK_SIGNATURE 0x0F000022U
 
-/** @This extends upipe_control with specific commands for queue sink. */
-enum upipe_qsink_control {
+/** @This extends upipe_command with specific commands for queue sink. */
+enum upipe_qsink_command {
     UPIPE_QSINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns a pointer to the current queue source (struct upipe **) */

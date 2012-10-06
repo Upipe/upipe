@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_avformat_source.h: application interface for avformat source module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe source module libavformat wrapper
+ */
 
 #ifndef _UPIPE_AV_UPIPE_AVFORMAT_SOURCE_H_
 /** @hidden */
@@ -33,8 +35,8 @@
 
 #define UPIPE_AVFSRC_SIGNATURE 0x0F010001U
 
-/** @This extends upipe_control with specific commands for avformat source. */
-enum upipe_avfsrc_control {
+/** @This extends upipe_command with specific commands for avformat source. */
+enum upipe_avfsrc_command {
     UPIPE_AVFSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the content of an avformat option (const char *,

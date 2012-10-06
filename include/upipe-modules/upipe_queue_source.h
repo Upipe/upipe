@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_queue_source.h: application interface for queue source module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe source module for queues
+ */
 
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_
 /** @hidden */
@@ -72,8 +74,8 @@ static inline unsigned int upipe_queue_max_length(struct upipe *upipe)
     return queue->max_length;
 }
 
-/** @This extends upipe_control with specific commands for queue source. */
-enum upipe_qsrc_control {
+/** @This extends upipe_command with specific commands for queue source. */
+enum upipe_qsrc_command {
     UPIPE_QSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the maximum length of the queue (unsigned int *) */

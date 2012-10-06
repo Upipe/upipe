@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_file_sink.h: application interface for file sink module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe sink module for files
+ */
 
 #ifndef _UPIPE_MODULES_UPIPE_FILE_SINK_H_
 /** @hidden */
@@ -43,8 +45,8 @@ enum upipe_fsink_mode {
     UPIPE_FSINK_CREATE
 };
 
-/** @This extends upipe_control with specific commands for file sink. */
-enum upipe_fsink_control {
+/** @This extends upipe_command with specific commands for file sink. */
+enum upipe_fsink_command {
     UPIPE_FSINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the path of the currently opened file (const char **) */
