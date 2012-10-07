@@ -66,7 +66,11 @@ enum uprobe_event {
     /** a ubuf manager is necessary to operate (void) */
     UPROBE_LINEAR_NEED_UBUF_MGR,
     /** a flow name is necessary to operate (void) */
-    UPROBE_SOURCE_NEED_FLOW_NAME
+    UPROBE_SOURCE_NEED_FLOW_NAME,
+
+    /** non-standard events implemented by a module type can start from
+     * there (first arg = signature) */
+    UPROBE_LOCAL = 0x8000
 };
 
 /** @This is the call-back type for uprobe events; it returns true if the

@@ -142,7 +142,7 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
             break;
         default:
             fprintf(uprobe_print->stream,
-                    "%s probe: pipe %p threw an unknown, uncaught event (%d)\n",
+                    "%s probe: pipe %p threw an unknown, uncaught event (0x%x)\n",
                     name, upipe, event);
             break;
     }
