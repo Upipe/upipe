@@ -19,7 +19,9 @@ check_PROGRAMS = \
 	ubuf_block_mem_test \
 	ubuf_pic_mem_test \
 	uref_std_test \
-	uclock_std_test
+	uclock_std_test \
+	upipe_dup_test \
+	upipe_ts_demux_test
 
 TESTS = \
 	umem_alloc_test \
@@ -30,7 +32,9 @@ TESTS = \
 	uref_std_test \
 	ulog_std_test.sh \
 	uprobe_print_test.sh \
-	uclock_std_test
+	uclock_std_test \
+	upipe_dup_test \
+	upipe_ts_demux_test
 
 if HAVE_EV
 check_PROGRAMS += \
@@ -38,7 +42,6 @@ check_PROGRAMS += \
 	ulifo_uqueue_test \
 	udeal_test \
 	upipe_file_test \
-	upipe_dup_test \
 	upipe_queue_test
 
 TESTS += \
@@ -46,7 +49,6 @@ TESTS += \
 	ulifo_uqueue_test \
 	udeal_test \
 	upipe_file_test.sh \
-	upipe_dup_test \
 	upipe_queue_test
 endif
 
@@ -73,8 +75,9 @@ udeal_test_CFLAGS = -pthread
 udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-upipe_queue_test_LDADD = $(LDADD)  -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
+upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

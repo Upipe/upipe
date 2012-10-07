@@ -10,3 +10,7 @@ The API documentation is written as a mkdoc file. Install mkdoc
 
 The latest code is available from:
         http://upipe.org/
+
+Upipe core libraries are distributed under the MIT license. The Upipe
+transport stream library is distributed under the GPLv2+ license. For non-GPL
+uses, please contact info@openheadend.tv.

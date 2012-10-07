@@ -102,11 +102,13 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe/libupipe.pc
                  lib/upump-ev/Makefile
                  lib/upump-ev/libupump_ev.pc
-                 lib/upipe-swscale/Makefile
-                 lib/upipe-swscale/libupipe_sws.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
                  lib/upipe-av/Makefile
                  lib/upipe-av/libupipe_av.pc
+                 lib/upipe-swscale/Makefile
+                 lib/upipe-swscale/libupipe_sws.pc
+                 lib/upipe-ts/Makefile
+                 lib/upipe-ts/libupipe_ts.pc
                  tests/Makefile])
 AC_OUTPUT
