@@ -157,7 +157,7 @@ static inline struct uref *uref_dup(struct uref *uref)
 
     if (uref->ubuf != NULL) {
         new_uref->ubuf = ubuf_dup(uref->ubuf);
-        if (unlikely(new_uref->ubuf != NULL)) {
+        if (unlikely(new_uref->ubuf == NULL)) {
             uref_free(new_uref);
             return NULL;
         }
