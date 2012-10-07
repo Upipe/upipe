@@ -69,7 +69,7 @@
 #define SRCSIZE             32
 #define DSTSIZE             16
 
-/** definition of our struct uprobe */
+/** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {

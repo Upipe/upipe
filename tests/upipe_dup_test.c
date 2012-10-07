@@ -54,7 +54,7 @@
 
 static int counter = 0;
 
-/** definition of our struct uprobe */
+/** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {

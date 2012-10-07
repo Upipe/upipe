@@ -63,7 +63,7 @@ static struct upump_mgr *upump_mgr;
 static struct upipe *upipe_qsink;
 static uint8_t counter = 0;
 
-/** definition of our struct uprobe */
+/** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {

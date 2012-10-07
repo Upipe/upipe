@@ -165,7 +165,7 @@ static void upipe_fsink_wait(struct upipe *upipe, uint64_t timeout)
 /** @internal @This outputs data to the file sink.
  *
  * @param upipe description structure of the pipe
- * @param uref struct uref structure
+ * @param uref uref structure
  */
 static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
 {
