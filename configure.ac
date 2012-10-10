@@ -40,6 +40,8 @@ AC_CHECK_HEADERS([ev.h], [
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 54.0.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.0 libavutil, [libswscale/swscale.h libavutil/avutil.h])
 
+AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
+
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])

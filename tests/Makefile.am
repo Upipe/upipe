@@ -20,8 +20,7 @@ check_PROGRAMS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	uclock_std_test \
-	upipe_dup_test \
-	upipe_ts_demux_test
+	upipe_dup_test
 
 TESTS = \
 	umem_alloc_test \
@@ -33,8 +32,7 @@ TESTS = \
 	ulog_std_test.sh \
 	uprobe_print_test.sh \
 	uclock_std_test \
-	upipe_dup_test \
-	upipe_ts_demux_test
+	upipe_dup_test
 
 if HAVE_EV
 check_PROGRAMS += \
@@ -62,6 +60,11 @@ check_PROGRAMS += \
     upipe_sws_test
 #TESTS += \
 #    upipe_sws_test
+endif
+
+if HAVE_BITSTREAM
+check_PROGRAMS += upipe_ts_demux_test
+TESTS += upipe_ts_demux_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
