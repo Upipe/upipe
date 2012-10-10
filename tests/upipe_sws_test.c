@@ -33,13 +33,17 @@
 #include <upipe/ulog_std.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
+#include <upipe/umem.h>
+#include <upipe/umem_alloc.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
+#include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_dump.h>
 #include <upipe-swscale/upipe_sws.h>
 
 #include <upipe/upipe_helper_upipe.h>
@@ -57,6 +61,7 @@
 
 #define ALIVE() { printf("# ALIVE: %s %s - %d\n", __FILE__, __func__, __LINE__); } // FIXME - debug - remove this
 
+#define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
 #define UBUF_PREPEND        2
@@ -91,15 +96,50 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
+enum plane_action {
+    UNMAP,
+    READ,
+    WRITE
+};
+
+/** fetches a single chroma into slices and set corresponding stride */
+static void inline fetch_chroma(struct uref *uref, struct uref *picflow, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
+{
+    size_t stride = 0;
+    switch(action) {
+
+    case READ:
+        uref_pic_plane_read(uref, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
+        break;
+    case WRITE:
+        uref_pic_plane_write(uref, str, 0, 0, -1, -1, slices+idx);
+        break;
+    case UNMAP:
+        uref_pic_plane_unmap(uref, str, 0, 0, -1, -1);
+        return;
+    }
+    uref_pic_plane_size(uref, str, &stride, NULL, NULL, NULL);
+    strides[idx] = (int) stride;
+}
+
+static void filldata(struct uref *uref, struct uref *picflow, int *strides, uint8_t **slices, enum plane_action action)
+{
+    fetch_chroma(uref, picflow, "y8", strides, slices, 0, action);
+    fetch_chroma(uref, picflow, "u8", strides, slices, 1, action);
+    fetch_chroma(uref, picflow, "v8", strides, slices, 2, action);
+}
+
 /* fill picture with some reference */
 static void fill_in(struct uref *uref, struct uref *pic_flow,
                     const char *chroma, uint8_t hsub, uint8_t vsub,
                     uint8_t macropixel_size)
 {
     size_t hsize, vsize, stride;
-    uint8_t *buffer = uref_pic_chroma(uref, pic_flow, chroma, &stride);
+    uint8_t *buffer;
+    uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buffer);
+    uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL);
     assert(buffer != NULL);
-    uref_pic_size(uref, &hsize, &vsize);
+    uref_pic_size(uref, &hsize, &vsize, NULL);
     hsize /= hsub;
     hsize *= macropixel_size;
     vsize /= vsub;
@@ -108,13 +148,15 @@ static void fill_in(struct uref *uref, struct uref *pic_flow,
             buffer[x] = 1 + (y * hsize) + x;
         buffer += stride;
     }
+    uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
 }
 
 /* compare a chroma of two pictures */
 static bool compare_chroma(struct uref **urefs, struct uref *pic_flow, const char *chroma, uint8_t hsub, uint8_t vsub, uint8_t macropixel_size, struct ulog *ulog)
 {
     char string[512], *str;
-    size_t hsize[2], vsize[2], stride[2];
+    size_t hsize[2], vsize[2];
+    int stride[2];
     uint8_t *buffer[2];
     int i, x, y;
 
@@ -130,10 +172,10 @@ static bool compare_chroma(struct uref **urefs, struct uref *pic_flow, const cha
     for (i = 0; i < 2; i++)
     {
         assert(urefs[i]);
-        uref_dump(urefs[i], ulog);
-        buffer[i] = uref_pic_chroma(urefs[i], pic_flow, chroma, &stride[i]);
+//        uref_dump(urefs[i], ulog);
+        fetch_chroma(urefs[i], pic_flow, chroma, stride, buffer, i, READ);
         assert(buffer[i]);
-        uref_pic_size(urefs[i], &hsize[i], &vsize[i]);
+        uref_pic_size(urefs[i], &hsize[i], &vsize[i], NULL);
         hsize[i] /= hsub;
         hsize[i] *= macropixel_size;
         vsize[i] /= vsub;
@@ -157,6 +199,9 @@ static bool compare_chroma(struct uref **urefs, struct uref *pic_flow, const cha
     }
 
     ulog_debug(ulog, "Yay, same pics for %s", chroma);
+    for (i=0; i < 2; i++) {
+        fetch_chroma(urefs[i], pic_flow, chroma, stride,  buffer, i, UNMAP);
+    }
     return true;
 }
 
@@ -191,11 +236,11 @@ static bool sws_test_control(struct upipe *upipe, enum upipe_command command, va
         struct uref *uref = va_arg(args, struct uref*);
         assert(uref != NULL);
         ulog_debug(upipe->ulog, "===> received input uref");
-        uref_dump(uref, upipe->ulog);
+//        uref_dump(uref, upipe->ulog);
 
         if (unlikely(!uref_flow_get_name(uref, &name))) {
            ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-           uref_release(uref);
+           uref_free(uref);
            return false;
         }
 
@@ -203,7 +248,7 @@ static bool sws_test_control(struct upipe *upipe, enum upipe_command command, va
         {
             assert(def);
             if (sws_test->flow) {
-                uref_release(sws_test->flow);
+                uref_free(sws_test->flow);
                 sws_test->flow = NULL;
             }
             sws_test->flow = uref;
@@ -211,12 +256,12 @@ static bool sws_test_control(struct upipe *upipe, enum upipe_command command, va
             return true;
         }
         if (sws_test->pic) {
-            uref_release(sws_test->pic);
+            uref_free(sws_test->pic);
             sws_test->pic = NULL;
         }
         sws_test->pic = uref;
         ulog_debug(upipe->ulog, "received pic");
-        uref_dump(sws_test->pic, upipe->ulog);
+//        uref_dump(sws_test->pic, upipe->ulog);
         return true;
     }
     switch (command) {
@@ -230,8 +275,8 @@ static void sws_test_free(struct upipe *upipe)
 {
     ulog_debug(upipe->ulog, "releasing pipe");
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
-    if (sws_test->pic) uref_release(sws_test->pic);
-    if (sws_test->flow) uref_release(sws_test->flow);
+    if (sws_test->pic) uref_free(sws_test->pic);
+    if (sws_test->flow) uref_free(sws_test->flow);
     upipe_clean(upipe);
     free(sws_test);
 }
@@ -266,17 +311,14 @@ static int check_image_pointers(const uint8_t * const data[4], enum PixelFormat 
     return 1;
 }
 
-/** fetches a single chroma into slices and set corresponding stride */
-static void inline fetch_chroma(struct uref *uref, struct uref *picflow, const char *str, int *strides, uint8_t **slices, size_t idx)
-{
-    size_t stride = 0;
-    slices[idx] = uref_pic_chroma(uref, picflow, str, &stride);
-    strides[idx] = (int) stride;
-}
-
 int main(int argc, char **argv)
 {
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, -1, -1);
+
+    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
+    assert(umem_mgr != NULL);
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
+    assert(udict_mgr != NULL);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr;
     struct uref *pic_flow, *uref1, *uref2;
@@ -289,22 +331,22 @@ int main(int argc, char **argv)
     struct ulog *mainlog = ulog_std_alloc(stdout, ULOG_LEVEL, "main");
 
     /* planar I420 */
-    ubuf_mgr = ubuf_pic_mgr_alloc(UBUF_POOL_DEPTH, 1,
-                                  UBUF_PREPEND, UBUF_APPEND,
-                                  UBUF_PREPEND, UBUF_APPEND,
-                                  UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+    ubuf_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                      UBUF_PREPEND, UBUF_APPEND,
+                                      UBUF_PREPEND, UBUF_APPEND,
+                                      UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr != NULL);
-    assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 1, 1, 1));
-    assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 2, 2, 1));
-    assert(ubuf_pic_mgr_add_plane(ubuf_mgr, 2, 2, 1));
+    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "y8", 1, 1, 1));
+    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "u8", 2, 2, 1));
+    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "v8", 2, 2, 1));
 
     pic_flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(pic_flow != NULL);
-    assert(uref_flow_set_name(&pic_flow, FLOW_NAME));
-    assert(uref_pic_flow_add_plane(&pic_flow, 1, 1, 1, "y8"));
-    assert(uref_pic_flow_add_plane(&pic_flow, 2, 2, 1, "u8"));
-    assert(uref_pic_flow_add_plane(&pic_flow, 2, 2, 1, "v8"));
-    uref_dump(pic_flow, mainlog);
+    assert(uref_flow_set_name(pic_flow, FLOW_NAME));
+    assert(uref_pic_flow_add_plane(pic_flow, 1, 1, 1, "y8"));
+    assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "u8"));
+    assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "v8"));
+//    uref_dump(pic_flow, mainlog);
 
     /* try allocating */
     assert(uref_pic_alloc(uref_mgr, ubuf_mgr, 31, 32) == NULL);
@@ -314,13 +356,13 @@ int main(int argc, char **argv)
     uref1 = uref_pic_alloc(uref_mgr, ubuf_mgr, SRCSIZE, SRCSIZE);
     assert(uref1 != NULL);
     assert(uref1->ubuf != NULL);
-    assert(uref_flow_set_name(&uref1, FLOW_NAME));
+    assert(uref_flow_set_name(uref1, FLOW_NAME));
 
     /* fill reference picture */
     fill_in(uref1, pic_flow, "y8", 1, 1, 1);
     fill_in(uref1, pic_flow, "u8", 2, 2, 1);
     fill_in(uref1, pic_flow, "v8", 2, 2, 1);
-    uref_dump(uref1, mainlog);
+//    uref_dump(uref1, mainlog);
 
     // sws_scale test
     // uref2 : dest image
@@ -331,13 +373,8 @@ int main(int argc, char **argv)
     img_convert_ctx = sws_getCachedContext(NULL, SRCSIZE, SRCSIZE, PIX_FMT_YUV420P, DSTSIZE, DSTSIZE, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
     assert(img_convert_ctx);
 
-    fetch_chroma(uref1, pic_flow, "y8", strides, slices, 0);
-    fetch_chroma(uref1, pic_flow, "u8", strides, slices, 1);
-    fetch_chroma(uref1, pic_flow, "v8", strides, slices, 2);
-
-    fetch_chroma(uref2, pic_flow, "y8", dstrides, dslices, 0);
-    fetch_chroma(uref2, pic_flow, "u8", dstrides, dslices, 1);
-    fetch_chroma(uref2, pic_flow, "v8", dstrides, dslices, 2);
+    filldata(uref1, pic_flow, strides, slices, READ);
+    filldata(uref2, pic_flow, dstrides, dslices, WRITE);
 
     assert(slices[0]);
     assert(slices[1]);
@@ -352,6 +389,9 @@ int main(int argc, char **argv)
     // fire raw swscale test
     ret = sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides, 0, SRCSIZE, dslices, dstrides);
     sws_freeContext(img_convert_ctx);
+
+    filldata(uref1, pic_flow, strides, slices, UNMAP);
+    filldata(uref2, pic_flow, dstrides, dslices, UNMAP);
 
     /*
      * now test upipe_sws module
@@ -371,13 +411,15 @@ int main(int argc, char **argv)
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "sws_test"));
+    ulog_debug(mainlog, "Pipe addr: sws:\t %p", sws);
+    ulog_debug(mainlog, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
     assert(upipe_linear_set_output(sws, sws_test));
 
     /* Send first flow definition packet */
-    struct uref *flowdef = uref_dup(uref_mgr, pic_flow);
+    struct uref *flowdef = uref_dup(pic_flow);
     assert(flowdef);
     assert(upipe_input(sws, flowdef));
 
@@ -393,15 +435,15 @@ int main(int argc, char **argv)
 
 
     /* Send definition again */
-    flowdef = uref_dup(uref_mgr, pic_flow);
+    flowdef = uref_dup(pic_flow);
     assert(flowdef);
     assert(upipe_input(sws, flowdef));
 
     /* Define outputflow */
-    assert(upipe_sws_set_out_flow(sws, uref_dup(uref_mgr, pic_flow), DSTSIZE, DSTSIZE));
+    assert(upipe_sws_set_out_flow(sws, uref_dup(pic_flow), DSTSIZE, DSTSIZE));
 
     /* Now send pic */
-    struct uref *pic = uref_dup(uref_mgr, uref1);
+    struct uref *pic = uref_dup(uref1);
     assert(upipe_input(sws, pic));
 
     assert(sws_test_from_upipe(sws_test)->pic);
@@ -410,20 +452,18 @@ int main(int argc, char **argv)
     assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), pic_flow, "v8", 2, 2, 1, mainlog));
 
     /* release urefs */
-    uref_release(uref1);
-    uref_release(uref2);
-    uref_release(pic_flow);
+    uref_free(uref1);
+    uref_free(uref2);
+    uref_free(pic_flow);
 
     /* release pipes */
     upipe_release(sws);
     sws_test_free(sws_test);
 
     /* release uref manager */
-    assert(urefcount_single(&ubuf_mgr->refcount));
     ubuf_mgr_release(ubuf_mgr);
 
     /* release ubuf manager */
-    assert(urefcount_single(&uref_mgr->refcount));
     uref_mgr_release(uref_mgr); 
 
     return 0;

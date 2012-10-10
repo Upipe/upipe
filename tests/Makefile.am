@@ -57,12 +57,12 @@ check_PROGRAMS += \
 	upipe_avformat_test
 endif
 
-#if HAVE_SWSCALE
-#check_PROGRAMS += \
-#    upipe_sws_test
+if HAVE_SWSCALE
+check_PROGRAMS += \
+    upipe_sws_test
 #TESTS += \
 #    upipe_sws_test
-#endif
+endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
