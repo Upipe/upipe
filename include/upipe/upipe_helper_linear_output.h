@@ -187,14 +187,13 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
         STRUCTURE##_flow_def(upipe);                                        \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
-        ulog_error(upipe->ulog, "no flowdef defined");                      \
+        ulog_error(upipe->ulog, "no flow_def defined");                     \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
                                                                             \
     const char *flow_name;                                                  \
-    if (unlikely(!STRUCTURE->FLOW_DEF_SENT ||                               \
-                 !uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name) ||    \
+    if (unlikely(!uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name) ||    \
                  !uref_flow_set_name(uref, flow_name))) {                   \
         uref_free(uref);                                                    \
         ulog_aerror(upipe->ulog);                                           \
