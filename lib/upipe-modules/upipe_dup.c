@@ -254,7 +254,7 @@ UPIPE_HELPER_SPLIT_OUTPUTS(upipe_dup, outputs, upipe_dup_output)
 /** @internal @This allocates a dup pipe.
  *
  * @param mgr common management structure
- * @return pointer to struct upipe or NULL in case of allocation error
+ * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr)
 {
@@ -318,7 +318,8 @@ static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
  * @ref upipe_dup_set_output since it only changes existing outputs.
  *
  * @param upipe description structure of the pipe
- * @param args pointer to output pipe and flow suffix
+ * @param o pipe acting as output, or NULL to delete the output
+ * @param flow_suffix flow suffix
  * @return false in case of error
  */
 static bool _upipe_dup_set_output(struct upipe *upipe, struct upipe *o,
