@@ -49,7 +49,7 @@
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
 /** we only output TS packets */
-#define OUTPUT_FLOW_DEF "block.mpegts"
+#define OUTPUT_FLOW_DEF "block.mpegts."
 /** TS synchronization word */
 #define TS_SYNC 0x47
 
@@ -60,7 +60,7 @@ struct upipe_ts_sync {
 
     /** pipe acting as output */
     struct upipe *output;
-    /** flow definition packet */
+    /** output flow definition packet */
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
@@ -94,7 +94,7 @@ UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent, uref_
 /** @internal @This allocates a ts_sync pipe.
  *
  * @param mgr common management structure
- * @return pointer to struct upipe or NULL in case of allocation error
+ * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr)
 {
@@ -109,6 +109,7 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr)
     upipe_ts_sync_init_output(upipe);
     upipe_ts_sync->ts_size = DEFAULT_TS_SIZE;
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
+    upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
     upipe_ts_sync->ready = false;
     upipe_ts_sync->acquired = false;
@@ -576,6 +577,13 @@ static void upipe_ts_sync_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
         upipe_ts_sync_clean_output(upipe);
         upipe_ts_sync_clean_uref_mgr(upipe);
+
+        uref_free(upipe_ts_sync->next_uref);
+        struct uchain *uchain;
+        ulist_delete_foreach (&upipe_ts_sync->urefs, uchain) {
+            ulist_delete(&upipe_ts_sync->urefs, uchain);
+            uref_free(uref_from_uchain(uchain));
+        }
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_sync->refcount);
