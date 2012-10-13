@@ -129,7 +129,7 @@ static inline const uint8_t *uref_block_peek(struct uref *uref,
                                              uint8_t *buffer)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return NULL;
     return ubuf_block_peek(uref->ubuf, offset, size, buffer);
 }
 
