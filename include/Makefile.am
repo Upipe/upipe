@@ -61,7 +61,9 @@ nobase_include_HEADERS = \
 	upipe-av/upipe_av.h \
 	upipe-av/upipe_avformat_source.h \
 	upipe-swscale/upipe_sws.h \
+	upipe-ts/upipe_ts_split.h \
 	upipe-ts/upipe_ts_sync.h \
+	upipe-ts/uref_ts_flow.h \
 	upump-ev/upump_ev.h
 
 pkginclude_HEADERS = upipe/config.h
