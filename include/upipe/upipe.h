@@ -102,6 +102,12 @@ enum upipe_command {
     /** sets ubuf manager for given flow suffix (struct ubuf_mgr *,
      * const char *) */
     UPIPE_SPLIT_SET_UBUF_MGR,
+    /** gets output flow definition for given flow suffix (struct uref **,
+     * const char *) */
+    UPIPE_SPLIT_GET_FLOW_DEF,
+    /** sets output flow definition for given flow suffix (struct uref *,
+     * const char *) */
+    UPIPE_SPLIT_SET_FLOW_DEF,
 
     /*
      * Source elements commands
@@ -334,6 +340,8 @@ UPIPE_SPLIT_CONTROL_TEMPLATE(output, OUTPUT, struct upipe *,
                              pipe acting as output)
 UPIPE_SPLIT_CONTROL_TEMPLATE(ubuf_mgr, UBUF_MGR, struct ubuf_mgr *,
                              ubuf manager)
+UPIPE_SPLIT_CONTROL_TEMPLATE(flow_def, FLOW_DEF, struct uref *,
+                             output flow definition)
 #undef UPIPE_SPLIT_CONTROL_TEMPLATE
 
 /** @This increments the reference count of a upipe.
