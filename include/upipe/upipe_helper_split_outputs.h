@@ -109,6 +109,13 @@
  * @ref #UPIPE_HELPER_SPLIT_OUTPUTS.
  *
  * @item @code
+ *  void upipe_foo_output_get_flow_def(struct upipe *upipe,
+ *                                     struct upipe_foo_output *output,
+ *                                     struct uref **p)
+ * @end code
+ * Used by @ref #UPIPE_HELPER_SPLIT_FLOW_NAME.
+ *
+ * @item @code
  *  void upipe_foo_output_set_flow_def(struct upipe *upipe,
  *                                     struct upipe_foo_output *output,
  *                                     struct uref *flow_def)
@@ -255,16 +262,21 @@ static void SUBSTRUCT##_flow_def(struct upipe *upipe,                       \
 static void SUBSTRUCT##_output(struct upipe *upipe,                         \
                                struct SUBSTRUCT *output, struct uref *uref) \
 {                                                                           \
+    if (unlikely(output->OUTPUT == NULL)) {                                 \
+        ulog_error(upipe->ulog, "no output defined");                       \
+        uref_free(uref);                                                    \
+        return;                                                             \
+    }                                                                       \
     if (unlikely(!output->FLOW_DEF_SENT))                                   \
         SUBSTRUCT##_flow_def(upipe, output);                                \
     if (unlikely(!output->FLOW_DEF_SENT)) {                                 \
+        ulog_error(upipe->ulog, "no flow_def defined");                     \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
                                                                             \
     const char *flow_name;                                                  \
-    if (unlikely(!output->FLOW_DEF_SENT ||                                  \
-                 !uref_flow_get_name(output->FLOW_DEF, &flow_name) ||       \
+    if (unlikely(!uref_flow_get_name(output->FLOW_DEF, &flow_name) ||       \
                  !uref_flow_set_name(uref, flow_name))) {                   \
         uref_free(uref);                                                    \
         ulog_aerror(upipe->ulog);                                           \
@@ -273,6 +285,21 @@ static void SUBSTRUCT##_output(struct upipe *upipe,                         \
     }                                                                       \
     upipe_input(output->OUTPUT, uref);                                      \
 }                                                                           \
+/** @internal @This gets the flow definition to use on the output of a      \
+ * substructure.                                                            \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param output pointer to output-specific substructure                    \
+ * @param p filled in with the flow definition packet                       \
+ */                                                                         \
+static void SUBSTRUCT##_get_flow_def(struct upipe *upipe,                   \
+                                     struct SUBSTRUCT *output,              \
+                                     struct uref **p)                       \
+{                                                                           \
+    *p = output->FLOW_DEF;                                                  \
+}                                                                           \
+/** @hidden */                                                              \
+static bool STRUCTURE##_get_flow_name(struct upipe *upipe, const char **p); \
 /** @internal @This sets the flow definition to use on the output of a      \
  * substructure. If set to NULL, also output a flow deletion packet.        \
  * Otherwise, schedule a flow definition packet next time a packet must be  \
@@ -291,6 +318,20 @@ static void SUBSTRUCT##_set_flow_def(struct upipe *upipe,                   \
             SUBSTRUCT##_flow_delete(upipe, output);                         \
         uref_free(output->FLOW_DEF);                                        \
         output->FLOW_DEF_SENT = false;                                      \
+    }                                                                       \
+    const char *flow_name = NULL;                                           \
+    STRUCTURE##_get_flow_name(upipe, &flow_name);                           \
+    bool ret;                                                               \
+    if (unlikely(flow_name == NULL))                                        \
+        ret = uref_flow_set_name(flow_def, output->FLOW_SUFFIX);            \
+    else                                                                    \
+        ret = uref_flow_set_name_va(flow_def, "%s.%s", flow_name,           \
+                                    output->FLOW_SUFFIX);                   \
+    if (unlikely(!ret)) {                                                   \
+        uref_free(flow_def);                                                \
+        ulog_aerror(upipe->ulog);                                           \
+        upipe_throw_aerror(upipe);                                          \
+        return;                                                             \
     }                                                                       \
     output->FLOW_DEF = flow_def;                                            \
 }                                                                           \
@@ -591,6 +632,124 @@ static void STRUCTURE##_clean_outputs(struct upipe *upipe,                  \
         ulist_delete(&STRUCTURE->LIST, uchain);                             \
         output_free(upipe, output);                                         \
     }                                                                       \
+}
+
+/** @This declares two functions dealing with the source flow name of a split
+ * pipe.
+ *
+ * You must add one member to your private upipe structure, for instance:
+ * @code
+ *  char *flow_name;
+ * @end code
+ *
+ * You must also declare @ref #UPIPE_HELPER_SPLIT_OUTPUT and
+ * #UPIPE_HELPER_SPLIT_OUTPUTS prior to using this
+ * macro, and its substructure describing an output.
+ *
+ * Supposing the name of your structure is upipe_foo, and the output
+ * substructure is upipe_foo_output, it declares:
+ * @list
+ * @item @code
+ *  bool upipe_foo_get_flow_name(struct upipe *upipe, const char **p)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  case UPIPE_SOURCE_GET_FLOW_NAME: {
+ *      const char **p = va_arg(args, const char **);
+ *      return upipe_foo_get_flow_name(upipe, p);
+ *  }
+ * @end code
+ *
+ * @item @code
+ *  bool upipe_foo_set_flow_name(struct upipe *upipe, const char *flow_name)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  case UPIPE_SOURCE_SET_FLOW_NAME: {
+ *      const char *flow_name = va_arg(args, const char *);
+ *      return upipe_foo_set_flow_name(upipe, flow_name);
+ *  }
+ * @end code
+ * @end list
+ *
+ * @param STRUCTURE name of your private upipe structure, declared in
+ * @ref #UPIPE_HELPER_SPLIT_OUTPUTS
+ * @param LIST name of the @tt {struct ulist} field of
+ * your private upipe structure, declared in @ref #UPIPE_HELPER_SPLIT_OUTPUTS
+ * @param FLOW_NAME string containing the source part (without suffix) of the
+ * flow name
+ * @param SUBSTRUCT name of the substructure that contains a specific output,
+ * declared in @ref #UPIPE_HELPER_SPLIT_OUTPUT
+ */
+#define UPIPE_HELPER_SPLIT_FLOW_NAME(STRUCTURE, LIST, FLOW_NAME, SUBSTRUCT) \
+/** @internal @This initializes the private members for this helper.        \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static void STRUCTURE##_init_flow_name(struct upipe *upipe)                 \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    STRUCTURE->FLOW_NAME = NULL;                                            \
+}                                                                           \
+/** @internal @This returns the source flow name.                           \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param p filled in with the source flow name                             \
+ * @return false in case of error                                           \
+ */                                                                         \
+static bool STRUCTURE##_get_flow_name(struct upipe *upipe, const char **p)  \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(p != NULL);                                                      \
+    *p = STRUCTURE->FLOW_NAME;                                              \
+    return true;                                                            \
+}                                                                           \
+/** @internal @This sets the source flow name for this helper.              \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param flow_name source flow name                                        \
+ * @return false in case of error                                           \
+ */                                                                         \
+static bool STRUCTURE##_set_flow_name(struct upipe *upipe,                  \
+                                      const char *flow_name)                \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    free(STRUCTURE->FLOW_NAME);                                             \
+    if (likely(flow_name != NULL)) {                                        \
+        STRUCTURE->flow_name = strdup(flow_name);                           \
+        if (unlikely(STRUCTURE->flow_name == NULL)) {                       \
+            ulog_aerror(upipe->ulog);                                       \
+            upipe_throw_aerror(upipe);                                      \
+            return false;                                                   \
+        }                                                                   \
+    } else                                                                  \
+        STRUCTURE->flow_name = NULL;                                        \
+                                                                            \
+    struct uchain *uchain;                                                  \
+    ulist_foreach (&STRUCTURE->LIST, uchain) {                              \
+        struct SUBSTRUCT *output = SUBSTRUCT##_from_uchain(uchain);         \
+        struct uref *flow_def;                                              \
+        SUBSTRUCT##_get_flow_def(upipe, output, &flow_def);                 \
+        if (likely(flow_def != NULL)) {                                     \
+            struct uref *uref = uref_dup(flow_def);                         \
+            if (unlikely(uref == NULL)) {                                   \
+                ulog_aerror(upipe->ulog);                                   \
+                upipe_throw_aerror(upipe);                                  \
+                return false;                                               \
+            }                                                               \
+            SUBSTRUCT##_set_flow_def(upipe, output, uref);                  \
+        }                                                                   \
+    }                                                                       \
+    return true;                                                            \
+}                                                                           \
+/** @internal @This cleans up the private members for this helper.          \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static void STRUCTURE##_clean_flow_name(struct upipe *upipe)                \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    free(STRUCTURE->FLOW_NAME);                                             \
 }
 
 #endif

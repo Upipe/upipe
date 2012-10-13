@@ -84,9 +84,9 @@ struct upipe_avfsrc {
 
     /** list of outputs */
     struct ulist outputs;
-
     /** flow name */
     char *flow_name;
+
     /** URL */
     char *url;
 
@@ -133,6 +133,8 @@ struct upipe_avfsrc_output {
 UPIPE_HELPER_SPLIT_OUTPUT(upipe_avfsrc, upipe_avfsrc_output, uchain, output,
                           flow_suffix, flow_def, flow_def_sent, uref_mgr)
 UPIPE_HELPER_SPLIT_OUTPUTS(upipe_avfsrc, outputs, upipe_avfsrc_output)
+UPIPE_HELPER_SPLIT_FLOW_NAME(upipe_avfsrc, outputs, flow_name,
+                             upipe_avfsrc_output)
 UPIPE_HELPER_SPLIT_UBUF_MGR(upipe_avfsrc, upipe_avfsrc_output, ubuf_mgr)
 UPIPE_HELPER_SPLIT_UBUF_MGRS(upipe_avfsrc, upipe_avfsrc_output)
 
@@ -147,7 +149,8 @@ static struct upipe_avfsrc_output *
     upipe_avfsrc_output_alloc(struct upipe *upipe, const char *flow_suffix)
 {
     assert(flow_suffix != NULL);
-    struct upipe_avfsrc_output *output = malloc(sizeof(struct upipe_avfsrc_output));
+    struct upipe_avfsrc_output *output =
+        malloc(sizeof(struct upipe_avfsrc_output));
     if (unlikely(output == NULL))
         return NULL;
     if (unlikely(!upipe_avfsrc_output_init(upipe, output, flow_suffix))) {
@@ -175,7 +178,7 @@ static struct upipe_avfsrc_output *
     UBASE_VARARG(upipe_avfsrc_output_alloc(upipe, string))
 }
 
-/** @internal @This frees up an output-specific substructure.
+/** @internal @This frees an output-specific substructure.
  *
  * @param upipe description structure of the pipe
  * @param output substructure to free
@@ -196,7 +199,8 @@ static void upipe_avfsrc_output_free(struct upipe *upipe,
 static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr)
 {
     struct upipe_avfsrc *upipe_avfsrc = malloc(sizeof(struct upipe_avfsrc));
-    if (unlikely(upipe_avfsrc == NULL)) return NULL;
+    if (unlikely(upipe_avfsrc == NULL))
+        return NULL;
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_AVFSRC_SIGNATURE;
@@ -205,8 +209,8 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr)
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_uclock(upipe);
     upipe_avfsrc_init_outputs(upipe);
+    upipe_avfsrc_init_flow_name(upipe);
 
-    upipe_avfsrc->flow_name = NULL;
     upipe_avfsrc->url = NULL;
 
     upipe_avfsrc->upump_av_deal = NULL;
@@ -569,75 +573,6 @@ static inline bool _upipe_avfsrc_set_upump_mgr(struct upipe *upipe,
     return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
 }
 
-/** @internal @This returns the source flow name.
- *
- * @param upipe description structure of the pipe
- * @param url_p filled in with the URL
- * @return false in case of error
- */
-static bool upipe_avfsrc_get_flow_name(struct upipe *upipe, const char **p)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    assert(p != NULL);
-    *p = upipe_avfsrc->flow_name;
-    return true;
-}
-
-/** @internal @This sets the content of an avformat option. It only take effect
- * after the next call to @ref upipe_avfsrc_set_url.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option, or NULL to delete it
- * @return false in case of error
- */
-static bool upipe_avfsrc_set_flow_name(struct upipe *upipe,
-                                       const char *flow_name)
-{
-    assert(flow_name != NULL);
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    free(upipe_avfsrc->flow_name);
-    if (likely(flow_name != NULL)) {
-        upipe_avfsrc->flow_name = strdup(flow_name);
-        if (unlikely(upipe_avfsrc->flow_name == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            return false;
-        }
-    } else
-        upipe_avfsrc->flow_name = NULL;
-
-    struct uchain *uchain;
-    ulist_foreach (&upipe_avfsrc->outputs, uchain) {
-        struct upipe_avfsrc_output *output =
-            upipe_avfsrc_output_from_uchain(uchain);
-        if (likely(output->flow_def != NULL)) {
-            struct uref *flow_def = uref_dup(output->flow_def);
-            if (unlikely(flow_def == NULL)) {
-                ulog_aerror(upipe->ulog);
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-
-            bool ret;
-            if (unlikely(upipe_avfsrc->flow_name == NULL))
-                ret = uref_flow_set_name(flow_def, output->flow_suffix);
-            else
-                ret = uref_flow_set_name_va(flow_def, "%s.%s",
-                                            upipe_avfsrc->flow_name,
-                                            output->flow_suffix);
-            if (unlikely(!ret)) {
-                ulog_aerror(upipe->ulog);
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-
-            upipe_avfsrc_output_set_flow_def(upipe, output, flow_def);
-        }
-    }
-    return true;
-}
-
 /** @internal @This returns the content of an avformat option.
  *
  * @param upipe description structure of the pipe
@@ -949,8 +884,8 @@ static void upipe_avfsrc_release(struct upipe *upipe)
         av_dict_free(&upipe_avfsrc->options);
 
         free(upipe_avfsrc->url);
-        free(upipe_avfsrc->flow_name);
 
+        upipe_avfsrc_clean_flow_name(upipe);
         upipe_avfsrc_clean_outputs(upipe, upipe_avfsrc_output_free);
         upipe_avfsrc_clean_uclock(upipe);
         upipe_avfsrc_clean_upump_mgr(upipe);
