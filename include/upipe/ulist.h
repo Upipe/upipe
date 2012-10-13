@@ -106,8 +106,10 @@ static inline struct uchain *ulist_peek(struct ulist *ulist)
 static inline struct uchain *ulist_pop(struct ulist *ulist)
 {
     struct uchain *uchain = ulist->first;
-    ulist->first = uchain->next;
-    uchain->next = NULL;
+    if (uchain != NULL) {
+        ulist->first = uchain->next;
+        uchain->next = NULL;
+    }
     return uchain;
 }
 
