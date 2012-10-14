@@ -65,10 +65,12 @@ endif
 if HAVE_BITSTREAM
 check_PROGRAMS += \
 	upipe_ts_sync_test \
-	upipe_ts_split_test
+	upipe_ts_split_test \
+	upipe_ts_decaps_test
 TESTS += \
 	upipe_ts_sync_test \
-	upipe_ts_split_test
+	upipe_ts_split_test \
+	upipe_ts_decaps_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -89,3 +91,4 @@ upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

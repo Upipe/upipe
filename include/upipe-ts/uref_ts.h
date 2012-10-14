@@ -24,18 +24,16 @@
  */
 
 /** @file
- * @short Upipe flow definition attributes for TS
+ * @short Upipe attributes for TS
  */
 
-#ifndef _UPIPE_UREF_TS_FLOW_H_
+#ifndef _UPIPE_UREF_TS_H_
 /** @hidden */
-#define _UPIPE_UREF_TS_FLOW_H_
+#define _UPIPE_UREF_TS_H_
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-#include <stdint.h>
-
-UREF_ATTR_TEMPLATE(ts_flow, pid, "t.pid", unsigned, uint64_t, PID)
+UREF_ATTR_TEMPLATE_VOID(ts, unitstart, "t.unitstart", unit start)
 
 #endif

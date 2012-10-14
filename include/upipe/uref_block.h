@@ -34,9 +34,13 @@
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/uref.h>
+#include <upipe/uref_attr.h>
 
 #include <stdint.h>
 #include <stdbool.h>
+
+UREF_ATTR_TEMPLATE_VOID(block, discontinuity, "b.discontinuity", discontinuity)
+UREF_ATTR_TEMPLATE_VOID(block, error, "b.error", transport error)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.

@@ -57,6 +57,20 @@ static inline bool uref_flow_set_name_va(struct uref *uref,
     UBASE_VARARG(uref_flow_set_name(uref, string))
 }
 
+/** @This sets the flow definition attribute of a uref, with printf-style
+ * generation.
+ *
+ * @param uref uref structure
+ * @param format printf-style format of the flow definition, followed by a
+ * variable list of arguments
+ * @return true if no allocation failure occurred
+ */
+static inline bool uref_flow_set_def_va(struct uref *uref,
+                                        const char *format, ...)
+{
+    UBASE_VARARG(uref_flow_set_def(uref, string))
+}
+
 /** @This duplicates a uref and sets the flow name attribute.
  *
  * @param uref uref structure

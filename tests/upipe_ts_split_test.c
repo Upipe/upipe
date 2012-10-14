@@ -111,7 +111,7 @@ struct ts_test {
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_ts_demux */
+/** helper phony pipe to test upipe_ts_split */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)
 {
     struct ts_test *ts_test = malloc(sizeof(struct ts_test));
@@ -124,14 +124,14 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)
     return &ts_test->upipe;
 }
 
-/** helper phony pipe to test upipe_ts_demux */
+/** helper phony pipe to test upipe_ts_split */
 static void ts_test_set_flow(struct upipe *upipe, const char *flow)
 {
     struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
     ts_test->flow = flow;
 }
 
-/** helper phony pipe to test upipe_ts_demux */
+/** helper phony pipe to test upipe_ts_split */
 static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
                             va_list args)
 {
@@ -172,7 +172,7 @@ static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
     return false;
 }
 
-/** helper phony pipe to test upipe_ts_demux */
+/** helper phony pipe to test upipe_ts_split */
 static void ts_test_free(struct upipe *upipe)
 {
     struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
@@ -181,7 +181,7 @@ static void ts_test_free(struct upipe *upipe)
     free(ts_test);
 }
 
-/** helper phony pipe to test upipe_ts_demux */
+/** helper phony pipe to test upipe_ts_split */
 static struct upipe_mgr ts_test_mgr = {
     .upipe_alloc = ts_test_alloc,
     .upipe_control = ts_test_control,

@@ -45,7 +45,7 @@
 #include <bitstream/mpeg/ts.h>
 
 /** we only accept blocks containing exactly one TS packet */
-#define EXPECTED_FLOW_DEF "block.mpegts"
+#define EXPECTED_FLOW_DEF "block.mpegts."
 /** maximum number of PIDs */
 #define MAX_PIDS 8192
 
@@ -53,8 +53,6 @@
 struct upipe_ts_split_pid {
     /** outputs specific to that PID */
     struct ulist outputs;
-    /** last continuity counter, or -1 */
-    int8_t last_cc;
     /** true if we asked for this PID */
     bool set;
 };
@@ -184,7 +182,6 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr)
 
     for (int i = 0; i < MAX_PIDS; i++) {
         ulist_init(&upipe_ts_split->pids[i].outputs);
-        upipe_ts_split->pids[i].last_cc = -1;
         upipe_ts_split->pids[i].set = false;
     }
     upipe_ts_split->ready = false;
@@ -314,7 +311,7 @@ static bool upipe_ts_split_input(struct upipe *upipe, struct uref *uref)
     }
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_ts_split->flow_name != NULL) {
+        if (unlikely(upipe_ts_split->flow_name != NULL)) {
             ulog_warning(upipe->ulog,
                          "received flow definition without delete first");
             upipe_ts_split_set_flow_name(upipe, NULL);
