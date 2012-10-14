@@ -111,11 +111,11 @@ UPIPE_HELPER_UPIPE(upipe_fsrc, upipe)
 UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr)
 
 UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_fsrc, ubuf_mgr)
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_fsrc, output, flow_def, flow_def_sent, uref_mgr)
+UPIPE_HELPER_LINEAR_OUTPUT(upipe_fsrc, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_fsrc, upump_mgr, upump)
 UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock)
-UPIPE_HELPER_SOURCE_FLOW_NAME(upipe_fsrc, flow_name, flow_def, uref_mgr)
+UPIPE_HELPER_SOURCE_FLOW_NAME(upipe_fsrc, flow_name, flow_def)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
 
 /** @internal @This allocates a file source pipe.

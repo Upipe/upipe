@@ -32,7 +32,6 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_linear_output.h>
 #include <upipe-ts/upipe_ts_sync.h>
 
@@ -55,9 +54,6 @@
 
 /** @internal @This is the private context of a ts_sync pipe. */
 struct upipe_ts_sync {
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
-
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -87,9 +83,8 @@ struct upipe_ts_sync {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe)
-UPIPE_HELPER_UREF_MGR(upipe_ts_sync, uref_mgr)
 
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent, uref_mgr)
+UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_sync pipe.
  *
@@ -105,7 +100,6 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_SYNC_SIGNATURE;
     urefcount_init(&upipe_ts_sync->refcount);
-    upipe_ts_sync_init_uref_mgr(upipe);
     upipe_ts_sync_init_output(upipe);
     upipe_ts_sync->ts_size = DEFAULT_TS_SIZE;
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
@@ -327,19 +321,18 @@ static bool upipe_ts_sync_input(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
 
-    if (unlikely(upipe_ts_sync->uref_mgr == NULL)) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer while the pipe is not ready");
-        uref_free(uref);
-        upipe_throw_need_uref_mgr(upipe);
-        return false;
-    }
-
     const char *flow, *def, *def_flow;
     if (unlikely(!uref_flow_get_name(uref, &flow))) {
        ulog_warning(upipe->ulog, "received a buffer outside of a flow");
        uref_free(uref);
        return false;
+    }
+
+    if (unlikely(uref_flow_get_delete(uref))) {
+        upipe_ts_sync_set_flow_def(upipe, NULL);
+        uref_free(uref);
+        upipe_ts_sync_flush(upipe);
+        return true;
     }
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
@@ -376,13 +369,6 @@ static bool upipe_ts_sync_input(struct upipe *upipe, struct uref *uref)
                      "received a buffer not matching the current flow");
         uref_free(uref);
         return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_ts_sync_set_flow_def(upipe, NULL);
-        uref_free(uref);
-        upipe_ts_sync_flush(upipe);
-        return true;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
@@ -473,15 +459,6 @@ static bool _upipe_ts_sync_control(struct upipe *upipe,
                                    enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_sync_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_sync_set_uref_mgr(upipe, uref_mgr);
-        }
-
         case UPIPE_LINEAR_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_sync_get_output(upipe, p);
@@ -541,17 +518,9 @@ static bool upipe_ts_sync_control(struct upipe *upipe,
         return false;
 
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (unlikely(upipe_ts_sync->uref_mgr != NULL)) {
-        if (likely(!upipe_ts_sync->ready)) {
-            upipe_ts_sync->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_ts_sync->ready = false;
-
-        if (unlikely(upipe_ts_sync->uref_mgr == NULL))
-            upipe_throw_need_uref_mgr(upipe);
+    if (likely(!upipe_ts_sync->ready)) {
+        upipe_ts_sync->ready = true;
+        upipe_throw_ready(upipe);
     }
 
     return true;
@@ -576,7 +545,6 @@ static void upipe_ts_sync_release(struct upipe *upipe)
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
         upipe_ts_sync_clean_output(upipe);
-        upipe_ts_sync_clean_uref_mgr(upipe);
 
         uref_free(upipe_ts_sync->next_uref);
         struct uchain *uchain;

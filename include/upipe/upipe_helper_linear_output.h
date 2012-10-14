@@ -48,8 +48,6 @@
  *  bool flow_def_sent;
  * @end code
  *
- * You must also declare @ref #UPIPE_HELPER_UREF_MGR prior to using this macro.
- *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
@@ -115,11 +113,9 @@
  * your private upipe structure
  * @param FLOW_DEF_SENT name of the @tt{bool} field of
  * your private upipe structure
- * @param UREF_MGR name of the @tt{struct uref_mgr *} field of
- * your private upipe structure, declared in @ref #UPIPE_HELPER_UREF_MGR
  */
 #define UPIPE_HELPER_LINEAR_OUTPUT(STRUCTURE, OUTPUT, FLOW_DEF,             \
-                                   FLOW_DEF_SENT, UREF_MGR)                 \
+                                   FLOW_DEF_SENT)                           \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -138,20 +134,22 @@ static void STRUCTURE##_init_output(struct upipe *upipe)                    \
 static void STRUCTURE##_flow_delete(struct upipe *upipe)                    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    const char *flow_name;                                                  \
-    STRUCTURE->FLOW_DEF_SENT = false;                                       \
-    if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
-                 STRUCTURE->FLOW_DEF == NULL ||                             \
-                 !uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name)))     \
+    if (unlikely(STRUCTURE->FLOW_DEF == NULL))                              \
         return;                                                             \
-    struct uref *uref = uref_flow_alloc_delete(STRUCTURE->UREF_MGR,         \
-                                               flow_name);                  \
+    struct uref *uref = uref_dup(STRUCTURE->FLOW_DEF);                      \
     if (unlikely(uref == NULL)) {                                           \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
     }                                                                       \
+    if (unlikely(!uref_flow_set_delete(uref))) {                            \
+        uref_free(uref);                                                    \
+        ulog_aerror(upipe->ulog);                                           \
+        upipe_throw_aerror(upipe);                                          \
+        return;                                                             \
+    }                                                                       \
     upipe_input(STRUCTURE->OUTPUT, uref);                                   \
+    STRUCTURE->FLOW_DEF_SENT = false;                                       \
 }                                                                           \
 /** @internal @This outputs a flow definition control packet.               \
  *                                                                          \

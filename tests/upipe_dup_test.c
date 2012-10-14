@@ -169,7 +169,6 @@ int main(int argc, char *argv[])
     struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
-    assert(upipe_set_uref_mgr(upipe_dup, uref_mgr));
     assert(upipe_split_set_output(upipe_dup, upipe_sink0, "0"));
 
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);

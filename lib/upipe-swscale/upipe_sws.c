@@ -106,7 +106,7 @@ struct upipe_sws {
 
 UPIPE_HELPER_UPIPE(upipe_sws, upipe);
 UPIPE_HELPER_UREF_MGR(upipe_sws, uref_mgr);
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_sws, output, output_flow, output_flow_sent, uref_mgr);
+UPIPE_HELPER_LINEAR_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
 UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_sws, ubuf_mgr);
 
 /** @internal @This allocates a swscale pipe.
@@ -311,6 +311,13 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
        return false;
     }
 
+    if (unlikely(uref_flow_get_delete(uref))) {
+        uref_free(upipe_sws->input_flow);
+        upipe_sws->input_flow = NULL;
+        uref_free(uref);
+        return true;
+    }
+
     if (unlikely(uref_flow_get_def(uref, &def))) {
         if (upipe_sws->input_flow) {
             ulog_warning(upipe->ulog, "received flow definition without delete first");
@@ -334,14 +341,6 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
         ulog_warning(upipe->ulog, "received a buffer not matching the current flow");
         uref_free(uref);
         return false;
-    }
-
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        uref_free(upipe_sws->input_flow);
-        upipe_sws->input_flow = NULL;
-        uref_free(uref);
-        return true;
     }
 
 /*    assert(def);

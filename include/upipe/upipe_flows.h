@@ -153,7 +153,9 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
         return false;
     }
 
-    if (unlikely(uref_flow_get_def(uref, &def))) {
+    if (unlikely(uref_flow_get_delete(uref)))
+        upipe_flows_delete(upipe_flows, flow);
+    else if (unlikely(uref_flow_get_def(uref, &def))) {
         struct uref *new_uref = uref_dup(uref);
         if (likely(new_uref != NULL)) {
             upipe_flows_set(upipe_flows, new_uref);
@@ -169,8 +171,6 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
                      "received a buffer without a flow definition");
         return false;
     }
-    else if (unlikely(uref_flow_get_delete(uref)))
-        upipe_flows_delete(upipe_flows, flow);
 
     return true;
 }
@@ -199,21 +199,22 @@ static inline bool upipe_flows_input(struct ulist *upipe_flows,
  *
  * @param upipe_flows pointer to a upipe_flows structure
  * @param upipe description structure of the pipe
- * @param uref_mgr management structure allowing to create urefs
  * @param uref name of the new uref flow deletion to use in action
  * @param action line of code to execute for every new uref
  */
-#define upipe_flows_foreach_delete(upipe_flows, upipe, uref_mgr, uref,      \
-                                   action)                                  \
+#define upipe_flows_foreach_delete(upipe_flows, upipe, uref, action)        \
     struct uref *upipe_flows_delete_uref;                                   \
     upipe_flows_foreach (upipe_flows, upipe_flows_delete_uref) {            \
-        const char *flow;                                                   \
-        bool ret = uref_flow_get_name(upipe_flows_delete_uref, &flow);      \
-        assert(ret);                                                        \
-        struct uref *uref = uref_flow_alloc_delete(uref_mgr, flow);         \
-        if (likely(uref != NULL))                                           \
+        struct uref *uref = uref_dup(upipe_flows_delete_uref);              \
+        if (likely(uref != NULL)) {                                         \
+            if (unlikely(!uref_flow_set_delete(uref))) {                    \
+                uref_free(uref);                                            \
+                ulog_aerror(upipe->ulog);                                   \
+                upipe_throw_aerror(upipe);                                  \
+                break;                                                      \
+            }                                                               \
             action;                                                         \
-        else {                                                              \
+        } else {                                                            \
             ulog_aerror(upipe->ulog);                                       \
             upipe_throw_aerror(upipe);                                      \
             break;                                                          \

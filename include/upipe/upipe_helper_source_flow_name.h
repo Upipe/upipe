@@ -47,9 +47,6 @@
  *  char *flow_name;
  * @end code
  *
- * You must also declare @ref #UPIPE_HELPER_LINEAR_OUTPUT prior to using this
- * macro.
- *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
@@ -96,11 +93,8 @@
  * your private upipe structure
  * @param FLOW_DEF name of the @tt{struct uref *} field of
  * your private upipe structure, declared in @ref #UPIPE_HELPER_LINEAR_OUTPUT
- * @param UREF_MGR name of the @tt{struct uref_mgr *} field of
- * your private upipe structure, declared in @ref #UPIPE_HELPER_UREF_MGR
  */
-#define UPIPE_HELPER_SOURCE_FLOW_NAME(STRUCTURE, FLOW_NAME, FLOW_DEF,       \
-                                      UREF_MGR)                             \
+#define UPIPE_HELPER_SOURCE_FLOW_NAME(STRUCTURE, FLOW_NAME, FLOW_DEF)       \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \

@@ -55,8 +55,6 @@
  *  bool flow_def_sent;
  * @end code
  *
- * You must also declare @ref #UPIPE_HELPER_UREF_MGR prior to using this macro.
- *
  * Supposing the name of your structure is upipe_foo, and the output
  * substructure is upipe_foo_output, it declares:
  * @list
@@ -150,12 +148,9 @@
  * @param FLOW_SUFFIX name of the @tt {char *} field of the substructure
  * @param FLOW_DEF name of the @tt {struct uref *} field of the substructure
  * @param FLOW_DEF_SENT name of the @tt {bool} field of the substructure
- * @param UREF_MGR name of the @tt{struct uref_mgr *} field of
- * your private upipe structure, declared in @ref #UPIPE_HELPER_UREF_MGR
  */
 #define UPIPE_HELPER_SPLIT_OUTPUT(STRUCTURE, SUBSTRUCT, UCHAIN, OUTPUT,     \
-                                  FLOW_SUFFIX, FLOW_DEF, FLOW_DEF_SENT,     \
-                                  UREF_MGR)                                 \
+                                  FLOW_SUFFIX, FLOW_DEF, FLOW_DEF_SENT)     \
 /** @internal @This returns the uchain utility structure.                   \
  *                                                                          \
  * @param s pointer to the output-specific substructure                     \
@@ -168,7 +163,7 @@ static inline struct uchain *SUBSTRUCT##_to_uchain(struct SUBSTRUCT *s)     \
 /** @internal @This returns the private output-specific substructure.       \
  *                                                                          \
  * @param u uchain utility structure                                        \
- * @return pointer to the private STRUCTURE structure                       \
+ * @return pointer to the private SUBSTRUCT structure                       \
  */                                                                         \
 static inline struct SUBSTRUCT *SUBSTRUCT##_from_uchain(struct uchain *u)   \
 {                                                                           \
@@ -217,21 +212,22 @@ static bool SUBSTRUCT##_init(struct upipe *upipe, struct SUBSTRUCT *output, \
 static void SUBSTRUCT##_flow_delete(struct upipe *upipe,                    \
                                     struct SUBSTRUCT *output)               \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    const char *flow_name;                                                  \
-    output->FLOW_DEF_SENT = false;                                          \
-    if (unlikely(STRUCTURE->UREF_MGR == NULL ||                             \
-                 output->FLOW_DEF == NULL ||                                \
-                 !uref_flow_get_name(output->FLOW_DEF, &flow_name)))        \
+    if (unlikely(output->FLOW_DEF == NULL))                                 \
         return;                                                             \
-    struct uref *uref = uref_flow_alloc_delete(STRUCTURE->UREF_MGR,         \
-                                               flow_name);                  \
+    struct uref *uref = uref_dup(output->FLOW_DEF);                         \
     if (unlikely(uref == NULL)) {                                           \
         ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
     }                                                                       \
+    if (unlikely(!uref_flow_set_delete(uref))) {                            \
+        uref_free(uref);                                                    \
+        ulog_aerror(upipe->ulog);                                           \
+        upipe_throw_aerror(upipe);                                          \
+        return;                                                             \
+    }                                                                       \
     upipe_input(output->OUTPUT, uref);                                      \
+    output->FLOW_DEF_SENT = false;                                          \
 }                                                                           \
 /** @internal @This outputs a flow definition control packet on an          \
  * output substructure.                                                     \

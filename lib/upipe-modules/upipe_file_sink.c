@@ -294,6 +294,12 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
         return false;
     }
 
+    if (unlikely(uref_flow_get_delete(uref))) {
+        upipe_flows_delete(&upipe_fsink->flows, flow);
+        uref_free(uref);
+        return true;
+    }
+
     if (unlikely(uref_flow_get_def(uref, &def))) {
         upipe_flows_set(&upipe_fsink->flows, uref);
         ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
@@ -304,12 +310,6 @@ static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
         ulog_warning(upipe->ulog, "received a buffer without a flow definition");
         uref_free(uref);
         return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_flows_delete(&upipe_fsink->flows, flow);
-        uref_free(uref);
-        return true;
     }
 
     if (unlikely(strncmp(def, EXPECTED_FLOW_DEF, strlen(EXPECTED_FLOW_DEF)))) {

@@ -32,7 +32,6 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_split_outputs.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
@@ -62,8 +61,6 @@ struct upipe_ts_split_pid {
 
 /** @internal @This is the private context of a ts_split pipe. */
 struct upipe_ts_split {
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** list of outputs */
     struct ulist outputs;
     /** input flow name */
@@ -81,7 +78,6 @@ struct upipe_ts_split {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_split, upipe)
-UPIPE_HELPER_UREF_MGR(upipe_ts_split, uref_mgr)
 
 /** @internal @This is the private context of an output of a ts_split pipe. */
 struct upipe_ts_split_output {
@@ -124,7 +120,7 @@ static inline struct upipe_ts_split_output *upipe_ts_split_output_from_pid_uchai
 }
 
 UPIPE_HELPER_SPLIT_OUTPUT(upipe_ts_split, upipe_ts_split_output, uchain, output,
-                          flow_suffix, flow_def, flow_def_sent, uref_mgr)
+                          flow_suffix, flow_def, flow_def_sent)
 UPIPE_HELPER_SPLIT_OUTPUTS(upipe_ts_split, outputs, upipe_ts_split_output)
 UPIPE_HELPER_SPLIT_FLOW_NAME(upipe_ts_split, outputs, flow_name,
                              upipe_ts_split_output)
@@ -183,7 +179,6 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_SPLIT_SIGNATURE;
     urefcount_init(&upipe_ts_split->refcount);
-    upipe_ts_split_init_uref_mgr(upipe);
     upipe_ts_split_init_outputs(upipe);
     upipe_ts_split_init_flow_name(upipe);
 
@@ -305,19 +300,17 @@ static bool upipe_ts_split_input(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
 
-    if (unlikely(upipe_ts_split->uref_mgr == NULL)) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer while the pipe is not ready");
-        uref_free(uref);
-        upipe_throw_need_uref_mgr(upipe);
-        return false;
-    }
-
     const char *flow, *def;
     if (unlikely(!uref_flow_get_name(uref, &flow))) {
        ulog_warning(upipe->ulog, "received a buffer outside of a flow");
        uref_free(uref);
        return false;
+    }
+
+    if (unlikely(uref_flow_get_delete(uref))) {
+        upipe_ts_split_set_flow_name(upipe, NULL);
+        uref_free(uref);
+        return true;
     }
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
@@ -351,12 +344,6 @@ static bool upipe_ts_split_input(struct upipe *upipe, struct uref *uref)
                      "received a buffer not matching the current flow");
         uref_free(uref);
         return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_ts_split_set_flow_name(upipe, NULL);
-        uref_free(uref);
-        return true;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
@@ -453,15 +440,6 @@ static bool _upipe_ts_split_control(struct upipe *upipe,
                                     enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_split_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_split_set_uref_mgr(upipe, uref_mgr);
-        }
-
         case UPIPE_SPLIT_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             const char *flow_suffix = va_arg(args, const char *);
@@ -508,17 +486,9 @@ static bool upipe_ts_split_control(struct upipe *upipe,
         return false;
 
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
-    if (unlikely(upipe_ts_split->uref_mgr != NULL)) {
-        if (likely(!upipe_ts_split->ready)) {
-            upipe_ts_split->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_ts_split->ready = false;
-
-        if (unlikely(upipe_ts_split->uref_mgr == NULL))
-            upipe_throw_need_uref_mgr(upipe);
+    if (likely(!upipe_ts_split->ready)) {
+        upipe_ts_split->ready = true;
+        upipe_throw_ready(upipe);
     }
 
     return true;
@@ -544,7 +514,6 @@ static void upipe_ts_split_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_split->refcount))) {
         upipe_ts_split_clean_flow_name(upipe);
         upipe_ts_split_clean_outputs(upipe, upipe_ts_split_output_free);
-        upipe_ts_split_clean_uref_mgr(upipe);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_split->refcount);

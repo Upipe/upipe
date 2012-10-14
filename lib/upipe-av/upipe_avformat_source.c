@@ -131,7 +131,7 @@ struct upipe_avfsrc_output {
 };
 
 UPIPE_HELPER_SPLIT_OUTPUT(upipe_avfsrc, upipe_avfsrc_output, uchain, output,
-                          flow_suffix, flow_def, flow_def_sent, uref_mgr)
+                          flow_suffix, flow_def, flow_def_sent)
 UPIPE_HELPER_SPLIT_OUTPUTS(upipe_avfsrc, outputs, upipe_avfsrc_output)
 UPIPE_HELPER_SPLIT_FLOW_NAME(upipe_avfsrc, outputs, flow_name,
                              upipe_avfsrc_output)

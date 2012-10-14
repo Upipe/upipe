@@ -36,7 +36,6 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_flows.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe-modules/upipe_queue_source.h>
 
@@ -49,8 +48,6 @@
 
 /** @internal @This is the private context of a queue source pipe. */
 struct upipe_qsrc {
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
@@ -72,7 +69,6 @@ struct upipe_qsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
-UPIPE_HELPER_UREF_MGR(upipe_qsrc, uref_mgr)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
 
@@ -89,7 +85,6 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_QSRC_SIGNATURE;
     urefcount_init(&upipe_qsrc->refcount);
-    upipe_qsrc_init_uref_mgr(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
     upipe_qsrc->output = NULL;
     upipe_flows_init(&upipe_qsrc->flows);
@@ -159,22 +154,17 @@ static bool upipe_qsrc_set_output(struct upipe *upipe, struct upipe *output)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (unlikely(upipe_qsrc->output != NULL)) {
-        if (likely(upipe_qsrc->uref_mgr != NULL)) {
-            /* signal flow deletion on old output */
-            upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe,
-                                       upipe_qsrc->uref_mgr, uref,
-                                       upipe_qsrc_output(upipe, uref));
-        }
+        /* signal flow deletion on old output */
+        upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe, uref,
+                                   upipe_qsrc_output(upipe, uref));
         upipe_release(upipe_qsrc->output);
     }
     upipe_qsrc->output = output;
     if (likely(upipe_qsrc->output != NULL)) {
         upipe_use(upipe_qsrc->output);
-        if (likely(upipe_qsrc->uref_mgr != NULL)) {
-            /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_qsrc->flows, upipe, uref,
-                                       upipe_qsrc_output(upipe, uref));
-        }
+        /* replay flow definitions */
+        upipe_flows_foreach_replay(&upipe_qsrc->flows, upipe, uref,
+                                   upipe_qsrc_output(upipe, uref));
     }
     return true;
 }
@@ -248,15 +238,6 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_qsrc_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_qsrc_set_uref_mgr(upipe, uref_mgr);
-        }
-
         case UPIPE_LINEAR_GET_OUTPUT: {
             struct upipe **output_p = va_arg(args, struct upipe **);
             return upipe_qsrc_get_output(upipe, output_p);
@@ -313,8 +294,7 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         return false;
 
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    if (unlikely(upipe_qsrc->uref_mgr != NULL &&
-                 upipe_qsrc->upump_mgr != NULL &&
+    if (unlikely(upipe_qsrc->upump_mgr != NULL &&
                  upipe_qsrc->output != NULL &&
                  upipe_qsrc->upipe_queue.max_length)) {
         if (likely(upipe_qsrc->upump == NULL)) {
@@ -339,9 +319,7 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         upipe_qsrc_set_upump(upipe, NULL);
         upipe_qsrc->ready = false;
 
-        if (unlikely(upipe_qsrc->uref_mgr == NULL))
-            upipe_throw_need_uref_mgr(upipe);
-        else if (unlikely(upipe_qsrc->upump_mgr == NULL))
+        if (unlikely(upipe_qsrc->upump_mgr == NULL))
             upipe_throw_need_upump_mgr(upipe);
     }
 
@@ -368,17 +346,13 @@ static void upipe_qsrc_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_qsrc->refcount))) {
         ulog_notice(upipe->ulog, "freeing queue %p", upipe);
         if (likely(upipe_qsrc->output != NULL)) {
-            if (likely(upipe_qsrc->uref_mgr != NULL)) {
-                /* signal flow deletion on old queue */
-                upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe,
-                                           upipe_qsrc->uref_mgr, uref,
-                                           upipe_qsrc_output(upipe, uref));
-            }
+            /* signal flow deletion on old queue */
+            upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe, uref,
+                                       upipe_qsrc_output(upipe, uref));
             upipe_release(upipe_qsrc->output);
         }
         upipe_flows_clean(&upipe_qsrc->flows);
         upipe_qsrc_clean_upump_mgr(upipe);
-        upipe_qsrc_clean_uref_mgr(upipe);
 
         struct uqueue *uqueue = upipe_queue(upipe);
         struct uchain *uchain;

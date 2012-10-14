@@ -192,8 +192,6 @@ int main(int argc, char *argv[])
     struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "ts sync"));
     assert(upipe_ts_sync != NULL);
-
-    assert(upipe_set_uref_mgr(upipe_ts_sync, uref_mgr));
     assert(upipe_linear_set_output(upipe_ts_sync, upipe_sink));
 
     struct uref *uref;

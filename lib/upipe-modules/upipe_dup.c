@@ -36,7 +36,6 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_split_outputs.h>
 #include <upipe/upipe_flows.h>
 #include <upipe-modules/upipe_dup.h>
@@ -49,8 +48,6 @@
 
 /** @internal @This is the private context of a dup pipe. */
 struct upipe_dup {
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** list of outputs */
     struct ulist outputs;
 
@@ -66,7 +63,6 @@ struct upipe_dup {
 };
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe)
-UPIPE_HELPER_UREF_MGR(upipe_dup, uref_mgr)
 
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
@@ -207,23 +203,18 @@ static bool upipe_dup_output_set_output(struct upipe *upipe,
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (unlikely(output->output != NULL)) {
-        if (likely(upipe_dup->uref_mgr != NULL)) {
-            /* change of output, signal flow deletions on old output */
-            upipe_flows_foreach_delete(&upipe_dup->flows, upipe,
-                                       upipe_dup->uref_mgr, uref,
-                              upipe_dup_output_output(upipe, output, uref));
-        }
+        /* change of output, signal flow deletions on old output */
+        upipe_flows_foreach_delete(&upipe_dup->flows, upipe, uref,
+                          upipe_dup_output_output(upipe, output, uref));
         upipe_release(output->output);
     }
 
     output->output = o;
     if (likely(o != NULL)) {
         upipe_use(o);
-        if (likely(upipe_dup->uref_mgr != NULL)) {
-            /* replay flow definitions */
-            upipe_flows_foreach_replay(&upipe_dup->flows, upipe, uref,
-                              upipe_dup_output_output(upipe, output, uref));
-        }
+        /* replay flow definitions */
+        upipe_flows_foreach_replay(&upipe_dup->flows, upipe, uref,
+                          upipe_dup_output_output(upipe, output, uref));
     }
     return true;
 }
@@ -239,11 +230,8 @@ static void upipe_dup_output_free(struct upipe *upipe,
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     free(output->flow_suffix);
     if (likely(output->output != NULL)) {
-        if (likely(upipe_dup->uref_mgr != NULL)) {
-            upipe_flows_foreach_delete(&upipe_dup->flows, upipe,
-                                       upipe_dup->uref_mgr, uref,
-                              upipe_dup_output_output(upipe, output, uref));
-        }
+        upipe_flows_foreach_delete(&upipe_dup->flows, upipe, uref,
+                          upipe_dup_output_output(upipe, output, uref));
         upipe_release(output->output);
     }
     free(output);
@@ -264,7 +252,6 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_DUP_SIGNATURE;
     urefcount_init(&upipe_dup->refcount);
-    upipe_dup_init_uref_mgr(upipe);
     upipe_dup_init_outputs(upipe);
     upipe_flows_init(&upipe_dup->flows);
     upipe_dup->ready = false;
@@ -280,14 +267,6 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr)
 static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-
-    if (unlikely(upipe_dup->uref_mgr == NULL)) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer while the pipe is not ready");
-        uref_free(uref);
-        upipe_throw_need_uref_mgr(upipe);
-        return false;
-    }
 
     if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe, uref))) {
         uref_free(uref);
@@ -358,15 +337,6 @@ static bool _upipe_dup_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_dup_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_dup_set_uref_mgr(upipe, uref_mgr);
-        }
-
         case UPIPE_SPLIT_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             const char *flow_suffix = va_arg(args, const char *);
@@ -404,17 +374,9 @@ static bool upipe_dup_control(struct upipe *upipe, enum upipe_command command,
         return false;
 
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    if (unlikely(upipe_dup->uref_mgr != NULL)) {
-        if (likely(!upipe_dup->ready)) {
-            upipe_dup->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_dup->ready = false;
-
-        if (unlikely(upipe_dup->uref_mgr == NULL))
-            upipe_throw_need_uref_mgr(upipe);
+    if (likely(!upipe_dup->ready)) {
+        upipe_dup->ready = true;
+        upipe_throw_ready(upipe);
     }
 
     return true;
@@ -440,7 +402,6 @@ static void upipe_dup_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_dup->refcount))) {
         upipe_dup_clean_outputs(upipe, upipe_dup_output_free);
         upipe_flows_clean(&upipe_dup->flows);
-        upipe_dup_clean_uref_mgr(upipe);
         upipe_clean(upipe);
         urefcount_clean(&upipe_dup->refcount);
         free(upipe_dup);

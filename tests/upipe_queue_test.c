@@ -172,7 +172,6 @@ int main(int argc, char *argv[])
     struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
-    assert(upipe_set_uref_mgr(upipe_qsrc, uref_mgr));
     assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
     assert(upipe_linear_set_output(upipe_qsrc, upipe_sink));
 
@@ -181,7 +180,6 @@ int main(int argc, char *argv[])
     upipe_qsink = upipe_alloc(upipe_qsink_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "queue sink"));
     assert(upipe_qsink != NULL);
-    assert(upipe_set_uref_mgr(upipe_qsink, uref_mgr));
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
     assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
 

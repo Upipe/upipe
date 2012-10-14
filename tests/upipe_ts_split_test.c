@@ -139,6 +139,13 @@ static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
         struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
         struct uref *uref = va_arg(args, struct uref *);
         assert(uref != NULL);
+        if (uref_flow_get_delete(uref)) {
+            assert(ts_test->got_packet);
+            ts_test->got_flow_def = false;
+            uref_free(uref);
+            return true;
+        }
+
         const char *def;
         if (uref_flow_get_def(uref, &def)) {
             assert(!ts_test->got_flow_def);
@@ -146,12 +153,6 @@ static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
             uint64_t pid;
             assert(uref_ts_flow_get_pid(uref, &pid));
             ts_test->pid = pid;
-            uref_free(uref);
-            return true;
-        }
-        if (uref_flow_get_delete(uref)) {
-            assert(ts_test->got_packet);
-            ts_test->got_flow_def = false;
             uref_free(uref);
             return true;
         }
@@ -226,7 +227,6 @@ int main(int argc, char *argv[])
     struct upipe *upipe_ts_split = upipe_alloc(upipe_ts_split_mgr, uprobe_print,
             ulog_std_alloc(stdout, ULOG_LEVEL, "ts split"));
     assert(upipe_ts_split != NULL);
-    assert(upipe_set_uref_mgr(upipe_ts_split, uref_mgr));
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
