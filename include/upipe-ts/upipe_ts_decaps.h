@@ -28,7 +28,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_DECAPS_SIGNATURE 0x0F100001U
+#define UPIPE_TS_DECAPS_SIGNATURE 0x0F100003U
 
 /** @This extends uprobe_event with specific events for ts decaps. */
 enum uprobe_ts_decaps_event {

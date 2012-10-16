@@ -41,6 +41,8 @@
 
 UREF_ATTR_TEMPLATE_VOID(block, discontinuity, "b.discontinuity", discontinuity)
 UREF_ATTR_TEMPLATE_VOID(block, error, "b.error", transport error)
+UREF_ATTR_TEMPLATE_VOID(block, start, "b.start", start)
+UREF_ATTR_TEMPLATE_VOID(block, end, "b.end", end)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.

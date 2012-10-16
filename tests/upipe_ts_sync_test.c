@@ -60,7 +60,6 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define READ_SIZE 4096
 #define ULOG_LEVEL ULOG_DEBUG
 
 static unsigned int nb_packets = 0;
@@ -101,7 +100,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     }
     return true;
 }
-
 
 /** helper phony pipe to test upipe_ts_sync */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)

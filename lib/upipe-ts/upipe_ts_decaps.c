@@ -105,7 +105,7 @@ static void upipe_ts_decaps_pcr(struct upipe *upipe, struct uref *uref,
                 pcr);
 }
 
-/** @internal @This parses and removes the TS and PES headers of a packet.
+/** @internal @This parses and removes the TS header of a packet.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -208,7 +208,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref)
 
     if (unlikely((transporterror && !uref_block_set_error(uref))) ||
                  (discontinuity && !uref_block_set_discontinuity(uref)) ||
-                 (unitstart && !uref_ts_set_unitstart(uref))) {
+                 (unitstart && !uref_block_set_start(uref))) {
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         uref_free(uref);

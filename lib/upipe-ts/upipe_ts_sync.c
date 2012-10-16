@@ -336,7 +336,7 @@ static bool upipe_ts_sync_input(struct upipe *upipe, struct uref *uref)
     }
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_ts_sync->flow_def != NULL)
+        if (unlikely(upipe_ts_sync->flow_def != NULL))
             ulog_warning(upipe->ulog,
                          "received flow definition without delete first");
         upipe_ts_sync_flush(upipe);

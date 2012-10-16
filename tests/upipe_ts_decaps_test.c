@@ -61,14 +61,13 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define READ_SIZE 4096
 #define ULOG_LEVEL ULOG_DEBUG
 
 static unsigned int nb_packets;
 static uint64_t pcr = 0;
 static bool transporterror = false;
 static bool discontinuity = true;
-static bool unitstart = true;
+static bool start = true;
 static size_t payload_size = 184;
 
 /** definition of our uprobe */
@@ -137,7 +136,7 @@ static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
         assert(size == payload_size);
         assert(transporterror == uref_block_get_error(uref));
         assert(discontinuity == uref_block_get_discontinuity(uref));
-        assert(unitstart == uref_ts_get_unitstart(uref));
+        assert(start == uref_block_get_start(uref));
         uref_free(uref);
         nb_packets--;
         return true;
@@ -223,7 +222,7 @@ int main(int argc, char *argv[])
     assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
-    unitstart = false;
+    start = false;
     ts_set_transporterror(buffer);
     transporterror = true;
     ts_set_cc(buffer, 1);
