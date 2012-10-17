@@ -67,12 +67,14 @@ check_PROGRAMS += \
 	upipe_ts_sync_test \
 	upipe_ts_split_test \
 	upipe_ts_decaps_test \
-	upipe_ts_pesd_test
+	upipe_ts_pesd_test \
+	upipe_ts_psim_test
 TESTS += \
 	upipe_ts_sync_test \
 	upipe_ts_split_test \
 	upipe_ts_decaps_test \
-	upipe_ts_pesd_test
+	upipe_ts_pesd_test \
+	upipe_ts_psim_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -95,3 +97,4 @@ upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pesd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_psim_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
