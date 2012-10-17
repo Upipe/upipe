@@ -546,7 +546,8 @@ static void upipe_ts_sync_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
         upipe_ts_sync_clean_output(upipe);
 
-        uref_free(upipe_ts_sync->next_uref);
+        if (upipe_ts_sync->next_uref != NULL)
+            uref_free(upipe_ts_sync->next_uref);
         struct uchain *uchain;
         ulist_delete_foreach (&upipe_ts_sync->urefs, uchain) {
             ulist_delete(&upipe_ts_sync->urefs, uchain);
