@@ -353,6 +353,7 @@ static bool upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref)
     if (unlikely(uref_flow_get_delete(uref))) {
         upipe_ts_pesd_set_flow_def(upipe, NULL);
         uref_free(uref);
+        upipe_ts_pesd_flush(upipe);
         return true;
     }
 
@@ -360,6 +361,7 @@ static bool upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref)
         if (unlikely(upipe_ts_pesd->flow_def != NULL))
             ulog_warning(upipe->ulog,
                          "received flow definition without delete first");
+        upipe_ts_pesd_flush(upipe);
 
         if (unlikely(strncmp(def, EXPECTED_FLOW_DEF,
                              strlen(EXPECTED_FLOW_DEF)))) {
@@ -472,6 +474,9 @@ static void upipe_ts_pesd_release(struct upipe *upipe)
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_pesd->refcount))) {
         upipe_ts_pesd_clean_output(upipe);
+
+        if (upipe_ts_pesd->next_uref != NULL)
+            uref_free(upipe_ts_pesd->next_uref);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_pesd->refcount);
