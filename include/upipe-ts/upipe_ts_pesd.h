@@ -31,16 +31,6 @@
 
 #define UPIPE_TS_PESD_SIGNATURE 0x0F100004U
 
-/** @This extends uprobe_event with specific events for ts pesd. */
-enum uprobe_ts_pesd_event {
-    UPROBE_TS_PESD_SENTINEL = UPROBE_LOCAL,
-
-    /** the TS pesdhronization was acquired (void) */
-    UPROBE_TS_PESD_ACQUIRED,
-    /** the TS pesdhronization was lost (void) */
-    UPROBE_TS_PESD_LOST
-};
-
 /** @This returns the management structure for all ts_pesd pipes.
  *
  * @return pointer to manager

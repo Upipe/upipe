@@ -34,7 +34,6 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_linear_output.h>
-#include <upipe-ts/uref_ts.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 
 #include <stdlib.h>

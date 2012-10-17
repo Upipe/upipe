@@ -36,7 +36,6 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_linear_output.h>
-#include <upipe-ts/uref_ts.h>
 #include <upipe-ts/upipe_ts_pesd.h>
 
 #include <stdlib.h>
@@ -64,7 +63,7 @@ struct upipe_ts_pesd {
     struct uref *next_uref;
     /** true if we have thrown the ready event */
     bool ready;
-    /** true if we have thrown the pesd_acquired event */
+    /** true if we have thrown the sync_acquired event */
     bool acquired;
 
     /** refcount management structure */
@@ -107,7 +106,7 @@ static void upipe_ts_pesd_lost(struct upipe *upipe)
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (upipe_ts_pesd->acquired) {
         upipe_ts_pesd->acquired = false;
-        upipe_throw(upipe, UPROBE_TS_PESD_LOST, UPIPE_TS_PESD_SIGNATURE);
+        upipe_throw_sync_lost(upipe);
     }
 }
 
@@ -121,7 +120,7 @@ static void upipe_ts_pesd_acquired(struct upipe *upipe)
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (!upipe_ts_pesd->acquired) {
         upipe_ts_pesd->acquired = true;
-        upipe_throw(upipe, UPROBE_TS_PESD_ACQUIRED, UPIPE_TS_PESD_SIGNATURE);
+        upipe_throw_sync_acquired(upipe);
     }
 }
 
@@ -308,6 +307,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe)
 static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
+    if (unlikely(uref_block_get_discontinuity(uref)))
+        upipe_ts_pesd_flush(upipe);
     if (uref_block_get_start(uref)) {
         if (unlikely(upipe_ts_pesd->next_uref != NULL)) {
             ulog_warning(upipe->ulog, "truncated PES header");

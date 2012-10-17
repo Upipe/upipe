@@ -119,7 +119,7 @@ static void upipe_ts_sync_lost(struct upipe *upipe)
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (upipe_ts_sync->acquired) {
         upipe_ts_sync->acquired = false;
-        upipe_throw(upipe, UPROBE_TS_SYNC_LOST, UPIPE_TS_SYNC_SIGNATURE);
+        upipe_throw_sync_lost(upipe);
     }
 }
 
@@ -133,7 +133,7 @@ static void upipe_ts_sync_acquired(struct upipe *upipe)
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (!upipe_ts_sync->acquired) {
         upipe_ts_sync->acquired = true;
-        upipe_throw(upipe, UPROBE_TS_SYNC_ACQUIRED, UPIPE_TS_SYNC_SIGNATURE);
+        upipe_throw_sync_acquired(upipe);
     }
 }
 
@@ -218,8 +218,8 @@ static void upipe_ts_sync_append(struct upipe *upipe, struct uref *uref)
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (upipe_ts_sync->next_uref != NULL) {
         struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-        if (unlikely(ubuf == NULL) ||
-                     !uref_block_append(upipe_ts_sync->next_uref, ubuf)) {
+        if (unlikely(ubuf == NULL ||
+                     !uref_block_append(upipe_ts_sync->next_uref, ubuf))) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             uref_free(uref);

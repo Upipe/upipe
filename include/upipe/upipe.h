@@ -505,6 +505,25 @@ static inline void upipe_throw_source_need_flow_name(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_SOURCE_NEED_FLOW_NAME);
 }
 
+/** @This throws an event telling that a pipe synchronized on its input.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_sync_acquired(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
+}
+
+/** @This throws an event telling that a pipe lost synchronization with its
+ * input.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_sync_lost(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_SYNC_LOST);
+}
+
 /** @This increments the reference count of a upipe manager.
  *
  * @param mgr pointer to upipe manager

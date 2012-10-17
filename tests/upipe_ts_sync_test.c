@@ -84,19 +84,13 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
             break;
-        case UPROBE_TS_SYNC_ACQUIRED: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+        case UPROBE_SYNC_ACQUIRED:
             fprintf(stdout, "ts probe: pipe %p acquired TS sync\n", upipe);
             break;
-        }
-        case UPROBE_TS_SYNC_LOST: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+        case UPROBE_SYNC_LOST:
             fprintf(stdout, "ts probe: pipe %p lost TS sync\n", upipe);
             assert(expect_loss == nb_packets);
             break;
-        }
     }
     return true;
 }

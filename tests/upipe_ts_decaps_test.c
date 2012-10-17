@@ -46,7 +46,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uref_ts.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 
 #include <stdbool.h>
