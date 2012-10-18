@@ -200,8 +200,8 @@ bool ubuf_block_common_delete(struct ubuf *ubuf, int offset, int size)
     /* Delete from the beginning */
     if (!offset) {
         size_t deleted = size <= common->size ? size : common->size;
-        common->size -= size;
-        common->offset += size;
+        common->size -= deleted;
+        common->offset += deleted;
         size -= deleted;
         if (!size)
             return true;
@@ -210,8 +210,8 @@ bool ubuf_block_common_delete(struct ubuf *ubuf, int offset, int size)
     if (offset < common->size) {
         /* Delete from the end */
         if (offset + size >= common->size) {
-            size_t deleted = size <= common->size ? size : common->size;
-            common->size -= size;
+            size_t deleted = common->size - offset;
+            common->size -= deleted;
             size -= deleted;
             if (!size)
                 return true;

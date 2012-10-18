@@ -60,7 +60,6 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define READ_SIZE 4096
 #define ULOG_LEVEL ULOG_DEBUG
 
 static unsigned int nb_packets = 0;
@@ -85,23 +84,16 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
             break;
-        case UPROBE_TS_SYNC_ACQUIRED: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+        case UPROBE_SYNC_ACQUIRED:
             fprintf(stdout, "ts probe: pipe %p acquired TS sync\n", upipe);
             break;
-        }
-        case UPROBE_TS_SYNC_LOST: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+        case UPROBE_SYNC_LOST:
             fprintf(stdout, "ts probe: pipe %p lost TS sync\n", upipe);
             assert(expect_loss == nb_packets);
             break;
-        }
     }
     return true;
 }
-
 
 /** helper phony pipe to test upipe_ts_sync */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)

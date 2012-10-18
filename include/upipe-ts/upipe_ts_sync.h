@@ -44,16 +44,6 @@ enum upipe_ts_sync_command {
     UPIPE_TS_SYNC_SET_SYNC
 };
 
-/** @This extends uprobe_event with specific events for ts sync. */
-enum uprobe_ts_sync_event {
-    UPROBE_TS_SYNC_SENTINEL = UPROBE_LOCAL,
-
-    /** the TS synchronization was acquired (void) */
-    UPROBE_TS_SYNC_ACQUIRED,
-    /** the TS synchronization was lost (void) */
-    UPROBE_TS_SYNC_LOST
-};
-
 /** @This returns the management structure for all ts_sync pipes.
  *
  * @return pointer to manager

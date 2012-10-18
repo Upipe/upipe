@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uprobe.h: structure used to raise events
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe structure used to raise events from pipes
+ */
 
 #ifndef _UPIPE_UPROBE_H_
 /** @hidden */
@@ -67,6 +69,10 @@ enum uprobe_event {
     UPROBE_LINEAR_NEED_UBUF_MGR,
     /** a flow name is necessary to operate (void) */
     UPROBE_SOURCE_NEED_FLOW_NAME,
+    /** a pipe got synchronized with its input (void) */
+    UPROBE_SYNC_ACQUIRED,
+    /** a pipe lost synchronization with its input (void) */
+    UPROBE_SYNC_LOST,
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */

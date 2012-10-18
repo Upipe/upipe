@@ -223,17 +223,23 @@ int main(int argc, char **argv)
 
     /* test ubuf_block_copy */
     ubuf2 = ubuf_block_copy(mgr, ubuf1, 1, -1);
-    ubuf_free(ubuf1);
-
     wanted = -1;
     assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
     assert(wanted == 64);
-    for (int i = 0; i < wanted; i++) {
+    for (int i = 0; i < wanted; i++)
         assert(r[i] == i + 1);
-    }
     assert(ubuf_block_unmap(ubuf2, 0, wanted));
-
     ubuf_free(ubuf2);
+
+    /* test ubuf_block_delete */
+    assert(ubuf_block_delete(ubuf1, 8, 32));
+    uint8_t buf[33];
+    assert(ubuf_block_extract(ubuf1, 0, -1, buf));
+    for (int i = 0; i < 8; i++)
+        assert(buf[i] == i);
+    for (int i = 9; i < 33; i++)
+        assert(buf[i] == i + 32);
+    ubuf_free(ubuf1);
 
     ubuf_mgr_release(mgr);
     umem_mgr_release(umem_mgr);

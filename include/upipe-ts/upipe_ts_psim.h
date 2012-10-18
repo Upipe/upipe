@@ -19,29 +19,21 @@
  */
 
 /** @file
- * @short Upipe module decapsulating (removing TS header) TS packets
+ * @short Upipe module merging PSI sections from TS input
  */
 
-#ifndef _UPIPE_TS_UPIPE_TS_DECAPS_H_
+#ifndef _UPIPE_TS_UPIPE_TS_PESD_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_TS_DECAPS_H_
+#define _UPIPE_TS_UPIPE_TS_PESD_H_
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_DECAPS_SIGNATURE 0x0F100003U
+#define UPIPE_TS_PSIM_SIGNATURE 0x0F100005U
 
-/** @This extends uprobe_event with specific events for ts decaps. */
-enum uprobe_ts_decaps_event {
-    UPROBE_TS_DECAPS_SENTINEL = UPROBE_LOCAL,
-
-    /** a PCR was found in the given uref (struct uref *, uint64_t) */
-    UPROBE_TS_DECAPS_PCR,
-};
-
-/** @This returns the management structure for all ts_decaps pipes.
+/** @This returns the management structure for all ts_psim pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_ts_decaps_mgr_alloc(void);
+struct upipe_mgr *upipe_ts_psim_mgr_alloc(void);
 
 #endif
