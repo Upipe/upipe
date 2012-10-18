@@ -202,6 +202,7 @@ int main(int argc, char *argv[])
     assert(upipe_linear_set_output(upipe_udpsrc, udpsrc_test));
     assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
     assert(upipe_source_set_flow_name(upipe_udpsrc, "udp0"));
+    assert(upipe_set_uclock(upipe_udpsrc, uclock));
     assert(upipe_udpsrc_set_uri(upipe_udpsrc, udp_uri));
 
     ev_loop(loop, 0);
