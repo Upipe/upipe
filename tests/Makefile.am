@@ -40,7 +40,8 @@ check_PROGRAMS += \
 	ulifo_uqueue_test \
 	udeal_test \
 	upipe_file_test \
-	upipe_queue_test
+	upipe_queue_test \
+    upipe_udp_test
 
 TESTS += \
 	upump_ev_test \
@@ -48,6 +49,7 @@ TESTS += \
 	udeal_test \
 	upipe_file_test.sh \
 	upipe_queue_test
+#    upipe_udp_test
 endif
 
 if HAVE_AVFORMAT
@@ -83,6 +85,7 @@ ulifo_uqueue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev
 udeal_test_CFLAGS = -pthread
 udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
