@@ -38,7 +38,6 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_linear_ubuf_mgr.h>
 #include <upipe/upipe_helper_linear_output.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -76,8 +75,6 @@ struct upipe_sws {
     /** output pipe */
     struct upipe *output;
 
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -105,7 +102,6 @@ struct upipe_sws {
 
 
 UPIPE_HELPER_UPIPE(upipe_sws, upipe);
-UPIPE_HELPER_UREF_MGR(upipe_sws, uref_mgr);
 UPIPE_HELPER_LINEAR_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
 UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_sws, ubuf_mgr);
 
@@ -122,7 +118,6 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_SWS_SIGNATURE;
     urefcount_init(&upipe_sws->refcount);
-    upipe_sws_init_uref_mgr(upipe);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
     upipe_sws->input_flow = NULL;
@@ -148,31 +143,31 @@ enum plane_action {
  * @param slices array of pointers to data plans
  * @param idx index of the chroma in slices[]/strides[]
  */
-static void inline upipe_sws_fetch_chroma(struct uref *uref, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
+static void inline upipe_sws_fetch_chroma(struct ubuf *ubuf, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
 {
     size_t stride = 0;
     switch(action) {
 
     case READ:
-        uref_pic_plane_read(uref, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
+        ubuf_pic_plane_read(ubuf, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
         break;
     case WRITE:
-        uref_pic_plane_write(uref, str, 0, 0, -1, -1, slices+idx);
+        ubuf_pic_plane_write(ubuf, str, 0, 0, -1, -1, slices+idx);
         break;
     case UNMAP:
-        uref_pic_plane_unmap(uref, str, 0, 0, -1, -1);
+        ubuf_pic_plane_unmap(ubuf, str, 0, 0, -1, -1);
         return;
     }
-    uref_pic_plane_size(uref, str, &stride, NULL, NULL, NULL);
+    ubuf_pic_plane_size(ubuf, str, &stride, NULL, NULL, NULL);
     strides[idx] = (int) stride;
 }
 
-static void upipe_sws_filldata(struct uref *uref, int *strides, uint8_t **slices, enum plane_action action)
+static void upipe_sws_filldata(struct ubuf *ubuf, int *strides, uint8_t **slices, enum plane_action action)
 {
     // FIXME - hardcoded chroma fetch
-    upipe_sws_fetch_chroma(uref, "y8", strides, slices, 0, action);
-    upipe_sws_fetch_chroma(uref, "u8", strides, slices, 1, action);
-    upipe_sws_fetch_chroma(uref, "v8", strides, slices, 2, action);
+    upipe_sws_fetch_chroma(ubuf, "y8", strides, slices, 0, action);
+    upipe_sws_fetch_chroma(ubuf, "u8", strides, slices, 1, action);
+    upipe_sws_fetch_chroma(ubuf, "v8", strides, slices, 2, action);
 }
 
 /** @internal @This configures swscale context
@@ -245,11 +240,11 @@ static bool upipe_sws_conf_outflow(struct upipe *upipe, struct uref *flow)
  * @param srcpic uref structure describing the picture
  * @return false in case of failure
  */
-static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *srcpic)
+static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *uref)
 {
 
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    struct uref *dstpic;
+    struct ubuf *dstpic;
     struct picsize inputsize, *srcsize, *dstsize;
     int strides[4], dstrides[4];
     uint8_t *slices[4], *dslices[4];
@@ -257,11 +252,11 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *srcpic)
 
     if(unlikely(!upipe_sws->ready)) {
         ulog_warning(upipe->ulog, "pipe not ready");
-        uref_free(srcpic);
+        uref_free(uref);
         return false;
     }
     
-    uref_pic_size(srcpic, &inputsize.hsize, &inputsize.vsize, NULL);
+    uref_pic_size(uref, &inputsize.hsize, &inputsize.vsize, NULL);
     srcsize = &upipe_sws->srcsize;
     if ( unlikely((srcsize->hsize != inputsize.hsize) || (srcsize->vsize != inputsize.vsize)) )
     {
@@ -270,26 +265,29 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *srcpic)
     }
 
     dstsize = &upipe_sws->dstsize;
-    dstpic = uref_pic_alloc(upipe_sws->uref_mgr, upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
+    dstpic = ubuf_pic_alloc(upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
     if (unlikely(dstpic == NULL)) {
         ulog_debug(upipe->ulog, "dstpic == NULL");
         upipe_throw_aerror(upipe);
     }
 
-    upipe_sws_filldata(srcpic, strides, slices, READ);
+    upipe_sws_filldata(uref->ubuf, strides, slices, READ);
     upipe_sws_filldata(dstpic, dstrides, dslices, WRITE);
 
     ret = sws_scale(upipe_sws->convert_ctx, (const uint8_t *const*) slices, strides, 0, srcsize->vsize, dslices, dstrides);
 
     
-    upipe_sws_filldata(srcpic, strides, slices, UNMAP);
+    upipe_sws_filldata(uref->ubuf, strides, slices, UNMAP);
     upipe_sws_filldata(dstpic, dstrides, dslices, UNMAP);
-    uref_free(srcpic);
+
+    ubuf_free(uref_detach_ubuf(uref));
     if(unlikely(ret <= 0)) {
-        uref_free(dstpic);
+        ubuf_free(dstpic);
+        uref_free(uref);
         return false;
     }
-    upipe_sws_output(upipe, dstpic);
+    uref_attach_ubuf(uref, dstpic);
+    upipe_sws_output(upipe, uref);
     return true;
 }
 
@@ -377,14 +375,6 @@ static bool _upipe_sws_control(struct upipe *upipe, enum upipe_command command,
     }
     switch (command) {
         // generic linear stuff
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_sws_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_sws_set_uref_mgr(upipe, uref_mgr);
-        }
         case UPIPE_LINEAR_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_sws_get_ubuf_mgr(upipe, p);
@@ -429,17 +419,8 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     int ret = _upipe_sws_control(upipe, command, args);
    
-    // FIXME - send probes
-/*    if (unlikely(upipe_sws->uref_mgr == NULL))
-        upipe_throw_need_uref_mgr(upipe);
-    else if (unlikely(upipe_sws->ubuf_mgr == NULL))
-        upipe_throw_linear_need_ubuf_mgr(upipe);
-    else if (unlikely(upipe_sws->output == NULL))
-        upipe_throw_new_flow(upipe, NULL, upipe_sws->flow_def);
-*/
-
     // FIXME - check convert_ctx
-    if (upipe_sws->output && upipe_sws->uref_mgr && upipe_sws->ubuf_mgr
+    if (upipe_sws->output && upipe_sws->ubuf_mgr
         && upipe_sws->input_flow && upipe_sws->output_flow) {
         if (!upipe_sws->ready) {
             upipe_sws->ready = true;
@@ -469,7 +450,6 @@ static void upipe_sws_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_sws->refcount))) {
         upipe_sws_clean_output(upipe);
         upipe_sws_clean_ubuf_mgr(upipe);
-        upipe_sws_clean_uref_mgr(upipe);
         if (upipe_sws->input_flow) {
             uref_free(upipe_sws->input_flow);
         }

@@ -407,7 +407,6 @@ int main(int argc, char **argv)
     struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "sws")); 
     assert(sws != NULL);
     assert(upipe_linear_set_ubuf_mgr(sws, ubuf_mgr));
-    assert(upipe_set_uref_mgr(sws, uref_mgr));
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "sws_test"));
