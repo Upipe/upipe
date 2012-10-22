@@ -52,7 +52,6 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_linear_ubuf_mgr.h>
 #include <upipe/upipe_helper_linear_output.h>
 #include <upipe-modules/upipe_genaux.h>
@@ -70,8 +69,6 @@ struct upipe_genaux {
     /** output pipe */
     struct upipe *output;
 
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -85,7 +82,6 @@ struct upipe_genaux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe);
-UPIPE_HELPER_UREF_MGR(upipe_genaux, uref_mgr);
 UPIPE_HELPER_LINEAR_OUTPUT(upipe_genaux, output, output_flow, output_flow_sent);
 UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_genaux, ubuf_mgr);
 
@@ -204,14 +200,6 @@ static bool _upipe_genaux_control(struct upipe *upipe, enum upipe_command comman
     }
     switch (command) {
         // generic linear stuff
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_genaux_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_genaux_set_uref_mgr(upipe, uref_mgr);
-        }
         case UPIPE_LINEAR_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_genaux_get_ubuf_mgr(upipe, p);
@@ -268,7 +256,6 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr)
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_GENAUX_SIGNATURE;
     urefcount_init(&upipe_genaux->refcount);
-    upipe_genaux_init_uref_mgr(upipe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
     upipe_genaux->input_flow = NULL;
@@ -298,7 +285,6 @@ static void upipe_genaux_release(struct upipe *upipe)
         ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
         upipe_genaux_clean_output(upipe);
         upipe_genaux_clean_ubuf_mgr(upipe);
-        upipe_genaux_clean_uref_mgr(upipe);
         if (upipe_genaux->input_flow) {
             uref_free(upipe_genaux->input_flow);
         }

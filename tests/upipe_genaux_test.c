@@ -226,7 +226,6 @@ int main(int argc, char **argv)
     struct upipe *genaux = upipe_alloc(upipe_genaux_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
     assert(genaux);
-    assert(upipe_set_uref_mgr(genaux, uref_mgr));
     assert(upipe_linear_set_ubuf_mgr(genaux, ubuf_mgr));
 
     struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "genaux_test"));
