@@ -140,16 +140,15 @@ enum plane_action {
     WRITE
 };
 
-/** @internal @This fetches chroma from uref/using defined picflow
+/** @internal @This fetches chroma from uref
  *  
  * @param uref uref structure
- * @param picflow uref structure describing the picture flow
  * @param str name of the chroma
  * @param strides strides array
  * @param slices array of pointers to data plans
  * @param idx index of the chroma in slices[]/strides[]
  */
-static void inline upipe_sws_fetch_chroma(struct uref *uref, struct uref *picflow, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
+static void inline upipe_sws_fetch_chroma(struct uref *uref, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
 {
     size_t stride = 0;
     switch(action) {
@@ -168,12 +167,12 @@ static void inline upipe_sws_fetch_chroma(struct uref *uref, struct uref *picflo
     strides[idx] = (int) stride;
 }
 
-static void upipe_sws_filldata(struct uref *uref, struct uref *picflow, int *strides, uint8_t **slices, enum plane_action action)
+static void upipe_sws_filldata(struct uref *uref, int *strides, uint8_t **slices, enum plane_action action)
 {
     // FIXME - hardcoded chroma fetch
-    upipe_sws_fetch_chroma(uref, picflow, "y8", strides, slices, 0, action);
-    upipe_sws_fetch_chroma(uref, picflow, "u8", strides, slices, 1, action);
-    upipe_sws_fetch_chroma(uref, picflow, "v8", strides, slices, 2, action);
+    upipe_sws_fetch_chroma(uref, "y8", strides, slices, 0, action);
+    upipe_sws_fetch_chroma(uref, "u8", strides, slices, 1, action);
+    upipe_sws_fetch_chroma(uref, "v8", strides, slices, 2, action);
 }
 
 /** @internal @This configures swscale context
@@ -277,14 +276,14 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *srcpic)
         upipe_throw_aerror(upipe);
     }
 
-    upipe_sws_filldata(srcpic, upipe_sws->input_flow, strides, slices, READ);
-    upipe_sws_filldata(dstpic, upipe_sws->output_flow, dstrides, dslices, WRITE);
+    upipe_sws_filldata(srcpic, strides, slices, READ);
+    upipe_sws_filldata(dstpic, dstrides, dslices, WRITE);
 
     ret = sws_scale(upipe_sws->convert_ctx, (const uint8_t *const*) slices, strides, 0, srcsize->vsize, dslices, dstrides);
 
     
-    upipe_sws_filldata(srcpic, upipe_sws->input_flow, strides, slices, UNMAP);
-    upipe_sws_filldata(dstpic, upipe_sws->output_flow, dstrides, dslices, UNMAP);
+    upipe_sws_filldata(srcpic, strides, slices, UNMAP);
+    upipe_sws_filldata(dstpic, dstrides, dslices, UNMAP);
     uref_free(srcpic);
     if(unlikely(ret <= 0)) {
         uref_free(dstpic);
@@ -312,7 +311,9 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
     }
 
     if (unlikely(uref_flow_get_delete(uref))) {
-        uref_free(upipe_sws->input_flow);
+        if (upipe_sws->input_flow) {
+            uref_free(upipe_sws->input_flow);
+        }
         upipe_sws->input_flow = NULL;
         uref_free(uref);
         return true;
@@ -325,6 +326,11 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
             upipe_sws->input_flow = NULL;
         }
 
+        if (unlikely(strncmp(def, "pic.", strlen("pic.")))) {
+            ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
+            uref_free(uref);
+            return false;
+        }
         upipe_sws->input_flow = uref;
         ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
         return true;
@@ -342,13 +348,6 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
         return false;
     }
-
-/*    assert(def);
-    if (unlikely(strncmp(def, "pic.", strlen("pic.")))) {
-        ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
-        uref_free(uref);
-        return false;
-    }*/ // FIXME - needed ?
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
