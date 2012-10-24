@@ -165,15 +165,20 @@ static void upipe_ts_split_output_free(struct upipe *upipe,
 /** @internal @This allocates a ts_split pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr,
+                                          struct uprobe *uprobe,
+                                          struct ulog *ulog)
 {
     struct upipe_ts_split *upipe_ts_split =
         malloc(sizeof(struct upipe_ts_split));
     if (unlikely(upipe_ts_split == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_split_to_upipe(upipe_ts_split);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_SPLIT_SIGNATURE;
     urefcount_init(&upipe_ts_split->refcount);
@@ -529,7 +534,7 @@ static struct upipe_mgr upipe_ts_split_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all ts_splits
+/** @This returns the management structure for all ts_split pipes.
  *
  * @return pointer to manager
  */

@@ -75,13 +75,18 @@ UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
 /** @internal @This allocates a queue source pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr)
+static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
+                                       struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe_qsrc *upipe_qsrc = malloc(sizeof(struct upipe_qsrc));
-    if (unlikely(upipe_qsrc == NULL)) return NULL;
+    if (unlikely(upipe_qsrc == NULL))
+        return NULL;
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_QSRC_SIGNATURE;
     urefcount_init(&upipe_qsrc->refcount);
@@ -380,7 +385,7 @@ static struct upipe_mgr upipe_qsrc_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all queue sources
+/** @This returns the management structure for all queue source pipes.
  *
  * @return pointer to manager
  */

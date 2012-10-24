@@ -194,14 +194,19 @@ static void upipe_avfsrc_output_free(struct upipe *upipe,
 /** @internal @This allocates a file source pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
+                                        struct uprobe *uprobe,
+                                        struct ulog *ulog)
 {
     struct upipe_avfsrc *upipe_avfsrc = malloc(sizeof(struct upipe_avfsrc));
     if (unlikely(upipe_avfsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_AVFSRC_SIGNATURE;
     urefcount_init(&upipe_avfsrc->refcount);
@@ -908,7 +913,7 @@ static struct upipe_mgr upipe_avfsrc_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all avformat sources
+/** @This returns the management structure for all avformat source pipes.
  *
  * @return pointer to manager
  */

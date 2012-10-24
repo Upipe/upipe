@@ -108,13 +108,18 @@ UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_sws, ubuf_mgr);
 /** @internal @This allocates a swscale pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
+                                     struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe_sws *upipe_sws = malloc(sizeof(struct upipe_sws));
-    if (unlikely(upipe_sws == NULL)) return NULL;
+    if (unlikely(upipe_sws == NULL))
+        return NULL;
     struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_SWS_SIGNATURE;
     urefcount_init(&upipe_sws->refcount);

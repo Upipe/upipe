@@ -27,17 +27,6 @@
  * @short Upipe module - generates auxiliary blocks from k.systime
  */
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
-#include <assert.h>
-
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
@@ -56,6 +45,16 @@
 #include <upipe/upipe_helper_linear_output.h>
 #include <upipe-modules/upipe_genaux.h>
 
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdarg.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
+#include <assert.h>
 
 /** upipe_genaux structure */ 
 struct upipe_genaux {
@@ -246,13 +245,18 @@ static bool upipe_genaux_control(struct upipe *upipe, enum upipe_command command
 /** @internal @This allocates a genaux pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
+                                        struct uprobe *uprobe,
+                                        struct ulog *ulog)
 {
     struct upipe_genaux *upipe_genaux = malloc(sizeof(struct upipe_genaux));
     if (unlikely(upipe_genaux == NULL)) return NULL;
     struct upipe *upipe = upipe_genaux_to_upipe(upipe_genaux);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_GENAUX_SIGNATURE;
     urefcount_init(&upipe_genaux->refcount);

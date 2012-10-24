@@ -74,15 +74,20 @@ UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)
 /** @internal @This allocates a ts_decaps pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
+                                           struct uprobe *uprobe,
+                                           struct ulog *ulog)
 {
     struct upipe_ts_decaps *upipe_ts_decaps =
         malloc(sizeof(struct upipe_ts_decaps));
     if (unlikely(upipe_ts_decaps == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_decaps_to_upipe(upipe_ts_decaps);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_DECAPS_SIGNATURE;
     urefcount_init(&upipe_ts_decaps->refcount);
@@ -95,6 +100,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr)
 /** @internal @This sends the decaps_pcr event.
  *
  * @param upipe description structure of the pipe
+ * @param uref uref triggering the event
  * @param pcr PCR value
  */
 static void upipe_ts_decaps_pcr(struct upipe *upipe, struct uref *uref,
@@ -374,7 +380,7 @@ static struct upipe_mgr upipe_ts_decaps_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all ts_decapss
+/** @This returns the management structure for all ts_decaps pipes.
  *
  * @return pointer to manager
  */

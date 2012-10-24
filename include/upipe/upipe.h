@@ -36,6 +36,7 @@
 
 #include <stdint.h>
 #include <stdarg.h>
+#include <assert.h>
 
 /** @hidden */
 struct uref;
@@ -150,7 +151,8 @@ struct upipe {
 /** @This stores common management parameters for a pipe type. */
 struct upipe_mgr {
     /** function to create a pipe */
-    struct upipe *(*upipe_alloc)(struct upipe_mgr *);
+    struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *,
+                                 struct ulog *);
     /** control function for standard or local commands */
     bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
     /** function to increment the refcount of the pipe */
@@ -175,11 +177,22 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         struct ulog *ulog)
 {
-    struct upipe *upipe = mgr->upipe_alloc(mgr);
-    if (unlikely(upipe == NULL)) return NULL;
+    return mgr->upipe_alloc(mgr, uprobe, ulog);
+}
+
+/** @This initializes the public members of a pipe.
+ *
+ * @param mgr management structure for this pipe type
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
+ * @return pointer to allocated pipe, or NULL in case of failure
+ */
+static inline void upipe_init(struct upipe *upipe, struct uprobe *uprobe,
+                              struct ulog *ulog)
+{
+    assert(upipe != NULL);
     upipe->uprobe = uprobe;
     upipe->ulog = ulog;
-    return upipe;
 }
 
 /** @internal @This sends a control command to the pipe. Note that all control
@@ -371,6 +384,7 @@ static inline void upipe_release(struct upipe *upipe)
  */
 static inline void upipe_clean(struct upipe *upipe)
 {
+    assert(upipe != NULL);
     ulog_free(upipe->ulog);
 }
 

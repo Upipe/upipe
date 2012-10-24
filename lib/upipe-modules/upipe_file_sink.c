@@ -109,13 +109,18 @@ UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
 /** @internal @This allocates a file sink pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
+                                       struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe_fsink *upipe_fsink = malloc(sizeof(struct upipe_fsink));
-    if (unlikely(upipe_fsink == NULL)) return NULL;
+    if (unlikely(upipe_fsink == NULL))
+        return NULL;
     struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_FSINK_SIGNATURE;
     urefcount_init(&upipe_fsink->refcount);
@@ -560,7 +565,7 @@ static struct upipe_mgr upipe_fsink_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all file sinks
+/** @This returns the management structure for all file sink pipes.
  *
  * @return pointer to manager
  */

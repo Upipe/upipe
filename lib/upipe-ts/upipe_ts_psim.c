@@ -77,14 +77,19 @@ UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
 /** @internal @This allocates a ts_psim pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
+                                         struct uprobe *uprobe,
+                                         struct ulog *ulog)
 {
     struct upipe_ts_psim *upipe_ts_psim = malloc(sizeof(struct upipe_ts_psim));
     if (unlikely(upipe_ts_psim == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_psim_to_upipe(upipe_ts_psim);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_PSIM_SIGNATURE;
     urefcount_init(&upipe_ts_psim->refcount);
@@ -420,7 +425,7 @@ static struct upipe_mgr upipe_ts_psim_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all ts_psims
+/** @This returns the management structure for all ts_psim pipes.
  *
  * @return pointer to manager
  */

@@ -121,13 +121,18 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
 /** @internal @This allocates a file source pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
+                                      struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe_fsrc *upipe_fsrc = malloc(sizeof(struct upipe_fsrc));
-    if (unlikely(upipe_fsrc == NULL)) return NULL;
+    if (unlikely(upipe_fsrc == NULL))
+        return NULL;
     struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_FSRC_SIGNATURE;
     urefcount_init(&upipe_fsrc->refcount);
@@ -550,7 +555,7 @@ static struct upipe_mgr upipe_fsrc_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all file sources
+/** @This returns the management structure for all file source pipes.
  *
  * @return pointer to manager
  */

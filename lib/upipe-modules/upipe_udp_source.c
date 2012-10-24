@@ -139,13 +139,18 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_udpsrc, read_size)
 /** @internal @This allocates a udp socket source pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
+                                        struct uprobe *uprobe,
+                                        struct ulog *ulog)
 {
     struct upipe_udpsrc *upipe_udpsrc = malloc(sizeof(struct upipe_udpsrc));
     if (unlikely(upipe_udpsrc == NULL)) return NULL;
     struct upipe *upipe = upipe_udpsrc_to_upipe(upipe_udpsrc);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_UDPSRC_SIGNATURE;
     urefcount_init(&upipe_udpsrc->refcount);

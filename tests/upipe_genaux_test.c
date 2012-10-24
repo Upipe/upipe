@@ -100,13 +100,15 @@ struct genaux_test {
 UPIPE_HELPER_UPIPE(genaux_test, upipe);
 
 /** helper phony pipe to test upipe_genaux */
-static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr)
+static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
+                                       struct uprobe *uprobe, struct ulog *ulog)
 {
     struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
     if (unlikely(!genaux_test)) return NULL;
+    upipe_init(&genaux_test->upipe, uprobe, ulog);
+    genaux_test->upipe.mgr = mgr;
     genaux_test->flow = NULL;
     genaux_test->entry = NULL;
-    genaux_test->upipe.mgr = mgr;
     return &genaux_test->upipe;
 }
 

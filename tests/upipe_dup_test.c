@@ -84,13 +84,15 @@ struct dup_test {
 };
 
 /** helper phony pipe to test upipe_dup */
-static struct upipe *dup_test_alloc(struct upipe_mgr *mgr)
+static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
+                                    struct uprobe *uprobe, struct ulog *ulog)
 {
     struct dup_test *dup_test = malloc(sizeof(struct dup_test));
     if (unlikely(dup_test == NULL))
         return NULL;
-    dup_test->flow = NULL;
+    upipe_init(&dup_test->upipe, uprobe, ulog);
     dup_test->upipe.mgr = mgr;
+    dup_test->flow = NULL;
     return &dup_test->upipe;
 }
 

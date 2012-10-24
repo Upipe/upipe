@@ -103,11 +103,13 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** helper phony pipe to test upipe_ts_psim */
-static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)
+static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
+                                   struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     if (unlikely(upipe == NULL))
         return NULL;
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr;
     return upipe;
 }

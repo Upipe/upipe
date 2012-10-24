@@ -79,14 +79,19 @@ UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_pesd, output, flow_def, flow_def_sent)
 /** @internal @This allocates a ts_pesd pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
+                                         struct uprobe *uprobe,
+                                         struct ulog *ulog)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = malloc(sizeof(struct upipe_ts_pesd));
     if (unlikely(upipe_ts_pesd == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_pesd_to_upipe(upipe_ts_pesd);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_PESD_SIGNATURE;
     urefcount_init(&upipe_ts_pesd->refcount);
@@ -495,7 +500,7 @@ static struct upipe_mgr upipe_ts_pesd_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all ts_pesds
+/** @This returns the management structure for all ts_pesd pipes.
  *
  * @return pointer to manager
  */

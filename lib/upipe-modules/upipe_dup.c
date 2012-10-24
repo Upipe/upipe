@@ -242,13 +242,18 @@ UPIPE_HELPER_SPLIT_OUTPUTS(upipe_dup, outputs, upipe_dup_output)
 /** @internal @This allocates a dup pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
+                                     struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe_dup *upipe_dup = malloc(sizeof(struct upipe_dup));
-    if (unlikely(upipe_dup == NULL)) return NULL;
+    if (unlikely(upipe_dup == NULL))
+        return NULL;
     struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_DUP_SIGNATURE;
     urefcount_init(&upipe_dup->refcount);
@@ -419,7 +424,7 @@ static struct upipe_mgr upipe_dup_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all dups
+/** @This returns the management structure for all dup pipes.
  *
  * @return pointer to manager
  */

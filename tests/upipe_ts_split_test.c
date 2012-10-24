@@ -111,15 +111,17 @@ struct ts_test {
 };
 
 /** helper phony pipe to test upipe_ts_split */
-static struct upipe *ts_test_alloc(struct upipe_mgr *mgr)
+static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
+                                   struct uprobe *uprobe, struct ulog *ulog)
 {
     struct ts_test *ts_test = malloc(sizeof(struct ts_test));
     if (unlikely(ts_test == NULL))
         return NULL;
+    upipe_init(&ts_test->upipe, uprobe, ulog);
+    ts_test->upipe.mgr = mgr;
     ts_test->flow = NULL;
     ts_test->got_flow_def = false;
     ts_test->got_packet = false;
-    ts_test->upipe.mgr = mgr;
     return &ts_test->upipe;
 }
 

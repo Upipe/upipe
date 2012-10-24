@@ -89,14 +89,19 @@ UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
 /** @internal @This allocates a ts_sync pipe.
  *
  * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr)
+static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
+                                         struct uprobe *uprobe,
+                                         struct ulog *ulog)
 {
     struct upipe_ts_sync *upipe_ts_sync = malloc(sizeof(struct upipe_ts_sync));
     if (unlikely(upipe_ts_sync == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_sync_to_upipe(upipe_ts_sync);
+    upipe_init(upipe, uprobe, ulog);
     upipe->mgr = mgr; /* do not increment refcount as mgr is static */
     upipe->signature = UPIPE_TS_SYNC_SIGNATURE;
     urefcount_init(&upipe_ts_sync->refcount);
@@ -571,7 +576,7 @@ static struct upipe_mgr upipe_ts_sync_mgr = {
     .upipe_mgr_release = NULL
 };
 
-/** @This returns the management structure for all ts_syncs
+/** @This returns the management structure for all ts_sync pipes.
  *
  * @return pointer to manager
  */
