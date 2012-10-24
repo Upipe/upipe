@@ -263,7 +263,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
 
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
         ulog_error(upipe->ulog, "unable to get interface index (%s)", strerror(errno));
-        return false
+        return false;
     }
 
     close(fd);
@@ -588,7 +588,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
                 if (bind(fd, &bind_addr_any.so,
                            sizeof(bind_addr_any)) < 0) {
                     ulog_error(upipe->ulog, "couldn't bind");
-                    upipe_udp_print_socket(upipe "socket definition:", &bind_addr, &connect_addr);
+                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                     close(fd);
                     return -1;
                 }
