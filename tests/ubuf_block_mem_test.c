@@ -145,6 +145,7 @@ int main(int argc, char **argv)
 
 
     ubuf1 = ubuf_block_alloc(mgr, 32);
+    assert(ubuf1 != NULL);
     wanted = -1;
     assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
     assert(wanted == 32);
@@ -155,6 +156,7 @@ int main(int argc, char **argv)
     assert(ubuf_block_unmap(ubuf1, 0, wanted));
 
     ubuf2 = ubuf_block_alloc(mgr, 1);
+    assert(ubuf2 != NULL);
     wanted = 1;
     assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 1);
@@ -169,6 +171,7 @@ int main(int argc, char **argv)
     assert(size == 33);
 
     ubuf2 = ubuf_block_alloc(mgr, 16);
+    assert(ubuf2 != NULL);
     wanted = -1;
     assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 16);
@@ -182,6 +185,7 @@ int main(int argc, char **argv)
     assert(size == 49);
 
     ubuf2 = ubuf_block_alloc(mgr, 16);
+    assert(ubuf2 != NULL);
     wanted = -1;
     assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 16);
@@ -223,12 +227,19 @@ int main(int argc, char **argv)
 
     /* test ubuf_block_copy */
     ubuf2 = ubuf_block_copy(mgr, ubuf1, 1, -1);
+    assert(ubuf2 != NULL);
     wanted = -1;
     assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
     assert(wanted == 64);
     for (int i = 0; i < wanted; i++)
         assert(r[i] == i + 1);
     assert(ubuf_block_unmap(ubuf2, 0, wanted));
+    ubuf_free(ubuf2);
+
+    /* test ubuf_block_compare */
+    ubuf2 = ubuf_block_copy(mgr, ubuf1, 0, -1);
+    assert(ubuf2 != NULL);
+    assert(ubuf_block_compare(ubuf1, ubuf2));
     ubuf_free(ubuf2);
 
     /* test ubuf_block_delete */

@@ -447,4 +447,43 @@ static inline bool ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
     return true;
 }
 
+/** @This compares the content of two block ubufs.
+ *
+ * @param ubuf1 pointer to first ubuf
+ * @param ubuf2 pointer to second ubuf
+ * @return false if the ubufs are different
+ */
+static inline bool ubuf_block_compare(struct ubuf *ubuf1, struct ubuf *ubuf2)
+{
+    size_t ubuf1_size, ubuf2_size;
+    if (unlikely(!ubuf_block_size(ubuf1, &ubuf1_size) ||
+                 !ubuf_block_size(ubuf2, &ubuf2_size) ||
+                 ubuf1_size != ubuf2_size))
+        return false;
+
+    int offset = 0;
+    int size = ubuf1_size;
+    while (size > 0) {
+        int read_size1 = size, read_size2 = size;
+        const uint8_t *read_buffer1, *read_buffer2;
+        if (unlikely(!ubuf_block_read(ubuf1, offset, &read_size1,
+                                      &read_buffer1)))
+            return false;
+        if (unlikely(!ubuf_block_read(ubuf2, offset, &read_size2,
+                                      &read_buffer2))) {
+            ubuf_block_unmap(ubuf1, offset, read_size1);
+            return false;
+        }
+        int compare_size = read_size1 < read_size2 ? read_size1 : read_size2;
+        bool ret = !memcmp(read_buffer1, read_buffer2, compare_size);
+        ret = ubuf_block_unmap(ubuf1, offset, read_size1) && ret;
+        ret = ubuf_block_unmap(ubuf2, offset, read_size2) && ret;
+        if (!ret)
+            return false;
+        size -= compare_size;
+        offset += compare_size;
+    }
+    return true;
+}
+
 #endif

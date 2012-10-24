@@ -187,4 +187,14 @@ static inline bool uref_block_merge(struct uref *uref,
     return ubuf_block_merge(ubuf_mgr, &uref->ubuf, skip, new_size);
 }
 
+/** @see ubuf_block_compare */
+static inline bool uref_block_compare(struct uref *uref1, struct uref *uref2)
+{
+    if (uref1->ubuf == NULL || uref2->ubuf == NULL)
+        return false;
+    if (uref1->ubuf == uref2->ubuf)
+        return true;
+    return ubuf_block_compare(uref1->ubuf, uref2->ubuf);
+}
+
 #endif
