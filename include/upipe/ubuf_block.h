@@ -37,6 +37,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/uio.h>
 
 /** @This returns a new ubuf from a block allocator. This function shall not
  * create a segmented block.
@@ -293,6 +294,96 @@ static inline bool ubuf_block_extract(struct ubuf *ubuf, int offset, int size,
         size -= read_size;
         buffer += read_size;
         offset += read_size;
+    }
+    return true;
+}
+
+/** @This returns the number of iovec needed to send part of a ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @return the number of iovec needed, or -1 in case of error
+ */
+static inline int ubuf_block_iovec_count(struct ubuf *ubuf,
+                                         int offset, int size)
+{
+    int count = 0;
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return -1;
+
+    while (size > 0) {
+        int read_size = size;
+        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, NULL) ||
+                     !ubuf_block_unmap(ubuf, offset, read_size)))
+            return -1;
+        size -= read_size;
+        offset += read_size;
+        count++;
+    }
+    return count;
+}
+
+/** @This maps the requested part of a ubuf to the number of iovec given by
+ * @ref ubuf_block_iovec_count.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param iovecs iovec structures array
+ * @return false in case of error
+ */
+static inline bool ubuf_block_iovec_read(struct ubuf *ubuf,
+                                         int offset, int size,
+                                         struct iovec *iovecs)
+{
+    int count = 0;
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+
+    while (size > 0) {
+        int read_size = size;
+        const uint8_t *read_buffer;
+        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+            return false;
+        iovecs[count].iov_base = (void *)read_buffer;
+        iovecs[count].iov_len = read_size;
+        size -= read_size;
+        offset += read_size;
+        count++;
+    }
+    return true;
+}
+
+/** @This unmaps the parts of a ubuf previsouly mapped by @ref
+ * ubuf_block_iovec_read.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param iovec iovec structures array
+ * @return false in case of error
+ */
+static inline bool ubuf_block_iovec_unmap(struct ubuf *ubuf,
+                                          int offset, int size,
+                                          struct iovec *iovecs)
+{
+    int count = 0;
+    if (unlikely(!ubuf_block_check_offset(ubuf, &offset, &size)))
+        return false;
+
+    while (size > 0) {
+        if (unlikely(!ubuf_block_unmap(ubuf, offset, iovecs[count].iov_len)))
+            return false;
+        size -= iovecs[count].iov_len;
+        offset += iovecs[count].iov_len;
+        count++;
     }
     return true;
 }
