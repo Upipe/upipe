@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -214,19 +214,19 @@ int main(int argc, char *argv[])
     assert(uprobe_print != NULL);
 
     struct upipe *upipe_sink68 = upipe_alloc(&ts_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink 68"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 68"));
     assert(upipe_sink68 != NULL);
     ts_test_set_flow(upipe_sink68, "source.1.68");
 
     struct upipe *upipe_sink69 = upipe_alloc(&ts_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink 69"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 69"));
     assert(upipe_sink69 != NULL);
     ts_test_set_flow(upipe_sink69, "source.1.69");
 
     struct upipe_mgr *upipe_ts_split_mgr = upipe_ts_split_mgr_alloc();
     assert(upipe_ts_split_mgr != NULL);
     struct upipe *upipe_ts_split = upipe_alloc(upipe_ts_split_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "ts split"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts split"));
     assert(upipe_ts_split != NULL);
 
     struct uref *uref;

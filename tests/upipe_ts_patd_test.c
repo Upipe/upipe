@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     assert(upipe_ts_patd_mgr != NULL);
     struct upipe *upipe_ts_patd = upipe_alloc(upipe_ts_patd_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "ts patd"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts patd"));
     assert(upipe_ts_patd != NULL);
 
     struct uref *uref;

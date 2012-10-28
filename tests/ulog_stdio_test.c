@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ulog_std_test.c: unit tests for ulog implementation
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,12 +21,16 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short unit tests for ulog implementation
+ */
 
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -36,7 +38,7 @@
 
 int main(int argc, char **argv)
 {
-    struct ulog *ulog1 = ulog_std_alloc(stdout, ULOG_DEBUG, "test");
+    struct ulog *ulog1 = ulog_stdio_alloc(stdout, ULOG_DEBUG, "test");
     assert(ulog1 != NULL);
 
     ulog_error(ulog1, "This is an error");
@@ -46,7 +48,7 @@ int main(int argc, char **argv)
     ulog_aerror(ulog1);
     ulog_free(ulog1);
 
-    struct ulog *ulog2 = ulog_std_alloc_va(stdout, ULOG_ERROR, "test[%d]", 2);
+    struct ulog *ulog2 = ulog_stdio_alloc_va(stdout, ULOG_ERROR, "test[%d]", 2);
     assert(ulog2 != NULL);
     ulog_error(ulog2, "This is another error with %d", 0x43);
     ulog_warning(ulog2, "This is a warning that you shouldn't see");

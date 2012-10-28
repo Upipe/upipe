@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -167,13 +167,13 @@ int main(int argc, char *argv[])
     assert(uprobe_print != NULL);
 
     struct upipe *upipe_sink = upipe_alloc(&queue_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     assert(upipe_qsrc_mgr != NULL);
     struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "queue source"), QUEUE_LENGTH);
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
     assert(upipe_linear_set_output(upipe_qsrc, upipe_sink));
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
     upipe_qsink = upipe_alloc(upipe_qsink_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "queue sink"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "queue sink"));
     assert(upipe_qsink != NULL);
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
     assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));

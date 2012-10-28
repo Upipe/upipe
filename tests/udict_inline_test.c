@@ -35,7 +35,7 @@
 #include <upipe/udict_inline.h>
 #include <upipe/udict_dump.h>
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -49,7 +49,7 @@
 
 int main(int argc, char **argv)
 {
-    struct ulog *ulog = ulog_std_alloc(stdout, ULOG_DEBUG, "udict test");
+    struct ulog *ulog = ulog_stdio_alloc(stdout, ULOG_DEBUG, "udict test");
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr,
