@@ -5,5 +5,6 @@ includedir=@includedir@
 Name: libupipe_modules
 Description: upipe multimedia framework, base modules
 Version: @VERSION@
-Libs: -L${libdir} -lupipe
+Requires: libupipe
+Libs: -L${libdir} -lupipe_modules
 Cflags: -I${includedir}

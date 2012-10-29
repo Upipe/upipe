@@ -5,5 +5,6 @@ includedir=@includedir@
 Name: libupump_ev
 Description: upipe multimedia framework, libev event loop wrapper
 Version: @VERSION@
-Libs: -L${libdir} -lupipe -lev
+Requires: libupipe
+Libs: -L${libdir} -lupump_ev -lev
 Cflags: -I${includedir}

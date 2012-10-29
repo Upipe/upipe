@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_sws
 Description: upipe multimedia framework, swscale interface module
 Version: @VERSION@
-Requires: libswscale
-Libs: -L${libdir} -lupipe
+Requires: libswscale libupipe
+Libs: -L${libdir} -lupipe_sws
 Cflags: -I${includedir}
