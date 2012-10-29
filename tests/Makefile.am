@@ -3,15 +3,17 @@ AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
 	ulog_stdio_test.sh \
+	ulog_sub_test.sh \
 	udict_inline_test.sh \
 	uprobe_print_test.sh \
 	upipe_file_test.sh \
 	valgrind_wrapper.sh
 
-dist_check_DATA = ulog_stdio_test.txt uprobe_print_test.txt
+dist_check_DATA = ulog_stdio_test.txt ulog_sub_test.txt uprobe_print_test.txt
 
 check_PROGRAMS = \
 	ulog_stdio_test \
+	ulog_sub_test \
 	uprobe_print_test \
 	umem_alloc_test \
 	umem_pool_test \
@@ -30,6 +32,7 @@ TESTS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	ulog_stdio_test.sh \
+	ulog_sub_test.sh \
 	uprobe_print_test.sh \
 	uclock_std_test \
 	upipe_dup_test

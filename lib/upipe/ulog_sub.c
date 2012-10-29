@@ -24,22 +24,21 @@
  */
 
 /** @file
- * @short Upipe API for logging using stdio
+ * @short Upipe API for logging using another (higher-level) ulog
  */
 
 #include <upipe/ubase.h>
 #include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
+#include <upipe/ulog_sub.h>
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
 /** @This is a super-set of the ulog structure with additional local members. */
-struct ulog_stdio {
-    /** file stream to write to */
-    FILE *stream;
+struct ulog_sub {
+    /** higher-level ulog structure */
+    struct ulog *up_ulog;
     /** name of the local portion of the pipe (informative) */
     char *name;
     /** minimum level of printed messages */
@@ -51,22 +50,22 @@ struct ulog_stdio {
 
 /** @internal @This returns the high-level ulog structure.
  *
- * @param ulog_stdio pointer to the ulog_stdio structure
+ * @param ulog_sub pointer to the ulog_sub structure
  * @return pointer to the ulog structure
  */
-static inline struct ulog *ulog_stdio_to_ulog(struct ulog_stdio *ulog_stdio)
+static inline struct ulog *ulog_sub_to_ulog(struct ulog_sub *ulog_sub)
 {
-    return &ulog_stdio->ulog;
+    return &ulog_sub->ulog;
 }
 
-/** @internal @This returns the private ulog_stdio structure.
+/** @internal @This returns the private ulog_sub structure.
  *
  * @param mgr description structure of the ulog
- * @return pointer to the ulog_stdio structure
+ * @return pointer to the ulog_sub structure
  */
-static inline struct ulog_stdio *ulog_stdio_from_ulog(struct ulog *ulog)
+static inline struct ulog_sub *ulog_sub_from_ulog(struct ulog *ulog)
 {
-    return container_of(ulog, struct ulog_stdio, ulog);
+    return container_of(ulog, struct ulog_sub, ulog);
 }
 
 /** @internal @This prints messages to the console.
@@ -76,80 +75,72 @@ static inline struct ulog_stdio *ulog_stdio_from_ulog(struct ulog *ulog)
  * @param format printf format string
  * @param args optional printf parameters
  */
-static void ulog_stdio_ulog(struct ulog *ulog, enum ulog_level level,
-                            const char *format, va_list args)
+static void ulog_sub_ulog(struct ulog *ulog, enum ulog_level level,
+                          const char *format, va_list args)
 {
-    struct ulog_stdio *ulog_stdio = ulog_stdio_from_ulog(ulog);
-    if (level < ulog_stdio->min_level)
+    struct ulog_sub *ulog_sub = ulog_sub_from_ulog(ulog);
+    if (level < ulog_sub->min_level)
         return;
 
-    size_t name_len = likely(ulog_stdio->name != NULL) ?
-                      strlen(ulog_stdio->name) : 0;
-    const char *level_name;
-    switch (level) {
-        case ULOG_DEBUG: level_name = "debug"; break;
-        case ULOG_NOTICE: level_name = "notice"; break;
-        case ULOG_WARNING: level_name = "warning"; break;
-        case ULOG_ERROR: level_name = "error"; break;
-        default: level_name = "unknown"; break;
-    }
-    char new_format[strlen(format) + strlen(level_name) + name_len +
-                    strlen(": [] \n") + 1];
-    sprintf(new_format, "%s: [%s] %s\n", level_name,
-            likely(ulog_stdio->name != NULL) ? ulog_stdio->name : "unknown",
+    size_t name_len = likely(ulog_sub->name != NULL) ?
+                      strlen(ulog_sub->name) : 0;
+    char new_format[strlen(format) + name_len +
+                    strlen("[] ") + 1];
+    sprintf(new_format, "[%s] %s",
+            likely(ulog_sub->name != NULL) ? ulog_sub->name : "unknown",
             format);
 
-    vfprintf(ulog_stdio->stream, new_format, args);
+    ulog_sub->up_ulog->ulog(ulog_sub->up_ulog, level, new_format, args);
 }
 
 /** @This frees a ulog structure.
  *
  * @param ulog structure to free
  */
-static void ulog_stdio_free(struct ulog *ulog)
+static void ulog_sub_free(struct ulog *ulog)
 {
-    struct ulog_stdio *ulog_stdio = ulog_stdio_from_ulog(ulog);
-    free(ulog_stdio->name);
-    free(ulog_stdio);
+    struct ulog_sub *ulog_sub = ulog_sub_from_ulog(ulog);
+    free(ulog_sub->name);
+    free(ulog_sub);
 }
 
 /** @This allocates a new ulog structure using an stdio stream.
  *
- * @param stream file stream to write to (eg. stderr)
+ * @param up_ulog higher-level ulog to use
  * @param log_level minimum level of messages printed to the console
  * @param name name of this section of pipe (informative)
  * @return pointer to ulog, or NULL in case of error
  */
-struct ulog *ulog_stdio_alloc(FILE *stream, enum ulog_level log_level,
-                              const char *name)
+struct ulog *ulog_sub_alloc(struct ulog *up_ulog, enum ulog_level log_level,
+                            const char *name)
 {
-    struct ulog_stdio *ulog_stdio = malloc(sizeof(struct ulog_stdio));
-    if (unlikely(ulog_stdio == NULL))
+    struct ulog_sub *ulog_sub = malloc(sizeof(struct ulog_sub));
+    if (unlikely(ulog_sub == NULL))
         return NULL;
-    ulog_stdio->stream = stream;
+    ulog_sub->up_ulog = up_ulog;
     if (likely(name != NULL)) {
-        ulog_stdio->name = strdup(name);
-        if (unlikely(ulog_stdio->name == NULL))
-            fprintf(stream, "error: [ulog_stdio] couldn't allocate a string\n");
+        ulog_sub->name = strdup(name);
+        if (unlikely(ulog_sub->name == NULL))
+            ulog_error(up_ulog, "[ulog_sub] couldn't allocate a string");
     } else
-        ulog_stdio->name = NULL;
-    ulog_stdio->min_level = log_level;
-    ulog_stdio->ulog.ulog = ulog_stdio_ulog;
-    ulog_stdio->ulog.ulog_free = ulog_stdio_free;
-    return ulog_stdio_to_ulog(ulog_stdio);
+        ulog_sub->name = NULL;
+    ulog_sub->min_level = log_level;
+    ulog_sub->ulog.ulog = ulog_sub_ulog;
+    ulog_sub->ulog.ulog_free = ulog_sub_free;
+    return ulog_sub_to_ulog(ulog_sub);
 }
 
 /** @This allocates a new ulog structure using an stdio stream, with composite
  * name.
  *
- * @param stream file stream to write to (eg. stderr)
+ * @param up_ulog higher-level ulog to use
  * @param log_level minimum level of messages printed to the console
  * @param format printf-format string used for this section of pipe, followed
  * by optional arguments
  * @return pointer to ulog, or NULL in case of error
  */
-struct ulog *ulog_stdio_alloc_va(FILE *stream, enum ulog_level log_level,
-                                 const char *format, ...)
+struct ulog *ulog_sub_alloc_va(struct ulog *up_ulog, enum ulog_level log_level,
+                               const char *format, ...)
 {
     size_t len;
     va_list args;
@@ -161,7 +152,7 @@ struct ulog *ulog_stdio_alloc_va(FILE *stream, enum ulog_level log_level,
         va_start(args, format);
         vsnprintf(name, len + 1, format, args);
         va_end(args);
-        return ulog_stdio_alloc(stream, log_level, name);
+        return ulog_sub_alloc(up_ulog, log_level, name);
     }
-    return ulog_stdio_alloc(stream, log_level, "unknown");
+    return ulog_sub_alloc(up_ulog, log_level, "unknown");
 }

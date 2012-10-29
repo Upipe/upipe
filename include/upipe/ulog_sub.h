@@ -24,34 +24,35 @@
  */
 
 /** @file
- * @short unit tests for ulog stdio implementation
+ * @short Upipe API for logging using another (higher-level) ulog
  */
 
-#undef NDEBUG
+#ifndef _UPIPE_ULOG_SUB_H_
+/** @hidden */
+#define _UPIPE_ULOG_SUB_H_
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
+/** @This allocates a new ulog structure using another (higher-level) ulog.
+ *
+ * @param up_ulog higher-level ulog to use
+ * @param log_level minimum level of messages printed to the console
+ * @param name name of this section of pipe (informative)
+ * @return pointer to ulog, or NULL in case of error
+ */
+struct ulog *ulog_sub_alloc(struct ulog *up_ulog, enum ulog_level log_level,
+                            const char *name);
 
-int main(int argc, char **argv)
-{
-    struct ulog *ulog1 = ulog_stdio_alloc(stdout, ULOG_DEBUG, "test");
-    assert(ulog1 != NULL);
+/** @This allocates a new ulog structure using another (higher-level) ulog,
+ * with composite name.
+ *
+ * @param up_ulog higher-level ulog to use
+ * @param log_level minimum level of messages printed to the console
+ * @param format printf-format string used for this section of pipe, followed
+ * by optional arguments
+ * @return pointer to ulog, or NULL in case of error
+ */
+struct ulog *ulog_sub_alloc_va(struct ulog *up_ulog, enum ulog_level log_level,
+                               const char *format, ...);
 
-    ulog_error(ulog1, "This is an error");
-    ulog_warning(ulog1, "This is a %s warning with %d", "composite", 0x42);
-    ulog_notice(ulog1, "This is a notice");
-    ulog_debug(ulog1, "This is a debug, next error is an allocation failure");
-    ulog_aerror(ulog1);
-    ulog_free(ulog1);
-
-    struct ulog *ulog2 = ulog_stdio_alloc_va(stdout, ULOG_ERROR, "test[%d]", 2);
-    assert(ulog2 != NULL);
-    ulog_error(ulog2, "This is another error with %d", 0x43);
-    ulog_warning(ulog2, "This is a warning that you shouldn't see");
-    ulog_free(ulog2);
-    return 0;
-}
+#endif

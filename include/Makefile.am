@@ -20,6 +20,7 @@ nobase_include_HEADERS = \
 	upipe/ulist.h \
 	upipe/ulog.h \
 	upipe/ulog_stdio.h \
+	upipe/ulog_sub.h \
 	upipe/umem.h \
 	upipe/umem_alloc.h \
 	upipe/umem_pool.h \

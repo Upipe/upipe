@@ -13,7 +13,7 @@ cat "$srcdir"/udict_inline_test.txt > "$DIR"/ref
 cat "$srcdir"/udict_inline_test.txt >> "$DIR"/ref
 cat "$srcdir"/udict_inline_test.txt >> "$DIR"/ref
 
-sed -e "s/^\(udict test debug: dumping udict\) .*$/\1/" < "$DIR"/logs | sed -e  "s/^\(udict test debug: end of attributes for udict\) .*$/\1/" > "$DIR"/logs2
+sed -e "s/^\(debug: \[udict test\] dumping udict\) .*$/\1/" < "$DIR"/logs | sed -e  "s/^\(debug: \[udict test\] end of attributes for udict\) .*$/\1/" > "$DIR"/logs2
 diff -q "$DIR"/logs2 "$DIR"/ref
 RET=$?
 rm -rf "$DIR"
