@@ -2,6 +2,7 @@
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
+ *          Benjamin Cohen
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -36,6 +37,7 @@
 #include <time.h>
 
 #ifdef __MACH__
+#include <string.h>
 #include <mach/clock.h>
 #include <mach/mach.h>
 #endif
@@ -44,6 +46,10 @@
 struct uclock_std {
     /** flags at the creation of this clock */
     enum uclock_std_flags flags;
+#ifdef __MACH__
+    /** mach cclock structure */
+    clock_serv_t cclock;
+#endif
 
     /** refcount management structure */
     urefcount refcount;
@@ -81,13 +87,8 @@ static uint64_t uclock_std_now(struct uclock *uclock)
     struct uclock_std *std = uclock_std_from_uclock(uclock);
 
 #ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-    clock_serv_t cclock;
     mach_timespec_t ts;
-    if (unlikely(host_get_clock_service(mach_host_self(), unlikely(std->flags & UCLOCK_FLAG_REALTIME) ? CALENDAR_CLOCK : REALTIME_CLOCK, &cclock) < 0)) {
-        return 0;
-    }
-    clock_get_time(cclock, &ts);
-    mach_port_deallocate(mach_task_self(), cclock);
+    clock_get_time((std->cclock), &ts);
 #else
     struct timespec ts;
 
@@ -121,6 +122,9 @@ static void uclock_std_release(struct uclock *uclock)
 {
     struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
     if (unlikely(urefcount_release(&uclock_std->refcount))) {
+#ifdef __MACH__
+        mach_port_deallocate(mach_task_self(), uclock_std->cclock);
+#endif
         urefcount_clean(&uclock_std->refcount);
         free(uclock_std);
     }
@@ -140,9 +144,9 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
         return NULL;
     }
     if(unlikely(clock_get_time(cclock, &ts) < 0)) {
+        mach_port_deallocate(mach_task_self(), cclock);
         return NULL;
     }
-    mach_port_deallocate(mach_task_self(), cclock);
 #else
     struct timespec ts;
     if (unlikely(clock_gettime(unlikely(flags & UCLOCK_FLAG_REALTIME) ?
@@ -157,5 +161,8 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
     uclock_std->uclock.uclock_now = uclock_std_now;
     uclock_std->uclock.uclock_use = uclock_std_use;
     uclock_std->uclock.uclock_release = uclock_std_release;
+#ifdef __MACH__
+    memcpy(&uclock_std->cclock, &cclock, sizeof(cclock));
+#endif
     return uclock_std_to_uclock(uclock_std);
 }
