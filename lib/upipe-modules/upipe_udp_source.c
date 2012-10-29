@@ -180,7 +180,6 @@ static void upipe_udpsrc_worker(struct upump *upump)
     uint64_t systime = 0; /* to keep gcc quiet */
     if (unlikely(upipe_udpsrc->uclock != NULL))
         systime = uclock_now(upipe_udpsrc->uclock);
-    ulog_debug(upipe->ulog, "%s %d", __func__, __LINE__);
 
     struct uref *uref = uref_block_alloc(upipe_udpsrc->uref_mgr,
                                          upipe_udpsrc->ubuf_mgr,
