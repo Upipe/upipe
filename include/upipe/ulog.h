@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ulog.h: toolbox provided by the application to modules for logging
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short toolbox provided by the application to modules for logging
+ */
 
 #ifndef _UPIPE_ULOG_H_
 /** @hidden */
@@ -68,7 +70,8 @@ struct ulog {
  */                                                                         \
 static inline void ulog_##name(struct ulog *ulog, const char *format, ...)  \
 {                                                                           \
-    if (unlikely(ulog == NULL)) return;                                     \
+    if (unlikely(ulog == NULL))                                             \
+        return;                                                             \
     va_list args;                                                           \
     va_start(args, format);                                                 \
     ulog->ulog(ulog, ULOG_##NAME, format, args);                            \

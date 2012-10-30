@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/uclock.h>
@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
     struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "file sink"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file sink"));
     assert(upipe_fsink != NULL);
     assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
     if (delay) {
@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "file source"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));

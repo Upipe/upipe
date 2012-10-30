@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -328,7 +328,7 @@ int main(int argc, char **argv)
 
     struct SwsContext *img_convert_ctx;
 
-    struct ulog *mainlog = ulog_std_alloc(stdout, ULOG_LEVEL, "main");
+    struct ulog *mainlog = ulog_stdio_alloc(stdout, ULOG_LEVEL, "main");
 
     /* planar I420 */
     ubuf_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
@@ -404,12 +404,12 @@ int main(int argc, char **argv)
     assert(uprobe_print != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
-    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "sws")); 
+    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws")); 
     assert(sws != NULL);
     assert(upipe_linear_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "sws_test"));
+    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws_test"));
     ulog_debug(mainlog, "Pipe addr: sws:\t %p", sws);
     ulog_debug(mainlog, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);

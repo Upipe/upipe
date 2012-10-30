@@ -206,22 +206,26 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
 
 write_buffer:
     for ( ; ; ) {
-        size_t ubuf_size;
-        if (!uref_block_size(uref, &ubuf_size) || !ubuf_size) {
+        int iovec_count = uref_block_iovec_count(uref, 0, -1);
+        if (unlikely(iovec_count == -1)) {
+            uref_free(uref);
+            ulog_warning(upipe->ulog, "cannot read ubuf buffer");
+            break;
+        }
+        if (unlikely(iovec_count == 0)) {
             uref_free(uref);
             break;
         }
 
-        int size = -1;
-        const uint8_t *buffer;
-        if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
+        struct iovec iovecs[iovec_count];
+        if (unlikely(!uref_block_iovec_read(uref, 0, -1, iovecs))) {
             uref_free(uref);
             ulog_warning(upipe->ulog, "cannot read ubuf buffer");
             break;
         }
 
-        ssize_t ret = write(upipe_fsink->fd, buffer, size);
-        uref_block_unmap(uref, 0, size);
+        ssize_t ret = writev(upipe_fsink->fd, iovecs, iovec_count);
+        uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
             switch (errno) {
@@ -251,11 +255,8 @@ write_buffer:
             return;
         }
 
-        if (ret == ubuf_size) {
-            uref_free(uref);
-            break;
-        } else
-            uref_block_resize(uref, ret, -1);
+        uref_free(uref);
+        break;
     }
 }
 

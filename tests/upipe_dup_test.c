@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -157,19 +157,19 @@ int main(int argc, char *argv[])
     assert(uprobe_print != NULL);
 
     struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink 0"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 0"));
     assert(upipe_sink0 != NULL);
     dup_test_set_flow(upipe_sink0, "source.0");
 
     struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink 1"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 1"));
     assert(upipe_sink1 != NULL);
     dup_test_set_flow(upipe_sink1, "source.1");
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
     struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "dup"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
     assert(upipe_split_set_output(upipe_dup, upipe_sink0, "0"));
 

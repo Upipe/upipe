@@ -31,7 +31,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/uclock.h>
@@ -188,13 +188,13 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
 
-     struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr, uprobe_print, ulog_std_alloc(stdout, ULOG_LEVEL, "udpsrc_test"));
+     struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "udpsrc_test"));
 
    
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
     struct upipe *upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "udp source"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "udp source"));
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));

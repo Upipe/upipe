@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ulog_std.h: declarations for the standard toolbox for logging
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,35 +21,38 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
 
-#ifndef _UPIPE_ULOG_STD_H_
+/** @file
+ * @short Upipe API for logging using another (higher-level) ulog
+ */
+
+#ifndef _UPIPE_ULOG_SUB_H_
 /** @hidden */
-#define _UPIPE_ULOG_STD_H_
+#define _UPIPE_ULOG_SUB_H_
 
 #include <upipe/ulog.h>
 
-#include <stdio.h>
-
-/** @This allocates a new ulog structure.
+/** @This allocates a new ulog structure using another (higher-level) ulog.
  *
- * @param stream file stream to write to (eg. stderr)
+ * @param up_ulog higher-level ulog to use
  * @param log_level minimum level of messages printed to the console
  * @param name name of this section of pipe (informative)
  * @return pointer to ulog, or NULL in case of error
  */
-struct ulog *ulog_std_alloc(FILE *stream, enum ulog_level log_level,
+struct ulog *ulog_sub_alloc(struct ulog *up_ulog, enum ulog_level log_level,
                             const char *name);
 
-/** @This allocates a new ulog structure, with composite name.
+/** @This allocates a new ulog structure using another (higher-level) ulog,
+ * with composite name.
  *
- * @param stream file stream to write to (eg. stderr)
+ * @param up_ulog higher-level ulog to use
  * @param log_level minimum level of messages printed to the console
  * @param format printf-format string used for this section of pipe, followed
  * by optional arguments
  * @return pointer to ulog, or NULL in case of error
  */
-struct ulog *ulog_std_alloc_va(FILE *stream, enum ulog_level log_level,
+struct ulog *ulog_sub_alloc_va(struct ulog *up_ulog, enum ulog_level log_level,
                                const char *format, ...);
 
 #endif

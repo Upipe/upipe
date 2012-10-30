@@ -1,0 +1,6 @@
+error: [test] This is an error
+warning: [test] This is a composite warning with 66
+notice: [test] This is a notice
+debug: [test] This is a debug, next error is an allocation failure
+error: [test] allocation failure at
+error: [test[2]] This is another error with 67

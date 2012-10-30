@@ -1,9 +1,9 @@
-udict test debug: dumping udict
-udict test debug:  - "x.opaque" [opaque]
-udict test debug:  - "x.truc" [bool]: true
-udict test debug:  - "k.pts" [unsigned]: 18446744073709551615
-udict test debug:  - "x.date[400]" [int]: 9223372036854775807
-udict test debug:  - "x.version" [float]: 1.000000
-udict test debug:  - "x.salutation" [string]: "Hello everyone, this is just some padding to make the structure bigger, if you don't mind."
-udict test debug:  - "x.ar[0]" [rational]: 64/45
-udict test debug: end of attributes for udict
+debug: [udict test] dumping udict
+debug: [udict test]  - "x.opaque" [opaque]
+debug: [udict test]  - "x.truc" [bool]: true
+debug: [udict test]  - "k.pts" [unsigned]: 18446744073709551615
+debug: [udict test]  - "x.date[400]" [int]: 9223372036854775807
+debug: [udict test]  - "x.version" [float]: 1.000000
+debug: [udict test]  - "x.salutation" [string]: "Hello everyone, this is just some padding to make the structure bigger, if you don't mind."
+debug: [udict test]  - "x.ar[0]" [rational]: 64/45
+debug: [udict test] end of attributes for udict

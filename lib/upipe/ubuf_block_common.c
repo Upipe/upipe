@@ -93,7 +93,6 @@ bool ubuf_block_common_##name(struct ubuf *ubuf, int offset, int *size_p,   \
 {                                                                           \
     assert(offset >= 0);                                                    \
     assert(size_p != NULL && *size_p >= 0);                                 \
-    assert(buffer_p != NULL);                                               \
                                                                             \
     struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);   \
     if (offset >= common->size) {                                           \

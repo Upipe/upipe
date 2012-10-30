@@ -38,6 +38,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/uio.h>
 
 UREF_ATTR_TEMPLATE_VOID(block, discontinuity, "b.discontinuity", discontinuity)
 UREF_ATTR_TEMPLATE_VOID(block, error, "b.error", transport error)
@@ -156,6 +157,35 @@ static inline bool uref_block_extract(struct uref *uref, int offset, int size,
     if (uref->ubuf == NULL)
         return false;
     return ubuf_block_extract(uref->ubuf, offset, size, buffer);
+}
+
+/** @see ubuf_block_iovec_count */
+static inline int uref_block_iovec_count(struct uref *uref,
+                                         int offset, int size)
+{
+    if (uref->ubuf == NULL)
+        return -1;
+    return ubuf_block_iovec_count(uref->ubuf, offset, size);
+}
+
+/** @see ubuf_block_iovec_read */
+static inline bool uref_block_iovec_read(struct uref *uref,
+                                         int offset, int size,
+                                         struct iovec *iovecs)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_iovec_read(uref->ubuf, offset, size, iovecs);
+}
+
+/** @see ubuf_block_iovec_unmap */
+static inline bool uref_block_iovec_unmap(struct uref *uref,
+                                          int offset, int size,
+                                          struct iovec *iovecs)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_iovec_unmap(uref->ubuf, offset, size, iovecs);
 }
 
 /** @see ubuf_block_resize */

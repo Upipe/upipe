@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/umem.h>
@@ -178,13 +178,13 @@ int main(int argc, char *argv[])
     assert(uprobe_print != NULL);
 
     struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "sink"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_ts_sync_mgr = upipe_ts_sync_mgr_alloc();
     assert(upipe_ts_sync_mgr != NULL);
     struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "ts sync"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts sync"));
     assert(upipe_ts_sync != NULL);
     assert(upipe_linear_set_output(upipe_ts_sync, upipe_sink));
 

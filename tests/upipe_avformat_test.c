@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ulog.h>
-#include <upipe/ulog_std.h>
+#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 #include <upipe/uclock.h>
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);
     struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "file sink"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file sink"));
     assert(upipe_avfsink != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsink, upump_mgr));
     if (delay) {
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
     struct upipe *upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr, uprobe_print,
-            ulog_std_alloc(stdout, ULOG_LEVEL, "avformat source"));
+            ulog_stdio_alloc(stdout, ULOG_LEVEL, "avformat source"));
     assert(upipe_avfsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
