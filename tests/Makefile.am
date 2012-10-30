@@ -7,6 +7,7 @@ dist_check_SCRIPTS = \
 	udict_inline_test.sh \
 	uprobe_print_test.sh \
 	upipe_file_test.sh \
+	upipe_multicat_test.sh \
 	valgrind_wrapper.sh
 
 dist_check_DATA = ulog_stdio_test.txt ulog_sub_test.txt uprobe_print_test.txt
@@ -22,6 +23,7 @@ check_PROGRAMS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	uclock_std_test \
+	upipe_genaux_test \
 	upipe_dup_test
 
 TESTS = \
@@ -35,6 +37,7 @@ TESTS = \
 	ulog_sub_test.sh \
 	uprobe_print_test.sh \
 	uclock_std_test \
+	upipe_genaux_test \
 	upipe_dup_test
 
 if HAVE_EV
@@ -44,7 +47,7 @@ check_PROGRAMS += \
 	udeal_test \
 	upipe_file_test \
 	upipe_queue_test \
-	upipe_genaux_test \
+	upipe_multicat_test \
 	upipe_udp_test
 
 TESTS += \
@@ -53,7 +56,7 @@ TESTS += \
 	udeal_test \
 	upipe_file_test.sh \
 	upipe_queue_test \
-	upipe_genaux_test
+	upipe_multicat_test.sh
 #	upipe_udp_test
 endif
 
@@ -97,6 +100,7 @@ udeal_test_CFLAGS = -pthread
 udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

@@ -61,6 +61,7 @@ nobase_include_HEADERS = \
 	upipe-modules/upipe_queue_source.h \
 	upipe-modules/upipe_udp_source.h \
 	upipe-modules/upipe_genaux.h \
+	upipe-modules/upipe_multicat_sink.h \
 	upipe-av/upipe_av.h \
 	upipe-av/upipe_avformat_source.h \
 	upipe-swscale/upipe_sws.h \
