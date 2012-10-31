@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
 	// write junk to the first file to test set_mode/OVERWRITE
 	snprintf(filepath, MAXPATHLEN, "%s%u%s", dirpath, 0, suffix);
 	fd = open(filepath, O_TRUNC|O_CREAT|O_WRONLY, 0644);
+	memset(filepath, 42, MAXPATHLEN);
 	write(fd, filepath, MAXPATHLEN);
 	close(fd);
 
