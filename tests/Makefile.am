@@ -56,8 +56,8 @@ TESTS += \
 	udeal_test \
 	upipe_file_test.sh \
 	upipe_queue_test \
-	upipe_multicat_test.sh
-#	upipe_udp_test
+	upipe_multicat_test.sh \
+	upipe_udp_test
 endif
 
 if HAVE_AVFORMAT
