@@ -577,4 +577,42 @@ static inline bool ubuf_block_compare(struct ubuf *ubuf1, struct ubuf *ubuf2)
     return true;
 }
 
+/** @This checks if the beginning of a block ubuf matches a filter with a
+ * given mask.
+ *
+ * @param ubuf pointer to ubuf
+ * @param filter wanted content
+ * @param mask mask of the bits to check
+ * @param size size (in octets) of filter and mask
+ * @return false if the ubuf doesn't match
+ */
+static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
+                                    const uint8_t *mask, size_t size)
+{
+    size_t ubuf_size;
+    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) || ubuf_size < size))
+        return false;
+
+    int offset = 0;
+    while (size > 0) {
+        int read_size = size;
+        const uint8_t *read_buffer;
+        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+            return false;
+        int compare_size = read_size < size ? read_size : size;
+        bool ret = true;
+        for (int i = 0; i < compare_size; i++)
+            if ((read_buffer[i] & mask[offset + i]) != filter[offset + i]) {
+                ret = false;
+                break;
+            }
+        ret = ubuf_block_unmap(ubuf, offset, read_size) && ret;
+        if (!ret)
+            return false;
+        size -= compare_size;
+        offset += compare_size;
+    }
+    return true;
+}
+
 #endif

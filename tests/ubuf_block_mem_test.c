@@ -242,6 +242,13 @@ int main(int argc, char **argv)
     assert(ubuf_block_compare(ubuf1, ubuf2));
     ubuf_free(ubuf2);
 
+    /* test ubuf_block_match */
+    uint8_t filter[] = { 0, 1, 2, 1 };
+    uint8_t mask[] = { 0xff, 0xff, 0x0f, 0xfd };
+    assert(ubuf_block_match(ubuf1, filter, mask, 4));
+    filter[3] = 0;
+    assert(!ubuf_block_match(ubuf1, filter, mask, 4));
+
     /* test ubuf_block_delete */
     assert(ubuf_block_delete(ubuf1, 8, 32));
     uint8_t buf[33];

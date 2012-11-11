@@ -227,4 +227,13 @@ static inline bool uref_block_compare(struct uref *uref1, struct uref *uref2)
     return ubuf_block_compare(uref1->ubuf, uref2->ubuf);
 }
 
+/** @see ubuf_block_match */
+static inline bool uref_block_match(struct uref *uref, const uint8_t *filter,
+                                    const uint8_t *mask, size_t size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_match(uref->ubuf, filter, mask, size);
+}
+
 #endif
