@@ -257,6 +257,12 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
                             pic_mgr->common_mgr.planes[plane]->hsub *
                             pic_mgr->common_mgr.planes[plane]->macropixel_size +
                          pic_mgr->align;
+        strides[plane] -=
+                (strides[plane] +
+                 (pic_mgr->align_hmoffset + pic_mgr->hmprepend) /
+                    pic_mgr->common_mgr.planes[plane]->hsub *
+                    pic_mgr->common_mgr.planes[plane]->macropixel_size) %
+                pic_mgr->align;
         plane_sizes[plane] = (vsize + pic_mgr->vprepend + pic_mgr->vappend) /
                                  pic_mgr->common_mgr.planes[plane]->vsub *
                                  strides[plane];

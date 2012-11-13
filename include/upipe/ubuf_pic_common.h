@@ -147,7 +147,8 @@ static inline struct ubuf_pic_common_mgr *ubuf_pic_common_mgr_from_ubuf_mgr(stru
  * @param chroma chroma type
  * @return number of the plane, or -1 if not found
  */
-static int ubuf_pic_common_plane(struct ubuf_mgr *mgr, const char *chroma)
+static inline int ubuf_pic_common_plane(struct ubuf_mgr *mgr,
+                                        const char *chroma)
 {
     struct ubuf_pic_common_mgr *common_mgr =
         ubuf_pic_common_mgr_from_ubuf_mgr(mgr);
