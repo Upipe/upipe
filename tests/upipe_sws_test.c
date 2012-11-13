@@ -216,13 +216,14 @@ struct sws_test {
 UPIPE_HELPER_UPIPE(sws_test, upipe);
 
 /** helper phony pipe to test upipe_sws */
-static struct upipe *sws_test_alloc(struct upipe_mgr *mgr)
+static struct upipe *sws_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     if (unlikely(!sws_test)) return NULL;
     sws_test->flow = NULL;
     sws_test->pic = NULL;
     sws_test->upipe.mgr = mgr;
+	upipe_init(&sws_test->upipe, uprobe, ulog);
     return &sws_test->upipe;
 }
 
