@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uint8_t *buffer, *pat_program;
     int size;
-    uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspat.");
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtspat.");
     assert(uref != NULL);
     assert(uref_flow_set_name(uref, "source"));
     assert(upipe_input(upipe_ts_patd, uref));

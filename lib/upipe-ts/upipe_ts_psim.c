@@ -303,7 +303,6 @@ static bool upipe_ts_psim_input(struct upipe *upipe, struct uref *uref)
         }
 
         ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        uref_flow_set_def_va(uref, "block.%s", def + strlen(EXPECTED_FLOW_DEF));
         upipe_ts_psim_set_flow_def(upipe, uref);
         return true;
     }

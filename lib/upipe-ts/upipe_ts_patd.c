@@ -47,7 +47,7 @@
 #include <bitstream/mpeg/psi.h>
 
 /** we only accept TS packets */
-#define EXPECTED_FLOW_DEF "block.mpegtspat."
+#define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspat."
 
 /** @internal @This is the private context of a ts_patd pipe. */
 struct upipe_ts_patd {
