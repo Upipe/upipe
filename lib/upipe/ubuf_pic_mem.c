@@ -253,19 +253,22 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
     size_t plane_sizes[pic_mgr->common_mgr.nb_planes];
     size_t strides[pic_mgr->common_mgr.nb_planes];
     for (uint8_t plane = 0; plane < pic_mgr->common_mgr.nb_planes; plane++) {
+        size_t align = 0;
+        if (pic_mgr->align &&
+                ((hmsize + pic_mgr->hmprepend + pic_mgr->hmappend) /
+                    pic_mgr->common_mgr.planes[plane]->hsub *
+                    pic_mgr->common_mgr.planes[plane]->macropixel_size) %
+                        pic_mgr->align)
+            align = pic_mgr->align;
         strides[plane] = (hmsize + pic_mgr->hmprepend + pic_mgr->hmappend) /
                             pic_mgr->common_mgr.planes[plane]->hsub *
                             pic_mgr->common_mgr.planes[plane]->macropixel_size +
-                         pic_mgr->align;
-        strides[plane] -=
-                (strides[plane] +
-                 (pic_mgr->align_hmoffset + pic_mgr->hmprepend) /
-                    pic_mgr->common_mgr.planes[plane]->hsub *
-                    pic_mgr->common_mgr.planes[plane]->macropixel_size) %
-                pic_mgr->align;
+                         align;
+        if (align)
+            strides[plane] -= strides[plane] % align;
         plane_sizes[plane] = (vsize + pic_mgr->vprepend + pic_mgr->vappend) /
                                  pic_mgr->common_mgr.planes[plane]->vsub *
-                                 strides[plane];
+                                 strides[plane] + pic_mgr->align;
         buffer_size += plane_sizes[plane];
     }
 

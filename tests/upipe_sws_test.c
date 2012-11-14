@@ -65,8 +65,8 @@
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
-#define UBUF_PREPEND        2
-#define UBUF_APPEND         2
+#define UBUF_PREPEND        0
+#define UBUF_APPEND         0
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_HOFFSET  0
 #define ULOG_LEVEL ULOG_DEBUG
