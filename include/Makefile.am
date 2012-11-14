@@ -68,6 +68,7 @@ nobase_include_HEADERS = \
 	upipe-ts/upipe_ts_decaps.h \
 	upipe-ts/upipe_ts_patd.h \
 	upipe-ts/upipe_ts_pesd.h \
+	upipe-ts/upipe_ts_psi_split.h \
 	upipe-ts/upipe_ts_psim.h \
 	upipe-ts/upipe_ts_split.h \
 	upipe-ts/upipe_ts_sync.h \
