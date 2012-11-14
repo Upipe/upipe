@@ -463,7 +463,7 @@ static inline uint8_t *udict_set(struct udict *udict, const char *name,
     return p;
 }
 
-/** @This sets the value of a opaque attribute, optionally creating it
+/** @This sets the value of an opaque attribute, optionally creating it.
  *
  * @param udict the pointer to the udict
  * @param value value to set
