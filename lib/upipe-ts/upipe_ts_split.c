@@ -66,8 +66,6 @@ struct upipe_ts_split {
 
     /** PIDs array */
     struct upipe_ts_split_pid pids[MAX_PIDS];
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** refcount management structure */
     urefcount refcount;
@@ -103,10 +101,6 @@ static inline struct uchain *upipe_ts_split_output_to_pid_uchain(struct upipe_ts
     return &output->pid_uchain;
 }
 
-/** @hidden */
-static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
-                                     struct upipe_ts_split_output *output);
-
 /** @internal @This returns the upipe_ts_split_output structure.
  *
  * @param uchain pointer to uchain
@@ -122,6 +116,10 @@ UPIPE_HELPER_SPLIT_OUTPUT(upipe_ts_split, upipe_ts_split_output, uchain, output,
 UPIPE_HELPER_SPLIT_OUTPUTS(upipe_ts_split, outputs, upipe_ts_split_output)
 UPIPE_HELPER_SPLIT_FLOW_NAME(upipe_ts_split, outputs, flow_name,
                              upipe_ts_split_output)
+
+/** @hidden */
+static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
+                                     struct upipe_ts_split_output *output);
 
 /** @internal @This allocates and initializes a new output-specific
  * substructure.
@@ -189,7 +187,7 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr,
         ulist_init(&upipe_ts_split->pids[i].outputs);
         upipe_ts_split->pids[i].set = false;
     }
-    upipe_ts_split->ready = false;
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -253,7 +251,7 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
     upipe_ts_split_pid_check(upipe, pid);
 }
 
-/** @internal @This demuxes a TS packet to the appropriate output.
+/** @internal @This demuxes a TS packet to the appropriate output(s).
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -431,7 +429,7 @@ static bool upipe_ts_split_set_flow_def(struct upipe *upipe,
     return true;
 }
 
-/** @internal @This processes control commands on a ts split pipe.
+/** @internal @This processes control commands on a ts_split pipe.
  *
  * @param upipe description structure of the pipe
  * @param command type of command to process
@@ -467,7 +465,7 @@ static bool _upipe_ts_split_control(struct upipe *upipe,
     }
 }
 
-/** @internal @This processes control commands on a ts sync pipe, and
+/** @internal @This processes control commands on a ts_split pipe, and
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
@@ -476,7 +474,7 @@ static bool _upipe_ts_split_control(struct upipe *upipe,
  * @return false in case of error
  */
 static bool upipe_ts_split_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
+                                   enum upipe_command command, va_list args)
 {
     if (likely(command == UPIPE_INPUT)) {
         struct uref *uref = va_arg(args, struct uref *);
@@ -484,16 +482,7 @@ static bool upipe_ts_split_control(struct upipe *upipe,
         return upipe_ts_split_input(upipe, uref);
     }
 
-    if (unlikely(!_upipe_ts_split_control(upipe, command, args)))
-        return false;
-
-    struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
-    if (likely(!upipe_ts_split->ready)) {
-        upipe_ts_split->ready = true;
-        upipe_throw_ready(upipe);
-    }
-
-    return true;
+    return _upipe_ts_split_control(upipe, command, args);
 }
 
 /** @This increments the reference count of a upipe.
