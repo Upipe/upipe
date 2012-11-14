@@ -238,20 +238,20 @@ int main(int argc, char *argv[])
     assert(upipe_input(upipe_ts_sync, uref));
     assert(!nb_packets);
 
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE / 2 + 1);
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE / 2);
     assert(uref != NULL);
     size = -1;
     assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == TS_SIZE / 2 + 1);
-    buffer[size - 1] = 0x47;
+    assert(size == TS_SIZE / 2);
     memset(buffer, 0, TS_SIZE / 2);
     uref_block_unmap(uref, 0, size);
     assert(uref_flow_set_name(uref, "0"));
-    nb_packets++;
     assert(upipe_input(upipe_ts_sync, uref));
     assert(!nb_packets);
 
+    nb_packets++;
     upipe_release(upipe_ts_sync);
+    assert(!nb_packets);
     upipe_mgr_release(upipe_ts_sync_mgr); // nop
 
     ts_test_free(upipe_sink);

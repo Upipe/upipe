@@ -306,6 +306,24 @@ static void upipe_ts_sync_work(struct upipe *upipe)
 static void upipe_ts_sync_flush(struct upipe *upipe)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
+    if (upipe_ts_sync->acquired) {
+        size_t offset = 0, size;
+        while (upipe_ts_sync->next_uref != NULL &&
+               uref_block_size(upipe_ts_sync->next_uref, &size) &&
+               size >= upipe_ts_sync->ts_size &&
+               upipe_ts_sync_scan(upipe, &offset) && !offset) {
+            struct uref *output = uref_dup(upipe_ts_sync->next_uref);
+            upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
+            if (unlikely(output == NULL)) {
+                ulog_aerror(upipe->ulog);
+                upipe_throw_aerror(upipe);
+                continue;
+            }
+            uref_block_resize(output, 0, upipe_ts_sync->ts_size);
+            upipe_ts_sync_output(upipe, output);
+        }
+    }
+
     if (upipe_ts_sync->next_uref != NULL) {
         uref_free(upipe_ts_sync->next_uref);
         upipe_ts_sync->next_uref = NULL;
@@ -334,9 +352,9 @@ static bool upipe_ts_sync_input(struct upipe *upipe, struct uref *uref)
     }
 
     if (unlikely(uref_flow_get_delete(uref))) {
+        upipe_ts_sync_flush(upipe);
         upipe_ts_sync_set_flow_def(upipe, NULL);
         uref_free(uref);
-        upipe_ts_sync_flush(upipe);
         return true;
     }
 
@@ -549,15 +567,8 @@ static void upipe_ts_sync_release(struct upipe *upipe)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
+        upipe_ts_sync_flush(upipe);
         upipe_ts_sync_clean_output(upipe);
-
-        if (upipe_ts_sync->next_uref != NULL)
-            uref_free(upipe_ts_sync->next_uref);
-        struct uchain *uchain;
-        ulist_delete_foreach (&upipe_ts_sync->urefs, uchain) {
-            ulist_delete(&upipe_ts_sync->urefs, uchain);
-            uref_free(uref_from_uchain(uchain));
-        }
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_sync->refcount);
