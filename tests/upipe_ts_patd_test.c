@@ -103,17 +103,13 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int program = va_arg(args, unsigned int);
-            struct uref *control = va_arg(args, struct uref *);
+            unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             assert(uref != NULL);
-            assert(control != NULL);
-            uint64_t pid;
-            assert(uref_ts_flow_get_pid(control, &pid));
-            uref_free(control);
             program_sum -= program;
             pid_sum -= pid;
             fprintf(stdout,
-                    "ts probe: pipe %p added program %u (PID %"PRIu64")\n",
+                    "ts probe: pipe %p added program %u (PID %u)\n",
                     upipe, program, pid);
             break;
         }

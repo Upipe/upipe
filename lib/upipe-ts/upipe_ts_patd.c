@@ -113,14 +113,14 @@ static void upipe_ts_patd_tsid(struct upipe *upipe, struct uref *uref,
  * @param upipe description structure of the pipe
  * @param uref uref triggering the event
  * @param program program number (a.k.a. service ID)
- * @param control control packet describing the PMT of the program
+ * @param pid PID of the PMT
  */
 static void upipe_ts_patd_new_program(struct upipe *upipe, struct uref *uref,
                                       unsigned int program,
-                                      struct uref *control)
+                                      unsigned int pid)
 {
     upipe_throw(upipe, UPROBE_TS_PATD_NEW_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                uref, program, control);
+                uref, program, pid);
 }
 
 /** @internal @This sends the patd_del_program event.
@@ -166,7 +166,7 @@ static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
  * @param pat_program iterator pointing to program definition
  */
 #define UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, sections, pat_program)        \
-            ret = uref_block_peek_unmap(section, 0, PAT_PROGRAM_SIZE,       \
+            ret = uref_block_peek_unmap(section, offset, PAT_PROGRAM_SIZE,  \
                                         program_buffer, pat_program);       \
             assert(ret);                                                    \
             offset += PAT_PROGRAM_SIZE;
@@ -202,7 +202,8 @@ static bool upipe_ts_patd_table_compare_program(struct upipe *upipe,
     UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
 
     uint16_t program = patn_get_program(pat_program);
-    bool compare = !memcmp(pat_program, wanted_pat_program, PAT_PROGRAM_SIZE);
+    bool compare =
+        patn_get_pid(pat_program) == patn_get_pid(wanted_pat_program);
 
     UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat, pat_program)
 
@@ -285,8 +286,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     const uint8_t *pat_header = uref_block_peek(uref, 0, PAT_HEADER_SIZE,
                                                 buffer);
     if (unlikely(pat_header == NULL)) {
-        ulog_aerror(upipe->ulog);
-        upipe_throw_aerror(upipe);
+        ulog_warning(upipe->ulog, "invalid PAT section received");
         uref_free(uref);
         return;
     }
@@ -340,24 +340,8 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
 
     UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->next_pat, pat_program)
 
-    if (!compare) {
-        struct uref *control = uref_dup(uref);
-        if (unlikely(control == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            return;
-        }
-        ubuf_free(uref_detach_ubuf(control));
-        if (unlikely(!uref_flow_set_def(control,
-                                        "block.mpegtspsi.mpegtspmt.") ||
-                     !uref_ts_flow_set_pid(control, pid))) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            uref_free(control);
-            return;
-        }
-        upipe_ts_patd_new_program(upipe, uref, program, control);
-    }
+    if (!compare)
+        upipe_ts_patd_new_program(upipe, uref, program, pid);
 
     UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->next_pat, pat_program)
 

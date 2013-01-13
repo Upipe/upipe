@@ -37,7 +37,7 @@ enum uprobe_ts_patd_event {
     /** a new TSID was detected (struct uref *, unsigned int tsid) */
     UPROBE_TS_PATD_TSID,
     /** a new program was found in the given uref (struct uref *,
-     * unsigned int, struct uref *) */
+     * unsigned int, unsigned int) */
     UPROBE_TS_PATD_NEW_PROGRAM,
     /** a program was deleted in the given uref (struct uref *,
      * unsigned int) */
