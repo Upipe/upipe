@@ -201,7 +201,8 @@ static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
 /** @This peeks into a ubuf for the given amount of octets, and returns a
  * read-only pointer to the buffer. If the buffer space wanted stretches
  * across two or more segments, it is copied to a (caller-supplied) memory
- * space, and a pointer to it is returned.
+ * space, and a pointer to it is returned. It returns NULL if the ubuf isn't
+ * large enough to provide enough data.
  *
  * @param ubuf pointer to ubuf
  * @param offset offset of the buffer space wanted in the whole block, in
