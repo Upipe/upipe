@@ -75,6 +75,7 @@ endif
 if HAVE_BITSTREAM
 check_PROGRAMS += \
 	upipe_ts_sync_test \
+	upipe_ts_check_test \
 	upipe_ts_split_test \
 	upipe_ts_decaps_test \
 	upipe_ts_pesd_test \
@@ -84,6 +85,7 @@ check_PROGRAMS += \
 	upipe_ts_pmtd_test
 TESTS += \
 	upipe_ts_sync_test \
+	upipe_ts_check_test \
 	upipe_ts_split_test \
 	upipe_ts_decaps_test \
 	upipe_ts_pesd_test \
@@ -113,6 +115,7 @@ upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pesd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

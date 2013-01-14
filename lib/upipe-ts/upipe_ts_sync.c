@@ -41,14 +41,16 @@
 #include <string.h>
 #include <assert.h>
 
-/** default TS size */
-#define DEFAULT_TS_SIZE 188
+#include <bitstream/mpeg/ts.h>
+
 /** default number of packets to sync with */
 #define DEFAULT_TS_SYNC 2
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
-/** we only output TS packets */
+/** when configured with standard TS size, we output TS packets */
 #define OUTPUT_FLOW_DEF "block.mpegts."
+/** otherwise there is a suffix to decaps */
+#define SUFFIX_OUTPUT_FLOW_DEF "block.mpegtssuffix."
 /** TS synchronization word */
 #define TS_SYNC 0x47
 
@@ -106,7 +108,7 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
     upipe->signature = UPIPE_TS_SYNC_SIGNATURE;
     urefcount_init(&upipe_ts_sync->refcount);
     upipe_ts_sync_init_output(upipe);
-    upipe_ts_sync->ts_size = DEFAULT_TS_SIZE;
+    upipe_ts_sync->ts_size = TS_SIZE;
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
     upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
@@ -374,6 +376,7 @@ static bool upipe_ts_sync_input(struct upipe *upipe, struct uref *uref)
         }
 
         ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
+        /* FIXME make it dependant on the output size */
         uref_flow_set_def(uref, OUTPUT_FLOW_DEF);
         upipe_ts_sync_set_flow_def(upipe, uref);
         return true;
@@ -436,6 +439,7 @@ static bool _upipe_ts_sync_set_size(struct upipe *upipe, int size)
     if (size < 0)
         return false;
     upipe_ts_sync->ts_size = size;
+    /* FIXME change flow definition */
     return true;
 }
 

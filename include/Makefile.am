@@ -65,6 +65,7 @@ nobase_include_HEADERS = \
 	upipe-av/upipe_av.h \
 	upipe-av/upipe_avformat_source.h \
 	upipe-swscale/upipe_sws.h \
+	upipe-ts/upipe_ts_check.h \
 	upipe-ts/upipe_ts_decaps.h \
 	upipe-ts/upipe_ts_patd.h \
 	upipe-ts/upipe_ts_pesd.h \
