@@ -28,7 +28,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_SYNC_SIGNATURE 0x0F100001U
+#define UPIPE_TS_SYNC_SIGNATURE UBASE_FOURCC('t','s','s','y')
 
 /** @This extends upipe_command with specific commands for ts sync. */
 enum upipe_ts_sync_command {

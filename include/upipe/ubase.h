@@ -95,4 +95,17 @@ static inline void uchain_init(struct uchain *uchain)
     uchain->next = uchain->prev = NULL;
 }
 
+#ifdef WORDS_BIGENDIAN
+/** @This allows to define a 32-bit unsigned integer with 4 letters. */     \
+#   define UBASE_FOURCC(a, b, c, d)                                         \
+        (((uint32_t)d) | (((uint32_t)c) << 8) | (((uint32_t)b) << 16) |     \
+         (((uint32_t)a) << 24))
+
+#else /* mkdoc:skip */
+#   define UBASE_FOURCC(a, b, c, d)                                         \
+        (((uint32_t)a) | (((uint32_t)b) << 8) | (((uint32_t)c) << 16) |     \
+         (((uint32_t)d) << 24))
+
+#endif
+
 #endif

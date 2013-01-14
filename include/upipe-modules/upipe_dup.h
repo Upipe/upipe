@@ -33,7 +33,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_DUP_SIGNATURE 0x0F000001U
+#define UPIPE_DUP_SIGNATURE UBASE_FOURCC('d','u','p',' ')
 
 /** @This returns the management structure for all dup pipes.
  *

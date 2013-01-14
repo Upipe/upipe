@@ -57,6 +57,7 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 AC_CHECK_TYPES([ptrdiff_t])
+AC_C_BIGENDIAN
 
 # Checks for library functions.
 AC_FUNC_MALLOC

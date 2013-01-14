@@ -39,7 +39,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 
-#define UPIPE_GENAUX_SIGNATURE 0x0F000041U
+#define UPIPE_GENAUX_SIGNATURE UBASE_FOURCC('g','a','u','x')
 
 /** @This returns the management structure for genaux pipes.
  *

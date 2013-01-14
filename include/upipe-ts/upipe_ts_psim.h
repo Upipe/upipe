@@ -28,7 +28,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PSIM_SIGNATURE 0x0F100005U
+#define UPIPE_TS_PSIM_SIGNATURE UBASE_FOURCC('t','s','p','m')
 
 /** @This returns the management structure for all ts_psim pipes.
  *

@@ -33,7 +33,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_FSRC_SIGNATURE 0x0F000011U
+#define UPIPE_FSRC_SIGNATURE UBASE_FOURCC('f','s','r','c')
 
 /** @This extends upipe_command with specific commands for file source. */
 enum upipe_fsrc_command {

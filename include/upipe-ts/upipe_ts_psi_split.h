@@ -32,7 +32,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PSI_SPLIT_SIGNATURE 0x0F100100U
+#define UPIPE_TS_PSI_SPLIT_SIGNATURE UBASE_FOURCC('t','s','p','s')
 
 /** @This returns the management structure for all ts_psi_split pipes.
  *

@@ -39,7 +39,7 @@
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_multicat_sink.h>
 
-#define UPIPE_MULTICAT_SINK_SIGNATURE 0x0F000042U
+#define UPIPE_MULTICAT_SINK_SIGNATURE UBASE_FOURCC('m','s','n','k')
 #define UPIPE_MULTICAT_SINK_DEF_ROTATE UINT64_C(97200000000) // FIXME
 
 /** @This extends upipe_command with specific commands for multicat sink. */

@@ -34,7 +34,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_UDPSRC_SIGNATURE 0x0F000011U
+#define UPIPE_UDPSRC_SIGNATURE UBASE_FOURCC('u','s','r','c')
 
 /** @This extends upipe_command with specific commands for udp socket source. */
 enum upipe_udpsrc_command {

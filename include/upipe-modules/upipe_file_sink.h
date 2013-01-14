@@ -33,7 +33,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_FSINK_SIGNATURE 0x0F000012U
+#define UPIPE_FSINK_SIGNATURE UBASE_FOURCC('f','s','n','k')
 
 /** @This defines file opening modes. */
 enum upipe_fsink_mode {

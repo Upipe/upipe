@@ -31,7 +31,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_SWS_SIGNATURE 0x0F020001U
+#define UPIPE_SWS_SIGNATURE UBASE_FOURCC('s','w','s',' ')
 
 /** @This sets a new output flow definition along with the
  * output picture size

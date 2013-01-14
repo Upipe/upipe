@@ -28,7 +28,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PATD_SIGNATURE 0x0F100101U
+#define UPIPE_TS_PATD_SIGNATURE UBASE_FOURCC('t','s','1','d')
 
 /** @This extends uprobe_event with specific events for ts patd. */
 enum uprobe_ts_patd_event {

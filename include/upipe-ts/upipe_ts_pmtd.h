@@ -28,7 +28,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PMTD_SIGNATURE 0x0F100102U
+#define UPIPE_TS_PMTD_SIGNATURE UBASE_FOURCC('t','s','2','d')
 
 /** @This extends uprobe_event with specific events for ts pmtd. */
 enum uprobe_ts_pmtd_event {

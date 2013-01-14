@@ -37,7 +37,7 @@
 
 #include <assert.h>
 
-#define UPIPE_QSRC_SIGNATURE 0x0F000021U
+#define UPIPE_QSRC_SIGNATURE UBASE_FOURCC('q','s','r','c')
 
 /** @internal @This is the structure exported from source to sinks. */
 struct upipe_queue {

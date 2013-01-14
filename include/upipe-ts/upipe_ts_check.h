@@ -29,7 +29,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_CHECK_SIGNATURE 0x0F100006U
+#define UPIPE_TS_CHECK_SIGNATURE UBASE_FOURCC('t','s','c','k')
 
 /** @This extends upipe_command with specific commands for ts check. */
 enum upipe_ts_check_command {

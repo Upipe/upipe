@@ -32,7 +32,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_SPLIT_SIGNATURE 0x0F100002U
+#define UPIPE_TS_SPLIT_SIGNATURE UBASE_FOURCC('t','s','s','p')
 
 /** @This extends uprobe_event with specific events for ts split. */
 enum uprobe_ts_split_event {

@@ -33,7 +33,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_QSINK_SIGNATURE 0x0F000022U
+#define UPIPE_QSINK_SIGNATURE UBASE_FOURCC('q','s','n','k')
 
 /** @This extends upipe_command with specific commands for queue sink. */
 enum upipe_qsink_command {
