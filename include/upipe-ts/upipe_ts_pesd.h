@@ -29,7 +29,7 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PESD_SIGNATURE 0x0F100004U
+#define UPIPE_TS_PESD_SIGNATURE UBASE_FOURCC('t','s','p','d')
 
 /** @This returns the management structure for all ts_pesd pipes.
  *
