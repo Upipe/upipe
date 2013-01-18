@@ -82,7 +82,8 @@ check_PROGRAMS += \
 	upipe_ts_psim_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_patd_test \
-	upipe_ts_pmtd_test
+	upipe_ts_pmtd_test \
+	upipe_ts_demux_test
 TESTS += \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
@@ -123,3 +124,4 @@ upipe_ts_psim_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_patd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pmtd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
