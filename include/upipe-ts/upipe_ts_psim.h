@@ -22,9 +22,9 @@
  * @short Upipe module merging PSI sections from TS input
  */
 
-#ifndef _UPIPE_TS_UPIPE_TS_PESD_H_
+#ifndef _UPIPE_TS_UPIPE_TS_PSIM_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_TS_PESD_H_
+#define _UPIPE_TS_UPIPE_TS_PSIM_H_
 
 #include <upipe/upipe.h>
 
