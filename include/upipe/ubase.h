@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <string.h>
 
 #ifdef __GNUC__
 
@@ -107,5 +108,16 @@ static inline void uchain_init(struct uchain *uchain)
          (((uint32_t)d) << 24))
 
 #endif
+
+/** @This checks if a prefix matches a string.
+ *
+ * @param string large string
+ * @param prefix prefix to check
+ * @return 0 if the prefix matches
+ */
+static inline int ubase_ncmp(const char *string, const char *prefix)
+{
+    return strncmp(string, prefix, strlen(prefix));
+}
 
 #endif
