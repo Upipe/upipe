@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uprobe_print.c: simple probe printing all received events, as a fall-back
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,9 +21,14 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short simple probe printing all received events, as a fall-back
+ */
 
 #include <upipe/ubase.h>
+#include <upipe/uref_flow.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_print.h>
 
@@ -82,6 +85,8 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_print *uprobe_print = uprobe_print_from_uprobe(uprobe);
     const char *name = likely(uprobe_print->name != NULL) ? uprobe_print->name :
                        "unknown";
+    va_list args_copy;
+    va_copy(args_copy, args);
 
     switch (event) {
         case UPROBE_READY:
@@ -100,24 +105,17 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     name, upipe);
             break;
         case UPROBE_READ_END: {
-            const char *location = va_arg(args, const char *);
+            const char *location = va_arg(args_copy, const char *);
             fprintf(uprobe_print->stream,
                     "%s probe: received read end from pipe %p on %s\n",
                     name, upipe, location);
             break;
         }
         case UPROBE_WRITE_END: {
-            const char *location = va_arg(args, const char *);
+            const char *location = va_arg(args_copy, const char *);
             fprintf(uprobe_print->stream,
                     "%s probe: received write end from pipe %p on %s\n",
                     name, upipe, location);
-            break;
-        }
-        case UPROBE_NEW_FLOW: {
-            const char *flow_name = va_arg(args, const char *);
-            fprintf(uprobe_print->stream,
-                    "%s probe: received new flow from pipe %p on output %s\n",
-                    name, upipe, flow_name);
             break;
         }
         case UPROBE_NEED_UREF_MGR:
@@ -140,12 +138,52 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     "%s probe: pipe %p required a flow name\n",
                     name, upipe);
             break;
+        case UPROBE_LINEAR_NEED_OUTPUT: {
+            struct uref *flow_def = va_arg(args_copy, struct uref *);
+            const char *def = "[invalid]";
+            uref_flow_get_def(flow_def, &def);
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p required an output for flow definition \"%s\"\n",
+                    name, upipe, def);
+            break;
+        }
+        case UPROBE_SPLIT_NEED_OUTPUT: {
+            struct uref *flow_def = va_arg(args_copy, struct uref *);
+            const char *flow_suffix = va_arg(args_copy, const char *);
+            const char *def = "[invalid]";
+            uref_flow_get_def(flow_def, &def);
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p required an output on %s for flow definition \"%s\"\n",
+                    name, upipe, flow_suffix, def);
+            break;
+        }
+        case UPROBE_SPLIT_NEW_FLOW: {
+            struct uref *flow_def = va_arg(args_copy, struct uref *);
+            const char *flow_suffix = va_arg(args_copy, const char *);
+            const char *def = "[invalid]";
+            uref_flow_get_def(flow_def, &def);
+            fprintf(uprobe_print->stream,
+                    "%s probe: received new flow definition \"%s\" from pipe %p on output %s\n",
+                    name, def, upipe, flow_suffix);
+            break;
+        }
+        case UPROBE_SYNC_ACQUIRED:
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p acquired sync\n",
+                    name, upipe);
+            break;
+        case UPROBE_SYNC_LOST:
+            fprintf(uprobe_print->stream,
+                    "%s probe: pipe %p lost sync\n",
+                    name, upipe);
+            break;
         default:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p threw an unknown, uncaught event (0x%x)\n",
                     name, upipe, event);
             break;
     }
+    va_end(args_copy);
     return false;
 }
 

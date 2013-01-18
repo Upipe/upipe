@@ -178,22 +178,15 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_AERROR:
-        case UPROBE_UPUMP_ERROR:
-        case UPROBE_WRITE_END:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_LINEAR_NEED_UBUF_MGR:
-        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
         case UPROBE_READY:
         case UPROBE_READ_END:
             break;
-        case UPROBE_NEW_FLOW: {
-            const char *flow_suffix = va_arg(args, const char *);
+        case UPROBE_SPLIT_NEED_OUTPUT: {
             struct uref *flow_def = va_arg(args, struct uref *);
+            const char *flow_suffix = va_arg(args, const char *);
             const char *def;
             assert(uref_flow_get_def(flow_def, &def));
             if (strncmp(def, "block.", strlen("block."))) {

@@ -258,6 +258,9 @@ static void SUBSTRUCT##_flow_def(struct upipe *upipe,                       \
 static void SUBSTRUCT##_output(struct upipe *upipe,                         \
                                struct SUBSTRUCT *output, struct uref *uref) \
 {                                                                           \
+    if (unlikely(output->OUTPUT == NULL && output->FLOW_DEF != NULL))       \
+        upipe_split_throw_need_output(upipe, output->FLOW_DEF,              \
+                                      output->FLOW_SUFFIX);                 \
     if (unlikely(output->OUTPUT == NULL)) {                                 \
         ulog_error(upipe->ulog, "no output defined");                       \
         uref_free(uref);                                                    \
@@ -303,7 +306,8 @@ static bool STRUCTURE##_get_flow_name(struct upipe *upipe, const char **p); \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param output pointer to output-specific substructure                    \
- * @param flow_def control packet describing the output                     \
+ * @param flow_def control packet describing the output (we keep a pointer  \
+ * to it so make sure it belongs to us)                                     \
  */                                                                         \
 static void SUBSTRUCT##_set_flow_def(struct upipe *upipe,                   \
                                      struct SUBSTRUCT *output,              \

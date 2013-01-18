@@ -69,15 +69,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_AERROR:
-        case UPROBE_UPUMP_ERROR:
-        case UPROBE_READ_END:
-        case UPROBE_WRITE_END:
-        case UPROBE_NEW_FLOW:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_LINEAR_NEED_UBUF_MGR:
-        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;

@@ -93,7 +93,7 @@ struct upipe_ts_split_output {
 
 /** @internal @This returns the uchain for PID chaining.
  *
- * @param block pointer to the upipe_ts_split_output structure
+ * @param output pointer to the upipe_ts_split_output structure
  * @return pointer to uchain
  */
 static inline struct uchain *upipe_ts_split_output_to_pid_uchain(struct upipe_ts_split_output *output)
@@ -404,6 +404,10 @@ static bool upipe_ts_split_set_flow_def(struct upipe *upipe,
         if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS))
             return false;
 
+        struct uref *uref = uref_dup(flow_def);
+        if (unlikely(uref == NULL))
+            return false;
+
         struct upipe_ts_split_output *output =
             upipe_ts_split_find_output(upipe, flow_suffix);
 
@@ -411,6 +415,7 @@ static bool upipe_ts_split_set_flow_def(struct upipe *upipe,
             ulog_debug(upipe->ulog, "adding output: %s", flow_suffix);
             output = upipe_ts_split_output_alloc(upipe, flow_suffix);
             if (unlikely(output == NULL)) {
+                uref_free(uref);
                 ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 return false;
@@ -422,7 +427,7 @@ static bool upipe_ts_split_set_flow_def(struct upipe *upipe,
                 return false;
             upipe_ts_split_pid_unset(upipe, old_pid, output);
         }
-        upipe_ts_split_output_set_flow_def(upipe, output, flow_def);
+        upipe_ts_split_output_set_flow_def(upipe, output, uref);
         upipe_ts_split_pid_set(upipe, pid, output);
     }
 

@@ -27,19 +27,20 @@
 #define _UPIPE_TS_UPIPE_TS_PMTD_H_
 
 #include <upipe/upipe.h>
+#include <upipe-ts/upipe_ts_demux.h>
 
 #define UPIPE_TS_PMTD_SIGNATURE UBASE_FOURCC('t','s','2','d')
 
 /** @This extends uprobe_event with specific events for ts pmtd. */
 enum uprobe_ts_pmtd_event {
-    UPROBE_TS_PMTD_SENTINEL = UPROBE_LOCAL,
+    UPROBE_TS_PMTD_SENTINEL = UPROBE_TS_DEMUX_PMTD,
 
     /** a new PMT header was found in the given uref (struct uref *,
      * unsigned int, unsigned int, unsigned int) */
     UPROBE_TS_PMTD_HEADER,
     /** a new ES was found in the given uref (struct uref *, unsigned int,
      * unsigned int, unsigned int, unsigned int) */
-    UPROBE_TS_PMTD_NEW_ES,
+    UPROBE_TS_PMTD_ADD_ES,
     /** an ES was deleted in the given uref (struct uref *, unsigned int) */
     UPROBE_TS_PMTD_DEL_ES,
 };

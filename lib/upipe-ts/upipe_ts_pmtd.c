@@ -106,7 +106,7 @@ static void upipe_ts_pmtd_throw_header(struct upipe *upipe, struct uref *uref,
                 uref, pcrpid, desc_offset, desc_size);
 }
 
-/** @internal @This sends the pmtd_new_es event.
+/** @internal @This sends the pmtd_add_es event.
  *
  * @param upipe description structure of the pipe
  * @param uref uref triggering the event
@@ -115,12 +115,12 @@ static void upipe_ts_pmtd_throw_header(struct upipe *upipe, struct uref *uref,
  * @param desc_offset offset of the ES descriptors array in uref
  * @param desc_size size of the ES descriptors array in uref
  */
-static void upipe_ts_pmtd_new_es(struct upipe *upipe, struct uref *uref,
+static void upipe_ts_pmtd_add_es(struct upipe *upipe, struct uref *uref,
                                  unsigned int pid, unsigned int streamtype,
                                  unsigned int desc_offset,
                                  unsigned int desc_size)
 {
-    upipe_throw(upipe, UPROBE_TS_PMTD_NEW_ES, UPIPE_TS_PMTD_SIGNATURE,
+    upipe_throw(upipe, UPROBE_TS_PMTD_ADD_ES, UPIPE_TS_PMTD_SIGNATURE,
                 uref, pid, streamtype, desc_offset, desc_size);
 }
 
@@ -451,7 +451,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     UPIPE_TS_PMTD_PEEK_UNMAP(upipe, uref, offset, es, desc, desclength)
 
     if (!compare)
-        upipe_ts_pmtd_new_es(upipe, uref, pid, streamtype, desc_offset,
+        upipe_ts_pmtd_add_es(upipe, uref, pid, streamtype, desc_offset,
                              desclength);
 
     UPIPE_TS_PMTD_PEEK_END(upipe, uref, offset)

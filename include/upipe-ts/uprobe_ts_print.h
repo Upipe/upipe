@@ -24,12 +24,13 @@
  */
 
 /** @file
- * @short simple probe printing all received events, as a fall-back
+ * @short simple probe printing all received events from ts pipes, as a
+ * fall-back
  */
 
-#ifndef _UPIPE_UPROBE_PRINT_H_
+#ifndef _UPIPE_UPROBE_TS_PRINT_H_
 /** @hidden */
-#define _UPIPE_UPROBE_PRINT_H_
+#define _UPIPE_UPROBE_TS_PRINT_H_
 
 #include <upipe/uprobe.h>
 
@@ -39,7 +40,7 @@
  *
  * @param uprobe print structure to free
  */
-void uprobe_print_free(struct uprobe *uprobe);
+void uprobe_ts_print_free(struct uprobe *uprobe);
 
 /** @This allocates a new uprobe print structure.
  *
@@ -48,8 +49,8 @@ void uprobe_print_free(struct uprobe *uprobe);
  * @param name prefix appended to all messages by this probe (informative)
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc(struct uprobe *next, FILE *stream,
-                                  const char *name);
+struct uprobe *uprobe_ts_print_alloc(struct uprobe *next, FILE *stream,
+                                     const char *name);
 
 /** @This allocates a new uprobe print structure, with composite name.
  *
@@ -59,7 +60,7 @@ struct uprobe *uprobe_print_alloc(struct uprobe *next, FILE *stream,
  * messages by this probe, followed by optional arguments
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_print_alloc_va(struct uprobe *next, FILE *stream,
-                                     const char *format, ...);
+struct uprobe *uprobe_ts_print_alloc_va(struct uprobe *next, FILE *stream,
+                                        const char *format, ...);
 
 #endif

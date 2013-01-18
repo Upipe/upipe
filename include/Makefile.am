@@ -67,6 +67,7 @@ nobase_include_HEADERS = \
 	upipe-swscale/upipe_sws.h \
 	upipe-ts/upipe_ts_check.h \
 	upipe-ts/upipe_ts_decaps.h \
+	upipe-ts/upipe_ts_demux.h \
 	upipe-ts/upipe_ts_patd.h \
 	upipe-ts/upipe_ts_pesd.h \
 	upipe-ts/upipe_ts_psi_split.h \
@@ -74,6 +75,7 @@ nobase_include_HEADERS = \
 	upipe-ts/upipe_ts_pmtd.h \
 	upipe-ts/upipe_ts_split.h \
 	upipe-ts/upipe_ts_sync.h \
+	upipe-ts/uprobe_ts_print.h \
 	upipe-ts/uref_ts_flow.h \
 	upump-ev/upump_ev.h
 

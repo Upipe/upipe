@@ -559,7 +559,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
             uref_flow_set_lang(flow_def, lang->value);
 
         upipe_avfsrc_output_set_flow_def(upipe, output, flow_def);
-        upipe_throw_new_flow(upipe, output->flow_suffix, flow_def);
+        upipe_split_throw_need_output(upipe, flow_def, output->flow_suffix);
     }
 
     upipe_avfsrc_start(upipe);

@@ -177,6 +177,8 @@ static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
 static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    if (unlikely(STRUCTURE->OUTPUT == NULL && STRUCTURE->FLOW_DEF != NULL)) \
+        upipe_linear_throw_need_output(upipe, STRUCTURE->FLOW_DEF);         \
     if (unlikely(STRUCTURE->OUTPUT == NULL)) {                              \
         ulog_error(upipe->ulog, "no output defined");                       \
         uref_free(uref);                                                    \
@@ -206,7 +208,8 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
  * It can handle the set_flow_def control command.                          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param flow_def control packet describing the output                     \
+ * @param flow_def control packet describing the output (we keep a pointer  \
+ * to it so make sure it belongs to us)                                     \
  */                                                                         \
 static void STRUCTURE##_set_flow_def(struct upipe *upipe,                   \
                                      struct uref *flow_def)                 \

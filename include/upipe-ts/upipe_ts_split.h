@@ -31,12 +31,13 @@
 #define _UPIPE_TS_UPIPE_TS_SPLIT_H_
 
 #include <upipe/upipe.h>
+#include <upipe-ts/upipe_ts_demux.h>
 
 #define UPIPE_TS_SPLIT_SIGNATURE UBASE_FOURCC('t','s','s','p')
 
 /** @This extends uprobe_event with specific events for ts split. */
 enum uprobe_ts_split_event {
-    UPROBE_TS_SPLIT_SENTINEL = UPROBE_LOCAL,
+    UPROBE_TS_SPLIT_SENTINEL = UPROBE_TS_DEMUX_SPLIT,
 
     /** the given PID is needed for correct operation (unsigned int) */
     UPROBE_TS_SPLIT_SET_PID,

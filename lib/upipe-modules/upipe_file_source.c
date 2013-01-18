@@ -496,8 +496,6 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
                 upipe_throw_need_upump_mgr(upipe);
             else if (unlikely(upipe_fsrc->flow_name == NULL))
                 upipe_throw_source_need_flow_name(upipe);
-            else if (unlikely(upipe_fsrc->output == NULL))
-                upipe_throw_new_flow(upipe, NULL, upipe_fsrc->flow_def);
             else if (unlikely(upipe_fsrc->ubuf_mgr == NULL))
                 upipe_throw_linear_need_ubuf_mgr(upipe);
         }

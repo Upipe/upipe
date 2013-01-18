@@ -970,8 +970,6 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
                 upipe_throw_need_upump_mgr(upipe);
             else if (unlikely(upipe_udpsrc->flow_name == NULL))
                 upipe_throw_source_need_flow_name(upipe);
-            else if (unlikely(upipe_udpsrc->output == NULL))
-                upipe_throw_new_flow(upipe, NULL, upipe_udpsrc->flow_def);
             else if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))
                 upipe_throw_linear_need_ubuf_mgr(upipe);
         }

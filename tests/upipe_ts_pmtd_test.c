@@ -44,9 +44,9 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
+#include <upipe-ts/uprobe_ts_print.h>
 #include <upipe-ts/upipe_ts_pmtd.h>
 #include <upipe-ts/uref_ts_flow.h>
 
@@ -78,15 +78,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_AERROR:
-        case UPROBE_UPUMP_ERROR:
-        case UPROBE_READ_END:
-        case UPROBE_WRITE_END:
-        case UPROBE_NEW_FLOW:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_LINEAR_NEED_UBUF_MGR:
-        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
@@ -108,7 +99,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             pcrpid = 0;
             break;
         }
-        case UPROBE_TS_PMTD_NEW_ES: {
+        case UPROBE_TS_PMTD_ADD_ES: {
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int pid = va_arg(args, unsigned int);
@@ -160,11 +151,14 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
+    struct uprobe *uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout,
+                                                           "ts test");
+    assert(uprobe_ts_print != NULL);
 
     struct upipe_mgr *upipe_ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     assert(upipe_ts_pmtd_mgr != NULL);
-    struct upipe *upipe_ts_pmtd = upipe_alloc(upipe_ts_pmtd_mgr, uprobe_print,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts pmtd"));
+    struct upipe *upipe_ts_pmtd = upipe_alloc(upipe_ts_pmtd_mgr,
+            uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts pmtd"));
     assert(upipe_ts_pmtd != NULL);
 
     struct uref *uref;
@@ -456,6 +450,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uprobe_print_free(uprobe_print);
+    uprobe_ts_print_free(uprobe_ts_print);
 
     return 0;
 }

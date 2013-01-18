@@ -296,6 +296,10 @@ static bool upipe_ts_psi_split_set_flow_def(struct upipe *upipe,
                                                 upipe_ts_psi_split_output_free);
 
     } else {
+        struct uref *uref = uref_dup(flow_def);
+        if (unlikely(uref == NULL))
+            return false;
+
         struct upipe_ts_psi_split_output *output =
             upipe_ts_psi_split_find_output(upipe, flow_suffix);
 
@@ -303,13 +307,14 @@ static bool upipe_ts_psi_split_set_flow_def(struct upipe *upipe,
             ulog_debug(upipe->ulog, "adding output: %s", flow_suffix);
             output = upipe_ts_psi_split_output_alloc(upipe, flow_suffix);
             if (unlikely(output == NULL)) {
+                uref_free(uref);
                 ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 return false;
             }
             upipe_ts_psi_split_add_output(upipe, output);
         }
-        upipe_ts_psi_split_output_set_flow_def(upipe, output, flow_def);
+        upipe_ts_psi_split_output_set_flow_def(upipe, output, uref);
     }
 
     return true;

@@ -84,9 +84,9 @@ enum upipe_command {
     UPIPE_LINEAR_GET_UBUF_MGR,
     /** sets ubuf manager (struct ubuf_mgr *) */
     UPIPE_LINEAR_SET_UBUF_MGR,
-    /** get output flow definition (struct uref **) */
+    /** gets output flow definition (struct uref **) */
     UPIPE_LINEAR_GET_FLOW_DEF,
-    /** set output flow definition (struct uref *) */
+    /** sets output flow definition (struct uref *) */
     UPIPE_LINEAR_SET_FLOW_DEF,
 
 
@@ -357,6 +357,22 @@ UPIPE_SPLIT_CONTROL_TEMPLATE(flow_def, FLOW_DEF, struct uref *,
                              output flow definition)
 #undef UPIPE_SPLIT_CONTROL_TEMPLATE
 
+/** @This sets the output regardless of the pipe type. This is typically
+ * useful for plumbers (probes that catch the need_output event).
+ *
+ * @param upipe pointer to upipe
+ * @param flow_suffix flow suffix passed to the probe (possibly NULL)
+ * @param output pipe acting as output
+ */
+static inline bool upipe_set_output(struct upipe *upipe,
+                                    const char *flow_suffix,
+                                    struct upipe *output)
+{
+    if (flow_suffix != NULL)
+        return upipe_split_set_output(upipe, output, flow_suffix);
+    return upipe_linear_set_output(upipe, output);
+}
+
 /** @This increments the reference count of a upipe.
  *
  * @param upipe pointer to upipe
@@ -468,21 +484,6 @@ static inline void upipe_throw_write_end(struct upipe *upipe,
     upipe_throw(upipe, UPROBE_WRITE_END, location);
 }
 
-/** @This throws a new flow event. This event is thrown whenever a pipe
- * declares a new output flow.
- *
- * @param upipe description structure of the pipe
- * @param flow_suffix suffix appended to the flow name for this output, or NULL
- * in case of a linear pipe
- * @param flow_def_head head of list of flow definitions supported by the output
- */
-static inline void upipe_throw_new_flow(struct upipe *upipe,
-                                        const char *flow_suffix,
-                                        struct uref *flow_def_head)
-{
-    upipe_throw(upipe, UPROBE_NEW_FLOW, flow_suffix, flow_def_head);
-}
-
 /** @This throws an event asking for a uref manager.
  *
  * @param upipe description structure of the pipe
@@ -517,6 +518,59 @@ static inline void upipe_throw_linear_need_ubuf_mgr(struct upipe *upipe)
 static inline void upipe_throw_source_need_flow_name(struct upipe *upipe)
 {
     upipe_throw(upipe, UPROBE_SOURCE_NEED_FLOW_NAME);
+}
+
+/** @This throws an event asking for an output, in a linear pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def definition for this flow
+ */
+static inline void upipe_linear_throw_need_output(struct upipe *upipe,
+                                                  struct uref *flow_def)
+{
+    upipe_throw(upipe, UPROBE_LINEAR_NEED_OUTPUT, flow_def);
+}
+
+/** @This throws an event asking for an output, in a split pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def definition for this flow
+ * @param flow_suffix suffix appended to the flow name for this output
+ */
+static inline void upipe_split_throw_need_output(struct upipe *upipe,
+                                                 struct uref *flow_def,
+                                                 const char *flow_suffix)
+{
+    upipe_throw(upipe, UPROBE_SPLIT_NEED_OUTPUT, flow_def, flow_suffix);
+}
+
+/** @This throws a new flow event. This event is thrown whenever a pipe
+ * declares a new possible output flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def definition for this flow
+ * @param flow_suffix suffix to use for this flow
+ */
+static inline void upipe_split_throw_new_flow(struct upipe *upipe,
+                                              struct uref *flow_def,
+                                              const char *flow_suffix)
+{
+    upipe_throw(upipe, UPROBE_SPLIT_NEW_FLOW, flow_def, flow_suffix);
+}
+
+/** @This throws a new flow event, with printf-style flow suffix generation.
+ * This event is thrown whenever a pipe declares a new possible output flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet for the PSI table
+ * @param format printf-style format of the flow suffix, followed by a
+ * variable list of arguments
+ */
+static inline void upipe_split_throw_new_flow_va(struct upipe *upipe,
+                                                 struct uref *flow_def,
+                                                 const char *format, ...)
+{
+    UBASE_VARARG(upipe_split_throw_new_flow(upipe, flow_def, string))
 }
 
 /** @This throws an event telling that a pipe synchronized on its input.

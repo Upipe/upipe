@@ -46,6 +46,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
+#include <upipe-ts/uprobe_ts_print.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 
 #include <stdbool.h>
@@ -74,15 +75,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_AERROR:
-        case UPROBE_UPUMP_ERROR:
-        case UPROBE_READ_END:
-        case UPROBE_WRITE_END:
-        case UPROBE_NEW_FLOW:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_LINEAR_NEED_UBUF_MGR:
-        case UPROBE_SOURCE_NEED_FLOW_NAME:
         default:
             assert(0);
             break;
@@ -182,6 +174,9 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
+    struct uprobe *uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout,
+                                                           "ts test");
+    assert(uprobe_ts_print != NULL);
 
     struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, uprobe_print,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink"));
@@ -190,7 +185,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_decaps_mgr = upipe_ts_decaps_mgr_alloc();
     assert(upipe_ts_decaps_mgr != NULL);
     struct upipe *upipe_ts_decaps = upipe_alloc(upipe_ts_decaps_mgr,
-            uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts decaps"));
+            uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts decaps"));
     assert(upipe_ts_decaps != NULL);
     assert(upipe_linear_set_output(upipe_ts_decaps, upipe_sink));
 
@@ -269,6 +264,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uprobe_print_free(uprobe_print);
+    uprobe_ts_print_free(uprobe_ts_print);
 
     return 0;
 }

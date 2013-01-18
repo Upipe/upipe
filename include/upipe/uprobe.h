@@ -32,6 +32,7 @@
 #define _UPIPE_UPROBE_H_
 
 #include <upipe/ubase.h>
+#include <upipe/uref_flow.h>
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -59,8 +60,6 @@ enum uprobe_event {
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
     UPROBE_WRITE_END,
-    /** a pipe declares a new output flow (const char *, struct uref *) */
-    UPROBE_NEW_FLOW,
     /** a uref manager is necessary to operate (void) */
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (void) */
@@ -69,6 +68,13 @@ enum uprobe_event {
     UPROBE_LINEAR_NEED_UBUF_MGR,
     /** a flow name is necessary to operate (void) */
     UPROBE_SOURCE_NEED_FLOW_NAME,
+    /** an output pipe is necessary to operate (struct uref *) */
+    UPROBE_LINEAR_NEED_OUTPUT,
+    /** an output pipe is necessary to operate (struct uref *, const char *) */
+    UPROBE_SPLIT_NEED_OUTPUT,
+    /** a pipe declares a new possible output flow (struct uref *,
+     * const char *) */
+    UPROBE_SPLIT_NEW_FLOW,
     /** a pipe got synchronized with its input (void) */
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */
@@ -105,6 +111,51 @@ static inline void uprobe_init(struct uprobe *uprobe, uprobe_throw uthrow,
 {
     uprobe->uthrow = uthrow;
     uprobe->next = next;
+}
+
+/** @This implements the common parts of a plumber probe (catching the
+ * need_output event).
+ *
+ * @param uprobe pointer to the probe
+ * @param upipe pointer to the pipe
+ * @param event event triggered by the pipe
+ * @param args arguments of the event
+ * @param flow_suffix_p filled in with the flow suffix passed with the event
+ * @param flow_def_p filled in with the flow definition uref passed with the
+ * event
+ * @param flow_p filled in with the flow name
+ * @param def_p filled in with the flow definition
+ * @return false if the event cannot be handled by a plumber
+ */
+static inline bool uprobe_plumber(struct uprobe *uprobe, struct upipe *upipe,
+                                  enum uprobe_event event, va_list args,
+                                  const char **flow_suffix_p,
+                                  struct uref **flow_def_p,
+                                  const char **flow_p, const char **def_p)
+{
+    va_list args_copy;
+    switch (event) {
+        case UPROBE_LINEAR_NEED_OUTPUT:
+            va_copy(args_copy, args);
+            *flow_def_p = va_arg(args, struct uref *);
+            *flow_suffix_p = NULL;
+            va_end(args_copy);
+            break;
+        case UPROBE_SPLIT_NEED_OUTPUT:
+            va_copy(args_copy, args);
+            *flow_def_p = va_arg(args, struct uref *);
+            *flow_suffix_p = va_arg(args, const char *);
+            va_end(args_copy);
+            break;
+        default:
+            return false;
+    }
+
+    if (unlikely(!uref_flow_get_name(*flow_def_p, flow_p) ||
+                 !uref_flow_get_def(*flow_def_p, def_p)))
+        return false;
+
+    return true;
 }
 
 #endif

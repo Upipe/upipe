@@ -234,7 +234,12 @@ static bool upipe_sws_conf_outflow(struct upipe *upipe, struct uref *flow)
     upipe_sws->dstsize.hsize = size;
     uref_pic_flow_get_vsize(flow, &size);
     upipe_sws->dstsize.vsize = size;
-    upipe_sws_set_flow_def(upipe, flow);
+
+    struct uref *uref = uref_dup(flow);
+    if (unlikely(uref == NULL))
+        return false;
+
+    upipe_sws_set_flow_def(upipe, uref);
     return true;
 }
 
