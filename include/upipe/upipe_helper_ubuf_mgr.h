@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_linear_ubuf_mgr.h: upipe helper functions for ubuf manager
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,11 +21,15 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
 
-#ifndef _UPIPE_UPIPE_HELPER_LINEAR_UBUF_MGR_H_
+/** @file
+ * @short Upipe helper functions for ubuf manager
+ */
+
+#ifndef _UPIPE_UPIPE_HELPER_UBUF_MGR_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_LINEAR_UBUF_MGR_H_
+#define _UPIPE_UPIPE_HELPER_UBUF_MGR_H_
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -36,7 +38,7 @@
 #include <stdbool.h>
 
 /** @This declares four functions dealing with the ubuf manager used on the
- * output of a linear pipe.
+ * output of a pipe.
  *
  * You must add one pointer to your private upipe structure, for instance:
  * @code
@@ -57,7 +59,7 @@
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_LINEAR_GET_UBUF_MGR: {
+ *  case UPIPE_GET_UBUF_MGR: {
  *      struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
  *      return upipe_foo_get_ubuf_mgr(upipe, p);
  *  }
@@ -68,7 +70,7 @@
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_LINEAR_SET_UBUF_MGR: {
+ *  case UPIPE_SET_UBUF_MGR: {
  *      struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
  *      return upipe_foo_set_ubuf_mgr(upipe, ubuf_mgr);
  *  }
@@ -84,7 +86,7 @@
  * @param UBUF_MGR name of the @tt {struct ubuf_mgr *} field of
  * your private upipe structure
  */
-#define UPIPE_HELPER_LINEAR_UBUF_MGR(STRUCTURE, UBUF_MGR)                   \
+#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR)                          \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \

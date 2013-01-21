@@ -54,45 +54,54 @@
 
     @section {Pipes}
 
-      Pipes are provided by specialized modules, possibly delivered by third-parties. A @ref upipe may expose input and control methods (with standard and custom commands), and would typically take data from its input, process it and output it, possibly using a different buffer, to its output(s).
+      Pipes are provided by specialized modules, possibly delivered by third-parties. A @ref upipe may expose input and control methods (with standard and custom commands), and would typically take data from its input, process it and output it, possibly using a different buffer, to its output.
 
       When created, pipes are passed with two structures for logging (@ref ulog) and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.). Functions from a pipe may only be called from a single thread, so locking and reentrancy isn't required.
 
       The standard Upipe distribution currently contains the following pipe types (though third-party modules may also be used):
 
-      @table 4
+      @table 3
 
-        @item API name @item description @item number of flows @item link with
+        @item API name @item description @item link with
 
-        @item @ref upipe_fsrc_mgr_alloc @item source pipe opening for reading a file or special file characterized by its path @item one @item @tt -lupipe-modules
-        @item @ref upipe_fsink_mgr_alloc @item sink pipe opening for writing a file or special file characterized by its path @item any of block type @item @tt -lupipe-modules
-        @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item any @item @tt -lupipe-modules
-        @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item any @item @tt -lupipe-modules
-        @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item any @item @tt -lupipe-modules
+        @item @ref upipe_fsrc_mgr_alloc @item source pipe opening for reading a file or special file characterized by its path @item @tt -lupipe-modules
+        @item @ref upipe_fsink_mgr_alloc @item sink pipe opening for writing a file or special file characterized by its path @item @tt -lupipe-modules
+        @item @ref upipe_udpsrc_mgr_alloc @item source pipe opening for reading a UDP socket @item @tt -lupipe-modules
+        @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe opening for writing a directory in a manner compatible with multicat @item @tt -lupipe-modules
+        @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item @tt -lupipe-modules
+        @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
+        @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
+        @item @ref upipe_avfsrc_mgr_alloc @item source pipe opening for reading a URL and using libavformat @item @tt -lupipe-av
+        @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
+        @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
 
       @end table
 
-      The generic @ref upipe_control call provides to the application an interface to modify the pipe's property. The counterpart of this function is provided by @ref uprobe, which allows the pipe to send messages to the application. It is possible to build upon this messaging system to dynamically take actions on the pipe or the pipeline. The standard Upipe distribution currently contains the following catchers:
+      Data is fed into a pipe using @ref upipe_input. The @ref uref argument then belongs to the callee and shouldn't be used any longer. There is an additional @ref upump argument that points to the pump that generated the buffer (or NULL if unavailable).
+
+      The generic @ref upipe_control call provides to the application an interface to modify the pipe's property. The counterpart of this function is provided by @ref uprobe, which allows the pipe to send messages to the application. It is possible to build upon this messaging system to dynamically take actions on the pipe or the pipeline. All parameters to @ref upipe_control belong to the caller. All parameters to sent by subpipes via probes also belong to the subpipe. The standard Upipe distribution currently contains the following catchers:
 
       @table 3
 
         @item API name @item description @item link with
 
         @item @ref uprobe_print_alloc @item print all received messages, for debug purposes @item @tt -lupipe
+        @item @ref uprobe_ts_print_alloc @item print TS-related received messages, for debug purposes @item @tt -lupipe-ts
 
       @end table
 
       In Upipe's design, decision taking happens inside probes, while data processing is done in pipes with no intelligence whatsoever.
 
-      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into six categories:
+      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 7 categories:
 
       @list
 
         @item generic: commands and probes which can apply to any type of pipe (no prefix)
-        @item linear: for pipes that only have one output; unless otherwise stated, linear pipes are only required to handle one input flow
+        @item linear: for pipes that only have one output
         @item source: for pipes that have no input, but rely instead on external events to retrieve incoming data
+        @item join: for pipes that have several inputs, such as a mux
         @item split: for pipes that have several outputs, such as a demux
-        @item sink: pipes that have no output and may rely on external events
+        @item sink: for pipes that have no output and may rely on external events
         @item pipe type-specific commands and probes which must be prefixed with the short name of the pipe
 
       @end list
@@ -107,16 +116,14 @@
         @item @ref #UPIPE_HELPER_UREF_MGR @item helper for pipes which require a uref manager
         @item @ref #UPIPE_HELPER_UPUMP_MGR @item helper for pipes which require a upump manager and rely on external events
         @item @ref #UPIPE_HELPER_UCLOCK @item helper for pipes which requires a uclock
-        @item @ref #UPIPE_HELPER_LINEAR_OUTPUT @item helper for the management of the output of linear pipes
-        @item @ref #UPIPE_HELPER_LINEAR_UBUF_MGR @item helper for the management of the ubuf manager for the output of linear pipes
-        @item @ref #UPIPE_HELPER_SOURCE_FLOW_NAME @item helper for source pipes outputting packets with a configurable flow name
+        @item @ref #UPIPE_HELPER_OUTPUT @item helper for the management of the output
+        @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
         @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
         @item @ref #UPIPE_HELPER_SINK_DELAY @item helper for sink pipes outputting data at the given system time of packets, plus a configurable delay
-        @item @ref #UPIPE_HELPER_SPLIT_OUTPUTS @item helper for the management of the multiple outputs and flows of a split pipe
 
       @end table
 
-      In addition, it provides a header file (which is not technically a helper macro, but still) for the management of multiple input flows, for the pipes which allow it (@ref upipe_flows_init).
+      Strictly speaking, a @ref upipe object has at most one input and one output (and possibly none). Split and join pipes are implemented using subpipes: the main split (resp. join) pipe is a sink (resp. a source), and each output (resp. input) requires allocating a source subpipe using @ref upipe_alloc_output (resp. @ref upipe_alloc_input). In a split pipe, outputs are configured with @ref upipe_set_output, @ref upipe_set_flow_def and @ref upipe_set_ubuf_mgr called on the output subpipe; however data is fed into the main pipe. In a join pipe, data is input using @ref upipe_input on each input subpipe; however outputs are configured on the main pipe. The caller must therefore keep a constellation of objects, not only the main pipe but also all the subpipes. Outputs (resp. inputs) are closed by calling @ref upipe_release on the related subpipe.
 
     @end section
 
@@ -168,13 +175,7 @@
 
   @section T {Flows}
 
-    Quite often one need to handle data coming from different sources, or of different nature, such as pictures and sounds. Some parts of the pipeline would be common (like demux or mux), and some would be different (like decoding or encoding). Upipe defines a notion of "flows" (similar to the elementary stream concept in the multimedia realm) defined by an arbitrary string. For instance it is possible to use "video" and "audio" as flow names, or "0", "1", etc.
-
-    When the flow enters a split pipe, such as a demux, resulting flows will be created with the name of the input, appended with a suffix identifying the component, such as "0.0", "0.1", etc.
-
-    An attribute containing the flow name must be added to all @ref uref structures with @ref uref_flow_set_name, so that other pipes know what they are dealing with. Before sending a buffer on a new flow, the source of the flow must send a flow definition buffer describing the content of the flow and how it is stored (@ref uref_block_flow_alloc_def, @ref uref_pic_flow_alloc_def, @ref uref_sound_flow_alloc_def). At the end of the flow, a flow deletion buffer is sent in-band, so that it is only handled with after all buffers of the flow (@ref uref_flow_alloc_delete).
-
-    Please note that some pipes (such as linear pipes in general) only support one input flow. Also, flow management requires an uref manager; a lot of modules will ask for it. Setting the uref manager to NULL may lead to unexpected results and is not recommended.
+    By definition, a series of @ref uref fed into a pipe, or read from a pipe is called a flow. A flow must be preceded by a flow definition packet, telling the pipe which kind of data to expect. If the format is not compatible, the pipe may throw the @ref upipe_throw_flow_def_error exception. A flow definition remains valid until either a new flow definition packet is sent, or the flow is closed by releasing the pipe.
 
   @end section
 

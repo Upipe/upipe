@@ -81,6 +81,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
         case UPROBE_READ_END:
             break;
     }
@@ -155,10 +156,9 @@ int main(int argc, char *argv[])
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
-    assert(upipe_linear_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
-    assert(upipe_linear_set_output(upipe_fsrc, upipe_fsink));
+    assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
+    assert(upipe_set_output(upipe_fsrc, upipe_fsink));
     assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
-    assert(upipe_source_set_flow_name(upipe_fsrc, "0"));
     if (delay)
         assert(upipe_set_uclock(upipe_fsrc, uclock));
     assert(upipe_fsrc_set_path(upipe_fsrc, src_file));

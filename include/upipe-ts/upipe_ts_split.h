@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -20,10 +20,6 @@
 
 /** @file
  * @short Upipe module splitting PIDs of a transport stream
- *
- * Please note the special behavior of @ref upipe_split_set_flow_def. If the
- * flow suffix doesn't exist, it creates it. If flow_def is NULL, it deletes
- * it. This function must be called before @ref upipe_split_set_output.
  */
 
 #ifndef _UPIPE_TS_UPIPE_TS_SPLIT_H_
@@ -33,7 +29,8 @@
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_demux.h>
 
-#define UPIPE_TS_SPLIT_SIGNATURE UBASE_FOURCC('t','s','s','p')
+#define UPIPE_TS_SPLIT_SIGNATURE UBASE_FOURCC('t','s','Y',' ')
+#define UPIPE_TS_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','Y','o')
 
 /** @This extends uprobe_event with specific events for ts split. */
 enum uprobe_ts_split_event {

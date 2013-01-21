@@ -49,6 +49,7 @@
 #include <upipe-ts/uprobe_ts_print.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_patd.h>
+#include <upipe-ts/upipe_ts_pmtd.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
 
@@ -67,6 +68,10 @@
 #define UBUF_POOL_DEPTH 10
 #define ULOG_LEVEL ULOG_DEBUG
 
+static struct upipe *upipe_ts_demux;
+static struct upipe *upipe_ts_demux_output_pmt;
+static struct uprobe *uprobe_ts_print;
+
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
@@ -76,25 +81,29 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
         case UPROBE_TS_SPLIT_SET_PID:
         case UPROBE_TS_SPLIT_UNSET_PID:
         case UPROBE_TS_PATD_TSID:
+        case UPROBE_TS_PATD_ADD_PROGRAM:
+        case UPROBE_TS_PATD_DEL_PROGRAM:
+        case UPROBE_TS_PMTD_ADD_ES:
+        case UPROBE_TS_PMTD_DEL_ES:
             break;
-        case UPROBE_TS_DEMUX_NEW_PSI_FLOW: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
-            struct uref *uref = va_arg(args, struct uref *);
-            const char *flow_suffix = va_arg(args, const char *);
-            assert(uref != NULL);
-            assert(upipe_ts_demux_set_psi_flow_def(upipe, uref, flow_suffix));
-            break;
-        }
         case UPROBE_SPLIT_NEW_FLOW: {
             struct uref *uref = va_arg(args, struct uref *);
-            const char *flow_suffix = va_arg(args, const char *);
             assert(uref != NULL);
+            const char *def;
+            assert(uref_flow_get_def(uref, &def));
+            if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
+                upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
+                        uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL,
+                                                      "ts demux output pmt"));
+                assert(upipe_ts_demux_output_pmt != NULL);
+                assert(upipe_set_flow_def(upipe_ts_demux_output_pmt, uref));
+            }
             break;
         }
     }
@@ -120,13 +129,12 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
-    struct uprobe *uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout,
-                                                           "ts test");
+    uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout, "ts test");
     assert(uprobe_ts_print != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    struct upipe *upipe_ts_demux = upipe_alloc(upipe_ts_demux_mgr,
+    upipe_ts_demux = upipe_alloc(upipe_ts_demux_mgr,
             uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts demux"));
     assert(upipe_ts_demux != NULL);
     assert(upipe_set_uref_mgr(upipe_ts_demux, uref_mgr));
@@ -136,8 +144,7 @@ int main(int argc, char *argv[])
     int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_demux, uref));
+    upipe_input(upipe_ts_demux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
@@ -166,8 +173,7 @@ int main(int argc, char *argv[])
     payload += PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_demux, uref));
+    upipe_input(upipe_ts_demux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
@@ -199,9 +205,9 @@ int main(int argc, char *argv[])
     payload += PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_demux, uref));
+    upipe_input(upipe_ts_demux, uref, NULL);
 
+    upipe_release(upipe_ts_demux_output_pmt);
     upipe_release(upipe_ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
 

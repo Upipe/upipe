@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 
 #define UPIPE_AVFSRC_SIGNATURE UBASE_FOURCC('a','v','f','r')
+#define UPIPE_AVFSRC_OUTPUT_SIGNATURE UBASE_FOURCC('a','v','f','o')
 
 /** @This extends upipe_command with specific commands for avformat source. */
 enum upipe_avfsrc_command {

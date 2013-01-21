@@ -63,67 +63,43 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
     }
     return true;
 }
 
 /** helper phony pipe to test upipe_dup */
-struct dup_test {
-    const char *flow;
-    struct upipe upipe;
-};
-
-/** helper phony pipe to test upipe_dup */
 static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
                                     struct uprobe *uprobe, struct ulog *ulog)
 {
-    struct dup_test *dup_test = malloc(sizeof(struct dup_test));
-    if (unlikely(dup_test == NULL))
-        return NULL;
-    upipe_init(&dup_test->upipe, uprobe, ulog);
-    dup_test->upipe.mgr = mgr;
-    dup_test->flow = NULL;
-    return &dup_test->upipe;
+    struct upipe *upipe = malloc(sizeof(struct upipe));
+    assert(upipe != NULL);
+    upipe_init(upipe, mgr, uprobe, ulog);
+    return upipe;
 }
 
 /** helper phony pipe to test upipe_dup */
-static void dup_test_set_flow(struct upipe *upipe, const char *flow)
+static void dup_test_input(struct upipe *upipe, struct uref *uref,
+                           struct upump *upump)
 {
-    struct dup_test *dup_test = container_of(upipe, struct dup_test, upipe);
-    dup_test->flow = flow;
-}
-
-/** helper phony pipe to test upipe_dup */
-static bool dup_test_control(struct upipe *upipe, enum upipe_command command,
-                             va_list args)
-{
-    if (likely(command == UPIPE_INPUT)) {
-        struct dup_test *dup_test = container_of(upipe, struct dup_test, upipe);
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        const char *flow;
-        assert(uref_flow_get_name(uref, &flow));
-        assert(!strcmp(flow, dup_test->flow));
-        counter++;
-        uref_free(uref);
-        return true;
-    }
-    return false;
+    assert(uref != NULL);
+    counter++;
+    uref_free(uref);
 }
 
 /** helper phony pipe to test upipe_dup */
 static void dup_test_free(struct upipe *upipe)
 {
-    struct dup_test *dup_test = container_of(upipe, struct dup_test, upipe);
     upipe_clean(upipe);
-    free(dup_test);
+    free(upipe);
 }
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr dup_test_mgr = {
     .upipe_alloc = dup_test_alloc,
-    .upipe_control = dup_test_control,
+    .upipe_input = dup_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
     .upipe_release = NULL,
 
@@ -150,50 +126,46 @@ int main(int argc, char *argv[])
     struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, uprobe_print,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 0"));
     assert(upipe_sink0 != NULL);
-    dup_test_set_flow(upipe_sink0, "source.0");
 
     struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, uprobe_print,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 1"));
     assert(upipe_sink1 != NULL);
-    dup_test_set_flow(upipe_sink1, "source.1");
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
     struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_print,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
-    assert(upipe_split_set_output(upipe_dup, upipe_sink0, "0"));
+
+    struct upipe *upipe_dup_output0 = upipe_alloc_output(upipe_dup,
+            uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 0"));
+    assert(upipe_dup_output0 != NULL);
+    assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
 
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    upipe_input(upipe_dup, uref);
-    assert(counter == 1);
-    counter = 0;
+    upipe_input(upipe_dup, uref, NULL);
+    assert(counter == 0);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    upipe_input(upipe_dup, uref);
-    assert(counter == 1);
+    upipe_input(upipe_dup, uref, NULL);
+    assert(counter == 2);
     counter = 0;
 
-    assert(upipe_split_set_output(upipe_dup, upipe_sink1, "1"));
-    assert(counter == 1);
-    counter = 0;
+    struct upipe *upipe_dup_output1 = upipe_alloc_output(upipe_dup,
+            uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 1"));
+    assert(upipe_dup_output1 != NULL);
+    assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
+    assert(counter == 0);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    upipe_input(upipe_dup, uref);
-    assert(counter == 2);
-    counter = 0;
+    upipe_input(upipe_dup, uref, NULL);
+    assert(counter == 3);
 
-    uref = uref_flow_alloc_delete(uref_mgr, "source");
-    assert(uref != NULL);
-    upipe_input(upipe_dup, uref);
-    assert(counter == 2);
-
+    upipe_release(upipe_dup_output0);
+    upipe_release(upipe_dup_output1);
     upipe_release(upipe_dup);
     upipe_mgr_release(upipe_dup_mgr); // nop
 

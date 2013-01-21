@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -48,8 +48,6 @@
 #include <upipe-swscale/upipe_sws.h>
 
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_linear_ubuf_mgr.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -71,7 +69,6 @@
 #define UBUF_ALIGN_HOFFSET  0
 #define ULOG_LEVEL ULOG_DEBUG
 
-#define FLOW_NAME           "fooflow"
 #define SRCSIZE             32
 #define DSTSIZE             16
 
@@ -84,6 +81,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
     }
     return true;
@@ -211,56 +209,40 @@ UPIPE_HELPER_UPIPE(sws_test, upipe);
 static struct upipe *sws_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
-    if (unlikely(!sws_test)) return NULL;
+    assert(sws_test != NULL);
     sws_test->flow = NULL;
     sws_test->pic = NULL;
-    sws_test->upipe.mgr = mgr;
-	upipe_init(&sws_test->upipe, uprobe, ulog);
+	upipe_init(&sws_test->upipe, mgr, uprobe, ulog);
     return &sws_test->upipe;
 }
 
 /** helper phony pipe to test upipe_sws */
-static bool sws_test_control(struct upipe *upipe, enum upipe_command command, va_list args)
+static void sws_test_input(struct upipe *upipe, struct uref *uref,
+                           struct upump *upump)
 {
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
-    const char *def, *name;
+    const char *def;
+    assert(uref != NULL);
+    ulog_debug(upipe->ulog, "===> received input uref");
+//  uref_dump(uref, upipe->ulog);
 
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref*);
-        assert(uref != NULL);
-        ulog_debug(upipe->ulog, "===> received input uref");
-//        uref_dump(uref, upipe->ulog);
-
-        if (unlikely(!uref_flow_get_name(uref, &name))) {
-           ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-           uref_free(uref);
-           return false;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        assert(def);
+        if (sws_test->flow) {
+            uref_free(sws_test->flow);
+            sws_test->flow = NULL;
         }
-
-        if (unlikely(uref_flow_get_def(uref, &def)))
-        {
-            assert(def);
-            if (sws_test->flow) {
-                uref_free(sws_test->flow);
-                sws_test->flow = NULL;
-            }
-            sws_test->flow = uref;
-            ulog_debug(upipe->ulog, "flow def for %s: %s", name, def);
-            return true;
-        }
-        if (sws_test->pic) {
-            uref_free(sws_test->pic);
-            sws_test->pic = NULL;
-        }
-        sws_test->pic = uref;
-        ulog_debug(upipe->ulog, "received pic");
-//        uref_dump(sws_test->pic, upipe->ulog);
-        return true;
+        sws_test->flow = uref;
+        ulog_debug(upipe->ulog, "flow def %s", def);
+        return;
     }
-    switch (command) {
-        default:
-            return false;
+    if (sws_test->pic) {
+        uref_free(sws_test->pic);
+        sws_test->pic = NULL;
     }
+    sws_test->pic = uref;
+    ulog_debug(upipe->ulog, "received pic");
+//  uref_dump(sws_test->pic, upipe->ulog);
 }
 
 /** helper phony pipe to test upipe_sws */
@@ -277,7 +259,8 @@ static void sws_test_free(struct upipe *upipe)
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr sws_test_mgr = {
     .upipe_alloc = sws_test_alloc,
-    .upipe_control = sws_test_control,
+    .upipe_input = sws_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
     .upipe_release = NULL,
 
@@ -335,7 +318,6 @@ int main(int argc, char **argv)
 
     pic_flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(pic_flow != NULL);
-    assert(uref_flow_set_name(pic_flow, FLOW_NAME));
     assert(uref_pic_flow_add_plane(pic_flow, 1, 1, 1, "y8"));
     assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "u8"));
     assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "v8"));
@@ -349,7 +331,6 @@ int main(int argc, char **argv)
     uref1 = uref_pic_alloc(uref_mgr, ubuf_mgr, SRCSIZE, SRCSIZE);
     assert(uref1 != NULL);
     assert(uref1->ubuf != NULL);
-    assert(uref_flow_set_name(uref1, FLOW_NAME));
 
     /* fill reference picture */
     fill_in(uref1, "y8", 1, 1, 1);
@@ -399,7 +380,7 @@ int main(int argc, char **argv)
     assert(upipe_sws_mgr != NULL);
     struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws")); 
     assert(sws != NULL);
-    assert(upipe_linear_set_ubuf_mgr(sws, ubuf_mgr));
+    assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws_test"));
@@ -408,36 +389,20 @@ int main(int argc, char **argv)
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
-    assert(upipe_linear_set_output(sws, sws_test));
+    assert(upipe_set_output(sws, sws_test));
 
     /* Send first flow definition packet */
     struct uref *flowdef = uref_dup(pic_flow);
-    assert(flowdef);
-    assert(upipe_input(sws, flowdef));
-
-    /* Send flow deletion packet */
-    struct uref *flowdel = uref_flow_alloc_delete(uref_mgr, FLOW_NAME);
-    assert(flowdel);
-    assert(upipe_input(sws, flowdel));
-
-    /* Try sending some random uref belonging to the flow */
-    flowdel = uref_flow_alloc_delete(uref_mgr, FLOW_NAME);
-    assert(flowdel);
-    assert(upipe_input(sws, flowdel));
-
-
-    /* Send definition again */
-    flowdef = uref_dup(pic_flow);
     udict_dump(flowdef->udict, mainlog);
     assert(flowdef);
-    assert(upipe_input(sws, flowdef));
+    upipe_input(sws, flowdef, NULL);
 
     /* Define outputflow */
     assert(upipe_sws_set_out_flow(sws, uref_dup(pic_flow), DSTSIZE, DSTSIZE));
 
     /* Now send pic */
     struct uref *pic = uref_dup(uref1);
-    assert(upipe_input(sws, pic));
+    upipe_input(sws, pic, NULL);
 
     assert(sws_test_from_upipe(sws_test)->pic);
     assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, mainlog));

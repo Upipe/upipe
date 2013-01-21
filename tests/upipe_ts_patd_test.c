@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -78,6 +78,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
         case UPROBE_TS_PATD_TSID: {
             unsigned int signature = va_arg(args, unsigned int);
@@ -153,8 +154,7 @@ int main(int argc, char *argv[])
     int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtspat.");
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
@@ -175,10 +175,9 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     program_sum = 12;
     pid_sum = 42;
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -202,8 +201,7 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer); /* set invalid CRC */
     patn_set_pid(pat_program, 42);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -226,8 +224,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -251,8 +248,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -275,8 +271,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43); // invalid: program defined twice
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -300,8 +295,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -324,10 +318,9 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     program_sum = 13; // the first program already exists
     pid_sum = 43;
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
 
@@ -350,9 +343,8 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     del_program_sum = 12;
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!del_program_sum);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -379,10 +371,9 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 44);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     program_sum = 14;
     pid_sum = 44;
-    assert(upipe_input(upipe_ts_patd, uref));
+    upipe_input(upipe_ts_patd, uref, NULL);
     assert(!del_program_sum);
 
     upipe_release(upipe_ts_patd);

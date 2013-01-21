@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,6 +74,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
         case UPROBE_SYNC_ACQUIRED:
             fprintf(stdout, "ts probe: pipe %p acquired TS sync\n", upipe);
@@ -91,43 +92,36 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
                                    struct uprobe *uprobe, struct ulog *ulog)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
-    if (unlikely(upipe == NULL))
-        return NULL;
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr;
+    assert(upipe != NULL);
+    upipe_init(upipe, mgr, uprobe, ulog);
     return upipe;
 }
 
 /** helper phony pipe to test upipe_ts_sync */
-static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
-                            va_list args)
+static void ts_test_input(struct upipe *upipe, struct uref *uref,
+                          struct upump *upump)
 {
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        const char *def;
-        if (uref_flow_get_def(uref, &def) || uref_flow_get_delete(uref)) {
-            uref_free(uref);
-            return true;
-        }
-
-        {
-            size_t size;
-            assert(uref_block_size(uref, &size));
-            assert(size == TS_SIZE);
-        }
-
-        const uint8_t *buffer;
-        int size = 1;
-        assert(uref_block_read(uref, 0, &size, &buffer));
-        assert(size == 1);
-        assert(ts_validate(buffer));
-        uref_block_unmap(uref, 0, size);
+    assert(uref != NULL);
+    const char *def;
+    if (uref_flow_get_def(uref, &def)) {
         uref_free(uref);
-        nb_packets--;
-        return true;
+        return;
     }
-    return false;
+
+    {
+        size_t size;
+        assert(uref_block_size(uref, &size));
+        assert(size == TS_SIZE);
+    }
+
+    const uint8_t *buffer;
+    int size = 1;
+    assert(uref_block_read(uref, 0, &size, &buffer));
+    assert(size == 1);
+    assert(ts_validate(buffer));
+    uref_block_unmap(uref, 0, size);
+    uref_free(uref);
+    nb_packets--;
 }
 
 /** helper phony pipe to test upipe_ts_sync */
@@ -140,7 +134,8 @@ static void ts_test_free(struct upipe *upipe)
 /** helper phony pipe to test upipe_ts_sync */
 static struct upipe_mgr ts_test_mgr = {
     .upipe_alloc = ts_test_alloc,
-    .upipe_control = ts_test_control,
+    .upipe_input = ts_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
     .upipe_release = NULL,
 
@@ -177,15 +172,14 @@ int main(int argc, char *argv[])
     struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr, uprobe_print,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts sync"));
     assert(upipe_ts_sync != NULL);
-    assert(upipe_linear_set_output(upipe_ts_sync, upipe_sink));
+    assert(upipe_set_output(upipe_ts_sync, upipe_sink));
 
     struct uref *uref;
     uint8_t *buffer;
     int size;
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "0"));
-    assert(upipe_input(upipe_ts_sync, uref));
+    upipe_input(upipe_ts_sync, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2 * TS_SIZE);
     assert(uref != NULL);
@@ -195,9 +189,8 @@ int main(int argc, char *argv[])
     ts_pad(buffer);
     ts_pad(buffer + TS_SIZE);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "0"));
     nb_packets++;
-    assert(upipe_input(upipe_ts_sync, uref));
+    upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2 * TS_SIZE + 12);
@@ -210,10 +203,9 @@ int main(int argc, char *argv[])
     ts_pad(buffer + 12);
     ts_pad(buffer + 12 + TS_SIZE);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "0"));
     nb_packets += 2;
     expect_loss = 1;
-    assert(upipe_input(upipe_ts_sync, uref));
+    upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE / 2);
@@ -224,9 +216,8 @@ int main(int argc, char *argv[])
     buffer[0] = 0x47;
     memset(buffer + 1, 0, TS_SIZE / 2 - 1);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "0"));
     nb_packets++; // because this will release the previous packet
-    assert(upipe_input(upipe_ts_sync, uref));
+    upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE / 2);
@@ -236,8 +227,7 @@ int main(int argc, char *argv[])
     assert(size == TS_SIZE / 2);
     memset(buffer, 0, TS_SIZE / 2);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "0"));
-    assert(upipe_input(upipe_ts_sync, uref));
+    upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
 
     nb_packets++;

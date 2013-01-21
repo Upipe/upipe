@@ -37,27 +37,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-UREF_ATTR_TEMPLATE(flow, name, "f.flow", string, const char *, flow name)
 UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
-UREF_ATTR_TEMPLATE_VOID(flow, delete, "f.delete", flow delete flag)
-UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag)
-UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)
 UREF_ATTR_TEMPLATE(flow, program, "f.program", string, const char *,
                    flow program)
-
-/** @This sets the flow name attribute of a uref, with printf-style name
- * generation.
- *
- * @param uref uref structure
- * @param format printf-style format of the flow name, followed by a variable
- * list of arguments
- * @return true if no allocation failure occurred
- */
-static inline bool uref_flow_set_name_va(struct uref *uref,
-                                         const char *format, ...)
-{
-    UBASE_VARARG(uref_flow_set_name(uref, string))
-}
+UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag)
+UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)
 
 /** @This sets the flow definition attribute of a uref, with printf-style
  * generation.
@@ -85,44 +69,6 @@ static inline bool uref_flow_set_program_va(struct uref *uref,
                                             const char *format, ...)
 {
     UBASE_VARARG(uref_flow_set_program(uref, string))
-}
-
-/** @This duplicates a uref and sets the flow name attribute.
- *
- * @param uref uref structure
- * @param flow flow name
- * @return pointer to new uref
- */
-static inline struct uref *uref_flow_dup(struct uref *uref, const char *flow)
-{
-    struct uref *new_uref = uref_dup(uref);
-    if (unlikely(new_uref == NULL))
-        return NULL;
-    if (unlikely(!(uref_flow_set_name(new_uref, flow)))) {
-        uref_free(new_uref);
-        return NULL;
-    }
-    return new_uref;
-}
-
-/** @This allocates a control packet to delete a flow.
- *
- * @param mgr uref management structure
- * @param flow flow name
- * @return pointer to uref control packet
- */
-static inline struct uref *uref_flow_alloc_delete(struct uref_mgr *mgr,
-                                                  const char *flow)
-{
-    struct uref *uref = uref_alloc_control(mgr);
-    if (unlikely(uref == NULL))
-        return NULL;
-    if (unlikely(!(uref_flow_set_name(uref, flow) &&
-                   uref_flow_set_delete(uref)))) {
-        uref_free(uref);
-        return NULL;
-    }
-    return uref;
 }
 
 #endif

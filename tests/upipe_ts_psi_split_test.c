@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -72,6 +72,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
     }
     return true;
@@ -89,10 +90,8 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
                                    struct uprobe *uprobe, struct ulog *ulog)
 {
     struct ts_test *ts_test = malloc(sizeof(struct ts_test));
-    if (unlikely(ts_test == NULL))
-        return NULL;
-    upipe_init(&ts_test->upipe, uprobe, ulog);
-    ts_test->upipe.mgr = mgr;
+    assert(ts_test != NULL);
+    upipe_init(&ts_test->upipe, mgr, uprobe, ulog);
     ts_test->table_id = 0;
     ts_test->got_flow_def = false;
     ts_test->nb_packets = 0;
@@ -107,57 +106,45 @@ static void ts_test_set_table(struct upipe *upipe, uint16_t table_id)
 }
 
 /** helper phony pipe to test upipe_ts_psi_split */
-static bool ts_test_control(struct upipe *upipe, enum upipe_command command,
-                            va_list args)
+static void ts_test_input(struct upipe *upipe, struct uref *uref,
+                          struct upump *upump)
 {
-    if (likely(command == UPIPE_INPUT)) {
-        struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        if (uref_flow_get_delete(uref)) {
-            assert(ts_test->nb_packets == 1);
-            ts_test->got_flow_def = false;
-            uref_free(uref);
-            return true;
-        }
-
-        const char *def;
-        if (uref_flow_get_def(uref, &def)) {
-            assert(!ts_test->got_flow_def);
-            ts_test->got_flow_def = true;
-            const uint8_t *filter;
-            const uint8_t *mask;
-            size_t size;
-            assert(uref_ts_flow_get_psi_filter(uref, &filter, &mask, &size));
-            assert(size == PSI_HEADER_SIZE_SYNTAX1);
-            assert(psi_get_tableid(filter) == ts_test->table_id);
-            assert(psi_get_tableid(mask) == 0xff);
-            uref_free(uref);
-            return true;
-        }
-
-        assert(ts_test->got_flow_def);
-        ts_test->nb_packets++;
-        const uint8_t *buffer;
-        int size = -1;
-        assert(uref_block_read(uref, 0, &size, &buffer));
-        assert(size == PSI_MAX_SIZE);
-        assert(psi_get_tableid(buffer) == ts_test->table_id);
-        if (ts_test->table_id == 69) {
-            assert(psi_get_tableidext(buffer) == ts_test->table_id);
-        }
-        uref_block_unmap(uref, 0, size);
+    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
+    assert(uref != NULL);
+    const char *def;
+    if (uref_flow_get_def(uref, &def)) {
+        assert(!ts_test->got_flow_def);
+        ts_test->got_flow_def = true;
+        const uint8_t *filter;
+        const uint8_t *mask;
+        size_t size;
+        assert(uref_ts_flow_get_psi_filter(uref, &filter, &mask, &size));
+        assert(size == PSI_HEADER_SIZE_SYNTAX1);
+        assert(psi_get_tableid(filter) == ts_test->table_id);
+        assert(psi_get_tableid(mask) == 0xff);
         uref_free(uref);
-        return true;
+        return;
     }
-    return false;
+
+    assert(ts_test->got_flow_def);
+    ts_test->nb_packets++;
+    const uint8_t *buffer;
+    int size = -1;
+    assert(uref_block_read(uref, 0, &size, &buffer));
+    assert(size == PSI_MAX_SIZE);
+    assert(psi_get_tableid(buffer) == ts_test->table_id);
+    if (ts_test->table_id == 69) {
+        assert(psi_get_tableidext(buffer) == ts_test->table_id);
+    }
+    uref_block_unmap(uref, 0, size);
+    uref_free(uref);
 }
 
 /** helper phony pipe to test upipe_ts_psi_split */
 static void ts_test_free(struct upipe *upipe)
 {
     struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
-    assert(ts_test->nb_packets == 1 && !ts_test->got_flow_def);
+    assert(ts_test->nb_packets == 1);
     upipe_clean(upipe);
     free(ts_test);
 }
@@ -165,7 +152,8 @@ static void ts_test_free(struct upipe *upipe)
 /** helper phony pipe to test upipe_ts_psi_split */
 static struct upipe_mgr ts_test_mgr = {
     .upipe_alloc = ts_test_alloc,
-    .upipe_control = ts_test_control,
+    .upipe_input = ts_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
     .upipe_release = NULL,
 
@@ -224,22 +212,29 @@ int main(int argc, char *argv[])
     psi_set_tableid(filter, 68);
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    assert(upipe_split_set_flow_def(upipe_ts_psi_split, uref, "68"));
-    assert(upipe_split_set_output(upipe_ts_psi_split, upipe_sink68, "68"));
+    struct upipe *upipe_ts_psi_split_output68 =
+        upipe_alloc_output(upipe_ts_psi_split, uprobe_print,
+        ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts psi split output 68"));
+    assert(upipe_ts_psi_split_output68 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psi_split_output68, uref));
+    assert(upipe_set_output(upipe_ts_psi_split_output68, upipe_sink68));
 
     psi_set_tableid(filter, 69);
     psi_set_tableidext(mask, 0xff);
     psi_set_tableidext(filter, 69);
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    assert(upipe_split_set_flow_def(upipe_ts_psi_split, uref, "69"));
-    assert(upipe_split_set_output(upipe_ts_psi_split, upipe_sink69, "69"));
+    struct upipe *upipe_ts_psi_split_output69 =
+        upipe_alloc_output(upipe_ts_psi_split, uprobe_print,
+        ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts psi split output 69"));
+    assert(upipe_ts_psi_split_output69 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psi_split_output69, uref));
+    assert(upipe_set_output(upipe_ts_psi_split_output69, upipe_sink69));
     uref_free(uref);
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_psi_split, uref));
+    upipe_input(upipe_ts_psi_split, uref, NULL);
 
     uint8_t *buffer;
     int size;
@@ -252,8 +247,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer, 68);
     psi_set_tableidext(buffer, 12);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_psi_split, uref));
+    upipe_input(upipe_ts_psi_split, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
     assert(uref != NULL);
@@ -264,8 +258,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer, 69);
     psi_set_tableidext(buffer, 12);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_psi_split, uref));
+    upipe_input(upipe_ts_psi_split, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
     assert(uref != NULL);
@@ -276,9 +269,10 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer, 69);
     psi_set_tableidext(buffer, 69);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_psi_split, uref));
+    upipe_input(upipe_ts_psi_split, uref, NULL);
 
+    upipe_release(upipe_ts_psi_split_output68);
+    upipe_release(upipe_ts_psi_split_output69);
     upipe_release(upipe_ts_psi_split);
     upipe_mgr_release(upipe_ts_psi_split_mgr); // nop
 

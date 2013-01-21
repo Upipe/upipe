@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,7 +34,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_linear_output.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_psim.h>
 
 #include <stdlib.h>
@@ -59,8 +59,6 @@ struct upipe_ts_psim {
 
     /** next uref to be processed */
     struct uref *next_uref;
-    /** true if we have thrown the ready event */
-    bool ready;
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 
@@ -72,7 +70,7 @@ struct upipe_ts_psim {
 
 UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe)
 
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_psim pipe.
  *
@@ -89,14 +87,11 @@ static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_ts_psim == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_psim_to_upipe(upipe_ts_psim);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_TS_PSIM_SIGNATURE;
-    urefcount_init(&upipe_ts_psim->refcount);
+    upipe_init(upipe, mgr, uprobe, ulog);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
-    upipe_ts_psim->ready = false;
     upipe_ts_psim->acquired = false;
+    urefcount_init(&upipe_ts_psim->refcount);
     return upipe;
 }
 
@@ -145,20 +140,22 @@ static void upipe_ts_psim_flush(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref pointing to (part of) a PSI section
+ * @param upump pump that generated the buffer
  * @return false if the uref has been entirely consumed
  */
-static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref)
+static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     if (upipe_ts_psim->next_uref != NULL) {
         struct ubuf *ubuf = ubuf_dup(uref->ubuf);
         if (unlikely(ubuf == NULL ||
                      !uref_block_append(upipe_ts_psim->next_uref, ubuf))) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
             upipe_ts_psim_flush(upipe);
             if (ubuf != NULL)
                 ubuf_free(ubuf);
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
             return false;
         }
     } else {
@@ -206,7 +203,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref)
     ret = uref_block_resize(upipe_ts_psim->next_uref, 0,
                             length + PSI_HEADER_SIZE);
     assert(ret);
-    upipe_ts_psim_output(upipe, upipe_ts_psim->next_uref);
+    upipe_ts_psim_output(upipe, upipe_ts_psim->next_uref, upump);
     upipe_ts_psim->next_uref = NULL;
     if (length + PSI_HEADER_SIZE == size)
         return false;
@@ -225,8 +222,10 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
+ * @param upump pump that generated the buffer
  */
-static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref,
+                               struct upump *upump)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     if (unlikely(uref_block_get_discontinuity(uref)))
@@ -259,7 +258,7 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref)
         return;
     }
 
-    while (upipe_ts_psim_merge(upipe, uref));
+    while (upipe_ts_psim_merge(upipe, uref, upump));
     uref_free(uref);
 }
 
@@ -267,68 +266,39 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_ts_psim_input(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-
-    const char *flow, *def, *def_flow;
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-       ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-       uref_free(uref);
-       return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_ts_psim_set_flow_def(upipe, NULL);
-        uref_free(uref);
-        upipe_ts_psim_flush(upipe);
-        return true;
-    }
-
+    const char *def;
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(upipe_ts_psim->flow_def != NULL))
-            ulog_warning(upipe->ulog,
-                         "received flow definition without delete first");
         upipe_ts_psim_flush(upipe);
 
-        if (unlikely(strncmp(def, EXPECTED_FLOW_DEF,
-                             strlen(EXPECTED_FLOW_DEF)))) {
-            ulog_warning(upipe->ulog,
-                         "received an incompatible flow definition");
+        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
             uref_free(uref);
-            upipe_ts_psim_set_flow_def(upipe, NULL);
-            return false;
+            upipe_ts_psim_store_flow_def(upipe, NULL);
+            upipe_throw_flow_def_error(upipe, uref);
+            return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        upipe_ts_psim_set_flow_def(upipe, uref);
-        return true;
+        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_ts_psim_store_flow_def(upipe, uref);
+        return;
     }
 
     if (unlikely(upipe_ts_psim->flow_def == NULL)) {
-        ulog_warning(upipe->ulog, "pipe has no registered input flow");
         uref_free(uref);
-        return false;
-    }
-
-    bool ret = uref_flow_get_name(upipe_ts_psim->flow_def, &def_flow);
-    assert(ret);
-    if (unlikely(strcmp(def_flow, flow))) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer not matching the current flow");
-        uref_free(uref);
-        return false;
+        upipe_throw_flow_def_error(upipe, uref);
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
-    upipe_ts_psim_work(upipe, uref);
-    return true;
+    upipe_ts_psim_work(upipe, uref, upump);
 }
 
 /** @internal @This processes control commands on a ts psim pipe.
@@ -338,50 +308,21 @@ static bool upipe_ts_psim_input(struct upipe *upipe, struct uref *uref)
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool _upipe_ts_psim_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+static bool upipe_ts_psim_control(struct upipe *upipe,
+                                  enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_LINEAR_GET_OUTPUT: {
+        case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psim_get_output(upipe, p);
         }
-        case UPIPE_LINEAR_SET_OUTPUT: {
+        case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psim_set_output(upipe, output);
         }
         default:
             return false;
     }
-}
-
-/** @internal @This processes control commands on a ts psim pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_ts_psim_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
-{
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_ts_psim_input(upipe, uref);
-    }
-
-    if (unlikely(!_upipe_ts_psim_control(upipe, command, args)))
-        return false;
-
-    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (likely(!upipe_ts_psim->ready)) {
-        upipe_ts_psim->ready = true;
-        upipe_throw_ready(upipe);
-    }
-
-    return true;
 }
 
 /** @This increments the reference count of a upipe.
@@ -415,7 +356,10 @@ static void upipe_ts_psim_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_psim_mgr = {
+    .signature = UPIPE_TS_PSIM_SIGNATURE,
+
     .upipe_alloc = upipe_ts_psim_alloc,
+    .upipe_input = upipe_ts_psim_input,
     .upipe_control = upipe_ts_psim_control,
     .upipe_use = upipe_ts_psim_use,
     .upipe_release = upipe_ts_psim_release,

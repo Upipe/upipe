@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -19,7 +19,7 @@
  */
 
 /** @file
- * @short Upipe module splitting PIDS of a transport stream
+ * @short Upipe module splitting PIDs of a transport stream
  */
 
 #include <upipe/ubase.h>
@@ -32,7 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_split_outputs.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
 
@@ -59,13 +59,14 @@ struct upipe_ts_split_pid {
 
 /** @internal @This is the private context of a ts_split pipe. */
 struct upipe_ts_split {
-    /** list of outputs */
-    struct ulist outputs;
-    /** input flow name */
-    char *flow_name;
+    /** true if we received a compatible flow definition */
+    bool flow_def_ok;
 
     /** PIDs array */
     struct upipe_ts_split_pid pids[MAX_PIDS];
+
+    /** manager to create outputs */
+    struct upipe_mgr output_mgr;
 
     /** refcount management structure */
     urefcount refcount;
@@ -75,89 +76,253 @@ struct upipe_ts_split {
 
 UPIPE_HELPER_UPIPE(upipe_ts_split, upipe)
 
+/** @internal @This returns the public output_mgr structure.
+ *
+ * @param upipe_ts_split pointer to the private upipe_ts_split structure
+ * @return pointer to the public output_mgr structure
+ */
+static inline struct upipe_mgr *
+    upipe_ts_split_to_output_mgr(struct upipe_ts_split *s)
+{
+    return &s->output_mgr;
+}
+
+/** @internal @This returns the private upipe_ts_split structure.
+ *
+ * @param output_mgr public output_mgr structure of the pipe
+ * @return pointer to the private upipe_ts_split structure
+ */
+static inline struct upipe_ts_split *
+    upipe_ts_split_from_output_mgr(struct upipe_mgr *output_mgr)
+{
+    return container_of(output_mgr, struct upipe_ts_split, output_mgr);
+}
+
 /** @internal @This is the private context of an output of a ts_split pipe. */
 struct upipe_ts_split_output {
-    /** structure for double-linked lists (in outputs ulist) */
+    /** structure for double-linked lists */
     struct uchain uchain;
-    /** structure for double-linked lists (in pid ulist) */
-    struct uchain pid_uchain;
-    /** suffix added to every flow on this output */
-    char *flow_suffix;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet on this output */
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+
+    /** refcount management structure */
+    urefcount refcount;
+    /** public upipe structure */
+    struct upipe upipe;
 };
 
-/** @internal @This returns the uchain for PID chaining.
- *
- * @param output pointer to the upipe_ts_split_output structure
- * @return pointer to uchain
- */
-static inline struct uchain *upipe_ts_split_output_to_pid_uchain(struct upipe_ts_split_output *output)
-{
-    return &output->pid_uchain;
-}
+UPIPE_HELPER_UPIPE(upipe_ts_split_output, upipe)
+UPIPE_HELPER_OUTPUT(upipe_ts_split_output, output, flow_def, flow_def_sent)
 
-/** @internal @This returns the upipe_ts_split_output structure.
- *
- * @param uchain pointer to uchain
- * @return pointer to the upipe_ts_split_output structure
- */
-static inline struct upipe_ts_split_output *upipe_ts_split_output_from_pid_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_ts_split_output, pid_uchain);
-}
-
-UPIPE_HELPER_SPLIT_OUTPUT(upipe_ts_split, upipe_ts_split_output, uchain, output,
-                          flow_suffix, flow_def, flow_def_sent)
-UPIPE_HELPER_SPLIT_OUTPUTS(upipe_ts_split, outputs, upipe_ts_split_output)
-UPIPE_HELPER_SPLIT_FLOW_NAME(upipe_ts_split, outputs, flow_name,
-                             upipe_ts_split_output)
-
+/** @hidden */
+static void upipe_ts_split_pid_set(struct upipe *upipe, uint16_t pid,
+                                   struct upipe_ts_split_output *output);
 /** @hidden */
 static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
                                      struct upipe_ts_split_output *output);
 
-/** @internal @This allocates and initializes a new output-specific
- * substructure.
+/** @This returns the high-level upipe_ts_split_output structure.
  *
- * @param upipe description structure of the pipe
- * @param flow_suffix flow suffix
- * @return pointer to allocated substructure
+ * @param uchain pointer to the uchain structure wrapped into the
+ * upipe_ts_split_output
+ * @return pointer to the upipe_ts_split_output structure
  */
-static struct upipe_ts_split_output *
-    upipe_ts_split_output_alloc(struct upipe *upipe, const char *flow_suffix)
+static inline struct upipe_ts_split_output *
+    upipe_ts_split_output_from_uchain(struct uchain *uchain)
 {
-    assert(flow_suffix != NULL);
-    struct upipe_ts_split_output *output =
-        malloc(sizeof(struct upipe_ts_split_output));
-    if (unlikely(output == NULL))
-        return NULL;
-    if (unlikely(!upipe_ts_split_output_init(upipe, output, flow_suffix))) {
-        free(output);
-        return NULL;
-    }
-    return output;
+    return container_of(uchain, struct upipe_ts_split_output, uchain);
 }
 
-/** @internal @This frees an output-specific substructure.
+/** @This returns the uchain structure used for FIFO, LIFO and lists.
+ *
+ * @param upipe_ts_split_output upipe_ts_split_output structure
+ * @return pointer to the uchain structure
+ */
+static inline struct uchain *
+    upipe_ts_split_output_to_uchain(struct upipe_ts_split_output *upipe_ts_split_output)
+{
+    return &upipe_ts_split_output->uchain;
+}
+
+/** @internal @This allocates an output subpipe of a ts_split pipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
+ * @return pointer to upipe or NULL in case of allocation error
+ */
+static struct upipe *upipe_ts_split_output_alloc(struct upipe_mgr *mgr,
+                                                 struct uprobe *uprobe,
+                                                 struct ulog *ulog)
+{
+    struct upipe_ts_split_output *upipe_ts_split_output =
+        malloc(sizeof(struct upipe_ts_split_output));
+    if (unlikely(upipe_ts_split_output == NULL))
+        return NULL;
+    struct upipe *upipe = upipe_ts_split_output_to_upipe(upipe_ts_split_output);
+    upipe_init(upipe, mgr, uprobe, ulog);
+    uchain_init(&upipe_ts_split_output->uchain);
+    upipe_ts_split_output_init_output(upipe);
+    urefcount_init(&upipe_ts_split_output->refcount);
+    upipe_throw_ready(upipe);
+    return upipe;
+}
+
+/** @internal @This sets the flow definition on an output.
+ *
+ * The attribute t.pid must be set on the flow definition packet.
  *
  * @param upipe description structure of the pipe
- * @param output substructure to free
+ * @param flow_def flow definition packet
+ * @return false in case of error
  */
-static void upipe_ts_split_output_free(struct upipe *upipe,
-                                       struct upipe_ts_split_output *output)
+static bool upipe_ts_split_output_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
 {
-    uint64_t pid = MAX_PIDS;
-    if (likely(output->flow_def != NULL))
-        uref_ts_flow_get_pid(output->flow_def, &pid);
-    upipe_ts_split_output_clean(upipe, output);
-    if (likely(pid < MAX_PIDS))
-        upipe_ts_split_pid_unset(upipe, pid, output);
-    free(output);
+    struct upipe_ts_split_output *upipe_ts_split_output =
+        upipe_ts_split_output_from_upipe(upipe);
+    if (upipe_ts_split_output->flow_def != NULL) {
+        uint64_t pid;
+        if (uref_ts_flow_get_pid(upipe_ts_split_output->flow_def, &pid))
+            upipe_ts_split_pid_unset(upipe, pid, upipe_ts_split_output);
+        upipe_ts_split_output_store_flow_def(upipe, NULL);
+    }
+
+    uint64_t pid;
+    if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS))
+        return false;
+
+    struct uref *uref = uref_dup(flow_def);
+    if (unlikely(uref == NULL)) {
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+        return false;
+    }
+    upipe_ts_split_output_store_flow_def(upipe, uref);
+    struct upipe_ts_split *upipe_ts_split =
+        upipe_ts_split_from_output_mgr(upipe->mgr);
+    upipe_ts_split_pid_set(upipe_ts_split_to_upipe(upipe_ts_split), pid,
+                           upipe_ts_split_output);
+    return true;
+}
+
+/** @internal @This processes control commands on an output subpipe of a
+ * ts_split pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_split_output_control(struct upipe *upipe,
+                                        enum upipe_command command,
+                                        va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_split_output_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_split_output_set_output(upipe, output);
+        }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_split_output_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_split_output_set_flow_def(upipe, flow_def);
+        }
+
+        default:
+            return false;
+    }
+}
+
+/** @This increments the reference count of a upipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_split_output_use(struct upipe *upipe)
+{
+    struct upipe_ts_split_output *upipe_ts_split_output =
+        upipe_ts_split_output_from_upipe(upipe);
+    urefcount_use(&upipe_ts_split_output->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_split_output_release(struct upipe *upipe)
+{
+    struct upipe_ts_split_output *upipe_ts_split_output =
+        upipe_ts_split_output_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_ts_split_output->refcount))) {
+        struct upipe_ts_split *upipe_ts_split =
+            upipe_ts_split_from_output_mgr(upipe->mgr);
+        /* remove output from the outputs list */
+        if (upipe_ts_split_output->flow_def != NULL) {
+            uint64_t pid;
+            if (uref_ts_flow_get_pid(upipe_ts_split_output->flow_def, &pid))
+                upipe_ts_split_pid_unset(
+                        upipe_ts_split_to_upipe(upipe_ts_split), pid,
+                        upipe_ts_split_output);
+        }
+
+        upipe_ts_split_output_clean_output(upipe);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_ts_split_output->refcount);
+        free(upipe_ts_split_output);
+    }
+}
+
+/** @This increments the reference count of a upipe manager.
+ *
+ * @param mgr pointer to upipe manager
+ */
+static void upipe_ts_split_output_mgr_use(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_output_mgr(mgr);
+    upipe_use(upipe_ts_split_to_upipe(upipe_ts_split));
+}
+
+/** @This decrements the reference count of a upipe manager or frees it.
+ *
+ * @param mgr pointer to upipe manager.
+ */
+static void upipe_ts_split_output_mgr_release(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_output_mgr(mgr);
+    upipe_release(upipe_ts_split_to_upipe(upipe_ts_split));
+}
+
+/** @internal @This initializes the output manager for a ts_split pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return pointer to output upipe manager
+ */
+static struct upipe_mgr *upipe_ts_split_init_output_mgr(struct upipe *upipe)
+{
+    struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
+    struct upipe_mgr *output_mgr = &upipe_ts_split->output_mgr;
+    output_mgr->signature = UPIPE_TS_SPLIT_OUTPUT_SIGNATURE;
+    output_mgr->upipe_alloc = upipe_ts_split_output_alloc;
+    output_mgr->upipe_input = NULL;
+    output_mgr->upipe_control = upipe_ts_split_output_control;
+    output_mgr->upipe_use = upipe_ts_split_output_use;
+    output_mgr->upipe_release = upipe_ts_split_output_release;
+    output_mgr->upipe_mgr_use = upipe_ts_split_output_mgr_use;
+    output_mgr->upipe_mgr_release = upipe_ts_split_output_mgr_release;
+    return output_mgr;
 }
 
 /** @internal @This allocates a ts_split pipe.
@@ -176,17 +341,16 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_ts_split == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_split_to_upipe(upipe_ts_split);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_TS_SPLIT_SIGNATURE;
-    urefcount_init(&upipe_ts_split->refcount);
-    upipe_ts_split_init_outputs(upipe);
-    upipe_ts_split_init_flow_name(upipe);
+    upipe_split_init(upipe, mgr, uprobe, ulog,
+                     upipe_ts_split_init_output_mgr(upipe));
+    upipe_ts_split->flow_def_ok = false;
 
-    for (int i = 0; i < MAX_PIDS; i++) {
+    int i;
+    for (i = 0; i < MAX_PIDS; i++) {
         ulist_init(&upipe_ts_split->pids[i].outputs);
         upipe_ts_split->pids[i].set = false;
     }
+    urefcount_init(&upipe_ts_split->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -228,7 +392,7 @@ static void upipe_ts_split_pid_set(struct upipe *upipe, uint16_t pid,
     assert(pid < MAX_PIDS);
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     ulist_add(&upipe_ts_split->pids[pid].outputs,
-              upipe_ts_split_output_to_pid_uchain(output));
+              upipe_ts_split_output_to_uchain(output));
     upipe_ts_split_pid_check(upipe, pid);
 }
 
@@ -245,8 +409,9 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     struct uchain *uchain;
     ulist_delete_foreach (&upipe_ts_split->pids[pid].outputs, uchain) {
-        if (output == upipe_ts_split_output_from_pid_uchain(uchain))
+        if (output == upipe_ts_split_output_from_uchain(uchain)) {
             ulist_delete(&upipe_ts_split->pids[pid].outputs, uchain);
+        }
     }
     upipe_ts_split_pid_check(upipe, pid);
 }
@@ -255,8 +420,10 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
+ * @param upump pump that generated the buffer
  */
-static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     uint8_t buffer[TS_HEADER_SIZE];
@@ -276,218 +443,66 @@ static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref)
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_split->pids[pid].outputs, uchain) {
         struct upipe_ts_split_output *output =
-                upipe_ts_split_output_from_pid_uchain(uchain);
-        struct uref *new_uref = uref_dup(uref);
-        if (likely(new_uref != NULL))
-            upipe_ts_split_output_output(upipe, output, new_uref);
-        else {
-            uref_free(uref);
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            return;
+                upipe_ts_split_output_from_uchain(uchain);
+        if (likely(uchain->next == NULL)) {
+            upipe_ts_split_output_output(upipe_ts_split_output_to_upipe(output),
+                                         uref, upump);
+            uref = NULL;
+        } else {
+            struct uref *new_uref = uref_dup(uref);
+            if (likely(new_uref != NULL))
+                upipe_ts_split_output_output(
+                        upipe_ts_split_output_to_upipe(output),
+                        new_uref, upump);
+            else {
+                uref_free(uref);
+                ulog_aerror(upipe->ulog);
+                upipe_throw_aerror(upipe);
+                return;
+            }
         }
     }
-    uref_free(uref);
+    if (uref != NULL)
+        uref_free(uref);
 }
 
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_ts_split_input(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
+                                 struct upump *upump)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
-
-    const char *flow, *def;
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-       ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-       uref_free(uref);
-       return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_ts_split_set_flow_name(upipe, NULL);
-        uref_free(uref);
-        return true;
-    }
-
+    const char *def;
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(upipe_ts_split->flow_name != NULL)) {
-            ulog_warning(upipe->ulog,
-                         "received flow definition without delete first");
-            upipe_ts_split_set_flow_name(upipe, NULL);
-        }
-        if (unlikely(strncmp(def, EXPECTED_FLOW_DEF,
-                             strlen(EXPECTED_FLOW_DEF)))) {
-            ulog_warning(upipe->ulog,
-                         "received an incompatible flow definition");
+        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
             uref_free(uref);
-            return false;
+            upipe_ts_split->flow_def_ok = false;
+            upipe_throw_flow_def_error(upipe, uref);
+            return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        upipe_ts_split_set_flow_name(upipe, flow);
+        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_ts_split->flow_def_ok = true;
         uref_free(uref);
-        return true;
+        return;
     }
 
-    if (unlikely(upipe_ts_split->flow_name == NULL)) {
-        ulog_warning(upipe->ulog, "pipe has no registered input flow");
+    if (unlikely(!upipe_ts_split->flow_def_ok)) {
         uref_free(uref);
-        return false;
-    }
-
-    if (unlikely(strcmp(upipe_ts_split->flow_name, flow))) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer not matching the current flow");
-        uref_free(uref);
-        return false;
+        upipe_throw_flow_def_error(upipe, uref);
+        return;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
-    upipe_ts_split_work(upipe, uref);
-    return true;
-}
-
-/** @internal @This gets the flow definition on an output. The uref returned
- * may not be modified nor freed.
- *
- * @param upipe description structure of the pipe
- * @param p filled in with the flow definition packet
- * @param flow_suffix flow suffix
- * @return false in case of error
- */
-static bool upipe_ts_split_get_flow_def(struct upipe *upipe,
-                                        struct uref **p,
-                                        const char *flow_suffix)
-{
-    assert(p != NULL);
-    assert(flow_suffix != NULL);
-
-    struct upipe_ts_split_output *output =
-        upipe_ts_split_find_output(upipe, flow_suffix);
-    if (unlikely(output == NULL))
-        return false;
-    *p = output->flow_def;
-    return true;
-}
-
-/** @internal @This sets the flow definition on an output. It must be called
- * before @ref upipe_ts_split_set_output, because it allows to create
- * non-existant outputs. If flow_def is NULL, the output is deleted.
- *
- * The attribute t.pid must be set on the flow definition packet.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @param flow_suffix flow suffix
- * @return false in case of error
- */
-static bool upipe_ts_split_set_flow_def(struct upipe *upipe,
-                                        struct uref *flow_def,
-                                        const char *flow_suffix)
-{
-    assert(flow_suffix != NULL);
-    if (flow_def == NULL) {
-        ulog_debug(upipe->ulog, "deleting output: %s", flow_suffix);
-        return upipe_ts_split_delete_output(upipe, flow_suffix,
-                                            upipe_ts_split_output_free);
-
-    } else {
-        uint64_t pid;
-        if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS))
-            return false;
-
-        struct uref *uref = uref_dup(flow_def);
-        if (unlikely(uref == NULL))
-            return false;
-
-        struct upipe_ts_split_output *output =
-            upipe_ts_split_find_output(upipe, flow_suffix);
-
-        if (output == NULL) {
-            ulog_debug(upipe->ulog, "adding output: %s", flow_suffix);
-            output = upipe_ts_split_output_alloc(upipe, flow_suffix);
-            if (unlikely(output == NULL)) {
-                uref_free(uref);
-                ulog_aerror(upipe->ulog);
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-            upipe_ts_split_add_output(upipe, output);
-        } else {
-            uint64_t old_pid;
-            if (unlikely(!uref_ts_flow_get_pid(output->flow_def, &old_pid)))
-                return false;
-            upipe_ts_split_pid_unset(upipe, old_pid, output);
-        }
-        upipe_ts_split_output_set_flow_def(upipe, output, uref);
-        upipe_ts_split_pid_set(upipe, pid, output);
-    }
-
-    return true;
-}
-
-/** @internal @This processes control commands on a ts_split pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool _upipe_ts_split_control(struct upipe *upipe,
-                                    enum upipe_command command, va_list args)
-{
-    switch (command) {
-        case UPIPE_SPLIT_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            const char *flow_suffix = va_arg(args, const char *);
-            return upipe_ts_split_get_output(upipe, p, flow_suffix);
-        }
-        case UPIPE_SPLIT_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            const char *flow_suffix = va_arg(args, const char *);
-            return upipe_ts_split_set_output(upipe, output, flow_suffix);
-        }
-        case UPIPE_SPLIT_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            const char *flow_suffix = va_arg(args, const char *);
-            return upipe_ts_split_get_flow_def(upipe, p, flow_suffix);
-        }
-        case UPIPE_SPLIT_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            const char *flow_suffix = va_arg(args, const char *);
-            return upipe_ts_split_set_flow_def(upipe, flow_def, flow_suffix);
-        }
-        default:
-            return false;
-    }
-}
-
-/** @internal @This processes control commands on a ts_split pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_ts_split_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
-{
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_ts_split_input(upipe, uref);
-    }
-
-    return _upipe_ts_split_control(upipe, command, args);
+    upipe_ts_split_work(upipe, uref, upump);
 }
 
 /** @This increments the reference count of a upipe.
@@ -508,9 +523,8 @@ static void upipe_ts_split_release(struct upipe *upipe)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_split->refcount))) {
-        upipe_ts_split_clean_flow_name(upipe);
-        upipe_ts_split_clean_outputs(upipe, upipe_ts_split_output_free);
-
+        /* we can only arrive here if there is no output anymore, so no
+         * need to empty the outputs list */
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_split->refcount);
         free(upipe_ts_split);
@@ -519,8 +533,11 @@ static void upipe_ts_split_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_split_mgr = {
+    .signature = UPIPE_TS_SPLIT_SIGNATURE,
+
     .upipe_alloc = upipe_ts_split_alloc,
-    .upipe_control = upipe_ts_split_control,
+    .upipe_input = upipe_ts_split_input,
+    .upipe_control = NULL,
     .upipe_use = upipe_ts_split_use,
     .upipe_release = upipe_ts_split_release,
 

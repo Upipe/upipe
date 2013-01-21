@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,7 +33,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_linear_output.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_patd.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psid.h"
@@ -57,8 +57,9 @@ struct upipe_ts_patd {
     UPIPE_TS_PSID_TABLE_DECLARE(next_pat);
     /** current TSID */
     int tsid;
-    /** input flow name */
-    char *flow_name;
+    /** true if we received a compatible flow definition */
+    bool flow_def_ok;
+
     /** refcount management structure */
     urefcount refcount;
     /** public upipe structure */
@@ -75,21 +76,19 @@ UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe)
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
-                                           struct uprobe *uprobe,
-                                           struct ulog *ulog)
+                                         struct uprobe *uprobe,
+                                         struct ulog *ulog)
 {
     struct upipe_ts_patd *upipe_ts_patd =
         malloc(sizeof(struct upipe_ts_patd));
     if (unlikely(upipe_ts_patd == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_patd_to_upipe(upipe_ts_patd);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_TS_PATD_SIGNATURE;
+    upipe_init(upipe, mgr, uprobe, ulog);
     upipe_ts_psid_table_init(upipe_ts_patd->pat);
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
     upipe_ts_patd->tsid = -1;
-    upipe_ts_patd->flow_name = NULL;
+    upipe_ts_patd->flow_def_ok = false;
     urefcount_init(&upipe_ts_patd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
@@ -376,102 +375,43 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     }
 }
 
-/** @internal @This sets the source flow name.
- *
- * @param upipe description structure of the pipe
- * @param flow_name source flow name
- */
-static void upipe_ts_patd_set_flow_name(struct upipe *upipe,
-                                        const char *flow_name)
-{
-    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    free(upipe_ts_patd->flow_name);
-    upipe_ts_patd->flow_name = strdup(flow_name);
-}
-
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_ts_patd_input(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-
-    const char *flow, *def;
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-       ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-       uref_free(uref);
-       return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_ts_patd_set_flow_name(upipe, NULL);
-        uref_free(uref);
-        return true;
-    }
-
+    const char *def;
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(upipe_ts_patd->flow_name != NULL)) {
-            ulog_warning(upipe->ulog,
-                         "received flow definition without delete first");
-            upipe_ts_patd_set_flow_name(upipe, NULL);
-        }
-        if (unlikely(strncmp(def, EXPECTED_FLOW_DEF,
-                             strlen(EXPECTED_FLOW_DEF)))) {
-            ulog_warning(upipe->ulog,
-                         "received an incompatible flow definition");
+        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
             uref_free(uref);
-            return false;
+            upipe_ts_patd->flow_def_ok = false;
+            upipe_throw_flow_def_error(upipe, uref);
+            return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        upipe_ts_patd_set_flow_name(upipe, flow);
+        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_ts_patd->flow_def_ok = true;
         uref_free(uref);
-        return true;
+        return;
     }
 
-    if (unlikely(upipe_ts_patd->flow_name == NULL)) {
-        ulog_warning(upipe->ulog, "pipe has no registered input flow");
+    if (unlikely(!upipe_ts_patd->flow_def_ok)) {
         uref_free(uref);
-        return false;
-    }
-
-    if (unlikely(strcmp(upipe_ts_patd->flow_name, flow))) {
-        ulog_warning(upipe->ulog,
-                     "received a buffer not matching the current flow");
-        uref_free(uref);
-        return false;
+        upipe_throw_flow_def_error(upipe, uref);
+        return;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
     upipe_ts_patd_work(upipe, uref);
-    return true;
-}
-
-/** @internal @This processes control commands on a ts patd pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_ts_patd_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
-{
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_ts_patd_input(upipe, uref);
-    }
-
-    return false;
 }
 
 /** @This increments the reference count of a upipe.
@@ -494,7 +434,6 @@ static void upipe_ts_patd_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_patd->refcount))) {
         upipe_ts_psid_table_clean(upipe_ts_patd->pat);
         upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
-        free(upipe_ts_patd->flow_name);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_patd->refcount);
@@ -504,8 +443,11 @@ static void upipe_ts_patd_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_patd_mgr = {
+    .signature = UPIPE_TS_PATD_SIGNATURE,
+
     .upipe_alloc = upipe_ts_patd_alloc,
-    .upipe_control = upipe_ts_patd_control,
+    .upipe_input = upipe_ts_patd_input,
+    .upipe_control = NULL,
     .upipe_use = upipe_ts_patd_use,
     .upipe_release = upipe_ts_patd_release,
 

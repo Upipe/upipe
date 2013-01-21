@@ -20,10 +20,6 @@
 
 /** @file
  * @short Upipe higher-level module demuxing elementary streams of a TS
- *
- * Please note the special behavior of @ref upipe_demux_set_flow_def. If the
- * flow suffix doesn't exist, it creates it. If flow_def is NULL, it deletes
- * it. This function must be called before @ref upipe_demux_set_output.
  */
 
 #ifndef _UPIPE_TS_UPIPE_TS_DEMUX_H_
@@ -33,6 +29,7 @@
 #include <upipe/upipe.h>
 
 #define UPIPE_TS_DEMUX_SIGNATURE UBASE_FOURCC('t','s','d','x')
+#define UPIPE_TS_DEMUX_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','d','o')
 
 /** @This extends uprobe_event with specific events for ts demux. */
 enum uprobe_ts_demux_event {
@@ -42,13 +39,13 @@ enum uprobe_ts_demux_event {
     UPROBE_TS_DEMUX_NEW_PSI_FLOW,
 
     /** ts_split events begin here */
-    UPROBE_TS_DEMUX_SPLIT = 0x9000,
+    UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000,
     /** ts_decaps events begin here */
-    UPROBE_TS_DEMUX_DECAPS = 0x9100,
+    UPROBE_TS_DEMUX_DECAPS = UPROBE_LOCAL + 0x1100,
     /** ts_patd events begin here */
-    UPROBE_TS_DEMUX_PATD = 0x9200,
+    UPROBE_TS_DEMUX_PATD = UPROBE_LOCAL + 0x1200,
     /** ts_pmtd events begin here */
-    UPROBE_TS_DEMUX_PMTD = 0x9300
+    UPROBE_TS_DEMUX_PMTD = UPROBE_LOCAL + 0x1300
 };
 
 /** @This is the conformance mode of a transport stream. */
@@ -72,9 +69,7 @@ enum upipe_ts_demux_command {
     /** returns the currently detected conformance (int *) */
     UPIPE_TS_DEMUX_GET_CONFORMANCE,
     /** sets the conformance (int) */
-    UPIPE_TS_DEMUX_SET_CONFORMANCE,
-    /** sets flow definition for a PSI table (struct uref *, const char *) */
-    UPIPE_TS_DEMUX_SET_PSI_FLOW_DEF
+    UPIPE_TS_DEMUX_SET_CONFORMANCE
 };
 
 /** @This returns the management structure for all ts_demux pipes.
@@ -108,25 +103,6 @@ static inline bool upipe_ts_demux_set_conformance(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance);
-}
-
-/** @This sets a flow definition for a PSI table. The flow definition
- * packet is typically sent by a @ref #UPROBE_TS_DEMUX_NEW_PSI_FLOW probe, sent
- * when a new PMT table is present is may be needed.
- * The flow definition packet contains a PSI section filter and a PID to
- * attach to.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @param flow_suffix flow suffix
- * @return false in case of error
- */
-static inline bool upipe_ts_demux_set_psi_flow_def(struct upipe *upipe,
-                                                   struct uref *flow_def,
-                                                   const char *flow_suffix)
-{
-    return upipe_control(upipe, UPIPE_TS_DEMUX_SET_PSI_FLOW_DEF,
-                         UPIPE_TS_DEMUX_SIGNATURE, flow_def, flow_suffix);
 }
 
 #endif

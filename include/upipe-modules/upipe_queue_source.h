@@ -57,7 +57,7 @@ struct upipe_queue {
  */
 static inline struct uqueue *upipe_queue(struct upipe *upipe)
 {
-    assert(upipe->signature == UPIPE_QSRC_SIGNATURE);
+    assert(upipe->mgr->signature == UPIPE_QSRC_SIGNATURE);
     struct upipe_queue *queue = container_of(upipe, struct upipe_queue, upipe);
     return &queue->uqueue;
 }
@@ -69,7 +69,7 @@ static inline struct uqueue *upipe_queue(struct upipe *upipe)
  */
 static inline unsigned int upipe_queue_max_length(struct upipe *upipe)
 {
-    assert(upipe->signature == UPIPE_QSRC_SIGNATURE);
+    assert(upipe->mgr->signature == UPIPE_QSRC_SIGNATURE);
     struct upipe_queue *queue = container_of(upipe, struct upipe_queue, upipe);
     return queue->max_length;
 }

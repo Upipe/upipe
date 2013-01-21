@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -25,12 +25,6 @@
 
 #undef NDEBUG
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <assert.h>
-
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
@@ -54,6 +48,12 @@
 
 #include <upipe/upipe_helper_upipe.h>
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
+
 #define ALIVE() { printf("# ALIVE: %s %s - %d\n", __FILE__, __func__, __LINE__); } // FIXME - debug - remove this
 
 #define UDICT_POOL_DEPTH    5
@@ -65,7 +65,6 @@
 #define UBUF_ALIGN_OFFSET   0
 #define ULOG_LEVEL ULOG_DEBUG
 
-#define FLOW_NAME           "fooflow"
 #define IMGSIZE VHASH_IMGSIZE
 
 /** definition of our uprobe */
@@ -76,6 +75,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
     }
     return true;
@@ -96,60 +96,37 @@ static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe, struct ulog *ulog)
 {
     struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
-    if (unlikely(!genaux_test)) return NULL;
-    upipe_init(&genaux_test->upipe, uprobe, ulog);
-    genaux_test->upipe.mgr = mgr;
+    assert(genaux_test != NULL);
+    upipe_init(&genaux_test->upipe, mgr, uprobe, ulog);
     genaux_test->flow = NULL;
     genaux_test->entry = NULL;
     return &genaux_test->upipe;
 }
 
 /** helper phony pipe to test upipe_genaux */
-static bool genaux_test_control(struct upipe *upipe, enum upipe_command command, va_list args)
+static void genaux_test_input(struct upipe *upipe, struct uref *uref,
+                              struct upump *upump)
 {
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
-    const char *def, *name;
+    const char *def;
+    assert(uref != NULL);
+    ulog_debug(upipe->ulog, "===> received input uref");
+    udict_dump(uref->udict, upipe->ulog);
 
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref*);
-        assert(uref != NULL);
-        ulog_debug(upipe->ulog, "===> received input uref");
-        udict_dump(uref->udict, upipe->ulog);
-
-        if (unlikely(!uref_flow_get_name(uref, &name))) {
-           ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-           uref_free(uref);
-           return false;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        assert(def);
+        if (genaux_test->flow) {
+            uref_free(genaux_test->flow);
         }
-
-        if (unlikely(uref_flow_get_delete(uref))) {
-            uref_free(uref);
-            return true;
-        }
-
-        if (unlikely(uref_flow_get_def(uref, &def)))
-        {
-            assert(def);
-            if (genaux_test->flow) {
-                uref_free(genaux_test->flow);
-                genaux_test->flow = NULL;
-            }
-            genaux_test->flow = uref;
-            ulog_debug(upipe->ulog, "flow def for %s: %s", name, def);
-            return true;
-        }
-        if (genaux_test->entry) {
-            uref_free(genaux_test->entry);
-            genaux_test->entry = NULL;
-        }
-        genaux_test->entry = uref;
-        // FIXME peek into buffer
-        return true;
+        genaux_test->flow = uref;
+        ulog_debug(upipe->ulog, "flow def %s", def);
+        return;
     }
-    switch (command) {
-        default:
-            return false;
+    if (genaux_test->entry) {
+        uref_free(genaux_test->entry);
     }
+    genaux_test->entry = uref;
+    // FIXME peek into buffer
 }
 
 /** helper phony pipe to test upipe_genaux */
@@ -157,8 +134,10 @@ static void genaux_test_release(struct upipe *upipe)
 {
     ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
-    if (genaux_test->entry) uref_free(genaux_test->entry);
-    if (genaux_test->flow) uref_free(genaux_test->flow);
+    if (genaux_test->entry)
+        uref_free(genaux_test->entry);
+    if (genaux_test->flow)
+        uref_free(genaux_test->flow);
     upipe_clean(upipe);
     free(genaux_test);
 }
@@ -166,10 +145,12 @@ static void genaux_test_release(struct upipe *upipe)
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr genaux_test_mgr = {
     .upipe_alloc = genaux_test_alloc,
-    .upipe_control = genaux_test_control,
-    .upipe_release = genaux_test_release,
+    .upipe_input = genaux_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
+    .upipe_release = genaux_test_release,
 
+    .upipe_mgr_use = NULL,
     .upipe_mgr_release = NULL
 };
 
@@ -180,7 +161,7 @@ int main(int argc, char **argv)
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
 
     struct ubuf_mgr *ubuf_mgr;
-    struct uref *flow, *uref;
+    struct uref *uref;
     uint64_t systime, result;
     uint8_t buf[8];
 
@@ -220,32 +201,27 @@ int main(int argc, char **argv)
     struct upipe *genaux = upipe_alloc(upipe_genaux_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
     assert(genaux);
-    assert(upipe_linear_set_ubuf_mgr(genaux, ubuf_mgr));
+    assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
     struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux_test"));
-    assert(upipe_linear_set_output(genaux, genaux_test));
+    assert(upipe_set_output(genaux, genaux_test));
 
     /* Send first flow definition packet */
-    flow = uref_block_flow_alloc_def(uref_mgr, "bar.");
-    assert(uref_flow_set_name(flow, FLOW_NAME));
-    struct uref *flowdef = uref_dup(flow);
-    assert(flowdef);
-    assert(upipe_input(genaux, flowdef));
+    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
+    assert(uref);
+    upipe_input(genaux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
     assert(uref);
-    assert(uref_flow_set_name(uref, FLOW_NAME));
     assert(uref_clock_set_systime(uref, systime));
     /* Now send uref */
-    assert(upipe_input(genaux, uref_dup(uref)));
+    upipe_input(genaux, uref, NULL);
 
     uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);
     result = upipe_genaux_ntoh64(buf);
     ulog_debug(mainlog, "original: %"PRIu64" \t result: %"PRIu64, systime, result);
     assert(systime == result);
 
-    uref_free(uref);
-    uref_free(flow);
     upipe_release(genaux);
 
     /* release managers */

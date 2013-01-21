@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,8 +34,8 @@
 #include <upipe/uref.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_flows.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe-modules/upipe_queue_source.h>
 
@@ -55,8 +55,11 @@ struct upipe_qsrc {
 
     /** pipe acting as output */
     struct upipe *output;
-    /** list of input flows */
-    struct ulist flows;
+    /** flow definition packet */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
     /** extra data for the queue structure */
     void *uqueue_extra;
     /** true if we have thrown the ready event */
@@ -69,6 +72,8 @@ struct upipe_qsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
+
+UPIPE_HELPER_OUTPUT(upipe_qsrc, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
 
@@ -86,28 +91,14 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_qsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_QSRC_SIGNATURE;
+    upipe_init(upipe, mgr, uprobe, ulog);
     urefcount_init(&upipe_qsrc->refcount);
+    upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
-    upipe_qsrc->output = NULL;
-    upipe_flows_init(&upipe_qsrc->flows);
     upipe_qsrc->uqueue_extra = NULL;
     upipe_qsrc->ready = false;
     upipe_qsrc->upipe_queue.max_length = 0;
     return upipe;
-}
-
-/** @internal @This outputs data.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- */
-static void upipe_qsrc_output(struct upipe *upipe, struct uref *uref)
-{
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    upipe_input(upipe_qsrc->output, uref);
 }
 
 /** @internal @This reads data from the queue and outputs it.
@@ -122,56 +113,21 @@ static void upipe_qsrc_worker(struct upump *upump)
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
     if (likely(uchain != NULL)) {
         struct uref *uref = uref_from_uchain(uchain);
-        if (unlikely(!upipe_flows_input(&upipe_qsrc->flows, upipe, uref))) {
+        const char *def;
+        if (unlikely(uref_flow_get_def(uref, &def))) {
+            upipe_qsrc_store_flow_def(upipe, uref);
+            ulog_debug(upipe->ulog, "flow definition %s", def);
+            return;
+        }
+
+        if (unlikely(upipe_qsrc->flow_def == NULL)) {
+            upipe_throw_flow_def_error(upipe, uref);
             uref_free(uref);
             return;
         }
 
-        upipe_qsrc_output(upipe, uref);
+        upipe_qsrc_output(upipe, uref, upump);
     }
-}
-
-/** @internal @This handles the get_output control command.
- *
- * @param upipe description structure of the pipe
- * @param output_p filled in with a pointer to the output pipe
- * @return false in case of error
- */
-static bool upipe_qsrc_get_output(struct upipe *upipe,
-                                  struct upipe **output_p)
-{
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    assert(output_p != NULL);
-    *output_p = upipe_qsrc->output;
-    return true;
-}
-
-/** @internal @This handles the set_output control command, and properly
- * deletes and replays flows on old and new outputs. We do not use the
- * linear output helper here, because we aren't linear (we can output
- * any number of flows).
- *
- * @param upipe description structure of the pipe
- * @param output new output pipe
- * @return false in case of error
- */
-static bool upipe_qsrc_set_output(struct upipe *upipe, struct upipe *output)
-{
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    if (unlikely(upipe_qsrc->output != NULL)) {
-        /* signal flow deletion on old output */
-        upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe, uref,
-                                   upipe_qsrc_output(upipe, uref));
-        upipe_release(upipe_qsrc->output);
-    }
-    upipe_qsrc->output = output;
-    if (likely(upipe_qsrc->output != NULL)) {
-        upipe_use(upipe_qsrc->output);
-        /* replay flow definitions */
-        upipe_flows_foreach_replay(&upipe_qsrc->flows, upipe, uref,
-                                   upipe_qsrc_output(upipe, uref));
-    }
-    return true;
 }
 
 /** @internal @This returns the maximum length of the queue.
@@ -243,11 +199,11 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
     switch (command) {
-        case UPIPE_LINEAR_GET_OUTPUT: {
+        case UPIPE_GET_OUTPUT: {
             struct upipe **output_p = va_arg(args, struct upipe **);
             return upipe_qsrc_get_output(upipe, output_p);
         }
-        case UPIPE_LINEAR_SET_OUTPUT: {
+        case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_qsrc_set_output(upipe, output);
         }
@@ -350,14 +306,8 @@ static void upipe_qsrc_release(struct upipe *upipe)
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_qsrc->refcount))) {
         ulog_notice(upipe->ulog, "freeing queue %p", upipe);
-        if (likely(upipe_qsrc->output != NULL)) {
-            /* signal flow deletion on old queue */
-            upipe_flows_foreach_delete(&upipe_qsrc->flows, upipe, uref,
-                                       upipe_qsrc_output(upipe, uref));
-            upipe_release(upipe_qsrc->output);
-        }
-        upipe_flows_clean(&upipe_qsrc->flows);
         upipe_qsrc_clean_upump_mgr(upipe);
+        upipe_qsrc_clean_output(upipe);
 
         struct uqueue *uqueue = upipe_queue(upipe);
         struct uchain *uchain;
@@ -376,7 +326,10 @@ static void upipe_qsrc_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_qsrc_mgr = {
+    .signature = UPIPE_QSRC_SIGNATURE,
+
     .upipe_alloc = _upipe_qsrc_alloc,
+    .upipe_input = NULL,
     .upipe_control = upipe_qsrc_control,
     .upipe_use = upipe_qsrc_use,
     .upipe_release = upipe_qsrc_release,

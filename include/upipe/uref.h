@@ -35,12 +35,11 @@
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
-#include <upipe/upump.h>
 
 /** @hidden */
 struct uref_mgr;
 
-/** @This stores references to a ubuf, a udict and a upump.
+/** @This stores references to a ubuf and a udict.
  */
 struct uref {
     /** structure for double-linked lists */
@@ -52,8 +51,6 @@ struct uref {
     struct ubuf *ubuf;
     /** pointer to udict */
     struct udict *udict;
-    /** pointer to upump */
-    struct upump *upump;
 };
 
 /** @This stores common management parameters for a uref pool.
@@ -87,7 +84,6 @@ static inline void uref_free(struct uref *uref)
         ubuf_free(uref->ubuf);
     if (uref->udict != NULL)
         udict_free(uref->udict);
-    /* FIXME upump */
     uref->mgr->uref_free(uref);
 }
 
@@ -103,7 +99,6 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
         return NULL;
 
     uref->ubuf = NULL;
-    uref->upump = NULL;
     uref->udict = udict_alloc(mgr->udict_mgr, 0);
     if (unlikely(uref->udict == NULL)) {
         uref_free(uref);
@@ -126,7 +121,6 @@ static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
         return NULL;
 
     uref->ubuf = NULL;
-    uref->upump = NULL;
     uref->udict = udict_alloc(mgr->udict_mgr, mgr->control_attr_size);
     if (unlikely(uref->udict == NULL)) {
         uref_free(uref);
@@ -148,7 +142,6 @@ static inline struct uref *uref_dup(struct uref *uref)
         return NULL;
 
     new_uref->ubuf = NULL;
-    new_uref->upump = NULL;
     new_uref->udict = udict_dup(uref->udict);
     if (unlikely(new_uref->udict == NULL)) {
         uref_free(new_uref);
@@ -162,9 +155,6 @@ static inline struct uref *uref_dup(struct uref *uref)
             return NULL;
         }
     }
-
-    /* FIXME */
-    new_uref->upump = uref->upump;
     return new_uref;
 }
 
@@ -195,33 +185,6 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     return ubuf;
 }
 
-/** @This attaches a upump to a given uref. The upump pointer may no longer be
- * used by the module afterwards.
- *
- * @param uref pointer to uref structure
- * @param upump pointer to upump structure to attach to uref
- */
-static inline void uref_attach_upump(struct uref *uref, struct upump *upump)
-{
-/*    if (uref->upump != NULL)
-        FIXME */
-
-    uref->upump = upump;
-}
-
-/** @This detaches a upump from a uref. The returned upump must be freed
- * or re-attached at some point, otherwise it will leak.
- *
- * @param uref pointer to uref structure
- * @return pointer to detached upump structure
- */
-static inline struct upump *uref_detach_upump(struct uref *uref)
-{
-    struct upump *upump = uref->upump;
-    uref->upump = NULL;
-    return upump;
-}
-
 /** @This returns the high-level uref structure.
  *
  * @param uchain pointer to the uchain structure wrapped into the uref
@@ -234,7 +197,7 @@ static inline struct uref *uref_from_uchain(struct uchain *uchain)
 
 /** @This returns the uchain structure used for FIFO, LIFO and lists.
  *
- * @param uref struct uref structure
+ * @param uref uref structure
  * @return pointer to the uchain structure
  */
 static inline struct uchain *uref_to_uchain(struct uref *uref)
@@ -243,7 +206,7 @@ static inline struct uchain *uref_to_uchain(struct uref *uref)
 }
 
 /** @This instructs an existing uref manager to release all structures currently
- * kept in pools. It is inteded as a debug tool only.
+ * kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to uref manager
  */

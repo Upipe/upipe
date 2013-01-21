@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe helper functions for output (linear)
+ * @short Upipe helper functions for output
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_LINEAR_OUTPUT_H_
+#ifndef _UPIPE_UPIPE_HELPER_OUTPUT_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_LINEAR_OUTPUT_H_
+#define _UPIPE_UPIPE_HELPER_OUTPUT_H_
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -38,7 +38,7 @@
 
 #include <stdbool.h>
 
-/** @This declares eight functions dealing with the output of a linear pipe,
+/** @This declares nine functions dealing with the output of a pipe,
  * and an associated uref which is the flow definition on the output.
  *
  * You must add three members to your private upipe structure, for instance:
@@ -74,16 +74,29 @@
  * of sending the flow definition if necessary.
  *
  * @item @code
- *  void upipe_foo_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+ *  void upipe_foo_store_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @end code
- * Called whenever you change the flow definition on this output.
+ * Called whenever you change the flow definition on this output. You cannot
+ * call it directly from your UPIPE_SET_FLOW_DEF handler because you need
+ * to duplicate the uref first.
+ *
+ * @item @code
+ *  bool upipe_foo_get_flow_def(struct upipe *upipe, struct uref **p)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  case UPIPE_GET_FLOW_DEF: {
+ *      struct uref **p = va_arg(args, struct uref **);
+ *      return upipe_foo_get_flow_def(upipe, p);
+ *  }
+ * @end code
  *
  * @item @code
  *  bool upipe_foo_get_output(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_LINEAR_GET_OUTPUT: {
+ *  case UPIPE_GET_OUTPUT: {
  *      struct upipe **p = va_arg(args, struct upipe **);
  *      return upipe_foo_get_output(upipe, p);
  *  }
@@ -94,7 +107,7 @@
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_LINEAR_SET_OUTPUT: {
+ *  case UPIPE_SET_OUTPUT: {
  *      struct upipe *output = va_arg(args, struct upipe *);
  *      return upipe_foo_set_output(upipe, output);
  *  }
@@ -114,8 +127,7 @@
  * @param FLOW_DEF_SENT name of the @tt{bool} field of
  * your private upipe structure
  */
-#define UPIPE_HELPER_LINEAR_OUTPUT(STRUCTURE, OUTPUT, FLOW_DEF,             \
-                                   FLOW_DEF_SENT)                           \
+#define UPIPE_HELPER_OUTPUT(STRUCTURE, OUTPUT, FLOW_DEF, FLOW_DEF_SENT)     \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -127,35 +139,12 @@ static void STRUCTURE##_init_output(struct upipe *upipe)                    \
     STRUCTURE->FLOW_DEF = NULL;                                             \
     STRUCTURE->FLOW_DEF_SENT = false;                                       \
 }                                                                           \
-/** @This outputs a flow deletion control packet.                           \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- */                                                                         \
-static void STRUCTURE##_flow_delete(struct upipe *upipe)                    \
-{                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->FLOW_DEF == NULL))                              \
-        return;                                                             \
-    struct uref *uref = uref_dup(STRUCTURE->FLOW_DEF);                      \
-    if (unlikely(uref == NULL)) {                                           \
-        ulog_aerror(upipe->ulog);                                           \
-        upipe_throw_aerror(upipe);                                          \
-        return;                                                             \
-    }                                                                       \
-    if (unlikely(!uref_flow_set_delete(uref))) {                            \
-        uref_free(uref);                                                    \
-        ulog_aerror(upipe->ulog);                                           \
-        upipe_throw_aerror(upipe);                                          \
-        return;                                                             \
-    }                                                                       \
-    upipe_input(STRUCTURE->OUTPUT, uref);                                   \
-    STRUCTURE->FLOW_DEF_SENT = false;                                       \
-}                                                                           \
 /** @internal @This outputs a flow definition control packet.               \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
+ * @param upump pump that generated the buffer                              \
  */                                                                         \
-static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
+static void STRUCTURE##_flow_def(struct upipe *upipe, struct upump *upump)  \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->FLOW_DEF == NULL))                              \
@@ -166,58 +155,52 @@ static void STRUCTURE##_flow_def(struct upipe *upipe)                       \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
     }                                                                       \
-    upipe_input(STRUCTURE->OUTPUT, uref);                                   \
+    upipe_input(STRUCTURE->OUTPUT, uref, upump);                            \
     STRUCTURE->FLOW_DEF_SENT = true;                                        \
 }                                                                           \
-/** @internal @This sends a uref to the output.                             \
+/** @internal @This sends a uref to the output. Note that uref is then      \
+ * owned by the callee and shouldn't be used any longer.                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param uref uref structure to send                                       \
+ * @param upump pump that generated the buffer                              \
  */                                                                         \
-static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref)      \
+static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
+                               struct upump *upump)                         \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->OUTPUT == NULL && STRUCTURE->FLOW_DEF != NULL)) \
-        upipe_linear_throw_need_output(upipe, STRUCTURE->FLOW_DEF);         \
+        upipe_throw_need_output(upipe, STRUCTURE->FLOW_DEF);                \
     if (unlikely(STRUCTURE->OUTPUT == NULL)) {                              \
         ulog_error(upipe->ulog, "no output defined");                       \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
-        STRUCTURE##_flow_def(upipe);                                        \
+        STRUCTURE##_flow_def(upipe, upump);                                 \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
         ulog_error(upipe->ulog, "no flow_def defined");                     \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
                                                                             \
-    const char *flow_name;                                                  \
-    if (unlikely(!uref_flow_get_name(STRUCTURE->FLOW_DEF, &flow_name) ||    \
-                 !uref_flow_set_name(uref, flow_name))) {                   \
-        uref_free(uref);                                                    \
-        ulog_aerror(upipe->ulog);                                           \
-        upipe_throw_aerror(upipe);                                          \
-        return;                                                             \
-    }                                                                       \
-    upipe_input(STRUCTURE->OUTPUT, uref);                                   \
+    upipe_input(STRUCTURE->OUTPUT, uref, upump);                            \
 }                                                                           \
-/** @internal @This sets the flow definition to use on the output. If set   \
- * to NULL, also output a flow deletion packet. Otherwise, schedule a       \
- * flow definition packet next time a packet must be output.                \
- * It can handle the set_flow_def control command.                          \
+/** @internal @This stores the flow definition to use on the output. It     \
+ * also schedules a flow definition packet next time a packet must be       \
+ * output.                                                                  \
+ * It cannot directly handle the set_flow_def control command because the   \
+ * uref first needs to be duplicated.                                       \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param flow_def control packet describing the output (we keep a pointer  \
  * to it so make sure it belongs to us)                                     \
  */                                                                         \
-static void STRUCTURE##_set_flow_def(struct upipe *upipe,                   \
-                                     struct uref *flow_def)                 \
+static void STRUCTURE##_store_flow_def(struct upipe *upipe,                 \
+                                       struct uref *flow_def)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->FLOW_DEF != NULL)) {                            \
-        if (unlikely(STRUCTURE->FLOW_DEF_SENT && flow_def == NULL))         \
-            STRUCTURE##_flow_delete(upipe);                                 \
         uref_free(STRUCTURE->FLOW_DEF);                                     \
         STRUCTURE->FLOW_DEF_SENT = false;                                   \
     }                                                                       \
@@ -260,11 +243,8 @@ static bool STRUCTURE##_set_output(struct upipe *upipe,                     \
                                    struct upipe *output)                    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->OUTPUT != NULL)) {                              \
-        if (likely(STRUCTURE->FLOW_DEF_SENT))                               \
-            STRUCTURE##_flow_delete(upipe);                                 \
+    if (unlikely(STRUCTURE->OUTPUT != NULL))                                \
         upipe_release(STRUCTURE->OUTPUT);                                   \
-    }                                                                       \
                                                                             \
     STRUCTURE->OUTPUT = output;                                             \
     if (likely(output != NULL))                                             \
@@ -278,11 +258,8 @@ static bool STRUCTURE##_set_output(struct upipe *upipe,                     \
 static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->OUTPUT != NULL)) {                                \
-        if (likely(STRUCTURE->FLOW_DEF_SENT))                               \
-            STRUCTURE##_flow_delete(upipe);                                 \
+    if (likely(STRUCTURE->OUTPUT != NULL))                                  \
         upipe_release(STRUCTURE->OUTPUT);                                   \
-    }                                                                       \
     if (likely(STRUCTURE->FLOW_DEF != NULL))                                \
         uref_free(STRUCTURE->FLOW_DEF);                                     \
 }

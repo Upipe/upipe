@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen <bencoh@notk.org>
+ * Authors: Benjamin Cohen
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -38,8 +38,8 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_linear_ubuf_mgr.h>
-#include <upipe/upipe_helper_linear_output.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-swscale/upipe_sws.h>
 
 #include <stdlib.h>
@@ -102,8 +102,8 @@ struct upipe_sws {
 
 
 UPIPE_HELPER_UPIPE(upipe_sws, upipe);
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
-UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_sws, ubuf_mgr);
+UPIPE_HELPER_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
+UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);
 
 /** @internal @This allocates a swscale pipe.
  *
@@ -119,10 +119,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_sws == NULL))
         return NULL;
     struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_SWS_SIGNATURE;
-    urefcount_init(&upipe_sws->refcount);
+    upipe_init(upipe, mgr, uprobe, ulog);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
     upipe_sws->input_flow = NULL;
@@ -130,6 +127,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     memset(&upipe_sws->srcsize, 0, sizeof(struct picsize));
     memset(&upipe_sws->dstsize, 0, sizeof(struct picsize));
 
+    urefcount_init(&upipe_sws->refcount);
     upipe_sws->ready = false;
     return upipe;
 }
@@ -221,7 +219,7 @@ static bool upipe_sws_set_context(struct upipe *upipe, struct uref *flow, struct
  * @param flow uref structure describing the flow
  * @return false in case of failure
  */
-static bool upipe_sws_conf_outflow(struct upipe *upipe, struct uref *flow)
+static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow)
 {
     uint64_t size = 0;
     if (!flow) {
@@ -239,7 +237,7 @@ static bool upipe_sws_conf_outflow(struct upipe *upipe, struct uref *flow)
     if (unlikely(uref == NULL))
         return false;
 
-    upipe_sws_set_flow_def(upipe, uref);
+    upipe_sws_store_flow_def(upipe, uref);
     return true;
 }
 
@@ -247,10 +245,11 @@ static bool upipe_sws_conf_outflow(struct upipe *upipe, struct uref *flow)
 /** @internal @This receives pictures.
  *
  * @param upipe description structure of the pipe
- * @param srcpic uref structure describing the picture
- * @return false in case of failure
+ * @param uref uref structure describing the picture
+ * @param upump pump that generated the buffer
  */
-static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *uref)
+static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
 
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
@@ -263,7 +262,7 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *uref)
     if(unlikely(!upipe_sws->ready)) {
         ulog_warning(upipe->ulog, "pipe not ready");
         uref_free(uref);
-        return false;
+        return;
     }
     
     uref_pic_size(uref, &inputsize.hsize, &inputsize.vsize, NULL);
@@ -279,6 +278,8 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *uref)
     if (unlikely(dstpic == NULL)) {
         ulog_debug(upipe->ulog, "dstpic == NULL");
         upipe_throw_aerror(upipe);
+        uref_free(uref);
+        return;
     }
 
     upipe_sws_filldata(uref->ubuf, strides, slices, READ);
@@ -294,76 +295,53 @@ static bool upipe_sws_input_pic(struct upipe *upipe, struct uref *uref)
     if(unlikely(ret <= 0)) {
         ubuf_free(dstpic);
         uref_free(uref);
-        return false;
+        return;
     }
     uref_attach_ubuf(uref, dstpic);
-    upipe_sws_output(upipe, uref);
-    return true;
+    upipe_sws_output(upipe, uref, upump);
 }
 
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
+static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
+                            struct upump *upump)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    const char *flow, *def = NULL, *inflow = NULL; // hush gcc !
-
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-       ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-       uref_free(uref);
-       return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        if (upipe_sws->input_flow) {
-            uref_free(upipe_sws->input_flow);
-        }
-        upipe_sws->input_flow = NULL;
-        uref_free(uref);
-        return true;
-    }
+    const char *def;
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
         if (upipe_sws->input_flow) {
-            ulog_warning(upipe->ulog, "received flow definition without delete first");
             uref_free(upipe_sws->input_flow);
             upipe_sws->input_flow = NULL;
         }
 
-        if (unlikely(strncmp(def, "pic.", strlen("pic.")))) {
-            ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
+        if (unlikely(ubase_ncmp(def, "pic."))) {
+            upipe_throw_flow_def_error(upipe, uref);
             uref_free(uref);
-            return false;
+            return;
         }
         upipe_sws->input_flow = uref;
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        return true;
+        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        return;
     }
 
     if (unlikely(upipe_sws->input_flow == NULL)) {
         ulog_warning(upipe->ulog, "pipe has no registered input flow");
         uref_free(uref);
-        return false;
-    }
-
-    uref_flow_get_name(upipe_sws->input_flow, &inflow);
-    if (unlikely(strcmp(inflow, flow))) {
-        ulog_warning(upipe->ulog, "received a buffer not matching the current flow");
-        uref_free(uref);
-        return false;
+        return;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
     ulog_debug(upipe->ulog, "calling input_pic");
-    return upipe_sws_input_pic(upipe, uref);
+    upipe_sws_input_pic(upipe, uref, upump);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -378,36 +356,30 @@ static bool upipe_sws_input(struct upipe *upipe, struct uref *uref)
 static bool _upipe_sws_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_sws_input(upipe, uref);
-    }
     switch (command) {
-        // generic linear stuff
-        case UPIPE_LINEAR_GET_UBUF_MGR: {
+        case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_sws_get_ubuf_mgr(upipe, p);
         }
-        case UPIPE_LINEAR_SET_UBUF_MGR: {
+        case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_sws_set_ubuf_mgr(upipe, ubuf_mgr);
         }
-        case UPIPE_LINEAR_GET_OUTPUT: {
+        case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_get_output(upipe, p);
         }
-        case UPIPE_LINEAR_SET_OUTPUT: {
+        case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_sws_set_output(upipe, output);
         }
-        case UPIPE_LINEAR_SET_FLOW_DEF: {
-            struct uref *flow = va_arg(args, struct uref *);
-            return upipe_sws_conf_outflow(upipe, flow);
-        }
-        case UPIPE_LINEAR_GET_FLOW_DEF: {
+        case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_sws_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow = va_arg(args, struct uref *);
+            return upipe_sws_set_flow_def(upipe, flow);
         }
         default:
             return false;
@@ -475,7 +447,10 @@ static void upipe_sws_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_sws_mgr = {
+    .signature = UPIPE_SWS_SIGNATURE,
+
     .upipe_alloc = upipe_sws_alloc,
+    .upipe_input = upipe_sws_input,
     .upipe_control = upipe_sws_control,
     .upipe_use = upipe_sws_use,
     .upipe_release = upipe_sws_release,
@@ -501,7 +476,8 @@ bool upipe_sws_set_out_flow(struct upipe *upipe, struct uref* flow, uint64_t hsi
     }
     uref_pic_flow_set_hsize(flow, hsize);
     uref_pic_flow_set_vsize(flow, vsize);
-    return upipe_linear_set_flow_def(upipe, flow);
+    upipe_sws_store_flow_def(upipe, flow);
+    return true;
 }
 
 /** @This returns the management structure for swscale pipes

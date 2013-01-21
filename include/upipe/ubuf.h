@@ -50,8 +50,8 @@ struct ubuf {
     struct ubuf_mgr *mgr;
 };
 
-/** @This is a simple signature to make sure the @ref ubuf_alloc API is used
- * properly. */
+/** @This is a simple signature to make sure the ubuf_alloc internal API
+ * is used properly. */
 enum ubuf_alloc_type {
     /** block (int) */
     UBUF_ALLOC_BLOCK,

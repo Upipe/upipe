@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -41,11 +41,10 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_linear_ubuf_mgr.h>
-#include <upipe/upipe_helper_linear_output.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_source_flow_name.h>
 #include <upipe/upipe_helper_source_read_size.h>
 #include <upipe-modules/upipe_file_source.h>
 
@@ -89,8 +88,6 @@ struct upipe_fsrc {
     struct upump *upump;
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
-    /** flow name */
-    char *flow_name;
     /** read size */
     unsigned int read_size;
 
@@ -110,12 +107,11 @@ struct upipe_fsrc {
 UPIPE_HELPER_UPIPE(upipe_fsrc, upipe)
 UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr)
 
-UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_fsrc, ubuf_mgr)
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_fsrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr)
+UPIPE_HELPER_OUTPUT(upipe_fsrc, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_fsrc, upump_mgr, upump)
 UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock)
-UPIPE_HELPER_SOURCE_FLOW_NAME(upipe_fsrc, flow_name, flow_def)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
 
 /** @internal @This allocates a file source pipe.
@@ -132,16 +128,13 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_fsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_FSRC_SIGNATURE;
+    upipe_init(upipe, mgr, uprobe, ulog);
     urefcount_init(&upipe_fsrc->refcount);
     upipe_fsrc_init_uref_mgr(upipe);
     upipe_fsrc_init_ubuf_mgr(upipe);
     upipe_fsrc_init_output(upipe);
     upipe_fsrc_init_upump_mgr(upipe);
     upipe_fsrc_init_uclock(upipe);
-    upipe_fsrc_init_flow_name(upipe);
     upipe_fsrc_init_read_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_fsrc->fd = -1;
     upipe_fsrc->path = NULL;
@@ -220,7 +213,7 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_clock_set_systime(uref, systime);
     if (unlikely(ret != upipe_fsrc->read_size))
         uref_block_resize(uref, 0, ret);
-    upipe_fsrc_output(upipe, uref);
+    upipe_fsrc_output(upipe, uref, upump);
 }
 
 /** @internal @This returns the path of the currently opened file.
@@ -344,19 +337,19 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
             return upipe_fsrc_set_uref_mgr(upipe, uref_mgr);
         }
 
-        case UPIPE_LINEAR_GET_UBUF_MGR: {
+        case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_fsrc_get_ubuf_mgr(upipe, p);
         }
-        case UPIPE_LINEAR_SET_UBUF_MGR: {
+        case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_fsrc_set_ubuf_mgr(upipe, ubuf_mgr);
         }
-        case UPIPE_LINEAR_GET_OUTPUT: {
+        case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_fsrc_get_output(upipe, p);
         }
-        case UPIPE_LINEAR_SET_OUTPUT: {
+        case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_fsrc_set_output(upipe, output);
         }
@@ -376,14 +369,6 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
             return upipe_fsrc_set_uclock(upipe, uclock);
-        }
-        case UPIPE_SOURCE_GET_FLOW_NAME: {
-            const char **p = va_arg(args, const char **);
-            return upipe_fsrc_get_flow_name(upipe, p);
-        }
-        case UPIPE_SOURCE_SET_FLOW_NAME: {
-            const char *flow_name = va_arg(args, const char *);
-            return upipe_fsrc_set_flow_name(upipe, flow_name);
         }
         case UPIPE_SOURCE_GET_READ_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
@@ -445,7 +430,6 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
 
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (unlikely(upipe_fsrc->uref_mgr != NULL &&
-                 upipe_fsrc->flow_name != NULL &&
                  upipe_fsrc->flow_def == NULL)) {
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
                                                           NULL);
@@ -454,14 +438,13 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
             upipe_throw_aerror(upipe);
             return false;
         }
-        upipe_fsrc_set_flow_name_def(upipe, flow_def);
+        upipe_fsrc_store_flow_def(upipe, flow_def);
     }
 
     if (unlikely(upipe_fsrc->uref_mgr != NULL &&
                  upipe_fsrc->output != NULL &&
                  upipe_fsrc->ubuf_mgr != NULL &&
                  upipe_fsrc->upump_mgr != NULL &&
-                 upipe_fsrc->flow_name != NULL &&
                  upipe_fsrc->fd != -1)) {
         if (likely(upipe_fsrc->upump == NULL)) {
             struct upump *upump;
@@ -494,10 +477,8 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
                 upipe_throw_need_uref_mgr(upipe);
             else if (unlikely(upipe_fsrc->upump_mgr == NULL))
                 upipe_throw_need_upump_mgr(upipe);
-            else if (unlikely(upipe_fsrc->flow_name == NULL))
-                upipe_throw_source_need_flow_name(upipe);
             else if (unlikely(upipe_fsrc->ubuf_mgr == NULL))
-                upipe_throw_linear_need_ubuf_mgr(upipe);
+                upipe_throw_need_ubuf_mgr(upipe, upipe_fsrc->flow_def);
         }
     }
 
@@ -529,7 +510,6 @@ static void upipe_fsrc_release(struct upipe *upipe)
         }
         free(upipe_fsrc->path);
         upipe_fsrc_clean_read_size(upipe);
-        upipe_fsrc_clean_flow_name(upipe);
         upipe_fsrc_clean_uclock(upipe);
         upipe_fsrc_clean_upump_mgr(upipe);
         upipe_fsrc_clean_output(upipe);
@@ -544,7 +524,10 @@ static void upipe_fsrc_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_fsrc_mgr = {
+    .signature = UPIPE_FSRC_SIGNATURE,
+
     .upipe_alloc = upipe_fsrc_alloc,
+    .upipe_input = NULL,
     .upipe_control = upipe_fsrc_control,
     .upipe_use = upipe_fsrc_use,
     .upipe_release = upipe_fsrc_release,

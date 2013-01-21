@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -41,8 +41,8 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_linear_ubuf_mgr.h>
-#include <upipe/upipe_helper_linear_output.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_genaux.h>
 
 #include <stdlib.h>
@@ -58,21 +58,14 @@
 
 /** upipe_genaux structure */ 
 struct upipe_genaux {
-    /** input flow */
-    struct uref *input_flow;
-    /** output flow */
-    struct uref *output_flow;
-    /** true if the flow definition has already been sent */
-    bool output_flow_sent;
-
-    /** output pipe */
-    struct upipe *output;
-
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
-
-    /** true if we have thrown the ready event */
-    bool ready;
+    /** output pipe */
+    struct upipe *output;
+    /** flow_definition packet */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
 
     /** refcount management structure */
     urefcount refcount;
@@ -81,16 +74,17 @@ struct upipe_genaux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe);
-UPIPE_HELPER_LINEAR_OUTPUT(upipe_genaux, output, output_flow, output_flow_sent);
-UPIPE_HELPER_LINEAR_UBUF_MGR(upipe_genaux, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr);
+UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
 
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool _upipe_genaux_input(struct upipe *upipe, struct uref *uref)
+static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     uint64_t systime = 0;
@@ -100,146 +94,92 @@ static bool _upipe_genaux_input(struct upipe *upipe, struct uref *uref)
 
     if (!uref_clock_get_systime(uref, &systime)) {
         uref_free(uref);
-        return false;
+        return;
     }
 
     size = sizeof(uint64_t);
     dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
     if (unlikely(dst == NULL)) {
+        uref_free(uref);
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
-        return false;
+        return;
     }
     ubuf_block_write(dst, 0, &size, &aux);
     upipe_genaux_hton64(aux, systime);
     ubuf_block_unmap(dst, 0, size);
     ubuf_free(uref_detach_ubuf(uref));
     uref_attach_ubuf(uref, dst);
-    upipe_genaux_output(upipe, uref);
-    return true;
+    upipe_genaux_output(upipe, uref, upump);
 }
 
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_genaux_input(struct upipe *upipe, struct uref *uref)
+static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
+                               struct upump *upump)
 {
     // FIXME: check flow definition (only accept flows with planar y8)
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    const char *flow, *def = NULL, *inflow = NULL; // hush gcc !
-
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-       ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-       uref_free(uref);
-       return false;
-    }
+    const char *def;
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_genaux->input_flow) {
-            ulog_warning(upipe->ulog, "received flow definition without delete first");
-            uref_free(upipe_genaux->input_flow);
-            upipe_genaux->input_flow = NULL;
+        ulog_debug(upipe->ulog, "flow definition %s", def);
+        if (unlikely(!uref_flow_set_def(uref, "block.aux."))) {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
         }
-
-        upipe_genaux->input_flow = uref;
-        //FIXME: allocate new flow
-        upipe_genaux_set_flow_def(upipe, uref_dup(uref));
-
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        return true;
+        upipe_genaux_store_flow_def(upipe, uref);
+        return;
     }
 
-    if (unlikely(upipe_genaux->input_flow == NULL)) {
-        ulog_warning(upipe->ulog, "pipe has no registered input flow");
+    if (unlikely(upipe_genaux->flow_def == NULL)) {
+        upipe_throw_flow_def_error(upipe, uref);
         uref_free(uref);
-        return false;
-    }
-
-    uref_flow_get_name(upipe_genaux->input_flow, &inflow);
-    if (unlikely(strcmp(inflow, flow))) {
-        ulog_warning(upipe->ulog, "received a buffer not matching the current flow");
-        uref_free(uref);
-        return false;
-    }
-
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        uref_free(upipe_genaux->input_flow);
-        upipe_genaux->input_flow = NULL;
-        uref_free(uref);
-        return true;
+        return;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
-    return _upipe_genaux_input(upipe, uref);
+    _upipe_genaux_input(upipe, uref, upump);
 }
 
-/** @internal @This processes control commands on a file source pipe, and
- * checks the status of the pipe afterwards.
+/** @internal @This processes control commands on a genaux pipe.
  *
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool _upipe_genaux_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static bool upipe_genaux_control(struct upipe *upipe,
+                                 enum upipe_command command, va_list args)
 {
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_genaux_input(upipe, uref);
-    }
     switch (command) {
-        // generic linear stuff
-        case UPIPE_LINEAR_GET_UBUF_MGR: {
+        case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_genaux_get_ubuf_mgr(upipe, p);
         }
-        case UPIPE_LINEAR_SET_UBUF_MGR: {
+        case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_genaux_set_ubuf_mgr(upipe, ubuf_mgr);
         }
-        case UPIPE_LINEAR_GET_OUTPUT: {
+        case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_genaux_get_output(upipe, p);
         }
-        case UPIPE_LINEAR_SET_OUTPUT: {
+        case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_genaux_set_output(upipe, output);
         }
         default:
             return false;
     }
-}
-
-/** @internal @This processes control commands on a file source pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_genaux_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
-{
-    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    int ret = _upipe_genaux_control(upipe, command, args);
-   
-    // FIXME - check something before setting ready !
-    if (!upipe_genaux->ready) {
-        upipe_genaux->ready = true;
-        upipe_throw_ready(upipe);
-    }
-    return ret;
 }
 
 /** @internal @This allocates a genaux pipe.
@@ -254,17 +194,15 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
                                         struct ulog *ulog)
 {
     struct upipe_genaux *upipe_genaux = malloc(sizeof(struct upipe_genaux));
-    if (unlikely(upipe_genaux == NULL)) return NULL;
+    if (unlikely(upipe_genaux == NULL))
+        return NULL;
     struct upipe *upipe = upipe_genaux_to_upipe(upipe_genaux);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_GENAUX_SIGNATURE;
-    urefcount_init(&upipe_genaux->refcount);
+    upipe_init(upipe, mgr, uprobe, ulog);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
-    upipe_genaux->input_flow = NULL;
 
-    upipe_genaux->ready = false;
+    urefcount_init(&upipe_genaux->refcount);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -287,11 +225,9 @@ static void upipe_genaux_release(struct upipe *upipe)
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_genaux->refcount))) {
         ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
-        upipe_genaux_clean_output(upipe);
         upipe_genaux_clean_ubuf_mgr(upipe);
-        if (upipe_genaux->input_flow) {
-            uref_free(upipe_genaux->input_flow);
-        }
+        upipe_genaux_clean_output(upipe);
+
         upipe_clean(upipe);
         urefcount_clean(&upipe_genaux->refcount);
         free(upipe_genaux);
@@ -299,7 +235,10 @@ static void upipe_genaux_release(struct upipe *upipe)
 }
 
 static struct upipe_mgr upipe_genaux_mgr = {
+    .signature = UPIPE_GENAUX_SIGNATURE,
+
     .upipe_alloc = upipe_genaux_alloc,
+    .upipe_input = upipe_genaux_input,
     .upipe_control = upipe_genaux_control,
     .upipe_release = upipe_genaux_release,
     .upipe_use = upipe_genaux_use,

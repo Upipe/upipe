@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -82,6 +82,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
             break;
         case UPROBE_TS_PMTD_HEADER: {
             unsigned int signature = va_arg(args, unsigned int);
@@ -166,8 +167,7 @@ int main(int argc, char *argv[])
     int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtspmt.");
     assert(uref != NULL);
-    assert(uref_flow_set_name(uref, "source"));
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE);
@@ -189,13 +189,12 @@ int main(int argc, char *argv[])
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     pid_sum = 12;
     streamtype_sum = 42;
     del_pid_sum = 0;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 0;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -228,12 +227,11 @@ int main(int argc, char *argv[])
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     pid_sum = 12;
     streamtype_sum = 42;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 5;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 142);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -269,14 +267,13 @@ int main(int argc, char *argv[])
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     header_desc_size = 5;
     del_pid_sum = 12;
     pid_sum = 13;
     streamtype_sum = 43;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE + 5;
     desc_size_sum = 5;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -313,9 +310,8 @@ int main(int argc, char *argv[])
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     header_desc_size = 5;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -350,9 +346,8 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer); //set invalid CRC
     pmtn_set_streamtype(pmt_es, 44);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     header_desc_size = 0;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -386,14 +381,13 @@ int main(int argc, char *argv[])
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     header_desc_size = 0;
     pid_sum = 13 + 14;
     streamtype_sum = 43 + 44;
     del_pid_sum = 0;
     desc_offset_sum = (PMT_HEADER_SIZE + PMT_ES_SIZE) * 2 + PMT_ES_SIZE;
     desc_size_sum = 0;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
     assert(!streamtype_sum);
@@ -427,14 +421,13 @@ int main(int argc, char *argv[])
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
-    assert(uref_flow_set_name(uref, "source"));
     header_desc_size = 0;
     pid_sum = 12;
     streamtype_sum = 42;
     del_pid_sum = 13;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 0;
-    assert(upipe_input(upipe_ts_pmtd, uref));
+    upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
     assert(!streamtype_sum);

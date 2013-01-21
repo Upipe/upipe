@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
             Benjamin Cohen
@@ -103,6 +103,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
         case UPROBE_READ_END:
             break;
     }
@@ -123,58 +124,42 @@ UPIPE_HELPER_UPIPE(udpsrc_test, upipe);
 static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
 {
     struct udpsrc_test *udpsrc_test = malloc(sizeof(struct udpsrc_test));
-    if (unlikely(!udpsrc_test)) return NULL;
+    assert(udpsrc_test != NULL);
     udpsrc_test->flow = NULL;
-    udpsrc_test->upipe.mgr = mgr;
     udpsrc_test->counter = 0;
-	upipe_init(&udpsrc_test->upipe, uprobe, ulog);
+	upipe_init(&udpsrc_test->upipe, mgr, uprobe, ulog);
     return &udpsrc_test->upipe;
 }
 
 /** helper phony pipe to test upipe_udpsrc */
-static bool udpsrc_test_control(struct upipe *upipe, enum upipe_command command, va_list args)
+static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
+                              struct upump *upump)
 {
-	const char *def, *name;
+	const char *def;
 	uint8_t buf[BUF_SIZE], str[BUF_SIZE];
 	const uint8_t *rbuf;
 	struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref*);
-        assert(uref != NULL);
+    assert(uref != NULL);
 
-        if (unlikely(!uref_flow_get_name(uref, &name))) {
-           ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-           uref_free(uref);
-           return false;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        assert(def);
+        if (udpsrc_test->flow) {
+            uref_free(udpsrc_test->flow);
         }
-
-        if (unlikely(uref_flow_get_def(uref, &def)))
-        {
-            assert(def);
-            if (udpsrc_test->flow) {
-                uref_free(udpsrc_test->flow);
-            }
-            udpsrc_test->flow = uref;
-            ulog_debug(upipe->ulog, "flow def for %s: %s", name, def);
-            return true;
-        }
-
-		if ((rbuf = uref_block_peek(uref, 0, -1, buf))) {
-			ulog_debug(upipe->ulog, "Received string: %s", rbuf);
-			snprintf((char *)str, sizeof(str), FORMAT, udpsrc_test->counter);
-			assert(strncmp((char *)str, (char *)rbuf, BUF_SIZE) == 0);
-			udpsrc_test->counter++;
-			uref_block_peek_unmap(uref, 0, -1, buf, rbuf);
-		}
-
-        uref_free(uref);
-        return true;
-
+        udpsrc_test->flow = uref;
+        ulog_debug(upipe->ulog, "flow def: %s", def);
+        return;
     }
-    switch (command) {
-        default:
-            return false;
+
+    if ((rbuf = uref_block_peek(uref, 0, -1, buf))) {
+        ulog_debug(upipe->ulog, "Received string: %s", rbuf);
+        snprintf((char *)str, sizeof(str), FORMAT, udpsrc_test->counter);
+        assert(strncmp((char *)str, (char *)rbuf, BUF_SIZE) == 0);
+        udpsrc_test->counter++;
+        uref_block_peek_unmap(uref, 0, -1, buf, rbuf);
     }
+
+    uref_free(uref);
 }
 
 /** helper phony pipe to test upipe_udpsrc */
@@ -182,18 +167,21 @@ static void udpsrc_test_release(struct upipe *upipe)
 {
     ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
     struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
-    if (udpsrc_test->flow) uref_free(udpsrc_test->flow);
+    if (udpsrc_test->flow)
+        uref_free(udpsrc_test->flow);
 	upipe_clean(upipe);
     free(udpsrc_test);
 }
 
-/** helper phony pipe to test upipe_dup */
+/** helper phony pipe to test upipe_udpsrc */
 static struct upipe_mgr udpsrc_test_mgr = {
     .upipe_alloc = udpsrc_test_alloc,
-    .upipe_control = udpsrc_test_control,
-    .upipe_release = udpsrc_test_release,
+    .upipe_input = udpsrc_test_input,
+    .upipe_control = NULL,
     .upipe_use = NULL,
+    .upipe_release = udpsrc_test_release,
 
+    .upipe_mgr_use = NULL,
     .upipe_mgr_release = NULL
 };
 
@@ -258,10 +246,9 @@ int main(int argc, char *argv[])
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
-    assert(upipe_linear_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
-    assert(upipe_linear_set_output(upipe_udpsrc, udpsrc_test));
+    assert(upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
+    assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
     assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
-    assert(upipe_source_set_flow_name(upipe_udpsrc, "udp0"));
     assert(upipe_set_uclock(upipe_udpsrc, uclock));
 	srand(42);
 	for (i=0; i < 10; i++) {

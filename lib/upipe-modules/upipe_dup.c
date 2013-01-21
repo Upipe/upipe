@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -36,8 +36,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_split_outputs.h>
-#include <upipe/upipe_flows.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_dup.h>
 
 #include <stdlib.h>
@@ -50,11 +49,11 @@
 struct upipe_dup {
     /** list of outputs */
     struct ulist outputs;
+    /** flow definition packet */
+    struct uref *flow_def;
 
-    /** list of input flows */
-    struct ulist flows;
-    /** true if we have thrown the ready event */
-    bool ready;
+    /** manager to create outputs */
+    struct upipe_mgr output_mgr;
 
     /** refcount management structure */
     urefcount refcount;
@@ -64,180 +63,212 @@ struct upipe_dup {
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe)
 
+/** @internal @This returns the public output_mgr structure.
+ *
+ * @param upipe_dup pointer to the private upipe_dup structure
+ * @return pointer to the public output_mgr structure
+ */
+static inline struct upipe_mgr *upipe_dup_to_output_mgr(struct upipe_dup *s)
+{
+    return &s->output_mgr;
+}
+
+/** @internal @This returns the private upipe_dup structure.
+ *
+ * @param output_mgr public output_mgr structure of the pipe
+ * @return pointer to the private upipe_dup structure
+ */
+static inline struct upipe_dup *
+    upipe_dup_from_output_mgr(struct upipe_mgr *output_mgr)
+{
+    return container_of(output_mgr, struct upipe_dup, output_mgr);
+}
+
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
     /** structure for double-linked lists */
     struct uchain uchain;
-    /** suffix added to every flow on this output */
-    char *flow_suffix;
+
     /** pipe acting as output */
     struct upipe *output;
+    /** flow definition packet */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
+    /** refcount management structure */
+    urefcount refcount;
+    /** public upipe structure */
+    struct upipe upipe;
 };
 
-/** We do not use @ref #UPIPE_HELPER_SPLIT_OUTPUT because it supposes there
- * is only one flow per output, which is not the case for us. */
+UPIPE_HELPER_UPIPE(upipe_dup_output, upipe)
+UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, flow_def_sent)
 
-/** @internal @This returns the uchain utility structure.
+/** @This returns the high-level upipe_dup_output structure.
  *
- * @param s pointer to the output-specific substructure
- * @return pointer to the uchain utility structure
+ * @param uchain pointer to the uchain structure wrapped into the
+ * upipe_dup_output
+ * @return pointer to the upipe_dup_output structure
  */
-static inline struct uchain *upipe_dup_output_to_uchain(struct upipe_dup_output *s)
+static inline struct upipe_dup_output *
+    upipe_dup_output_from_uchain(struct uchain *uchain)
 {
-    return &s->uchain;
+    return container_of(uchain, struct upipe_dup_output, uchain);
 }
 
-/** @internal @This returns the private output-specific substructure.
+/** @This returns the uchain structure used for FIFO, LIFO and lists.
  *
- * @param u uchain utility structure
- * @return pointer to the private STRUCTURE structure
+ * @param upipe_dup_output upipe_dup_output structure
+ * @return pointer to the uchain structure
  */
-static inline struct upipe_dup_output *upipe_dup_output_from_uchain(struct uchain *u)
+static inline struct uchain *
+    upipe_dup_output_to_uchain(struct upipe_dup_output *upipe_dup_output)
 {
-    return container_of(u, struct upipe_dup_output, uchain);
+    return &upipe_dup_output->uchain;
 }
 
-/** @internal @This checks if an output-specific substructure matches
- * a given flow suffix.
+/** @internal @This allocates an output subpipe of a dup pipe.
  *
- * @param output pointer to output-specific substructure
- * @param flow_suffix flow suffix
- * @return true if the substructure matches
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
+ * @return pointer to upipe or NULL in case of allocation error
  */
-static inline bool upipe_dup_output_match(struct upipe_dup_output *output,
-                                          const char *flow_suffix)
+static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
+                                            struct uprobe *uprobe,
+                                            struct ulog *ulog)
 {
-    assert(output != NULL);
-    assert(flow_suffix != NULL);
-    return !strcmp(output->flow_suffix, flow_suffix);
-}
-
-/** @internal @This allocates and initializes a new output-specific
- * substructure.
- *
- * @param upipe description structure of the pipe
- * @param flow_suffix flow suffix
- * @return pointer to allocated substructure
- */
-static struct upipe_dup_output *upipe_dup_output_alloc(struct upipe *upipe,
-                                                       const char *flow_suffix)
-{
-    assert(flow_suffix != NULL);
-    struct upipe_dup_output *output = malloc(sizeof(struct upipe_dup_output));
-    if (unlikely(output == NULL))
+    struct upipe_dup_output *upipe_dup_output =
+        malloc(sizeof(struct upipe_dup_output));
+    if (unlikely(upipe_dup_output == NULL))
         return NULL;
-    uchain_init(&output->uchain);
-    output->flow_suffix = strdup(flow_suffix);
-    if (unlikely(output->flow_suffix == NULL)) {
-        free(output);
-        return NULL;
-    }
-    output->output = NULL;
-    return output;
-}
+    struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
+    upipe_init(upipe, mgr, uprobe, ulog);
+    uchain_init(&upipe_dup_output->uchain);
+    upipe_dup_output_init_output(upipe);
+    urefcount_init(&upipe_dup_output->refcount);
 
-/** @internal @This sends a uref to the output of a substructure.
- *
- * @param upipe description structure of the pipe
- * @param output pointer to output-specific substructure
- * @param uref uref structure to send
- */
-static void upipe_dup_output_output(struct upipe *upipe,
-                                    struct upipe_dup_output *output,
-                                    struct uref *uref)
-{
-    if (unlikely(output->output == NULL))
-        return;
+    /* add the newly created output to the outputs list */
+    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
+    ulist_add(&upipe_dup->outputs,
+              upipe_dup_output_to_uchain(upipe_dup_output));
 
-    /* change flow */
-    const char *flow_name;
-    if (unlikely(!uref_flow_get_name(uref, &flow_name))) {
-        if (unlikely(!uref_flow_set_name(uref, output->flow_suffix))) {
+    /* set flow definition if available */
+    if (upipe_dup->flow_def != NULL) {
+        struct uref *uref = uref_dup(upipe_dup->flow_def);
+        if (unlikely(uref == NULL)) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
-            uref_free(uref);
-            return;
-        }
-    } else {
-        char new_flow[strlen(flow_name) + strlen(output->flow_suffix) + 2];
-        sprintf(new_flow, "%s.%s", flow_name, output->flow_suffix);
-        if (unlikely(!uref_flow_set_name(uref, new_flow))) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            uref_free(uref);
-            return;
-        }
+        } else
+            upipe_dup_output_store_flow_def(upipe, uref);
     }
-    upipe_input(output->output, uref);
+    upipe_throw_ready(upipe);
+    return upipe;
 }
 
-/** @internal @This handles the get_output control command on a
- * substructure.
+/** @internal @This processes control commands on an output subpipe of a dup
+ * pipe.
  *
  * @param upipe description structure of the pipe
- * @param output pointer to output-specific substructure
- * @param p filled in with the output
+ * @param command type of command to process
+ * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_dup_output_get_output(struct upipe *upipe,
-                                        struct upipe_dup_output *output,
-                                        struct upipe **p)
+static bool upipe_dup_output_control(struct upipe *upipe,
+                                     enum upipe_command command, va_list args)
 {
-    assert(p != NULL);
-    *p = output->output;
-    return true;
+    switch (command) {
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_dup_output_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_dup_output_set_output(upipe, output);
+        }
+
+        default:
+            return false;
+    }
 }
 
-/** @internal @This handles the set_output control command on a
- * substructure, and properly deletes and replays flows on old and new
- * outputs.
+/** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
- * @param output pointer to output-specific substructure
- * @param o new output pipe
- * @return false in case of error
  */
-static bool upipe_dup_output_set_output(struct upipe *upipe,
-                                        struct upipe_dup_output *output,
-                                        struct upipe *o)
+static void upipe_dup_output_use(struct upipe *upipe)
 {
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    if (unlikely(output->output != NULL)) {
-        /* change of output, signal flow deletions on old output */
-        upipe_flows_foreach_delete(&upipe_dup->flows, upipe, uref,
-                          upipe_dup_output_output(upipe, output, uref));
-        upipe_release(output->output);
-    }
-
-    output->output = o;
-    if (likely(o != NULL)) {
-        upipe_use(o);
-        /* replay flow definitions */
-        upipe_flows_foreach_replay(&upipe_dup->flows, upipe, uref,
-                          upipe_dup_output_output(upipe, output, uref));
-    }
-    return true;
+    struct upipe_dup_output *upipe_dup_output =
+        upipe_dup_output_from_upipe(upipe);
+    urefcount_use(&upipe_dup_output->refcount);
 }
 
-/** @internal @This frees up an output-specific substructure.
+/** @This decrements the reference count of a upipe or frees it.
  *
  * @param upipe description structure of the pipe
- * @param output substructure to free
  */
-static void upipe_dup_output_free(struct upipe *upipe,
-                                  struct upipe_dup_output *output)
+static void upipe_dup_output_release(struct upipe *upipe)
 {
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    free(output->flow_suffix);
-    if (likely(output->output != NULL)) {
-        upipe_flows_foreach_delete(&upipe_dup->flows, upipe, uref,
-                          upipe_dup_output_output(upipe, output, uref));
-        upipe_release(output->output);
+    struct upipe_dup_output *upipe_dup_output =
+        upipe_dup_output_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_dup_output->refcount))) {
+        struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(upipe->mgr);
+        /* remove output from the outputs list */
+        struct uchain *uchain;
+        ulist_delete_foreach(&upipe_dup->outputs, uchain) {
+            if (upipe_dup_output_from_uchain(uchain) == upipe_dup_output) {
+                ulist_delete(&upipe_dup->outputs, uchain);
+                break;
+            }
+        }
+        upipe_dup_output_clean_output(upipe);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_dup_output->refcount);
+        free(upipe_dup_output);
     }
-    free(output);
 }
 
-UPIPE_HELPER_SPLIT_OUTPUTS(upipe_dup, outputs, upipe_dup_output)
+/** @This increments the reference count of a upipe manager.
+ *
+ * @param mgr pointer to upipe manager
+ */
+static void upipe_dup_output_mgr_use(struct upipe_mgr *mgr)
+{
+    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
+    upipe_use(upipe_dup_to_upipe(upipe_dup));
+}
+
+/** @This decrements the reference count of a upipe manager or frees it.
+ *
+ * @param mgr pointer to upipe manager.
+ */
+static void upipe_dup_output_mgr_release(struct upipe_mgr *mgr)
+{
+    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
+    upipe_release(upipe_dup_to_upipe(upipe_dup));
+}
+
+/** @internal @This initializes the output manager for a dup pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return pointer to output upipe manager
+ */
+static struct upipe_mgr *upipe_dup_init_output_mgr(struct upipe *upipe)
+{
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    struct upipe_mgr *output_mgr = &upipe_dup->output_mgr;
+    output_mgr->signature = UPIPE_DUP_OUTPUT_SIGNATURE;
+    output_mgr->upipe_alloc = upipe_dup_output_alloc;
+    output_mgr->upipe_input = NULL;
+    output_mgr->upipe_control = upipe_dup_output_control;
+    output_mgr->upipe_use = upipe_dup_output_use;
+    output_mgr->upipe_release = upipe_dup_output_release;
+    output_mgr->upipe_mgr_use = upipe_dup_output_mgr_use;
+    output_mgr->upipe_mgr_release = upipe_dup_output_mgr_release;
+    return output_mgr;
+}
 
 /** @internal @This allocates a dup pipe.
  *
@@ -253,13 +284,12 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_dup == NULL))
         return NULL;
     struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_DUP_SIGNATURE;
+    upipe_split_init(upipe, mgr, uprobe, ulog,
+                     upipe_dup_init_output_mgr(upipe));
+    ulist_init(&upipe_dup->outputs);
+    upipe_dup->flow_def = NULL;
     urefcount_init(&upipe_dup->refcount);
-    upipe_dup_init_outputs(upipe);
-    upipe_flows_init(&upipe_dup->flows);
-    upipe_dup->ready = false;
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -267,124 +297,57 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_dup_input(struct upipe *upipe, struct uref *uref)
+static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
+                            struct upump *upump)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    const char *def;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        if (upipe_dup->flow_def != NULL)
+            uref_free(upipe_dup->flow_def);
+        upipe_dup->flow_def = uref;
+        ulog_debug(upipe->ulog, "flow definition %s", def);
 
-    if (unlikely(!upipe_flows_input(&upipe_dup->flows, upipe, uref))) {
+        /* also set it for every output */
+        struct uchain *uchain;
+        ulist_foreach(&upipe_dup->outputs, uchain) {
+            struct upipe_dup_output *upipe_dup_output =
+                upipe_dup_output_from_uchain(uchain);
+            uref = uref_dup(upipe_dup->flow_def);
+            if (unlikely(uref == NULL)) {
+                ulog_aerror(upipe->ulog);
+                upipe_throw_aerror(upipe);
+                return;
+            }
+            upipe_dup_output_store_flow_def(
+                    upipe_dup_output_to_upipe(upipe_dup_output), uref);
+        }
+        return;
+    }
+
+    if (unlikely(upipe_dup->flow_def == NULL)) {
+        upipe_throw_flow_def_error(upipe, uref);
         uref_free(uref);
-        return false;
+        return;
     }
 
     struct uchain *uchain;
     ulist_foreach (&upipe_dup->outputs, uchain) {
-        struct upipe_dup_output *output = upipe_dup_output_from_uchain(uchain);
+        struct upipe_dup_output *upipe_dup_output =
+            upipe_dup_output_from_uchain(uchain);
         struct uref *new_uref = uref_dup(uref);
-        if (likely(new_uref != NULL))
-            upipe_dup_output_output(upipe, output, new_uref);
-        else {
+        if (unlikely(new_uref == NULL)) {
             uref_free(uref);
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
-            return false;
+            return;
         }
+        upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
+                                new_uref, upump);
     }
     uref_free(uref);
-    return true;
-
-    /* only to kill a gcc warning */
-    upipe_dup_output(upipe, NULL, NULL);
-}
-
-/** @internal @This adds/deletes/changes an output. We cannot rely on
- * @ref upipe_dup_set_output since it only changes existing outputs.
- *
- * @param upipe description structure of the pipe
- * @param o pipe acting as output, or NULL to delete the output
- * @param flow_suffix flow suffix
- * @return false in case of error
- */
-static bool _upipe_dup_set_output(struct upipe *upipe, struct upipe *o,
-                                  const char *flow_suffix)
-{
-    struct upipe_dup_output *output;
-
-    if (likely(o == NULL)) {
-        ulog_debug(upipe->ulog, "deleting output: %s", flow_suffix);
-        return upipe_dup_delete_output(upipe, flow_suffix,
-                                       upipe_dup_output_free);
-
-    } else if (likely(!upipe_dup_set_output(upipe, o, flow_suffix))) {
-        ulog_debug(upipe->ulog, "adding output: %s", flow_suffix);
-        output = upipe_dup_output_alloc(upipe, flow_suffix);
-        if (unlikely(output == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-            return false;
-        }
-        upipe_dup_add_output(upipe, output);
-        return upipe_dup_output_set_output(upipe, output, o);
-    }
-
-    return true;
-}
-
-/** @internal @This processes control commands on a dup pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool _upipe_dup_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
-{
-    switch (command) {
-        case UPIPE_SPLIT_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            const char *flow_suffix = va_arg(args, const char *);
-            return upipe_dup_get_output(upipe, p, flow_suffix);
-        }
-        case UPIPE_SPLIT_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            const char *flow_suffix = va_arg(args, const char *);
-            return _upipe_dup_set_output(upipe, output, flow_suffix);
-        }
-
-        default:
-            return false;
-    }
-}
-
-/** @internal @This processes control commands on a dup source pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_dup_control(struct upipe *upipe, enum upipe_command command,
-                              va_list args)
-{
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_dup_input(upipe, uref);
-    }
-
-    if (unlikely(!_upipe_dup_control(upipe, command, args)))
-        return false;
-
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    if (likely(!upipe_dup->ready)) {
-        upipe_dup->ready = true;
-        upipe_throw_ready(upipe);
-    }
-
-    return true;
 }
 
 /** @This increments the reference count of a upipe.
@@ -405,8 +368,10 @@ static void upipe_dup_release(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_dup->refcount))) {
-        upipe_dup_clean_outputs(upipe, upipe_dup_output_free);
-        upipe_flows_clean(&upipe_dup->flows);
+        /* we can only arrive here if there is no output anymore, so no
+         * need to empty the outputs list */
+        if (upipe_dup->flow_def != NULL)
+            uref_free(upipe_dup->flow_def);
         upipe_clean(upipe);
         urefcount_clean(&upipe_dup->refcount);
         free(upipe_dup);
@@ -415,8 +380,11 @@ static void upipe_dup_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_dup_mgr = {
+    .signature = UPIPE_DUP_SIGNATURE,
+
     .upipe_alloc = upipe_dup_alloc,
-    .upipe_control = upipe_dup_control,
+    .upipe_input = upipe_dup_input,
+    .upipe_control = NULL,
     .upipe_use = upipe_dup_use,
     .upipe_release = upipe_dup_release,
 

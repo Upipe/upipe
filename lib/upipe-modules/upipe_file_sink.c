@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,7 +39,6 @@
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_flows.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -65,7 +64,7 @@
 
 /** default delay to use compared to the theorical reception time of the
  * packet */
-#define SYSTIME_DELAY               (0.01 * UCLOCK_FREQ)
+#define SYSTIME_DELAY        (0.01 * UCLOCK_FREQ)
 /** expected flow definition on all flows */
 #define EXPECTED_FLOW_DEF    "block."
 
@@ -82,8 +81,6 @@ struct upipe_fsink {
     /** delay applied to systime attribute when uclock is provided */
     uint64_t delay;
 
-    /** list of input flows */
-    struct ulist flows;
     /** file descriptor */
     int fd;
     /** file path */
@@ -92,6 +89,8 @@ struct upipe_fsink {
     struct ulist urefs;
     /** true if the sink currently blocks the pipe */
     bool blocked;
+    /** true if we have received a compatible flow definition */
+    bool flow_def_ok;
     /** true if we have thrown the ready event */
     bool ready;
 
@@ -120,17 +119,15 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_fsink == NULL))
         return NULL;
     struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
-    upipe_init(upipe, uprobe, ulog);
-    upipe->mgr = mgr; /* do not increment refcount as mgr is static */
-    upipe->signature = UPIPE_FSINK_SIGNATURE;
+    upipe_init(upipe, mgr, uprobe, ulog);
     urefcount_init(&upipe_fsink->refcount);
     upipe_fsink_init_upump_mgr(upipe);
     upipe_fsink_init_uclock(upipe);
     upipe_fsink_init_delay(upipe, SYSTIME_DELAY);
-    upipe_flows_init(&upipe_fsink->flows);
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
     upipe_fsink->blocked = false;
+    upipe_fsink->flow_def_ok = false;
     upipe_fsink->ready = false;
     ulist_init(&upipe_fsink->urefs);
     return upipe;
@@ -171,8 +168,10 @@ static void upipe_fsink_wait(struct upipe *upipe, uint64_t timeout)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
+ * @param upump pump that generated the buffer
  */
-static void upipe_fsink_output(struct upipe *upipe, struct uref *uref)
+static void upipe_fsink_output(struct upipe *upipe, struct uref *uref,
+                               struct upump *upump)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
 
@@ -280,7 +279,7 @@ static void upipe_fsink_watcher(struct upump *upump)
     struct uchain *uchain;
     ulist_delete_foreach (&urefs, uchain) {
         ulist_delete(&urefs, uchain);
-        upipe_fsink_output(upipe, uref_from_uchain(uchain));
+        upipe_fsink_output(upipe, uref_from_uchain(uchain), NULL);
     }
 }
 
@@ -288,49 +287,39 @@ static void upipe_fsink_watcher(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump pump that generated the buffer
  */
-static bool upipe_fsink_input(struct upipe *upipe, struct uref *uref)
+static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
+                              struct upump *upump)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    const char *flow, *def;
-    if (unlikely(!uref_flow_get_name(uref, &flow))) {
-        ulog_warning(upipe->ulog, "received a buffer outside of a flow");
-        uref_free(uref);
-        return false;
-    }
-
-    if (unlikely(uref_flow_get_delete(uref))) {
-        upipe_flows_delete(&upipe_fsink->flows, flow);
-        uref_free(uref);
-        return true;
-    }
-
+    const char *def;
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_flows_set(&upipe_fsink->flows, uref);
-        ulog_debug(upipe->ulog, "flow definition for %s: %s", flow, def);
-        return true;
+        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
+            upipe_fsink->flow_def_ok = false;
+            upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
+            return;
+        }
+
+        upipe_fsink->flow_def_ok = true;
+        ulog_debug(upipe->ulog, "flow definition %s", def);
+        uref_free(uref);
+        return;
     }
 
-    if (unlikely(!upipe_flows_get_def(&upipe_fsink->flows, flow, &def))) {
-        ulog_warning(upipe->ulog, "received a buffer without a flow definition");
+    if (unlikely(!upipe_fsink->flow_def_ok)) {
+        upipe_throw_flow_def_error(upipe, uref);
         uref_free(uref);
-        return false;
-    }
-
-    if (unlikely(strncmp(def, EXPECTED_FLOW_DEF, strlen(EXPECTED_FLOW_DEF)))) {
-        ulog_warning(upipe->ulog, "received a buffer with an incompatible flow defintion");
-        uref_free(uref);
-        return false;
+        return;
     }
 
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
-        return true;
+        return;
     }
 
-    upipe_fsink_output(upipe, uref);
-    return true;
+    upipe_fsink_output(upipe, uref, upump);
 }
 
 /** @internal @This returns the path of the currently opened file.
@@ -488,12 +477,6 @@ static bool _upipe_fsink_control(struct upipe *upipe,
 static bool upipe_fsink_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
-    if (likely(command == UPIPE_INPUT)) {
-        struct uref *uref = va_arg(args, struct uref *);
-        assert(uref != NULL);
-        return upipe_fsink_input(upipe, uref);
-    }
-
     if (unlikely(!_upipe_fsink_control(upipe, command, args)))
         return false;
 
@@ -532,7 +515,6 @@ static void upipe_fsink_release(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_fsink->refcount))) {
-        upipe_flows_clean(&upipe_fsink->flows);
         if (likely(upipe_fsink->fd != -1)) {
             if (likely(upipe_fsink->path != NULL))
                 ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
@@ -557,7 +539,10 @@ static void upipe_fsink_release(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_fsink_mgr = {
+    .signature = UPIPE_FSINK_SIGNATURE,
+
     .upipe_alloc = upipe_fsink_alloc,
+    .upipe_input = upipe_fsink_input,
     .upipe_control = upipe_fsink_control,
     .upipe_use = upipe_fsink_use,
     .upipe_release = upipe_fsink_release,

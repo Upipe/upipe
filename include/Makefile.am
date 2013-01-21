@@ -25,18 +25,14 @@ nobase_include_HEADERS = \
 	upipe/umem_alloc.h \
 	upipe/umem_pool.h \
 	upipe/upipe.h \
-	upipe/upipe_flows.h \
-	upipe/upipe_helper_upipe.h \
-	upipe/upipe_helper_uref_mgr.h \
-	upipe/upipe_helper_upump_mgr.h \
-	upipe/upipe_helper_uclock.h \
-	upipe/upipe_helper_linear_output.h \
-	upipe/upipe_helper_linear_ubuf_mgr.h \
-	upipe/upipe_helper_source_flow_name.h \
-	upipe/upipe_helper_source_read_size.h \
+	upipe/upipe_helper_output.h \
 	upipe/upipe_helper_sink_delay.h \
-	upipe/upipe_helper_split_outputs.h \
-	upipe/upipe_helper_split_ubuf_mgr.h \
+	upipe/upipe_helper_source_read_size.h \
+	upipe/upipe_helper_ubuf_mgr.h \
+	upipe/upipe_helper_uclock.h \
+	upipe/upipe_helper_upipe.h \
+	upipe/upipe_helper_upump_mgr.h \
+	upipe/upipe_helper_uref_mgr.h \
 	upipe/uprobe.h \
 	upipe/uprobe_print.h \
 	upipe/upump_common.h \
@@ -57,11 +53,11 @@ nobase_include_HEADERS = \
 	upipe-modules/upipe_dup.h \
 	upipe-modules/upipe_file_sink.h \
 	upipe-modules/upipe_file_source.h \
+	upipe-modules/upipe_genaux.h \
+	upipe-modules/upipe_multicat_sink.h \
 	upipe-modules/upipe_queue_sink.h \
 	upipe-modules/upipe_queue_source.h \
 	upipe-modules/upipe_udp_source.h \
-	upipe-modules/upipe_genaux.h \
-	upipe-modules/upipe_multicat_sink.h \
 	upipe-av/upipe_av.h \
 	upipe-av/upipe_avformat_source.h \
 	upipe-swscale/upipe_sws.h \

@@ -94,9 +94,19 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     "%s probe: received ready event from pipe %p\n",
                     name, upipe);
             break;
+        case UPROBE_DEAD:
+            fprintf(uprobe_print->stream,
+                    "%s probe: received dead event from pipe %p\n",
+                    name, upipe);
+            break;
         case UPROBE_AERROR:
             fprintf(uprobe_print->stream,
                     "%s probe: received allocation error from pipe %p\n",
+                    name, upipe);
+            break;
+        case UPROBE_FLOW_DEF_ERROR:
+            fprintf(uprobe_print->stream,
+                    "%s probe: received flow def error from pipe %p\n",
                     name, upipe);
             break;
         case UPROBE_UPUMP_ERROR:
@@ -128,17 +138,12 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     "%s probe: pipe %p required a upump manager\n",
                     name, upipe);
             break;
-        case UPROBE_LINEAR_NEED_UBUF_MGR:
+        case UPROBE_NEED_UBUF_MGR:
             fprintf(uprobe_print->stream,
                     "%s probe: pipe %p required a ubuf manager\n",
                     name, upipe);
             break;
-        case UPROBE_SOURCE_NEED_FLOW_NAME:
-            fprintf(uprobe_print->stream,
-                    "%s probe: pipe %p required a flow name\n",
-                    name, upipe);
-            break;
-        case UPROBE_LINEAR_NEED_OUTPUT: {
+        case UPROBE_NEED_OUTPUT: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
             const char *def = "[invalid]";
             uref_flow_get_def(flow_def, &def);
@@ -147,24 +152,13 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     name, upipe, def);
             break;
         }
-        case UPROBE_SPLIT_NEED_OUTPUT: {
-            struct uref *flow_def = va_arg(args_copy, struct uref *);
-            const char *flow_suffix = va_arg(args_copy, const char *);
-            const char *def = "[invalid]";
-            uref_flow_get_def(flow_def, &def);
-            fprintf(uprobe_print->stream,
-                    "%s probe: pipe %p required an output on %s for flow definition \"%s\"\n",
-                    name, upipe, flow_suffix, def);
-            break;
-        }
         case UPROBE_SPLIT_NEW_FLOW: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
-            const char *flow_suffix = va_arg(args_copy, const char *);
             const char *def = "[invalid]";
             uref_flow_get_def(flow_def, &def);
             fprintf(uprobe_print->stream,
-                    "%s probe: received new flow definition \"%s\" from pipe %p on output %s\n",
-                    name, def, upipe, flow_suffix);
+                    "%s probe: received new flow definition \"%s\" from split pipe %p\n",
+                    name, def, upipe);
             break;
         }
         case UPROBE_SYNC_ACQUIRED:

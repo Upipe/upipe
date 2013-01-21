@@ -52,9 +52,7 @@ static void udict_inline_free_inner(struct udict *udict);
 enum udict_type_shorthands {
     UDICT_TYPE_SENTINEL = UDICT_TYPE_SHORTHAND,
 
-    UDICT_TYPE_FLOW_NAME,
     UDICT_TYPE_FLOW_DEF,
-    UDICT_TYPE_FLOW_DELETE,
     UDICT_TYPE_FLOW_DISC,
 
     UDICT_TYPE_CLOCK_SYSTIME,
@@ -93,9 +91,7 @@ struct inline_shorthand {
  * should be no gap in number in-between.
  */
 static const struct inline_shorthand inline_shorthands[] = {
-    { UDICT_TYPE_FLOW_NAME, "f.flow", UDICT_TYPE_STRING },
     { UDICT_TYPE_FLOW_DEF, "f.def", UDICT_TYPE_STRING },
-    { UDICT_TYPE_FLOW_DELETE, "f.delete", UDICT_TYPE_VOID },
     { UDICT_TYPE_FLOW_DISC, "f.disc", UDICT_TYPE_VOID },
 
     { UDICT_TYPE_CLOCK_SYSTIME, "k.systime", UDICT_TYPE_UNSIGNED },

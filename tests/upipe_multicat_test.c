@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -69,7 +69,6 @@
 #define UBUF_POOL_DEPTH  10
 #define READ_SIZE  4096
 #define ULOG_LEVEL ULOG_DEBUG
-#define FLOW_NAME  "fooflow"
 #define UREF_PER_SLICE 10
 #define SLICES_NUM 10
 
@@ -99,6 +98,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(0);
             break;
         case UPROBE_READY:
+        case UPROBE_DEAD:
         case UPROBE_READ_END:
             break;
     }
@@ -106,7 +106,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** packet generator */
-static void genpacket_idler(struct upump *unused)
+static void genpacket_idler(struct upump *upump)
 {
 	static uint64_t systime = 0;
 	if (systime >= SLICES_NUM * rotate) {
@@ -122,10 +122,9 @@ static void genpacket_idler(struct upump *unused)
 
 	memcpy(buf, &systime, sizeof(uint64_t));
 	uref_clock_set_systime(uref, systime);
-	uref_flow_set_name(uref, FLOW_NAME);
 
 	uref_block_unmap(uref, 0, size);
-	upipe_input(multicat_sink, uref);
+	upipe_input(multicat_sink, uref, upump);
 	systime += rotate/UREF_PER_SLICE;
 }
 
@@ -200,8 +199,7 @@ int main(int argc, char *argv[])
     assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
 	// send flow definition
 	flow = uref_block_flow_alloc_def(uref_mgr, "");
-	uref_flow_set_name(flow, FLOW_NAME);
-	upipe_input(multicat_sink, flow);
+	upipe_input(multicat_sink, flow, NULL);
 
 	// idler - packet generator
 	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL, true);	

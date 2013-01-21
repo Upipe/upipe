@@ -20,10 +20,6 @@
 
 /** @file
  * @short Upipe module splitting tables of the PSI of a transport stream
- *
- * Please note the special behavior of @ref upipe_split_set_flow_def. If the
- * flow suffix doesn't exist, it creates it. If flow_def is NULL, it deletes
- * it. This function must be called before @ref upipe_split_set_output.
  */
 
 #ifndef _UPIPE_TS_UPIPE_TS_PSI_SPLIT_H_
@@ -32,7 +28,8 @@
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_PSI_SPLIT_SIGNATURE UBASE_FOURCC('t','s','p','s')
+#define UPIPE_TS_PSI_SPLIT_SIGNATURE UBASE_FOURCC('t','s','p','Y')
+#define UPIPE_TS_PSI_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','p','Z')
 
 /** @This returns the management structure for all ts_psi_split pipes.
  *
