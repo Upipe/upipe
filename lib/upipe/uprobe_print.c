@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <inttypes.h>
 
 /** @hidden */
 struct upipe;
@@ -152,13 +153,21 @@ static bool uprobe_print_throw(struct uprobe *uprobe, struct upipe *upipe,
                     name, upipe, def);
             break;
         }
-        case UPROBE_SPLIT_NEW_FLOW: {
+        case UPROBE_SPLIT_ADD_FLOW: {
+            uint64_t flow_id = va_arg(args_copy, uint64_t);
             struct uref *flow_def = va_arg(args_copy, struct uref *);
             const char *def = "[invalid]";
             uref_flow_get_def(flow_def, &def);
             fprintf(uprobe_print->stream,
-                    "%s probe: received new flow definition \"%s\" from split pipe %p\n",
-                    name, def, upipe);
+                    "%s probe: received add flow 0x%"PRIx64" definition \"%s\" from split pipe %p\n",
+                    name, flow_id, def, upipe);
+            break;
+        }
+        case UPROBE_SPLIT_DEL_FLOW: {
+            uint64_t flow_id = va_arg(args_copy, uint64_t);
+            fprintf(uprobe_print->stream,
+                    "%s probe: received del flow 0x%"PRIx64" from split pipe %p\n",
+                    name, flow_id, upipe);
             break;
         }
         case UPROBE_SYNC_ACQUIRED:

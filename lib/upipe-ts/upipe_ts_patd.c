@@ -127,14 +127,12 @@ static void upipe_ts_patd_add_program(struct upipe *upipe, struct uref *uref,
  * @param upipe description structure of the pipe
  * @param uref uref triggering the event
  * @param program program number (a.k.a. service ID)
- * @param pid PID of the PMT
  */
 static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
-                                      unsigned int program,
-                                      unsigned int pid)
+                                      unsigned int program)
 {
     upipe_throw(upipe, UPROBE_TS_PATD_DEL_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                uref, program, pid);
+                uref, program);
 }
 
 /** @internal @This walks through the programs in a PAT. This is the first part:
@@ -344,11 +342,8 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
 
     UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->next_pat, pat_program)
 
-    if (!compare) {
-        if (old_pid)
-            upipe_ts_patd_del_program(upipe, uref, program, old_pid);
+    if (!compare)
         upipe_ts_patd_add_program(upipe, uref, program, pid);
-    }
 
     UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->next_pat, pat_program)
 
@@ -362,12 +357,11 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         UPIPE_TS_PATD_TABLE_PEEK(upipe, old_pat, pat_program)
 
         uint16_t program = patn_get_program(pat_program);
-        uint16_t pid = patn_get_pid(pat_program);
 
         UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, old_pat, pat_program)
 
         if (!upipe_ts_patd_table_pmt_pid(upipe, upipe_ts_patd->pat, program))
-            upipe_ts_patd_del_program(upipe, uref, program, pid);
+            upipe_ts_patd_del_program(upipe, uref, program);
 
         UPIPE_TS_PATD_TABLE_PEEK_END(upipe, old_pat, pat_program)
 

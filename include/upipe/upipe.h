@@ -538,16 +538,31 @@ static inline void upipe_throw_need_ubuf_mgr(struct upipe *upipe,
     upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
 }
 
-/** @This throws a new flow event. This event is thrown whenever a pipe
+/** @This throws an add flow event. This event is thrown whenever a split pipe
  * declares a new possible output flow.
  *
  * @param upipe description structure of the pipe
+ * @param flow_id unique ID for the split pipe
  * @param flow_def definition for this flow
  */
-static inline void upipe_split_throw_new_flow(struct upipe *upipe,
+static inline void upipe_split_throw_add_flow(struct upipe *upipe,
+                                              uint64_t flow_id,
                                               struct uref *flow_def)
 {
-    upipe_throw(upipe, UPROBE_SPLIT_NEW_FLOW, flow_def);
+    upipe_throw(upipe, UPROBE_SPLIT_ADD_FLOW, flow_id, flow_def);
+}
+
+/** @This throws a del flow event. This event is thrown whenever a split pipe
+ * declares that a given flow is no longer possible. If there is currently
+ * an output subpipe on this flow, it will afterwards throw a read_end event.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_id unique ID for the split pipe
+ */
+static inline void upipe_split_throw_del_flow(struct upipe *upipe,
+                                              uint64_t flow_id)
+{
+    upipe_throw(upipe, UPROBE_SPLIT_DEL_FLOW, flow_id);
 }
 
 /** @This throws an event telling that a pipe synchronized on its input.

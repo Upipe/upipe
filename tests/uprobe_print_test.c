@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     test_pipe.uprobe = uprobe;
 
     struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
-    upipe_split_throw_new_flow(&test_pipe, uref);
+    upipe_split_throw_add_flow(&test_pipe, 0, uref);
     uref_free(uref);
     upipe_throw_need_uref_mgr(&test_pipe);
     upipe_throw_need_upump_mgr(&test_pipe);

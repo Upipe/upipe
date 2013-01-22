@@ -179,8 +179,10 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_READ_END:
+        case UPROBE_SPLIT_DEL_FLOW:
             break;
-        case UPROBE_SPLIT_NEW_FLOW: {
+        case UPROBE_SPLIT_ADD_FLOW: {
+            uint64_t flow_id = va_arg(args, uint64_t);
             struct uref *flow_def = va_arg(args, struct uref *);
             const char *def;
             assert(uref_flow_get_def(flow_def, &def));

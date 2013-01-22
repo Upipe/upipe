@@ -91,19 +91,24 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_PATD_DEL_PROGRAM:
         case UPROBE_TS_PMTD_ADD_ES:
         case UPROBE_TS_PMTD_DEL_ES:
+        case UPROBE_SPLIT_DEL_FLOW:
+        case UPROBE_READ_END:
             break;
-        case UPROBE_SPLIT_NEW_FLOW: {
+        case UPROBE_SPLIT_ADD_FLOW: {
+            uint64_t flow_id = va_arg(args, uint64_t);
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             const char *def;
             assert(uref_flow_get_def(uref, &def));
             if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
+                assert(flow_id == 12);
                 upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
                         uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL,
                                                       "ts demux output pmt"));
                 assert(upipe_ts_demux_output_pmt != NULL);
                 assert(upipe_set_flow_def(upipe_ts_demux_output_pmt, uref));
-            }
+            } else
+                assert(flow_id == 43 << 16);
             break;
         }
     }

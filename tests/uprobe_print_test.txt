@@ -2,6 +2,6 @@ test probe: received allocation error from pipe TEST_PIPE
 test probe: received upump error from pipe TEST_PIPE
 test probe: received read end from pipe TEST_PIPE on pouet
 test probe: received write end from pipe TEST_PIPE on pouet
-test 2 probe: received new flow definition "block.test." from split pipe TEST_PIPE
+test 2 probe: received add flow 0x0 definition "block.test." from split pipe TEST_PIPE
 test 2 probe: pipe TEST_PIPE required a uref manager
 test 2 probe: pipe TEST_PIPE required a upump manager

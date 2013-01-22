@@ -769,7 +769,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
             return;
         }
 
-        upipe_split_throw_new_flow(upipe, flow_def);
+        upipe_split_throw_add_flow(upipe, i, flow_def);
         uref_free(flow_def);
     }
 

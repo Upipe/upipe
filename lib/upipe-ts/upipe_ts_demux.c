@@ -372,7 +372,7 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
     }
 }
 
-/** @internal @This catches new_flow events coming from subpipes.
+/** @internal @This catches need_output events coming from subpipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
  * @param subpipe pointer to the subpipe
@@ -432,7 +432,7 @@ static bool upipe_ts_demux_plumber(struct uprobe *uprobe, struct upipe *subpipe,
     return false;
 }
 
-/** @internal @This catches new_flow events coming from psim subpipes.
+/** @internal @This catches need_output events coming from psim subpipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
  * @param upipe pointer to the subpipe
@@ -470,7 +470,7 @@ static bool upipe_ts_demux_psim_plumber(struct uprobe *uprobe,
     return true;
 }
 
-/** @internal @This catches new_flow events coming from psi_split subpipes.
+/** @internal @This catches need_output events coming from psi_split subpipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
  * @param upipe pointer to the subpipe
@@ -617,20 +617,20 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
                                                    PSI_HEADER_SIZE_SYNTAX1) &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
                        uref_flow_set_program_va(flow_def, "%u", program)))
-                upipe_split_throw_new_flow(upipe, flow_def);
+                upipe_split_throw_add_flow(upipe, program, flow_def);
 
             if (flow_def != NULL)
                 uref_free(flow_def);
             /* return false in case someone else is interested */
-            return false;
+            return true;
         }
         case UPROBE_TS_PATD_DEL_PROGRAM: {
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int program = va_arg(args, unsigned int);
-            unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
-            /* FIXME */
+            upipe_split_throw_del_flow(upipe, program);
+            /* return false in case someone else is interested */
             return false;
         }
         default:
@@ -680,7 +680,8 @@ static bool upipe_ts_demux_pmtd_probe(struct uprobe *uprobe,
                     if (likely(flow_def != NULL &&
                                uref_ts_flow_set_pid(flow_def, pid) /*&&
                                uref_flow_set_program_va(flow_def, "%u", program)*/))
-                        upipe_split_throw_new_flow(upipe, flow_def);
+                        upipe_split_throw_add_flow(upipe,
+                                (pid << 16) /*| program */, flow_def);
 
                     if (flow_def != NULL)
                         uref_free(flow_def);
@@ -695,7 +696,7 @@ static bool upipe_ts_demux_pmtd_probe(struct uprobe *uprobe,
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            ulog_debug(upipe->ulog, "del ES");
+            upipe_split_throw_del_flow(upipe, (pid << 16) /*| program */);
             /* return false in case someone else is interested */
             return false;
         }
