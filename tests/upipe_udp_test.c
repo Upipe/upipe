@@ -163,7 +163,7 @@ static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
 }
 
 /** helper phony pipe to test upipe_udpsrc */
-static void udpsrc_test_release(struct upipe *upipe)
+static void udpsrc_test_free(struct upipe *upipe)
 {
     ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
     struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
@@ -179,7 +179,7 @@ static struct upipe_mgr udpsrc_test_mgr = {
     .upipe_input = udpsrc_test_input,
     .upipe_control = NULL,
     .upipe_use = NULL,
-    .upipe_release = udpsrc_test_release,
+    .upipe_release = NULL,
 
     .upipe_mgr_use = NULL,
     .upipe_mgr_release = NULL
@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
     assert(uprobe_print != NULL);
 
-     struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "udpsrc_test"));
+    struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "udpsrc_test"));
 
 
 	// udpsrc
@@ -286,6 +286,7 @@ int main(int argc, char *argv[])
 	// release
 	upump_free(write_pump);
     upipe_release(upipe_udpsrc);
+    udpsrc_test_free(udpsrc_test);
     upipe_mgr_release(upipe_udpsrc_mgr); // nop
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);

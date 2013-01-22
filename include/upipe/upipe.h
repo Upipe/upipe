@@ -279,6 +279,26 @@ static inline void upipe_split_init(struct upipe *upipe, struct upipe_mgr *mgr,
     upipe->output_mgr = output_mgr;
 }
 
+/** @This increments the reference count of a upipe.
+ *
+ * @param upipe pointer to upipe
+ */
+static inline void upipe_use(struct upipe *upipe)
+{
+    if (likely(upipe->mgr->upipe_use != NULL))
+        upipe->mgr->upipe_use(upipe);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param mgr pointer to upipe manager.
+ */
+static inline void upipe_release(struct upipe *upipe)
+{
+    if (likely(upipe->mgr->upipe_release != NULL))
+        upipe->mgr->upipe_release(upipe);
+}
+
 /** @This sends an input buffer into a pipe. Note that all inputs and control
  * commands must be executed from the same thread - no reentrancy or locking
  * is required from the pipe. Also note that uref is then owned by the callee
@@ -292,7 +312,9 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     assert(upipe->mgr->upipe_input != NULL);
+    upipe_use(upipe);
     upipe->mgr->upipe_input(upipe, uref, upump);
+    upipe_release(upipe);
 }
 
 /** @internal @This sends a control command to the pipe. Note that all control
@@ -314,7 +336,9 @@ static inline bool upipe_control(struct upipe *upipe,
     bool ret;
     va_list args;
     va_start(args, command);
+    upipe_use(upipe);
     ret = upipe->mgr->upipe_control(upipe, command, args);
+    upipe_release(upipe);
     va_end(args);
     return ret;
 }
@@ -543,26 +567,6 @@ static inline void upipe_throw_sync_acquired(struct upipe *upipe)
 static inline void upipe_throw_sync_lost(struct upipe *upipe)
 {
     upipe_throw(upipe, UPROBE_SYNC_LOST);
-}
-
-/** @This increments the reference count of a upipe.
- *
- * @param upipe pointer to upipe
- */
-static inline void upipe_use(struct upipe *upipe)
-{
-    if (likely(upipe->mgr->upipe_use != NULL))
-        upipe->mgr->upipe_use(upipe);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param mgr pointer to upipe manager.
- */
-static inline void upipe_release(struct upipe *upipe)
-{
-    if (likely(upipe->mgr->upipe_release != NULL))
-        upipe->mgr->upipe_release(upipe);
 }
 
 /** @This should be called by the module writer before it disposes of its

@@ -130,7 +130,7 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
 }
 
 /** helper phony pipe to test upipe_genaux */
-static void genaux_test_release(struct upipe *upipe)
+static void genaux_test_free(struct upipe *upipe)
 {
     ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
@@ -148,7 +148,7 @@ static struct upipe_mgr genaux_test_mgr = {
     .upipe_input = genaux_test_input,
     .upipe_control = NULL,
     .upipe_use = NULL,
-    .upipe_release = genaux_test_release,
+    .upipe_release = NULL,
 
     .upipe_mgr_use = NULL,
     .upipe_mgr_release = NULL
@@ -223,6 +223,7 @@ int main(int argc, char **argv)
     assert(systime == result);
 
     upipe_release(genaux);
+    genaux_test_free(genaux_test);
 
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
