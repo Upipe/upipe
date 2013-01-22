@@ -25,6 +25,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 
+/** @file
+ * @short Upipe swscale (ffmpeg) module
+ */
+
 #ifndef _UPIPE_MODULES_UPIPE_SWS_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_SWS_H_
@@ -32,17 +36,6 @@
 #include <upipe/upipe.h>
 
 #define UPIPE_SWS_SIGNATURE UBASE_FOURCC('s','w','s',' ')
-
-/** @This sets a new output flow definition along with the
- * output picture size
- *
- * @param upipe description structure of the pipe
- * @param flow output flow definition
- * @param hsize horizontal size
- * @param vsize vertical size
- * @return false in case of error
- */
-bool upipe_sws_set_out_flow(struct upipe *upipe, struct uref* flow, uint64_t hsize, uint64_t vsize);
 
 /** @This returns the management structure for sws pipes.
  *

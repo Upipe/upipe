@@ -58,8 +58,6 @@
 #include <libswscale/swscale.h>
 #include <libavutil/pixdesc.h> // debug
 
-#define ALIVE() { printf("# ALIVE: %s %s - %d\n", __FILE__, __func__, __LINE__); } // FIXME - debug - remove this
-
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
@@ -398,7 +396,9 @@ int main(int argc, char **argv)
     upipe_input(sws, flowdef, NULL);
 
     /* Define outputflow */
-    assert(upipe_sws_set_out_flow(sws, uref_dup(pic_flow), DSTSIZE, DSTSIZE));
+    uref_pic_flow_set_hsize(pic_flow, DSTSIZE);
+    uref_pic_flow_set_vsize(pic_flow, DSTSIZE);
+    assert(upipe_set_flow_def(sws, pic_flow));
 
     /* Now send pic */
     struct uref *pic = uref_dup(uref1);

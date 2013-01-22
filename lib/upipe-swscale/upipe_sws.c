@@ -54,8 +54,6 @@
 #include <libswscale/swscale.h>
 #include <libavutil/pixdesc.h> // debug
 
-#define ALIVE() { printf("# ALIVE: %s %s - %d\n", __FILE__, __func__, __LINE__); } // FIXME - debug - remove this
-
 /** Picture size*/
 
 struct picsize {
@@ -402,8 +400,7 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
     int ret = _upipe_sws_control(upipe, command, args);
    
     // FIXME - check convert_ctx
-    if (upipe_sws->output && upipe_sws->ubuf_mgr
-        && upipe_sws->input_flow && upipe_sws->output_flow) {
+    if (upipe_sws->output && upipe_sws->ubuf_mgr && upipe_sws->output_flow) {
         if (!upipe_sws->ready) {
             upipe_sws->ready = true;
             upipe_throw_ready(upipe);
@@ -458,27 +455,6 @@ static struct upipe_mgr upipe_sws_mgr = {
     .upipe_mgr_use = NULL,
     .upipe_mgr_release = NULL
 };
-
-/** @This sets a new output flow definition along with the
- * output picture size
- *
- * @param upipe description structure of the pipe
- * @param flow output flow definition
- * @param hsize horizontal size
- * @param vsize vertical size
- * @return false in case of error
- */
-bool upipe_sws_set_out_flow(struct upipe *upipe, struct uref* flow, uint64_t hsize, uint64_t vsize)
-{
-    if (! flow) {
-        ulog_warning(upipe->ulog, "set_out_flow: null flow");
-        return false;
-    }
-    uref_pic_flow_set_hsize(flow, hsize);
-    uref_pic_flow_set_vsize(flow, vsize);
-    upipe_sws_store_flow_def(upipe, flow);
-    return true;
-}
 
 /** @This returns the management structure for swscale pipes
  *
