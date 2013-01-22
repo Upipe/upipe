@@ -315,9 +315,11 @@ static void upipe_udp_print_socket(struct upipe *upipe, const char *text, union 
  * @param default_port default port
  * @param if_index interface index
  */
-static struct addrinfo *upipe_udp_parse_node_service(struct upipe *upipe, char *_string, char **stringend,
+static bool upipe_udp_parse_node_service(struct upipe *upipe,
+                                          char *_string, char **stringend,
                                           uint16_t default_port,
-                                          int *if_index)
+                                          int *if_index,
+                                          struct sockaddr_storage *ss)
 {
     int family = AF_INET;
     char port_buffer[6];
@@ -334,7 +336,7 @@ static struct addrinfo *upipe_udp_parse_node_service(struct upipe *upipe, char *
         if (end == NULL) {
             ulog_warning(upipe->ulog, "invalid IPv6 address %s", _string);
             free(string);
-            return NULL;
+            return false;
         }
         *end++ = '\0';
 
@@ -343,7 +345,7 @@ static struct addrinfo *upipe_udp_parse_node_service(struct upipe *upipe, char *
             *intf++ = '\0';
             if (if_index != NULL) {
                 if (!upipe_udp_get_ifindex(upipe, intf, if_index)) {
-                    return NULL;
+                    return false;
                 };
             }
         }
@@ -389,17 +391,11 @@ static struct addrinfo *upipe_udp_parse_node_service(struct upipe *upipe, char *
             }
             sin->sin_addr = addr;
 
-            res = malloc(sizeof(struct addrinfo));
-            res->ai_family = AF_INET;
-            res->ai_socktype = SOCK_DGRAM;
-            res->ai_protocol = 0;
-            res->ai_addrlen = sizeof(struct sockaddr_in);
-            res->ai_addr = (struct sockaddr *)sin;
-            res->ai_canonname = NULL;
-            res->ai_next = NULL;
+            memcpy(ss, sin, sizeof(struct sockaddr_in));
+            free(sin);
 
             free(string);
-            return res;
+            return true;
         }
     }
 
@@ -411,11 +407,14 @@ static struct addrinfo *upipe_udp_parse_node_service(struct upipe *upipe, char *
     if ((ret = getaddrinfo(node, port, &hint, &res)) != 0) {
         //ulog_warning(upipe->ulog, "getaddrinfo error: %s", gai_strerror(ret));
         free(string);
-        return NULL;
+        return false;
     }
 
+    memcpy(ss, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+
     free(string);
-    return res;
+    return true;
 }
 
 /** @internal @This parses argv and open IPv4 & IPv6 sockets
@@ -440,7 +439,6 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     in_addr_t if_addr = INADDR_ANY;
     int tos = 0;
     bool b_tcp;
-    struct addrinfo *ai;
     int family;
     socklen_t sockaddr_len;
 
@@ -473,22 +471,18 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
 
     /* Hosts */
     if (token[0] != '@') {
-        ai = upipe_udp_parse_node_service(upipe, token, &token, connect_port, &connect_if_index);
-        if (ai == NULL) {
+        if (!upipe_udp_parse_node_service(upipe, token, &token, connect_port,
+                                        &connect_if_index, &connect_addr.ss)) {
             return -1;
         }
-        memcpy(&connect_addr.ss, ai->ai_addr, ai->ai_addrlen);
-        freeaddrinfo(ai);
     }
 
     if (token[0] == '@') {
         token++;
-        ai = upipe_udp_parse_node_service(upipe, token, &token, bind_port, &bind_if_index);
-        if (ai == NULL) {
+        if (!upipe_udp_parse_node_service(upipe, token, &token, bind_port,
+                                        &bind_if_index, &bind_addr.ss)) {
             return -1;
         }
-        memcpy(&bind_addr.ss, ai->ai_addr, ai->ai_addrlen);
-        freeaddrinfo(ai);
     }
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
