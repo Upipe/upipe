@@ -119,8 +119,6 @@ struct upipe_ts_demux {
     struct uprobe patd_probe;
     /** probe to get events from ts_pmtd subpipe */
     struct uprobe pmtd_probe;
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
@@ -911,6 +909,8 @@ static void upipe_ts_demux_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_demux_output->refcount))) {
         struct upipe_ts_demux *upipe_ts_demux =
             upipe_ts_demux_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
         if (upipe_ts_demux_output->split_output != NULL)
             upipe_release(upipe_ts_demux_output->split_output);
         if (upipe_ts_demux_output->psi_split_output != NULL) {
@@ -1004,8 +1004,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_patd_probe, upipe->uprobe);
     uprobe_init(&upipe_ts_demux->pmtd_probe,
                 upipe_ts_demux_pmtd_probe, upipe->uprobe);
-    upipe_ts_demux->ready = false;
     urefcount_init(&upipe_ts_demux->refcount);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -1014,7 +1014,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param input_mode input mode
  */
-static void upipe_ts_demux_ready(struct upipe *upipe)
+static void upipe_ts_demux_init(struct upipe *upipe)
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
@@ -1081,9 +1081,6 @@ static void upipe_ts_demux_ready(struct upipe *upipe)
         return;
     }
     uref_free(flow_def);
-
-    upipe_ts_demux->ready = true;
-    upipe_throw_ready(upipe);
 }
 
 /** @internal @This sets the input mode.
@@ -1164,10 +1161,19 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
-    if (unlikely(!upipe_ts_demux->ready)) {
-        ulog_warning(upipe->ulog, "received a buffer while not ready");
-        uref_free(uref);
-        return;
+    if (upipe_ts_demux->uref_mgr == NULL) {
+        upipe_throw_need_uref_mgr(upipe);
+        if (unlikely(upipe_ts_demux->uref_mgr == NULL)) {
+            uref_free(uref);
+            return;
+        }
+    }
+    if (upipe_ts_demux->split == NULL) {
+        upipe_ts_demux_init(upipe);
+        if (unlikely(upipe_ts_demux->split == NULL)) {
+            uref_free(uref);
+            return;
+        }
     }
 
     const char *def;
@@ -1253,8 +1259,8 @@ static bool _upipe_ts_demux_set_conformance(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool _upipe_ts_demux_control(struct upipe *upipe,
-                                    enum upipe_command command, va_list args)
+static bool upipe_ts_demux_control(struct upipe *upipe,
+                                   enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -1286,37 +1292,6 @@ static bool _upipe_ts_demux_control(struct upipe *upipe,
     }
 }
 
-/** @internal @This processes control commands on a ts_demux pipe, and
- * checks the status of the pipe afterwards.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_ts_demux_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
-{
-    if (unlikely(!_upipe_ts_demux_control(upipe, command, args)))
-        return false;
-
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (upipe_ts_demux->uref_mgr != NULL) {
-        if (!upipe_ts_demux->ready)
-            upipe_ts_demux_ready(upipe);
-    } else if (upipe_ts_demux->ready) {
-        upipe_ts_demux_set_input_mode(upipe, UPIPE_TS_DEMUX_OFF);
-        upipe_release(upipe_ts_demux->psi_split_output_pat);
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-        upipe_release(upipe_ts_demux->split);
-        upipe_ts_demux->ready = false;
-        upipe_throw_need_uref_mgr(upipe);
-    } else
-        upipe_throw_need_uref_mgr(upipe);
-
-    return true;
-}
-
 /** @This increments the reference count of a upipe.
  *
  * @param upipe description structure of the pipe
@@ -1335,7 +1310,9 @@ static void upipe_ts_demux_release(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_demux->refcount))) {
-        if (upipe_ts_demux->ready) {
+        upipe_throw_dead(upipe);
+
+        if (upipe_ts_demux->split != NULL) {
             upipe_ts_demux_set_input_mode(upipe, UPIPE_TS_DEMUX_OFF);
             upipe_release(upipe_ts_demux->psi_split_output_pat);
             upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);

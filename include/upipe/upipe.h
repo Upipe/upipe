@@ -192,8 +192,9 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
  * join pipe.
  *
  * @param upipe pointer to the join pipe
- * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param ulog structure used to output logs (belongs to the callee)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_alloc_input(struct upipe *upipe,
@@ -207,8 +208,9 @@ static inline struct upipe *upipe_alloc_input(struct upipe *upipe,
  * split pipe.
  *
  * @param upipe pointer to the split pipe
- * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param ulog structure used to output logs (belongs to the callee)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_alloc_output(struct upipe *upipe,
@@ -343,6 +345,18 @@ static inline bool upipe_control(struct upipe *upipe,
     return ret;
 }
 
+/** @This should be called by the module writer before it disposes of its
+ * upipe structure.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_clean(struct upipe *upipe)
+{
+    assert(upipe != NULL);
+    ulog_free(upipe->ulog);
+    upipe_mgr_release(upipe->mgr);
+}
+
 /** @internal @This allows to easily define accessors for control commands.
  *
  * @param group group of commands in lower-case
@@ -417,10 +431,7 @@ static inline void upipe_throw(struct upipe *upipe,
 }
 
 /** @This throws a ready event. This event is thrown whenever a
- * pipe is ready to process data or respond to control commands asking
- * for information about the processing. If a packet is input into a pipe
- * before the ready event was thrown, the behaviour of the pipe is undefined,
- * except for calls to @ref upipe_release.
+ * pipe is ready to accept input or respond to control commands.
  *
  * @param upipe description structure of the pipe
  */
@@ -430,7 +441,8 @@ static inline void upipe_throw_ready(struct upipe *upipe)
 }
 
 /** @This throws a dead event. This event is thrown whenever a
- * pipe is about to be destroyed.
+ * pipe is about to be destroyed and will no longer accept input and
+ * control commands.
  *
  * @param upipe description structure of the pipe
  */
@@ -582,19 +594,6 @@ static inline void upipe_throw_sync_acquired(struct upipe *upipe)
 static inline void upipe_throw_sync_lost(struct upipe *upipe)
 {
     upipe_throw(upipe, UPROBE_SYNC_LOST);
-}
-
-/** @This should be called by the module writer before it disposes of its
- * upipe structure.
- *
- * @param upipe pointer to struct upipe
- */
-static inline void upipe_clean(struct upipe *upipe)
-{
-    assert(upipe != NULL);
-    upipe_throw_dead(upipe);
-    ulog_free(upipe->ulog);
-    upipe_mgr_release(upipe->mgr);
 }
 
 #endif

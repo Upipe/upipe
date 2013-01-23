@@ -113,8 +113,6 @@ struct upipe_udpsrc {
     int fd;
     /** udp socket uri */
     char *uri;
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** refcount management structure */
     urefcount refcount;
@@ -157,7 +155,7 @@ static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
     upipe_udpsrc_init_read_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_udpsrc->fd = -1;
     upipe_udpsrc->uri = NULL;
-    upipe_udpsrc->ready = false;
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -777,30 +775,58 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         if (likely(upipe_udpsrc->uri != NULL))
             ulog_notice(upipe->ulog, "closing udp socket %s", upipe_udpsrc->uri);
         close(upipe_udpsrc->fd);
+        upipe_udpsrc->fd = -1;
     }
     free(upipe_udpsrc->uri);
     upipe_udpsrc->uri = NULL;
     upipe_udpsrc_set_upump(upipe, NULL);
 
-    if (likely(uri != NULL)) {
-        upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri, UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
-//        upipe_udpsrc->fd = open(uri, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (unlikely(upipe_udpsrc->fd == -1)) {
-            ulog_error(upipe->ulog, "can't open udp socket %s (%s)", uri,
-                       ulog_strerror(upipe->ulog, errno));
-            return false;
-        }
+    if (unlikely(uri == NULL))
+        return true;
 
-        upipe_udpsrc->uri = strdup(uri);
-        if (unlikely(upipe_udpsrc->uri == NULL)) {
-            close(upipe_udpsrc->fd);
-            upipe_udpsrc->fd = -1;
+    if (upipe_udpsrc->uref_mgr == NULL) {
+        upipe_throw_need_uref_mgr(upipe);
+        if (unlikely(upipe_udpsrc->uref_mgr == NULL))
+            return false;
+    }
+    if (upipe_udpsrc->flow_def == NULL) {
+        struct uref *flow_def =
+            uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
+        if (unlikely(flow_def == NULL)) {
             ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
-        ulog_notice(upipe->ulog, "opening udp socket %s", upipe_udpsrc->uri);
+        upipe_udpsrc_store_flow_def(upipe, flow_def);
     }
+    if (upipe_udpsrc->upump_mgr == NULL) {
+        upipe_throw_need_upump_mgr(upipe);
+        if (unlikely(upipe_udpsrc->upump_mgr == NULL))
+            return false;
+    }
+    if (upipe_udpsrc->ubuf_mgr == NULL) {
+        upipe_throw_need_ubuf_mgr(upipe, upipe_udpsrc->flow_def);
+        if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))
+            return false;
+    }
+
+    upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri, UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
+//        upipe_udpsrc->fd = open(uri, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (unlikely(upipe_udpsrc->fd == -1)) {
+        ulog_error(upipe->ulog, "can't open udp socket %s (%s)", uri,
+                   ulog_strerror(upipe->ulog, errno));
+        return false;
+    }
+
+    upipe_udpsrc->uri = strdup(uri);
+    if (unlikely(upipe_udpsrc->uri == NULL)) {
+        close(upipe_udpsrc->fd);
+        upipe_udpsrc->fd = -1;
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+        return false;
+    }
+    ulog_notice(upipe->ulog, "opening udp socket %s", upipe_udpsrc->uri);
     return true;
 }
 
@@ -847,6 +873,9 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
+            if (upipe_udpsrc->upump != NULL)
+                upipe_udpsrc_set_upump(upipe, NULL);
             return upipe_udpsrc_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -898,57 +927,17 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
         return false;
 
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
-    if (unlikely(upipe_udpsrc->uref_mgr != NULL &&
-                 upipe_udpsrc->flow_def == NULL)) {
-        struct uref *flow_def = uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr,
-                                                          NULL);
-        if (unlikely(flow_def == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
+    if (upipe_udpsrc->upump_mgr != NULL && upipe_udpsrc->fd != -1 &&
+        upipe_udpsrc->upump == NULL) {
+        struct upump *upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
+                                                  upipe_udpsrc_worker, upipe,
+                                                  true, upipe_udpsrc->fd);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_upump_error(upipe);
             return false;
         }
-        upipe_udpsrc_store_flow_def(upipe, flow_def);
-    }
-
-    if (unlikely(upipe_udpsrc->uref_mgr != NULL &&
-                 upipe_udpsrc->output != NULL &&
-                 upipe_udpsrc->ubuf_mgr != NULL &&
-                 upipe_udpsrc->upump_mgr != NULL &&
-                 upipe_udpsrc->fd != -1)) {
-        if (likely(upipe_udpsrc->upump == NULL)) {
-            struct upump *upump;
-            if (likely(upipe_udpsrc->uclock == NULL))
-                upump = upump_alloc_idler(upipe_udpsrc->upump_mgr,
-                                          upipe_udpsrc_worker, upipe, true);
-            else
-                upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
-                                            upipe_udpsrc_worker, upipe, true,
-                                            upipe_udpsrc->fd);
-            if (unlikely(upump == NULL)) {
-                ulog_error(upipe->ulog, "can't create worker");
-                upipe_throw_upump_error(upipe);
-                return false;
-            }
-            upipe_udpsrc_set_upump(upipe, upump);
-            upump_start(upump);
-        }
-        if (likely(!upipe_udpsrc->ready)) {
-            upipe_udpsrc->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_udpsrc_set_upump(upipe, NULL);
-        upipe_udpsrc->ready = false;
-
-        if (unlikely(upipe_udpsrc->fd != -1)) {
-            if (unlikely(upipe_udpsrc->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            else if (unlikely(upipe_udpsrc->upump_mgr == NULL))
-                upipe_throw_need_upump_mgr(upipe);
-            else if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe, upipe_udpsrc->flow_def);
-        }
+        upipe_udpsrc_set_upump(upipe, upump);
+        upump_start(upump);
     }
 
     return true;
@@ -972,6 +961,8 @@ static void upipe_udpsrc_release(struct upipe *upipe)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_udpsrc->refcount))) {
+        upipe_throw_dead(upipe);
+
         if (likely(upipe_udpsrc->fd != -1)) {
             if (likely(upipe_udpsrc->uri != NULL))
                 ulog_notice(upipe->ulog, "closing udp socket %s", upipe_udpsrc->uri);

@@ -539,6 +539,8 @@ static void upipe_ts_pmtd_release(struct upipe *upipe)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_pmtd->refcount))) {
+        upipe_throw_dead(upipe);
+
         uref_free(upipe_ts_pmtd->pmt);
 
         upipe_clean(upipe);

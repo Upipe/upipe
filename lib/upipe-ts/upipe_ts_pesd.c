@@ -94,6 +94,7 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
     upipe_ts_pesd->next_uref = NULL;
     upipe_ts_pesd->acquired = false;
     urefcount_init(&upipe_ts_pesd->refcount);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -419,6 +420,8 @@ static void upipe_ts_pesd_release(struct upipe *upipe)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_pesd->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_pesd_clean_output(upipe);
 
         if (upipe_ts_pesd->next_uref != NULL)

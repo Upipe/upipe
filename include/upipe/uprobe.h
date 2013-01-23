@@ -44,10 +44,11 @@ struct upipe;
 
 /** common types of events */
 enum uprobe_event {
-    /** a pipe is ready to process data and respond to control commands
-     * asking for info about the processing (void) */
+    /** a pipe is ready to accept input and respond to control commands
+     * (void) */
     UPROBE_READY,
-    /** a pipe is about to be destroyed (void) */
+    /** a pipe is about to be destroyed and will no longer accept input
+     * and control commands (void) */
     UPROBE_DEAD,
     /** an allocation error occurred, data may be lost (void); from now on
      * the behaviour of the pipe is undefined, except @ref upipe_release */

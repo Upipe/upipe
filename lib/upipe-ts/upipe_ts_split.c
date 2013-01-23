@@ -268,6 +268,8 @@ static void upipe_ts_split_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_split_output->refcount))) {
         struct upipe_ts_split *upipe_ts_split =
             upipe_ts_split_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
         /* remove output from the outputs list */
         if (upipe_ts_split_output->flow_def != NULL) {
             uint64_t pid;
@@ -523,6 +525,8 @@ static void upipe_ts_split_release(struct upipe *upipe)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_split->refcount))) {
+        upipe_throw_dead(upipe);
+
         /* we can only arrive here if there is no output anymore, so no
          * need to empty the outputs list */
         upipe_clean(upipe);

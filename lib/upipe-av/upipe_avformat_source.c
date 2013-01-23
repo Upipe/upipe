@@ -98,8 +98,6 @@ struct upipe_avfsrc {
     AVFormatContext *context;
     /** true if the URL has already been probed by avformat */
     bool probed;
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
@@ -329,6 +327,8 @@ static void upipe_avfsrc_output_release(struct upipe *upipe)
     struct upipe_avfsrc_output *upipe_avfsrc_output =
         upipe_avfsrc_output_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_avfsrc_output->refcount))) {
+        upipe_throw_dead(upipe);
+
         /* remove output from the outputs list */
         struct upipe_avfsrc *upipe_avfsrc =
             upipe_avfsrc_from_output_mgr(upipe->mgr);
@@ -417,8 +417,8 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
     upipe_avfsrc->probed = false;
-    upipe_avfsrc->ready = false;
     urefcount_init(&upipe_avfsrc->refcount);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -530,17 +530,11 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
     struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
                                             upipe_avfsrc_worker, upipe, true);
     if (unlikely(upump == NULL)) {
-        ulog_error(upipe->ulog, "can't create worker");
         upipe_throw_upump_error(upipe);
         return false;
     }
     upipe_avfsrc_set_upump(upipe, upump);
     upump_start(upump);
-
-    if (likely(!upipe_avfsrc->ready)) {
-        upipe_avfsrc->ready = true;
-        upipe_throw_ready(upipe);
-    }
     return true;
 }
 
@@ -785,6 +779,9 @@ static void upipe_avfsrc_probe(struct upump *upump)
 static inline bool _upipe_avfsrc_set_upump_mgr(struct upipe *upipe,
                                                struct upump_mgr *upump_mgr)
 {
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    if (upipe_avfsrc->upump != NULL)
+        upipe_avfsrc_set_upump(upipe, NULL);
     upipe_avfsrc_abort_av_deal(upipe);
     return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
 }
@@ -867,21 +864,33 @@ static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
     free(upipe_avfsrc->url);
     upipe_avfsrc->url = NULL;
 
-    if (likely(url != NULL)) {
-        AVDictionary *options = NULL;
-        av_dict_copy(&options, upipe_avfsrc->options, 0);
-        int error = avformat_open_input(&upipe_avfsrc->context, url, NULL,
-                                        &options);
-        av_dict_free(&options);
-        if (unlikely(error < 0)) {
-            ulog_error(upipe->ulog, "can't open URL %s (%s)", url,
-                       upipe_av_ulog_strerror(upipe->ulog, error));
-            return false;
-        }
+    if (unlikely(url == NULL))
+        return true;
 
-        upipe_avfsrc->url = strdup(url);
-        ulog_notice(upipe->ulog, "opening URL %s", upipe_avfsrc->url);
+    if (upipe_avfsrc->uref_mgr == NULL) {
+        upipe_throw_need_uref_mgr(upipe);
+        if (unlikely(upipe_avfsrc->uref_mgr == NULL))
+            return false;
     }
+    if (upipe_avfsrc->upump_mgr == NULL) {
+        upipe_throw_need_upump_mgr(upipe);
+        if (unlikely(upipe_avfsrc->upump_mgr == NULL))
+            return false;
+    }
+
+    AVDictionary *options = NULL;
+    av_dict_copy(&options, upipe_avfsrc->options, 0);
+    int error = avformat_open_input(&upipe_avfsrc->context, url, NULL,
+                                    &options);
+    av_dict_free(&options);
+    if (unlikely(error < 0)) {
+        ulog_error(upipe->ulog, "can't open URL %s (%s)", url,
+                   upipe_av_ulog_strerror(upipe->ulog, error));
+        return false;
+    }
+
+    upipe_avfsrc->url = strdup(url);
+    ulog_notice(upipe->ulog, "opening URL %s", upipe_avfsrc->url);
     return true;
 }
 
@@ -1005,12 +1014,8 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
         return false;
 
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (unlikely(upipe_avfsrc->uref_mgr != NULL &&
-                 upipe_avfsrc->upump_mgr != NULL &&
-                 upipe_avfsrc->url != NULL)) {
-        if (unlikely(upipe_avfsrc->upump != NULL))
-            return true;
-
+    if (upipe_avfsrc->upump_mgr != NULL && upipe_avfsrc->url != NULL &&
+        upipe_avfsrc->upump == NULL) {
         if (unlikely(upipe_avfsrc->probed))
             return upipe_avfsrc_start(upipe);
 
@@ -1027,18 +1032,6 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
         }
         upipe_avfsrc->upump_av_deal = upump_av_deal;
         upipe_av_deal_start(upump_av_deal);
-
-    } else {
-        upipe_avfsrc_set_upump(upipe, NULL);
-        upipe_avfsrc_abort_av_deal(upipe);
-        upipe_avfsrc->ready = false;
-
-        if (unlikely(upipe_avfsrc->url != NULL)) {
-            if (unlikely(upipe_avfsrc->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            else if (unlikely(upipe_avfsrc->upump_mgr == NULL))
-                upipe_throw_need_upump_mgr(upipe);
-        }
     }
 
     return true;

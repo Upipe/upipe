@@ -92,6 +92,12 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     struct ubuf *dst;
     uint8_t *aux;
 
+    if (upipe_genaux->ubuf_mgr == NULL) {
+        upipe_throw_need_ubuf_mgr(upipe, upipe_genaux->flow_def);
+        if (unlikely(upipe_genaux->ubuf_mgr == NULL))
+            return;
+    }
+
     if (!uref_clock_get_systime(uref, &systime)) {
         uref_free(uref);
         return;
@@ -224,6 +230,8 @@ static void upipe_genaux_release(struct upipe *upipe)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_genaux->refcount))) {
+        upipe_throw_dead(upipe);
+
         ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
         upipe_genaux_clean_ubuf_mgr(upipe);
         upipe_genaux_clean_output(upipe);

@@ -253,6 +253,8 @@ static void upipe_ts_psi_split_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_psi_split_output->refcount))) {
         struct upipe_ts_psi_split *upipe_ts_psi_split =
             upipe_ts_psi_split_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
         /* remove output from the outputs list */
         struct uchain *uchain;
         ulist_delete_foreach(&upipe_ts_psi_split->outputs, uchain) {
@@ -433,6 +435,8 @@ static void upipe_ts_psi_split_release(struct upipe *upipe)
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_psi_split->refcount))) {
+        upipe_throw_dead(upipe);
+
         /* we can only arrive here if there is no output anymore, so no
          * need to empty the outputs list */
         upipe_clean(upipe);

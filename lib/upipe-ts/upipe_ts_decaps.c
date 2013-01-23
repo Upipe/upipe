@@ -302,6 +302,8 @@ static void upipe_ts_decaps_release(struct upipe *upipe)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_decaps->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_decaps_clean_output(upipe);
 
         upipe_clean(upipe);

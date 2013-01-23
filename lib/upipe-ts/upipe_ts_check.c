@@ -301,6 +301,8 @@ static void upipe_ts_check_release(struct upipe *upipe)
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_check->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_check_clean_output(upipe);
 
         upipe_clean(upipe);

@@ -214,6 +214,8 @@ static void upipe_dup_output_release(struct upipe *upipe)
         upipe_dup_output_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_dup_output->refcount))) {
         struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
         /* remove output from the outputs list */
         struct uchain *uchain;
         ulist_delete_foreach(&upipe_dup->outputs, uchain) {
@@ -368,6 +370,7 @@ static void upipe_dup_release(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_dup->refcount))) {
+        upipe_throw_dead(upipe);
         /* we can only arrive here if there is no output anymore, so no
          * need to empty the outputs list */
         if (upipe_dup->flow_def != NULL)

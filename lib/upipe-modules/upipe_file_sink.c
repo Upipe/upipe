@@ -91,8 +91,6 @@ struct upipe_fsink {
     bool blocked;
     /** true if we have received a compatible flow definition */
     bool flow_def_ok;
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** refcount management structure */
     urefcount refcount;
@@ -128,8 +126,8 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
     upipe_fsink->path = NULL;
     upipe_fsink->blocked = false;
     upipe_fsink->flow_def_ok = false;
-    upipe_fsink->ready = false;
     ulist_init(&upipe_fsink->urefs);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -361,53 +359,60 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         upipe_fsink->blocked = false;
     }
 
-    if (likely(path != NULL)) {
-        const char *mode_desc;
-        int flags;
-        switch (mode) {
-            case UPIPE_FSINK_APPEND:
-                mode_desc = "append";
-                flags = O_CREAT;
-                break;
-            case UPIPE_FSINK_OVERWRITE:
-                mode_desc = "overwrite";
-                flags = O_CREAT;
-                break;
-            case UPIPE_FSINK_CREATE:
-                mode_desc = "create";
-                flags = O_CREAT | O_EXCL;
-                break;
-            default:
-                ulog_error(upipe->ulog, "invalid mode %d", mode);
-                return false;
-        }
-        upipe_fsink->fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC | flags,
-                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (unlikely(upipe_fsink->fd == -1)) {
-            ulog_error(upipe->ulog, "can't open file %s (%s)",
-                       path, ulog_strerror(upipe->ulog, errno));
-            return false;
-        }
-        if (likely(mode == UPIPE_FSINK_APPEND))
-            if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END)) == -1) {
-                ulog_error(upipe->ulog, "can't append to file %s (%s)",
-                           path, ulog_strerror(upipe->ulog, errno));
-                close(upipe_fsink->fd);
-                upipe_fsink->fd = -1;
-                return false;
-            }
+    if (unlikely(path == NULL))
+        return true;
 
-        upipe_fsink->path = strdup(path);
-        if (unlikely(upipe_fsink->path == NULL)) {
+    if (upipe_fsink->upump_mgr == NULL) {
+        upipe_throw_need_upump_mgr(upipe);
+        if (unlikely(upipe_fsink->upump_mgr == NULL))
+            return false;
+    }
+
+    const char *mode_desc;
+    int flags;
+    switch (mode) {
+        case UPIPE_FSINK_APPEND:
+            mode_desc = "append";
+            flags = O_CREAT;
+            break;
+        case UPIPE_FSINK_OVERWRITE:
+            mode_desc = "overwrite";
+            flags = O_CREAT;
+            break;
+        case UPIPE_FSINK_CREATE:
+            mode_desc = "create";
+            flags = O_CREAT | O_EXCL;
+            break;
+        default:
+            ulog_error(upipe->ulog, "invalid mode %d", mode);
+            return false;
+    }
+    upipe_fsink->fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC | flags,
+                           S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (unlikely(upipe_fsink->fd == -1)) {
+        ulog_error(upipe->ulog, "can't open file %s (%s)",
+                   path, ulog_strerror(upipe->ulog, errno));
+        return false;
+    }
+    if (likely(mode == UPIPE_FSINK_APPEND))
+        if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END)) == -1) {
+            ulog_error(upipe->ulog, "can't append to file %s (%s)",
+                       path, ulog_strerror(upipe->ulog, errno));
             close(upipe_fsink->fd);
             upipe_fsink->fd = -1;
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
             return false;
         }
-        ulog_notice(upipe->ulog, "opening file %s in %s mode",
-                    upipe_fsink->path, mode_desc);
+
+    upipe_fsink->path = strdup(path);
+    if (unlikely(upipe_fsink->path == NULL)) {
+        close(upipe_fsink->fd);
+        upipe_fsink->fd = -1;
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+        return false;
     }
+    ulog_notice(upipe->ulog, "opening file %s in %s mode",
+                upipe_fsink->path, mode_desc);
     return true;
 }
 
@@ -428,6 +433,9 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+            if (upipe_fsink->upump != NULL)
+                upipe_fsink_set_upump(upipe, NULL);
             return upipe_fsink_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -481,18 +489,8 @@ static bool upipe_fsink_control(struct upipe *upipe, enum upipe_command command,
         return false;
 
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    if (unlikely(upipe_fsink->upump_mgr != NULL)) {
-        if (unlikely(!ulist_empty(&upipe_fsink->urefs)))
-            upipe_fsink_wait(upipe, 0);
-        if (likely(!upipe_fsink->ready)) {
-            upipe_fsink->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_fsink->ready = false;
-        upipe_throw_need_upump_mgr(upipe);
-    }
+    if (unlikely(!ulist_empty(&upipe_fsink->urefs)))
+        upipe_fsink_wait(upipe, 0);
 
     return true;
 }
@@ -515,6 +513,8 @@ static void upipe_fsink_release(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_fsink->refcount))) {
+        upipe_throw_dead(upipe);
+
         if (likely(upipe_fsink->fd != -1)) {
             if (likely(upipe_fsink->path != NULL))
                 ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);

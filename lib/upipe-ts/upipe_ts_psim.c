@@ -92,6 +92,7 @@ static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
     upipe_ts_psim->next_uref = NULL;
     upipe_ts_psim->acquired = false;
     urefcount_init(&upipe_ts_psim->refcount);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -343,6 +344,8 @@ static void upipe_ts_psim_release(struct upipe *upipe)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_psim->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_psim_clean_output(upipe);
 
         if (upipe_ts_psim->next_uref != NULL)

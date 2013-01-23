@@ -512,6 +512,8 @@ static void upipe_ts_sync_release(struct upipe *upipe)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_sync_flush(upipe, NULL);
         upipe_ts_sync_clean_output(upipe);
 

@@ -62,8 +62,6 @@ struct upipe_qsrc {
 
     /** extra data for the queue structure */
     void *uqueue_extra;
-    /** true if we have thrown the ready event */
-    bool ready;
 
     /** refcount management structure */
     urefcount refcount;
@@ -96,8 +94,8 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
     upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
     upipe_qsrc->uqueue_extra = NULL;
-    upipe_qsrc->ready = false;
     upipe_qsrc->upipe_queue.max_length = 0;
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -169,6 +167,8 @@ static bool _upipe_qsrc_set_max_length(struct upipe *upipe, unsigned int length)
     upipe_qsrc->upipe_queue.max_length = length;
     ulog_notice(upipe->ulog, "queue source %p is ready with length %u",
                 upipe, length);
+    if (unlikely(upipe_qsrc->upump_mgr == NULL))
+        upipe_throw_need_upump_mgr(upipe);
     return true;
 }
 
@@ -214,6 +214,9 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
+            if (upipe_qsrc->upump != NULL)
+                upipe_qsrc_set_upump(upipe, NULL);
             return upipe_qsrc_set_upump_mgr(upipe, upump_mgr);
         }
 
@@ -255,33 +258,18 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         return false;
 
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    if (unlikely(upipe_qsrc->upump_mgr != NULL &&
-                 upipe_qsrc->output != NULL &&
-                 upipe_qsrc->upipe_queue.max_length)) {
-        if (likely(upipe_qsrc->upump == NULL)) {
-            struct upump *upump =
-                uqueue_upump_alloc_pop(upipe_queue(upipe),
-                                       upipe_qsrc->upump_mgr,
-                                       upipe_qsrc_worker, upipe);
-            if (unlikely(upump == NULL)) {
-                ulog_error(upipe->ulog, "can't create watcher");
-                upipe_throw_upump_error(upipe);
-                return false;
-            } 
-            upipe_qsrc_set_upump(upipe, upump);
-            upump_start(upump);
-        }
-        if (likely(!upipe_qsrc->ready)) {
-            upipe_qsrc->ready = true;
-            upipe_throw_ready(upipe);
-        }
-
-    } else {
-        upipe_qsrc_set_upump(upipe, NULL);
-        upipe_qsrc->ready = false;
-
-        if (unlikely(upipe_qsrc->upump_mgr == NULL))
-            upipe_throw_need_upump_mgr(upipe);
+    if (upipe_qsrc->upump_mgr != NULL && upipe_qsrc->upipe_queue.max_length &&
+        upipe_qsrc->upump == NULL) {
+        struct upump *upump =
+            uqueue_upump_alloc_pop(upipe_queue(upipe),
+                                   upipe_qsrc->upump_mgr,
+                                   upipe_qsrc_worker, upipe);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_upump_error(upipe);
+            return false;
+        } 
+        upipe_qsrc_set_upump(upipe, upump);
+        upump_start(upump);
     }
 
     return true;
@@ -305,6 +293,8 @@ static void upipe_qsrc_release(struct upipe *upipe)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_qsrc->refcount))) {
+        upipe_throw_dead(upipe);
+
         ulog_notice(upipe->ulog, "freeing queue %p", upipe);
         upipe_qsrc_clean_upump_mgr(upipe);
         upipe_qsrc_clean_output(upipe);

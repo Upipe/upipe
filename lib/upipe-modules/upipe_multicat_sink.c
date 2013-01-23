@@ -475,6 +475,8 @@ static void upipe_multicat_sink_release(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_multicat_sink->refcount))) {
+        upipe_throw_dead(upipe);
+
         ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
         if (upipe_multicat_sink->flow_def != NULL)
             uref_free(upipe_multicat_sink->flow_def);

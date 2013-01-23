@@ -426,6 +426,8 @@ static void upipe_ts_patd_release(struct upipe *upipe)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_patd->refcount))) {
+        upipe_throw_dead(upipe);
+
         upipe_ts_psid_table_clean(upipe_ts_patd->pat);
         upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
 
