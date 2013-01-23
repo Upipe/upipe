@@ -28,7 +28,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -187,8 +187,8 @@ int main(int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
 
     /* clock */
     struct uclock *uclock = uclock_std_alloc(0);
@@ -198,12 +198,12 @@ int main(int argc, char **argv)
 
     /* build genaux pipe */
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux"));
+    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
     assert(genaux);
     assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
-    struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux_test"));
+    struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "genaux_test"));
     assert(upipe_set_output(genaux, genaux_test));
 
     /* Send first flow definition packet */
@@ -230,7 +230,7 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_print_free(uprobe_print);
+    uprobe_log_free(uprobe_log);
     ulog_free(mainlog);
 
     return 0;

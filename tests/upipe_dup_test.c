@@ -32,7 +32,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -120,25 +120,25 @@ int main(int argc, char *argv[])
     struct uref *uref;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_LEVEL);
+    assert(uprobe_log != NULL);
 
-    struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, uprobe_print,
+    struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 0"));
     assert(upipe_sink0 != NULL);
 
-    struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, uprobe_print,
+    struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 1"));
     assert(upipe_sink1 != NULL);
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
-    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_print,
+    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
 
     struct upipe *upipe_dup_output0 = upipe_alloc_output(upipe_dup,
-            uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 0"));
+            uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 0"));
     assert(upipe_dup_output0 != NULL);
     assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
 
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
     counter = 0;
 
     struct upipe *upipe_dup_output1 = upipe_alloc_output(upipe_dup,
-            uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 1"));
+            uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "dup output 1"));
     assert(upipe_dup_output1 != NULL);
     assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
     assert(counter == 0);
@@ -176,6 +176,6 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 
-    uprobe_print_free(uprobe_print);
+    uprobe_log_free(uprobe_log);
     return 0;
 }

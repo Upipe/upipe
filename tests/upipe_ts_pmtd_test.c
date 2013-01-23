@@ -32,7 +32,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -46,7 +46,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uprobe_ts_print.h>
+#include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/upipe_ts_pmtd.h>
 #include <upipe-ts/uref_ts_flow.h>
 
@@ -150,16 +150,15 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
-    struct uprobe *uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout,
-                                                           "ts test");
-    assert(uprobe_ts_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(uprobe_log, ULOG_DEBUG);
+    assert(uprobe_ts_log != NULL);
 
     struct upipe_mgr *upipe_ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     assert(upipe_ts_pmtd_mgr != NULL);
     struct upipe *upipe_ts_pmtd = upipe_alloc(upipe_ts_pmtd_mgr,
-            uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts pmtd"));
+            uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts pmtd"));
     assert(upipe_ts_pmtd != NULL);
 
     struct uref *uref;
@@ -442,8 +441,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_print_free(uprobe_print);
-    uprobe_ts_print_free(uprobe_ts_print);
+    uprobe_log_free(uprobe_log);
+    uprobe_ts_log_free(uprobe_ts_log);
 
     return 0;
 }

@@ -24,13 +24,13 @@
  */
 
 /** @file
- * @short unit tests for uprobe print implementation
+ * @short unit tests for uprobe ts log implementation
  */
 
 #undef NDEBUG
 
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe-ts/uprobe_ts_log.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -39,6 +39,14 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_std.h>
+#include <upipe/ulog.h>
+#include <upipe/ulog_stdio.h>
+
+#include <upipe-ts/upipe_ts_demux.h>
+#include <upipe-ts/upipe_ts_decaps.h>
+#include <upipe-ts/upipe_ts_split.h>
+#include <upipe-ts/upipe_ts_patd.h>
+#include <upipe-ts/upipe_ts_pmtd.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -51,39 +59,36 @@ static struct upipe test_pipe;
 
 int main(int argc, char **argv)
 {
-    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
-    assert(umem_mgr != NULL);
-    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
-                                                         umem_mgr, -1, -1);
-    assert(udict_mgr != NULL);
-    struct uref_mgr *mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
-    assert(mgr != NULL);
-
-    printf("%p\n", &test_pipe);
-
-    struct uprobe *uprobe = uprobe_print_alloc(NULL, stdout, "test");
+    struct uprobe *uprobe = uprobe_ts_log_alloc(NULL, ULOG_DEBUG);
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
+    test_pipe.ulog = ulog_stdio_alloc(stdout, ULOG_DEBUG, "ts probe");
 
     upipe_throw_aerror(&test_pipe);
-    upipe_throw_upump_error(&test_pipe);
-    upipe_throw_read_end(&test_pipe, "pouet");
-    upipe_throw_write_end(&test_pipe, "pouet");
 
-    uprobe_print_free(uprobe);
-    uprobe = uprobe_print_alloc_va(NULL, stdout, "test %d", 2);
-    assert(uprobe != NULL);
-    test_pipe.uprobe = uprobe;
+    upipe_throw(&test_pipe, UPROBE_TS_DECAPS_PCR, UPIPE_TS_DECAPS_SIGNATURE,
+                NULL, 42);
 
-    struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
-    upipe_split_throw_add_flow(&test_pipe, 0, uref);
-    uref_free(uref);
-    upipe_throw_need_uref_mgr(&test_pipe);
-    upipe_throw_need_upump_mgr(&test_pipe);
-    uprobe_print_free(uprobe);
+    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_SET_PID, UPIPE_TS_SPLIT_SIGNATURE,
+                42);
+    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_UNSET_PID, UPIPE_TS_SPLIT_SIGNATURE,
+                42);
 
-    uref_mgr_release(mgr);
-    udict_mgr_release(udict_mgr);
-    umem_mgr_release(umem_mgr);
+    upipe_throw(&test_pipe, UPROBE_TS_PATD_TSID, UPIPE_TS_PATD_SIGNATURE, NULL,
+                42);
+    upipe_throw(&test_pipe, UPROBE_TS_PATD_ADD_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
+                NULL, 42, 12);
+    upipe_throw(&test_pipe, UPROBE_TS_PATD_DEL_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
+                NULL, 42);
+
+    upipe_throw(&test_pipe, UPROBE_TS_PMTD_HEADER, UPIPE_TS_PMTD_SIGNATURE,
+                NULL, 42);
+    upipe_throw(&test_pipe, UPROBE_TS_PMTD_ADD_ES, UPIPE_TS_PMTD_SIGNATURE,
+                NULL, 42, 12);
+    upipe_throw(&test_pipe, UPROBE_TS_PMTD_DEL_ES, UPIPE_TS_PMTD_SIGNATURE,
+                NULL, 42);
+
+    uprobe_log_free(uprobe);
+    ulog_free(test_pipe.ulog);
     return 0;
 }

@@ -62,6 +62,17 @@ struct ulog {
     char ulog_buffer[ULOG_BUFFER_SIZE];
 };
 
+static inline void ulog_log(struct ulog *ulog, enum ulog_level level,
+                            const char *format, ...)
+{
+    if (unlikely(ulog == NULL))
+        return;
+    va_list args;
+    va_start(args, format);
+    ulog->ulog(ulog, level, format, args);
+    va_end(args);
+}
+
 #define ULOG_TEMPLATE(name, NAME)                                           \
 /** @This prints name messages to the console.                              \
  *                                                                          \

@@ -32,7 +32,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -372,16 +372,16 @@ int main(int argc, char **argv)
     /* build sws pipe and dependencies */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
-    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws")); 
+    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws")); 
     assert(sws != NULL);
     assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws_test"));
+    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws_test"));
     ulog_debug(mainlog, "Pipe addr: sws:\t %p", sws);
     ulog_debug(mainlog, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
@@ -422,7 +422,7 @@ int main(int argc, char **argv)
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr); 
     ulog_free(mainlog);
-    uprobe_print_free(uprobe_print);
+    uprobe_log_free(uprobe_log);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 

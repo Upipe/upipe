@@ -34,7 +34,7 @@ nobase_include_HEADERS = \
 	upipe/upipe_helper_upump_mgr.h \
 	upipe/upipe_helper_uref_mgr.h \
 	upipe/uprobe.h \
-	upipe/uprobe_print.h \
+	upipe/uprobe_log.h \
 	upipe/upump_common.h \
 	upipe/upump.h \
 	upipe/uqueue.h \
@@ -71,7 +71,7 @@ nobase_include_HEADERS = \
 	upipe-ts/upipe_ts_pmtd.h \
 	upipe-ts/upipe_ts_split.h \
 	upipe-ts/upipe_ts_sync.h \
-	upipe-ts/uprobe_ts_print.h \
+	upipe-ts/uprobe_ts_log.h \
 	upipe-ts/uref_ts_flow.h \
 	upump-ev/upump_ev.h
 

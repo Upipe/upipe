@@ -35,9 +35,6 @@
 enum uprobe_ts_demux_event {
     UPROBE_TS_DEMUX_SENTINEL = UPROBE_LOCAL,
 
-    /** a new PSI flow is proposed (struct uref *, const char *) */
-    UPROBE_TS_DEMUX_NEW_PSI_FLOW,
-
     /** ts_split events begin here */
     UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000,
     /** ts_decaps events begin here */

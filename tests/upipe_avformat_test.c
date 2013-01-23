@@ -34,7 +34,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -72,7 +72,7 @@
 #define ULOG_LEVEL ULOG_DEBUG
 
 struct ubuf_mgr *ubuf_mgr;
-static struct uprobe *uprobe_print;
+static struct uprobe *uprobe_log;
 static struct upipe *upipe_avfsrc;
 static struct ulist upipe_avfsrc_outputs;
 
@@ -200,11 +200,11 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             uchain_init(&output->uchain);
             ulist_add(&upipe_avfsrc_outputs, &output->uchain);
             output->upipe_avfsrc_output = upipe_alloc_output(upipe_avfsrc,
-                    uprobe_print, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
+                    uprobe_log, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
                                                       "output %"PRIu64, id));
             assert(output->upipe_avfsrc_output != NULL);
             struct upipe *upipe_sink = upipe_alloc(&avformat_test_mgr,
-                    uprobe_print, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
+                    uprobe_log, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
                                                       "sink %"PRIu64, id));
             assert(upipe_sink != NULL);
             assert(upipe_set_flow_def(output->upipe_avfsrc_output, flow_def));
@@ -266,15 +266,15 @@ int main(int argc, char *argv[])
 #endif
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
+    uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
 
     assert(upipe_av_init(false));
 
 #if 0
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);
-    struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr, uprobe_print,
+    struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "file sink"));
     assert(upipe_avfsink != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsink, upump_mgr));
@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
-    upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr, uprobe_print,
+    upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "avformat source"));
     assert(upipe_avfsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     uclock_release(uclock);
 #endif
-    uprobe_print_free(uprobe_print);
+    uprobe_log_free(uprobe_log);
 
     ev_default_destroy();
     return 0;

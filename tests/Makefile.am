@@ -5,17 +5,22 @@ dist_check_SCRIPTS = \
 	ulog_stdio_test.sh \
 	ulog_sub_test.sh \
 	udict_inline_test.sh \
-	uprobe_print_test.sh \
+	uprobe_log_test.sh \
 	upipe_file_test.sh \
 	upipe_multicat_test.sh \
+	uprobe_ts_log_test.sh \
 	valgrind_wrapper.sh
 
-dist_check_DATA = ulog_stdio_test.txt ulog_sub_test.txt uprobe_print_test.txt
+dist_check_DATA = \
+	ulog_stdio_test.txt \
+	ulog_sub_test.txt \
+	uprobe_log_test.txt \
+	uprobe_ts_log_test.txt
 
 check_PROGRAMS = \
 	ulog_stdio_test \
 	ulog_sub_test \
-	uprobe_print_test \
+	uprobe_log_test \
 	umem_alloc_test \
 	umem_pool_test \
 	udict_inline_test \
@@ -35,7 +40,7 @@ TESTS = \
 	uref_std_test \
 	ulog_stdio_test.sh \
 	ulog_sub_test.sh \
-	uprobe_print_test.sh \
+	uprobe_log_test.sh \
 	uclock_std_test \
 	upipe_genaux_test \
 	upipe_dup_test
@@ -74,6 +79,7 @@ endif
 
 if HAVE_BITSTREAM
 check_PROGRAMS += \
+	uprobe_ts_log_test \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
@@ -85,6 +91,7 @@ check_PROGRAMS += \
 	upipe_ts_pmtd_test \
 	upipe_ts_demux_test
 TESTS += \
+	uprobe_ts_log_test.sh \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
@@ -115,6 +122,7 @@ upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
+uprobe_ts_log_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

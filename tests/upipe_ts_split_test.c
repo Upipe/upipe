@@ -32,7 +32,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -46,7 +46,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uprobe_ts_print.h>
+#include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
 
@@ -79,7 +79,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             unsigned int signature = va_arg(args, unsigned int);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
-            fprintf(stdout, "ts probe: pipe %p set PID %u\n", upipe, pid);
             assert(pid == 68 || pid == 69);
             break;
         }
@@ -87,7 +86,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             unsigned int signature = va_arg(args, unsigned int);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
-            fprintf(stdout, "ts probe: pipe %p unset PID %u\n", upipe, pid);
             assert(pid == 68 || pid == 69);
             break;
         }
@@ -181,24 +179,23 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
-    struct uprobe *uprobe_ts_print = uprobe_ts_print_alloc(uprobe_print, stdout,
-                                                           "ts test");
-    assert(uprobe_ts_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(uprobe_log, ULOG_DEBUG);
+    assert(uprobe_ts_log != NULL);
 
-    struct upipe *upipe_sink68 = upipe_alloc(&ts_test_mgr, uprobe_print,
+    struct upipe *upipe_sink68 = upipe_alloc(&ts_test_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 68"));
     assert(upipe_sink68 != NULL);
 
-    struct upipe *upipe_sink69 = upipe_alloc(&ts_test_mgr, uprobe_print,
+    struct upipe *upipe_sink69 = upipe_alloc(&ts_test_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 69"));
     assert(upipe_sink69 != NULL);
 
     struct upipe_mgr *upipe_ts_split_mgr = upipe_ts_split_mgr_alloc();
     assert(upipe_ts_split_mgr != NULL);
     struct upipe *upipe_ts_split = upipe_alloc(upipe_ts_split_mgr,
-            uprobe_ts_print, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts split"));
+            uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts split"));
     assert(upipe_ts_split != NULL);
 
     struct uref *uref;
@@ -207,7 +204,7 @@ int main(int argc, char *argv[])
 
     assert(uref_ts_flow_set_pid(uref, 68));
     struct upipe *upipe_ts_split_output68 = upipe_alloc_output(upipe_ts_split,
-            uprobe_print,
+            uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts split output 68"));
     assert(upipe_ts_split_output68 != NULL);
     assert(upipe_set_flow_def(upipe_ts_split_output68, uref));
@@ -215,7 +212,7 @@ int main(int argc, char *argv[])
 
     assert(uref_ts_flow_set_pid(uref, 69));
     struct upipe *upipe_ts_split_output69 = upipe_alloc_output(upipe_ts_split,
-            uprobe_print,
+            uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts split output 69"));
     assert(upipe_ts_split_output69 != NULL);
     assert(upipe_set_flow_def(upipe_ts_split_output69, uref));
@@ -260,8 +257,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_print_free(uprobe_print);
-    uprobe_ts_print_free(uprobe_ts_print);
+    uprobe_log_free(uprobe_log);
+    uprobe_ts_log_free(uprobe_ts_log);
 
     return 0;
 }

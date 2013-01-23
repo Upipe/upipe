@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,43 +24,28 @@
  */
 
 /** @file
- * @short simple probe printing all received events from ts pipes, as a
- * fall-back
+ * @short simple probe logging all received events, as a fall-back
  */
 
-#ifndef _UPIPE_UPROBE_TS_PRINT_H_
+#ifndef _UPIPE_UPROBE_LOG_H_
 /** @hidden */
-#define _UPIPE_UPROBE_TS_PRINT_H_
+#define _UPIPE_UPROBE_LOG_H_
 
 #include <upipe/uprobe.h>
+#include <upipe/ulog.h>
 
-#include <stdio.h>
-
-/** @This frees a uprobe print structure.
- *
- * @param uprobe print structure to free
- */
-void uprobe_ts_print_free(struct uprobe *uprobe);
-
-/** @This allocates a new uprobe print structure.
+/** @This allocates a new uprobe log structure.
  *
  * @param next next probe to test if this one doesn't catch the event
- * @param stream file stream to write to (eg. stderr)
- * @param name prefix appended to all messages by this probe (informative)
+ * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_ts_print_alloc(struct uprobe *next, FILE *stream,
-                                     const char *name);
+struct uprobe *uprobe_log_alloc(struct uprobe *next, enum ulog_level level);
 
-/** @This allocates a new uprobe print structure, with composite name.
+/** @This frees a uprobe log structure.
  *
- * @param next next probe to test if this one doesn't catch the event
- * @param stream file stream to write to (eg. stderr)
- * @param format printf-format string used for the prefix appended to all
- * messages by this probe, followed by optional arguments
- * @return pointer to uprobe, or NULL in case of error
+ * @param uprobe uprobe structure to free
  */
-struct uprobe *uprobe_ts_print_alloc_va(struct uprobe *next, FILE *stream,
-                                        const char *format, ...);
+void uprobe_log_free(struct uprobe *uprobe);
 
 #endif

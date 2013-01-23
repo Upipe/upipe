@@ -32,7 +32,7 @@
 #include <upipe/ulog.h>
 #include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_print.h>
+#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -171,8 +171,8 @@ int main(int argc, char *argv[])
     assert(upump_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_print = uprobe_print_alloc(&uprobe, stdout, "test");
-    assert(uprobe_print != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    assert(uprobe_log != NULL);
 
 	// write junk to the first file to test set_mode/OVERWRITE
 	snprintf(filepath, MAXPATHLEN, "%s%u%s", dirpath, 0, suffix);
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    multicat_sink = upipe_alloc(upipe_multicat_sink_mgr, uprobe_print,
+    multicat_sink = upipe_alloc(upipe_multicat_sink_mgr, uprobe_log,
             ulog_stdio_alloc(stdout, ULOG_LEVEL, "multicat sink"));
     assert(multicat_sink != NULL);
     assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_print_free(uprobe_print);
+    uprobe_log_free(uprobe_log);
 
     ev_default_destroy();
 	sync();
