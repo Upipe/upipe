@@ -323,8 +323,8 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-#if 0
     ubuf_mgr_release(ubuf_mgr);
+#if 0
     uclock_release(uclock);
 #endif
     uprobe_log_free(uprobe_log);

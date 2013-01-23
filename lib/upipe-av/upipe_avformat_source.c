@@ -495,6 +495,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     struct uref *uref = uref_block_alloc(upipe_avfsrc->uref_mgr,
                                          output->ubuf_mgr, pkt.size);
     if (unlikely(uref == NULL)) {
+        av_free_packet(&pkt);
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
@@ -505,6 +506,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
+        av_free_packet(&pkt);
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
@@ -512,6 +514,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     assert(read_size == pkt.size);
     memcpy(buffer, pkt.data, pkt.size);
     uref_block_unmap(uref, 0, read_size);
+    av_free_packet(&pkt);
 
     if (upipe_avfsrc->uclock != NULL)
         uref_clock_set_systime(uref, systime);
@@ -689,8 +692,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
         av_dict_copy(&options[i], upipe_avfsrc->options, 0);
     }
     int error = avformat_find_stream_info(context, options);
-    for (unsigned i = 0; i < context->nb_streams; i++)
-        av_dict_free(&options[i]);
 
     if (unlikely(!upipe_av_deal_yield(upump))) {
         upump_free(upipe_avfsrc->upump_av_deal);
