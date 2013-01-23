@@ -83,12 +83,10 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
             break;
         case UPROBE_SYNC_ACQUIRED:
-            fprintf(stdout, "ts probe: pipe %p acquired PES sync\n", upipe);
             assert(expect_acquired);
             expect_acquired = false;
             break;
         case UPROBE_SYNC_LOST:
-            fprintf(stdout, "ts probe: pipe %p lost PES sync\n", upipe);
             assert(expect_lost);
             expect_lost = false;
             break;

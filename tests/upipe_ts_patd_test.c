@@ -86,8 +86,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             unsigned int patd_tsid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             assert(uref != NULL);
-            fprintf(stdout, "ts probe: pipe %p detected TS ID %u\n", upipe,
-                    patd_tsid);
             assert(patd_tsid == tsid);
             break;
         }
@@ -100,9 +98,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(uref != NULL);
             program_sum -= program;
             pid_sum -= pid;
-            fprintf(stdout,
-                    "ts probe: pipe %p added program %u (PID %u)\n",
-                    upipe, program, pid);
             break;
         }
         case UPROBE_TS_PATD_DEL_PROGRAM: {
@@ -112,8 +107,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             assert(uref != NULL);
             del_program_sum -= program;
-            fprintf(stdout,
-                    "ts probe: pipe %p deleted program %u\n", upipe, program);
             break;
         }
     }
