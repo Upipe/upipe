@@ -1056,6 +1056,8 @@ static void upipe_avfsrc_release(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_avfsrc->refcount))) {
+        upipe_throw_dead(upipe);
+
         /* we can only arrive here if there is no output anymore, so no
          * need to empty the outputs list */
         upipe_avfsrc_abort_av_deal(upipe);
