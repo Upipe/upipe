@@ -85,8 +85,9 @@
 
         @item API name @item description @item link with
 
-        @item @ref uprobe_print_alloc @item print all received messages, for debug purposes @item @tt -lupipe
-        @item @ref uprobe_ts_print_alloc @item print TS-related received messages, for debug purposes @item @tt -lupipe-ts
+        @item @ref uprobe_log_alloc @item log all received messages, for debug purposes @item @tt -lupipe
+        @item @ref uprobe_ts_log_alloc @item log TS-related received messages, for debug purposes @item @tt -lupipe-ts
+        @item @ref uprobe_uref_mgr_alloc @item set an uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
 
       @end table
 

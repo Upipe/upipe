@@ -39,7 +39,6 @@
 #include <upipe-ts/upipe_ts_pmtd.h>
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>

@@ -35,6 +35,7 @@ nobase_include_HEADERS = \
 	upipe/upipe_helper_uref_mgr.h \
 	upipe/uprobe.h \
 	upipe/uprobe_log.h \
+	upipe/uprobe_uref_mgr.h \
 	upipe/upump_common.h \
 	upipe/upump.h \
 	upipe/uqueue.h \

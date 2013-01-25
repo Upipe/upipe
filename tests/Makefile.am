@@ -21,6 +21,7 @@ check_PROGRAMS = \
 	ulog_stdio_test \
 	ulog_sub_test \
 	uprobe_log_test \
+	uprobe_uref_mgr_test \
 	umem_alloc_test \
 	umem_pool_test \
 	udict_inline_test \
@@ -41,6 +42,7 @@ TESTS = \
 	ulog_stdio_test.sh \
 	ulog_sub_test.sh \
 	uprobe_log_test.sh \
+	uprobe_uref_mgr_test \
 	uclock_std_test \
 	upipe_genaux_test \
 	upipe_dup_test
