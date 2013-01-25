@@ -52,6 +52,7 @@ check_PROGRAMS += \
 	upump_ev_test \
 	ulifo_uqueue_test \
 	udeal_test \
+	uprobe_upump_mgr_test \
 	upipe_file_test \
 	upipe_queue_test \
 	upipe_multicat_test \
@@ -61,6 +62,7 @@ TESTS += \
 	upump_ev_test \
 	ulifo_uqueue_test \
 	udeal_test \
+	uprobe_upump_mgr_test \
 	upipe_file_test.sh \
 	upipe_queue_test \
 	upipe_multicat_test.sh \
@@ -114,6 +116,7 @@ ulifo_uqueue_test_CFLAGS = -pthread
 ulifo_uqueue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 udeal_test_CFLAGS = -pthread
 udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+uprobe_upump_mgr_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

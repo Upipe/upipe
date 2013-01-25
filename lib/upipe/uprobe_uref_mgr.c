@@ -76,7 +76,7 @@ static inline struct uprobe_uref_mgr *
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return always true
+ * @return true if the event was caught and handled
  */
 static bool uprobe_uref_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
                                   enum uprobe_event event, va_list args)

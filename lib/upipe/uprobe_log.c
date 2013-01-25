@@ -74,7 +74,7 @@ static inline struct uprobe_log *uprobe_log_from_uprobe(struct uprobe *uprobe)
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return always true
+ * @return always false
  */
 static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
                                enum uprobe_event event, va_list args)
