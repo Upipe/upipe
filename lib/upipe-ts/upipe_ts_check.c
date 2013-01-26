@@ -63,8 +63,6 @@ struct upipe_ts_check {
 
     /** TS packet size */
     size_t ts_size;
-    /** true if we have thrown the check_acquired event */
-    bool acquired;
 
     /** refcount management structure */
     urefcount refcount;

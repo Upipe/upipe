@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_sync.h>
 
@@ -83,6 +84,7 @@ struct upipe_ts_sync {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe)
+UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
 
@@ -102,42 +104,15 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_ts_sync_to_upipe(upipe_ts_sync);
     upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_ts_sync_init_sync(upipe);
     upipe_ts_sync_init_output(upipe);
     upipe_ts_sync->ts_size = TS_SIZE;
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
     upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
-    upipe_ts_sync->acquired = false;
     urefcount_init(&upipe_ts_sync->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This sends the sync_lost event if it has not already been sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_sync_lost(struct upipe *upipe)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (upipe_ts_sync->acquired) {
-        upipe_ts_sync->acquired = false;
-        upipe_throw_sync_lost(upipe);
-    }
-}
-
-/** @internal @This sends the sync_acquired event if it has not already been
- * sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_sync_acquired(struct upipe *upipe)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (!upipe_ts_sync->acquired) {
-        upipe_ts_sync->acquired = true;
-        upipe_throw_sync_acquired(upipe);
-    }
 }
 
 /** @internal @This scans for a sync word in the working buffer.
@@ -278,14 +253,14 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
         size_t offset = 0;
         bool ret = upipe_ts_sync_check(upipe, &offset);
         if (offset) {
-            upipe_ts_sync_lost(upipe);
+            upipe_ts_sync_sync_lost(upipe);
             upipe_ts_sync_consume(upipe, offset);
         }
         if (!ret)
             break;
 
         /* upipe_ts_sync_check said there is at least one TS packet there. */
-        upipe_ts_sync_acquired(upipe);
+        upipe_ts_sync_sync_acquired(upipe);
         struct uref *output = uref_dup(upipe_ts_sync->next_uref);
         upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
@@ -516,6 +491,7 @@ static void upipe_ts_sync_release(struct upipe *upipe)
 
         upipe_ts_sync_flush(upipe, NULL);
         upipe_ts_sync_clean_output(upipe);
+        upipe_ts_sync_clean_sync(upipe);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_sync->refcount);

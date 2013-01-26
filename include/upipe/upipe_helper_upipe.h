@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_upipe.h: upipe helper functions for public upipe structure
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for public upipe structure
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_UPIPE_H_
 /** @hidden */
@@ -54,7 +56,7 @@
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure 
- * @param UPiPE name of the @tt{struct upipe} field of
+ * @param UPIPE name of the @tt{struct upipe} field of
  * your private upipe structure
  */
 #define UPIPE_HELPER_UPIPE(STRUCTURE, UPIPE)                                \

@@ -35,6 +35,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pesd.h>
 
@@ -71,6 +72,7 @@ struct upipe_ts_pesd {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pesd, upipe)
+UPIPE_HELPER_SYNC(upipe_ts_pesd, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_pesd, output, flow_def, flow_def_sent)
 
@@ -90,39 +92,12 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_ts_pesd_to_upipe(upipe_ts_pesd);
     upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_ts_pesd_init_sync(upipe);
     upipe_ts_pesd_init_output(upipe);
     upipe_ts_pesd->next_uref = NULL;
-    upipe_ts_pesd->acquired = false;
     urefcount_init(&upipe_ts_pesd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This sends the pesd_lost event if it has not already been sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_pesd_lost(struct upipe *upipe)
-{
-    struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (upipe_ts_pesd->acquired) {
-        upipe_ts_pesd->acquired = false;
-        upipe_throw_sync_lost(upipe);
-    }
-}
-
-/** @internal @This sends the pesd_acquired event if it has not already been
- * sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_pesd_acquired(struct upipe *upipe)
-{
-    struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (!upipe_ts_pesd->acquired) {
-        upipe_ts_pesd->acquired = true;
-        upipe_throw_sync_acquired(upipe);
-    }
 }
 
 /** @internal @This flushes all input buffers.
@@ -136,7 +111,7 @@ static void upipe_ts_pesd_flush(struct upipe *upipe)
         uref_free(upipe_ts_pesd->next_uref);
         upipe_ts_pesd->next_uref = NULL;
     }
-    upipe_ts_pesd_lost(upipe);
+    upipe_ts_pesd_sync_lost(upipe);
 }
 
 /** @internal @This parses and removes the PES header of a packet.
@@ -181,7 +156,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         streamid == PES_STREAM_ID_H222_1_E) {
         ret = uref_block_resize(upipe_ts_pesd->next_uref, PES_HEADER_SIZE, -1);
         assert(ret);
-        upipe_ts_pesd_acquired(upipe);
+        upipe_ts_pesd_sync_acquired(upipe);
         upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
         upipe_ts_pesd->next_uref = NULL;
         return;
@@ -295,7 +270,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     ret = uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1);
     assert(ret);
-    upipe_ts_pesd_acquired(upipe);
+    upipe_ts_pesd_sync_acquired(upipe);
     upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
     upipe_ts_pesd->next_uref = NULL;
 }
@@ -423,6 +398,7 @@ static void upipe_ts_pesd_release(struct upipe *upipe)
         upipe_throw_dead(upipe);
 
         upipe_ts_pesd_clean_output(upipe);
+        upipe_ts_pesd_clean_sync(upipe);
 
         if (upipe_ts_pesd->next_uref != NULL)
             uref_free(upipe_ts_pesd->next_uref);

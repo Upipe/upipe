@@ -34,6 +34,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_psim.h>
 
@@ -69,6 +70,7 @@ struct upipe_ts_psim {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe)
+UPIPE_HELPER_SYNC(upipe_ts_psim, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
 
@@ -88,39 +90,12 @@ static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_ts_psim_to_upipe(upipe_ts_psim);
     upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_ts_psim_init_sync(upipe);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
-    upipe_ts_psim->acquired = false;
     urefcount_init(&upipe_ts_psim->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This sends the psim_lost event if it has not already been sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psim_lost(struct upipe *upipe)
-{
-    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (upipe_ts_psim->acquired) {
-        upipe_ts_psim->acquired = false;
-        upipe_throw_sync_lost(upipe);
-    }
-}
-
-/** @internal @This sends the psim_acquired event if it has not already been
- * sent.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psim_acquired(struct upipe *upipe)
-{
-    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (!upipe_ts_psim->acquired) {
-        upipe_ts_psim->acquired = true;
-        upipe_throw_sync_acquired(upipe);
-    }
 }
 
 /** @internal @This flushes all input buffers.
@@ -134,7 +109,7 @@ static void upipe_ts_psim_flush(struct upipe *upipe)
         uref_free(upipe_ts_psim->next_uref);
         upipe_ts_psim->next_uref = NULL;
     }
-    upipe_ts_psim_lost(upipe);
+    upipe_ts_psim_sync_lost(upipe);
 }
 
 /** @internal @This merges a PSI section.
@@ -248,7 +223,7 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref,
                 uref_free(uref);
                 return;
             }
-            upipe_ts_psim_acquired(upipe);
+            upipe_ts_psim_sync_acquired(upipe);
         }
         bool ret = uref_block_delete_start(uref);
         assert(ret);
@@ -347,6 +322,7 @@ static void upipe_ts_psim_release(struct upipe *upipe)
         upipe_throw_dead(upipe);
 
         upipe_ts_psim_clean_output(upipe);
+        upipe_ts_psim_clean_sync(upipe);
 
         if (upipe_ts_psim->next_uref != NULL)
             uref_free(upipe_ts_psim->next_uref);
