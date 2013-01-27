@@ -40,6 +40,8 @@
 UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag
                         that may be present in any uref carrying data)
 UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
+UREF_ATTR_TEMPLATE(flow, raw_def, "f.rawdef", string, const char *,
+                   raw flow definition)
 UREF_ATTR_TEMPLATE(flow, program, "f.program", string, const char *,
                    flow program)
 UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)

@@ -29,6 +29,7 @@
 #include <upipe/upipe.h>
 
 #define UPIPE_TS_DEMUX_SIGNATURE UBASE_FOURCC('t','s','d','x')
+#define UPIPE_TS_DEMUX_PROGRAM_SIGNATURE UBASE_FOURCC('t','s','d','p')
 #define UPIPE_TS_DEMUX_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','d','o')
 
 /** @This extends uprobe_event with specific events for ts demux. */

@@ -20,6 +20,17 @@
 
 /** @file
  * @short Upipe higher-level module demuxing elementary streams of a TS
+ * Four parts in this file:
+ * @list
+ * @item psi_pid structure, which handles PSI demultiplexing from ts_split
+ * until ts_psi_split
+ * @item output source pipe, which is returned to the application, and
+ * represents an elementary stream; it sets up the ts_decaps, pes_decaps and
+ * framer subpipes
+ * @item program split pipe, which is returned to the application, and
+ * represents a program; it sets up the ts_split_output and ts_pmtd subpipes
+ * @item demux sink pipe which sets up the ts_split, ts_patd and optional input
+ * synchronizer subpipes
  */
 
 #include <upipe/ubase.h>
@@ -66,6 +77,64 @@
 /** maximum number of PIDs */
 #define MAX_PIDS 8192
 
+/** @internal @This is the private context of a ts_demux manager. */
+struct upipe_ts_demux_mgr {
+    /** pointer to ts_split manager */
+    struct upipe_mgr *ts_split_mgr;
+
+    /* inputs */
+    /** pointer to ts_sync manager */
+    struct upipe_mgr *ts_sync_mgr;
+    /** pointer to ts_check manager */
+    struct upipe_mgr *ts_check_mgr;
+
+    /** pointer to ts_decaps manager */
+    struct upipe_mgr *ts_decaps_mgr;
+
+    /* PSI */
+    /** pointer to ts_psim manager */
+    struct upipe_mgr *ts_psim_mgr;
+    /** pointer to ts_psi_split manager */
+    struct upipe_mgr *ts_psi_split_mgr;
+    /** pointer to ts_patd manager */
+    struct upipe_mgr *ts_patd_mgr;
+    /** pointer to ts_pmtd manager */
+    struct upipe_mgr *ts_pmtd_mgr;
+
+    /* ES */
+    /** pointer to ts_pesd manager */
+    struct upipe_mgr *ts_pesd_mgr;
+    /** pointer to mp2vf manager */
+    struct upipe_mgr *mp2vf_mgr;
+
+    /** refcount management structure */
+    urefcount refcount;
+    /** public upipe_mgr structure */
+    struct upipe_mgr mgr;
+};
+
+/** @internal @This returns the high-level upipe_mgr structure.
+ *
+ * @param ts_demux_mgr pointer to the upipe_ts_demux_mgr structure
+ * @return pointer to the upipe_mgr structure
+ */
+static inline struct upipe_mgr *
+    upipe_ts_demux_mgr_to_upipe_mgr(struct upipe_ts_demux_mgr *ts_demux_mgr)
+{
+    return &ts_demux_mgr->mgr;
+}
+
+/** @internal @This returns the private upipe_ts_demux_mgr structure.
+ *
+ * @param mgr description structure of the upipe manager
+ * @return pointer to the upipe_ts_demux_mgr structure
+ */
+static inline struct upipe_ts_demux_mgr *
+    upipe_ts_demux_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
+{
+    return container_of(mgr, struct upipe_ts_demux_mgr, mgr);
+}
+
 /** @internal @This is the input mode of a ts_demux pipe. */
 enum upipe_ts_demux_mode {
     /** no input configured */
@@ -109,18 +178,18 @@ struct upipe_ts_demux {
     /** current conformance */
     enum upipe_ts_demux_conformance conformance;
 
-    /** probe to get new flow events from subpipes */
-    struct uprobe plumber;
-    /** probe to get new flow events from ts_psim subpipes */
+    /** probe to get new flow events from subpipes created by psi_pid objects */
+    struct uprobe psi_pid_plumber;
+    /** probe to get new flow events from ts_psim subpipes created by psi_pid
+     * objects */
     struct uprobe psim_plumber;
-    /** probe to get new flow events from ts_psi_split subpipes */
-    struct uprobe psi_split_plumber;
     /** probe to get events from ts_patd subpipe */
     struct uprobe patd_probe;
-    /** probe to get events from ts_pmtd subpipe */
-    struct uprobe pmtd_probe;
 
-    /** manager to create outputs */
+    /** list of programs */
+    struct ulist programs;
+
+    /** manager to create programs */
     struct upipe_mgr output_mgr;
 
     /** refcount management structure */
@@ -154,61 +223,143 @@ static inline struct upipe_ts_demux *
     return container_of(output_mgr, struct upipe_ts_demux, output_mgr);
 }
 
-/** @internal @This is the private context of a ts_demux manager. */
-struct upipe_ts_demux_mgr {
-    /** pointer to ts_split manager */
-    struct upipe_mgr *ts_split_mgr;
+/** @internal @This is the private context of a program of a ts_demux pipe. */
+struct upipe_ts_demux_program {
+    /** structure for double-linked lists */
+    struct uchain uchain;
 
-    /* inputs */
-    /** pointer to ts_sync manager */
-    struct upipe_mgr *ts_sync_mgr;
-    /** pointer to ts_check manager */
-    struct upipe_mgr *ts_check_mgr;
+    /** flow definition set */
+    struct uref *flow_def;
+    /** program number */
+    unsigned int program;
+    /** PCR PID */
+    uint16_t pcr_pid;
+    /** ts_psi_split_output subpipe */
+    struct upipe *psi_split_output;
+    /** pointer to psi_pid structure */
+    struct upipe_ts_demux_psi_pid *psi_pid;
 
-    /** pointer to ts_decaps manager */
-    struct upipe_mgr *ts_decaps_mgr;
+    /** probe to get events from subpipes */
+    struct uprobe plumber;
+    /** probe to get events from ts_pmtd subpipe */
+    struct uprobe pmtd_probe;
 
-    /* PSI */
-    /** pointer to ts_psim manager */
-    struct upipe_mgr *ts_psim_mgr;
-    /** pointer to ts_psi_split manager */
-    struct upipe_mgr *ts_psi_split_mgr;
-    /** pointer to ts_patd manager */
-    struct upipe_mgr *ts_patd_mgr;
-    /** pointer to ts_pmtd manager */
-    struct upipe_mgr *ts_pmtd_mgr;
+    /** list of outputs */
+    struct ulist outputs;
 
-    /* ES */
-    /** pointer to ts_pesd manager */
-    struct upipe_mgr *ts_pesd_mgr;
+    /** manager to create outputs */
+    struct upipe_mgr output_mgr;
 
     /** refcount management structure */
     urefcount refcount;
-    /** public upipe_mgr structure */
-    struct upipe_mgr mgr;
+    /** public upipe structure */
+    struct upipe upipe;
 };
 
-/** @internal @This returns the high-level upipe_mgr structure.
+UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe)
+
+/** @internal @This returns the public output_mgr structure.
  *
- * @param ts_demux_mgr pointer to the upipe_ts_demux_mgr structure
- * @return pointer to the upipe_mgr structure
+ * @param upipe_ts_demux_program pointer to the private upipe_ts_demux_program
+ * structure
+ * @return pointer to the public output_mgr structure
  */
 static inline struct upipe_mgr *
-    upipe_ts_demux_mgr_to_upipe_mgr(struct upipe_ts_demux_mgr *ts_demux_mgr)
+    upipe_ts_demux_program_to_output_mgr(struct upipe_ts_demux_program *s)
 {
-    return &ts_demux_mgr->mgr;
+    return &s->output_mgr;
 }
 
-/** @internal @This returns the private upipe_ts_demux_mgr structure.
+/** @internal @This returns the private upipe_ts_demux_program structure.
  *
- * @param mgr description structure of the upipe manager
- * @return pointer to the upipe_ts_demux_mgr structure
+ * @param output_mgr public output_mgr structure of the pipe
+ * @return pointer to the private upipe_ts_demux_program structure
  */
-static inline struct upipe_ts_demux_mgr *
-    upipe_ts_demux_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
+static inline struct upipe_ts_demux_program *
+    upipe_ts_demux_program_from_output_mgr(struct upipe_mgr *output_mgr)
 {
-    return container_of(mgr, struct upipe_ts_demux_mgr, mgr);
+    return container_of(output_mgr, struct upipe_ts_demux_program, output_mgr);
 }
+
+/** @This returns the high-level upipe_ts_demux_program structure.
+ *
+ * @param uchain pointer to the uchain structure wrapped into the
+ * upipe_ts_demux_program
+ * @return pointer to the upipe_ts_demux_program structure
+ */
+static inline struct upipe_ts_demux_program *
+    upipe_ts_demux_program_from_uchain(struct uchain *uchain)
+{
+    return container_of(uchain, struct upipe_ts_demux_program, uchain);
+}
+
+/** @This returns the uchain structure used for FIFO, LIFO and lists.
+ *
+ * @param upipe_ts_demux_program upipe_ts_demux_program structure
+ * @return pointer to the uchain structure
+ */
+static inline struct uchain *
+    upipe_ts_demux_program_to_uchain(struct upipe_ts_demux_program *upipe_ts_demux_program)
+{
+    return &upipe_ts_demux_program->uchain;
+}
+
+/** @internal @This is the private context of an output of a ts_demux_program
+ * subpipe. */
+struct upipe_ts_demux_output {
+    /** structure for double-linked lists */
+    struct uchain uchain;
+
+    /** flow definition set */
+    struct uref *flow_def;
+    /** PID */
+    uint64_t pid;
+    /** ts_split_output subpipe */
+    struct upipe *split_output;
+
+    /** probe to get events from subpipes */
+    struct uprobe plumber;
+
+    /** pointer to the last subpipe */
+    struct upipe *last_subpipe;
+    /** pointer to the output of the last subpipe */
+    struct upipe *output;
+
+    /** refcount management structure */
+    urefcount refcount;
+    /** public upipe structure */
+    struct upipe upipe;
+};
+
+UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe)
+
+/** @This returns the high-level upipe_ts_demux_output structure.
+ *
+ * @param uchain pointer to the uchain structure wrapped into the
+ * upipe_ts_demux_output
+ * @return pointer to the upipe_ts_demux_output structure
+ */
+static inline struct upipe_ts_demux_output *
+    upipe_ts_demux_output_from_uchain(struct uchain *uchain)
+{
+    return container_of(uchain, struct upipe_ts_demux_output, uchain);
+}
+
+/** @This returns the uchain structure used for FIFO, LIFO and lists.
+ *
+ * @param upipe_ts_demux_output upipe_ts_demux_output structure
+ * @return pointer to the uchain structure
+ */
+static inline struct uchain *
+    upipe_ts_demux_output_to_uchain(struct upipe_ts_demux_output *upipe_ts_demux_output)
+{
+    return &upipe_ts_demux_output->uchain;
+}
+
+
+/*
+ * psi_pid structure handling
+ */
 
 /** @internal @This is the context of a PID carrying PSI of a ts_demux pipe. */
 struct upipe_ts_demux_psi_pid {
@@ -267,7 +418,7 @@ static struct upipe_ts_demux_psi_pid *
 
     /* allocate ts_psi_split subpipe */
     psi_pid->psi_split = upipe_alloc(ts_demux_mgr->ts_psi_split_mgr,
-                                     &upipe_ts_demux->psi_split_plumber,
+                                     upipe->uprobe,
                                      ulog_sub_alloc_va(upipe->ulog,
                                         ULOG_DEBUG, "psi_split %"PRIu16, pid));
     if (unlikely(psi_pid->psi_split == NULL)) {
@@ -277,7 +428,8 @@ static struct upipe_ts_demux_psi_pid *
 
     /* set PID filter on ts_split subpipe */
     psi_pid->split_output =
-        upipe_alloc_output(upipe_ts_demux->split, &upipe_ts_demux->plumber,
+        upipe_alloc_output(upipe_ts_demux->split,
+                           &upipe_ts_demux->psi_pid_plumber,
                            ulog_sub_alloc_va(upipe->ulog,
                                 ULOG_DEBUG, "split output %"PRIu16, pid));
     if (unlikely(psi_pid->split_output == NULL)) {
@@ -370,7 +522,841 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
     }
 }
 
-/** @internal @This catches need_output events coming from subpipes.
+
+/*
+ * upipe_ts_demux_output structure handling (derived from upipe structure)
+ */
+
+/** @internal @This catches need_output events coming from output subpipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_output
+ * @param upipe pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
+                                          struct upipe *subpipe,
+                                          enum uprobe_event event,
+                                          va_list args)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        container_of(uprobe, struct upipe_ts_demux_output, plumber);
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_output_mgr(
+                upipe_ts_demux_program_to_upipe(program)->mgr);
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
+
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(uprobe, subpipe, event, args, &flow_def, &def))
+        return false;
+
+    if (subpipe == upipe_ts_demux_output->last_subpipe) {
+        if (upipe_ts_demux_output->output != NULL)
+            upipe_set_output(subpipe, upipe_ts_demux_output->output);
+        else
+            upipe_throw_need_output(upipe, flow_def);
+        return true;
+    }
+
+    if (ubase_ncmp(def, "block."))
+        return false;
+
+    if (!ubase_ncmp(def, "block.mpegts.")) {
+        /* allocate ts_decaps subpipe */
+        struct upipe *output = upipe_alloc(ts_demux_mgr->ts_decaps_mgr,
+                                           uprobe,
+                                           ulog_sub_alloc(upipe->ulog,
+                                                ULOG_DEBUG, "decaps"));
+        if (unlikely(output == NULL)) {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+        } else {
+            upipe_set_output(subpipe, output);
+            upipe_release(output);
+        }
+        return true;
+    }
+
+    if (!ubase_ncmp(def, "block.mpegtspes.")) {
+        /* allocate ts_pesd subpipe */
+        struct upipe *output = upipe_alloc(ts_demux_mgr->ts_pesd_mgr,
+                                           uprobe,
+                                           ulog_sub_alloc(upipe->ulog,
+                                                ULOG_DEBUG, "pesd"));
+        if (unlikely(output == NULL)) {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+        } else {
+            upipe_set_output(subpipe, output);
+            upipe_release(output);
+        }
+        return true;
+    }
+
+    if (!ubase_ncmp(def, "block.mpeg2video.")) {
+        return true;
+        /* allocate mp2vf subpipe */
+        struct upipe *output = upipe_alloc(ts_demux_mgr->mp2vf_mgr,
+                                           &upipe_ts_demux_output->plumber,
+                                           ulog_sub_alloc(upipe->ulog,
+                                                ULOG_DEBUG, "mp2vf"));
+        if (unlikely(output == NULL)) {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+        } else {
+            upipe_set_output(subpipe, output);
+            upipe_ts_demux_output->last_subpipe = output;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/** @internal @This allocates an output subpipe of a ts_demux_program subpipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
+ * @return pointer to upipe or NULL in case of allocation error
+ */
+static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
+                                                 struct uprobe *uprobe,
+                                                 struct ulog *ulog)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        malloc(sizeof(struct upipe_ts_demux_output));
+    if (unlikely(upipe_ts_demux_output == NULL))
+        return NULL;
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
+    upipe_init(upipe, mgr, uprobe, ulog);
+    uchain_init(&upipe_ts_demux_output->uchain);
+    upipe_ts_demux_output->flow_def = NULL;
+    upipe_ts_demux_output->pid = 0;
+    upipe_ts_demux_output->split_output = NULL;
+    upipe_ts_demux_output->last_subpipe = upipe_ts_demux_output->output = NULL;
+    uprobe_init(&upipe_ts_demux_output->plumber,
+                upipe_ts_demux_output_plumber, upipe->uprobe);
+    urefcount_init(&upipe_ts_demux_output->refcount);
+
+    /* add the newly created output to the outputs list */
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(mgr);
+    ulist_add(&program->outputs,
+              upipe_ts_demux_output_to_uchain(upipe_ts_demux_output));
+
+    upipe_throw_ready(upipe);
+    return upipe;
+}
+
+/** @internal @This gets the flow definition on an output.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the flow definition packet
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_get_flow_def(struct upipe *upipe,
+                                               struct uref **p)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    *p = upipe_ts_demux_output->flow_def;
+    return true;
+}
+
+/** @internal @This sets the flow definition on an output.
+ *
+ * The attribute t.pid must be set on the flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+    struct upipe_ts_demux *demux =
+        upipe_ts_demux_from_output_mgr(
+                upipe_ts_demux_program_to_upipe(program)->mgr);
+
+    if (upipe_ts_demux_output->split_output != NULL) {
+        /* check if we can reuse the same split output */
+        uint64_t pid;
+        const char *def, *old_def;
+        if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS ||
+                     !uref_flow_get_raw_def(flow_def, &def) ||
+                     !uref_flow_get_raw_def(upipe_ts_demux_output->flow_def,
+                                            &old_def)))
+            return false;
+        if (pid == upipe_ts_demux_output->pid && !strcmp(def, old_def)) {
+            struct uref *flow_def_dup = uref_dup(flow_def);
+            struct uref *uref = uref_dup(flow_def);
+            if (likely(flow_def_dup != NULL && uref != NULL &&
+                       uref_flow_set_def(uref, def) &&
+                       uref_flow_delete_raw_def(uref))) {
+                uref_free(upipe_ts_demux_output->flow_def);
+                upipe_ts_demux_output->flow_def = flow_def_dup;
+                upipe_set_flow_def(upipe_ts_demux_output->split_output, uref);
+                uref_free(uref);
+                return true;
+            }
+            if (flow_def_dup != NULL)
+                uref_free(flow_def_dup);
+            if (uref != NULL)
+                uref_free(uref);
+        }
+
+        upipe_release(upipe_ts_demux_output->split_output);
+        upipe_ts_demux_output->split_output = NULL;
+    }
+    if (upipe_ts_demux_output->last_subpipe != NULL) {
+        upipe_release(upipe_ts_demux_output->last_subpipe);
+        upipe_ts_demux_output->last_subpipe = NULL;
+    }
+    if (upipe_ts_demux_output->flow_def != NULL) {
+        uref_free(upipe_ts_demux_output->flow_def);
+        upipe_ts_demux_output->flow_def = NULL;
+    }
+    upipe_ts_demux_output->pid = 0;
+
+    if (unlikely(!uref_ts_flow_get_pid(flow_def, &upipe_ts_demux_output->pid) ||
+                 upipe_ts_demux_output->pid >= MAX_PIDS))
+        return false;
+
+    upipe_ts_demux_output->flow_def = uref_dup(flow_def);
+    struct uref *uref = uref_dup(flow_def);
+    const char *def;
+    if (unlikely(upipe_ts_demux_output->flow_def == NULL ||
+                 uref == NULL ||
+                 !uref_flow_get_raw_def(flow_def, &def) ||
+                 !uref_flow_set_def(uref, def) ||
+                 !uref_flow_delete_raw_def(uref))) {
+        if (upipe_ts_demux_output->flow_def != NULL) {
+            uref_free(upipe_ts_demux_output->flow_def);
+            upipe_ts_demux_output->flow_def = NULL;
+        }
+        if (uref != NULL)
+            uref_free(uref);
+        return false;
+    }
+
+    /* set up a split_output subpipe */
+    upipe_ts_demux_output->split_output =
+        upipe_alloc_output(demux->split, &upipe_ts_demux_output->plumber,
+                           ulog_sub_alloc_va(upipe->ulog,
+                                ULOG_DEBUG, "split output %"PRIu64,
+                                upipe_ts_demux_output->pid));
+    if (unlikely(upipe_ts_demux_output->split_output == NULL)) {
+        uref_free(upipe_ts_demux_output->flow_def);
+        upipe_ts_demux_output->flow_def = NULL;
+        uref_free(uref);
+        return false;
+    }
+
+    upipe_set_flow_def(upipe_ts_demux_output->split_output, uref);
+    uref_free(uref);
+    return true;
+}
+
+/** @internal @This gets the output pipe on an output.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with a pointer to the output
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_get_output(struct upipe *upipe,
+                                             struct upipe **p)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    *p = upipe_ts_demux_output->output;
+    return true;
+}
+
+/** @internal @This sets the output pipe on an output.
+ *
+ * @param upipe description structure of the pipe
+ * @param output pointer to output
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_set_output(struct upipe *upipe,
+                                             struct upipe *output)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    bool ret;
+    if (upipe_ts_demux_output->output != NULL) {
+        upipe_release(upipe_ts_demux_output->output);
+        upipe_ts_demux_output->output = NULL;
+    }
+
+    if (upipe_ts_demux_output->last_subpipe != NULL)
+        ret = upipe_set_output(upipe_ts_demux_output->last_subpipe, output);
+    else
+        ret = true;
+
+    if (likely(ret)) {
+        upipe_ts_demux_output->output = output;
+        if (output != NULL)
+            upipe_use(output);
+    }
+    return ret;
+}
+
+/** @internal @This processes control commands on an output subpipe of a
+ * ts_demux_program subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_demux_output_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_demux_output_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_demux_output_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_demux_output_set_output(upipe, output);
+        }
+
+        default:
+            return false;
+    }
+}
+
+/** @This increments the reference count of a upipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_output_use(struct upipe *upipe)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    urefcount_use(&upipe_ts_demux_output->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_output_release(struct upipe *upipe)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_ts_demux_output->refcount))) {
+        struct upipe_ts_demux_program *program =
+            upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
+        /* remove output from the outputs list */
+        struct uchain *uchain;
+        ulist_delete_foreach(&program->outputs, uchain) {
+            if (upipe_ts_demux_output_from_uchain(uchain) ==
+                    upipe_ts_demux_output) {
+                ulist_delete(&program->outputs, uchain);
+                break;
+            }
+        }
+
+        if (upipe_ts_demux_output->split_output != NULL)
+            upipe_release(upipe_ts_demux_output->split_output);
+        if (upipe_ts_demux_output->last_subpipe != NULL)
+            upipe_release(upipe_ts_demux_output->last_subpipe);
+        if (upipe_ts_demux_output->output != NULL)
+            upipe_release(upipe_ts_demux_output->output);
+        if (upipe_ts_demux_output->flow_def != NULL)
+            uref_free(upipe_ts_demux_output->flow_def);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_ts_demux_output->refcount);
+        free(upipe_ts_demux_output);
+    }
+}
+
+/** @This increments the reference count of a upipe manager.
+ *
+ * @param mgr pointer to upipe manager
+ */
+static void upipe_ts_demux_output_mgr_use(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(mgr);
+    upipe_use(upipe_ts_demux_program_to_upipe(program));
+}
+
+/** @This decrements the reference count of a upipe manager or frees it.
+ *
+ * @param mgr pointer to upipe manager.
+ */
+static void upipe_ts_demux_output_mgr_release(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(mgr);
+    upipe_release(upipe_ts_demux_program_to_upipe(program));
+}
+
+/** @internal @This initializes the output manager for a ts_demux_program
+ * subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return pointer to output upipe manager
+ */
+static struct upipe_mgr *
+    upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
+{
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    struct upipe_mgr *output_mgr = &program->output_mgr;
+    output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
+    output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
+    output_mgr->upipe_input = NULL;
+    output_mgr->upipe_control = upipe_ts_demux_output_control;
+    output_mgr->upipe_use = upipe_ts_demux_output_use;
+    output_mgr->upipe_release = upipe_ts_demux_output_release;
+    output_mgr->upipe_mgr_use = upipe_ts_demux_output_mgr_use;
+    output_mgr->upipe_mgr_release = upipe_ts_demux_output_mgr_release;
+    return output_mgr;
+}
+
+
+/*
+ * upipe_ts_demux_program structure handling (derived from upipe structure)
+ */
+
+/** @internal @This catches need_output events coming from program subpipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_program
+ * @param upipe pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_demux_program_plumber(struct uprobe *uprobe,
+                                           struct upipe *subpipe,
+                                           enum uprobe_event event,
+                                           va_list args)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        container_of(uprobe, struct upipe_ts_demux_program, plumber);
+    struct upipe *upipe =
+        upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_output_mgr(upipe->mgr);
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
+
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(uprobe, subpipe, event, args, &flow_def, &def))
+        return false;
+
+    if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
+        /* allocate ts_pmtd subpipe */
+        struct upipe *output = upipe_alloc(ts_demux_mgr->ts_pmtd_mgr,
+                                           &upipe_ts_demux_program->pmtd_probe,
+                                           ulog_sub_alloc(upipe->ulog,
+                                                ULOG_DEBUG, "pmtd"));
+        if (unlikely(output == NULL)) {
+            ulog_aerror(upipe->ulog);
+            upipe_throw_aerror(upipe);
+        } else {
+            upipe_set_output(subpipe, output);
+            upipe_release(output);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/** @internal @This catches events coming from pmtd subpipe.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_program
+ * @param pmtd pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
+                                              struct upipe *pmtd,
+                                             enum uprobe_event event,
+                                             va_list args)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        container_of(uprobe, struct upipe_ts_demux_program, pmtd_probe);
+    struct upipe *upipe =
+        upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_output_mgr(upipe->mgr);
+
+    switch (event) {
+        case UPROBE_TS_PMTD_HEADER: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            unsigned int pmtd_pcrpid = va_arg(args, unsigned int);
+            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
+            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
+            upipe_ts_demux_program->pcr_pid = pmtd_pcrpid;
+            return false;
+        }
+        case UPROBE_TS_PMTD_ADD_ES: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            unsigned int pid = va_arg(args, unsigned int);
+            unsigned int streamtype = va_arg(args, unsigned int);
+            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
+            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
+
+            switch (streamtype) {
+                case 0x2: {
+                    struct uref *flow_def =
+                        uref_block_flow_alloc_def(demux->uref_mgr,
+                                                  "mpeg2video.");
+                    if (likely(flow_def != NULL &&
+                               uref_flow_set_raw_def(flow_def,
+                                   "block.mpegts.mpegtspes.mpeg2video.") &&
+                               uref_ts_flow_set_pid(flow_def, pid) &&
+                               uref_flow_set_program_va(flow_def, "%u,",
+                                   upipe_ts_demux_program->program)))
+                        upipe_split_throw_add_flow(
+                               upipe_ts_demux_to_upipe(demux), pid, flow_def);
+
+                    if (flow_def != NULL)
+                        uref_free(flow_def);
+                    break;
+                }
+                default:
+                    ulog_warning(upipe->ulog, "unknown stream type %u",
+                                 streamtype);
+                    break;
+            }
+            /* return false in case someone else is interested */
+            return false;
+        }
+        case UPROBE_TS_PMTD_DEL_ES: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            unsigned int pid = va_arg(args, unsigned int);
+
+            upipe_split_throw_del_flow(upipe_ts_demux_to_upipe(demux), pid);
+
+            struct uchain *uchain;
+            struct upipe_ts_demux_output *output = NULL;
+            ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
+                if (output != NULL)
+                    upipe_release(upipe_ts_demux_output_to_upipe(output));
+                output = upipe_ts_demux_output_from_uchain(uchain);
+                /* to avoid having the uchain disappear during
+                 * upipe_throw_read_end */
+                upipe_use(upipe_ts_demux_output_to_upipe(output));
+                if (output->pid == pid)
+                    upipe_throw_read_end(upipe_ts_demux_output_to_upipe(output),
+                                         NULL);
+            }
+            if (output != NULL)
+                upipe_release(upipe_ts_demux_output_to_upipe(output));
+            /* return false in case someone else is interested */
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
+/** @internal @This allocates a program subpipe of a ts_demux pipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param ulog structure used to output logs
+ * @return pointer to upipe or NULL in case of allocation error
+ */
+static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
+                                                  struct uprobe *uprobe,
+                                                  struct ulog *ulog)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        malloc(sizeof(struct upipe_ts_demux_program));
+    if (unlikely(upipe_ts_demux_program == NULL))
+        return NULL;
+    struct upipe *upipe =
+        upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
+    upipe_split_init(upipe, mgr, uprobe, ulog,
+                     upipe_ts_demux_program_init_output_mgr(upipe));
+    uchain_init(&upipe_ts_demux_program->uchain);
+    upipe_ts_demux_program->flow_def = NULL;
+    upipe_ts_demux_program->program = 0;
+    upipe_ts_demux_program->pcr_pid = 0;
+    upipe_ts_demux_program->psi_split_output = NULL;
+    uprobe_init(&upipe_ts_demux_program->plumber,
+                upipe_ts_demux_program_plumber, upipe->uprobe);
+    uprobe_init(&upipe_ts_demux_program->pmtd_probe,
+                upipe_ts_demux_program_pmtd_probe, upipe->uprobe);
+    ulist_init(&upipe_ts_demux_program->outputs);
+    urefcount_init(&upipe_ts_demux_program->refcount);
+
+    /* add the newly created program to the programs list */
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_output_mgr(mgr);
+    ulist_add(&demux->programs,
+              upipe_ts_demux_program_to_uchain(upipe_ts_demux_program));
+
+    upipe_throw_ready(upipe);
+    return upipe;
+}
+
+/** @internal @This gets the flow definition on a program.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the flow definition packet
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_program_get_flow_def(struct upipe *upipe,
+                                                struct uref **p)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    *p = upipe_ts_demux_program->flow_def;
+    return true;
+}
+
+/** @internal @This sets the flow definition on a program.
+ *
+ * The attribute t.psi.filter must be set on the flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_program_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_output_mgr(upipe->mgr);
+    if (!ulist_empty(&upipe_ts_demux_program->outputs))
+        return false;
+
+    if (upipe_ts_demux_program->psi_split_output != NULL) {
+        upipe_release(upipe_ts_demux_program->psi_split_output);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                       upipe_ts_demux_program->psi_pid);
+        upipe_ts_demux_program->psi_split_output = NULL;
+        upipe_ts_demux_program->psi_pid = NULL;
+    }
+    if (upipe_ts_demux_program->flow_def != NULL) {
+        uref_free(upipe_ts_demux_program->flow_def);
+        upipe_ts_demux_program->flow_def = NULL;
+    }
+    upipe_ts_demux_program->program = 0;
+    upipe_ts_demux_program->pcr_pid = 0;
+
+    uint64_t pid;
+    const char *program;
+    const uint8_t *filter, *mask;
+    size_t size;
+    if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS ||
+                 !uref_ts_flow_get_psi_filter(flow_def, &filter, &mask,
+                                              &size) ||
+                 !uref_flow_get_program(flow_def, &program) ||
+                 sscanf(program, "%u,",
+                        &upipe_ts_demux_program->program) != 1 ||
+                 upipe_ts_demux_program->program == 0 ||
+                 upipe_ts_demux_program->program > UINT16_MAX)) {
+        upipe_ts_demux_program->program = 0;
+        return false;
+    }
+
+    upipe_ts_demux_program->flow_def = uref_dup(flow_def);
+    struct uref *uref = uref_dup(flow_def);
+    const char *def;
+    if (unlikely(upipe_ts_demux_program->flow_def == NULL ||
+                 uref == NULL ||
+                 !uref_flow_get_raw_def(flow_def, &def) ||
+                 !uref_flow_set_def(uref, def) ||
+                 !uref_flow_delete_raw_def(uref))) {
+        if (upipe_ts_demux_program->flow_def != NULL) {
+            uref_free(upipe_ts_demux_program->flow_def);
+            upipe_ts_demux_program->flow_def = NULL;
+        }
+        if (uref != NULL)
+            uref_free(uref);
+        return false;
+    }
+
+    /* set up a psi_split_output subpipe */
+    upipe_ts_demux_program->psi_pid =
+        upipe_ts_demux_psi_pid_use(upipe_ts_demux_to_upipe(demux), pid);
+    if (unlikely(upipe_ts_demux_program->psi_pid == NULL)) {
+        uref_free(upipe_ts_demux_program->flow_def);
+        upipe_ts_demux_program->flow_def = NULL;
+        uref_free(uref);
+        return false;
+    }
+    upipe_ts_demux_program->psi_split_output =
+        upipe_alloc_output(upipe_ts_demux_program->psi_pid->psi_split,
+                           &upipe_ts_demux_program->plumber,
+                           ulog_sub_alloc(upipe->ulog,
+                                ULOG_DEBUG, "psi_split output"));
+    if (unlikely(upipe_ts_demux_program->psi_split_output == NULL)) {
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                       upipe_ts_demux_program->psi_pid);
+        upipe_ts_demux_program->psi_pid = NULL;
+        uref_free(upipe_ts_demux_program->flow_def);
+        upipe_ts_demux_program->flow_def = NULL;
+        uref_free(uref);
+        return false;
+    }
+
+    upipe_set_flow_def(upipe_ts_demux_program->psi_split_output, uref);
+    uref_free(uref);
+    return true;
+}
+
+/** @internal @This processes control commands on a program subpipe of a
+ * ts_demux pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_program_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_demux_program_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_demux_program_set_flow_def(upipe, flow_def);
+        }
+
+        default:
+            return false;
+    }
+}
+
+/** @This increments the reference count of a upipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_program_use(struct upipe *upipe)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    urefcount_use(&upipe_ts_demux_program->refcount);
+}
+
+/** @This decrements the reference count of a upipe or frees it.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_program_release(struct upipe *upipe)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    if (unlikely(urefcount_release(&upipe_ts_demux_program->refcount))) {
+        struct upipe_ts_demux *demux =
+            upipe_ts_demux_from_output_mgr(upipe->mgr);
+        upipe_throw_dead(upipe);
+
+        /* remove program from the programs list */
+        struct uchain *uchain;
+        ulist_delete_foreach(&demux->programs, uchain) {
+            if (upipe_ts_demux_program_from_uchain(uchain) ==
+                    upipe_ts_demux_program) {
+                ulist_delete(&demux->programs, uchain);
+                break;
+            }
+        }
+
+        if (upipe_ts_demux_program->psi_split_output != NULL) {
+            upipe_release(upipe_ts_demux_program->psi_split_output);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                           upipe_ts_demux_program->psi_pid);
+        }
+        if (upipe_ts_demux_program->flow_def != NULL)
+            uref_free(upipe_ts_demux_program->flow_def);
+
+        upipe_clean(upipe);
+        urefcount_clean(&upipe_ts_demux_program->refcount);
+        free(upipe_ts_demux_program);
+    }
+}
+
+/** @This increments the reference count of a upipe manager.
+ *
+ * @param mgr pointer to upipe manager
+ */
+static void upipe_ts_demux_program_mgr_use(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_output_mgr(mgr);
+    upipe_use(upipe_ts_demux_to_upipe(upipe_ts_demux));
+}
+
+/** @This decrements the reference count of a upipe manager or frees it.
+ *
+ * @param mgr pointer to upipe manager.
+ */
+static void upipe_ts_demux_program_mgr_release(struct upipe_mgr *mgr)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_output_mgr(mgr);
+    upipe_release(upipe_ts_demux_to_upipe(upipe_ts_demux));
+}
+
+/** @internal @This initializes the output manager for a ts_demux pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return pointer to output upipe manager
+ */
+static struct upipe_mgr *upipe_ts_demux_init_output_mgr(struct upipe *upipe)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    struct upipe_mgr *output_mgr = &upipe_ts_demux->output_mgr;
+    output_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
+    output_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
+    output_mgr->upipe_input = NULL;
+    output_mgr->upipe_control = upipe_ts_demux_program_control;
+    output_mgr->upipe_use = upipe_ts_demux_program_use;
+    output_mgr->upipe_release = upipe_ts_demux_program_release;
+    output_mgr->upipe_mgr_use = upipe_ts_demux_program_mgr_use;
+    output_mgr->upipe_mgr_release = upipe_ts_demux_program_mgr_release;
+    return output_mgr;
+}
+
+
+/*
+ * upipe_ts_demux structure handling (derived from upipe structure)
+ */
+
+/** @internal @This catches need_output events coming from subpipes created by
+ * psi_pid objects.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
  * @param subpipe pointer to the subpipe
@@ -378,11 +1364,13 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
  * @param args arguments of the event
  * @return true if the event was caught
  */
-static bool upipe_ts_demux_plumber(struct uprobe *uprobe, struct upipe *subpipe,
-                                   enum uprobe_event event, va_list args)
+static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
+                                           struct upipe *subpipe,
+                                           enum uprobe_event event,
+                                           va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
-        container_of(uprobe, struct upipe_ts_demux, plumber);
+        container_of(uprobe, struct upipe_ts_demux, psi_pid_plumber);
     struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
@@ -398,7 +1386,7 @@ static bool upipe_ts_demux_plumber(struct uprobe *uprobe, struct upipe *subpipe,
     if (!ubase_ncmp(def, "block.mpegts.")) {
         /* allocate ts_decaps subpipe */
         struct upipe *output = upipe_alloc(ts_demux_mgr->ts_decaps_mgr,
-                                           &upipe_ts_demux->plumber,
+                                           uprobe,
                                            ulog_sub_alloc(upipe->ulog,
                                                 ULOG_DEBUG, "decaps"));
         if (unlikely(output == NULL)) {
@@ -466,65 +1454,6 @@ static bool upipe_ts_demux_psim_plumber(struct uprobe *uprobe,
 
     upipe_set_output(psim, psi_pid->psi_split);
     return true;
-}
-
-/** @internal @This catches need_output events coming from psi_split subpipes.
- *
- * @param uprobe pointer to the probe in upipe_ts_demux
- * @param upipe pointer to the subpipe
- * @param event event triggered by the subpipe
- * @param args arguments of the event
- * @return true if the event was caught
- */
-static bool upipe_ts_demux_psi_split_plumber(struct uprobe *uprobe,
-                                             struct upipe *psi_split,
-                                             enum uprobe_event event,
-                                             va_list args)
-{
-    struct upipe_ts_demux *upipe_ts_demux =
-        container_of(uprobe, struct upipe_ts_demux, psi_split_plumber);
-    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
-    struct upipe_ts_demux_mgr *ts_demux_mgr =
-        upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
-
-    struct uref *flow_def;
-    const char *def;
-    if (!uprobe_plumber(uprobe, psi_split, event, args, &flow_def, &def))
-        return false;
-
-    if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspat.")) {
-        /* allocate ts_patd subpipe */
-        struct upipe *output = upipe_alloc(ts_demux_mgr->ts_patd_mgr,
-                                           &upipe_ts_demux->patd_probe,
-                                           ulog_sub_alloc(upipe->ulog,
-                                                ULOG_DEBUG, "patd"));
-        if (unlikely(output == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-        } else {
-            upipe_set_output(psi_split, output);
-            upipe_release(output);
-        }
-        return true;
-    }
-
-    if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
-        /* allocate ts_pmtd subpipe */
-        struct upipe *output = upipe_alloc(ts_demux_mgr->ts_pmtd_mgr,
-                                           &upipe_ts_demux->pmtd_probe,
-                                           ulog_sub_alloc(upipe->ulog,
-                                                ULOG_DEBUG, "pmtd"));
-        if (unlikely(output == NULL)) {
-            ulog_aerror(upipe->ulog);
-            upipe_throw_aerror(upipe);
-        } else {
-            upipe_set_output(psi_split, output);
-            upipe_release(output);
-        }
-        return true;
-    }
-
-    return false;
 }
 
 /** @internal @This tries to guess the conformance of the stream from the
@@ -608,13 +1537,16 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
             psi_set_tableidext(filter, program);
             psi_set_tableidext(mask, 0xffff);
             struct uref *flow_def =
-                uref_block_flow_alloc_def(upipe_ts_demux->uref_mgr,
-                                          "mpegtspsi.mpegtspmt.");
+                uref_alloc_control(upipe_ts_demux->uref_mgr);
+
             if (likely(flow_def != NULL &&
+                       uref_flow_set_def(flow_def, "internal.") &&
+                       uref_flow_set_raw_def(flow_def,
+                                             "block.mpegtspsi.mpegtspmt.") &&
                        uref_ts_flow_set_psi_filter(flow_def, filter, mask,
                                                    PSI_HEADER_SIZE_SYNTAX1) &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
-                       uref_flow_set_program_va(flow_def, "%u", program)))
+                       uref_flow_set_program_va(flow_def, "%u,", program)))
                 upipe_split_throw_add_flow(upipe, program, flow_def);
 
             if (flow_def != NULL)
@@ -625,345 +1557,32 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
         case UPROBE_TS_PATD_DEL_PROGRAM: {
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
-            unsigned int program = va_arg(args, unsigned int);
+            unsigned int pmtd_program = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
-            upipe_split_throw_del_flow(upipe, program);
-            /* return false in case someone else is interested */
-            return false;
-        }
-        default:
-            return false;
-    }
-}
 
-/** @internal @This catches events coming from pmtd subpipe.
- *
- * @param uprobe pointer to the probe in upipe_ts_demux
- * @param pmtd pointer to the subpipe
- * @param event event triggered by the subpipe
- * @param args arguments of the event
- * @return true if the event was caught
- */
-static bool upipe_ts_demux_pmtd_probe(struct uprobe *uprobe,
-                                      struct upipe *pmtd,
-                                      enum uprobe_event event, va_list args)
-{
-    struct upipe_ts_demux *upipe_ts_demux =
-        container_of(uprobe, struct upipe_ts_demux, pmtd_probe);
-    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
-    switch (event) {
-        case UPROBE_TS_PMTD_HEADER: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pmtd_pcrpid = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            ulog_debug(upipe->ulog, "new PMT header");
-            return true;
-        }
-        case UPROBE_TS_PMTD_ADD_ES: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pid = va_arg(args, unsigned int);
-            unsigned int streamtype = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            switch (streamtype) {
-                case 0x2: {
-                    struct uref *flow_def =
-                        uref_block_flow_alloc_def(upipe_ts_demux->uref_mgr,
-                                                  "mpegts.mpegtspes.mpegtsmp2v");
-                    if (likely(flow_def != NULL &&
-                               uref_ts_flow_set_pid(flow_def, pid) /*&&
-                               uref_flow_set_program_va(flow_def, "%u", program)*/))
-                        upipe_split_throw_add_flow(upipe,
-                                (pid << 16) /*| program */, flow_def);
+            upipe_split_throw_del_flow(upipe, pmtd_program);
 
-                    if (flow_def != NULL)
-                        uref_free(flow_def);
-                    break;
-                }
+            struct uchain *uchain;
+            struct upipe_ts_demux_program *program = NULL;
+            ulist_foreach (&upipe_ts_demux->programs, uchain) {
+                if (program != NULL)
+                    upipe_release(upipe_ts_demux_program_to_upipe(program));
+                program = upipe_ts_demux_program_from_uchain(uchain);
+                /* to avoid having the uchain disappear during
+                 * upipe_throw_read_end */
+                upipe_use(upipe_ts_demux_program_to_upipe(program));
+                if (program->program == pmtd_program)
+                    upipe_throw_read_end(upipe_ts_demux_program_to_upipe(program),
+                                         NULL);
             }
-            /* return false in case someone else is interested */
-            return false;
-        }
-        case UPROBE_TS_PMTD_DEL_ES: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pid = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            upipe_split_throw_del_flow(upipe, (pid << 16) /*| program */);
+            if (program != NULL)
+                upipe_release(upipe_ts_demux_program_to_upipe(program));
             /* return false in case someone else is interested */
             return false;
         }
         default:
             return false;
     }
-}
-
-/** @internal @This is the private context of an output of a ts_demux pipe. */
-struct upipe_ts_demux_output {
-    /** structure for double-linked lists */
-    struct uchain uchain;
-
-    /** ts_split_output subpipe */
-    struct upipe *split_output;
-    /** ts_psi_split_output subpipe */
-    struct upipe *psi_split_output;
-    /** pointer to psi_pid structure */
-    struct upipe_ts_demux_psi_pid *psi_pid;
-
-    /** refcount management structure */
-    urefcount refcount;
-    /** public upipe structure */
-    struct upipe upipe;
-};
-
-UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe)
-
-/** @This returns the high-level upipe_ts_demux_output structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upipe_ts_demux_output
- * @return pointer to the upipe_ts_demux_output structure
- */
-static inline struct upipe_ts_demux_output *
-    upipe_ts_demux_output_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_ts_demux_output, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upipe_ts_demux_output upipe_ts_demux_output structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upipe_ts_demux_output_to_uchain(struct upipe_ts_demux_output *upipe_ts_demux_output)
-{
-    return &upipe_ts_demux_output->uchain;
-}
-
-/** @internal @This allocates an output subpipe of a ts_demux pipe.
- *
- * @param mgr common management structure
- * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
- * @return pointer to upipe or NULL in case of allocation error
- */
-static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
-                                                 struct uprobe *uprobe,
-                                                 struct ulog *ulog)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        malloc(sizeof(struct upipe_ts_demux_output));
-    if (unlikely(upipe_ts_demux_output == NULL))
-        return NULL;
-    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
-    upipe_init(upipe, mgr, uprobe, ulog);
-    uchain_init(&upipe_ts_demux_output->uchain);
-    upipe_ts_demux_output->split_output =
-        upipe_ts_demux_output->psi_split_output = NULL;
-    urefcount_init(&upipe_ts_demux_output->refcount);
-    upipe_throw_ready(upipe);
-    return upipe;
-}
-
-/** @internal @This gets the flow definition on an output.
- *
- * @param upipe description structure of the pipe
- * @param p filled in with the flow definition packet
- * @return false in case of error
- */
-static bool upipe_ts_demux_output_get_flow_def(struct upipe *upipe,
-                                               struct uref **p)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    if (upipe_ts_demux_output->split_output != NULL)
-        return upipe_get_flow_def(upipe_ts_demux_output->split_output, p);
-    if (upipe_ts_demux_output->psi_split_output != NULL)
-        return upipe_get_flow_def(upipe_ts_demux_output->psi_split_output, p);
-    return false;
-}
-
-/** @internal @This sets the flow definition on an output.
- *
- * The attribute t.pid or t.psi.filter must be set on the flow definition
- * packet.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return false in case of error
- */
-static bool upipe_ts_demux_output_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    struct upipe_ts_demux *upipe_ts_demux =
-        upipe_ts_demux_from_output_mgr(upipe->mgr);
-    if (upipe_ts_demux_output->split_output != NULL) {
-        upipe_release(upipe_ts_demux_output->split_output);
-        upipe_ts_demux_output->split_output = NULL;
-    }
-    if (upipe_ts_demux_output->psi_split_output != NULL) {
-        upipe_release(upipe_ts_demux_output->psi_split_output);
-        upipe_ts_demux_output->psi_split_output = NULL;
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(upipe_ts_demux),
-                                       upipe_ts_demux_output->psi_pid);
-        upipe_ts_demux_output->psi_pid = NULL;
-    }
-
-    uint64_t pid;
-    if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid) || pid >= MAX_PIDS))
-        return false;
-
-    const uint8_t *filter, *mask;
-    size_t size;
-    if (uref_ts_flow_get_psi_filter(flow_def, &filter, &mask, &size)) {
-        /* set up a psi_split_output subpipe */
-        upipe_ts_demux_output->psi_pid =
-            upipe_ts_demux_psi_pid_use(upipe_ts_demux_to_upipe(upipe_ts_demux),
-                                       pid);
-        if (unlikely(upipe_ts_demux_output->psi_pid == NULL))
-            return false;
-        upipe_ts_demux_output->psi_split_output =
-            upipe_alloc_output(upipe_ts_demux_output->psi_pid->psi_split,
-                               &upipe_ts_demux->psi_split_plumber,
-                               ulog_sub_alloc(upipe->ulog,
-                                    ULOG_DEBUG, "psi_split output"));
-        if (unlikely(upipe_ts_demux_output->psi_split_output == NULL)) {
-            upipe_ts_demux_psi_pid_release(
-                    upipe_ts_demux_to_upipe(upipe_ts_demux),
-                    upipe_ts_demux_output->psi_pid);
-            upipe_ts_demux_output->psi_pid = NULL;
-            return false;
-        }
-
-        upipe_set_flow_def(upipe_ts_demux_output->psi_split_output, flow_def);
-    } else {
-        /* set up a split_output subpipe */
-        upipe_ts_demux_output->split_output =
-            upipe_alloc_output(upipe_ts_demux->split, &upipe_ts_demux->plumber,
-                               ulog_sub_alloc_va(upipe->ulog,
-                                    ULOG_DEBUG, "split output %"PRIu64,
-                                    pid));
-        if (unlikely(upipe_ts_demux_output->split_output == NULL))
-            return false;
-
-        upipe_set_flow_def(upipe_ts_demux_output->split_output, flow_def);
-    }
-
-    return true;
-}
-
-/** @internal @This processes control commands on an output subpipe of a
- * ts_demux pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-static bool upipe_ts_demux_output_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
-{
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_demux_output_get_flow_def(upipe, p);
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_ts_demux_output_set_flow_def(upipe, flow_def);
-        }
-
-        default:
-            return false;
-    }
-}
-
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_output_use(struct upipe *upipe)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    urefcount_use(&upipe_ts_demux_output->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_output_release(struct upipe *upipe)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_demux_output->refcount))) {
-        struct upipe_ts_demux *upipe_ts_demux =
-            upipe_ts_demux_from_output_mgr(upipe->mgr);
-        upipe_throw_dead(upipe);
-
-        if (upipe_ts_demux_output->split_output != NULL)
-            upipe_release(upipe_ts_demux_output->split_output);
-        if (upipe_ts_demux_output->psi_split_output != NULL) {
-            upipe_release(upipe_ts_demux_output->psi_split_output);
-            upipe_ts_demux_psi_pid_release(
-                    upipe_ts_demux_to_upipe(upipe_ts_demux),
-                    upipe_ts_demux_output->psi_pid);
-        }
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_demux_output->refcount);
-        free(upipe_ts_demux_output);
-    }
-}
-
-/** @This increments the reference count of a upipe manager.
- *
- * @param mgr pointer to upipe manager
- */
-static void upipe_ts_demux_output_mgr_use(struct upipe_mgr *mgr)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_output_mgr(mgr);
-    upipe_use(upipe_ts_demux_to_upipe(upipe_ts_demux));
-}
-
-/** @This decrements the reference count of a upipe manager or frees it.
- *
- * @param mgr pointer to upipe manager.
- */
-static void upipe_ts_demux_output_mgr_release(struct upipe_mgr *mgr)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_output_mgr(mgr);
-    upipe_release(upipe_ts_demux_to_upipe(upipe_ts_demux));
-}
-
-/** @internal @This initializes the output manager for a ts_demux pipe.
- *
- * @param upipe description structure of the pipe
- * @return pointer to output upipe manager
- */
-static struct upipe_mgr *upipe_ts_demux_init_output_mgr(struct upipe *upipe)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    struct upipe_mgr *output_mgr = &upipe_ts_demux->output_mgr;
-    output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
-    output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
-    output_mgr->upipe_input = NULL;
-    output_mgr->upipe_control = upipe_ts_demux_output_control;
-    output_mgr->upipe_use = upipe_ts_demux_output_use;
-    output_mgr->upipe_release = upipe_ts_demux_output_release;
-    output_mgr->upipe_mgr_use = upipe_ts_demux_output_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_ts_demux_output_mgr_release;
-    return output_mgr;
 }
 
 /** @internal @This allocates a ts_demux pipe.
@@ -994,16 +1613,15 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux->auto_conformance = true;
     upipe_ts_demux->nit_pid = 0;
 
-    uprobe_init(&upipe_ts_demux->plumber, upipe_ts_demux_plumber,
-                upipe->uprobe);
+    uprobe_init(&upipe_ts_demux->psi_pid_plumber,
+                upipe_ts_demux_psi_pid_plumber, upipe->uprobe);
     uprobe_init(&upipe_ts_demux->psim_plumber, upipe_ts_demux_psim_plumber,
                 upipe->uprobe);
-    uprobe_init(&upipe_ts_demux->psi_split_plumber,
-                upipe_ts_demux_psi_split_plumber, upipe->uprobe);
     uprobe_init(&upipe_ts_demux->patd_probe,
                 upipe_ts_demux_patd_probe, upipe->uprobe);
-    uprobe_init(&upipe_ts_demux->pmtd_probe,
-                upipe_ts_demux_pmtd_probe, upipe->uprobe);
+
+    ulist_init(&upipe_ts_demux->programs);
+
     urefcount_init(&upipe_ts_demux->refcount);
     upipe_throw_ready(upipe);
     return upipe;
@@ -1012,7 +1630,6 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
 /** @internal @This starts the split pipe.
  *
  * @param upipe description structure of the pipe
- * @param input_mode input mode
  */
 static void upipe_ts_demux_init(struct upipe *upipe)
 {
@@ -1020,7 +1637,7 @@ static void upipe_ts_demux_init(struct upipe *upipe)
         upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     upipe_ts_demux->split = upipe_alloc(ts_demux_mgr->ts_split_mgr,
-                                        &upipe_ts_demux->plumber,
+                                        upipe->uprobe,
                                         ulog_sub_alloc(upipe->ulog,
                                             ULOG_DEBUG, "split"));
     if (unlikely(upipe_ts_demux->split == NULL)) {
@@ -1033,6 +1650,7 @@ static void upipe_ts_demux_init(struct upipe *upipe)
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, 0);
     if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
         upipe_release(upipe_ts_demux->split);
+        upipe_ts_demux->split = NULL;
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
@@ -1040,17 +1658,33 @@ static void upipe_ts_demux_init(struct upipe *upipe)
 
     upipe_ts_demux->psi_split_output_pat =
         upipe_alloc_output(upipe_ts_demux->psi_pid_pat->psi_split,
-                           &upipe_ts_demux->psi_split_plumber,
+                           upipe->uprobe,
                            ulog_sub_alloc(upipe->ulog,
                                 ULOG_DEBUG, "psi_split output"));
     if (unlikely(upipe_ts_demux->psi_split_output_pat == NULL)) {
-        upipe_ts_demux_psi_pid_release(upipe,
-                                       upipe_ts_demux->psi_pid_pat);
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
         upipe_release(upipe_ts_demux->split);
+        upipe_ts_demux->split = NULL;
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
+
+    /* allocate PAT decoder */
+    struct upipe *patd = upipe_alloc(ts_demux_mgr->ts_patd_mgr,
+                                     &upipe_ts_demux->patd_probe,
+                                       ulog_sub_alloc(upipe->ulog,
+                                            ULOG_DEBUG, "patd"));
+    if (unlikely(patd == NULL)) {
+        upipe_release(upipe_ts_demux->psi_split_output_pat);
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
+        upipe_release(upipe_ts_demux->split);
+        upipe_ts_demux->split = NULL;
+        ulog_aerror(upipe->ulog);
+        upipe_throw_aerror(upipe);
+    }
+    upipe_set_output(upipe_ts_demux->psi_split_output_pat, patd);
+    upipe_release(patd);
 
     /* set filter on table 0, current */
     uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
@@ -1076,6 +1710,7 @@ static void upipe_ts_demux_init(struct upipe *upipe)
         upipe_release(upipe_ts_demux->psi_split_output_pat);
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
         upipe_release(upipe_ts_demux->split);
+        upipe_ts_demux->split = NULL;
         ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
@@ -1355,6 +1990,7 @@ static void upipe_ts_demux_mgr_release(struct upipe_mgr *mgr)
         upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
         upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
+        //upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
 
         urefcount_clean(&ts_demux_mgr->refcount);
         free(ts_demux_mgr);
@@ -1381,6 +2017,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
+    ts_demux_mgr->mp2vf_mgr = NULL; //upipe_mp2vf_mgr_alloc();
 
     ts_demux_mgr->mgr.signature = UPIPE_TS_DEMUX_SIGNATURE;
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;

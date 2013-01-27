@@ -94,7 +94,7 @@
 
       In Upipe's design, decision taking happens inside probes, while data processing is done in pipes with no intelligence whatsoever.
 
-      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 7 categories:
+      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 8 categories:
 
       @list
 
@@ -104,6 +104,7 @@
         @item join: for pipes that have several inputs, such as a mux
         @item split: for pipes that have several outputs, such as a demux
         @item sink: for pipes that have no output and may rely on external events
+        @item void: for pipes that have neither input nor output (such a pipe may be used internally to create other pipes)
         @item pipe type-specific commands and probes which must be prefixed with the short name of the pipe
 
       @end list

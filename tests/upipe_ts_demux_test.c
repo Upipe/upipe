@@ -62,6 +62,8 @@
 
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/mpeg/psi.h>
+#include <bitstream/mpeg/pes.h>
+//#include <bitstream/mpeg/mp2v.h>
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
@@ -69,8 +71,10 @@
 #define ULOG_LEVEL ULOG_DEBUG
 
 static struct upipe *upipe_ts_demux;
-static struct upipe *upipe_ts_demux_output_pmt;
+static struct upipe *upipe_ts_demux_output_pmt = NULL;
+static struct upipe *upipe_ts_demux_output_video = NULL;
 static struct uprobe *uprobe_ts_log;
+static uint64_t wanted_flow_id, deleted_flow_id;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -89,9 +93,9 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_PATD_TSID:
         case UPROBE_TS_PATD_ADD_PROGRAM:
         case UPROBE_TS_PATD_DEL_PROGRAM:
+        case UPROBE_TS_PMTD_HEADER:
         case UPROBE_TS_PMTD_ADD_ES:
         case UPROBE_TS_PMTD_DEL_ES:
-        case UPROBE_SPLIT_DEL_FLOW:
         case UPROBE_READ_END:
             break;
         case UPROBE_SPLIT_ADD_FLOW: {
@@ -100,15 +104,30 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(uref != NULL);
             const char *def;
             assert(uref_flow_get_def(uref, &def));
-            if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
-                assert(flow_id == 12);
+            assert(flow_id == wanted_flow_id);
+            if (!ubase_ncmp(def, "internal.")) {
+                if (upipe_ts_demux_output_pmt != NULL)
+                    upipe_release(upipe_ts_demux_output_pmt);
                 upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
                         uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL,
-                                                      "ts demux output pmt"));
+                                                      "ts demux pmt"));
                 assert(upipe_ts_demux_output_pmt != NULL);
                 assert(upipe_set_flow_def(upipe_ts_demux_output_pmt, uref));
-            } else
-                assert(flow_id == 43 << 16);
+            } else if (!ubase_ncmp(def, "block.mpeg2video")) {
+                if (upipe_ts_demux_output_video != NULL)
+                    upipe_release(upipe_ts_demux_output_video);
+                upipe_ts_demux_output_video =
+                    upipe_alloc_output(upipe_ts_demux_output_pmt,
+                        uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL,
+                                                      "ts demux video"));
+                assert(upipe_ts_demux_output_video != NULL);
+                assert(upipe_set_flow_def(upipe_ts_demux_output_video, uref));
+            }
+            break;
+        }
+        case UPROBE_SPLIT_DEL_FLOW: {
+            uint64_t flow_id = va_arg(args, uint64_t);
+            assert(flow_id == deleted_flow_id);
             break;
         }
     }
@@ -178,6 +197,7 @@ int main(int argc, char *argv[])
     payload += PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
     uref_block_unmap(uref, 0, size);
+    wanted_flow_id = 12;
     upipe_input(upipe_ts_demux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
@@ -210,8 +230,105 @@ int main(int argc, char *argv[])
     payload += PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
     uref_block_unmap(uref, 0, size);
+    wanted_flow_id = 43;
     upipe_input(upipe_ts_demux, uref, NULL);
 
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_init(buffer);
+    ts_set_unitstart(buffer);
+    ts_set_pid(buffer, 0);
+    ts_set_cc(buffer, 1);
+    ts_set_payload(buffer);
+    payload = ts_payload(buffer);
+    *payload++ = 0; /* pointer_field */
+    pat_init(payload);
+    pat_set_length(payload, PAT_PROGRAM_SIZE);
+    pat_set_tsid(payload, 42);
+    psi_set_version(payload, 1);
+    psi_set_current(payload);
+    psi_set_section(payload, 0);
+    psi_set_lastsection(payload, 0);
+    pat_program = pat_get_program(payload, 0);
+    patn_init(pat_program);
+    patn_set_program(pat_program, 13);
+    patn_set_pid(pat_program, 42);
+    psi_set_crc(payload);
+    payload += PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE;
+    *payload = 0xff;
+    uref_block_unmap(uref, 0, size);
+    wanted_flow_id = 13;
+    deleted_flow_id = 12;
+    upipe_input(upipe_ts_demux, uref, NULL);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_init(buffer);
+    ts_set_unitstart(buffer);
+    ts_set_pid(buffer, 42);
+    ts_set_cc(buffer, 1);
+    ts_set_payload(buffer);
+    payload = ts_payload(buffer);
+    *payload++ = 0; /* pointer_field */
+    pmt_init(payload);
+    pmt_set_length(payload, PMT_ES_SIZE);
+    pmt_set_program(payload, 13);
+    psi_set_version(payload, 0);
+    psi_set_current(payload);
+    psi_set_section(payload, 0);
+    psi_set_lastsection(payload, 0);
+    pmt_set_pcrpid(payload, 43);
+    pmt_set_desclength(payload, 0);
+    pmt_es = pmt_get_es(payload, 0);
+    pmtn_init(pmt_es);
+    pmtn_set_pid(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, 2);
+    pmtn_set_desclength(pmt_es, 0);
+    psi_set_crc(payload);
+    payload += PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE;
+    *payload = 0xff;
+    uref_block_unmap(uref, 0, size);
+    wanted_flow_id = 43;
+    upipe_input(upipe_ts_demux, uref, NULL);
+
+#if 0
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_init(buffer);
+    ts_set_unitstart(buffer);
+    ts_set_pid(buffer, 43);
+    ts_set_cc(buffer, 0);
+    ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE -
+                              PES_HEADER_SIZE_NOPTS - MP2VSEQ_HEADER_SIZE);
+    ts_set_payload(buffer);
+    payload = ts_payload(buffer);
+    pes_init(payload);
+    pes_set_streamid(payload, PES_STREAM_ID_VIDEO_MPEG);
+    pes_set_length(payload, MP2VSEQ_HEADER_SIZE + PES_HEADER_SIZE_NOPTS -
+                            PES_HEADER_SIZE);
+    pes_set_dataalignment(payload);
+    payload = pes_payload(payload);
+    mp2vseq_init(payload);
+    mp2vseq_set_horizontal(payload, 720);
+    mp2vseq_set_vertical(payload, 576);
+    mp2vseq_set_aspect(payload, MP2VSEQ_ASPECT_16_9);
+    mp2vseq_set_framerate(payload, MP2VSEQ_FRAMERATE_25);
+    mp2vseq_set_bitrate(payload, 2000000/400);
+    mp2vseq_set_vbvbuffer(payload, 1835008/16/1024);
+    uref_block_unmap(uref, 0, size);
+    upipe_input(upipe_ts_demux, uref, NULL);
+#endif
+
+    upipe_release(upipe_ts_demux_output_video);
     upipe_release(upipe_ts_demux_output_pmt);
     upipe_release(upipe_ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
