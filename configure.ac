@@ -113,5 +113,6 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-swscale/libupipe_sws.pc
                  lib/upipe-ts/Makefile
                  lib/upipe-ts/libupipe_ts.pc
-                 tests/Makefile])
+                 tests/Makefile
+                 examples/Makefile])
 AC_OUTPUT
