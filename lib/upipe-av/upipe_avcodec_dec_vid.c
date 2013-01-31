@@ -89,6 +89,15 @@ struct upipe_avcdv {
 
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
+    // FIXME: use a list of saved uref/upump ?
+    /** incoming upump kept in memory because of open_codec waiting */
+    #if 0 // upump are not refcounted and therefore cannot be stored
+    struct upump *saved_upump;
+    #else // saving upump_mgr instead
+    struct upump_mgr *saved_upump_mgr;
+    #endif
+    /** incoming uref kept in memory because of open_codec waiting */
+    struct uref *saved_uref;
 
     /** frame counter */
     uint64_t counter;
@@ -127,6 +136,9 @@ enum plane_action {
 static void upipe_avcdv_use(struct upipe *upipe);
 /** @internal */
 static void upipe_avcdv_release(struct upipe *upipe);
+/** @internal */
+static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
+                                    size_t size, struct upump *upump);
 
 /** @internal @This fetches chroma from uref
  *  
@@ -205,6 +217,7 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
 
     uint64_t framenum = 0; // DEBUG
     uref_attr_get_unsigned(frame->opaque, &framenum, "avcdv.framenum");
+
     ulog_debug(upipe->ulog, "Allocating frame for %u (%p) - %ux%u",
                 framenum, frame->opaque, frame->width, frame->height);
 
@@ -252,6 +265,7 @@ static void upipe_avcdv_release_buffer(struct AVCodecContext *context, AVFrame *
 
     uint64_t framenum = 0; // DEBUG
     uref_attr_get_unsigned(uref, &framenum, "avcdv.framenum");
+
     ulog_debug(upipe->ulog, "Releasing frame %u (%p)", (uint64_t) framenum, uref);
 
     if (likely(uref->ubuf)) {
@@ -288,12 +302,14 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
     bool ret = true;
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
     assert(upipe);
+    struct upump *upump_av_deal = upipe_avcdv->upump_av_deal;
 
-    if (upipe_avcdv->upump_av_deal) {
+    if (upump_av_deal) {
         if (unlikely(!upipe_av_deal_grab())) {
             ulog_debug(upipe->ulog, "could not grab resource, return");
             return false;
         }
+        upipe_avcdv->upump_av_deal = NULL;
     }
 
     if (codec) {
@@ -312,8 +328,13 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
     }
 
     if (unlikely(upipe_avcdv->context)) { // Close previously opened context
-        ulog_debug(upipe->ulog, "avcodec context (%s) closed",
-                    upipe_avcdv->context->codec->name);
+        // First send empty packet to send/release retained frames
+        ulog_debug(upipe->ulog, "flushing frames in decoder");
+        while (upipe_avcdv_process_buf(upipe, NULL, 0, NULL));
+
+        // Now close codec and free extradata if any
+        ulog_notice(upipe->ulog, "avcodec context (%s) closed (%d)",
+                    upipe_avcdv->context->codec->name, upipe_avcdv->counter);
         avcodec_close(upipe_avcdv->context);
         if (upipe_avcdv->context->extradata_size > 0) {
             free(upipe_avcdv->context->extradata);
@@ -331,10 +352,10 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
         }
     }
 
-    if (upipe_avcdv->upump_av_deal) {
-        if (unlikely(!upipe_av_deal_yield(upipe_avcdv->upump_av_deal))) {
-            upump_free(upipe_avcdv->upump_av_deal);
-            upipe_avcdv->upump_av_deal = NULL;
+    if (upump_av_deal) {
+        if (unlikely(!upipe_av_deal_yield(upump_av_deal))) {
+            upump_free(upump_av_deal);
+            upump_av_deal = NULL;
             ulog_error(upipe->ulog, "can't stop dealer");
             upipe_throw_upump_error(upipe);
             if (context) {
@@ -345,15 +366,30 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
             }
             return false;
         }
-        upump_free(upipe_avcdv->upump_av_deal);
-        upipe_avcdv->upump_av_deal = NULL;
+        upump_free(upump_av_deal);
+        upump_av_deal = NULL;
     }
 
     if (context && ret) {
         upipe_avcdv->context = context;
         upipe_avcdv->counter = 0;
-        ulog_debug(upipe->ulog, "codec %s (%s) %d opened", codec->name, 
+        ulog_notice(upipe->ulog, "codec %s (%s) %d opened", codec->name, 
                    codec->long_name, codec->id);
+
+
+        #if 0
+        if (upipe_avcdv->saved_upump) {
+            upump_start(upipe_avcdv->saved_upump);
+            upipe_avcdv->saved_upump = NULL;
+        }
+        #else
+        if (upipe_avcdv->saved_upump_mgr) {
+            ulog_debug(upipe->ulog, "unblocking saved upump_mgr");
+            upump_mgr_sink_unblock(upipe_avcdv->saved_upump_mgr);
+            upump_mgr_release(upipe_avcdv->saved_upump_mgr);
+            upipe_avcdv->saved_upump_mgr = NULL;
+        }
+        #endif
     }
     upipe_release(upipe);
     return ret;
@@ -501,6 +537,53 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
     upipe_avcdv_output(upipe, uref, upump);
 }
 
+/** @internal @This handles buffers once stripped from uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @return false if the buffer couldn't be accepted
+ */
+static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
+                                    size_t size, struct upump *upump)
+{
+    int gotframe = 0, len;
+    AVPacket avpkt;
+    AVFrame *frame; 
+    uint64_t framenum = 0;
+
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    assert(upipe);
+
+    // Init avcodec packed and attach input buffer
+    av_init_packet(&avpkt);
+    avpkt.size = size;
+    avpkt.data = buf;
+
+    frame = upipe_avcdv->frame;
+    len = avcodec_decode_video2(upipe_avcdv->context, frame, &gotframe, &avpkt);
+    if (len < 0) {
+        ulog_warning(upipe->ulog, "Error while decoding frame");
+    }
+
+    // Copy frame to ubuf_pic if any frame has been decoded
+    if (gotframe) {
+        uref_attr_get_unsigned(frame->opaque, &framenum, "avcdv.framenum"); // DEBUG
+
+        ulog_debug(upipe->ulog, "%u\t - Picture decoded ! %dx%d - %u",
+                upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
+
+        // FIXME DEVEL
+        if (!upipe_avcdv->output_flow) {
+            struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
+            upipe_avcdv_store_flow_def(upipe, outflow);
+        }
+
+        upipe_avcdv_output_frame(upipe, frame, upump);
+        return true;
+    } else {
+        return false;
+    }
+}
 
 /** @internal @This handles data.
  *
@@ -511,28 +594,60 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
 static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    AVPacket avpkt;
-    AVFrame *frame; 
     uint8_t *inbuf;
     size_t insize;
-    int gotframe = 0, len;
-    uint64_t framenum = 0;
 
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    assert(upipe);
+    assert(uref);
+
+    if (upipe_avcdv->upump_av_deal) { // open_codec callback is waiting
+        #if 1
+        ulog_debug(upipe->ulog, "Received packet while open_codec waiting");
+        if (upump) {
+            #if 0
+            upump_stop(upump);
+            upipe_avcdv->saved_upump = upump;
+            #else
+            upump_mgr_sink_block(upump->mgr);
+            upump_mgr_use(upump->mgr);
+            upipe_avcdv->saved_upump_mgr = upump->mgr;
+            #endif
+        }
+        if (upipe_avcdv->saved_uref) {
+            ulog_warning(upipe->ulog, "Dropping previously saved packet !");
+            uref_free(upipe_avcdv->saved_uref);
+        }
+        upipe_avcdv->saved_uref = uref;
+        return;
+    } else if (upipe_avcdv->saved_uref) {
+        ulog_debug(upipe->ulog, "Processing previously saved packet");
+        struct uref *prev_uref = upipe_avcdv->saved_uref;
+        upipe_avcdv->saved_uref = NULL;
+        #if 0
+        upipe_avcdv_input(upipe, prev_uref, prev_upump);
+        #else
+        upipe_avcdv_input(upipe, prev_uref, upump); // Not a typo, using the current upump here
+        #endif
+        #else
+        ulog_debug(upipe->ulog, "Received packet while open_codec waiting");
+        uref_free(uref);
+        return;
+        #endif
+    }
 
     if (!upipe_avcdv->context) {
         uref_free(uref);
-        if (upipe_avcdv->upump_av_deal) {
-            // FIXME: block pump, keep uref, throw notice ?
-        }
-        ulog_warning(upipe->ulog, "Received packet but decoder is not initialised");
+        ulog_warning(upipe->ulog, "Received packet but decoder is not initialized");
         return;
     }
+
     /* avcodec input buffer needs to be at least 4-byte aligned and
        FF_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
        Thus, extract ubuf content in a properly allocated buffer.
        Padding must be zeroed. */
     uref_block_size(uref, &insize);
+
     ulog_debug(upipe->ulog, "Received packet %u - size : %u", upipe_avcdv->counter, insize);
     inbuf = malloc(insize + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(!inbuf)) {
@@ -544,37 +659,16 @@ static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
     uref_block_extract(uref, 0, insize, inbuf); 
     ubuf_free(uref_detach_ubuf(uref));
 
-    // Init avcodec packed and attach input buffer
-    av_init_packet(&avpkt);
-    avpkt.size = insize;
-    avpkt.data = inbuf;
-
-    frame = upipe_avcdv->frame;
     uref_attr_set_unsigned(uref, upipe_avcdv->counter, "avcdv.framenum"); // DEBUG
+
+    /* Track current uref in pipe structure - required for buffer allocation
+     * in upipe_avcdv_get_buffer */
     upipe_avcdv->uref = uref;
-    len = avcodec_decode_video2(upipe_avcdv->context, frame, &gotframe, &avpkt);
-    if (len < 0) {
-        ulog_warning(upipe->ulog, "Error while decoding frame");
-    }
 
-    // Copy frame to ubuf_pic if any frame has been decoded
-    if (gotframe) {
+    upipe_avcdv_process_buf(upipe, inbuf, insize, upump);
 
-        uref_attr_get_unsigned(frame->opaque, &framenum, "avcdv.framenum"); // DEBUG
-        ulog_debug(upipe->ulog, "%u\t - Picture decoded ! %dx%d - %u",
-                upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
-
-        // FIXME DEVEL
-        if (!upipe_avcdv->output_flow) {
-            struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
-            upipe_avcdv_store_flow_def(upipe, outflow);
-        }
-
-        upipe_avcdv_output_frame(upipe, frame, upump);
-    }
-
-    uref_free(uref);
     free(inbuf);
+    uref_free(uref);
     upipe_avcdv->counter++;
 }
 
@@ -705,6 +799,20 @@ static void upipe_avcdv_release(struct upipe *upipe)
             uref_free(upipe_avcdv->input_flow);
         }
 
+        if (upipe_avcdv->saved_uref) {
+            uref_free(upipe_avcdv->saved_uref);
+        }
+        #if 0
+        if (upipe_avcdv->saved_upump) {
+            upump_start(upipe_avcdv->saved_upump);
+        }
+        #else
+        if (upipe_avcdv->saved_upump_mgr) {
+            upump_mgr_sink_unblock(upipe_avcdv->saved_upump_mgr);
+            upump_mgr_release(upipe_avcdv->saved_upump_mgr);
+        }
+        #endif
+
         upipe_avcdv_abort_av_deal(upipe);
         upipe_avcdv_clean_output(upipe);
         upipe_avcdv_clean_ubuf_mgr(upipe);
@@ -741,6 +849,12 @@ static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
     upipe_avcdv->input_flow = NULL;
     upipe_avcdv->context = NULL;
     upipe_avcdv->upump_av_deal = NULL;
+    upipe_avcdv->saved_uref = NULL;
+    #if 0
+    upipe_avcdv->saved_upump = NULL;
+    #else
+    upipe_avcdv->saved_upump_mgr = NULL;
+    #endif
     upipe_avcdv->frame = avcodec_alloc_frame();
 
     upipe_throw_ready(upipe);
