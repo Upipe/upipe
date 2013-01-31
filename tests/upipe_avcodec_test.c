@@ -484,6 +484,7 @@ int main (int argc, char **argv)
     // Open file with avformat
     printf("Trying to open %s ...\n", srcpath);
     avformat_open_input(&mainthread.avfctx, srcpath, NULL, NULL);
+    assert(mainthread.avfctx);
     assert(avformat_find_stream_info(mainthread.avfctx, NULL) >= 0);
     av_dump_format(mainthread.avfctx, 0, srcpath, 0);
 
@@ -498,10 +499,13 @@ int main (int argc, char **argv)
     assert(videoStream != -1);
     mainthread.codec_def = upipe_av_to_flow_def(mainthread.avfctx->streams[videoStream]->codec->codec_id);
     printf("Codec flow def: %s\n", mainthread.codec_def);
-    assert(upipe_avcdv_set_codec(avcdv, mainthread.codec_def, NULL, 0));
+    struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.codec_def);
+    upipe_input(avcdv, flowdef, NULL);
 
     // Check codec def back
-    assert(upipe_avcdv_get_codec(avcdv, &mainthread.codec_def));
+    const char *codec_def;
+    assert(upipe_avcdv_get_codec(avcdv, &codec_def));
+    assert(!strcmp(codec_def, mainthread.codec_def));
     printf("upipe_avcdv_get_codec: %s\n", mainthread.codec_def);
 
     // pthread/udeal check

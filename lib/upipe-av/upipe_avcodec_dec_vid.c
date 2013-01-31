@@ -58,6 +58,7 @@
 #include <libavcodec/avcodec.h>
 #include "upipe_av_internal.h"
 
+#define EXPECTED_FLOW "block."
 
 /** @internal @This are the parameters passed to avcodec_open2 by
  * upipe_avcodec_open_cb()
@@ -540,8 +541,9 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
 /** @internal @This handles buffers once stripped from uref.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param buf buffer containing packet
+ * @param size buffer size before padding
+ * @param upump upump structure
  */
 static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
                                     size_t size, struct upump *upump)
@@ -585,13 +587,13 @@ static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
     }
 }
 
-/** @internal @This handles data.
+/** @internal @This handles packets.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @return false if the buffer couldn't be accepted
+ * @param upump upump structure
  */
-static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
+static void upipe_avcdv_input_packet(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     uint8_t *inbuf;
@@ -625,9 +627,9 @@ static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
         struct uref *prev_uref = upipe_avcdv->saved_uref;
         upipe_avcdv->saved_uref = NULL;
         #if 0
-        upipe_avcdv_input(upipe, prev_uref, prev_upump);
+        upipe_avcdv_input_packet(upipe, prev_uref, prev_upump);
         #else
-        upipe_avcdv_input(upipe, prev_uref, upump); // Not a typo, using the current upump here
+        upipe_avcdv_input_packet(upipe, prev_uref, upump); // Not a typo, using the current upump here
         #endif
         #else
         ulog_debug(upipe->ulog, "Received packet while open_codec waiting");
@@ -670,6 +672,34 @@ static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
     free(inbuf);
     uref_free(uref);
     upipe_avcdv->counter++;
+}
+
+/** @internal @This handles input uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump upump structure
+ */
+static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
+                              struct upump *upump)
+{
+    const char *def = NULL;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW))) {
+            upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
+            upipe_avcdv_set_context(upipe, NULL, NULL, 0);
+            return;
+        }
+
+        ulog_debug(upipe->ulog, "flow definition %s", def);
+        def += strlen(EXPECTED_FLOW);
+        upipe_avcdv_set_context(upipe, def, NULL, 0);
+        uref_free(uref);
+        return;
+    }
+
+    upipe_avcdv_input_packet(upipe, uref, upump);
 }
 
 /* @internal @This defines a new upump_mgr after aborting av_deal
