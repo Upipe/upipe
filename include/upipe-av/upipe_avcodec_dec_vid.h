@@ -64,25 +64,15 @@ static inline bool upipe_avcdv_get_codec(struct upipe *upipe, const char **codec
  *
  * @param upipe description structure of the pipe
  * @param codec codec to open
- * @return false in case of error
- */
-static inline bool upipe_avcdv_set_codec(struct upipe *upipe, const char *codec)
-{
-    return upipe_control(upipe, UPIPE_AVCDV_SET_CODEC, UPIPE_AVCDV_SIGNATURE,
-                         codec);
-}
-
-/** @This sends extradata to avcodec.
- *
- * @param upipe description structure of the pipe
- * @param extradata extradata buffer to copy from
+ * @params extradata extradata buffer to copy from
  * @param size extradata size
  * @return false in case of error
  */
-static inline bool upipe_avcdv_set_extradata(struct upipe *upipe, const char *extradata, int size)
+static inline bool upipe_avcdv_set_codec(struct upipe *upipe, const char *codec,
+                                         uint8_t *extradata, int size)
 {
-    return upipe_control(upipe, UPIPE_AVCDV_SET_EXTRADATA, UPIPE_AVCDV_SIGNATURE,
-                         extradata, size);
+    return upipe_control(upipe, UPIPE_AVCDV_SET_CODEC, UPIPE_AVCDV_SIGNATURE,
+                         codec, extradata, size);
 }
 
 /** @This returns the management structure for all avformat sources.
