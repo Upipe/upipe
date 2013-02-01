@@ -467,7 +467,8 @@ int main (int argc, char **argv)
     assert(avcdv);
     assert(upipe_set_ubuf_mgr(avcdv, pic_mgr));
     assert(upipe_set_uref_mgr(avcdv, uref_mgr));
-    assert(upipe_set_upump_mgr(avcdv, upump_mgr));
+    /* mainthread avcdv runs alone (no thread) so it doesn't need any upump_mgr
+     * Please do not add one, to check the nopump (direct call) case */
     mainthread.avcdv = avcdv;
 
     // test pipe
@@ -497,10 +498,14 @@ int main (int argc, char **argv)
         }
     }
     assert(videoStream != -1);
+
+    // set codec def and test _context()/_release()
     mainthread.codec_def = upipe_av_to_flow_def(mainthread.avfctx->streams[videoStream]->codec->codec_id);
     printf("Codec flow def: %s\n", mainthread.codec_def);
     struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.codec_def);
+    upipe_use(avcdv);
     upipe_input(avcdv, flowdef, NULL);
+    upipe_release(avcdv);
 
     // Check codec def back
     const char *codec_def;

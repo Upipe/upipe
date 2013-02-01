@@ -488,6 +488,7 @@ static bool upipe_avcdv_set_context(struct upipe *upipe, const char *codec_def,
         return true;
     } else {
         ulog_debug(upipe->ulog, "no upump_mgr present, direct call to avcdv_open");
+        upipe_avcdv_use(upipe);
         return upipe_avcdv_open_codec(upipe, codec, extradata_padded, extradata_size);
     }
 }
@@ -816,7 +817,7 @@ static void upipe_avcdv_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_avcdv->refcount))) {
         if (upipe_avcdv->context) {
             upipe_avcdv_set_context(upipe, NULL, NULL, 0);
-            return;
+            return; // set_context() calls _use()/_release()
         }
 
         upipe_throw_dead(upipe);
