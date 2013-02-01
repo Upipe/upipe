@@ -67,13 +67,15 @@ TESTS += \
 	upipe_queue_test \
 	upipe_multicat_test.sh \
 	upipe_udp_test
-endif
 
+# avcodec/avformat tests currently depend on ev
 if HAVE_AVFORMAT
 check_PROGRAMS += \
 	upipe_avformat_test \
 	upipe_avcodec_test
 endif
+endif
+
 
 if HAVE_SWSCALE
 check_PROGRAMS += \
