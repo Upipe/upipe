@@ -68,14 +68,6 @@ enum udict_type {
     UDICT_TYPE_SHORTHAND = 0x80,
 };
 
-/** @This defines the rational type. */
-struct urational {
-    /** numerator */
-    int64_t num;
-    /** denominator */
-    uint64_t den;
-};
-
 /** @This defines standard commands which udict modules may implement. */
 enum udict_command {
     /** duplicate a given udict (struct udict **) */

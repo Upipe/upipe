@@ -111,6 +111,45 @@ static inline void uchain_init(struct uchain *uchain)
 
 #endif
 
+/** @This returns the greatest common denominator between two positive integers.
+ *
+ * @param a first integer (not null)
+ * @param b second integer
+ * @return GCD of the two integers
+ */
+static inline uint64_t ubase_gcd(uint64_t a, uint64_t b)
+{
+    while (likely(b != 0)) {
+        uint64_t c = a % b;
+        a = b;
+        b = c;
+    }
+    return a;
+}
+
+/** @This defines the rational type. */
+struct urational {
+    /** numerator */
+    int64_t num;
+    /** denominator */
+    uint64_t den;
+};
+
+/** @This simplifies a rational.
+ *
+ * @param urational pointer to rational
+ */
+static inline void urational_simplify(struct urational *urational)
+{
+    uint64_t gcd;
+    if (urational->num >= 0)
+        gcd = ubase_gcd(urational->num, urational->den);
+    else
+        gcd = ubase_gcd(-urational->num, urational->den);
+    urational->num /= gcd;
+    urational->den /= gcd;
+}
+
 /** @This checks if a prefix matches a string.
  *
  * @param string large string
