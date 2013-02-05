@@ -236,4 +236,33 @@ static inline bool uref_block_match(struct uref *uref, const uint8_t *filter,
     return ubuf_block_match(uref->ubuf, filter, mask, size);
 }
 
+/** @see ubuf_block_scan */
+static inline bool uref_block_scan(struct uref *uref, size_t *offset_p,
+                                   uint8_t word)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_scan(uref->ubuf, offset_p, word);
+}
+
+/** @see ubuf_block_find_va */
+static inline bool uref_block_find_va(struct uref *uref, size_t *offset_p,
+                                      unsigned int nb_octets, va_list args)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_find_va(uref->ubuf, offset_p, nb_octets, args);
+}
+
+/** @see ubuf_block_find */
+static inline bool uref_block_find(struct uref *uref, size_t *offset_p,
+                                   unsigned int nb_octets, ...)
+{
+    va_list args;
+    va_start(args, nb_octets);
+    bool ret = uref_block_find_va(uref, offset_p, nb_octets, args);
+    va_end(args);
+    return ret;
+}
+
 #endif

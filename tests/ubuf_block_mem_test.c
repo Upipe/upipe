@@ -249,6 +249,16 @@ int main(int argc, char **argv)
     filter[3] = 0;
     assert(!ubuf_block_match(ubuf1, filter, mask, 4));
 
+    /* test ubuf_block_scan */
+    size_t offset = 2;
+    assert(ubuf_block_scan(ubuf1, &offset, 3));
+    assert(offset == 3);
+
+    /* test ubuf_block_find */
+    offset = 0;
+    assert(ubuf_block_find_va(ubuf1, &offset, 2, 2, 3));
+    assert(offset == 2);
+
     /* test ubuf_block_delete */
     assert(ubuf_block_delete(ubuf1, 8, 32));
     uint8_t buf[33];

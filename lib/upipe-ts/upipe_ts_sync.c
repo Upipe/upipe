@@ -115,35 +115,6 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This scans for a sync word in the working buffer.
- *
- * @param upipe description structure of the pipe
- * @param offset_p written with the offset of the first sync word, or the total
- * size of the working buffer if none was found
- * @return false if the working buffer doesn't contain any sync word
- */
-static bool upipe_ts_sync_scan(struct upipe *upipe, size_t *offset_p)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    int offset = *offset_p;
-    const uint8_t *buffer;
-    int size = -1;
-    while (uref_block_read(upipe_ts_sync->next_uref, offset, &size, &buffer)) {
-        for (int i = 0; i < size; i++) {
-            if (buffer[i] == TS_SYNC) {
-                uref_block_unmap(upipe_ts_sync->next_uref, offset, size);
-                *offset_p += i;
-                return true;
-            }
-        }
-        uref_block_unmap(upipe_ts_sync->next_uref, offset, size);
-        *offset_p += size;
-        offset += size;
-        size = -1;
-    }
-    return false;
-}
-
 /** @internal @This checks the presence of the required number of sync words
  * in the working buffer.
  *
@@ -156,7 +127,8 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     for ( ; ; ) {
-        if (unlikely(!upipe_ts_sync_scan(upipe, offset_p)))
+        if (unlikely(!uref_block_scan(upipe_ts_sync->next_uref, offset_p,
+                                      TS_SYNC)))
             return false;
 
         /* first octet at *offset_p is a sync word */
@@ -286,7 +258,8 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
         while (upipe_ts_sync->next_uref != NULL &&
                uref_block_size(upipe_ts_sync->next_uref, &size) &&
                size >= upipe_ts_sync->ts_size &&
-               upipe_ts_sync_scan(upipe, &offset) && !offset) {
+               uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC) &&
+               !offset) {
             struct uref *output = uref_dup(upipe_ts_sync->next_uref);
             upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
@@ -347,6 +320,9 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+
+    if (unlikely(uref_block_get_discontinuity(uref)))
+        upipe_ts_sync_flush(upipe);
 
     upipe_ts_sync_append(upipe, uref);
     upipe_ts_sync_work(upipe, upump);

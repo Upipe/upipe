@@ -36,8 +36,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <assert.h>
 
 /** @This returns a new ubuf from a block allocator. This function shall not
  * create a segmented block.
@@ -614,6 +616,98 @@ static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
         offset += compare_size;
     }
     return true;
+}
+
+/** @This scans for an octet word in a block ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset_p start offset (in octets), written with the offset of the
+ * first wanted word, or the total size of the ubuf if none was found
+ * @param word word to scan for
+ * @return false if the word wasn't found
+ */
+static inline bool ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
+                                   uint8_t word)
+{
+    int offset = *offset_p;
+    const uint8_t *buffer;
+    int size = -1;
+    while (ubuf_block_read(ubuf, offset, &size, &buffer)) {
+        for (int i = 0; i < size; i++) {
+            if (buffer[i] == word) {
+                ubuf_block_unmap(ubuf, offset, size);
+                *offset_p += i;
+                return true;
+            }
+        }
+        ubuf_block_unmap(ubuf, offset, size);
+        *offset_p += size;
+        offset += size;
+        size = -1;
+    }
+    return false;
+}
+
+/** @This finds a multi-octet word in a block ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset_p start offset (in octets), written with the offset of the
+ * first wanted word, or first candidate if there aren't enough octets in the
+ * ubuf, or the total size of the ubuf if none was found
+ * @param nb_octets number of octets composing the word
+ * @param args list of octets composing the word, in big-endian ordering
+ * @return false if the word wasn't found
+ */
+static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
+                                      unsigned int nb_octets, va_list args)
+{
+    assert(nb_octets > 0);
+    unsigned int sync = va_arg(args, unsigned int);
+    if (nb_octets == 1)
+        return ubuf_block_scan(ubuf, offset_p, sync);
+
+    while (ubuf_block_scan(ubuf, offset_p, sync)) {
+        uint8_t rbuffer[nb_octets - 1];
+        const uint8_t *buffer = ubuf_block_peek(ubuf, *offset_p + 1,
+                                                nb_octets - 1, rbuffer);
+        if (buffer == NULL)
+            return false;
+
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int i;
+        for (i = 0; i < nb_octets - 1; i++) {
+            unsigned int word = va_arg(args_copy, unsigned int);
+            if (buffer[i] != word)
+                break;
+        }
+        va_end(args_copy);
+        ubuf_block_peek_unmap(ubuf, *offset_p + 1, nb_octets - 1, rbuffer,
+                              buffer);
+        if (i == nb_octets - 1)
+            return true;
+    }
+    return false;
+}
+
+/** @This finds a multi-octet word in a block ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset_p start offset (in octets), written with the offset of the
+ * first wanted word, or first candidate if there aren't enough octets in the
+ * ubuf, or the total size of the ubuf if none was found
+ * @param nb_octets number of octets composing the word, followed by a list
+ * of octets composing the word, in big-endian ordering
+ * @return false if the word wasn't found
+ */
+static inline bool ubuf_block_find(struct ubuf *ubuf, size_t *offset_p,
+                                   unsigned int nb_octets, ...)
+{
+    va_list args;
+    va_start(args, nb_octets);
+    bool ret = ubuf_block_find(ubuf, offset_p, nb_octets, args);
+    va_end(args);
+    return ret;
 }
 
 #endif
