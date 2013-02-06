@@ -686,6 +686,7 @@ static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
                               buffer);
         if (i == nb_octets - 1)
             return true;
+        (*offset_p)++;
     }
     return false;
 }
@@ -705,7 +706,7 @@ static inline bool ubuf_block_find(struct ubuf *ubuf, size_t *offset_p,
 {
     va_list args;
     va_start(args, nb_octets);
-    bool ret = ubuf_block_find(ubuf, offset_p, nb_octets, args);
+    bool ret = ubuf_block_find_va(ubuf, offset_p, nb_octets, args);
     va_end(args);
     return ret;
 }

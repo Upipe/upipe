@@ -256,7 +256,7 @@ int main(int argc, char **argv)
 
     /* test ubuf_block_find */
     offset = 0;
-    assert(ubuf_block_find_va(ubuf1, &offset, 2, 2, 3));
+    assert(ubuf_block_find(ubuf1, &offset, 2, 2, 3));
     assert(offset == 2);
 
     /* test ubuf_block_delete */

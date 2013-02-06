@@ -322,7 +322,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(uref_block_get_discontinuity(uref)))
-        upipe_ts_sync_flush(upipe);
+        upipe_ts_sync_flush(upipe, upump);
 
     upipe_ts_sync_append(upipe, uref);
     upipe_ts_sync_work(upipe, upump);

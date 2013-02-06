@@ -37,6 +37,7 @@
 #include <features.h>
 #endif
 #include <stdio.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
