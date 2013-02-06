@@ -30,6 +30,7 @@ check_PROGRAMS = \
 	uref_std_test \
 	uclock_std_test \
 	upipe_genaux_test \
+    upipe_null_test \
 	upipe_dup_test
 
 TESTS = \
@@ -45,6 +46,7 @@ TESTS = \
 	uprobe_uref_mgr_test \
 	uclock_std_test \
 	upipe_genaux_test \
+    upipe_null_test \
 	upipe_dup_test
 
 if HAVE_EV
@@ -125,6 +127,7 @@ upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
