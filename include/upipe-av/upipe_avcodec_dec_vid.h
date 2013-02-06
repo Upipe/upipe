@@ -64,7 +64,7 @@ static inline bool upipe_avcdv_get_codec(struct upipe *upipe, const char **codec
  *
  * @param upipe description structure of the pipe
  * @param codec codec to open
- * @params extradata extradata buffer to copy from
+ * @param extradata extradata buffer to copy from
  * @param size extradata size
  * @return false in case of error
  */
