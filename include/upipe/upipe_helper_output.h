@@ -151,7 +151,6 @@ static void STRUCTURE##_flow_def(struct upipe *upipe, struct upump *upump)  \
         return;                                                             \
     struct uref *uref = uref_dup(STRUCTURE->FLOW_DEF);                      \
     if (unlikely(uref == NULL)) {                                           \
-        ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
         return;                                                             \
     }                                                                       \
@@ -172,14 +171,14 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
     if (unlikely(STRUCTURE->OUTPUT == NULL && STRUCTURE->FLOW_DEF != NULL)) \
         upipe_throw_need_output(upipe, STRUCTURE->FLOW_DEF);                \
     if (unlikely(STRUCTURE->OUTPUT == NULL)) {                              \
-        ulog_error(upipe->ulog, "no output defined");                       \
+        upipe_err(upipe, "no output defined");                              \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT))                                \
         STRUCTURE##_flow_def(upipe, upump);                                 \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
-        ulog_error(upipe->ulog, "no flow_def defined");                     \
+        upipe_err(upipe, "no flow_def defined");                            \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \

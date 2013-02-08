@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,37 +24,34 @@
  */
 
 /** @file
- * @short Upipe API for logging using stdio
+ * @short unit tests for uprobe stdio implementation
  */
 
-#ifndef _UPIPE_ULOG_STDIO_H_
-/** @hidden */
-#define _UPIPE_ULOG_STDIO_H_
+#undef NDEBUG
 
-#include <upipe/ulog.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
 
 #include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
-/** @This allocates a new ulog structure using an stdio stream.
- *
- * @param stream file stream to write to (eg. stderr)
- * @param log_level minimum level of messages printed to the console
- * @param name name of this section of pipe (informative)
- * @return pointer to ulog, or NULL in case of error
- */
-struct ulog *ulog_stdio_alloc(FILE *stream, enum ulog_level log_level,
-                              const char *name);
+int main(int argc, char **argv)
+{
+    struct uprobe *uprobe1 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_DEBUG);
+    assert(uprobe1 != NULL);
 
-/** @This allocates a new ulog structure using an stdio stream, with composite
- * name.
- *
- * @param stream file stream to write to (eg. stderr)
- * @param log_level minimum level of messages printed to the console
- * @param format printf-format string used for this section of pipe, followed
- * by optional arguments
- * @return pointer to ulog, or NULL in case of error
- */
-struct ulog *ulog_stdio_alloc_va(FILE *stream, enum ulog_level log_level,
-                                 const char *format, ...);
+    uprobe_err(uprobe1, NULL, "This is an error");
+    uprobe_warn_va(uprobe1, NULL, "This is a %s warning with %d", "composite",
+                   0x42);
+    uprobe_notice(uprobe1, NULL, "This is a notice");
+    uprobe_dbg(uprobe1, NULL, "This is a debug");
+    uprobe_stdio_free(uprobe1);
 
-#endif
+    struct uprobe *uprobe2 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_ERROR);
+    assert(uprobe2 != NULL);
+    uprobe_err_va(uprobe2, NULL, "This is another error with %d", 0x43);
+    uprobe_warn(uprobe2, NULL, "This is a warning that you shouldn't see");
+    uprobe_stdio_free(uprobe2);
+    return 0;
+}

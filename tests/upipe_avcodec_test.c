@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -33,9 +33,9 @@
 #include <ev.h>
 #include <pthread.h>
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -76,7 +76,7 @@
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define THREAD_NUM          16
 #define ITER_LIMIT          1000
 #define FRAMES_LIMIT        200
@@ -193,18 +193,13 @@ UPIPE_HELPER_UPIPE(avcdv_test, upipe);
 
 /** helper phony pipe to test upipe_avcdv */
 static struct upipe *avcdv_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe, struct ulog *ulog)
+                                      struct uprobe *uprobe)
 {
     struct avcdv_test *avcdv_test = malloc(sizeof(struct avcdv_test));
     if (unlikely(!avcdv_test)) return NULL;
-    upipe_init(&avcdv_test->upipe, mgr, uprobe, ulog);
+    upipe_init(&avcdv_test->upipe, mgr, uprobe);
+    upipe_throw_ready(&avcdv_test->upipe);
     return &avcdv_test->upipe;
-}
-
-/** helper phony pipe to test upipe_avcdv */
-static bool avcdv_test_control(struct upipe *upipe, enum upipe_command command, va_list args)
-{
-    return false;
 }
 
 /** helper phony pipe to test upipe_avcdv */
@@ -215,8 +210,8 @@ static void avcdv_test_input(struct upipe *upipe, struct uref *uref, struct upum
     static int counter = 0;
 
     assert(uref != NULL);
-    ulog_debug(upipe->ulog, "===> received input uref");
-    udict_dump(uref->udict, upipe->ulog);
+    upipe_dbg(upipe, "===> received input uref");
+    udict_dump(uref->udict, upipe->uprobe);
     if (uref->ubuf) {
         uref_pic_plane_read(uref, "y8", 0, 0, -1, -1, &buf);
         uref_pic_plane_size(uref, "y8", &stride, NULL, NULL, NULL);
@@ -232,7 +227,8 @@ static void avcdv_test_input(struct upipe *upipe, struct uref *uref, struct upum
 /** helper phony pipe to test upipe_avcdv */
 static void avcdv_test_free(struct upipe *upipe)
 {
-    ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
+    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+    upipe_throw_dead(upipe);
     struct avcdv_test *avcdv_test = avcdv_test_from_upipe(upipe);
     upipe_clean(upipe);
     free(avcdv_test);
@@ -242,7 +238,7 @@ static void avcdv_test_free(struct upipe *upipe)
 static struct upipe_mgr avcdv_test_mgr = {
     .upipe_alloc = avcdv_test_alloc,
     .upipe_input = avcdv_test_input,
-    .upipe_control = avcdv_test_control,
+    .upipe_control = NULL,
     .upipe_release = NULL,
     .upipe_use = NULL,
 
@@ -258,12 +254,13 @@ UPIPE_HELPER_UPIPE(nullpipe, upipe);
 
 /** nullpipe (/dev/null) */
 static struct upipe *nullpipe_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe, struct ulog *ulog)
+                                    struct uprobe *uprobe)
 {
     struct nullpipe *nullpipe = malloc(sizeof(struct nullpipe));
     if (unlikely(!nullpipe)) return NULL;
-    upipe_init(&nullpipe->upipe, mgr, uprobe, ulog);
+    upipe_init(&nullpipe->upipe, mgr, uprobe);
     urefcount_init(&nullpipe->refcount);
+    upipe_throw_ready(&nullpipe->upipe);
     return &nullpipe->upipe;
 }
 
@@ -289,7 +286,7 @@ static void nullpipe_release(struct upipe *upipe)
 /** nullpipe (/dev/null) */
 static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
 {
-    ulog_debug(upipe->ulog, "sending uref to devnull");
+    upipe_dbg(upipe, "sending uref to devnull");
     uref_free(uref);
 }
 
@@ -442,8 +439,11 @@ int main (int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
 
     /* ev / pumps */
     struct ev_loop *loop = ev_default_loop(0);
@@ -463,7 +463,7 @@ int main (int argc, char **argv)
     assert(upipe_av_init(false));
     struct upipe_mgr *upipe_avcdv_mgr = upipe_avcdv_mgr_alloc();
     assert(upipe_avcdv_mgr);
-    struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "avcdv"));
+    struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv"));
     assert(avcdv);
     assert(upipe_set_ubuf_mgr(avcdv, pic_mgr));
     assert(upipe_set_uref_mgr(avcdv, uref_mgr));
@@ -472,11 +472,11 @@ int main (int argc, char **argv)
     mainthread.avcdv = avcdv;
 
     // test pipe
-    struct upipe *avcdv_test = upipe_alloc(&avcdv_test_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "avcdv_test"));
+    struct upipe *avcdv_test = upipe_alloc(&avcdv_test_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv_test"));
     assert(upipe_set_output(avcdv, avcdv_test));
     
     // null pipe
-    struct upipe *nullpipe = upipe_alloc(&nullpipe_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "devnull"));
+    struct upipe *nullpipe = upipe_alloc(&nullpipe_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"));
 
     if (!pgm_prefix) {
         assert(upipe_set_output(avcdv, nullpipe));
@@ -519,8 +519,8 @@ int main (int argc, char **argv)
         memset(&thread[i], 0, sizeof(struct thread));
         thread[i].num = i;
         thread[i].iteration = 0;
-        thread[i].avcdv = upipe_alloc(upipe_avcdv_mgr, uprobe_log,
-                        ulog_stdio_alloc_va(stdout, ULOG_LEVEL, "avcdv_thread(%d)", i));
+        thread[i].avcdv = upipe_alloc(upipe_avcdv_mgr,
+                        uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL, "avcdv_thread(%d)", i));
         assert(thread[i].avcdv);
         assert(upipe_set_ubuf_mgr(thread[i].avcdv, pic_mgr));
         assert(upipe_set_uref_mgr(thread[i].avcdv, uref_mgr));
@@ -574,7 +574,8 @@ int main (int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
     upipe_av_clean();
 
     ev_default_destroy();

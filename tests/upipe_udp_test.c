@@ -30,9 +30,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -72,7 +72,7 @@
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
 #define READ_SIZE 4096
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define BUF_SIZE 256
 #define FORMAT "This is packet number %d"
 
@@ -121,13 +121,14 @@ struct udpsrc_test {
 UPIPE_HELPER_UPIPE(udpsrc_test, upipe);
 
 /** helper phony pipe to test upipe_udpsrc */
-static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
+static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 {
     struct udpsrc_test *udpsrc_test = malloc(sizeof(struct udpsrc_test));
     assert(udpsrc_test != NULL);
     udpsrc_test->flow = NULL;
     udpsrc_test->counter = 0;
-	upipe_init(&udpsrc_test->upipe, mgr, uprobe, ulog);
+	upipe_init(&udpsrc_test->upipe, mgr, uprobe);
+    upipe_throw_ready(&udpsrc_test->upipe);
     return &udpsrc_test->upipe;
 }
 
@@ -147,12 +148,12 @@ static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
             uref_free(udpsrc_test->flow);
         }
         udpsrc_test->flow = uref;
-        ulog_debug(upipe->ulog, "flow def: %s", def);
+        upipe_dbg_va(upipe, "flow def: %s", def);
         return;
     }
 
     if ((rbuf = uref_block_peek(uref, 0, -1, buf))) {
-        ulog_debug(upipe->ulog, "Received string: %s", rbuf);
+        upipe_dbg_va(upipe, "Received string: %s", rbuf);
         snprintf((char *)str, sizeof(str), FORMAT, udpsrc_test->counter);
         assert(strncmp((char *)str, (char *)rbuf, BUF_SIZE) == 0);
         udpsrc_test->counter++;
@@ -165,7 +166,8 @@ static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
 /** helper phony pipe to test upipe_udpsrc */
 static void udpsrc_test_free(struct upipe *upipe)
 {
-    ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
+    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+    upipe_throw_dead(upipe);
     struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
     if (udpsrc_test->flow)
         uref_free(udpsrc_test->flow);
@@ -232,17 +234,21 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
 
-    struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "udpsrc_test"));
+    struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"));
 
 
 	// udpsrc
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
-    upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "udp source"));
+    upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp source"));
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
@@ -294,7 +300,8 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
 
 	freeaddrinfo(servinfo);
 

@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
@@ -92,18 +91,16 @@ UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_sync *upipe_ts_sync = malloc(sizeof(struct upipe_ts_sync));
     if (unlikely(upipe_ts_sync == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_sync_to_upipe(upipe_ts_sync);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_sync_init_sync(upipe);
     upipe_ts_sync_init_output(upipe);
     upipe_ts_sync->ts_size = TS_SIZE;
@@ -170,7 +167,6 @@ static void upipe_ts_sync_append(struct upipe *upipe, struct uref *uref)
         struct ubuf *ubuf = ubuf_dup(uref->ubuf);
         if (unlikely(ubuf == NULL ||
                      !uref_block_append(upipe_ts_sync->next_uref, ubuf))) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             uref_free(uref);
             if (ubuf != NULL)
@@ -236,7 +232,6 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
         struct uref *output = uref_dup(upipe_ts_sync->next_uref);
         upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             continue;
         }
@@ -263,7 +258,6 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
             struct uref *output = uref_dup(upipe_ts_sync->next_uref);
             upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
-                ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 continue;
             }
@@ -303,7 +297,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         /* FIXME make it dependant on the output size */
         uref_flow_set_def(uref, OUTPUT_FLOW_DEF);
         upipe_ts_sync_store_flow_def(upipe, uref);

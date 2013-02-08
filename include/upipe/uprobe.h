@@ -50,8 +50,11 @@ enum uprobe_event {
     /** a pipe is about to be destroyed and will no longer accept input
      * and control commands (void) */
     UPROBE_DEAD,
-    /** an allocation error occurred, data may be lost (void); from now on
-     * the behaviour of the pipe is undefined, except @ref upipe_release */
+    /** something occurred, and the pipe send a textual message
+     * (enum uprobe_log_level, const char *) */
+    UPROBE_LOG,
+    /** an allocation error occurred, data may be lost (void); from now on the
+     * behaviour of the pipe is undefined, except @ref upipe_release */
     UPROBE_AERROR,
     /** the last flow definition sent is not compatible with this pipe
      * (struct uref *) */
@@ -89,15 +92,28 @@ enum uprobe_event {
     UPROBE_LOCAL = 0x8000
 };
 
+/** @This defines the levels of log messages. */
+enum uprobe_log_level {
+    /** debug messages, not necessarily meaningful */
+    UPROBE_LOG_DEBUG,
+    /** notice messages, only informative */
+    UPROBE_LOG_NOTICE,
+    /** warning messages, the processing continues but may have unexpected
+     * results */
+    UPROBE_LOG_WARNING,
+    /** error messages, the processing cannot continue */
+    UPROBE_LOG_ERROR
+};
+
 /** @This is the call-back type for uprobe events; it returns true if the
  * event was handled. */
-typedef bool (*uprobe_throw)(struct uprobe *, struct upipe *,
-                             enum uprobe_event, va_list);
+typedef bool (*uprobe_throw_func)(struct uprobe *, struct upipe *,
+                                  enum uprobe_event, va_list);
 
 /** @This is a structure passed to a module upon initializing a new pipe. */
 struct uprobe {
     /** function to throw events */
-    uprobe_throw uthrow;
+    uprobe_throw_func uthrow;
     /** next probe to test if this one doesn't catch the event */
     struct uprobe *next;
 };
@@ -110,12 +126,176 @@ struct uprobe {
  * @param uthrow function which will be called when an event is thrown
  * @param next next probe to test if this one doesn't catch the event
  */
-static inline void uprobe_init(struct uprobe *uprobe, uprobe_throw uthrow,
+static inline void uprobe_init(struct uprobe *uprobe, uprobe_throw_func uthrow,
                                struct uprobe *next)
 {
     uprobe->uthrow = uthrow;
     uprobe->next = next;
 }
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param event event to throw
+ * @param args list of arguments
+ */
+static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
+                                   enum uprobe_event event, va_list args)
+{
+    while (likely(uprobe != NULL)) {
+        /* in case our probe deletes itself */
+        struct uprobe *next = uprobe->next;
+        if (uprobe->uthrow(uprobe, upipe, event, args))
+            break;
+        uprobe = next;
+    }
+}
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param event event to throw, followed with optional arguments
+ */
+static inline void uprobe_throw(struct uprobe *uprobe, struct upipe *upipe,
+                                enum uprobe_event event, ...)
+{
+    va_list args;
+    va_start(args, event);
+    uprobe_throw_va(uprobe, upipe, event, args);
+    va_end(args);
+}
+
+/** @internal @This throws a log event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param msg textual message
+ */
+static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
+                              enum uprobe_log_level level, const char *msg)
+{
+    uprobe_throw(uprobe, upipe, UPROBE_LOG, level, msg);
+}
+
+/** @internal @This throws a log event, with printf-style message generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_log_va(struct uprobe *uprobe, struct upipe *upipe,
+                                enum uprobe_log_level level,
+                                const char *format, ...)
+{
+    UBASE_VARARG(uprobe_log(uprobe, upipe, level, string))
+}
+
+/** @This throws an error event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define uprobe_err(uprobe, upipe, msg)                                      \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_ERROR, msg)
+
+/** @This throws an error event, with printf-style message generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_err_va(struct uprobe *uprobe, struct upipe *upipe,
+                                 const char *format, ...)
+{
+    UBASE_VARARG(uprobe_err(uprobe, upipe, string))
+}
+
+/** @This throws a warning event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param uprobe description structure of the pipe
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define uprobe_warn(uprobe, upipe, msg)                                     \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_WARNING, msg)
+
+/** @This throws a warning event, with printf-style message generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_warn_va(struct uprobe *uprobe, struct upipe *upipe,
+                                  const char *format, ...)
+{
+    UBASE_VARARG(uprobe_warn(uprobe, upipe, string))
+}
+
+/** @This throws a notice statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define uprobe_notice(uprobe, upipe, msg)                                   \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_NOTICE, msg)
+
+/** @This throws a notice statement event, with printf-style message generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_notice_va(struct uprobe *uprobe, struct upipe *upipe,
+                                    const char *format, ...)
+{
+    UBASE_VARARG(uprobe_notice(uprobe, upipe, string))
+}
+
+/** @This throws a debug statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define uprobe_dbg(uprobe, upipe, msg)                                      \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_DEBUG, msg)
+
+/** @This throws a debug statement event, with printf-style message generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
+                                 const char *format, ...)
+{
+    UBASE_VARARG(uprobe_dbg(uprobe, upipe, string))
+}
+
+/** @This throws an allocation error event. This event is thrown whenever a
+ * pipe is unable to allocate required data. After this event, the behaviour
+ * of a pipe is undefined, except for calls to @ref upipe_release.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ */
+#define uprobe_throw_aerror(uprobe, upipe)                                  \
+    do {                                                                    \
+        uprobe_err_va(uprobe, upipe, "allocation error at %s:%d",           \
+                     __FILE__, __LINE__);                                   \
+        uprobe_throw(uprobe, upipe, UPROBE_AERROR);                         \
+    } while (0)
 
 /** @This implements the common parts of a plumber probe (catching the
  * need_output event).

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,8 +34,8 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/udict_dump.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -49,7 +49,7 @@
 
 int main(int argc, char **argv)
 {
-    struct ulog *ulog = ulog_stdio_alloc(stdout, ULOG_DEBUG, "udict test");
+    struct uprobe *uprobe = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_DEBUG);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr,
@@ -106,22 +106,22 @@ int main(int argc, char **argv)
     assert(udict_get_rational_va(udict1, &r, "x.ar[%d]", 0));
     assert(r.num == 64 && r.den == 45);
 
-    udict_dump(udict1, ulog);
+    udict_dump(udict1, uprobe);
 
     struct udict *udict2 = udict_dup(udict1);
     assert(udict2 != NULL);
-    udict_dump(udict2, ulog);
+    udict_dump(udict2, uprobe);
     udict_free(udict2);
 
     udict2 = udict_copy(mgr, udict1);
     assert(udict2 != NULL);
-    udict_dump(udict2, ulog);
+    udict_dump(udict2, uprobe);
     udict_free(udict2);
 
     udict_free(udict1);
     udict_mgr_release(mgr);
 
     umem_mgr_release(umem_mgr);
-    ulog_free(ulog);
+    uprobe_stdio_free(uprobe);
     return 0;
 }

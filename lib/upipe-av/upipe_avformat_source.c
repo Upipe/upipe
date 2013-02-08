@@ -31,7 +31,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -190,19 +189,17 @@ static inline struct uchain *
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avfsrc_output_alloc(struct upipe_mgr *mgr,
-                                               struct uprobe *uprobe,
-                                               struct ulog *ulog)
+                                               struct uprobe *uprobe)
 {
     struct upipe_avfsrc_output *upipe_avfsrc_output =
         malloc(sizeof(struct upipe_avfsrc_output));
     if (unlikely(upipe_avfsrc_output == NULL))
         return NULL;
     struct upipe *upipe = upipe_avfsrc_output_to_upipe(upipe_avfsrc_output);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     uchain_init(&upipe_avfsrc_output->uchain);
     upipe_avfsrc_output->id = UINT64_MAX;
     upipe_avfsrc_output_init_output(upipe);
@@ -248,14 +245,13 @@ static bool upipe_avfsrc_output_set_flow_def(struct upipe *upipe,
         struct upipe_avfsrc_output *output =
             upipe_avfsrc_output_from_uchain(uchain);
         if (output != upipe_avfsrc_output && output->id == id) {
-            ulog_warning(upipe->ulog, "ID %"PRIu64" is already in use", id);
+            upipe_warn_va(upipe, "ID %"PRIu64" is already in use", id);
             return false;
         }
     }
 
     struct uref *uref = uref_dup(flow_def);
     if (unlikely(uref == NULL)) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
@@ -393,19 +389,16 @@ static struct upipe_mgr *upipe_avfsrc_init_output_mgr(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe,
-                                        struct ulog *ulog)
+                                        struct uprobe *uprobe)
 {
     struct upipe_avfsrc *upipe_avfsrc = malloc(sizeof(struct upipe_avfsrc));
     if (unlikely(upipe_avfsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
-    upipe_split_init(upipe, mgr, uprobe, ulog,
-                     upipe_avfsrc_init_output_mgr(upipe));
+    upipe_split_init(upipe, mgr, uprobe, upipe_avfsrc_init_output_mgr(upipe));
     ulist_init(&upipe_avfsrc->outputs);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
@@ -471,8 +464,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     int error = av_read_frame(upipe_avfsrc->context, &pkt);
     if (unlikely(error < 0)) {
-        ulog_error(upipe->ulog, "read error from %s (%s)", upipe_avfsrc->url,
-                   upipe_av_ulog_strerror(upipe->ulog, error));
+        upipe_av_strerror(error, buf);
+        upipe_err_va(upipe, "read error from %s (%s)", upipe_avfsrc->url, buf);
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_throw_read_end(upipe, upipe_avfsrc->url);
         return;
@@ -496,7 +489,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
                                          output->ubuf_mgr, pkt.size);
     if (unlikely(uref == NULL)) {
         av_free_packet(&pkt);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -507,7 +499,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
         av_free_packet(&pkt);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -696,7 +687,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
     if (unlikely(!upipe_av_deal_yield(upump))) {
         upump_free(upipe_avfsrc->upump_av_deal);
         upipe_avfsrc->upump_av_deal = NULL;
-        ulog_error(upipe->ulog, "can't stop dealer");
+        upipe_err(upipe, "can't stop dealer");
         upipe_throw_upump_error(upipe);
         return;
     }
@@ -705,10 +696,10 @@ static void upipe_avfsrc_probe(struct upump *upump)
     upipe_avfsrc->probed = true;
 
     if (unlikely(error < 0)) {
-        ulog_error(upipe->ulog, "can't probe URL %s (%s)", upipe_avfsrc->url,
-                   upipe_av_ulog_strerror(upipe->ulog, error));
+        upipe_av_strerror(error, buf);
+        upipe_err_va(upipe, "can't probe URL %s (%s)", upipe_avfsrc->url, buf);
         if (likely(upipe_avfsrc->url != NULL))
-            ulog_notice(upipe->ulog, "closing URL %s", upipe_avfsrc->url);
+            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         avformat_close_input(&upipe_avfsrc->context);
         upipe_avfsrc->context = NULL;
         free(upipe_avfsrc->url);
@@ -746,8 +737,8 @@ static void upipe_avfsrc_probe(struct upump *upump)
         }
 
         if (unlikely(flow_def == NULL)) {
-            ulog_warning(upipe->ulog, "unsupported track type (%u:%u)",
-                         codec->codec_type, codec->codec_id);
+            upipe_warn_va(upipe, "unsupported track type (%u:%u)",
+                          codec->codec_type, codec->codec_id);
             continue;
         }
         ret = uref_av_flow_set_id(flow_def, i);
@@ -759,7 +750,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         if (unlikely(!ret)) {
             uref_free(flow_def);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
@@ -823,8 +813,9 @@ static bool _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
     assert(option != NULL);
     int error = av_dict_set(&upipe_avfsrc->options, option, content, 0);
     if (unlikely(error < 0)) {
-        ulog_error(upipe->ulog, "can't set option %s:%s (%s)", option, content,
-                   upipe_av_ulog_strerror(upipe->ulog, error));
+        upipe_av_strerror(error, buf);
+        upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
+                     buf);
         return false;
     }
     return true;
@@ -856,7 +847,7 @@ static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
 
     if (unlikely(upipe_avfsrc->context != NULL)) {
         if (likely(upipe_avfsrc->url != NULL))
-            ulog_notice(upipe->ulog, "closing URL %s", upipe_avfsrc->url);
+            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         avformat_close_input(&upipe_avfsrc->context);
         upipe_avfsrc->context = NULL;
         upipe_avfsrc_set_upump(upipe, NULL);
@@ -885,13 +876,13 @@ static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
                                     &options);
     av_dict_free(&options);
     if (unlikely(error < 0)) {
-        ulog_error(upipe->ulog, "can't open URL %s (%s)", url,
-                   upipe_av_ulog_strerror(upipe->ulog, error));
+        upipe_av_strerror(error, buf);
+        upipe_err_va(upipe, "can't open URL %s (%s)", url, buf);
         return false;
     }
 
     upipe_avfsrc->url = strdup(url);
-    ulog_notice(upipe->ulog, "opening URL %s", upipe_avfsrc->url);
+    upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
     return true;
 }
 
@@ -1027,7 +1018,7 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
             upipe_av_deal_upump_alloc(upipe_avfsrc->upump_mgr,
                                       upipe_avfsrc_probe, upipe);
         if (unlikely(upump_av_deal == NULL)) {
-            ulog_error(upipe->ulog, "can't create dealer");
+            upipe_err(upipe, "can't create dealer");
             upipe_throw_upump_error(upipe);
             return false;
         }
@@ -1056,18 +1047,17 @@ static void upipe_avfsrc_release(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_avfsrc->refcount))) {
-        upipe_throw_dead(upipe);
-
         /* we can only arrive here if there is no output anymore, so no
          * need to empty the outputs list */
         upipe_avfsrc_abort_av_deal(upipe);
         if (likely(upipe_avfsrc->context != NULL)) {
             if (likely(upipe_avfsrc->url != NULL))
-                ulog_notice(upipe->ulog, "closing URL %s", upipe_avfsrc->url);
+                upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
             avformat_close_input(&upipe_avfsrc->context);
         }
-        av_dict_free(&upipe_avfsrc->options);
+        upipe_throw_dead(upipe);
 
+        av_dict_free(&upipe_avfsrc->options);
         free(upipe_avfsrc->url);
 
         upipe_avfsrc_clean_uclock(upipe);

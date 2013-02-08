@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -78,18 +77,16 @@ UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_psim *upipe_ts_psim = malloc(sizeof(struct upipe_ts_psim));
     if (unlikely(upipe_ts_psim == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_psim_to_upipe(upipe_ts_psim);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_psim_init_sync(upipe);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
@@ -130,7 +127,6 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
             upipe_ts_psim_flush(upipe);
             if (ubuf != NULL)
                 ubuf_free(ubuf);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
@@ -144,7 +140,6 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
 
         upipe_ts_psim->next_uref = uref_dup(uref);
         if (unlikely(upipe_ts_psim->next_uref == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
@@ -168,7 +163,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     assert(ret);
 
     if (unlikely(length + PSI_HEADER_SIZE > PSI_PRIVATE_MAX_SIZE)) {
-        ulog_warning(upipe->ulog, "wrong PSI header");
+        upipe_warn(upipe, "wrong PSI header");
         upipe_ts_psim_flush(upipe);
         return false;
     }
@@ -259,7 +254,7 @@ static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         upipe_ts_psim_store_flow_def(upipe, uref);
         return;
     }

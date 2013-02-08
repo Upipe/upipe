@@ -31,9 +31,9 @@
 #include <upipe/ubase.h>
 #include <upipe/upump.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/upipe.h>
-#include <upipe/ulog.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -49,27 +49,7 @@ struct uprobe_upump_mgr {
     struct uprobe uprobe;
 };
 
-/** @internal @This returns the high-level uprobe structure.
- *
- * @param uprobe_upump_mgr pointer to the uprobe_upump_mgr structure
- * @return pointer to the uprobe structure
- */
-static inline struct uprobe *
-    uprobe_upump_mgr_to_uprobe(struct uprobe_upump_mgr *uprobe_upump_mgr)
-{
-    return &uprobe_upump_mgr->uprobe;
-}
-
-/** @internal @This returns the private uprobe_upump_mgr structure.
- *
- * @param mgr description structure of the uprobe
- * @return pointer to the uprobe_upump_mgr structure
- */
-static inline struct uprobe_upump_mgr *
-    uprobe_upump_mgr_from_uprobe(struct uprobe *uprobe)
-{
-    return container_of(uprobe, struct uprobe_upump_mgr, uprobe);
-}
+UPROBE_HELPER_UPROBE(uprobe_upump_mgr, uprobe);
 
 /** @internal @This catches events thrown by pipes.
  *
@@ -88,7 +68,7 @@ static bool uprobe_upump_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
     if (event == UPROBE_NEED_UPUMP_MGR && uprobe_upump_mgr->upump_mgr != NULL) {
         if (unlikely(!upipe_set_upump_mgr(upipe,
                                           uprobe_upump_mgr->upump_mgr))) {
-            ulog_warning(upipe->ulog, "probe couldn't set upump manager");
+            upipe_warn(upipe, "probe couldn't set upump manager");
             return false;
         }
         return true;

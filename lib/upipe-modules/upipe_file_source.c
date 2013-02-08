@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -116,17 +115,16 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe, struct ulog *ulog)
+                                      struct uprobe *uprobe)
 {
     struct upipe_fsrc *upipe_fsrc = malloc(sizeof(struct upipe_fsrc));
     if (unlikely(upipe_fsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     urefcount_init(&upipe_fsrc->refcount);
     upipe_fsrc_init_uref_mgr(upipe);
     upipe_fsrc_init_ubuf_mgr(upipe);
@@ -158,7 +156,6 @@ static void upipe_fsrc_worker(struct upump *upump)
                                          upipe_fsrc->ubuf_mgr,
                                          upipe_fsrc->read_size);
     if (unlikely(uref == NULL)) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -167,7 +164,6 @@ static void upipe_fsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -192,8 +188,7 @@ static void upipe_fsrc_worker(struct upump *upump)
             default:
                 break;
         }
-        ulog_error(upipe->ulog, "read error from %s (%s)", upipe_fsrc->path,
-                   ulog_strerror(upipe->ulog, errno));
+        upipe_err_va(upipe, "read error from %s (%m)", upipe_fsrc->path);
         upipe_fsrc_set_upump(upipe, NULL);
         upipe_throw_read_end(upipe, upipe_fsrc->path);
         return;
@@ -201,7 +196,7 @@ static void upipe_fsrc_worker(struct upump *upump)
     if (unlikely(ret == 0)) {
         uref_free(uref);
         if (likely(upipe_fsrc->uclock == NULL)) {
-            ulog_notice(upipe->ulog, "end of file %s", upipe_fsrc->path);
+            upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
             upipe_fsrc_set_upump(upipe, NULL);
             upipe_throw_read_end(upipe, upipe_fsrc->path);
         }
@@ -240,7 +235,7 @@ static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
 
     if (unlikely(upipe_fsrc->fd != -1)) {
         if (likely(upipe_fsrc->path != NULL))
-            ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
+            upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
         close(upipe_fsrc->fd);
         upipe_fsrc->fd = -1;
     }
@@ -260,7 +255,6 @@ static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
                                                           NULL);
         if (unlikely(flow_def == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
@@ -279,8 +273,7 @@ static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
 
     upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (unlikely(upipe_fsrc->fd == -1)) {
-        ulog_error(upipe->ulog, "can't open file %s (%s)", path,
-                   ulog_strerror(upipe->ulog, errno));
+        upipe_err_va(upipe, "can't open file %s (%m)", path);
         return false;
     }
 
@@ -288,11 +281,10 @@ static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
     if (unlikely(upipe_fsrc->path == NULL)) {
         close(upipe_fsrc->fd);
         upipe_fsrc->fd = -1;
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
-    ulog_notice(upipe->ulog, "opening file %s", upipe_fsrc->path);
+    upipe_notice_va(upipe, "opening file %s", upipe_fsrc->path);
     return true;
 }
 
@@ -492,13 +484,13 @@ static void upipe_fsrc_release(struct upipe *upipe)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_fsrc->refcount))) {
-        upipe_throw_dead(upipe);
-
         if (likely(upipe_fsrc->fd != -1)) {
             if (likely(upipe_fsrc->path != NULL))
-                ulog_notice(upipe->ulog, "closing file %s", upipe_fsrc->path);
+                upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
             close(upipe_fsrc->fd);
         }
+        upipe_throw_dead(upipe);
+
         free(upipe_fsrc->path);
         upipe_fsrc_clean_read_size(upipe);
         upipe_fsrc_clean_uclock(upipe);

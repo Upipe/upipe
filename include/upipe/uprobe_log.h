@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short simple probe logging all received events, as a fall-back
+ * @short simple probe logging all received events
  */
 
 #ifndef _UPIPE_UPROBE_LOG_H_
@@ -32,7 +32,6 @@
 #define _UPIPE_UPROBE_LOG_H_
 
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 
 /** @This allocates a new uprobe log structure.
  *
@@ -40,7 +39,8 @@
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_log_alloc(struct uprobe *next, enum ulog_level level);
+struct uprobe *uprobe_log_alloc(struct uprobe *next,
+                                enum uprobe_log_level level);
 
 /** @This frees a uprobe log structure.
  *

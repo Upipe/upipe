@@ -34,8 +34,6 @@
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,12 +45,11 @@ static bool got_upump_mgr = false;
 
 /** helper phony pipe to test uprobe_upump_mgr */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe,
-                                       struct ulog *ulog)
+                                       struct uprobe *uprobe)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_throw_need_upump_mgr(upipe);
     assert(got_upump_mgr);
     return upipe;
@@ -104,8 +101,7 @@ int main(int argc, char **argv)
     struct uprobe *uprobe = uprobe_upump_mgr_alloc(NULL, upump_mgr);
     assert(uprobe != NULL);
 
-    struct upipe *upipe = uprobe_test_alloc(&uprobe_test_mgr, uprobe,
-            ulog_stdio_alloc(stdout, ULOG_DEBUG, "probe"));
+    struct upipe *upipe = uprobe_test_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
     uprobe_upump_mgr_free(uprobe);

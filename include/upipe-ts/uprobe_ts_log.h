@@ -24,8 +24,7 @@
  */
 
 /** @file
- * @short simple probe logging all received events from ts pipes, as a
- * fall-back
+ * @short simple probe logging all received events from ts pipes
  */
 
 #ifndef _UPIPE_UPROBE_TS_LOG_H_
@@ -33,17 +32,17 @@
 #define _UPIPE_UPROBE_TS_LOG_H_
 
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 
-/** @This allocates a new uprobe log structure.
+/** @This allocates a new uprobe ts log structure.
  *
  * @param next next probe to test if this one doesn't catch the event
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_ts_log_alloc(struct uprobe *next, enum ulog_level level);
+struct uprobe *uprobe_ts_log_alloc(struct uprobe *next,
+                                   enum uprobe_log_level level);
 
-/** @This frees a uprobe log structure.
+/** @This frees a uprobe ts log structure.
  *
  * @param uprobe uprobe structure to free
  */

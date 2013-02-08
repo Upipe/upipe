@@ -30,9 +30,9 @@
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/upipe.h>
-#include <upipe/ulog.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -48,27 +48,7 @@ struct uprobe_uref_mgr {
     struct uprobe uprobe;
 };
 
-/** @internal @This returns the high-level uprobe structure.
- *
- * @param uprobe_uref_mgr pointer to the uprobe_uref_mgr structure
- * @return pointer to the uprobe structure
- */
-static inline struct uprobe *
-    uprobe_uref_mgr_to_uprobe(struct uprobe_uref_mgr *uprobe_uref_mgr)
-{
-    return &uprobe_uref_mgr->uprobe;
-}
-
-/** @internal @This returns the private uprobe_uref_mgr structure.
- *
- * @param mgr description structure of the uprobe
- * @return pointer to the uprobe_uref_mgr structure
- */
-static inline struct uprobe_uref_mgr *
-    uprobe_uref_mgr_from_uprobe(struct uprobe *uprobe)
-{
-    return container_of(uprobe, struct uprobe_uref_mgr, uprobe);
-}
+UPROBE_HELPER_UPROBE(uprobe_uref_mgr, uprobe)
 
 /** @internal @This catches events thrown by pipes.
  *
@@ -86,7 +66,7 @@ static bool uprobe_uref_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
 
     if (event == UPROBE_NEED_UREF_MGR && uprobe_uref_mgr->uref_mgr != NULL) {
         if (unlikely(!upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr))) {
-            ulog_warning(upipe->ulog, "probe couldn't set uref manager");
+            upipe_warn(upipe, "probe couldn't set uref manager");
             return false;
         }
         return true;

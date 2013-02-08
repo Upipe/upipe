@@ -30,6 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
@@ -39,8 +40,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_std.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -61,10 +60,12 @@ int main(int argc, char **argv)
     struct uref_mgr *mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(mgr != NULL);
 
-    struct uprobe *uprobe = uprobe_log_alloc(NULL, ULOG_DEBUG);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout,
+                                                     UPROBE_LOG_DEBUG);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *uprobe = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
-    test_pipe.ulog = ulog_stdio_alloc(stdout, ULOG_DEBUG, "probe");
 
     upipe_throw_aerror(&test_pipe);
     upipe_throw_upump_error(&test_pipe);
@@ -77,10 +78,10 @@ int main(int argc, char **argv)
     upipe_throw_need_uref_mgr(&test_pipe);
     upipe_throw_need_upump_mgr(&test_pipe);
     uprobe_log_free(uprobe);
+    uprobe_stdio_free(uprobe_stdio);
 
     uref_mgr_release(mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    ulog_free(test_pipe.ulog);
     return 0;
 }

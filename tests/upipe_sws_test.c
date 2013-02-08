@@ -29,9 +29,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -65,7 +65,7 @@
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_HOFFSET  0
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 #define SRCSIZE             32
 #define DSTSIZE             16
@@ -141,7 +141,7 @@ static void fill_in(struct uref *uref,
 }
 
 /* compare a chroma of two pictures */
-static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub, uint8_t vsub, uint8_t macropixel_size, struct ulog *ulog)
+static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub, uint8_t vsub, uint8_t macropixel_size, struct uprobe *uprobe)
 {
     char string[512], *str;
     size_t hsize[2], vsize[2];
@@ -151,16 +151,16 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
 
     assert(urefs);
     assert(chroma);
-    assert(ulog);
+    assert(uprobe);
     assert(hsub);
     assert(vsub);
     assert(macropixel_size);
 
-    ulog_debug(ulog, "comparing %p and %p - chroma %s - %"PRIu8" %"PRIu8" %"PRIu8, urefs[0], urefs[1], chroma, hsub, vsub, macropixel_size);
+    uprobe_dbg_va(uprobe, NULL, "comparing %p and %p - chroma %s - %"PRIu8" %"PRIu8" %"PRIu8, urefs[0], urefs[1], chroma, hsub, vsub, macropixel_size);
     for (i = 0; i < 2; i++)
     {
         assert(urefs[i]);
-//        uref_dump(urefs[i], ulog);
+//        uref_dump(urefs[i], uprobe);
         fetch_chroma(urefs[i], chroma, stride, buffer, i, READ);
         assert(buffer[i]);
         uref_pic_size(urefs[i], &hsize[i], &vsize[i], NULL);
@@ -176,17 +176,17 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
         str = string;
         for (x = 0; x < hsize[0]; x++) {
             if (buffer[0][x] != buffer[1][x]) {
-                ulog_debug(ulog, "####### Pos %d %d differs: %"PRIu8" - %"PRIu8" !", x, y);
+                uprobe_dbg_va(uprobe, NULL, "####### Pos %d %d differs: %"PRIu8" - %"PRIu8" !", x, y);
                 return false;
             }
             str += snprintf(str, 5, "%02"PRIx8" ", buffer[0][x]);
         }
         buffer[0] += stride[0];
         buffer[1] += stride[1];
-        ulog_debug(ulog, string);
+        uprobe_dbg(uprobe, NULL, string);
     }
 
-    ulog_debug(ulog, "Yay, same pics for %s", chroma);
+    uprobe_dbg_va(uprobe, NULL, "Yay, same pics for %s", chroma);
     for (i=0; i < 2; i++) {
         fetch_chroma(urefs[i], chroma, stride,  buffer, i, UNMAP);
     }
@@ -204,13 +204,15 @@ struct sws_test {
 UPIPE_HELPER_UPIPE(sws_test, upipe);
 
 /** helper phony pipe to test upipe_sws */
-static struct upipe *sws_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
+static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
+                                    struct uprobe *uprobe)
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     assert(sws_test != NULL);
     sws_test->flow = NULL;
     sws_test->pic = NULL;
-	upipe_init(&sws_test->upipe, mgr, uprobe, ulog);
+	upipe_init(&sws_test->upipe, mgr, uprobe);
+    upipe_throw_ready(&sws_test->upipe);
     return &sws_test->upipe;
 }
 
@@ -221,8 +223,7 @@ static void sws_test_input(struct upipe *upipe, struct uref *uref,
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     const char *def;
     assert(uref != NULL);
-    ulog_debug(upipe->ulog, "===> received input uref");
-//  uref_dump(uref, upipe->ulog);
+    upipe_dbg(upipe, "===> received input uref");
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
         assert(def);
@@ -231,7 +232,7 @@ static void sws_test_input(struct upipe *upipe, struct uref *uref,
             sws_test->flow = NULL;
         }
         sws_test->flow = uref;
-        ulog_debug(upipe->ulog, "flow def %s", def);
+        upipe_dbg_va(upipe, "flow def %s", def);
         return;
     }
     if (sws_test->pic) {
@@ -239,14 +240,14 @@ static void sws_test_input(struct upipe *upipe, struct uref *uref,
         sws_test->pic = NULL;
     }
     sws_test->pic = uref;
-    ulog_debug(upipe->ulog, "received pic");
-//  uref_dump(sws_test->pic, upipe->ulog);
+    upipe_dbg(upipe, "received pic");
 }
 
 /** helper phony pipe to test upipe_sws */
 static void sws_test_free(struct upipe *upipe)
 {
-    ulog_debug(upipe->ulog, "releasing pipe");
+    upipe_dbg(upipe, "releasing pipe");
+    upipe_throw_dead(upipe);
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     if (sws_test->pic) uref_free(sws_test->pic);
     if (sws_test->flow) uref_free(sws_test->flow);
@@ -301,8 +302,6 @@ int main(int argc, char **argv)
     int ret;
 
     struct SwsContext *img_convert_ctx;
-
-    struct ulog *mainlog = ulog_stdio_alloc(stdout, ULOG_LEVEL, "main");
 
     /* planar I420 */
     ubuf_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
@@ -372,18 +371,21 @@ int main(int argc, char **argv)
     /* build sws pipe and dependencies */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
-    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws")); 
+    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws")); 
     assert(sws != NULL);
     assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "sws_test"));
-    ulog_debug(mainlog, "Pipe addr: sws:\t %p", sws);
-    ulog_debug(mainlog, "Pipe addr: sws_test: %p", sws_test);
+    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
+    uprobe_dbg_va(log, NULL, "Pipe addr: sws:\t %p", sws);
+    uprobe_dbg_va(log, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
@@ -391,7 +393,7 @@ int main(int argc, char **argv)
 
     /* Send first flow definition packet */
     struct uref *flowdef = uref_dup(pic_flow);
-    udict_dump(flowdef->udict, mainlog);
+    udict_dump(flowdef->udict, log);
     assert(flowdef);
     upipe_input(sws, flowdef, NULL);
 
@@ -405,9 +407,9 @@ int main(int argc, char **argv)
     upipe_input(sws, pic, NULL);
 
     assert(sws_test_from_upipe(sws_test)->pic);
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, mainlog));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, mainlog));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, mainlog));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, log));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, log));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, log));
 
     /* release urefs */
     uref_free(uref1);
@@ -421,8 +423,8 @@ int main(int argc, char **argv)
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr); 
-    ulog_free(mainlog);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 

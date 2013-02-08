@@ -38,8 +38,6 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,12 +52,11 @@ static bool got_uref_mgr = false;
 
 /** helper phony pipe to test uprobe_uref_mgr */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe,
-                                       struct ulog *ulog)
+                                       struct uprobe *uprobe)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_throw_need_uref_mgr(upipe);
     assert(got_uref_mgr);
     return upipe;
@@ -116,8 +113,7 @@ int main(int argc, char **argv)
     struct uprobe *uprobe = uprobe_uref_mgr_alloc(NULL, uref_mgr);
     assert(uprobe != NULL);
 
-    struct upipe *upipe = uprobe_test_alloc(&uprobe_test_mgr, uprobe,
-            ulog_stdio_alloc(stdout, ULOG_DEBUG, "probe"));
+    struct upipe *upipe = uprobe_test_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
     uprobe_uref_mgr_free(uprobe);

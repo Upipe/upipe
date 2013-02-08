@@ -27,7 +27,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
@@ -78,19 +77,17 @@ UPIPE_HELPER_OUTPUT(upipe_ts_check, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_check_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_check *upipe_ts_check =
         malloc(sizeof(struct upipe_ts_check));
     if (unlikely(upipe_ts_check == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_check_to_upipe(upipe_ts_check);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_check_init_output(upipe);
     upipe_ts_check->ts_size = TS_SIZE;
     urefcount_init(&upipe_ts_check->refcount);
@@ -112,7 +109,6 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
     uint8_t word;
     if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
@@ -121,7 +117,7 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
     uref_block_unmap(uref, 0, size);
     if (word != TS_SYNC) {
         uref_free(uref);
-        ulog_warning(upipe->ulog, "invalid TS sync 0x%"PRIx8, word);
+        upipe_warn_va(upipe, "invalid TS sync 0x%"PRIx8, word);
         return false;
     }
 
@@ -142,7 +138,6 @@ static void upipe_ts_check_work(struct upipe *upipe, struct uref *uref,
     size_t size;
     if (unlikely(!uref_block_size(uref, &size))) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -151,7 +146,6 @@ static void upipe_ts_check_work(struct upipe *upipe, struct uref *uref,
         struct uref *output = uref_dup(uref);
         if (unlikely(output == NULL)) {
             uref_free(uref);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
@@ -187,7 +181,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         /* FIXME make it dependant on the packet size */
         uref_flow_set_def(uref, OUTPUT_FLOW_DEF);
         upipe_ts_check_store_flow_def(upipe, uref);

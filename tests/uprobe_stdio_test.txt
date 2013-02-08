@@ -1,0 +1,5 @@
+error: This is an error
+warning: This is a composite warning with 66
+notice: This is a notice
+debug: This is a debug
+error: This is another error with 67

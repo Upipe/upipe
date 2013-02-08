@@ -31,7 +31,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -132,19 +131,17 @@ static inline struct uchain *
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe,
-                                            struct ulog *ulog)
+                                            struct uprobe *uprobe)
 {
     struct upipe_dup_output *upipe_dup_output =
         malloc(sizeof(struct upipe_dup_output));
     if (unlikely(upipe_dup_output == NULL))
         return NULL;
     struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     uchain_init(&upipe_dup_output->uchain);
     upipe_dup_output_init_output(upipe);
     urefcount_init(&upipe_dup_output->refcount);
@@ -157,10 +154,9 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
     /* set flow definition if available */
     if (upipe_dup->flow_def != NULL) {
         struct uref *uref = uref_dup(upipe_dup->flow_def);
-        if (unlikely(uref == NULL)) {
-            ulog_aerror(upipe->ulog);
+        if (unlikely(uref == NULL))
             upipe_throw_aerror(upipe);
-        } else
+        else
             upipe_dup_output_store_flow_def(upipe, uref);
     }
     upipe_throw_ready(upipe);
@@ -276,18 +272,16 @@ static struct upipe_mgr *upipe_dup_init_output_mgr(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe, struct ulog *ulog)
+                                     struct uprobe *uprobe)
 {
     struct upipe_dup *upipe_dup = malloc(sizeof(struct upipe_dup));
     if (unlikely(upipe_dup == NULL))
         return NULL;
     struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
-    upipe_split_init(upipe, mgr, uprobe, ulog,
-                     upipe_dup_init_output_mgr(upipe));
+    upipe_split_init(upipe, mgr, uprobe, upipe_dup_init_output_mgr(upipe));
     ulist_init(&upipe_dup->outputs);
     upipe_dup->flow_def = NULL;
     urefcount_init(&upipe_dup->refcount);
@@ -310,7 +304,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
         if (upipe_dup->flow_def != NULL)
             uref_free(upipe_dup->flow_def);
         upipe_dup->flow_def = uref;
-        ulog_debug(upipe->ulog, "flow definition %s", def);
+        upipe_dbg_va(upipe, "flow definition %s", def);
 
         /* also set it for every output */
         struct uchain *uchain;
@@ -319,7 +313,6 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                 upipe_dup_output_from_uchain(uchain);
             uref = uref_dup(upipe_dup->flow_def);
             if (unlikely(uref == NULL)) {
-                ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 return;
             }
@@ -342,7 +335,6 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
         struct uref *new_uref = uref_dup(uref);
         if (unlikely(new_uref == NULL)) {
             uref_free(uref);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }

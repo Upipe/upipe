@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
@@ -136,12 +135,10 @@ static inline struct uchain *
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_psi_split_output_alloc(struct upipe_mgr *mgr,
-                                                     struct uprobe *uprobe,
-                                                     struct ulog *ulog)
+                                                     struct uprobe *uprobe)
 {
     struct upipe_ts_psi_split_output *upipe_ts_psi_split_output =
         malloc(sizeof(struct upipe_ts_psi_split_output));
@@ -149,7 +146,7 @@ static struct upipe *upipe_ts_psi_split_output_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe =
         upipe_ts_psi_split_output_to_upipe(upipe_ts_psi_split_output);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     uchain_init(&upipe_ts_psi_split_output->uchain);
     upipe_ts_psi_split_output_init_output(upipe);
     urefcount_init(&upipe_ts_psi_split_output->refcount);
@@ -188,7 +185,6 @@ static bool upipe_ts_psi_split_output_set_flow_def(struct upipe *upipe,
 
     struct uref *uref = uref_dup(flow_def);
     if (unlikely(uref == NULL)) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
@@ -319,19 +315,17 @@ static struct upipe_mgr *upipe_ts_psi_split_init_output_mgr(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
-                                              struct uprobe *uprobe,
-                                              struct ulog *ulog)
+                                              struct uprobe *uprobe)
 {
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         malloc(sizeof(struct upipe_ts_psi_split));
     if (unlikely(upipe_ts_psi_split == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_psi_split_to_upipe(upipe_ts_psi_split);
-    upipe_split_init(upipe, mgr, uprobe, ulog,
+    upipe_split_init(upipe, mgr, uprobe,
                      upipe_ts_psi_split_init_output_mgr(upipe));
     ulist_init(&upipe_ts_psi_split->outputs);
     urefcount_init(&upipe_ts_psi_split->refcount);
@@ -366,7 +360,6 @@ static void upipe_ts_psi_split_work(struct upipe *upipe, struct uref *uref,
                         upump);
             else {
                 uref_free(uref);
-                ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 return;
             }
@@ -395,7 +388,7 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         upipe_ts_psi_split->flow_def_ok = true;
         uref_free(uref);
         return;

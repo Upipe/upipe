@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
@@ -79,17 +78,16 @@ UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe, struct ulog *ulog)
+                                       struct uprobe *uprobe)
 {
     struct upipe_qsrc *upipe_qsrc = malloc(sizeof(struct upipe_qsrc));
     if (unlikely(upipe_qsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     urefcount_init(&upipe_qsrc->refcount);
     upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
@@ -114,7 +112,7 @@ static void upipe_qsrc_worker(struct upump *upump)
         const char *def;
         if (unlikely(uref_flow_get_def(uref, &def))) {
             upipe_qsrc_store_flow_def(upipe, uref);
-            ulog_debug(upipe->ulog, "flow definition %s", def);
+            upipe_dbg_va(upipe, "flow definition %s", def);
             return;
         }
 
@@ -165,8 +163,8 @@ static bool _upipe_qsrc_set_max_length(struct upipe *upipe, unsigned int length)
                               upipe_qsrc->uqueue_extra)))
         return false;
     upipe_qsrc->upipe_queue.max_length = length;
-    ulog_notice(upipe->ulog, "queue source %p is ready with length %u",
-                upipe, length);
+    upipe_notice_va(upipe, "queue source %p is ready with length %u",
+                    upipe, length);
     if (unlikely(upipe_qsrc->upump_mgr == NULL))
         upipe_throw_need_upump_mgr(upipe);
     return true;
@@ -293,9 +291,9 @@ static void upipe_qsrc_release(struct upipe *upipe)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_qsrc->refcount))) {
+        upipe_notice_va(upipe, "freeing queue %p", upipe);
         upipe_throw_dead(upipe);
 
-        ulog_notice(upipe->ulog, "freeing queue %p", upipe);
         upipe_qsrc_clean_upump_mgr(upipe);
         upipe_qsrc_clean_output(upipe);
 

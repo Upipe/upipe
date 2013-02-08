@@ -30,8 +30,7 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_sub.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uclock.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref.h>
@@ -102,7 +101,7 @@ static bool _upipe_multicat_sink_change_file(struct upipe *upipe, int64_t idx)
     char filepath[MAXPATHLEN];
     if (unlikely(! (upipe_multicat_sink->dirpath
                       && upipe_multicat_sink->suffix && upipe_multicat_sink->fsink) )) {
-        ulog_warning(upipe->ulog, "call set_path first !");
+        upipe_warn(upipe, "call set_path first !");
         return false;
     }
     snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", upipe_multicat_sink->dirpath, idx, upipe_multicat_sink->suffix);
@@ -129,7 +128,7 @@ static void _upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
     newidx = (systime/upipe_multicat_sink->rotate);
     if (upipe_multicat_sink->fileidx != newidx) {
         if (unlikely(! _upipe_multicat_sink_change_file(upipe, newidx))) {
-            ulog_warning(upipe->ulog, "couldnt change file path");
+            upipe_warn(upipe, "couldnt change file path");
             uref_free(uref);
             return;
         }
@@ -152,7 +151,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
     const char *def;
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         if (upipe_multicat_sink->flow_def != NULL) {
             uref_free(upipe_multicat_sink->flow_def);
             upipe_multicat_sink->flow_def = NULL;
@@ -164,7 +163,6 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
         }
         upipe_multicat_sink->flow_def = uref_dup(uref);
         if (unlikely(upipe_multicat_sink->flow_def == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
@@ -196,13 +194,12 @@ static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
     struct upipe *fsink = NULL;
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (!upipe_multicat_sink->fsink_mgr) {
-        ulog_error(upipe->ulog, "fsink manager required");
+        upipe_err(upipe, "fsink manager required");
         return false;
     }
-    fsink = upipe_alloc(upipe_multicat_sink->fsink_mgr, upipe->uprobe,
-						ulog_sub_alloc(upipe->ulog, ULOG_NOTICE, "fsink"));
+    fsink = upipe_alloc(upipe_multicat_sink->fsink_mgr,
+                        uprobe_pfx_adhoc_alloc_va(upipe->uprobe, UPROBE_LOG_NOTICE, "fsink"));
     if (unlikely(!fsink)) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
@@ -210,7 +207,6 @@ static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
         struct uref *uref = uref_dup(upipe_multicat_sink->flow_def);
         if (unlikely(uref == NULL)) {
             upipe_release(fsink);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
@@ -241,7 +237,7 @@ static bool _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path,
     upipe_multicat_sink->fileidx = -1;
 
     if (unlikely(!path || !suffix)) {
-        ulog_notice(upipe->ulog, "setting NULL fsink path");
+        upipe_notice(upipe, "setting NULL fsink path");
         upipe_multicat_sink->dirpath = NULL;
         upipe_multicat_sink->suffix = NULL;
         upipe_fsink_set_path(upipe_multicat_sink->fsink, NULL, UPIPE_FSINK_APPEND);
@@ -250,7 +246,7 @@ static bool _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path,
 
     upipe_multicat_sink->dirpath = strndup(path, MAXPATHLEN);
     upipe_multicat_sink->suffix = strndup(suffix, MAXPATHLEN);
-    ulog_notice(upipe->ulog, "setting path and suffix: %s %s", path, suffix);
+    upipe_notice_va(upipe, "setting path and suffix: %s %s", path, suffix);
     return true;
 }
 
@@ -264,11 +260,11 @@ static bool  _upipe_multicat_sink_set_rotate(struct upipe *upipe, uint64_t rotat
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(rotate < 2)) {
-        ulog_warning(upipe->ulog, "invalid rotate interval (%"PRIu64" < 2)", rotate);
+        upipe_warn_va(upipe, "invalid rotate interval (%"PRIu64" < 2)", rotate);
         return false;
     }
     upipe_multicat_sink->rotate = rotate;
-    ulog_notice(upipe->ulog, "setting rotate: %"PRIu64, rotate);
+    upipe_notice_va(upipe, "setting rotate: %"PRIu64, rotate);
     return true;
 }
 
@@ -425,7 +421,7 @@ static bool upipe_multicat_sink_control(struct upipe *upipe, enum upipe_command 
             return _upipe_multicat_sink_get_path(upipe, va_arg(args, char **), va_arg(args, char **));
         }
         default:
-            ulog_warning(upipe->ulog, "invalid command");
+            upipe_warn(upipe, "invalid command");
             return false;
     }
 }
@@ -434,16 +430,15 @@ static bool upipe_multicat_sink_control(struct upipe *upipe, enum upipe_command 
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, struct ulog *ulog)
+static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = malloc(sizeof(struct upipe_multicat_sink));
     if (unlikely(upipe_multicat_sink == NULL))
         return NULL;
     struct upipe *upipe = upipe_multicat_sink_to_upipe(upipe_multicat_sink);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_multicat_sink->flow_def = NULL;
     upipe_multicat_sink->fsink = NULL;
     upipe_multicat_sink->fsink_mgr = NULL;
@@ -475,13 +470,14 @@ static void upipe_multicat_sink_release(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_multicat_sink->refcount))) {
-        upipe_throw_dead(upipe);
-
-        ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
         if (upipe_multicat_sink->flow_def != NULL)
             uref_free(upipe_multicat_sink->flow_def);
         if (upipe_multicat_sink->fsink != NULL)
             upipe_release(upipe_multicat_sink->fsink);
+
+        upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+        upipe_throw_dead(upipe);
+
         free(upipe_multicat_sink->dirpath);
         free(upipe_multicat_sink->suffix);
         upipe_clean(upipe);

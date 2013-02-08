@@ -31,7 +31,6 @@
 /** @hidden */
 #define _UPIPE_UPIPE_H_
 
-#include <upipe/ulog.h>
 #include <upipe/uprobe.h>
 
 #include <stdint.h>
@@ -40,8 +39,6 @@
 
 /** @hidden */
 struct uref;
-/** @hidden */
-struct ulog;
 /** @hidden */
 struct uclock;
 /** @hidden */
@@ -112,10 +109,8 @@ enum upipe_command {
 
 /** @This stores common parameters for upipe structures. */
 struct upipe {
-    /** pointer to the uprobe structure passed on initialization */
+    /** pointer to the uprobe hierarchy passed on initialization */
     struct uprobe *uprobe;
-    /** pointer to the ulog structure passed on initialization */
-    struct ulog *ulog;
     /** pointer to the manager for this pipe type */
     struct upipe_mgr *mgr;
 
@@ -131,8 +126,7 @@ struct upipe_mgr {
     unsigned int signature;
 
     /** function to create a pipe */
-    struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *,
-                                 struct ulog *);
+    struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *);
     /** function to send a uref to an input - the uref then belongs to the
      * callee */
     void (*upipe_input)(struct upipe *, struct uref *, struct upump *);
@@ -175,16 +169,16 @@ static inline void upipe_mgr_release(struct upipe_mgr *mgr)
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
- * @param ulog structure used to output logs (belongs to the callee)
  * @return pointer to allocated pipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe,
-                                        struct ulog *ulog)
+                                        struct uprobe *uprobe)
 {
-    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe, ulog);
+    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe);
     if (unlikely(upipe == NULL))
-        ulog_free(ulog);
+        /* notify ad-hoc probes that something went wrong so they can
+         * deallocate */
+        uprobe_throw_aerror(uprobe, NULL);
     return upipe;
 }
 
@@ -194,14 +188,12 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
  * @param upipe pointer to the join pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
- * @param ulog structure used to output logs (belongs to the callee)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_alloc_input(struct upipe *upipe,
-                                              struct uprobe *uprobe,
-                                              struct ulog *ulog)
+                                              struct uprobe *uprobe)
 {
-    return upipe_alloc(upipe->input_mgr, uprobe, ulog);
+    return upipe_alloc(upipe->input_mgr, uprobe);
 }
 
 /** @This allocates and initializes a subpipe that represents an output of a
@@ -210,14 +202,12 @@ static inline struct upipe *upipe_alloc_input(struct upipe *upipe,
  * @param upipe pointer to the split pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
- * @param ulog structure used to output logs (belongs to the callee)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_alloc_output(struct upipe *upipe,
-                                               struct uprobe *uprobe,
-                                               struct ulog *ulog)
+                                               struct uprobe *uprobe)
 {
-    return upipe_alloc(upipe->output_mgr, uprobe, ulog);
+    return upipe_alloc(upipe->output_mgr, uprobe);
 }
 
 /** @This initializes the public members of a pipe.
@@ -225,14 +215,12 @@ static inline struct upipe *upipe_alloc_output(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  */
 static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                              struct uprobe *uprobe, struct ulog *ulog)
+                              struct uprobe *uprobe)
 {
     assert(upipe != NULL);
     upipe->uprobe = uprobe;
-    upipe->ulog = ulog;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
     upipe->input_mgr = NULL;
@@ -244,16 +232,14 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @param input_mgr manager used to allocate input subpipes
  */
 static inline void upipe_join_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, struct ulog *ulog,
+                                   struct uprobe *uprobe,
                                    struct upipe_mgr *input_mgr)
 {
     assert(upipe != NULL);
     upipe->uprobe = uprobe;
-    upipe->ulog = ulog;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
     upipe->input_mgr = input_mgr;
@@ -265,16 +251,14 @@ static inline void upipe_join_init(struct upipe *upipe, struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @param output_mgr manager used to allocate output subpipes
  */
 static inline void upipe_split_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe, struct ulog *ulog,
+                                    struct uprobe *uprobe,
                                     struct upipe_mgr *output_mgr)
 {
     assert(upipe != NULL);
     upipe->uprobe = uprobe;
-    upipe->ulog = ulog;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
     upipe->input_mgr = NULL;
@@ -353,7 +337,6 @@ static inline bool upipe_control(struct upipe *upipe,
 static inline void upipe_clean(struct upipe *upipe)
 {
     assert(upipe != NULL);
-    ulog_free(upipe->ulog);
     upipe_mgr_release(upipe->mgr);
 }
 
@@ -417,17 +400,10 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
 static inline void upipe_throw(struct upipe *upipe,
                                enum uprobe_event event, ...)
 {
-    struct uprobe *uprobe = upipe->uprobe;
-    while (likely(uprobe != NULL)) {
-        bool ret;
-        va_list args;
-        va_start(args, event);
-        ret = uprobe->uthrow(uprobe, upipe, event, args);
-        va_end(args);
-        if (ret)
-            break;
-        uprobe = uprobe->next;
-    }
+    va_list args;
+    va_start(args, event);
+    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+    va_end(args);
 }
 
 /** @This throws a ready event. This event is thrown whenever a
@@ -451,16 +427,108 @@ static inline void upipe_throw_dead(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_DEAD);
 }
 
+/** @internal @This throws a log event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param msg textual message
+ */
+#define upipe_log(upipe, level, msg)                                        \
+    uprobe_log((upipe)->uprobe, upipe, level, msg)
+
+/** @internal @This throws a log event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_log_va(struct upipe *upipe,
+                                enum uprobe_log_level level,
+                                const char *format, ...)
+{
+    UBASE_VARARG(upipe_log(upipe, level, string))
+}
+
+/** @This throws an error event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_err(upipe, msg) upipe_log(upipe, UPROBE_LOG_ERROR, msg)
+
+/** @This throws an error event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_err(upipe, string))
+}
+
+/** @This throws a warning event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_warn(upipe, msg) upipe_log(upipe, UPROBE_LOG_WARNING, msg)
+
+/** @This throws a warning event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_warn(upipe, string))
+}
+
+/** @This throws a notice statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_notice(upipe, msg) upipe_log(upipe, UPROBE_LOG_NOTICE, msg)
+
+/** @This throws a notice statement event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_notice(upipe, string))
+}
+
+/** @This throws a debug statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_dbg(upipe, msg) upipe_log(upipe, UPROBE_LOG_DEBUG, msg)
+
+/** @This throws a debug statement event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_dbg(upipe, string))
+}
+
 /** @This throws an allocation error event. This event is thrown whenever a
  * pipe is unable to allocate required data. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
  *
  * @param upipe description structure of the pipe
  */
-static inline void upipe_throw_aerror(struct upipe *upipe)
-{
-    upipe_throw(upipe, UPROBE_AERROR);
-}
+#define upipe_throw_aerror(upipe) uprobe_throw_aerror((upipe)->uprobe, upipe)
 
 /** @This throws a flow definition error event. This event is thrown whenever
  * a flow definition packet is sent to @ref upipe_input, that is not

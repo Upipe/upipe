@@ -31,7 +31,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -134,18 +133,16 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_udpsrc, read_size)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe,
-                                        struct ulog *ulog)
+                                        struct uprobe *uprobe)
 {
     struct upipe_udpsrc *upipe_udpsrc = malloc(sizeof(struct upipe_udpsrc));
     if (unlikely(upipe_udpsrc == NULL))
         return NULL;
     struct upipe *upipe = upipe_udpsrc_to_upipe(upipe_udpsrc);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     urefcount_init(&upipe_udpsrc->refcount);
     upipe_udpsrc_init_uref_mgr(upipe);
     upipe_udpsrc_init_ubuf_mgr(upipe);
@@ -177,7 +174,6 @@ static void upipe_udpsrc_worker(struct upump *upump)
                                          upipe_udpsrc->ubuf_mgr,
                                          upipe_udpsrc->read_size);
     if (unlikely(uref == NULL)) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -186,7 +182,6 @@ static void upipe_udpsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -211,8 +206,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
             default:
                 break;
         }
-        ulog_error(upipe->ulog, "read error from %s (%s)", upipe_udpsrc->uri,
-                   ulog_strerror(upipe->ulog, errno));
+        upipe_err_va(upipe, "read error from %s (%m)", upipe_udpsrc->uri);
         upipe_udpsrc_set_upump(upipe, NULL);
         upipe_throw_read_end(upipe, upipe_udpsrc->uri);
         return;
@@ -220,7 +214,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
     if (unlikely(ret == 0)) {
         uref_free(uref);
         if (likely(upipe_udpsrc->uclock == NULL)) {
-            ulog_notice(upipe->ulog, "end of udp socket %s", upipe_udpsrc->uri);
+            upipe_notice_va(upipe, "end of udp socket %s", upipe_udpsrc->uri);
             upipe_udpsrc_set_upump(upipe, NULL);
             upipe_throw_read_end(upipe, upipe_udpsrc->uri);
         }
@@ -250,7 +244,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
     }
 
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        ulog_error(upipe->ulog, "unable to open socket (%s)", strerror(errno));
+        upipe_err_va(upipe, "unable to open socket (%m)");
         return false;
     }
 
@@ -258,7 +252,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
     ifr.ifr_name[IFNAMSIZ-1] = '\0';
 
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
-        ulog_error(upipe->ulog, "unable to get interface index (%s)", strerror(errno));
+        upipe_err_va(upipe, "unable to get interface index (%m)");
         return false;
     }
 
@@ -267,7 +261,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
     *ifrindex = ifr.ifr_ifindex;
     return true;
 #else
-    ulog_error(upipe->ulog, "unable to get interface index (%s)", strerror(errno));
+    upipe_err_va(upipe, "unable to get interface index (%m)");
     return false;
 #endif
 }
@@ -283,25 +277,26 @@ static void upipe_udp_print_socket(struct upipe *upipe, const char *text, union 
                          union sockaddru *connect)
 {
     if (bind->ss.ss_family == AF_INET) {
-        ulog_debug(upipe->ulog, "%s bind:%s:%u", text,
-                 inet_ntoa(bind->sin.sin_addr), ntohs(bind->sin.sin_port));
+        upipe_dbg_va(upipe, "%s bind:%s:%u", text,
+                     inet_ntoa(bind->sin.sin_addr), ntohs(bind->sin.sin_port));
     } else if (bind->ss.ss_family == AF_INET6) {
         char buf[INET6_ADDRSTRLEN];
-        ulog_debug(upipe->ulog, "%s bind:[%s]:%u", text,
-                 inet_ntop(AF_INET6, &bind->sin6.sin6_addr, buf, sizeof(buf)),
-                 ntohs(bind->sin6.sin6_port));
+        upipe_dbg_va(upipe, "%s bind:[%s]:%u", text,
+                     inet_ntop(AF_INET6, &bind->sin6.sin6_addr, buf,
+                               sizeof(buf)),
+                     ntohs(bind->sin6.sin6_port));
     }
 
     if (connect->ss.ss_family == AF_INET) {
-        ulog_debug(upipe->ulog, "%s connect:%s:%u", text,
-                 inet_ntoa(connect->sin.sin_addr),
-                 ntohs(connect->sin.sin_port));
+        upipe_dbg_va(upipe, "%s connect:%s:%u", text,
+                     inet_ntoa(connect->sin.sin_addr),
+                     ntohs(connect->sin.sin_port));
     } else if (connect->ss.ss_family == AF_INET6) {
         char buf[INET6_ADDRSTRLEN];
-        ulog_debug(upipe->ulog, "%s connect:[%s]:%u", text,
-                 inet_ntop(AF_INET6, &connect->sin6.sin6_addr, buf,
-                           sizeof(buf)),
-                 ntohs(connect->sin6.sin6_port));
+        upipe_dbg_va(upipe, "%s connect:[%s]:%u", text,
+                     inet_ntop(AF_INET6, &connect->sin6.sin6_addr, buf,
+                               sizeof(buf)),
+                     ntohs(connect->sin6.sin6_port));
     }
 }
 
@@ -332,7 +327,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
         node = string + 1;
         end = strchr(node, ']');
         if (end == NULL) {
-            ulog_warning(upipe->ulog, "invalid IPv6 address %s", _string);
+            upipe_warn_va(upipe, "invalid IPv6 address %s", _string);
             free(string);
             return false;
         }
@@ -403,7 +398,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
     hint.ai_protocol = 0;
     hint.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV | AI_ADDRCONFIG;
     if ((ret = getaddrinfo(node, port, &hint, &res)) != 0) {
-        //ulog_warning(upipe->ulog, "getaddrinfo error: %s", gai_strerror(ret));
+        //upipe_warn_va(upipe, "getaddrinfo error: %s", gai_strerror(ret));
         free(string);
         return false;
     }
@@ -508,7 +503,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
             } else if (IS_OPTION("tcp")) {
                 *use_tcp = true;
             } else {
-                ulog_warning(upipe->ulog, "unrecognized option %s", token2);
+                upipe_warn_va(upipe, "unrecognized option %s", token2);
             }
 #undef IS_OPTION
 #undef ARG_OPTION
@@ -521,7 +516,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     if (bind_addr.ss.ss_family != AF_UNSPEC
           && connect_addr.ss.ss_family != AF_UNSPEC
           && bind_addr.ss.ss_family != connect_addr.ss.ss_family) {
-        ulog_error(upipe->ulog, "incompatible address types");
+        upipe_err(upipe, "incompatible address types");
         return -1;
     }
     if (bind_addr.ss.ss_family != AF_UNSPEC) {
@@ -529,7 +524,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     } else if (connect_addr.ss.ss_family != AF_UNSPEC) {
         family = connect_addr.ss.ss_family;
     } else {
-        ulog_error(upipe->ulog, "ambiguous address declaration");
+        upipe_err(upipe, "ambiguous address declaration");
         return -1;
     }
     sockaddr_len = (family == AF_INET) ? sizeof(struct sockaddr_in) :
@@ -537,7 +532,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
 
     if (bind_if_index && connect_if_index
           && bind_if_index != connect_if_index) {
-        ulog_error(upipe->ulog, "incompatible bind and connect interfaces");
+        upipe_err(upipe, "incompatible bind and connect interfaces");
         return -1;
     }
     if (connect_if_index) bind_if_index = connect_if_index;
@@ -546,14 +541,14 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     /* Socket configuration */
     if ((fd = socket(family, *use_tcp ? SOCK_STREAM : SOCK_DGRAM,
                          0)) < 0) {
-        ulog_error(upipe->ulog, "unable to open socket (%s)", strerror(errno));
+        upipe_err_va(upipe, "unable to open socket (%m)");
         return -1;
     }
 
     i = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&i,
                      sizeof(i)) == -1) {
-        ulog_error(upipe->ulog, "unable to set socket (%s)", strerror(errno));
+        upipe_err_va(upipe, "unable to set socket (%m)");
         close(fd);
         return -1;
     }
@@ -562,7 +557,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
         if (bind_if_index
               && setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF,
                      (void *)&bind_if_index, sizeof(bind_if_index)) < 0) {
-            ulog_error(upipe->ulog, "couldn't set interface index");
+            upipe_err(upipe, "couldn't set interface index");
             upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
             close(fd);
             return -1;
@@ -577,7 +572,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
 
                 if (bind(fd, &bind_addr_any.so,
                            sizeof(bind_addr_any)) < 0) {
-                    ulog_error(upipe->ulog, "couldn't bind");
+                    upipe_err(upipe, "couldn't bind");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                     close(fd);
                     return -1;
@@ -589,7 +584,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
                 /* Join Multicast group without source filter */
                 if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
                                  (char *)&imr, sizeof(struct ipv6_mreq)) < 0) {
-                    ulog_error(upipe->ulog, "couldn't join multicast group");
+                    upipe_err(upipe, "couldn't join multicast group");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                     close(fd);
                     return -1;
@@ -602,7 +597,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     else if (bind_addr.ss.ss_family != AF_UNSPEC) {
 normal_bind:
         if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
-            ulog_error(upipe->ulog, "couldn't bind");
+            upipe_err(upipe, "couldn't bind");
             upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
             close(fd);
             return -1;
@@ -625,13 +620,12 @@ normal_bind:
                 imr.imr_interface.s_addr = if_addr;
                 imr.imr_sourceaddr = connect_addr.sin.sin_addr;
                 if (bind_if_index) {
-                    ulog_warning(upipe->ulog, "ignoring ifindex option in SSM");
+                    upipe_warn(upipe, "ignoring ifindex option in SSM");
                 }
 
                 if (setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP,
                             (char *)&imr, sizeof(struct ip_mreq_source)) < 0) {
-                    ulog_error(upipe->ulog, "couldn't join multicast group (%s)",
-                             strerror(errno));
+                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                  &connect_addr);
                     close(fd);
@@ -646,8 +640,7 @@ normal_bind:
 
                 if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
                                  (char *)&imr, sizeof(struct ip_mreqn)) < 0) {
-                    ulog_error(upipe->ulog, "couldn't join multicast group (%s)",
-                             strerror(errno));
+                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                  &connect_addr);
                     close(fd);
@@ -661,8 +654,7 @@ normal_bind:
 
                 if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
                                  (char *)&imr, sizeof(struct ip_mreq)) < 0) {
-                    ulog_error(upipe->ulog, "couldn't join multicast group (%s)",
-                             strerror(errno));
+                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                  &connect_addr);
                     close(fd);
@@ -674,8 +666,7 @@ normal_bind:
 
     if (connect_addr.ss.ss_family != AF_UNSPEC) {
         if (connect(fd, &connect_addr.so, sockaddr_len) < 0) {
-            ulog_error(upipe->ulog, "cannot connect socket (%s)",
-                     strerror(errno));
+            upipe_err_va(upipe, "cannot connect socket (%m)");
             upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
             close(fd);
             return -1;
@@ -687,8 +678,7 @@ normal_bind:
                       && IN_MULTICAST(ntohl(connect_addr.sin.sin_addr.s_addr))) {
                     if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL,
                                      (void *)&ttl, sizeof(ttl)) == -1) {
-                        ulog_error(upipe->ulog, "couldn't set TTL (%s)",
-                                 strerror(errno));
+                        upipe_err_va(upipe, "couldn't set TTL (%m)");
                         upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                      &connect_addr);
                         close(fd);
@@ -700,8 +690,7 @@ normal_bind:
                       && IN6_IS_ADDR_MULTICAST(&connect_addr.sin6.sin6_addr)) {
                     if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
                                      (void *)&ttl, sizeof(ttl)) == -1) {
-                        ulog_error(upipe->ulog, "couldn't set TTL (%s)",
-                                 strerror(errno));
+                        upipe_err_va(upipe, "couldn't set TTL (%m)");
                         upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                      &connect_addr);
                         close(fd);
@@ -713,7 +702,7 @@ normal_bind:
             if (tos) {
                 if (setsockopt(fd, IPPROTO_IP, IP_TOS,
                                  (void *)&tos, sizeof(tos)) == -1) {
-                    ulog_error(upipe->ulog, "couldn't set TOS (%s)", strerror(errno));
+                    upipe_err_va(upipe, "couldn't set TOS (%m)");
                     upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
                                  &connect_addr);
                     close(fd);
@@ -725,7 +714,7 @@ normal_bind:
         /* Open in listen mode - wait for an incoming connection */
         int new_fd;
         if (listen(fd, 1) < 0) {
-            ulog_error(upipe->ulog, "couldn't listen (%s)", strerror(errno));
+            upipe_err_va(upipe, "couldn't listen (%m)");
             upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
             close(fd);
             return -1;
@@ -733,7 +722,7 @@ normal_bind:
 
         while ((new_fd = accept(fd, NULL, NULL)) < 0) {
             if (errno != EINTR) {
-                ulog_error(upipe->ulog, "couldn't accept (%s)", strerror(errno));
+                upipe_err_va(upipe, "couldn't accept (%m)");
                 upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                 close(fd);
                 return -1;
@@ -773,7 +762,7 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 
     if (unlikely(upipe_udpsrc->fd != -1)) {
         if (likely(upipe_udpsrc->uri != NULL))
-            ulog_notice(upipe->ulog, "closing udp socket %s", upipe_udpsrc->uri);
+            upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
         close(upipe_udpsrc->fd);
         upipe_udpsrc->fd = -1;
     }
@@ -793,7 +782,6 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         struct uref *flow_def =
             uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
         if (unlikely(flow_def == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return false;
         }
@@ -813,8 +801,7 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri, UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
 //        upipe_udpsrc->fd = open(uri, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (unlikely(upipe_udpsrc->fd == -1)) {
-        ulog_error(upipe->ulog, "can't open udp socket %s (%s)", uri,
-                   ulog_strerror(upipe->ulog, errno));
+        upipe_err_va(upipe, "can't open udp socket %s (%m)", uri);
         return false;
     }
 
@@ -822,11 +809,10 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(upipe_udpsrc->uri == NULL)) {
         close(upipe_udpsrc->fd);
         upipe_udpsrc->fd = -1;
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
-    ulog_notice(upipe->ulog, "opening udp socket %s", upipe_udpsrc->uri);
+    upipe_notice_va(upipe, "opening udp socket %s", upipe_udpsrc->uri);
     return true;
 }
 
@@ -965,7 +951,7 @@ static void upipe_udpsrc_release(struct upipe *upipe)
 
         if (likely(upipe_udpsrc->fd != -1)) {
             if (likely(upipe_udpsrc->uri != NULL))
-                ulog_notice(upipe->ulog, "closing udp socket %s", upipe_udpsrc->uri);
+                upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
             close(upipe_udpsrc->fd);
         }
         free(upipe_udpsrc->uri);

@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_av_internal.h: internal interface to av managers
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,15 +21,21 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short internal interface to av managers
+ */
 
 #include <upipe/udeal.h>
-#include <upipe/ulog.h>
 #include <upipe/upump.h>
 
 #include <stdbool.h>
 
 #include <libavutil/error.h>
+
+/** typical size of the buffer for av_strerror() */
+#define UPIPE_AV_STRERROR_SIZE 64
 
 /** @hidden */
 enum CodecID;
@@ -101,14 +105,9 @@ static inline bool upipe_av_deal_abort(struct upump *upump)
  * @param errnum avutil error code
  * @return pointer to a buffer containing a description of the error
  */
-static inline const char *upipe_av_ulog_strerror(struct ulog *ulog, int errnum)
-{
-    if (likely(ulog != NULL)) {
-        av_strerror(errnum, ulog->ulog_buffer, ULOG_BUFFER_SIZE);
-        return ulog->ulog_buffer;
-    }
-    return "description unvailable";
-}
+#define upipe_av_strerror(errnum, buf)                                      \
+    char buf[UPIPE_AV_STRERROR_SIZE];                                       \
+    av_strerror(errnum, buf, UPIPE_AV_STRERROR_SIZE);
 
 /** @This allows to convert from avcodec ID to flow definition.
  *
