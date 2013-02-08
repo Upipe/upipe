@@ -12,6 +12,7 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
+	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
 	uprobe_log_test.txt \

@@ -4,7 +4,7 @@ BUILT_SOURCES = upipe_av_codecs.h
 endif
 
 nodist_libupipe_av_la_SOURCES = upipe_av_codecs.h
-libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_avformat_source.c upipe_avcodec_dec_vid.c 
+libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_avformat_source.c upipe_avcodec_dec_vid.c upipe_av_codecs.pl
 libupipe_av_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(builddir)
 libupipe_av_la_CFLAGS = -Wall @AVFORMAT_CFLAGS@
 libupipe_av_la_LIBADD = @AVFORMAT_LIBS@

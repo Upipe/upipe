@@ -25,13 +25,18 @@ nobase_include_HEADERS = \
 	upipe/upipe_helper_output.h \
 	upipe/upipe_helper_sink_delay.h \
 	upipe/upipe_helper_source_read_size.h \
+	upipe/upipe_helper_sync.h \
 	upipe/upipe_helper_ubuf_mgr.h \
 	upipe/upipe_helper_uclock.h \
 	upipe/upipe_helper_upipe.h \
 	upipe/upipe_helper_upump_mgr.h \
 	upipe/upipe_helper_uref_mgr.h \
 	upipe/uprobe.h \
+	upipe/uprobe_helper_adhoc.h \
+	upipe/uprobe_helper_uprobe.h \
 	upipe/uprobe_log.h \
+	upipe/uprobe_prefix.h \
+	upipe/uprobe_stdio.h \
 	upipe/uprobe_upump_mgr.h \
 	upipe/uprobe_uref_mgr.h \
 	upipe/upump_common.h \
@@ -58,7 +63,9 @@ nobase_include_HEADERS = \
 	upipe-modules/upipe_queue_source.h \
 	upipe-modules/upipe_udp_source.h \
 	upipe-av/upipe_av.h \
+	upipe-av/upipe_avcodec_dec_vid.h \
 	upipe-av/upipe_avformat_source.h \
+	upipe-av/uref_av_flow.h \
 	upipe-swscale/upipe_sws.h \
 	upipe-ts/upipe_ts_check.h \
 	upipe-ts/upipe_ts_decaps.h \

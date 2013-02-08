@@ -56,7 +56,7 @@
 
       Pipes are provided by specialized modules, possibly delivered by third-parties. A @ref upipe may expose input and control methods (with standard and custom commands), and would typically take data from its input, process it and output it, possibly using a different buffer, to its output.
 
-      When created, pipes are passed with two structures for logging (@ref ulog) and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.). Functions from a pipe may only be called from a single thread, so locking and reentrancy isn't required.
+      When created, pipes are passed with one structure for logging and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.). Functions from a pipe may only be called from a single thread, so locking and reentrancy isn't required.
 
       The standard Upipe distribution currently contains the following pipe types (though third-party modules may also be used):
 
@@ -85,8 +85,10 @@
 
         @item API name @item description @item link with
 
-        @item @ref uprobe_log_alloc @item log all received messages, for debug purposes @item @tt -lupipe
-        @item @ref uprobe_ts_log_alloc @item log TS-related received messages, for debug purposes @item @tt -lupipe-ts
+        @item @ref uprobe_stdio_alloc @item print all log messages to a file stream @item @tt -lupipe
+        @item @ref uprobe_pfx_alloc @item prefix all log messages with the given name @item @tt -lupipe
+        @item @ref uprobe_log_alloc @item log all received events, for debug purposes @item @tt -lupipe
+        @item @ref uprobe_ts_log_alloc @item log TS-related received events, for debug purposes @item @tt -lupipe-ts
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
 
