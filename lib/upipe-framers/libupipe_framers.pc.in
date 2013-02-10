@@ -2,8 +2,9 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@     
-Name: libupipe_ts
-Description: Upipe multimedia framework, MPEG-2 transport stream modules
+Name: libupipe_framers
+Description: Upipe multimedia framework, framers
 Version: @VERSION@
-Libs: -L${libdir} -lupipe
+Requires: libupipe
+Libs: -L${libdir} -lupipe_framers
 Cflags: -I${includedir}

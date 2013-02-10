@@ -38,8 +38,8 @@ UREF_ATTR_TEMPLATE(clock, systime, "k.systime", unsigned, uint64_t, reception ti
 UREF_ATTR_TEMPLATE(clock, pts, "k.pts", unsigned, uint64_t, presentation timestamp)
 UREF_ATTR_TEMPLATE(clock, pts_orig, "k.pts.orig", unsigned, uint64_t, original presentation timestamp)
 UREF_ATTR_TEMPLATE(clock, pts_sys, "k.pts.sys", unsigned, uint64_t, system presentation timestamp)
-UREF_ATTR_TEMPLATE(clock, dtsdelay, "k.dtsdelay", unsigned, uint64_t, dts/pts delay)
-UREF_ATTR_TEMPLATE(clock, vbvdelay, "k.vbvdelay", unsigned, uint64_t, vbv/dts delay)
+UREF_ATTR_TEMPLATE(clock, dts_delay, "k.dtsdelay", unsigned, uint64_t, dts/pts delay)
+UREF_ATTR_TEMPLATE(clock, vbv_delay, "k.vbvdelay", unsigned, uint64_t, vbv/dts delay)
 UREF_ATTR_TEMPLATE(clock, duration, "k.duration", unsigned, uint64_t, duration)
 
 #endif

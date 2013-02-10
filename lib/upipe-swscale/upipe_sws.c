@@ -224,9 +224,9 @@ static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow)
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     // TODO - detect associated PixelFormat
 
-    uref_pic_flow_get_hsize(flow, &size);
+    uref_pic_get_hsize(flow, &size);
     upipe_sws->dstsize.hsize = size;
-    uref_pic_flow_get_vsize(flow, &size);
+    uref_pic_get_vsize(flow, &size);
     upipe_sws->dstsize.vsize = size;
 
     struct uref *uref = uref_dup(flow);

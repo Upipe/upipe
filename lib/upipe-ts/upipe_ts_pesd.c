@@ -242,8 +242,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             return;
         }
         if (unlikely(pts > dts &&
-                     !uref_clock_set_dtsdelay(upipe_ts_pesd->next_uref,
-                                              pts - dts))) {
+                     !uref_clock_set_dts_delay(upipe_ts_pesd->next_uref,
+                                               pts - dts))) {
             upipe_ts_pesd_flush(upipe);
             upipe_throw_aerror(upipe);
             return;

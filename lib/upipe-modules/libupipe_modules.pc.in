@@ -3,7 +3,7 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@     
 Name: libupipe_modules
-Description: upipe multimedia framework, base modules
+Description: Upipe multimedia framework, base modules
 Version: @VERSION@
 Requires: libupipe
 Libs: -L${libdir} -lupipe_modules

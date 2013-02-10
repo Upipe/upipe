@@ -100,6 +100,13 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
 
 AC_CONFIG_FILES([Makefile
                  include/Makefile
+                 include/upipe/Makefile
+                 include/upump-ev/Makefile
+                 include/upipe-modules/Makefile
+                 include/upipe-framers/Makefile
+                 include/upipe-av/Makefile
+                 include/upipe-swscale/Makefile
+                 include/upipe-ts/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -107,6 +114,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upump-ev/libupump_ev.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
+                 lib/upipe-framers/Makefile
+                 lib/upipe-framers/libupipe_framers.pc
                  lib/upipe-av/Makefile
                  lib/upipe-av/libupipe_av.pc
                  lib/upipe-swscale/Makefile

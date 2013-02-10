@@ -1,4 +1,4 @@
-error: allocation error at uprobe_log_test.c:70
+error: allocation error at
 debug: probe caught allocation error
 debug: probe caught upump error
 debug: probe caught read end on pouet

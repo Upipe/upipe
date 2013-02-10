@@ -398,8 +398,8 @@ int main(int argc, char **argv)
     upipe_input(sws, flowdef, NULL);
 
     /* Define outputflow */
-    uref_pic_flow_set_hsize(pic_flow, DSTSIZE);
-    uref_pic_flow_set_vsize(pic_flow, DSTSIZE);
+    uref_pic_set_hsize(pic_flow, DSTSIZE);
+    uref_pic_set_vsize(pic_flow, DSTSIZE);
     assert(upipe_set_flow_def(sws, pic_flow));
 
     /* Now send pic */

@@ -122,7 +122,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     uint64_t uref_pts = 0, uref_dts = 0;
     uref_clock_get_pts_orig(uref, &uref_pts);
     assert(uref_pts == pts);
-    uref_clock_get_dtsdelay(uref, &uref_dts);
+    uref_clock_get_dts_delay(uref, &uref_dts);
     uref_dts = uref_pts - uref_dts;
     assert(uref_dts == dts);
     uref_free(uref);
