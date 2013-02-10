@@ -32,6 +32,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
+#include <upipe/upipe_helper_octet_stream.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_sync.h>
 
@@ -84,6 +85,7 @@ struct upipe_ts_sync {
 
 UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe)
 UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
+UPIPE_HELPER_OCTET_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
 
@@ -154,61 +156,6 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
     return true;
 }
 
-/** @internal @This appends a new uref to the list of received urefs, and
- * also appends it to the uref we are currently working on.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure to append
- */
-static void upipe_ts_sync_append(struct upipe *upipe, struct uref *uref)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (upipe_ts_sync->next_uref != NULL) {
-        struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-        if (unlikely(ubuf == NULL ||
-                     !uref_block_append(upipe_ts_sync->next_uref, ubuf))) {
-            upipe_throw_aerror(upipe);
-            uref_free(uref);
-            if (ubuf != NULL)
-                ubuf_free(ubuf);
-        } else
-            ulist_add(&upipe_ts_sync->urefs, uref_to_uchain(uref));
-    } else {
-        upipe_ts_sync->next_uref = uref;
-        uref_block_size(upipe_ts_sync->next_uref,
-                        &upipe_ts_sync->next_uref_size);
-    }
-}
-
-/** @internal @This consumed the given number of octets from the input
- * buffers, and rotate the buffers accordingly.
- *
- * @param upipe description structure of the pipe
- * @param consumed number of octets consumed from the input buffers
- */
-static void upipe_ts_sync_consume(struct upipe *upipe, size_t consumed)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    while (consumed) {
-        assert(upipe_ts_sync->next_uref != NULL);
-        if (consumed < upipe_ts_sync->next_uref_size) {
-            uref_block_resize(upipe_ts_sync->next_uref, consumed, -1);
-            upipe_ts_sync->next_uref_size -= consumed;
-            break;
-        }
-
-        consumed -= upipe_ts_sync->next_uref_size;
-        uref_free(upipe_ts_sync->next_uref);
-        upipe_ts_sync->next_uref = NULL;
-
-        struct ulist urefs = upipe_ts_sync->urefs;
-        ulist_init(&upipe_ts_sync->urefs);
-        struct uchain *uchain;
-        while ((uchain = ulist_pop(&urefs)) != NULL)
-            upipe_ts_sync_append(upipe, uref_from_uchain(uchain));
-    }
-}
-
 /** @internal @This tries to find TS packets in the buffered input urefs.
  *
  * @param upipe description structure of the pipe
@@ -222,7 +169,7 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
         bool ret = upipe_ts_sync_check(upipe, &offset);
         if (offset) {
             upipe_ts_sync_sync_lost(upipe);
-            upipe_ts_sync_consume(upipe, offset);
+            upipe_ts_sync_consume_octet_stream(upipe, offset);
         }
         if (!ret)
             break;
@@ -230,7 +177,7 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
         /* upipe_ts_sync_check said there is at least one TS packet there. */
         upipe_ts_sync_sync_acquired(upipe);
         struct uref *output = uref_dup(upipe_ts_sync->next_uref);
-        upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
+        upipe_ts_sync_consume_octet_stream(upipe, upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
             upipe_throw_aerror(upipe);
             continue;
@@ -256,7 +203,7 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
                uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC) &&
                !offset) {
             struct uref *output = uref_dup(upipe_ts_sync->next_uref);
-            upipe_ts_sync_consume(upipe, upipe_ts_sync->ts_size);
+            upipe_ts_sync_consume_octet_stream(upipe, upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
                 upipe_throw_aerror(upipe);
                 continue;
@@ -266,14 +213,8 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
         }
     }
 
-    if (upipe_ts_sync->next_uref != NULL) {
-        uref_free(upipe_ts_sync->next_uref);
-        upipe_ts_sync->next_uref = NULL;
-
-        struct uchain *uchain;
-        while ((uchain = ulist_pop(&upipe_ts_sync->urefs)) != NULL)
-            uref_free(uref_from_uchain(uchain));
-    }
+    upipe_ts_sync_clean_octet_stream(upipe);
+    upipe_ts_sync_init_octet_stream(upipe);
 }
 
 /** @internal @This receives data.
@@ -318,7 +259,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(uref_block_get_discontinuity(uref)))
         upipe_ts_sync_flush(upipe, upump);
 
-    upipe_ts_sync_append(upipe, uref);
+    upipe_ts_sync_append_octet_stream(upipe, uref);
     upipe_ts_sync_work(upipe, upump);
 }
 
@@ -457,9 +398,10 @@ static void upipe_ts_sync_release(struct upipe *upipe)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
+        upipe_ts_sync_flush(upipe, NULL);
         upipe_throw_dead(upipe);
 
-        upipe_ts_sync_flush(upipe, NULL);
+        upipe_ts_sync_clean_octet_stream(upipe);
         upipe_ts_sync_clean_output(upipe);
         upipe_ts_sync_clean_sync(upipe);
 

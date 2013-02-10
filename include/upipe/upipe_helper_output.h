@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,6 +47,8 @@
  *  struct uref *flow_def;
  *  bool flow_def_sent;
  * @end code
+ *
+ * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
  *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list

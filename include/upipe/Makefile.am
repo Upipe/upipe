@@ -22,6 +22,7 @@ nobase_include_HEADERS = \
 	umem_alloc.h \
 	umem_pool.h \
 	upipe.h \
+	upipe_helper_octet_stream.h \
 	upipe_helper_output.h \
 	upipe_helper_sink_delay.h \
 	upipe_helper_source_read_size.h \

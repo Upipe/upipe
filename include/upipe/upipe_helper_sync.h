@@ -42,6 +42,8 @@
  *  bool acquired;
  * @end code
  *
+ * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
+ *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
@@ -66,7 +68,7 @@
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure 
- * @param UPiPE name of the @tt{struct upipe} field of
+ * @param ACQUIRED name of the @tt{bool} field of
  * your private upipe structure
  */
 #define UPIPE_HELPER_SYNC(STRUCTURE, ACQUIRED)                              \
