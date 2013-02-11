@@ -25,9 +25,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -48,7 +48,7 @@
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define ITERATIONS 1000
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
@@ -80,14 +80,17 @@ int main(int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_DEBUG);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *uprobe_log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(uprobe_log != NULL);
 
     /* build null pipe */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr);
-    struct upipe *nullpipe = upipe_alloc(upipe_null_mgr, uprobe_log,
-                                ulog_stdio_alloc(stdout, ULOG_LEVEL, "null"));
+    struct upipe *nullpipe = upipe_alloc(upipe_null_mgr,
+                       uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
 
     /* Now send uref */
@@ -104,6 +107,7 @@ int main(int argc, char **argv)
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
     uprobe_log_free(uprobe_log);
+    uprobe_stdio_free(uprobe_stdio);
 
     return 0;
 }

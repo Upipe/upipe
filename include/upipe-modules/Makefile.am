@@ -6,4 +6,5 @@ nobase_include_HEADERS = \
 	upipe_multicat_sink.h \
 	upipe_queue_sink.h \
 	upipe_queue_source.h \
+	upipe_null.h \
 	upipe_udp_source.h
