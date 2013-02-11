@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -67,19 +66,17 @@ UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd =
         malloc(sizeof(struct upipe_ts_pmtd));
     if (unlikely(upipe_ts_pmtd == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_pmtd_to_upipe(upipe_ts_pmtd);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_pmtd->pmt = NULL;
     upipe_ts_pmtd->flow_def_ok = false;
     urefcount_init(&upipe_ts_pmtd->refcount);
@@ -247,7 +244,6 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
 #define UPIPE_TS_PMTD_PEEK_END(upipe, pmt, offset)                          \
     }                                                                       \
     if (unlikely(offset + PMT_ES_SIZE <= size - PSI_CRC_SIZE)) {            \
-        ulog_aerror(upipe->ulog);                                           \
         upipe_throw_aerror(upipe);                                          \
     }                                                                       \
 
@@ -414,7 +410,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     }
 
     if (!upipe_ts_pmtd_validate(upipe, uref)) {
-        ulog_warning(upipe->ulog, "invalid PMT section received");
+        upipe_warn(upipe, "invalid PMT section received");
         uref_free(uref);
         return;
     }
@@ -422,7 +418,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     UPIPE_TS_PMTD_HEADER(upipe, uref, header, header_desc, header_desclength)
 
     if (unlikely(header == NULL)) {
-        ulog_warning(upipe->ulog, "invalid PMT section received");
+        upipe_warn(upipe, "invalid PMT section received");
         uref_free(uref);
         return;
     }
@@ -501,7 +497,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         upipe_ts_pmtd->flow_def_ok = true;
         uref_free(uref);
         return;

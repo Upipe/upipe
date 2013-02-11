@@ -12,7 +12,6 @@ digraph "Upipe objects dependancies" {
 		fontcolor="#203080";
 		subgraph {
 			rank = source;
-			ulog;
 			uprobe;
 			upipe;
 		}
@@ -92,7 +91,6 @@ digraph "Upipe objects dependancies" {
 
 	uprobe->upipe;
 	upipe->uprobe;
-	upipe->ulog;
 	upipe->uref;
 	upipe->urefcount;
 	upipe->upump [style="dashed"];

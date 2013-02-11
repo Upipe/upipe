@@ -46,10 +46,11 @@
 /** @hidden */
 struct upipe;
 
-/** super-set of the uprobe structure with additional local members */
+/** @This is a super-set of the uprobe structure with additional local members.
+ */
 struct uprobe_ts_log {
     /** level at which to log the messages */
-    enum ulog_level level;
+    enum uprobe_log_level level;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -90,7 +91,7 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uprobe_ts_log *uprobe_ts_log =
         uprobe_ts_log_from_uprobe(uprobe);
-    if (event <= UPROBE_LOCAL)
+    if (upipe == NULL || event <= UPROBE_LOCAL)
         return false;
 
     va_list args_copy;
@@ -102,23 +103,23 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             assert(signature == UPIPE_TS_DECAPS_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
             uint64_t pcr = va_arg(args_copy, uint64_t);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught new PCR %"PRIu64, pcr);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught new PCR %"PRIu64, pcr);
             break;
         }
 
         case UPROBE_TS_SPLIT_SET_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught set PID %u", pid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught set PID %u", pid);
             break;
         }
         case UPROBE_TS_SPLIT_UNSET_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught unset PID %u", pid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught unset PID %u", pid);
             break;
         }
 
@@ -126,8 +127,8 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int tsid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught new TSID %u", tsid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught new TSID %u", tsid);
             break;
         }
         case UPROBE_TS_PATD_ADD_PROGRAM: {
@@ -135,17 +136,17 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int program = va_arg(args_copy, unsigned int);
             unsigned int pid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught add program %u with PID %u",
-                     program, pid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught add program %u with PID %u",
+                         program, pid);
             break;
         }
         case UPROBE_TS_PATD_DEL_PROGRAM: {
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int program = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught delete program %u", program);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught delete program %u", program);
             break;
         }
 
@@ -153,8 +154,8 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             assert(signature == UPIPE_TS_PMTD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int pcrpid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught new PCR PID %u", pcrpid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught new PCR PID %u", pcrpid);
             break;
         }
         case UPROBE_TS_PMTD_ADD_ES: {
@@ -162,39 +163,28 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int pid = va_arg(args_copy, unsigned int);
             unsigned int streamtype = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught add ES PID %u, stream type %u",
-                     pid, streamtype);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught add ES PID %u, stream type %u",
+                         pid, streamtype);
             break;
         }
         case UPROBE_TS_PMTD_DEL_ES: {
             assert(signature == UPIPE_TS_PMTD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
             unsigned int pid = va_arg(args_copy, unsigned int);
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught delete ES PID %u", pid);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught delete ES PID %u", pid);
             break;
         }
 
         default:
-            ulog_log(upipe->ulog, uprobe_ts_log->level,
-                     "ts probe caught an unknown, uncaught event (0x%x)",
-                     event);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught an unknown, uncaught event (0x%x)",
+                         event);
             break;
     }
     va_end(args_copy);
     return false;
-}
-
-/** @This frees a uprobe ts log structure.
- *
- * @param uprobe structure to free
- */
-void uprobe_ts_log_free(struct uprobe *uprobe)
-{
-    struct uprobe_ts_log *uprobe_ts_log =
-        uprobe_ts_log_from_uprobe(uprobe);
-    free(uprobe_ts_log);
 }
 
 /** @This allocates a new uprobe ts log structure.
@@ -203,14 +193,23 @@ void uprobe_ts_log_free(struct uprobe *uprobe)
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_ts_log_alloc(struct uprobe *next, enum ulog_level level)
+struct uprobe *uprobe_ts_log_alloc(struct uprobe *next, enum uprobe_log_level level)
 {
-    struct uprobe_ts_log *uprobe_ts_log =
-        malloc(sizeof(struct uprobe_ts_log));
+    struct uprobe_ts_log *uprobe_ts_log = malloc(sizeof(struct uprobe_ts_log));
     if (unlikely(uprobe_ts_log == NULL))
         return NULL;
     struct uprobe *uprobe = uprobe_ts_log_to_uprobe(uprobe_ts_log);
     uprobe_ts_log->level = level;
     uprobe_init(uprobe, uprobe_ts_log_throw, next);
     return uprobe;
+}
+
+/** @This frees a uprobe ts log structure.
+ *
+ * @param uprobe structure to free
+ */
+void uprobe_ts_log_free(struct uprobe *uprobe)
+{
+    struct uprobe_ts_log *uprobe_ts_log = uprobe_ts_log_from_uprobe(uprobe);
+    free(uprobe_ts_log);
 }

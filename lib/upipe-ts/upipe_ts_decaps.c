@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -73,19 +72,17 @@ UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
-                                           struct uprobe *uprobe,
-                                           struct ulog *ulog)
+                                           struct uprobe *uprobe)
 {
     struct upipe_ts_decaps *upipe_ts_decaps =
         malloc(sizeof(struct upipe_ts_decaps));
     if (unlikely(upipe_ts_decaps == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_decaps_to_upipe(upipe_ts_decaps);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
     urefcount_init(&upipe_ts_decaps->refcount);
@@ -122,7 +119,6 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -140,7 +136,6 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
     if (unlikely(has_adaptation)) {
         uint8_t af_length;
         if (unlikely(!uref_block_extract(uref, 0, 1, &af_length))) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             uref_free(uref);
             return;
@@ -148,7 +143,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
 
         if (unlikely((!has_payload && af_length != 183) ||
                      (has_payload && af_length >= 183))) {
-            ulog_warning(upipe->ulog, "invalid adaptation field received");
+            upipe_warn(upipe, "invalid adaptation field received");
             uref_free(uref);
             return;
         }
@@ -156,7 +151,6 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
         if (af_length) {
             uint8_t af_header;
             if (unlikely(!uref_block_extract(uref, 1, 1, &af_header))) {
-                ulog_aerror(upipe->ulog);
                 upipe_throw_aerror(upipe);
                 uref_free(uref);
                 return;
@@ -164,7 +158,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
 
             if (unlikely(!discontinuity &&
                      tsaf_has_discontinuity(&af_header - 1 - TS_HEADER_SIZE))) {
-                ulog_warning(upipe->ulog, "discontinuity flagged");
+                upipe_warn(upipe, "discontinuity flagged");
                 discontinuity = true;
             }
 
@@ -174,7 +168,6 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                         TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2);
                 if (unlikely(pcr == NULL)) {
                     uref_free(uref);
-                    ulog_aerror(upipe->ulog);
                     upipe_throw_aerror(upipe);
                     return;
                 }
@@ -198,8 +191,8 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(!discontinuity &&
                  ts_check_discontinuity(cc, upipe_ts_decaps->last_cc))) {
-        ulog_warning(upipe->ulog, "potentially lost %d packets",
-                     (0x10 + cc - upipe_ts_decaps->last_cc - 1) & 0xf);
+        upipe_warn_va(upipe, "potentially lost %d packets",
+                      (0x10 + cc - upipe_ts_decaps->last_cc - 1) & 0xf);
         discontinuity = true;
     }
     upipe_ts_decaps->last_cc = cc;
@@ -213,7 +206,6 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                  (discontinuity && !uref_block_set_discontinuity(uref)) ||
                  (unitstart && !uref_block_set_start(uref))) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -240,7 +232,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         uref_flow_set_def_va(uref, "block.%s", def + strlen(EXPECTED_FLOW_DEF));
         upipe_ts_decaps_store_flow_def(upipe, uref);
         return;

@@ -29,9 +29,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -68,7 +68,7 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static struct upipe *upipe_ts_demux;
 static struct upipe *upipe_ts_demux_output_pmt = NULL;
@@ -109,8 +109,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                 if (upipe_ts_demux_output_pmt != NULL)
                     upipe_release(upipe_ts_demux_output_pmt);
                 upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
-                        uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL,
-                                                      "ts demux pmt"));
+                        uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                               "ts demux pmt"));
                 assert(upipe_ts_demux_output_pmt != NULL);
                 assert(upipe_set_flow_def(upipe_ts_demux_output_pmt, uref));
             } else if (!ubase_ncmp(def, "block.mpeg2video")) {
@@ -118,8 +118,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     upipe_release(upipe_ts_demux_output_video);
                 upipe_ts_demux_output_video =
                     upipe_alloc_output(upipe_ts_demux_output_pmt,
-                        uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL,
-                                                      "ts demux video"));
+                        uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                               "ts demux video"));
                 assert(upipe_ts_demux_output_video != NULL);
                 assert(upipe_set_flow_def(upipe_ts_demux_output_video, uref));
             }
@@ -151,15 +151,19 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
-    uprobe_ts_log = uprobe_ts_log_alloc(uprobe_log, ULOG_DEBUG);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
+    uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
     upipe_ts_demux = upipe_alloc(upipe_ts_demux_mgr,
-            uprobe_ts_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts demux"));
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                   "ts demux"));
     assert(upipe_ts_demux != NULL);
     assert(upipe_set_uref_mgr(upipe_ts_demux, uref_mgr));
 
@@ -337,8 +341,9 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
     uprobe_ts_log_free(uprobe_ts_log);
+    uprobe_stdio_free(uprobe_stdio);
 
     return 0;
 }

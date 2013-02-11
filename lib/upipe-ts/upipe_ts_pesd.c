@@ -27,7 +27,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -80,18 +79,16 @@ UPIPE_HELPER_OUTPUT(upipe_ts_pesd, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = malloc(sizeof(struct upipe_ts_pesd));
     if (unlikely(upipe_ts_pesd == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_pesd_to_upipe(upipe_ts_pesd);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_pesd_init_sync(upipe);
     upipe_ts_pesd_init_output(upipe);
     upipe_ts_pesd->next_uref = NULL;
@@ -137,7 +134,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     assert(ret);
 
     if (unlikely(!validate)) {
-        ulog_warning(upipe->ulog, "wrong PES header");
+        upipe_warn(upipe, "wrong PES header");
         upipe_ts_pesd_flush(upipe);
         return;
     }
@@ -163,7 +160,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     }
 
     if (unlikely(length != 0 && length < PES_HEADER_OPTIONAL_SIZE)) {
-        ulog_warning(upipe->ulog, "wrong PES length");
+        upipe_warn(upipe, "wrong PES length");
         upipe_ts_pesd_flush(upipe);
         return;
     }
@@ -184,7 +181,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     assert(ret);
 
     if (unlikely(!validate)) {
-        ulog_warning(upipe->ulog, "wrong PES optional header");
+        upipe_warn(upipe, "wrong PES optional header");
         upipe_ts_pesd_flush(upipe);
         return;
     }
@@ -194,14 +191,13 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
                                             PES_HEADER_SIZE_NOPTS) ||
                  (has_dts && headerlength < PES_HEADER_SIZE_PTSDTS -
                                             PES_HEADER_SIZE_NOPTS))) {
-        ulog_warning(upipe->ulog, "wrong PES header length");
+        upipe_warn(upipe, "wrong PES header length");
         upipe_ts_pesd_flush(upipe);
         return;
     }
 
     size_t gathered_size;
     if (unlikely(!uref_block_size(upipe_ts_pesd->next_uref, &gathered_size))) {
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         upipe_ts_pesd_flush(upipe);
         return;
@@ -216,7 +212,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
                 PES_HEADER_SIZE_NOPTS, PES_HEADER_TS_SIZE * (has_dts ? 2 : 1),
                 buffer3);
         if (unlikely(ts_fields == NULL)) {
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             upipe_ts_pesd_flush(upipe);
             return;
@@ -236,22 +231,20 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         assert(ret);
 
         if (unlikely(!validate)) {
-            ulog_warning(upipe->ulog, "wrong PES timestamp syntax");
+            upipe_warn(upipe, "wrong PES timestamp syntax");
             upipe_ts_pesd_flush(upipe);
             return;
         }
 
         if (unlikely(!uref_clock_set_pts_orig(upipe_ts_pesd->next_uref, pts))) {
             upipe_ts_pesd_flush(upipe);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
         if (unlikely(pts > dts &&
-                     !uref_clock_set_dtsdelay(upipe_ts_pesd->next_uref,
-                                              pts - dts))) {
+                     !uref_clock_set_dts_delay(upipe_ts_pesd->next_uref,
+                                               pts - dts))) {
             upipe_ts_pesd_flush(upipe);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
@@ -262,7 +255,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
                  (!alignment &&
                   !uref_block_delete_start(upipe_ts_pesd->next_uref)))) {
         upipe_ts_pesd_flush(upipe);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -290,7 +282,7 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
         upipe_ts_pesd_flush(upipe);
     if (uref_block_get_start(uref)) {
         if (unlikely(upipe_ts_pesd->next_uref != NULL)) {
-            ulog_warning(upipe->ulog, "truncated PES header");
+            upipe_warn(upipe, "truncated PES header");
             uref_free(upipe_ts_pesd->next_uref);
         }
         upipe_ts_pesd->next_uref = uref;
@@ -301,7 +293,6 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
         if (unlikely(!uref_block_append(upipe_ts_pesd->next_uref, ubuf))) {
             ubuf_free(ubuf);
             upipe_ts_pesd_flush(upipe);
-            ulog_aerror(upipe->ulog);
             upipe_throw_aerror(upipe);
             return;
         }
@@ -333,7 +324,7 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         uref_flow_set_def_va(uref, "block.%s", def + strlen(EXPECTED_FLOW_DEF));
         upipe_ts_pesd_store_flow_def(upipe, uref);
         return;

@@ -26,7 +26,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -72,19 +71,17 @@ UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct upipe_ts_patd *upipe_ts_patd =
         malloc(sizeof(struct upipe_ts_patd));
     if (unlikely(upipe_ts_patd == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_patd_to_upipe(upipe_ts_patd);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_ts_psid_table_init(upipe_ts_patd->pat);
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
     upipe_ts_patd->tsid = -1;
@@ -179,7 +176,6 @@ static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
 #define UPIPE_TS_PATD_TABLE_PEEK_END(upipe, sections, pat_program)          \
         }                                                                   \
         if (unlikely(offset + PAT_PROGRAM_SIZE <= size - PSI_CRC_SIZE)) {   \
-            ulog_aerror(upipe->ulog);                                       \
             upipe_throw_aerror(upipe);                                      \
             break;                                                          \
         }                                                                   \
@@ -293,7 +289,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     const uint8_t *pat_header = uref_block_peek(uref, 0, PAT_HEADER_SIZE,
                                                 buffer);
     if (unlikely(pat_header == NULL)) {
-        ulog_warning(upipe->ulog, "invalid PAT section received");
+        upipe_warn(upipe, "invalid PAT section received");
         uref_free(uref);
         return;
     }
@@ -303,7 +299,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     assert(ret);
 
     if (unlikely(!validate)) {
-        ulog_warning(upipe->ulog, "invalid PAT section received");
+        upipe_warn(upipe, "invalid PAT section received");
         uref_free(uref);
         return;
     }
@@ -326,7 +322,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     }
 
     if (!upipe_ts_patd_table_validate(upipe)) {
-        ulog_warning(upipe->ulog, "invalid PAT section received");
+        upipe_warn(upipe, "invalid PAT section received");
         upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
         upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
         return;
@@ -388,7 +384,7 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         upipe_ts_patd->flow_def_ok = true;
         uref_free(uref);
         return;

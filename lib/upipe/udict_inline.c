@@ -72,9 +72,8 @@ enum udict_type_shorthands {
     UDICT_TYPE_PIC_HPOSITION,
     UDICT_TYPE_PIC_VPOSITION,
     UDICT_TYPE_PIC_ASPECT,
-    UDICT_TYPE_PIC_INTERLACED,
-    UDICT_TYPE_PIC_TFF,
-    UDICT_TYPE_PIC_FIELDS
+    UDICT_TYPE_PIC_PROGRESSIVE,
+    UDICT_TYPE_PIC_TFF
 };
 
 /** @internal @This represents a shorthand attribute type. */
@@ -111,9 +110,8 @@ static const struct inline_shorthand inline_shorthands[] = {
     { UDICT_TYPE_PIC_HPOSITION, "p.hposition", UDICT_TYPE_UNSIGNED },
     { UDICT_TYPE_PIC_VPOSITION, "p.vposition", UDICT_TYPE_UNSIGNED },
     { UDICT_TYPE_PIC_ASPECT, "p.aspect", UDICT_TYPE_RATIONAL },
-    { UDICT_TYPE_PIC_INTERLACED, "p.interlaced", UDICT_TYPE_VOID },
+    { UDICT_TYPE_PIC_PROGRESSIVE, "p.progressive", UDICT_TYPE_VOID },
     { UDICT_TYPE_PIC_TFF, "p.tff", UDICT_TYPE_VOID },
-    { UDICT_TYPE_PIC_FIELDS, "p.fields", UDICT_TYPE_SMALL_UNSIGNED },
 
     { UDICT_TYPE_END, "", UDICT_TYPE_END }
 };

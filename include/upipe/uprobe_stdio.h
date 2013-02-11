@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,40 +24,28 @@
  */
 
 /** @file
- * @short unit tests for ulog sub implementation
+ * @short probe outputting all print events to stdio
  */
 
-#undef NDEBUG
+#ifndef _UPIPE_UPROBE_STDIO_H_
+/** @hidden */
+#define _UPIPE_UPROBE_STDIO_H_
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
-#include <upipe/ulog_sub.h>
+#include <upipe/uprobe.h>
 
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
+/** @This allocates a new uprobe stdio structure.
+ *
+ * @param next next probe to test if this one doesn't catch the event
+ * @param level level at which to log the messages
+ * @return pointer to uprobe, or NULL in case of error
+ */
+struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
+                                  enum uprobe_log_level min_level);
 
-int main(int argc, char **argv)
-{
-    struct ulog *ulog2 = ulog_stdio_alloc(stdout, ULOG_DEBUG, "test");
-    assert(ulog2 != NULL);
+/** @This frees a uprobe stdio structure.
+ *
+ * @param uprobe structure to free
+ */
+void uprobe_stdio_free(struct uprobe *uprobe);
 
-    struct ulog *ulog1 = ulog_sub_alloc(ulog2, ULOG_DEBUG, "sub");
-    assert(ulog1 != NULL);
-
-    ulog_error(ulog1, "This is an error");
-    ulog_warning(ulog1, "This is a %s warning with %d", "composite", 0x42);
-    ulog_notice(ulog1, "This is a notice");
-    ulog_debug(ulog1, "This is a debug, next error is an allocation failure");
-    ulog_aerror(ulog1);
-    ulog_free(ulog1);
-
-    ulog1 = ulog_sub_alloc_va(ulog2, ULOG_ERROR, "sub[%d]", 2);
-    assert(ulog1 != NULL);
-    ulog_error(ulog1, "This is another error with %d", 0x43);
-    ulog_warning(ulog1, "This is a warning that you shouldn't see");
-    ulog_free(ulog1);
-
-    ulog_free(ulog2);
-    return 0;
-}
+#endif

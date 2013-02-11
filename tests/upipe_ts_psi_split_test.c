@@ -29,9 +29,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -61,7 +61,7 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -87,11 +87,11 @@ struct ts_test {
 
 /** helper phony pipe to test upipe_ts_psi_split */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, struct ulog *ulog)
+                                   struct uprobe *uprobe)
 {
     struct ts_test *ts_test = malloc(sizeof(struct ts_test));
     assert(ts_test != NULL);
-    upipe_init(&ts_test->upipe, mgr, uprobe, ulog);
+    upipe_init(&ts_test->upipe, mgr, uprobe);
     ts_test->table_id = 0;
     ts_test->got_flow_def = false;
     ts_test->nb_packets = 0;
@@ -178,23 +178,24 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
 
-    struct upipe *upipe_sink68 = upipe_alloc(&ts_test_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 68"));
+    struct upipe *upipe_sink68 = upipe_alloc(&ts_test_mgr, log);
     assert(upipe_sink68 != NULL);
     ts_test_set_table(upipe_sink68, 68);
 
-    struct upipe *upipe_sink69 = upipe_alloc(&ts_test_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink 69"));
+    struct upipe *upipe_sink69 = upipe_alloc(&ts_test_mgr, log);
     assert(upipe_sink69 != NULL);
     ts_test_set_table(upipe_sink69, 69);
 
     struct upipe_mgr *upipe_ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     assert(upipe_ts_psi_split_mgr != NULL);
     struct upipe *upipe_ts_psi_split = upipe_alloc(upipe_ts_psi_split_mgr,
-            uprobe_log, ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts psi split"));
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts psi split"));
     assert(upipe_ts_psi_split != NULL);
 
     uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
@@ -213,8 +214,9 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_ts_psi_split_output68 =
-        upipe_alloc_output(upipe_ts_psi_split, uprobe_log,
-        ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts psi split output 68"));
+        upipe_alloc_output(upipe_ts_psi_split,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
+                                       "ts psi split output 68"));
     assert(upipe_ts_psi_split_output68 != NULL);
     assert(upipe_set_flow_def(upipe_ts_psi_split_output68, uref));
     assert(upipe_set_output(upipe_ts_psi_split_output68, upipe_sink68));
@@ -225,8 +227,9 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_ts_psi_split_output69 =
-        upipe_alloc_output(upipe_ts_psi_split, uprobe_log,
-        ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts psi split output 69"));
+        upipe_alloc_output(upipe_ts_psi_split,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
+                                       "ts psi split output 69"));
     assert(upipe_ts_psi_split_output69 != NULL);
     assert(upipe_set_flow_def(upipe_ts_psi_split_output69, uref));
     assert(upipe_set_output(upipe_ts_psi_split_output69, upipe_sink69));
@@ -283,7 +286,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
 
     return 0;
 }

@@ -140,17 +140,16 @@ static inline bool upipe_qsrc_get_length(struct upipe *upipe,
  *
  * @param mgr management structure for queue source type
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @param length maximum length of the queue
  * @return pointer to allocated pipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_qsrc_alloc(struct upipe_mgr *mgr,
                                              struct uprobe *uprobe,
-                                             struct ulog *ulog,
                                              unsigned int length)
 {
-    struct upipe *upipe = upipe_alloc(mgr, uprobe, ulog);
-    if (unlikely(upipe == NULL)) return NULL;
+    struct upipe *upipe = upipe_alloc(mgr, uprobe);
+    if (unlikely(upipe == NULL))
+        return NULL;
     if (unlikely(!upipe_qsrc_set_max_length(upipe, length))) {
         upipe_release(upipe);
         return NULL;

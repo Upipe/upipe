@@ -29,9 +29,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -60,7 +60,7 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static unsigned int nb_packets = 0;
 static int expect_loss = -1;
@@ -86,11 +86,11 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_ts_sync */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, struct ulog *ulog)
+                                   struct uprobe *uprobe)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     return upipe;
 }
 
@@ -157,17 +157,19 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "sink"));
+    struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_ts_sync_mgr = upipe_ts_sync_mgr_alloc();
     assert(upipe_ts_sync_mgr != NULL);
-    struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "ts sync"));
+    struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts sync"));
     assert(upipe_ts_sync != NULL);
     assert(upipe_set_output(upipe_ts_sync, upipe_sink));
 
@@ -238,7 +240,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
 
     return 0;
 }

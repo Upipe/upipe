@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic_flow.h>
@@ -107,17 +106,16 @@ UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe, struct ulog *ulog)
+                                     struct uprobe *uprobe)
 {
     struct upipe_sws *upipe_sws = malloc(sizeof(struct upipe_sws));
     if (unlikely(upipe_sws == NULL))
         return NULL;
     struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
     upipe_sws->input_flow = NULL;
@@ -187,7 +185,7 @@ static bool upipe_sws_set_context(struct upipe *upipe, struct uref *flow, struct
     struct picsize *dstsize = &upipe_sws->dstsize;
 
     if (flow) {
-        ulog_warning(upipe->ulog, "sws_set_context: setting flow not implemented yet"); // FIXME
+        upipe_warn(upipe, "sws_set_context: setting flow not implemented yet"); // FIXME
         assert(0);
     }
     if (src) {
@@ -199,12 +197,12 @@ static bool upipe_sws_set_context(struct upipe *upipe, struct uref *flow, struct
         dstsize->vsize =  dst->vsize;
     }
 
-    ulog_debug(upipe->ulog, "Source size: %zu\t- %zu", srcsize->hsize, srcsize->vsize);
-    ulog_debug(upipe->ulog, "Dest size:   %zu\t- %zu", dstsize->hsize, dstsize->vsize);
+    upipe_dbg_va(upipe, "Source size: %zu\t- %zu", srcsize->hsize, srcsize->vsize);
+    upipe_dbg_va(upipe, "Dest size:   %zu\t- %zu", dstsize->hsize, dstsize->vsize);
     // FIXME hardcoded format, algorithm, filters
     upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx, srcsize->hsize, srcsize->vsize, PIX_FMT_YUV420P, dstsize->hsize, dstsize->vsize, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
     if (!upipe_sws->convert_ctx) {
-        ulog_error(upipe->ulog, "could not get swscale context");
+        upipe_err(upipe, "could not get swscale context");
         return false;
     }
 
@@ -226,9 +224,9 @@ static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow)
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     // TODO - detect associated PixelFormat
 
-    uref_pic_flow_get_hsize(flow, &size);
+    uref_pic_get_hsize(flow, &size);
     upipe_sws->dstsize.hsize = size;
-    uref_pic_flow_get_vsize(flow, &size);
+    uref_pic_get_vsize(flow, &size);
     upipe_sws->dstsize.vsize = size;
 
     struct uref *uref = uref_dup(flow);
@@ -258,7 +256,7 @@ static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
     int ret;
 
     if(unlikely(!upipe_sws->ready)) {
-        ulog_warning(upipe->ulog, "pipe not ready");
+        upipe_warn(upipe, "pipe not ready");
         uref_free(uref);
         return;
     }
@@ -267,14 +265,14 @@ static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
     srcsize = &upipe_sws->srcsize;
     if ( unlikely((srcsize->hsize != inputsize.hsize) || (srcsize->vsize != inputsize.vsize)) )
     {
-        ulog_notice(upipe->ulog, "received picture with a new size");
+        upipe_notice(upipe, "received picture with a new size");
         upipe_sws_set_context(upipe, NULL, &inputsize, NULL);
     }
 
     dstsize = &upipe_sws->dstsize;
     dstpic = ubuf_pic_alloc(upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
     if (unlikely(dstpic == NULL)) {
-        ulog_debug(upipe->ulog, "dstpic == NULL");
+        upipe_dbg(upipe, "dstpic == NULL");
         upipe_throw_aerror(upipe);
         uref_free(uref);
         return;
@@ -323,12 +321,12 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
             return;
         }
         upipe_sws->input_flow = uref;
-        ulog_debug(upipe->ulog, "flow definition: %s", def);
+        upipe_dbg_va(upipe, "flow definition: %s", def);
         return;
     }
 
     if (unlikely(upipe_sws->input_flow == NULL)) {
-        ulog_warning(upipe->ulog, "pipe has no registered input flow");
+        upipe_warn(upipe, "pipe has no registered input flow");
         uref_free(uref);
         return;
     }
@@ -338,7 +336,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    ulog_debug(upipe->ulog, "calling input_pic");
+    upipe_dbg(upipe, "calling input_pic");
     upipe_sws_input_pic(upipe, uref, upump);
 }
 
@@ -427,6 +425,7 @@ static void upipe_sws_release(struct upipe *upipe)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_sws->refcount))) {
+        upipe_throw_dead(upipe);
         upipe_sws_clean_output(upipe);
         upipe_sws_clean_ubuf_mgr(upipe);
         if (upipe_sws->input_flow) {

@@ -2,8 +2,8 @@ LOG_COMPILER = $(srcdir)/valgrind_wrapper.sh
 AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
-	ulog_stdio_test.sh \
-	ulog_sub_test.sh \
+	uprobe_stdio_test.sh \
+	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
 	uprobe_log_test.sh \
 	upipe_file_test.sh \
@@ -12,14 +12,15 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
-	ulog_stdio_test.txt \
-	ulog_sub_test.txt \
+	udict_inline_test.txt \
+	uprobe_stdio_test.txt \
+	uprobe_prefix_test.txt \
 	uprobe_log_test.txt \
 	uprobe_ts_log_test.txt
 
 check_PROGRAMS = \
-	ulog_stdio_test \
-	ulog_sub_test \
+	uprobe_stdio_test \
+	uprobe_prefix_test \
 	uprobe_log_test \
 	uprobe_uref_mgr_test \
 	umem_alloc_test \
@@ -40,8 +41,8 @@ TESTS = \
 	ubuf_block_mem_test \
 	ubuf_pic_mem_test \
 	uref_std_test \
-	ulog_stdio_test.sh \
-	ulog_sub_test.sh \
+	uprobe_stdio_test.sh \
+	uprobe_prefix_test.sh \
 	uprobe_log_test.sh \
 	uprobe_uref_mgr_test \
 	uclock_std_test \

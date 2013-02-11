@@ -31,9 +31,9 @@
 
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -69,10 +69,10 @@
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
 #define READ_SIZE 4096
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 struct ubuf_mgr *ubuf_mgr;
-static struct uprobe *uprobe_log;
+static struct uprobe *log;
 static struct upipe *upipe_avfsrc;
 static struct ulist upipe_avfsrc_outputs;
 
@@ -99,15 +99,16 @@ struct avformat_test {
 
 /** helper phony pipe to test upipe_avfsrc */
 static struct upipe *avformat_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, struct ulog *ulog)
+                                         struct uprobe *uprobe)
 {
     struct avformat_test *avformat_test = malloc(sizeof(struct avformat_test));
     assert(avformat_test != NULL);
-    upipe_init(&avformat_test->upipe, mgr, uprobe, ulog);
+    upipe_init(&avformat_test->upipe, mgr, uprobe);
     avformat_test->got_flow_def = false;
     avformat_test->nb_packets = 0;
     avformat_test->octets = 0;
     urefcount_init(&avformat_test->refcount);
+    upipe_throw_ready(&avformat_test->upipe);
     return &avformat_test->upipe;
 }
 
@@ -122,7 +123,7 @@ static void avformat_test_input(struct upipe *upipe, struct uref *uref,
     if (uref_flow_get_def(uref, &def)) {
         assert(!avformat_test->got_flow_def);
         avformat_test->got_flow_def = true;
-        ulog_debug(upipe->ulog, "got flow definition %s", def);
+        upipe_dbg_va(upipe, "got flow definition %s", def);
         uref_free(uref);
         return;
     }
@@ -149,8 +150,9 @@ static void avformat_test_release(struct upipe *upipe)
     struct avformat_test *avformat_test =
         container_of(upipe, struct avformat_test, upipe);
     if (unlikely(urefcount_release(&avformat_test->refcount))) {
-        ulog_debug(upipe->ulog, "got %u packets totalizing %zu octets",
-                   avformat_test->nb_packets, avformat_test->octets);
+        upipe_dbg_va(upipe, "got %u packets totalizing %zu octets",
+                     avformat_test->nb_packets, avformat_test->octets);
+        upipe_throw_dead(upipe);
         upipe_clean(upipe);
         free(avformat_test);
     }
@@ -187,8 +189,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             const char *def;
             assert(uref_flow_get_def(flow_def, &def));
             if (ubase_ncmp(def, "block.")) {
-                ulog_warning(upipe->ulog,
-                             "flow def %s is not supported by unit test", def);
+                upipe_warn_va(upipe,
+                              "flow def %s is not supported by unit test", def);
                 break;
             }
 
@@ -200,12 +202,12 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             uchain_init(&output->uchain);
             ulist_add(&upipe_avfsrc_outputs, &output->uchain);
             output->upipe_avfsrc_output = upipe_alloc_output(upipe_avfsrc,
-                    uprobe_log, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
-                                                      "output %"PRIu64, id));
+                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
+                                              "output %"PRIu64, id));
             assert(output->upipe_avfsrc_output != NULL);
             struct upipe *upipe_sink = upipe_alloc(&avformat_test_mgr,
-                    uprobe_log, ulog_stdio_alloc_va(stdout, ULOG_LEVEL,
-                                                      "sink %"PRIu64, id));
+                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
+                                              "sink %"PRIu64, id));
             assert(upipe_sink != NULL);
             assert(upipe_set_flow_def(output->upipe_avfsrc_output, flow_def));
             assert(upipe_set_ubuf_mgr(output->upipe_avfsrc_output, ubuf_mgr));
@@ -266,16 +268,19 @@ int main(int argc, char *argv[])
 #endif
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(log != NULL);
 
     assert(upipe_av_init(false));
 
 #if 0
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);
-    struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file sink"));
+    struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
     assert(upipe_avfsink != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsink, upump_mgr));
     if (delay) {
@@ -287,8 +292,9 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
-    upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "avformat source"));
+    upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
+                                   "avformat source"));
     assert(upipe_avfsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
@@ -327,7 +333,8 @@ int main(int argc, char *argv[])
 #if 0
     uclock_release(uclock);
 #endif
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
 
     ev_default_destroy();
     return 0;

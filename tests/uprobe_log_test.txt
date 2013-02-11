@@ -1,7 +1,8 @@
-debug: [probe] probe caught allocation error
-debug: [probe] probe caught upump error
-debug: [probe] probe caught read end on pouet
-debug: [probe] probe caught write end on pouet
-debug: [probe] probe caught add flow 0x42 def "block.test."
-debug: [probe] probe caught need uref manager
-debug: [probe] probe caught need upump manager
+error: allocation error at
+debug: probe caught allocation error
+debug: probe caught upump error
+debug: probe caught read end on pouet
+debug: probe caught write end on pouet
+debug: probe caught add flow 0x42 def "block.test."
+debug: probe caught need uref manager
+debug: probe caught need upump manager

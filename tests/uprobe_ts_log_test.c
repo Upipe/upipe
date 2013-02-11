@@ -30,6 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe-ts/uprobe_ts_log.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
@@ -39,8 +40,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_std.h>
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_decaps.h>
@@ -59,12 +58,12 @@ static struct upipe test_pipe;
 
 int main(int argc, char **argv)
 {
-    struct uprobe *uprobe = uprobe_ts_log_alloc(NULL, ULOG_DEBUG);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout,
+                                                     UPROBE_LOG_DEBUG);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *uprobe = uprobe_ts_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
-    test_pipe.ulog = ulog_stdio_alloc(stdout, ULOG_DEBUG, "ts probe");
-
-    upipe_throw_aerror(&test_pipe);
 
     upipe_throw(&test_pipe, UPROBE_TS_DECAPS_PCR, UPIPE_TS_DECAPS_SIGNATURE,
                 NULL, 42);
@@ -88,7 +87,7 @@ int main(int argc, char **argv)
     upipe_throw(&test_pipe, UPROBE_TS_PMTD_DEL_ES, UPIPE_TS_PMTD_SIGNATURE,
                 NULL, 42);
 
-    uprobe_log_free(uprobe);
-    ulog_free(test_pipe.ulog);
+    uprobe_ts_log_free(uprobe);
+    uprobe_stdio_free(uprobe_stdio);
     return 0;
 }

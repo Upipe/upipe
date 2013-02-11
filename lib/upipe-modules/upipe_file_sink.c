@@ -31,7 +31,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -107,17 +106,16 @@ UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe, struct ulog *ulog)
+                                       struct uprobe *uprobe)
 {
     struct upipe_fsink *upipe_fsink = malloc(sizeof(struct upipe_fsink));
     if (unlikely(upipe_fsink == NULL))
         return NULL;
     struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     urefcount_init(&upipe_fsink->refcount);
     upipe_fsink_init_upump_mgr(upipe);
     upipe_fsink_init_uclock(upipe);
@@ -149,7 +147,7 @@ static void upipe_fsink_wait(struct upipe *upipe, uint64_t timeout)
                                      upipe_fsink_watcher, upipe, false,
                                      upipe_fsink->fd);
     if (unlikely(upump == NULL)) {
-        ulog_error(upipe->ulog, "can't create watcher");
+        upipe_err_va(upipe, "can't create watcher");
         upipe_throw_upump_error(upipe);
         return;
     }
@@ -175,7 +173,7 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(upipe_fsink->fd == -1)) {
         uref_free(uref);
-        ulog_warning(upipe->ulog, "received a buffer before opening a file");
+        upipe_warn(upipe, "received a buffer before opening a file");
         return;
     }
 
@@ -189,7 +187,7 @@ static void upipe_fsink_output(struct upipe *upipe, struct uref *uref,
 
     uint64_t systime = 0;
     if (unlikely(!uref_clock_get_systime(uref, &systime))) {
-        ulog_warning(upipe->ulog, "received non-dated buffer");
+        upipe_warn(upipe, "received non-dated buffer");
         goto write_buffer;
     }
 
@@ -206,7 +204,7 @@ write_buffer:
         int iovec_count = uref_block_iovec_count(uref, 0, -1);
         if (unlikely(iovec_count == -1)) {
             uref_free(uref);
-            ulog_warning(upipe->ulog, "cannot read ubuf buffer");
+            upipe_warn(upipe, "cannot read ubuf buffer");
             break;
         }
         if (unlikely(iovec_count == 0)) {
@@ -217,7 +215,7 @@ write_buffer:
         struct iovec iovecs[iovec_count];
         if (unlikely(!uref_block_iovec_read(uref, 0, -1, iovecs))) {
             uref_free(uref);
-            ulog_warning(upipe->ulog, "cannot read ubuf buffer");
+            upipe_warn(upipe, "cannot read ubuf buffer");
             break;
         }
 
@@ -245,8 +243,7 @@ write_buffer:
                     break;
             }
             uref_free(uref);
-            ulog_warning(upipe->ulog, "write error to %s (%s)",
-                         upipe_fsink->path, ulog_strerror(upipe->ulog, errno));
+            upipe_warn_va(upipe, "write error to %s (%m)", upipe_fsink->path);
             upipe_fsink_set_upump(upipe, NULL);
             upipe_throw_write_end(upipe, upipe_fsink->path);
             return;
@@ -301,7 +298,7 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
         }
 
         upipe_fsink->flow_def_ok = true;
-        ulog_debug(upipe->ulog, "flow definition %s", def);
+        upipe_dbg_va(upipe, "flow definition %s", def);
         uref_free(uref);
         return;
     }
@@ -348,7 +345,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
 
     if (unlikely(upipe_fsink->fd != -1)) {
         if (likely(upipe_fsink->path != NULL))
-            ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
+            upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
         close(upipe_fsink->fd);
     }
     free(upipe_fsink->path);
@@ -384,20 +381,18 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
             flags = O_CREAT | O_EXCL;
             break;
         default:
-            ulog_error(upipe->ulog, "invalid mode %d", mode);
+            upipe_err_va(upipe, "invalid mode %d", mode);
             return false;
     }
     upipe_fsink->fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC | flags,
                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (unlikely(upipe_fsink->fd == -1)) {
-        ulog_error(upipe->ulog, "can't open file %s (%s)",
-                   path, ulog_strerror(upipe->ulog, errno));
+        upipe_err_va(upipe, "can't open file %s (%m)", path);
         return false;
     }
     if (likely(mode == UPIPE_FSINK_APPEND))
         if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END)) == -1) {
-            ulog_error(upipe->ulog, "can't append to file %s (%s)",
-                       path, ulog_strerror(upipe->ulog, errno));
+            upipe_err_va(upipe, "can't append to file %s (%m)", path);
             close(upipe_fsink->fd);
             upipe_fsink->fd = -1;
             return false;
@@ -407,12 +402,11 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->path == NULL)) {
         close(upipe_fsink->fd);
         upipe_fsink->fd = -1;
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return false;
     }
-    ulog_notice(upipe->ulog, "opening file %s in %s mode",
-                upipe_fsink->path, mode_desc);
+    upipe_notice_va(upipe, "opening file %s in %s mode",
+                    upipe_fsink->path, mode_desc);
     return true;
 }
 
@@ -513,13 +507,13 @@ static void upipe_fsink_release(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_fsink->refcount))) {
-        upipe_throw_dead(upipe);
-
         if (likely(upipe_fsink->fd != -1)) {
             if (likely(upipe_fsink->path != NULL))
-                ulog_notice(upipe->ulog, "closing file %s", upipe_fsink->path);
+                upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
             close(upipe_fsink->fd);
         }
+        upipe_throw_dead(upipe);
+
         free(upipe_fsink->path);
         upipe_fsink_clean_delay(upipe);
         upipe_fsink_clean_uclock(upipe);

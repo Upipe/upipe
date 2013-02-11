@@ -1,0 +1,5 @@
+error: [pfx] This is an error
+warning: [pfx] This is a composite warning with 66
+notice: [pfx] This is a notice
+debug: [pfx] This is a debug
+error: [pfx[2]] This is another error with 67

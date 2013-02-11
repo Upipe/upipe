@@ -50,9 +50,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -87,7 +87,7 @@
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
 #define READ_SIZE 4096
-#define ULOG_LEVEL ULOG_WARNING
+#define UPROBE_LOG_LEVEL UPROBE_LOG_WARNING
 
 void sig_handler(int sig)
 {
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
     const char *srcpath, *dirpath, *suffix;
     uint64_t rotate = 0;
     int opt;
-    enum ulog_level loglevel = ULOG_LEVEL;
+    enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 
     signal (SIGINT, sig_handler);
 
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
                 rotate = strtoull(optarg, NULL, 0);
                 break;
             case 'd':
-                loglevel = ULOG_DEBUG;
+                loglevel = UPROBE_LOG_DEBUG;
                 break;
             default:
                 usage(argv[0]);
@@ -166,14 +166,16 @@ int main(int argc, char *argv[])
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, loglevel);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout, loglevel);
+    struct uprobe *uprobe_log = uprobe_log_alloc(uprobe_stdio,
+                                                 UPROBE_LOG_DEBUG);
 
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
 
     // data files (multicat sink)
-    struct upipe *datasink= upipe_alloc(upipe_multicat_sink_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, loglevel, "datasink"));
+    struct upipe *datasink= upipe_alloc(upipe_multicat_sink_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"));
     upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
     upipe_set_upump_mgr(datasink, upump_mgr);
     if (rotate) {
@@ -182,8 +184,8 @@ int main(int argc, char *argv[])
     upipe_multicat_sink_set_path(datasink, dirpath, suffix);
 
     // aux files (multicat sink)
-    struct upipe *auxsink= upipe_alloc(upipe_multicat_sink_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, loglevel, "auxsink"));
+    struct upipe *auxsink= upipe_alloc(upipe_multicat_sink_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"));
     upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
     upipe_set_upump_mgr(auxsink, upump_mgr);
     if (rotate) {
@@ -193,24 +195,24 @@ int main(int argc, char *argv[])
 
     // aux block generation pipe
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr, uprobe_log,
-                                 ulog_stdio_alloc(stdout, loglevel, "genaux"));
+    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"));
     assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
     upipe_set_output(genaux, auxsink);
     
     // dup
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
-    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr, uprobe_log,
-                                    ulog_stdio_alloc(stdout, loglevel, "dup"));
-    upipe_set_output(upipe_alloc_output(upipe_dup, uprobe_log,
-                      ulog_stdio_alloc(stdout, loglevel, "dupdata")), datasink);
-    upipe_set_output(upipe_alloc_output(upipe_dup, uprobe_log,
-                      ulog_stdio_alloc(stdout, loglevel, "dupaux")), genaux);
+    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"));
+    upipe_set_output(upipe_alloc_output(upipe_dup,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata")), datasink);
+    upipe_set_output(upipe_alloc_output(upipe_dup,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux")), genaux);
 
     // udp source
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
-    struct upipe *upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, loglevel, "udp source"));
+    struct upipe *upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udp source"));
     upipe_set_upump_mgr(upipe_udpsrc, upump_mgr);
     upipe_set_uref_mgr(upipe_udpsrc, uref_mgr);
     upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
@@ -229,6 +231,9 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_udpsrc_mgr); //nop
     upipe_mgr_release(upipe_fsink_mgr); // nop
     upipe_mgr_release(upipe_multicat_sink_mgr); // nop
+
+    uprobe_log_free(uprobe_log);
+    uprobe_stdio_free(uprobe_stdio);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);

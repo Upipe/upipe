@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -29,9 +29,9 @@
 
 #undef NDEBUG
 
-#include <upipe/ulog.h>
-#include <upipe/ulog_stdio.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -63,7 +63,7 @@
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
 #define READ_SIZE 4096
-#define ULOG_LEVEL ULOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static void usage(const char *argv0) {
     fprintf(stdout, "Usage: %s [-d <delay>] [-a|-o] <source file> <sink file>\n", argv0);
@@ -134,13 +134,16 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(&uprobe, ULOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
+    assert(log != NULL);
 
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file sink"));
+    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
     assert(upipe_fsink != NULL);
     assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
     if (delay) {
@@ -151,8 +154,8 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
-    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr, uprobe_log,
-            ulog_stdio_alloc(stdout, ULOG_LEVEL, "file source"));
+    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
@@ -182,7 +185,8 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_log_free(uprobe_log);
+    uprobe_log_free(log);
+    uprobe_stdio_free(uprobe_stdio);
 
     ev_default_destroy();
     return 0;

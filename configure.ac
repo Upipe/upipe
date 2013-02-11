@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([upipe], [0.1], [massiot@via.ecp.fr])
-AC_CONFIG_SRCDIR([lib/upipe/ulog_stdio.c])
+AC_INIT([upipe], [0.1], [cmassiot@openheadend.tv])
+AC_CONFIG_SRCDIR([lib/upipe/uprobe_stdio.c])
 AC_CONFIG_HEADERS([include/upipe/config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
@@ -100,6 +100,13 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
 
 AC_CONFIG_FILES([Makefile
                  include/Makefile
+                 include/upipe/Makefile
+                 include/upump-ev/Makefile
+                 include/upipe-modules/Makefile
+                 include/upipe-framers/Makefile
+                 include/upipe-av/Makefile
+                 include/upipe-swscale/Makefile
+                 include/upipe-ts/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -107,6 +114,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upump-ev/libupump_ev.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
+                 lib/upipe-framers/Makefile
+                 lib/upipe-framers/libupipe_framers.pc
                  lib/upipe-av/Makefile
                  lib/upipe-av/libupipe_av.pc
                  lib/upipe-swscale/Makefile

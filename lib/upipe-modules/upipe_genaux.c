@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uclock.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref.h>
@@ -107,7 +106,6 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
     if (unlikely(dst == NULL)) {
         uref_free(uref);
-        ulog_aerror(upipe->ulog);
         upipe_throw_aerror(upipe);
         return;
     }
@@ -133,11 +131,9 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     const char *def;
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
-        ulog_debug(upipe->ulog, "flow definition %s", def);
-        if (unlikely(!uref_flow_set_def(uref, "block.aux."))) {
-            ulog_aerror(upipe->ulog);
+        upipe_dbg_va(upipe, "flow definition %s", def);
+        if (unlikely(!uref_flow_set_def(uref, "block.aux.")))
             upipe_throw_aerror(upipe);
-        }
         upipe_genaux_store_flow_def(upipe, uref);
         return;
     }
@@ -192,18 +188,16 @@ static bool upipe_genaux_control(struct upipe *upipe,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe,
-                                        struct ulog *ulog)
+                                        struct uprobe *uprobe)
 {
     struct upipe_genaux *upipe_genaux = malloc(sizeof(struct upipe_genaux));
     if (unlikely(upipe_genaux == NULL))
         return NULL;
     struct upipe *upipe = upipe_genaux_to_upipe(upipe_genaux);
-    upipe_init(upipe, mgr, uprobe, ulog);
+    upipe_init(upipe, mgr, uprobe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
 
@@ -230,9 +224,9 @@ static void upipe_genaux_release(struct upipe *upipe)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_genaux->refcount))) {
+        upipe_dbg_va(upipe, "releasing pipe %p", upipe);
         upipe_throw_dead(upipe);
 
-        ulog_debug(upipe->ulog, "releasing pipe %p", upipe);
         upipe_genaux_clean_ubuf_mgr(upipe);
         upipe_genaux_clean_output(upipe);
 

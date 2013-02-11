@@ -40,12 +40,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+UREF_ATTR_TEMPLATE(pic, number, "p.num", unsigned, uint64_t, picture number)
+UREF_ATTR_TEMPLATE(pic, hsize, "p.hsize", unsigned, uint64_t, horizontal size)
+UREF_ATTR_TEMPLATE(pic, vsize, "p.vsize", unsigned, uint64_t, vertical size)
+UREF_ATTR_TEMPLATE(pic, hsize_visible, "p.hsizevis", unsigned, uint64_t, horizontal visible size)
+UREF_ATTR_TEMPLATE(pic, vsize_visible, "p.vsizevis", unsigned, uint64_t, vertical visible size)
 UREF_ATTR_TEMPLATE(pic, hposition, "p.hposition", unsigned, uint64_t, horizontal position)
 UREF_ATTR_TEMPLATE(pic, vposition, "p.vposition", unsigned, uint64_t, vertical position)
 UREF_ATTR_TEMPLATE(pic, aspect, "p.aspect", rational, struct urational, aspect ratio)
-UREF_ATTR_TEMPLATE_VOID(pic, interlaced, "p.interlaced", interlaced)
+UREF_ATTR_TEMPLATE_VOID(pic, progressive, "p.progressive", progressive)
+UREF_ATTR_TEMPLATE_VOID(pic, tf, "p.tf", top field present)
+UREF_ATTR_TEMPLATE_VOID(pic, bf, "p.bf", bottom field present)
 UREF_ATTR_TEMPLATE_VOID(pic, tff, "p.tff", top field first)
-UREF_ATTR_TEMPLATE(pic, fields, "p.fields", small_unsigned, uint8_t, number of fields)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a picture.
  * This is equivalent to the two operations sequentially, and is a shortcut.

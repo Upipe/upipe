@@ -3,7 +3,7 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@     
 Name: libupump_ev
-Description: upipe multimedia framework, libev event loop wrapper
+Description: Upipe multimedia framework, libev event loop wrapper
 Version: @VERSION@
 Requires: libupipe
 Libs: -L${libdir} -lupump_ev -lev
