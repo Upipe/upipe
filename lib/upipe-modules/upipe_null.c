@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/ulog.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -61,15 +60,14 @@ UPIPE_HELPER_UPIPE(upipe_null, upipe);
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
- * @param ulog structure used to output logs
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe, struct ulog *ulog)
+                                       struct uprobe *uprobe)
 {
     struct upipe_null *upipe_null = malloc(sizeof(struct upipe_null));
     if (unlikely(!upipe_null)) return NULL;
-    upipe_init(&upipe_null->upipe, mgr, uprobe, ulog);
+    upipe_init(&upipe_null->upipe, mgr, uprobe);
     urefcount_init(&upipe_null->refcount);
     upipe_throw_ready(&upipe_null->upipe);
     return &upipe_null->upipe;
@@ -83,7 +81,7 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
 {
-    ulog_debug(upipe->ulog, "sending uref to devnull");
+    upipe_dbg(upipe, "sending uref to devnull");
     uref_free(uref);
 }
 
