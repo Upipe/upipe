@@ -41,6 +41,8 @@ UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag
                         that may be present in any uref carrying data)
 UREF_ATTR_TEMPLATE_VOID(flow, random, "f.random", random access flag
                         that may be present in any uref carrying data)
+UREF_ATTR_TEMPLATE_VOID(flow, error, "f.error", error flag
+                        that may be present in any uref carrying data)
 UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
 UREF_ATTR_TEMPLATE(flow, raw_def, "f.rawdef", string, const char *,
                    raw flow definition)

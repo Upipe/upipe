@@ -31,8 +31,9 @@ check_PROGRAMS = \
 	uref_std_test \
 	uclock_std_test \
 	upipe_genaux_test \
-    upipe_null_test \
-	upipe_dup_test
+	upipe_null_test \
+	upipe_dup_test \
+	upipe_mp2v_framer_test
 
 TESTS = \
 	umem_alloc_test \
@@ -47,8 +48,9 @@ TESTS = \
 	uprobe_uref_mgr_test \
 	uclock_std_test \
 	upipe_genaux_test \
-    upipe_null_test \
-	upipe_dup_test
+	upipe_null_test \
+	upipe_dup_test \
+	upipe_mp2v_framer_test
 
 if HAVE_EV
 check_PROGRAMS += \
@@ -134,12 +136,16 @@ upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modul
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
+
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
 upipe_avcodec_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
+
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
+
 uprobe_ts_log_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
@@ -150,6 +156,6 @@ upipe_ts_psim_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_patd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pmtd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
-upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)

@@ -47,7 +47,7 @@ UREF_ATTR_TEMPLATE(pic, hsize_visible, "p.hsizevis", unsigned, uint64_t, horizon
 UREF_ATTR_TEMPLATE(pic, vsize_visible, "p.vsizevis", unsigned, uint64_t, vertical visible size)
 UREF_ATTR_TEMPLATE(pic, hposition, "p.hposition", unsigned, uint64_t, horizontal position)
 UREF_ATTR_TEMPLATE(pic, vposition, "p.vposition", unsigned, uint64_t, vertical position)
-UREF_ATTR_TEMPLATE(pic, aspect, "p.aspect", rational, struct urational, aspect ratio)
+UREF_ATTR_TEMPLATE(pic, aspect, "p.aspect", rational, struct urational, sample aspect ratio)
 UREF_ATTR_TEMPLATE_VOID(pic, progressive, "p.progressive", progressive)
 UREF_ATTR_TEMPLATE_VOID(pic, tf, "p.tf", top field present)
 UREF_ATTR_TEMPLATE_VOID(pic, bf, "p.bf", bottom field present)

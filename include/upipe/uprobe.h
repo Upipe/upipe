@@ -144,9 +144,13 @@ static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
                                    enum uprobe_event event, va_list args)
 {
     while (likely(uprobe != NULL)) {
+        va_list args_copy;
+        va_copy(args_copy, args);
         /* in case our probe deletes itself */
         struct uprobe *next = uprobe->next;
-        if (uprobe->uthrow(uprobe, upipe, event, args))
+        bool ret = uprobe->uthrow(uprobe, upipe, event, args_copy);
+        va_end(args_copy);
+        if (ret)
             break;
         uprobe = next;
     }
