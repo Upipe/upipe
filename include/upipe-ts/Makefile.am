@@ -1,4 +1,5 @@
-nobase_include_HEADERS = \
+myincludedir = $(includedir)/upipe-ts
+myinclude_HEADERS = \
 	upipe_ts_check.h \
 	upipe_ts_decaps.h \
 	upipe_ts_demux.h \

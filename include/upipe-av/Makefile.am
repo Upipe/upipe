@@ -1,4 +1,5 @@
-nobase_include_HEADERS = \
+myincludedir = $(includedir)/upipe-av
+myinclude_HEADERS = \
 	upipe_av.h \
 	upipe_avcodec_dec_vid.h \
 	upipe_avformat_source.h \
