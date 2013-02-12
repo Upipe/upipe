@@ -77,6 +77,10 @@ check_PROGRAMS += \
 	upipe_avformat_test \
 	upipe_avcodec_test
 endif
+
+if HAVE_GLX
+check_PROGRAMS += upipe_glx_sink_test
+endif
 endif
 
 
@@ -147,3 +151,5 @@ upipe_ts_psi_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_t
 upipe_ts_patd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pmtd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)
