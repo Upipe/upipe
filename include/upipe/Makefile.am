@@ -1,4 +1,5 @@
-nobase_include_HEADERS = \
+pkginclude_HEADERS = \
+	config.h \
 	uatomic.h \
 	ubase.h \
 	ubuf.h \
@@ -55,5 +56,3 @@ nobase_include_HEADERS = \
 	uref_sound_flow.h \
 	uref_std.h \
 	uring.h
-
-pkginclude_HEADERS = config.h

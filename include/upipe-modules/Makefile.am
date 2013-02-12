@@ -1,4 +1,5 @@
-nobase_include_HEADERS = \
+myincludedir = $(includedir)/upipe-modules
+myinclude_HEADERS = \
 	upipe_dup.h \
 	upipe_file_sink.h \
 	upipe_file_source.h \
