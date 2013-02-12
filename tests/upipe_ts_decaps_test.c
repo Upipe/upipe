@@ -119,8 +119,8 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     size_t size;
     assert(uref_block_size(uref, &size));
     assert(size == payload_size);
-    assert(transporterror == uref_block_get_error(uref));
-    assert(discontinuity == uref_block_get_discontinuity(uref));
+    assert(transporterror == uref_flow_get_error(uref));
+    assert(discontinuity == uref_flow_get_discontinuity(uref));
     assert(start == uref_block_get_start(uref));
     uref_free(uref);
     nb_packets--;

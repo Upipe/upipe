@@ -278,7 +278,10 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (unlikely(uref_block_get_discontinuity(uref)))
+    size_t size;
+    uref_block_size(uref, &size);
+    upipe_dbg_va(upipe, "pouet %u", size);
+    if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_ts_pesd_flush(upipe);
     if (uref_block_get_start(uref)) {
         if (unlikely(upipe_ts_pesd->next_uref != NULL)) {

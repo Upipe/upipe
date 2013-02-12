@@ -256,7 +256,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(uref_block_get_discontinuity(uref)))
+    if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_ts_sync_flush(upipe, upump);
 
     upipe_ts_sync_append_octet_stream(upipe, uref);

@@ -40,8 +40,6 @@
 #include <stdbool.h>
 #include <sys/uio.h>
 
-UREF_ATTR_TEMPLATE_VOID(block, discontinuity, "b.discontinuity", discontinuity)
-UREF_ATTR_TEMPLATE_VOID(block, error, "b.error", transport error)
 UREF_ATTR_TEMPLATE_VOID(block, start, "b.start", start)
 UREF_ATTR_TEMPLATE_VOID(block, end, "b.end", end)
 

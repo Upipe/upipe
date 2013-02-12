@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
     payload_size = 1;
     uref_block_unmap(uref, 0, size);
     assert(uref_block_set_start(uref));
-    assert(uref_block_set_discontinuity(uref));
+    assert(uref_flow_set_discontinuity(uref));
     nb_packets++;
     expect_lost = true;
     expect_acquired = true;

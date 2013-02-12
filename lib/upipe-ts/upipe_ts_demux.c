@@ -591,13 +591,12 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
         return true;
     }
 
-    if (!ubase_ncmp(def, "block.mpeg2video.")) {
-        return true;
+    if (!ubase_ncmp(def, "block.mpeg2video.") &&
+        ts_demux_mgr->mp2vf_mgr != NULL) {
         /* allocate mp2vf subpipe */
         struct upipe *output = upipe_alloc(ts_demux_mgr->mp2vf_mgr,
-                                           uprobe_pfx_adhoc_alloc(
-                                                &upipe_ts_demux_output->plumber,
-                                                UPROBE_LOG_DEBUG, "mp2vf"));
+                uprobe_pfx_adhoc_alloc(upipe_ts_demux_to_upipe(demux)->uprobe,
+                                       UPROBE_LOG_DEBUG, "mp2vf"));
         if (unlikely(output == NULL))
             upipe_throw_aerror(upipe);
         else {
@@ -860,7 +859,6 @@ static void upipe_ts_demux_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_demux_output->refcount))) {
         struct upipe_ts_demux_program *program =
             upipe_ts_demux_program_from_output_mgr(upipe->mgr);
-        upipe_throw_dead(upipe);
 
         /* remove output from the outputs list */
         struct uchain *uchain;
@@ -878,6 +876,8 @@ static void upipe_ts_demux_output_release(struct upipe *upipe)
             upipe_release(upipe_ts_demux_output->last_subpipe);
         if (upipe_ts_demux_output->output != NULL)
             upipe_release(upipe_ts_demux_output->output);
+        upipe_throw_dead(upipe);
+
         if (upipe_ts_demux_output->flow_def != NULL)
             uref_free(upipe_ts_demux_output->flow_def);
 
@@ -1272,7 +1272,6 @@ static void upipe_ts_demux_program_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_demux_program->refcount))) {
         struct upipe_ts_demux *demux =
             upipe_ts_demux_from_output_mgr(upipe->mgr);
-        upipe_throw_dead(upipe);
 
         /* remove program from the programs list */
         struct uchain *uchain;
@@ -1289,6 +1288,8 @@ static void upipe_ts_demux_program_release(struct upipe *upipe)
             upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
                                            upipe_ts_demux_program->psi_pid);
         }
+        upipe_throw_dead(upipe);
+
         if (upipe_ts_demux_program->flow_def != NULL)
             uref_free(upipe_ts_demux_program->flow_def);
 
@@ -1537,7 +1538,7 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
             if (flow_def != NULL)
                 uref_free(flow_def);
             /* return false in case someone else is interested */
-            return true;
+            return false;
         }
         case UPROBE_TS_PATD_DEL_PROGRAM: {
             unsigned int signature = va_arg(args, unsigned int);
@@ -1921,7 +1922,6 @@ static void upipe_ts_demux_release(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_demux->refcount))) {
-        upipe_throw_dead(upipe);
 
         if (upipe_ts_demux->split != NULL) {
             upipe_ts_demux_set_input_mode(upipe, UPIPE_TS_DEMUX_OFF);
@@ -1929,6 +1929,7 @@ static void upipe_ts_demux_release(struct upipe *upipe)
             upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
             upipe_release(upipe_ts_demux->split);
         }
+        upipe_throw_dead(upipe);
         upipe_ts_demux_clean_uref_mgr(upipe);
 
         upipe_clean(upipe);
@@ -1939,7 +1940,7 @@ static void upipe_ts_demux_release(struct upipe *upipe)
 
 /** @This increments the reference count of a upipe manager.
  *
- * @param upipe description structure of the pipe
+ * @param mgr pointer to manager
  */
 static void upipe_ts_demux_mgr_use(struct upipe_mgr *mgr)
 {
@@ -1950,7 +1951,7 @@ static void upipe_ts_demux_mgr_use(struct upipe_mgr *mgr)
 
 /** @This decrements the reference count of a upipe manager or frees it.
  *
- * @param upipe description structure of the pipe
+ * @param mgr pointer to manager
  */
 static void upipe_ts_demux_mgr_release(struct upipe_mgr *mgr)
 {
@@ -1966,7 +1967,8 @@ static void upipe_ts_demux_mgr_release(struct upipe_mgr *mgr)
         upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
         upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
-        //upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
+        if (ts_demux_mgr->mp2vf_mgr != NULL)
+            upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
 
         urefcount_clean(&ts_demux_mgr->refcount);
         free(ts_demux_mgr);
@@ -1993,7 +1995,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
-    ts_demux_mgr->mp2vf_mgr = NULL; //upipe_mp2vf_mgr_alloc();
+    ts_demux_mgr->mp2vf_mgr = NULL;
 
     ts_demux_mgr->mgr.signature = UPIPE_TS_DEMUX_SIGNATURE;
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;
@@ -2005,4 +2007,73 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->mgr.upipe_mgr_release = upipe_ts_demux_mgr_release;
     urefcount_init(&ts_demux_mgr->refcount);
     return upipe_ts_demux_mgr_to_upipe_mgr(ts_demux_mgr);
+}
+
+/** @This processes control commands on a ts_demux manager. This may only be
+ * called before any pipe has been allocated.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
+                                   enum upipe_ts_demux_mgr_command command,
+                                   va_list args)
+{
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
+    assert(urefcount_single(&ts_demux_mgr->refcount));
+
+    switch (command) {
+#define GET_SET_MGR(name, NAME)                                             \
+        case UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR: {                         \
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
+            *p = ts_demux_mgr->name##_mgr;                                  \
+            return true;                                                    \
+        }                                                                   \
+        case UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR: {                         \
+            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
+            if (ts_demux_mgr->name##_mgr != NULL)                           \
+                upipe_mgr_release(ts_demux_mgr->name##_mgr);                \
+            if (m != NULL)                                                  \
+                upipe_mgr_use(m);                                           \
+            ts_demux_mgr->name##_mgr = m;                                   \
+            return true;                                                    \
+        }
+
+        GET_SET_MGR(ts_split, TS_SPLIT)
+        GET_SET_MGR(ts_sync, TS_SYNC)
+        GET_SET_MGR(ts_check, TS_CHECK)
+        GET_SET_MGR(ts_decaps, TS_DECAPS)
+        GET_SET_MGR(ts_psim, TS_PSIM)
+        GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
+        GET_SET_MGR(ts_patd, TS_PATD)
+        GET_SET_MGR(ts_pmtd, TS_PMTD)
+        GET_SET_MGR(ts_pesd, TS_PESD)
+
+        GET_SET_MGR(mp2vf, MP2VF)
+#undef GET_SET_MGR
+
+        default:
+            return false;
+    }
+}
+
+/** @This processes control commands on a ts_demux manager. This may only be
+ * called before any pipe has been allocated.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+bool upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
+                                enum upipe_ts_demux_mgr_command command, ...)
+{
+    va_list args;
+    va_start(args, command);
+    bool ret = upipe_ts_demux_mgr_control_va(mgr, command, args);
+    va_end(args);
+    return ret;
 }

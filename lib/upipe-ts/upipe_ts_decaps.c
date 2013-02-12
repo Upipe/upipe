@@ -202,8 +202,8 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely((transporterror && !uref_block_set_error(uref))) ||
-                 (discontinuity && !uref_block_set_discontinuity(uref)) ||
+    if (unlikely((transporterror && !uref_flow_set_error(uref))) ||
+                 (discontinuity && !uref_flow_set_discontinuity(uref)) ||
                  (unitstart && !uref_block_set_start(uref))) {
         uref_free(uref);
         upipe_throw_aerror(upipe);

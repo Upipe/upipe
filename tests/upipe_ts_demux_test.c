@@ -52,6 +52,7 @@
 #include <upipe-ts/upipe_ts_pmtd.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
+#include <upipe-framers/upipe_mp2v_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/mpeg/psi.h>
 #include <bitstream/mpeg/pes.h>
-//#include <bitstream/mpeg/mp2v.h>
+#include <bitstream/mpeg/mp2v.h>
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
@@ -75,6 +76,7 @@ static struct upipe *upipe_ts_demux_output_pmt = NULL;
 static struct upipe *upipe_ts_demux_output_video = NULL;
 static struct uprobe *uprobe_ts_log;
 static uint64_t wanted_flow_id, deleted_flow_id;
+static bool expect_need_output = false;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -130,6 +132,10 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(flow_id == deleted_flow_id);
             break;
         }
+        case UPROBE_NEED_OUTPUT:
+            assert(expect_need_output);
+            expect_need_output = false;
+            break;
     }
     return true;
 }
@@ -159,8 +165,13 @@ int main(int argc, char *argv[])
     uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
+    struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
+    assert(upipe_mp2vf_mgr != NULL);
+
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
+    assert(upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr,
+                                            upipe_mp2vf_mgr));
     upipe_ts_demux = upipe_alloc(upipe_ts_demux_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                    "ts demux"));
@@ -301,7 +312,6 @@ int main(int argc, char *argv[])
     wanted_flow_id = 43;
     upipe_input(upipe_ts_demux, uref, NULL);
 
-#if 0
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
@@ -311,14 +321,17 @@ int main(int argc, char *argv[])
     ts_set_unitstart(buffer);
     ts_set_pid(buffer, 43);
     ts_set_cc(buffer, 0);
-    ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE -
-                              PES_HEADER_SIZE_NOPTS - MP2VSEQ_HEADER_SIZE);
+    ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE - PES_HEADER_SIZE_NOPTS -
+            MP2VSEQ_HEADER_SIZE - MP2VSEQX_HEADER_SIZE - MP2VPIC_HEADER_SIZE -
+            MP2VPICX_HEADER_SIZE - 4 - MP2VEND_HEADER_SIZE - 1);
     ts_set_payload(buffer);
     payload = ts_payload(buffer);
     pes_init(payload);
     pes_set_streamid(payload, PES_STREAM_ID_VIDEO_MPEG);
-    pes_set_length(payload, MP2VSEQ_HEADER_SIZE + PES_HEADER_SIZE_NOPTS -
-                            PES_HEADER_SIZE);
+    pes_set_headerlength(payload, 0);
+    pes_set_length(payload, MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
+            MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
+            MP2VEND_HEADER_SIZE + PES_HEADER_SIZE_NOPTS - PES_HEADER_SIZE);
     pes_set_dataalignment(payload);
     payload = pes_payload(payload);
     mp2vseq_init(payload);
@@ -328,14 +341,48 @@ int main(int argc, char *argv[])
     mp2vseq_set_framerate(payload, MP2VSEQ_FRAMERATE_25);
     mp2vseq_set_bitrate(payload, 2000000/400);
     mp2vseq_set_vbvbuffer(payload, 1835008/16/1024);
+    payload += MP2VSEQ_HEADER_SIZE;
+
+    mp2vseqx_init(payload);
+    mp2vseqx_set_profilelevel(payload,
+                              MP2VSEQX_PROFILE_MAIN | MP2VSEQX_LEVEL_MAIN);
+    mp2vseqx_set_chroma(payload, MP2VSEQX_CHROMA_420);
+    mp2vseqx_set_horizontal(payload, 0);
+    mp2vseqx_set_vertical(payload, 0);
+    mp2vseqx_set_bitrate(payload, 0);
+    mp2vseqx_set_vbvbuffer(payload, 0);
+    payload += MP2VSEQX_HEADER_SIZE;
+
+    mp2vpic_init(payload);
+    mp2vpic_set_temporalreference(payload, 0);
+    mp2vpic_set_codingtype(payload, MP2VPIC_TYPE_I);
+    mp2vpic_set_vbvdelay(payload, UINT16_MAX);
+    payload += MP2VPIC_HEADER_SIZE;
+
+    mp2vpicx_init(payload);
+    mp2vpicx_set_fcode00(payload, 0);
+    mp2vpicx_set_fcode01(payload, 0);
+    mp2vpicx_set_fcode10(payload, 0);
+    mp2vpicx_set_fcode11(payload, 0);
+    mp2vpicx_set_intradc(payload, 0);
+    mp2vpicx_set_structure(payload, MP2VPICX_FRAME_PICTURE);
+    mp2vpicx_set_tff(payload);
+    payload += MP2VPICX_HEADER_SIZE;
+
+    mp2vstart_init(payload, 1);
+    payload += 4;
+
+    mp2vend_init(payload);
     uref_block_unmap(uref, 0, size);
+    expect_need_output = true;
     upipe_input(upipe_ts_demux, uref, NULL);
-#endif
+    assert(!expect_need_output);
 
     upipe_release(upipe_ts_demux_output_video);
     upipe_release(upipe_ts_demux_output_pmt);
     upipe_release(upipe_ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
+    upipe_mgr_release(upipe_mp2vf_mgr);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

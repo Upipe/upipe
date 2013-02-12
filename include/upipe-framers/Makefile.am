@@ -1,1 +1,5 @@
-nobase_include_HEADERS = 
+myincludedir = $(includedir)/upipe-framers
+myinclude_HEADERS = \
+	upipe_mp2v_framer.h \
+	uref_mp2v.h \
+	uref_mp2v_flow.h

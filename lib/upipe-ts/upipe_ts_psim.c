@@ -199,7 +199,7 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (unlikely(uref_block_get_discontinuity(uref)))
+    if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_ts_psim_flush(upipe);
 
     if (uref_block_get_start(uref)) {

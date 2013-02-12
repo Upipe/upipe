@@ -264,7 +264,6 @@ static void upipe_ts_split_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_split_output->refcount))) {
         struct upipe_ts_split *upipe_ts_split =
             upipe_ts_split_from_output_mgr(upipe->mgr);
-        upipe_throw_dead(upipe);
 
         /* remove output from the outputs list */
         if (upipe_ts_split_output->flow_def != NULL) {
@@ -275,6 +274,7 @@ static void upipe_ts_split_output_release(struct upipe *upipe)
                         upipe_ts_split_output);
         }
 
+        upipe_throw_dead(upipe);
         upipe_ts_split_output_clean_output(upipe);
 
         upipe_clean(upipe);
