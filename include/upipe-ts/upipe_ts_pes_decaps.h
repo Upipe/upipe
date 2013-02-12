@@ -19,13 +19,12 @@
  */
 
 /** @file
- * @short Upipe module decapsulating (removing PES header) TS packets
- * containing PES headers
+ * @short Upipe module decapsulating (removing) PES header of TS packets
  */
 
-#ifndef _UPIPE_TS_UPIPE_TS_PESD_H_
+#ifndef _UPIPE_TS_UPIPE_TS_PES_DECAPS_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_TS_PESD_H_
+#define _UPIPE_TS_UPIPE_TS_PES_DECAPS_H_
 
 #include <upipe/upipe.h>
 

@@ -48,8 +48,8 @@
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-ts/upipe_ts_patd.h>
-#include <upipe-ts/upipe_ts_pmtd.h>
+#include <upipe-ts/upipe_ts_pat_decoder.h>
+#include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
 #include <upipe-framers/upipe_mp2v_framer.h>

@@ -36,7 +36,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe-ts/upipe_ts_pesd.h>
+#include <upipe-ts/upipe_ts_pes_decaps.h>
 
 #include <stdlib.h>
 #include <stdbool.h>

@@ -3,11 +3,11 @@ myinclude_HEADERS = \
 	upipe_ts_check.h \
 	upipe_ts_decaps.h \
 	upipe_ts_demux.h \
-	upipe_ts_patd.h \
-	upipe_ts_pesd.h \
+	upipe_ts_pat_decoder.h \
+	upipe_ts_pes_decaps.h \
+	upipe_ts_pmt_decoder.h \
 	upipe_ts_psi_split.h \
-	upipe_ts_psim.h \
-	upipe_ts_pmtd.h \
+	upipe_ts_psi_merge.h \
 	upipe_ts_split.h \
 	upipe_ts_sync.h \
 	uprobe_ts_log.h \

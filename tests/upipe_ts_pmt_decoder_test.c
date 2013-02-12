@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short unit tests for TS pmtd module
+ * @short unit tests for TS PMT decoder module
  */
 
 #undef NDEBUG
@@ -47,7 +47,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
-#include <upipe-ts/upipe_ts_pmtd.h>
+#include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdbool.h>
