@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short unit tests for TS patd module
+ * @short unit tests for TS PAT decoder module
  */
 
 #undef NDEBUG
@@ -47,7 +47,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
-#include <upipe-ts/upipe_ts_patd.h>
+#include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdbool.h>

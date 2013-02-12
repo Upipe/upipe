@@ -32,9 +32,9 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe-ts/upipe_ts_pmtd.h>
+#include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
-#include "upipe_ts_psid.h"
+#include "upipe_ts_psi_decoder.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

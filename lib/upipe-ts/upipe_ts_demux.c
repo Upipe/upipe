@@ -52,11 +52,11 @@
 #include <upipe-ts/upipe_ts_sync.h>
 #include <upipe-ts/upipe_ts_check.h>
 #include <upipe-ts/upipe_ts_decaps.h>
-#include <upipe-ts/upipe_ts_psim.h>
+#include <upipe-ts/upipe_ts_psi_merge.h>
 #include <upipe-ts/upipe_ts_psi_split.h>
-#include <upipe-ts/upipe_ts_patd.h>
-#include <upipe-ts/upipe_ts_pmtd.h>
-#include <upipe-ts/upipe_ts_pesd.h>
+#include <upipe-ts/upipe_ts_pat_decoder.h>
+#include <upipe-ts/upipe_ts_pmt_decoder.h>
+#include <upipe-ts/upipe_ts_pes_decaps.h>
 
 #include <stdlib.h>
 #include <stdbool.h>

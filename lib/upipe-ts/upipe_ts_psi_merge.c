@@ -35,7 +35,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe-ts/upipe_ts_psim.h>
+#include <upipe-ts/upipe_ts_psi_merge.h>
 
 #include <stdlib.h>
 #include <stdbool.h>

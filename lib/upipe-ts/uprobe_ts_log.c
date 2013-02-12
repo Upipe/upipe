@@ -35,8 +35,8 @@
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 #include <upipe-ts/upipe_ts_split.h>
-#include <upipe-ts/upipe_ts_patd.h>
-#include <upipe-ts/upipe_ts_pmtd.h>
+#include <upipe-ts/upipe_ts_pat_decoder.h>
+#include <upipe-ts/upipe_ts_pmt_decoder.h>
 
 #include <stdlib.h>
 #include <string.h>
