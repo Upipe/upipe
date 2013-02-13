@@ -31,6 +31,29 @@
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_NULL_H_
 
+#include <upipe/upipe.h>
+
+#define UPIPE_NULL_SIGNATURE UBASE_FOURCC('n', 'u', 'l', 'l')
+
+/** @This extends upipe_command with specific commands for null */
+enum upipe_null_command {
+    UPIPE_NULL_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** ask enable or disable dumping dicts (int) */
+    UPIPE_NULL_DUMP_DICT
+};
+
+/** @This enables or disables dumping of uref->udict
+ *
+ * @param upipe description structure of the pipe
+ * @param enable enable or disable
+ * @return false in case of error
+ */
+static inline bool upipe_null_dump_dict(struct upipe *upipe, bool enable)
+{
+    return upipe_control(upipe, UPIPE_NULL_DUMP_DICT, UPIPE_NULL_SIGNATURE, (enable ? 1 : 0));
+}
+
 /** @This returns the management structure for null pipes.
  *
  * @return pointer to manager
