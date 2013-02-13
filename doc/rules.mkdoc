@@ -17,6 +17,12 @@
 
       @item A @ref upipe throwing @ref #upipe_throw_aerror shall not longer receive any input nor control command; it can only be released.
 
+      @item Only one pipe at time may call @ref upipe_input on a given @ref upipe. Pipes are not required to support multiple inputs. If multiple inputs are needed, they should be created using @ref upipe_alloc_input.
+
+      @item A @ref upipe may only send its output to one pipe. If multiple outputs are needed, they should be created using @ref upipe_alloc_output (and it is up to the pipe to decide which packets to send where).
+
+      @item A @ref upipe shall not use a blocking system call. It should register a file descriptor or a timer with @ref upump_alloc_fd_read, @ref upump_alloc_fd_write, or @ref upump_alloc_timer.
+
     @end list
 
   @end section
