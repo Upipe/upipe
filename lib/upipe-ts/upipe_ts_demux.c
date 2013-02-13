@@ -318,6 +318,8 @@ struct upipe_ts_demux_output {
 
     /** probe to get events from subpipes */
     struct uprobe plumber;
+    /** probe to get events from the output subpipe */
+    struct uprobe output_probe;
 
     /** pointer to the last subpipe */
     struct upipe *last_subpipe;
@@ -524,6 +526,32 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
  * upipe_ts_demux_output structure handling (derived from upipe structure)
  */
 
+/** @internal @This catches events coming from the final output subpipe.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_output
+ * @param upipe pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_demux_output_probe(struct uprobe *uprobe,
+                                        struct upipe *subpipe,
+                                        enum uprobe_event event,
+                                        va_list args)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        container_of(uprobe, struct upipe_ts_demux_output, output_probe);
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
+
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(uprobe, subpipe, event, args, &flow_def, &def))
+        return false;
+
+    upipe_throw_need_output(upipe, flow_def);
+    return true;
+}
+
 /** @internal @This catches need_output events coming from output subpipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux_output
@@ -595,7 +623,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
         ts_demux_mgr->mp2vf_mgr != NULL) {
         /* allocate mp2vf subpipe */
         struct upipe *output = upipe_alloc(ts_demux_mgr->mp2vf_mgr,
-                uprobe_pfx_adhoc_alloc(upipe_ts_demux_to_upipe(demux)->uprobe,
+                uprobe_pfx_adhoc_alloc(&upipe_ts_demux_output->output_probe,
                                        UPROBE_LOG_DEBUG, "mp2vf"));
         if (unlikely(output == NULL))
             upipe_throw_aerror(upipe);
@@ -631,6 +659,8 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output->last_subpipe = upipe_ts_demux_output->output = NULL;
     uprobe_init(&upipe_ts_demux_output->plumber,
                 upipe_ts_demux_output_plumber, upipe->uprobe);
+    uprobe_init(&upipe_ts_demux_output->output_probe,
+                upipe_ts_demux_output_probe, upipe->uprobe);
     urefcount_init(&upipe_ts_demux_output->refcount);
 
     /* add the newly created output to the outputs list */
@@ -992,8 +1022,8 @@ static bool upipe_ts_demux_program_plumber(struct uprobe *uprobe,
  */
 static bool upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
                                               struct upipe *pmtd,
-                                             enum uprobe_event event,
-                                             va_list args)
+                                              enum uprobe_event event,
+                                              va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, pmtd_probe);
