@@ -1,0 +1,46 @@
+
+@section TPH {Rules}
+
+  Upipe also defines semantic rules to correctly use the syntactic structures described in the previous chapters.
+
+  @section T {Pipes}
+
+    The following rules apply to @ref upipe:
+
+    @list
+
+      @item All methods of @ref upipe must be called from the same thread. As an exception, it is possible to allocate and configure a pipe in one thread, and migrate it to another thread afterwards, but a pipe is not required to be reentrant, nor to handle memory protection.
+
+      @item A @ref upipe shall throw @ref upipe_throw_ready as soon as it is ready to receive inputs and control commands, and before sending any other probe, including log messages.
+
+      @item A @ref upipe shall throw @ref upipe_throw_dead when it does no longer wish to receive inputs and control commands; it shall not send any other probe afterwards, including log messages.
+
+      @item A @ref upipe throwing @ref #upipe_throw_aerror shall not longer receive any input nor control command; it can only be released.
+
+    @end list
+
+  @end section
+
+  @section T {Probes}
+
+    @list
+
+      @item A @ref uprobe must be called from the same thread as the @ref upipe throwing the event; it is not required to be reentrant, nor to handle memory protection, but may opt to do so.
+
+      @item A @ref uprobe shall not send control commands upon receiving a log event.
+
+    @end list
+
+  @end section
+
+  @section T {Buffers}
+
+    @list
+
+      @item @ref ubuf_block_alloc shall not return a segmented block, ie. subsequent calls to @ref ubuf_block_read or @ref ubuf_block_write shall return the entire memory area.
+
+    @end list
+
+  @end section
+
+@end section

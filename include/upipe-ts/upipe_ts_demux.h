@@ -105,6 +105,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void);
 
 /** @This is a list of specific commands for ts demux managers. */
 enum upipe_ts_demux_mgr_command {
+/** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR(name, NAME)                          \
     /** returns the current manager for name subpipes                       \
      * (struct upipe_mgr **) */                                             \
@@ -148,6 +149,7 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
 bool upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
                                 enum upipe_ts_demux_mgr_command command, ...);
 
+/** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR(name, NAME)                          \
 /** @This returns the current manager for name subpipes.                    \
  *                                                                          \

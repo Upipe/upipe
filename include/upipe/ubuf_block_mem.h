@@ -37,6 +37,9 @@
 
 #include <stdint.h>
 
+/** @hidden */
+struct umem_mgr;
+
 /** @This allocates a new instance of the ubuf manager for block formats
  * using umem.
  *
