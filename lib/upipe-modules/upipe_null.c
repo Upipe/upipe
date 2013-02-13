@@ -32,6 +32,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
+#include <upipe/udict.h>
+#include <upipe/udict_dump.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe-modules/upipe_null.h>
 
@@ -49,6 +51,8 @@
 
 /** upipe_null structure */
 struct upipe_null {
+    /** dump dict */
+    bool dump;
     /** refcount management structure */
     urefcount refcount;
     /** public upipe structure */
@@ -81,8 +85,35 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
 {
+    struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_dbg(upipe, "sending uref to devnull");
+    if (upipe_null->dump) {
+        udict_dump(uref->udict, upipe->uprobe);
+    }
     uref_free(uref);
+}
+
+/** @internal @This processes control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_null_control(struct upipe *upipe, enum upipe_command command,
+                               va_list args)
+{
+    struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
+    switch(command) {
+        case UPIPE_NULL_DUMP_DICT: {
+            int signature = va_arg(args, int);
+            assert (signature == UPIPE_NULL_SIGNATURE);
+            upipe_null->dump = (va_arg(args, int) == 1 ? true : false);
+            return true;
+        }
+        default:
+            return false;
+    }
 }
 
 /** @This increments the reference count of a upipe.
@@ -115,7 +146,7 @@ static void upipe_null_release(struct upipe *upipe)
 static struct upipe_mgr upipe_null_mgr = {
     .upipe_alloc = upipe_null_alloc,
     .upipe_input = upipe_null_input,
-    .upipe_control = NULL,
+    .upipe_control = upipe_null_control,
     .upipe_release = upipe_null_release,
     .upipe_use = upipe_null_use,
     .upipe_mgr_release = NULL

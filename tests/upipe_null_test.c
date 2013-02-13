@@ -47,7 +47,7 @@
 
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
-#define ITERATIONS 1000
+#define ITERATIONS 50
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
@@ -94,6 +94,11 @@ int main(int argc, char **argv)
     assert(nullpipe);
 
     /* Now send uref */
+    for (i=0; i < ITERATIONS; i++) {
+        upipe_input(nullpipe, uref_alloc(uref_mgr), NULL);
+    }
+    /* Same with dump */
+    upipe_null_dump_dict(nullpipe, true);
     for (i=0; i < ITERATIONS; i++) {
         upipe_input(nullpipe, uref_alloc(uref_mgr), NULL);
     }
