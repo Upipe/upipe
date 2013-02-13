@@ -107,15 +107,17 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
                 /* The pipe we're attached to is dying, let's deallocate. */\
                 uprobe_throw(uprobe->next, upipe, event, args);             \
                 STRUCTURE##_free(uprobe);                                   \
+                return true;                                                \
             }                                                               \
-            return true;                                                    \
+            break;                                                          \
         case UPROBE_AERROR:                                                 \
             if (STRUCTURE->UPIPE == NULL && upipe == NULL) {                \
                 /* The pipe couldn't be created, let's deallocate. */       \
                 uprobe_throw(uprobe->next, upipe, event, args);             \
                 STRUCTURE##_free(uprobe);                                   \
+                return true;                                                \
             }                                                               \
-            return true;                                                    \
+            break;                                                          \
         default:                                                            \
             break;                                                          \
     }                                                                       \
