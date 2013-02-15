@@ -39,11 +39,11 @@
 enum uprobe_gl_sink_event {
     UPROBE_GL_SINK_SENTINEL = UPROBE_LOCAL,
 
-    /** init GL context */
+    /** init GL context (int SIGNATURE, int width, int height) */
     UPROBE_GL_SINK_INIT,
-    /** render GL */
+    /** render GL (int SIGNATURE, struct uref*) */
     UPROBE_GL_SINK_RENDER,
-    /** reshape GL  */
+    /** reshape GL (int SIGNATURE, int width, int height) */
     UPROBE_GL_SINK_RESHAPE,
 
     UPROBE_GL_SINK_LOCAL

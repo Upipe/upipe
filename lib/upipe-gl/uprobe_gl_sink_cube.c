@@ -33,6 +33,7 @@
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_adhoc.h>
 #include <upipe/upipe.h>
+#include <upipe/uref_pic.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -83,10 +84,19 @@ static void upipe_gl_sink_reshape_cube(struct uprobe *uprobe, struct upipe *upip
  * @param w pic width
  * @param h pic height
  */
-static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
+static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe,
+                                      struct uref *uref)
 {
     struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
     GLuint texture;
+    struct urational aspect;
+    float scale = 1;
+    size_t w = 0, h = 0;
+
+    uref_pic_size(uref, &w, &h, NULL);
+    aspect.num = aspect.den = 1;
+    uref_pic_get_aspect(uref, &aspect);
+    scale = (aspect.num * w)/((float) aspect.den * h);
 
     upipe_gl_sink_get_texture(upipe, &texture);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -98,7 +108,7 @@ static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe
 
     // Main movie "display"
     glPushMatrix();
-    glScalef(w/(float)h, 1, 1);
+    glScalef(scale, 1, 1);
     glBegin(GL_QUADS);
     {
         glTexCoord2f(0, 1); glVertex3f(-2, -2,  -4);
@@ -180,8 +190,6 @@ static void upipe_gl_sink_init_cube(struct uprobe *uprobe, struct upipe *upipe, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    upipe_gl_sink_render_cube(uprobe, upipe, w, h);
 }
 
 /** @internal @This catches events thrown by pipes.
@@ -207,9 +215,8 @@ static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
         case UPROBE_GL_SINK_RENDER: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
-            int w = va_arg(args, int);
-            int h = va_arg(args, int);
-            upipe_gl_sink_render_cube(uprobe, upipe, w, h);
+            struct uref *uref = va_arg(args, struct uref *);
+            upipe_gl_sink_render_cube(uprobe, upipe, uref);
             return true;
         }
         case UPROBE_GL_SINK_RESHAPE: {
