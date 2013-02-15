@@ -506,6 +506,7 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
     const char *chroma = NULL; 
     size_t sstride, dstride;
     int i, j;
+    struct urational aspect;
 
     // if uref has no attached ubuf (ie DR not supported)
     if (unlikely(!uref->ubuf)) {
@@ -532,6 +533,21 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
 
         uref_attach_ubuf(uref, ubuf);
     }
+
+    // Set aspect-ratio
+    aspect.den = 0; // null denom is invalid
+    if (upipe_avcdv->context->sample_aspect_ratio.den) {
+        aspect.num = upipe_avcdv->context->sample_aspect_ratio.num;
+        aspect.den = upipe_avcdv->context->sample_aspect_ratio.den;
+    } else if (frame->sample_aspect_ratio.den) {
+        aspect.num = frame->sample_aspect_ratio.num;
+        aspect.den = frame->sample_aspect_ratio.den;
+    }
+    if (aspect.den) {
+        urational_simplify(&aspect);
+        uref_pic_set_aspect(uref, aspect);
+    }
+
     upipe_avcdv_output(upipe, uref, upump);
 }
 
