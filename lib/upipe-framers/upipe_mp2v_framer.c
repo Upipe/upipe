@@ -99,6 +99,8 @@ struct upipe_mp2vf {
     bool flow_def_sent;
     /** input flow definition packet */
     struct uref *flow_def_input;
+    /** last random access point */
+    uint64_t systime_rap;
 
     /* picture parsing stuff */
     /** last output picture number */
@@ -228,6 +230,7 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf_init_octet_stream(upipe);
     upipe_mp2vf_init_output(upipe);
     upipe_mp2vf->flow_def_input = NULL;
+    upipe_mp2vf->systime_rap = UINT64_MAX;
     upipe_mp2vf->last_picture_number = 0;
     upipe_mp2vf->last_temporal_reference = -1;
     upipe_mp2vf->got_discontinuity = false;
@@ -846,9 +849,13 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 
     if (type == MP2VPIC_TYPE_I) {
         struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-        if (upipe_mp2vf->next_frame_sequence)
+        uint64_t systime_rap = UINT64_MAX;
+        uref_clock_get_systime_rap(uref, &systime_rap);
+
+        if (upipe_mp2vf->next_frame_sequence) {
             uref_flow_set_random(uref);
-        else if (upipe_mp2vf->insert_sequence) {
+            upipe_mp2vf->systime_rap = systime_rap;
+        } else if (upipe_mp2vf->insert_sequence) {
             struct ubuf *ubuf;
             if (upipe_mp2vf->sequence_display != NULL) {
                 ubuf = ubuf_dup(upipe_mp2vf->sequence_display);
@@ -873,6 +880,7 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
             }
             uref_block_insert(uref, 0, ubuf);
             uref_flow_set_random(uref);
+            upipe_mp2vf->systime_rap = systime_rap;
         }
     }
     return true;
@@ -907,6 +915,8 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         return false;
     }
 
+    if (upipe_mp2vf->systime_rap != UINT64_MAX)
+        uref_clock_set_systime_rap(uref, upipe_mp2vf->systime_rap);
     upipe_mp2vf_output(upipe, uref, upump);
     return true;
 }

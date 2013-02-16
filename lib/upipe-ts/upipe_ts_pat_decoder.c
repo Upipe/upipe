@@ -29,6 +29,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -89,6 +90,19 @@ static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
     urefcount_init(&upipe_ts_patd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This sends the patd_systime event.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref triggering the event
+ * @param systime systime of the earliest section of the PAT
+ */
+static void upipe_ts_patd_systime(struct upipe *upipe, struct uref *uref,
+                                  uint64_t systime)
+{
+    upipe_throw(upipe, UPROBE_TS_PATD_SYSTIME, UPIPE_TS_PATD_SIGNATURE, uref,
+                systime);
 }
 
 /** @internal @This sends the patd_tsid event.
@@ -276,6 +290,26 @@ static bool upipe_ts_patd_table_validate(struct upipe *upipe)
     return true;
 }
 
+/** @internal @This gets the systime of the earliest section of the next PAT,
+ * and sends the approriate event.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure triggering the event
+ */
+static void upipe_ts_patd_table_systime(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    uint64_t systime = UINT64_MAX;
+    upipe_ts_psid_table_foreach(upipe_ts_patd->next_pat, section) {
+        uint64_t section_systime;
+        if (uref_clock_get_systime(section, &section_systime) &&
+            section_systime < systime)
+            systime = section_systime;
+    }
+    if (systime != UINT64_MAX)
+        upipe_ts_patd_systime(upipe, uref, systime);
+}
+
 /** @internal @This parses a new PSI section.
  *
  * @param upipe description structure of the pipe
@@ -316,6 +350,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         upipe_ts_psid_table_compare(upipe_ts_patd->pat,
                                     upipe_ts_patd->next_pat)) {
         /* Identical PAT. */
+        upipe_ts_patd_table_systime(upipe, uref);
         upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
         upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
         return;
@@ -327,6 +362,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
         return;
     }
+    upipe_ts_patd_table_systime(upipe, uref);
 
     UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->next_pat, pat_program)
 

@@ -44,6 +44,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
@@ -72,6 +73,7 @@ static unsigned int streamtype_sum;
 static unsigned int desc_offset_sum;
 static unsigned int desc_size_sum;
 static unsigned int del_pid_sum;
+static uint64_t systime = UINT32_MAX;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -84,6 +86,17 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
+        case UPROBE_TS_PMTD_SYSTIME: {
+            unsigned int signature = va_arg(args, unsigned int);
+            struct uref *uref = va_arg(args, struct uref *);
+            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
+            assert(uref != NULL);
+            uint64_t pmtd_systime;
+            assert(uref_clock_get_systime(uref, &pmtd_systime));
+            assert(pmtd_systime == systime);
+            systime = 0;
+            break;
+        }
         case UPROBE_TS_PMTD_HEADER: {
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
@@ -196,6 +209,7 @@ int main(int argc, char *argv[])
     del_pid_sum = 0;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 0;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -203,6 +217,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     pcrpid = 142;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -233,6 +248,8 @@ int main(int argc, char *argv[])
     streamtype_sum = 42;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 5;
+    systime = 2 * UINT32_MAX;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 142);
     assert(!pid_sum);
@@ -240,6 +257,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
@@ -275,6 +293,8 @@ int main(int argc, char *argv[])
     streamtype_sum = 43;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE + 5;
     desc_size_sum = 5;
+    systime = 3 * UINT32_MAX;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -282,6 +302,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     pcrpid = 143;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -313,6 +334,8 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
     header_desc_size = 5;
+    systime = 4 * UINT32_MAX;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -320,6 +343,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     pcrpid = 143;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -349,6 +373,8 @@ int main(int argc, char *argv[])
     pmtn_set_streamtype(pmt_es, 44);
     uref_block_unmap(uref, 0, size);
     header_desc_size = 0;
+    systime = 5 * UINT32_MAX;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
@@ -356,6 +382,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(systime);
 
     pcrpid = 143;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -389,6 +416,7 @@ int main(int argc, char *argv[])
     del_pid_sum = 0;
     desc_offset_sum = (PMT_HEADER_SIZE + PMT_ES_SIZE) * 2 + PMT_ES_SIZE;
     desc_size_sum = 0;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -396,6 +424,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     pcrpid = 143;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -429,6 +458,8 @@ int main(int argc, char *argv[])
     del_pid_sum = 13;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 0;
+    systime = 6 * UINT32_MAX;
+    uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
@@ -436,6 +467,7 @@ int main(int argc, char *argv[])
     assert(!del_pid_sum);
     assert(!desc_offset_sum);
     assert(!desc_size_sum);
+    assert(!systime);
 
     upipe_release(upipe_ts_pmtd);
     upipe_mgr_release(upipe_ts_pmtd_mgr); // nop

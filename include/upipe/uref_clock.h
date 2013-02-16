@@ -37,6 +37,7 @@
 #include <stdint.h>
 
 UREF_ATTR_TEMPLATE(clock, systime, "k.systime", unsigned, uint64_t, reception time in system clock)
+UREF_ATTR_TEMPLATE(clock, systime_rap, "k.systime.rap", unsigned, uint64_t, reception time in system clock of the last random access point)
 UREF_ATTR_TEMPLATE(clock, pts, "k.pts", unsigned, uint64_t, presentation timestamp in Upipe clock)
 UREF_ATTR_TEMPLATE(clock, pts_orig, "k.pts.orig", unsigned, uint64_t, original presentation timestamp in stream clock)
 UREF_ATTR_TEMPLATE(clock, pts_sys, "k.pts.sys", unsigned, uint64_t, presentation timestamp in system clock)

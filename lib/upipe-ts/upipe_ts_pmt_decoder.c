@@ -84,6 +84,16 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This sends the pmtd_systime event.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref triggering the event
+ */
+static void upipe_ts_pmtd_systime(struct upipe *upipe, struct uref *uref)
+{
+    upipe_throw(upipe, UPROBE_TS_PMTD_SYSTIME, UPIPE_TS_PMTD_SIGNATURE, uref);
+}
+
 /** @internal @This sends the pmtd_header event.
  *
  * @param upipe description structure of the pipe
@@ -92,7 +102,7 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
  * @param desc_offset offset of the PMT descriptors array in uref
  * @param desc_size size of the PMT descriptors array in uref
  */
-static void upipe_ts_pmtd_throw_header(struct upipe *upipe, struct uref *uref,
+static void upipe_ts_pmtd_header(struct upipe *upipe, struct uref *uref,
                                        unsigned int pcrpid,
                                        unsigned int desc_offset,
                                        unsigned int desc_size)
@@ -405,6 +415,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     if (upipe_ts_pmtd->pmt != NULL &&
         uref_block_compare(upipe_ts_pmtd->pmt, uref)) {
         /* Identical PMT. */
+        upipe_ts_pmtd_systime(upipe, uref);
         uref_free(uref);
         return;
     }
@@ -414,6 +425,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
         return;
     }
+    upipe_ts_pmtd_systime(upipe, uref);
 
     UPIPE_TS_PMTD_HEADER(upipe, uref, header, header_desc, header_desclength)
 
@@ -431,8 +443,8 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
                                header_desclength)
 
     if (!compare)
-        upipe_ts_pmtd_throw_header(upipe, uref, pcrpid, PMT_HEADER_SIZE,
-                                   header_desclength);
+        upipe_ts_pmtd_header(upipe, uref, pcrpid, PMT_HEADER_SIZE,
+                             header_desclength);
 
     UPIPE_TS_PMTD_PEEK(upipe, uref, offset, header_desclength, es, desc,
                        desclength)

@@ -29,6 +29,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe-ts/uprobe_ts_log.h>
@@ -92,6 +93,14 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
 
+        case UPROBE_TS_PATD_SYSTIME: {
+            assert(signature == UPIPE_TS_PATD_SIGNATURE);
+            struct uref *uref = va_arg(args_copy, struct uref *);
+            uint64_t systime = va_arg(args_copy, uint64_t);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught new PAT systime %"PRIu64, systime);
+            break;
+        }
         case UPROBE_TS_PATD_TSID: {
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
@@ -119,6 +128,15 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
 
+        case UPROBE_TS_PMTD_SYSTIME: {
+            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
+            struct uref *uref = va_arg(args_copy, struct uref *);
+            uint64_t systime = 0;
+            uref_clock_get_systime(uref, &systime);
+            upipe_log_va(upipe, uprobe_ts_log->level,
+                         "ts probe caught new PMT systime %"PRIu64, systime);
+            break;
+        }
         case UPROBE_TS_PMTD_HEADER: {
             assert(signature == UPIPE_TS_PMTD_SIGNATURE);
             struct uref *uref = va_arg(args_copy, struct uref *);
