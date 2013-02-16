@@ -32,6 +32,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
@@ -223,6 +224,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             validate = validate &&
                        pes_validate_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
             dts = pes_get_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
+            if (dts > pts)
+                dts = pts;
         } else
             dts = pts;
         ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref,
@@ -236,18 +239,15 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             return;
         }
 
-        if (unlikely(!uref_clock_set_pts_orig(upipe_ts_pesd->next_uref, pts))) {
+        pts *= UCLOCK_FREQ / 90000;
+        dts *= UCLOCK_FREQ / 90000;
+        if (unlikely(!uref_clock_set_pts_orig(upipe_ts_pesd->next_uref, pts) ||
+                     !uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts))) {
             upipe_ts_pesd_flush(upipe);
             upipe_throw_aerror(upipe);
             return;
         }
-        if (unlikely(pts > dts &&
-                     !uref_clock_set_dts_delay(upipe_ts_pesd->next_uref,
-                                               pts - dts))) {
-            upipe_ts_pesd_flush(upipe);
-            upipe_throw_aerror(upipe);
-            return;
-        }
+        upipe_throw_clock_ts(upipe, upipe_ts_pesd->next_uref);
     }
 
     if (unlikely((alignment &&
@@ -278,9 +278,6 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    size_t size;
-    uref_block_size(uref, &size);
-    upipe_dbg_va(upipe, "pouet %u", size);
     if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_ts_pesd_flush(upipe);
     if (uref_block_get_start(uref)) {

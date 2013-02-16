@@ -90,6 +90,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
+        case UPROBE_CLOCK_REF:
+        case UPROBE_CLOCK_TS:
         case UPROBE_TS_SPLIT_SET_PID:
         case UPROBE_TS_SPLIT_UNSET_PID:
         case UPROBE_TS_PATD_TSID:
@@ -321,18 +323,25 @@ int main(int argc, char *argv[])
     ts_set_unitstart(buffer);
     ts_set_pid(buffer, 43);
     ts_set_cc(buffer, 0);
-    ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE - PES_HEADER_SIZE_NOPTS -
-            MP2VSEQ_HEADER_SIZE - MP2VSEQX_HEADER_SIZE - MP2VPIC_HEADER_SIZE -
+    ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE -
+            PES_HEADER_SIZE_PTSDTS - MP2VSEQ_HEADER_SIZE -
+            MP2VSEQX_HEADER_SIZE - MP2VPIC_HEADER_SIZE -
             MP2VPICX_HEADER_SIZE - 4 - MP2VEND_HEADER_SIZE - 1);
     ts_set_payload(buffer);
+    tsaf_set_discontinuity(buffer);
+    tsaf_set_randomaccess(buffer);
+    tsaf_set_pcr(buffer, 27000000 / 300);
+    tsaf_set_pcrext(buffer, 27000000 % 300);
     payload = ts_payload(buffer);
     pes_init(payload);
     pes_set_streamid(payload, PES_STREAM_ID_VIDEO_MPEG);
     pes_set_headerlength(payload, 0);
     pes_set_length(payload, MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
             MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
-            MP2VEND_HEADER_SIZE + PES_HEADER_SIZE_NOPTS - PES_HEADER_SIZE);
+            MP2VEND_HEADER_SIZE + PES_HEADER_SIZE_PTSDTS - PES_HEADER_SIZE);
     pes_set_dataalignment(payload);
+    pes_set_pts(payload, 27000000 / 300 * 3);
+    pes_set_dts(payload, 27000000 / 300 * 2);
     payload = pes_payload(payload);
     mp2vseq_init(payload);
     mp2vseq_set_horizontal(payload, 720);

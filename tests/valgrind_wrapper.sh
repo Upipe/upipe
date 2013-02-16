@@ -22,7 +22,7 @@ fi
 
 # Run in valgrind, with leak checking enabled
 FILE="`mktemp tmp.XXXXXXXXXX`"
-libtool --mode=execute valgrind -q --leak-check=full "$@" > /dev/null 2> "$FILE"
+libtool --mode=execute valgrind -q --leak-check=full --suppressions="$srcdir"/valgrind.supp "$@" > /dev/null 2> "$FILE"
 RET=$?
 if test -s "$FILE"; then
         cat "$FILE" >&2

@@ -32,6 +32,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_psi_split.h>
 
@@ -65,28 +66,6 @@ struct upipe_ts_psi_split {
 
 UPIPE_HELPER_UPIPE(upipe_ts_psi_split, upipe)
 
-/** @internal @This returns the public output_mgr structure.
- *
- * @param upipe_ts_psi_split pointer to the private upipe_ts_psi_split structure
- * @return pointer to the public output_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_ts_psi_split_to_output_mgr(struct upipe_ts_psi_split *s)
-{
-    return &s->output_mgr;
-}
-
-/** @internal @This returns the private upipe_ts_psi_split structure.
- *
- * @param output_mgr public output_mgr structure of the pipe
- * @return pointer to the private upipe_ts_psi_split structure
- */
-static inline struct upipe_ts_psi_split *
-    upipe_ts_psi_split_from_output_mgr(struct upipe_mgr *output_mgr)
-{
-    return container_of(output_mgr, struct upipe_ts_psi_split, output_mgr);
-}
-
 /** @internal @This is the private context of an output of a ts_psi_split pipe. */
 struct upipe_ts_psi_split_output {
     /** structure for double-linked lists */
@@ -108,28 +87,8 @@ struct upipe_ts_psi_split_output {
 UPIPE_HELPER_UPIPE(upipe_ts_psi_split_output, upipe)
 UPIPE_HELPER_OUTPUT(upipe_ts_psi_split_output, output, flow_def, flow_def_sent)
 
-/** @This returns the high-level upipe_ts_psi_split_output structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upipe_ts_psi_split_output
- * @return pointer to the upipe_ts_psi_split_output structure
- */
-static inline struct upipe_ts_psi_split_output *
-    upipe_ts_psi_split_output_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_ts_psi_split_output, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upipe_ts_psi_split_output upipe_ts_psi_split_output structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upipe_ts_psi_split_output_to_uchain(struct upipe_ts_psi_split_output *upipe_ts_psi_split_output)
-{
-    return &upipe_ts_psi_split_output->uchain;
-}
+UPIPE_HELPER_SUBPIPE(upipe_ts_psi_split, upipe_ts_psi_split_output, output,
+                     output_mgr, outputs, uchain)
 
 /** @internal @This allocates an output subpipe of a ts_psi_split pipe.
  *
@@ -147,15 +106,10 @@ static struct upipe *upipe_ts_psi_split_output_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe =
         upipe_ts_psi_split_output_to_upipe(upipe_ts_psi_split_output);
     upipe_init(upipe, mgr, uprobe);
-    uchain_init(&upipe_ts_psi_split_output->uchain);
     upipe_ts_psi_split_output_init_output(upipe);
     urefcount_init(&upipe_ts_psi_split_output->refcount);
 
-    /* add the newly created output to the outputs list */
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_output_mgr(mgr);
-    ulist_add(&upipe_ts_psi_split->outputs,
-              upipe_ts_psi_split_output_to_uchain(upipe_ts_psi_split_output));
+    upipe_ts_psi_split_output_init_sub(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -251,43 +205,13 @@ static void upipe_ts_psi_split_output_release(struct upipe *upipe)
             upipe_ts_psi_split_from_output_mgr(upipe->mgr);
         upipe_throw_dead(upipe);
 
-        /* remove output from the outputs list */
-        struct uchain *uchain;
-        ulist_delete_foreach(&upipe_ts_psi_split->outputs, uchain) {
-            if (upipe_ts_psi_split_output_from_uchain(uchain) ==
-                    upipe_ts_psi_split_output) {
-                ulist_delete(&upipe_ts_psi_split->outputs, uchain);
-                break;
-            }
-        }
+        upipe_ts_psi_split_output_clean_sub(upipe);
         upipe_ts_psi_split_output_clean_output(upipe);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_psi_split_output->refcount);
         free(upipe_ts_psi_split_output);
     }
-}
-
-/** @This increments the reference count of a upipe manager.
- *
- * @param mgr pointer to upipe manager
- */
-static void upipe_ts_psi_split_output_mgr_use(struct upipe_mgr *mgr)
-{
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_output_mgr(mgr);
-    upipe_use(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
-}
-
-/** @This decrements the reference count of a upipe manager or frees it.
- *
- * @param mgr pointer to upipe manager.
- */
-static void upipe_ts_psi_split_output_mgr_release(struct upipe_mgr *mgr)
-{
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_output_mgr(mgr);
-    upipe_release(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
 }
 
 /** @internal @This initializes the output manager for a ts_psi_split pipe.
@@ -327,7 +251,7 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_ts_psi_split_to_upipe(upipe_ts_psi_split);
     upipe_split_init(upipe, mgr, uprobe,
                      upipe_ts_psi_split_init_output_mgr(upipe));
-    ulist_init(&upipe_ts_psi_split->outputs);
+    upipe_ts_psi_split_init_sub_outputs(upipe);
     urefcount_init(&upipe_ts_psi_split->refcount);
     upipe_throw_ready(upipe);
     return upipe;
@@ -430,8 +354,7 @@ static void upipe_ts_psi_split_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_ts_psi_split->refcount))) {
         upipe_throw_dead(upipe);
 
-        /* we can only arrive here if there is no output anymore, so no
-         * need to empty the outputs list */
+        upipe_ts_psi_split_clean_sub_outputs(upipe);
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_psi_split->refcount);
         free(upipe_ts_psi_split);

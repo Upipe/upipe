@@ -36,6 +36,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_dup.h>
 
 #include <stdlib.h>
@@ -62,27 +63,6 @@ struct upipe_dup {
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe)
 
-/** @internal @This returns the public output_mgr structure.
- *
- * @param upipe_dup pointer to the private upipe_dup structure
- * @return pointer to the public output_mgr structure
- */
-static inline struct upipe_mgr *upipe_dup_to_output_mgr(struct upipe_dup *s)
-{
-    return &s->output_mgr;
-}
-
-/** @internal @This returns the private upipe_dup structure.
- *
- * @param output_mgr public output_mgr structure of the pipe
- * @return pointer to the private upipe_dup structure
- */
-static inline struct upipe_dup *
-    upipe_dup_from_output_mgr(struct upipe_mgr *output_mgr)
-{
-    return container_of(output_mgr, struct upipe_dup, output_mgr);
-}
-
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
     /** structure for double-linked lists */
@@ -104,28 +84,8 @@ struct upipe_dup_output {
 UPIPE_HELPER_UPIPE(upipe_dup_output, upipe)
 UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, flow_def_sent)
 
-/** @This returns the high-level upipe_dup_output structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upipe_dup_output
- * @return pointer to the upipe_dup_output structure
- */
-static inline struct upipe_dup_output *
-    upipe_dup_output_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_dup_output, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upipe_dup_output upipe_dup_output structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upipe_dup_output_to_uchain(struct upipe_dup_output *upipe_dup_output)
-{
-    return &upipe_dup_output->uchain;
-}
+UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_output, output, output_mgr, outputs,
+                     uchain)
 
 /** @internal @This allocates an output subpipe of a dup pipe.
  *
@@ -142,16 +102,13 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
     upipe_init(upipe, mgr, uprobe);
-    uchain_init(&upipe_dup_output->uchain);
     upipe_dup_output_init_output(upipe);
     urefcount_init(&upipe_dup_output->refcount);
 
-    /* add the newly created output to the outputs list */
-    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
-    ulist_add(&upipe_dup->outputs,
-              upipe_dup_output_to_uchain(upipe_dup_output));
+    upipe_dup_output_init_sub(upipe);
 
     /* set flow definition if available */
+    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
     if (upipe_dup->flow_def != NULL) {
         struct uref *uref = uref_dup(upipe_dup->flow_def);
         if (unlikely(uref == NULL))
@@ -209,43 +166,15 @@ static void upipe_dup_output_release(struct upipe *upipe)
     struct upipe_dup_output *upipe_dup_output =
         upipe_dup_output_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_dup_output->refcount))) {
-        struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(upipe->mgr);
         upipe_throw_dead(upipe);
 
-        /* remove output from the outputs list */
-        struct uchain *uchain;
-        ulist_delete_foreach(&upipe_dup->outputs, uchain) {
-            if (upipe_dup_output_from_uchain(uchain) == upipe_dup_output) {
-                ulist_delete(&upipe_dup->outputs, uchain);
-                break;
-            }
-        }
+        upipe_dup_output_clean_sub(upipe);
         upipe_dup_output_clean_output(upipe);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_dup_output->refcount);
         free(upipe_dup_output);
     }
-}
-
-/** @This increments the reference count of a upipe manager.
- *
- * @param mgr pointer to upipe manager
- */
-static void upipe_dup_output_mgr_use(struct upipe_mgr *mgr)
-{
-    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
-    upipe_use(upipe_dup_to_upipe(upipe_dup));
-}
-
-/** @This decrements the reference count of a upipe manager or frees it.
- *
- * @param mgr pointer to upipe manager.
- */
-static void upipe_dup_output_mgr_release(struct upipe_mgr *mgr)
-{
-    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(mgr);
-    upipe_release(upipe_dup_to_upipe(upipe_dup));
 }
 
 /** @internal @This initializes the output manager for a dup pipe.
@@ -282,7 +211,7 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
     upipe_split_init(upipe, mgr, uprobe, upipe_dup_init_output_mgr(upipe));
-    ulist_init(&upipe_dup->outputs);
+    upipe_dup_init_sub_outputs(upipe);
     upipe_dup->flow_def = NULL;
     urefcount_init(&upipe_dup->refcount);
     upipe_throw_ready(upipe);
@@ -363,8 +292,7 @@ static void upipe_dup_release(struct upipe *upipe)
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_dup->refcount))) {
         upipe_throw_dead(upipe);
-        /* we can only arrive here if there is no output anymore, so no
-         * need to empty the outputs list */
+        upipe_dup_clean_sub_outputs(upipe);
         if (upipe_dup->flow_def != NULL)
             uref_free(upipe_dup->flow_def);
         upipe_clean(upipe);

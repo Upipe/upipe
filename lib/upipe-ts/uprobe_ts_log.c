@@ -30,10 +30,11 @@
 #include <upipe/ubase.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe-ts/uprobe_ts_log.h>
+#include <upipe/upipe.h>
 
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-ts/upipe_ts_decaps.h>
 #include <upipe-ts/upipe_ts_split.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
@@ -42,9 +43,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>
-
-/** @hidden */
-struct upipe;
 
 /** @This is a super-set of the uprobe structure with additional local members.
  */
@@ -56,27 +54,7 @@ struct uprobe_ts_log {
     struct uprobe uprobe;
 };
 
-/** @internal @This returns the high-level uprobe structure.
- *
- * @param uprobe_ts_log pointer to the uprobe_ts_log structure
- * @return pointer to the uprobe structure
- */
-static inline struct uprobe *
-    uprobe_ts_log_to_uprobe(struct uprobe_ts_log *uprobe_ts_log)
-{
-    return &uprobe_ts_log->uprobe;
-}
-
-/** @internal @This returns the private uprobe_ts_log structure.
- *
- * @param mgr description structure of the uprobe
- * @return pointer to the uprobe_ts_log structure
- */
-static inline struct uprobe_ts_log *
-    uprobe_ts_log_from_uprobe(struct uprobe *uprobe)
-{
-    return container_of(uprobe, struct uprobe_ts_log, uprobe);
-}
+UPROBE_HELPER_UPROBE(uprobe_ts_log, uprobe)
 
 /** @internal @This catches events thrown by ts pipes.
  *
@@ -99,15 +77,6 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
     unsigned int signature = va_arg(args_copy, unsigned int);
 
     switch (event) {
-        case UPROBE_TS_DECAPS_PCR: {
-            assert(signature == UPIPE_TS_DECAPS_SIGNATURE);
-            struct uref *uref = va_arg(args_copy, struct uref *);
-            uint64_t pcr = va_arg(args_copy, uint64_t);
-            upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught new PCR %"PRIu64, pcr);
-            break;
-        }
-
         case UPROBE_TS_SPLIT_SET_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);

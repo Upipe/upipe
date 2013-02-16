@@ -30,6 +30,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
@@ -88,19 +89,6 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     urefcount_init(&upipe_ts_decaps->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This sends the decaps_pcr event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param pcr PCR value
- */
-static void upipe_ts_decaps_pcr(struct upipe *upipe, struct uref *uref,
-                                uint64_t pcr)
-{
-    upipe_throw(upipe, UPROBE_TS_DECAPS_PCR, UPIPE_TS_DECAPS_SIGNATURE, uref,
-                pcr);
 }
 
 /** @internal @This parses and removes the TS header of a packet.
@@ -171,12 +159,14 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                     upipe_throw_aerror(upipe);
                     return;
                 }
-                upipe_ts_decaps_pcr(upipe, uref,
-                        tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
-                        tsaf_get_pcrext(pcr - TS_HEADER_SIZE_AF));
+                uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
+                                   tsaf_get_pcrext(pcr - TS_HEADER_SIZE_AF)) *
+                                  UCLOCK_FREQ / 27000000;
                 ret = uref_block_peek_unmap(uref, 2,
                         TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2, pcr);
                 assert(ret);
+
+                upipe_throw_clock_ref(upipe, uref, pcrval);
             }
         }
 

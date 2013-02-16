@@ -43,6 +43,7 @@
 
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_decaps.h>
+#include <upipe-ts/upipe_ts_pes_decaps.h>
 #include <upipe-ts/upipe_ts_split.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
@@ -64,9 +65,6 @@ int main(int argc, char **argv)
     struct uprobe *uprobe = uprobe_ts_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
-
-    upipe_throw(&test_pipe, UPROBE_TS_DECAPS_PCR, UPIPE_TS_DECAPS_SIGNATURE,
-                NULL, 42);
 
     upipe_throw(&test_pipe, UPROBE_TS_SPLIT_SET_PID, UPIPE_TS_SPLIT_SIGNATURE,
                 42);

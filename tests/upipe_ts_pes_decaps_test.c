@@ -90,6 +90,17 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(expect_lost);
             expect_lost = false;
             break;
+        case UPROBE_CLOCK_TS: {
+            struct uref *uref = va_arg(args, struct uref *);
+            uint64_t decaps_pts = UINT64_MAX, decaps_dts = UINT64_MAX;
+            assert(uref != NULL);
+            uref_clock_get_pts_orig(uref, &decaps_pts);
+            uref_clock_get_dts_orig(uref, &decaps_dts);
+            assert(decaps_pts == pts * 300);
+            assert(decaps_dts == dts * 300);
+            pts = dts = 0;
+            break;
+        }
     }
     return true;
 }
@@ -119,12 +130,6 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_block_size(uref, &size));
     assert(size == payload_size);
     assert(dataalignment == uref_block_get_start(uref));
-    uint64_t uref_pts = 0, uref_dts = 0;
-    uref_clock_get_pts_orig(uref, &uref_pts);
-    assert(uref_pts == pts);
-    uref_clock_get_dts_delay(uref, &uref_dts);
-    uref_dts = uref_pts - uref_dts;
-    assert(uref_dts == dts);
     uref_free(uref);
     nb_packets--;
 }
@@ -206,7 +211,10 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_pesd, uref, NULL);
     assert(!nb_packets);
     assert(!expect_acquired);
+    assert(!pts);
+    assert(!dts);
 
+    dts = pts = 0x112121212;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE_PTS);
     assert(uref != NULL);
     size = -1;
@@ -218,7 +226,6 @@ int main(int argc, char *argv[])
     pes_set_headerlength(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE_NOPTS);
     dataalignment = false;
     pes_set_pts(buffer, pts);
-    dts = pts;
     uref_block_unmap(uref, 0, size);
     payload_size = 0;
 

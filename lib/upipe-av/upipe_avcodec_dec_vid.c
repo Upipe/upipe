@@ -222,7 +222,7 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
                  framenum, frame->opaque, frame->width, frame->height);
 
     if (frame->format != PIX_FMT_YUV420P) { // TODO: support different frame format
-        upipe_err(upipe, "Frame format != yuv420p");
+        upipe_err_va(upipe, "Frame format != yuv420p (%d)", frame->format);
         return 0;
     }
 

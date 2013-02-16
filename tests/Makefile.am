@@ -12,6 +12,7 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
+	valgrind.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
@@ -116,7 +117,8 @@ TESTS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_pat_decoder_test \
-	upipe_ts_pmt_decoder_test
+	upipe_ts_pmt_decoder_test \
+	upipe_ts_demux_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
