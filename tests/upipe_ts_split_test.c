@@ -75,14 +75,14 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
-        case UPROBE_TS_SPLIT_SET_PID: {
+        case UPROBE_TS_SPLIT_ADD_PID: {
             unsigned int signature = va_arg(args, unsigned int);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             assert(pid == 68 || pid == 69);
             break;
         }
-        case UPROBE_TS_SPLIT_UNSET_PID: {
+        case UPROBE_TS_SPLIT_DEL_PID: {
             unsigned int signature = va_arg(args, unsigned int);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);

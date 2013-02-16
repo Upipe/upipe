@@ -397,13 +397,25 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
  *
  * @param upipe description structure of the pipe
  * @param event event to throw
+ * @param args arguments
+ */
+static inline void upipe_throw_va(struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
+{
+    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+}
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param upipe description structure of the pipe
+ * @param event event to throw, followed by arguments
  */
 static inline void upipe_throw(struct upipe *upipe,
                                enum uprobe_event event, ...)
 {
     va_list args;
     va_start(args, event);
-    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+    upipe_throw_va(upipe, event, args);
     va_end(args);
 }
 

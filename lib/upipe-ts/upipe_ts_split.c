@@ -363,13 +363,13 @@ static void upipe_ts_split_pid_check(struct upipe *upipe, uint16_t pid)
     if (!ulist_empty(&upipe_ts_split->pids[pid].outputs)) {
         if (!upipe_ts_split->pids[pid].set) {
             upipe_ts_split->pids[pid].set = true;
-            upipe_throw(upipe, UPROBE_TS_SPLIT_SET_PID,
+            upipe_throw(upipe, UPROBE_TS_SPLIT_ADD_PID,
                         UPIPE_TS_SPLIT_SIGNATURE, (unsigned int)pid);
         }
     } else {
         if (upipe_ts_split->pids[pid].set) {
             upipe_ts_split->pids[pid].set = false;
-            upipe_throw(upipe, UPROBE_TS_SPLIT_UNSET_PID,
+            upipe_throw(upipe, UPROBE_TS_SPLIT_DEL_PID,
                         UPIPE_TS_SPLIT_SIGNATURE, (unsigned int)pid);
         }
     }

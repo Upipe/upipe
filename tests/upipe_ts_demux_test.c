@@ -92,8 +92,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SYNC_LOST:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
-        case UPROBE_TS_SPLIT_SET_PID:
-        case UPROBE_TS_SPLIT_UNSET_PID:
+        case UPROBE_TS_SPLIT_ADD_PID:
+        case UPROBE_TS_SPLIT_DEL_PID:
         case UPROBE_TS_PATD_TSID:
         case UPROBE_TS_PATD_ADD_PROGRAM:
         case UPROBE_TS_PATD_DEL_PROGRAM:

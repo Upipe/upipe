@@ -37,9 +37,9 @@ enum uprobe_ts_split_event {
     UPROBE_TS_SPLIT_SENTINEL = UPROBE_TS_DEMUX_SPLIT,
 
     /** the given PID is needed for correct operation (unsigned int) */
-    UPROBE_TS_SPLIT_SET_PID,
+    UPROBE_TS_SPLIT_ADD_PID,
     /** the given PID is no longer needed (unsigned int) */
-    UPROBE_TS_SPLIT_UNSET_PID
+    UPROBE_TS_SPLIT_DEL_PID
 };
 
 /** @This returns the management structure for all ts_split pipes.

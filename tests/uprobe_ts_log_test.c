@@ -66,9 +66,9 @@ int main(int argc, char **argv)
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
 
-    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_SET_PID, UPIPE_TS_SPLIT_SIGNATURE,
+    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_ADD_PID, UPIPE_TS_SPLIT_SIGNATURE,
                 42);
-    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_UNSET_PID, UPIPE_TS_SPLIT_SIGNATURE,
+    upipe_throw(&test_pipe, UPROBE_TS_SPLIT_DEL_PID, UPIPE_TS_SPLIT_SIGNATURE,
                 42);
 
     upipe_throw(&test_pipe, UPROBE_TS_PATD_TSID, UPIPE_TS_PATD_SIGNATURE, NULL,

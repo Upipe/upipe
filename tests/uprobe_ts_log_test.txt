@@ -1,5 +1,5 @@
-debug: ts probe caught set PID 42
-debug: ts probe caught unset PID 42
+debug: ts probe caught add PID 42
+debug: ts probe caught delete PID 42
 debug: ts probe caught new TSID 42
 debug: ts probe caught add program 42 with PID 12
 debug: ts probe caught delete program 42

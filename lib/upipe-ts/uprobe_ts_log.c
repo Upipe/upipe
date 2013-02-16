@@ -77,18 +77,18 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
     unsigned int signature = va_arg(args_copy, unsigned int);
 
     switch (event) {
-        case UPROBE_TS_SPLIT_SET_PID: {
+        case UPROBE_TS_SPLIT_ADD_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
             upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught set PID %u", pid);
+                         "ts probe caught add PID %u", pid);
             break;
         }
-        case UPROBE_TS_SPLIT_UNSET_PID: {
+        case UPROBE_TS_SPLIT_DEL_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
             upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught unset PID %u", pid);
+                         "ts probe caught delete PID %u", pid);
             break;
         }
 
