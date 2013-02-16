@@ -71,9 +71,14 @@
         @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item @tt -lupipe-modules
         @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
+        @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
+        @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
+        @item @ref upipe_genaux_mgr_alloc @item pipe generating multicat-style auxiliary blocks @item @tt -lupipe-modules
+        @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe generating multicat-style directories @item @tt -lupipe-modules
         @item @ref upipe_avfsrc_mgr_alloc @item source pipe opening for reading a URL and using libavformat @item @tt -lupipe-av
         @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
         @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
+        @item @ref upipe_mp2vf_mgr_alloc @item pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
 
       @end table
 
