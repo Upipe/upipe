@@ -72,6 +72,9 @@
 #include <libavutil/dict.h>
 #include <libavformat/avformat.h>
 
+/** lowest possible timestamp (just an arbitrarily high time) */
+#define AV_CLOCK_MIN UINT32_MAX
+
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
     /** uref manager */
@@ -417,6 +420,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_throw_aerror(upipe);
         return;
     }
+
+    AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
     uint64_t systime = upipe_avfsrc->uclock != NULL ?
                        uclock_now(upipe_avfsrc->uclock) : 0;
     uint8_t *buffer;
@@ -432,9 +437,35 @@ static void upipe_avfsrc_worker(struct upump *upump)
     uref_block_unmap(uref, 0, read_size);
     av_free_packet(&pkt);
 
+    bool ret = true, ts = false;;
     if (upipe_avfsrc->uclock != NULL)
-        uref_clock_set_systime(uref, systime);
-    /* FIXME: fix and set PTS */
+        ret = ret && uref_clock_set_systime(uref, systime);
+    if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
+        uint64_t dts = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
+                       stream->time_base.den + AV_CLOCK_MIN;
+        ret = ret && uref_clock_set_dts_orig(uref, dts);
+        ret = ret && uref_clock_set_dts(uref, dts);
+        ts = true;
+
+        /* this is subtly wrong, but whatever */
+        upipe_throw_clock_ref(upipe, uref, dts);
+    }
+    if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+        uint64_t pts = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
+                       stream->time_base.den + AV_CLOCK_MIN;
+        ret = ret && uref_clock_set_pts_orig(uref, pts);
+        ret = ret && uref_clock_set_pts(uref, pts);
+        ts = true;
+    }
+    if (pkt.duration > 0) {
+        uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
+                            stream->time_base.den;
+        ret = ret && uref_clock_set_duration(uref, duration);
+    }
+
+    if (ts)
+        upipe_throw_clock_ts(upipe, uref);
+
     upipe_avfsrc_output_output(upipe_avfsrc_output_to_upipe(output), uref,
                                upump);
 }

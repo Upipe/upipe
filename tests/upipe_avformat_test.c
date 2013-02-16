@@ -181,6 +181,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_READ_END:
+        case UPROBE_CLOCK_REF:
+        case UPROBE_CLOCK_TS:
         case UPROBE_SPLIT_DEL_FLOW:
             break;
         case UPROBE_SPLIT_ADD_FLOW: {
