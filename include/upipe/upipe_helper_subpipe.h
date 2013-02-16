@@ -35,28 +35,89 @@
 #include <upipe/ulist.h>
 #include <upipe/upipe.h>
 
-/** @This declares two functions dealing with public and private parts
- * of the allocated pipe structure.
+/** @This declares ten functions dealing with subpipes of split and join pipes.
  *
- * You must add the upipe structure to your private pipe structure:
+ * You must add two members to your private pipe structure:
  * @code
- *  struct upipe upipe;
+ *  struct ulist subpipes;
+ *  struct upipe_mgr subpipe_mgr;
  * @end code
  *
- * Supposing the name of your structure is upipe_foo, it declares:
+ * Youe must add one member to your private subpipe structure:
+ * @code
+ *  struct uchain uchain;
+ * @end code
+ *
+ * You must also declare @ref #UPIPE_HELPER_UPIPE on both the pipe and the
+ * subpipe.
+ *
+ * Supposing the name of your pipe structure is upipe_foo, and subpipe
+ * structure is upipe_foo_output, it declares:
  * @list
  * @item @code
- *  struct upipe *upipe_foo_to_upipe(struct upipe_foo *s)
+ *  struct upipe *upipe_foo_to_output_mgr(struct upipe_foo *s)
  * @end code
- * Returns a pointer to the public upipe structure.
+ * Returns a pointer to the public subpipe manager.
  *
  * @item @code
- *  struct upipe_foo upipe_foo_from_upipe(struct upipe *upipe)
+ *  struct upipe_foo *upipe_foo_from_output_mgr(struct upipe_mgr *mgr)
  * @end code
- * Returns a pointer to the private upipe_foo structure.
+ * Returns a pointer to the private upipe_foo structure from the subpipe
+ * manager.
+ *
+ * @item @code
+ *  struct upipe_foo_output *upipe_foo_output_from_uchain(struct uchain *uchain)
+ * @end code
+ * Returns a pointer to the private upipe_foo structure from the chaining
+ * structure.
+ *
+ * @item @code
+ *  struct uchain *upipe_foo_output_to_uchain(struct upipe_foo_output *s)
+ * @end code
+ * Returns a pointer to the chaining structure of the subpipe.
+ *
+ * @item @code
+ *  void upipe_foo_output_init_sub(struct upipe *upipe)
+ * @end code
+ * Initializes the private members of upipe_foo_output for this helper and
+ * adds the output to the list in upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_output_init_sub(struct upipe *upipe)
+ * @end code
+ * Cleans up the private members of upipe_foo_output for this helper and
+ * removes the output from the list in upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_output_mgr_use(struct upipe_mgr *mgr)
+ * @end code
+ * Increments the reference count of the subpipe manager by increasing the
+ * reference count of the pipe.
+ *
+ * @item @code
+ *  void upipe_foo_output_mgr_release(struct upipe_mgr *mgr)
+ * @end code
+ * Decrements the reference count of the subpipe manager by decreasing the
+ * reference count of the pipe.
+ *
+ * @item @code
+ *  void upipe_foo_init_sub_outputs(struct upipe *upipe)
+ * @end code
+ * Initializes the list in upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_clean_sub_outputs(struct upipe *upipe)
+ * @end code
+ * Cleans up the list in upipe_foo.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE_SUB name of your private subpipe structure 
+ * @param SUB suffix to use in upipe_foo_init_sub_XXX and
+ * upipe_foo_clean_sub_XXX
+ * @param MGR struct upipe_mgr member in your private upipe structure
+ * @param ULIST struct ulist member in your private upipe structure
+ * @param UCHAIN struct uchain member in your private subpipe structure
  * @param UPIPE name of the @tt{struct upipe} field of
  * your private upipe structure
  */
@@ -141,7 +202,7 @@ static void STRUCTURE_SUB##_mgr_use(struct upipe_mgr *mgr)                  \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(mgr);                      \
     upipe_use(STRUCTURE##_to_upipe(s));                                     \
 }                                                                           \
-/** @This decrements the reference count of a MGR by decreasing the refence \
+/** @This decrements the reference count of MGR by decreasing the reference \
  * count of the corresponding pipe.                                         \
  *                                                                          \
  * @param mgr pointer to subpipe manager.                                   \

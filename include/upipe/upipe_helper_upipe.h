@@ -50,7 +50,7 @@
  * Returns a pointer to the public upipe structure.
  *
  * @item @code
- *  struct upipe_foo upipe_foo_from_upipe(struct upipe *upipe)
+ *  struct upipe_foo *upipe_foo_from_upipe(struct upipe *upipe)
  * @end code
  * Returns a pointer to the private upipe_foo structure.
  * @end list
