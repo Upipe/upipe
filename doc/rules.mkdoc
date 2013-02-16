@@ -29,7 +29,7 @@
 
       @item The @ref uref passed to @ref upipe_input belongs to the callee, and must be freed at some point.
 
-      @item All parameters to @ref upipe_control belong to the caller. The @ref upipe must either duplicate or use (increment the refcount) structures it wants to keep.
+      @item All parameters to @ref upipe_control belong to the caller. The @ref upipe must either duplicate or use (increment the refcount) structures it wants to keep. However if the control command is supposed to return information (such as control structures) from the @ref pipe, the structure belongs to the callee and should be duplicated or used, if required, by the caller.
 
     @end list
 
