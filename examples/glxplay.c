@@ -319,6 +319,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SPLIT_DEL_FLOW:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_CLOCK_REF:
+        case UPROBE_CLOCK_TS:
             break;
         case UPROBE_READ_END: {
             upipe_avfsrc_set_url(upipe, url);
