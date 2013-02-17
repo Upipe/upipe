@@ -221,22 +221,22 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
     upipe_dbg_va(upipe, "Allocating frame for %u (%p) - %ux%u",
                  framenum, frame->opaque, frame->width, frame->height);
 
-    if (frame->format != PIX_FMT_YUV420P) { // TODO: support different frame format
-        upipe_err_va(upipe, "Frame format != yuv420p (%d)", frame->format);
+    if (context->pix_fmt != PIX_FMT_YUV420P) { // TODO: support different frame format
+        upipe_err_va(upipe, "Frame format != yuv420p (%d)", context->pix_fmt);
         return 0;
     }
 
     // Direct Rendering - allocate ubuf pic
     if (upipe_avcdv->context->codec->capabilities & CODEC_CAP_DR1) {
-        width_aligned = frame->width;
-        height_aligned = frame->height;
+        width_aligned = context->width;
+        height_aligned = context->height;
 
         // Use avcodec width/height alignement, then resize pic
         avcodec_align_dimensions(context, &width_aligned, &height_aligned);
         ubuf_pic = ubuf_pic_alloc(upipe_avcdv->ubuf_mgr, width_aligned, height_aligned);
 
         if (likely(ubuf_pic)) {
-            ubuf_pic_resize(ubuf_pic, 0, 0, frame->width, frame->height);
+            ubuf_pic_resize(ubuf_pic, 0, 0, context->width, context->height);
             upipe_avcdv_map_frame(ubuf_pic, frame->linesize, frame->data, WRITE);
             uref_attach_ubuf(frame->opaque, ubuf_pic);
             frame->data[3] = NULL;
