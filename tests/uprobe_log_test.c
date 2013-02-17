@@ -39,6 +39,7 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 
 #include <stdio.h>
@@ -67,16 +68,33 @@ int main(int argc, char **argv)
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
 
+    upipe_throw_ready(&test_pipe);
     upipe_throw_aerror(&test_pipe);
     upipe_throw_upump_error(&test_pipe);
     upipe_throw_read_end(&test_pipe, "pouet");
     upipe_throw_write_end(&test_pipe, "pouet");
-
-    struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
-    upipe_split_throw_add_flow(&test_pipe, 0x42, uref);
-    uref_free(uref);
     upipe_throw_need_uref_mgr(&test_pipe);
     upipe_throw_need_upump_mgr(&test_pipe);
+
+    struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
+    upipe_throw_flow_def_error(&test_pipe, uref);
+    upipe_throw_need_ubuf_mgr(&test_pipe, uref);
+    upipe_throw_need_output(&test_pipe, uref);
+    upipe_split_throw_add_flow(&test_pipe, 0x42, uref);
+    uref_free(uref);
+    upipe_split_throw_del_flow(&test_pipe, 0x42);
+
+    upipe_throw_sync_acquired(&test_pipe);
+    upipe_throw_sync_lost(&test_pipe);
+
+    uref = uref_alloc(mgr);
+    upipe_throw_clock_ref(&test_pipe, uref, 42);
+    uref_clock_set_pts_orig(uref, 42);
+    uref_clock_set_dts_orig(uref, 12);
+    upipe_throw_clock_ts(&test_pipe, uref);
+    uref_free(uref);
+    upipe_throw_dead(&test_pipe);
+
     uprobe_log_free(uprobe);
     uprobe_stdio_free(uprobe_stdio);
 

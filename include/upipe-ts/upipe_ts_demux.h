@@ -38,12 +38,10 @@ enum uprobe_ts_demux_event {
 
     /** ts_split events begin here */
     UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000,
-    /** ts_decaps events begin here */
-    UPROBE_TS_DEMUX_DECAPS = UPROBE_LOCAL + 0x1100,
     /** ts_patd events begin here */
-    UPROBE_TS_DEMUX_PATD = UPROBE_LOCAL + 0x1200,
+    UPROBE_TS_DEMUX_PATD = UPROBE_LOCAL + 0x1100,
     /** ts_pmtd events begin here */
-    UPROBE_TS_DEMUX_PMTD = UPROBE_LOCAL + 0x1300
+    UPROBE_TS_DEMUX_PMTD = UPROBE_LOCAL + 0x1200
 };
 
 /** @This is the conformance mode of a transport stream. */
@@ -113,6 +111,7 @@ enum upipe_ts_demux_mgr_command {
     /** sets the manager for name subpipes (struct upipe_mgr *) */          \
     UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR,
 
+    UPIPE_TS_DEMUX_MGR_GET_SET_MGR(null, NULL)
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_split, TS_SPLIT)
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_sync, TS_SYNC)
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_check, TS_CHECK)
@@ -150,7 +149,7 @@ bool upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
                                 enum upipe_ts_demux_mgr_command command, ...);
 
 /** @hidden */
-#define UPIPE_TS_DEMUX_MGR_GET_SET_MGR(name, NAME)                          \
+#define UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(name, NAME)                         \
 /** @This returns the current manager for name subpipes.                    \
  *                                                                          \
  * @param mgr pointer to manager                                            \
@@ -180,17 +179,18 @@ static inline bool                                                          \
                                       m);                                   \
 }
 
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_split, TS_SPLIT)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_sync, TS_SYNC)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_check, TS_CHECK)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_decaps, TS_DECAPS)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_psim, TS_PSIM)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_patd, TS_PATD)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_pmtd, TS_PMTD)
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_pesd, TS_PESD)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(null, NULL)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_split, TS_SPLIT)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_sync, TS_SYNC)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_check, TS_CHECK)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_decaps, TS_DECAPS)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_psim, TS_PSIM)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_psi_split, TS_PSI_SPLIT)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_patd, TS_PATD)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_pmtd, TS_PMTD)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_pesd, TS_PESD)
 
-UPIPE_TS_DEMUX_MGR_GET_SET_MGR(mp2vf, MP2VF)
-#undef UPIPE_TS_DEMUX_MGR_GET_SET_MGR
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(mp2vf, MP2VF)
+#undef UPIPE_TS_DEMUX_MGR_GET_SET_MGR2
 
 #endif

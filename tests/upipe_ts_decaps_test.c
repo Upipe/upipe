@@ -81,11 +81,9 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
-        case UPROBE_TS_DECAPS_PCR: {
-            unsigned int signature = va_arg(args, unsigned int);
+        case UPROBE_CLOCK_REF: {
             struct uref *uref = va_arg(args, struct uref *);
             uint64_t decaps_pcr = va_arg(args, uint64_t);
-            assert(signature == UPIPE_TS_DECAPS_SIGNATURE);
             assert(uref != NULL);
             assert(decaps_pcr == pcr);
             pcr = 0;

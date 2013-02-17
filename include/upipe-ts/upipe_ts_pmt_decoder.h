@@ -35,6 +35,8 @@
 enum uprobe_ts_pmtd_event {
     UPROBE_TS_PMTD_SENTINEL = UPROBE_TS_DEMUX_PMTD,
 
+    /** a new or repeated PMT was found in the given uref (struct uref *) */
+    UPROBE_TS_PMTD_SYSTIME,
     /** a new PMT header was found in the given uref (struct uref *,
      * unsigned int, unsigned int, unsigned int) */
     UPROBE_TS_PMTD_HEADER,

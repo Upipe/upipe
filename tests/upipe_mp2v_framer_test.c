@@ -43,8 +43,9 @@
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_block_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
@@ -108,14 +109,25 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     udict_dump(uref->udict, upipe->uprobe);
     size_t size;
     assert(uref_block_size(uref, &size));
+    uint64_t systime_rap = UINT64_MAX;
+    uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
+    uref_clock_get_systime_rap(uref, &systime_rap);
+    uref_clock_get_pts_orig(uref, &pts_orig);
+    uref_clock_get_dts_orig(uref, &dts_orig);
     switch (nb_packets) {
         case 0:
             assert(size == MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
                     MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4);
+            assert(systime_rap == 42);
+            assert(pts_orig == 27000000);
+            assert(dts_orig == 27000000);
             break;
         case 1:
             assert(size == MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
                     MP2VEND_HEADER_SIZE);
+            assert(systime_rap == 42);
+            assert(pts_orig == UINT64_MAX);
+            assert(dts_orig == 27000000 + 40 * 27000);
             break;
         default:
             assert(0);
@@ -255,6 +267,10 @@ int main(int argc, char *argv[])
 
     mp2vend_init(buffer);
     uref_block_unmap(uref, 0, size);
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_systime(uref, 84);
+    uref_clock_set_systime_rap(uref, 42);
     upipe_input(upipe_mp2vf, uref, NULL);
     assert(nb_packets == 2);
 

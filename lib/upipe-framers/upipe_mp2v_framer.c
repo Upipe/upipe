@@ -99,6 +99,8 @@ struct upipe_mp2vf {
     bool flow_def_sent;
     /** input flow definition packet */
     struct uref *flow_def_input;
+    /** last random access point */
+    uint64_t systime_rap;
 
     /* picture parsing stuff */
     /** last output picture number */
@@ -138,10 +140,18 @@ struct upipe_mp2vf {
     ssize_t next_frame_offset;
     /** true if we have found at least one slice header */
     bool next_frame_slice;
-    /** PTS of the next picture, or UINT64_MAX */
+    /** original PTS of the next picture, or UINT64_MAX */
     uint64_t next_frame_pts_orig;
-    /** DTS delay compared with PTS */
-    uint64_t next_frame_dts_delay;
+    /** PTS of the next picture, or UINT64_MAX */
+    uint64_t next_frame_pts;
+    /** system PTS of the next picture, or UINT64_MAX */
+    uint64_t next_frame_pts_sys;
+    /** original DTS of the next picture, or UINT64_MAX */
+    uint64_t next_frame_dts_orig;
+    /** DTS of the next picture, or UINT64_MAX */
+    uint64_t next_frame_dts;
+    /** system DTS of the next picture, or UINT64_MAX */
+    uint64_t next_frame_dts_sys;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -162,6 +172,46 @@ UPIPE_HELPER_OCTET_STREAM(upipe_mp2vf, next_uref, next_uref_size, urefs,
 
 UPIPE_HELPER_OUTPUT(upipe_mp2vf, output, flow_def, flow_def_sent)
 
+/** @internal @This flushes all PTS timestamps.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_mp2vf_flush_pts(struct upipe *upipe)
+{
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
+    upipe_mp2vf->next_frame_pts_orig = UINT64_MAX;
+    upipe_mp2vf->next_frame_pts = UINT64_MAX;
+    upipe_mp2vf->next_frame_pts_sys = UINT64_MAX;
+}
+
+/** @internal @This flushes all DTS timestamps.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_mp2vf_flush_dts(struct upipe *upipe)
+{
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
+    upipe_mp2vf->next_frame_dts_orig = UINT64_MAX;
+    upipe_mp2vf->next_frame_dts = UINT64_MAX;
+    upipe_mp2vf->next_frame_dts_sys = UINT64_MAX;
+}
+
+/** @internal @This increments all DTS timestamps by the duration of the frame.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration duration of the frame
+ */
+static void upipe_mp2vf_increment_dts(struct upipe *upipe, uint64_t duration)
+{
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
+    if (upipe_mp2vf->next_frame_dts_orig != UINT64_MAX)
+        upipe_mp2vf->next_frame_dts_orig += duration;
+    if (upipe_mp2vf->next_frame_dts != UINT64_MAX)
+        upipe_mp2vf->next_frame_dts += duration;
+    if (upipe_mp2vf->next_frame_dts_sys != UINT64_MAX)
+        upipe_mp2vf->next_frame_dts_sys += duration;
+}
+
 /** @internal @This allocates an mp2vf pipe.
  *
  * @param mgr common management structure
@@ -180,6 +230,7 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf_init_octet_stream(upipe);
     upipe_mp2vf_init_output(upipe);
     upipe_mp2vf->flow_def_input = NULL;
+    upipe_mp2vf->systime_rap = UINT64_MAX;
     upipe_mp2vf->last_picture_number = 0;
     upipe_mp2vf->last_temporal_reference = -1;
     upipe_mp2vf->got_discontinuity = false;
@@ -188,8 +239,8 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf->next_frame_sequence = false;
     upipe_mp2vf->next_frame_offset = -1;
     upipe_mp2vf->next_frame_slice = false;
-    upipe_mp2vf->next_frame_pts_orig = UINT64_MAX;
-    upipe_mp2vf->next_frame_dts_delay = 0;
+    upipe_mp2vf_flush_pts(upipe);
+    upipe_mp2vf_flush_dts(upipe);
     upipe_mp2vf->sequence_header = upipe_mp2vf->sequence_ext =
         upipe_mp2vf->sequence_display = NULL;
     upipe_mp2vf->acquired = false;
@@ -698,8 +749,8 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
 
     size_t ext_offset = upipe_mp2vf->next_frame_offset + MP2VPIC_HEADER_SIZE;
     uint8_t ext_header;
-    uint64_t duration = UCLOCK_FREQ * upipe_mp2vf->fps.num /
-                                      upipe_mp2vf->fps.den;
+    uint64_t duration = UCLOCK_FREQ * upipe_mp2vf->fps.den /
+                                      upipe_mp2vf->fps.num;
     if (upipe_mp2vf_find_ext(upipe, uref, &ext_offset, &ext_header)) {
         if (unlikely(ext_header != MP2VX_ID_PICX)) {
             /* if extensions are in use, we are in MPEG-2 mode, and therefore
@@ -755,6 +806,29 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
         }
     }
 
+    bool ret = true;
+#define SET_TIMESTAMP(name)                                                 \
+    if (upipe_mp2vf->next_frame_##name != UINT64_MAX)                       \
+        ret = ret &&                                                        \
+              uref_clock_set_##name(uref, upipe_mp2vf->next_frame_##name);  \
+    else                                                                    \
+        uref_clock_delete_##name(uref);
+    SET_TIMESTAMP(pts_orig)
+    SET_TIMESTAMP(pts)
+    SET_TIMESTAMP(pts_sys)
+    SET_TIMESTAMP(dts_orig)
+    SET_TIMESTAMP(dts)
+    SET_TIMESTAMP(dts_sys)
+#undef SET_TIMESTAMP
+    upipe_mp2vf_flush_pts(upipe);
+    upipe_mp2vf_increment_dts(upipe, duration);
+
+    if (!ret) {
+        uref_free(uref);
+        upipe_throw_aerror(upipe);
+        return true;
+    }
+
     return true;
 }
 
@@ -775,9 +849,13 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 
     if (type == MP2VPIC_TYPE_I) {
         struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-        if (upipe_mp2vf->next_frame_sequence)
+        uint64_t systime_rap = UINT64_MAX;
+        uref_clock_get_systime_rap(uref, &systime_rap);
+
+        if (upipe_mp2vf->next_frame_sequence) {
             uref_flow_set_random(uref);
-        else if (upipe_mp2vf->insert_sequence) {
+            upipe_mp2vf->systime_rap = systime_rap;
+        } else if (upipe_mp2vf->insert_sequence) {
             struct ubuf *ubuf;
             if (upipe_mp2vf->sequence_display != NULL) {
                 ubuf = ubuf_dup(upipe_mp2vf->sequence_display);
@@ -802,6 +880,7 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
             }
             uref_block_insert(uref, 0, ubuf);
             uref_flow_set_random(uref);
+            upipe_mp2vf->systime_rap = systime_rap;
         }
     }
     return true;
@@ -824,25 +903,6 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         return true;
     }
 
-    bool ret = true;
-    if (upipe_mp2vf->next_frame_pts_orig != UINT64_MAX) {
-        ret = ret && uref_clock_set_pts_orig(uref,
-                        upipe_mp2vf->next_frame_pts_orig);
-        upipe_mp2vf->next_frame_pts_orig = UINT64_MAX;
-    } else
-        uref_clock_delete_pts_orig(uref);
-    if (upipe_mp2vf->next_frame_dts_delay != 0) {
-        ret = ret && uref_clock_set_dts_delay(uref,
-                upipe_mp2vf->next_frame_dts_delay);
-        upipe_mp2vf->next_frame_dts_delay = 0;
-    } else
-        uref_clock_delete_dts_delay(uref);
-    if (!ret) {
-        uref_free(uref);
-        upipe_throw_aerror(upipe);
-        return true;
-    }
-
     if (upipe_mp2vf->next_frame_sequence) {
         if (unlikely(!upipe_mp2vf_handle_sequence(upipe, uref))) {
             uref_free(uref);
@@ -855,6 +915,8 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         return false;
     }
 
+    if (upipe_mp2vf->systime_rap != UINT64_MAX)
+        uref_clock_set_systime_rap(uref, upipe_mp2vf->systime_rap);
     upipe_mp2vf_output(upipe, uref, upump);
     return true;
 }
@@ -868,10 +930,16 @@ static void upipe_mp2vf_promote_uref(struct upipe *upipe)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     uint64_t ts;
-    if (uref_clock_get_pts_orig(upipe_mp2vf->next_uref, &ts))
-        upipe_mp2vf->next_frame_pts_orig = ts;
-    if (uref_clock_get_dts_delay(upipe_mp2vf->next_uref, &ts))
-        upipe_mp2vf->next_frame_dts_delay = ts;
+#define SET_TIMESTAMP(name)                                                 \
+    if (uref_clock_get_##name(upipe_mp2vf->next_uref, &ts))                 \
+        upipe_mp2vf->next_frame_##name = ts;
+    SET_TIMESTAMP(pts_orig)
+    SET_TIMESTAMP(pts)
+    SET_TIMESTAMP(pts_sys)
+    SET_TIMESTAMP(dts_orig)
+    SET_TIMESTAMP(dts)
+    SET_TIMESTAMP(dts_sys)
+#undef SET_TIMESTAMP
 }
 
 /** @internal @This tries to output frames from the queue of input buffers.
@@ -894,12 +962,8 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
 
             switch (start) {
                 case MP2VPIC_START_CODE:
-                    /* drop PTS and DTS that belong to a picture in the past
-                     * compared to the following sequence header - this could
-                     * be optimized but you expect that a random access point
-                     * would have PTS and DTS set */
-                    upipe_mp2vf->next_frame_pts_orig = UINT64_MAX;
-                    upipe_mp2vf->next_frame_dts_delay = 0;
+                    upipe_mp2vf_flush_pts(upipe);
+                    upipe_mp2vf_flush_dts(upipe);
                     break;
                 case MP2VSEQ_START_CODE:
                     upipe_mp2vf_sync_acquired(upipe);

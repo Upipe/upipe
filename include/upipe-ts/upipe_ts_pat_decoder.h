@@ -35,6 +35,9 @@
 enum uprobe_ts_patd_event {
     UPROBE_TS_PATD_SENTINEL = UPROBE_TS_DEMUX_PATD,
 
+    /** a new or repeated PAT was detected from the given systime
+     * (struct uref *, uint64_t) */
+    UPROBE_TS_PATD_SYSTIME,
     /** a new TSID was detected (struct uref *, unsigned int tsid) */
     UPROBE_TS_PATD_TSID,
     /** a new program was found in the given uref (struct uref *,

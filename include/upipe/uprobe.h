@@ -77,15 +77,22 @@ enum uprobe_event {
     UPROBE_NEED_OUTPUT,
     /** a ubuf manager is necessary to operate (struct uref *) */
     UPROBE_NEED_UBUF_MGR,
-    /** a split pipe declares a new possible output flow (struct uref *) */
+    /** a split pipe declares a new possible output flow (uint64_t,
+     * struct uref *) */
     UPROBE_SPLIT_ADD_FLOW,
     /** a split pipe declares an output flow is no longer possible
-     * (struct uref *) */
+     * (uint64_t) */
     UPROBE_SPLIT_DEL_FLOW,
     /** a pipe got synchronized with its input (void) */
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */
     UPROBE_SYNC_LOST,
+    /** a pipe signals that a uref carries a new clock reference
+     * (struct uref *, uint64_t) */
+    UPROBE_CLOCK_REF,
+    /** a pipe signals that a uref carries a presentation and/or a
+     * decoding timestamp (struct uref *) */
+    UPROBE_CLOCK_TS,
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */

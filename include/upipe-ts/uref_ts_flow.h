@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,6 +38,7 @@
 #include <stdint.h>
 
 UREF_ATTR_TEMPLATE(ts_flow, pid, "t.pid", unsigned, uint64_t, PID)
+UREF_ATTR_TEMPLATE(ts_flow, max_delay, "t.maxdelay", unsigned, uint64_t, maximum retention time)
 
 /** @This returns the value of a PSI section filter.
  *

@@ -27,17 +27,8 @@
 #define _UPIPE_TS_UPIPE_TS_DECAPS_H_
 
 #include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_demux.h>
 
 #define UPIPE_TS_DECAPS_SIGNATURE UBASE_FOURCC('t','s','d','c')
-
-/** @This extends uprobe_event with specific events for ts decaps. */
-enum uprobe_ts_decaps_event {
-    UPROBE_TS_DECAPS_SENTINEL = UPROBE_TS_DEMUX_DECAPS,
-
-    /** a PCR was found in the given uref (struct uref *, uint64_t) */
-    UPROBE_TS_DECAPS_PCR,
-};
 
 /** @This returns the management structure for all ts_decaps pipes.
  *

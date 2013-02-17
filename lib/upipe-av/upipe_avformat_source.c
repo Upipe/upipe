@@ -50,6 +50,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_subpipe.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
 
@@ -70,6 +71,9 @@
 
 #include <libavutil/dict.h>
 #include <libavformat/avformat.h>
+
+/** lowest possible timestamp (just an arbitrarily high time) */
+#define AV_CLOCK_MIN UINT32_MAX
 
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
@@ -113,28 +117,6 @@ UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upump)
 UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
 
-/** @internal @This returns the public output_mgr structure.
- *
- * @param upipe_avfsrc pointer to the private upipe_avfsrc structure
- * @return pointer to the public output_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_avfsrc_to_output_mgr(struct upipe_avfsrc *s)
-{
-    return &s->output_mgr;
-}
-
-/** @internal @This returns the private upipe_avfsrc structure.
- *
- * @param output_mgr public output_mgr structure of the pipe
- * @return pointer to the private upipe_avfsrc structure
- */
-static inline struct upipe_avfsrc *
-    upipe_avfsrc_from_output_mgr(struct upipe_mgr *output_mgr)
-{
-    return container_of(output_mgr, struct upipe_avfsrc, output_mgr);
-}
-
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
 struct upipe_avfsrc_output {
@@ -162,28 +144,8 @@ UPIPE_HELPER_UPIPE(upipe_avfsrc_output, upipe)
 UPIPE_HELPER_OUTPUT(upipe_avfsrc_output, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_output, ubuf_mgr)
 
-/** @This returns the high-level upipe_avfsrc_output structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upipe_avfsrc_output
- * @return pointer to the upipe_avfsrc_output structure
- */
-static inline struct upipe_avfsrc_output *
-    upipe_avfsrc_output_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_avfsrc_output, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upipe_avfsrc_output upipe_avfsrc_output structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upipe_avfsrc_output_to_uchain(struct upipe_avfsrc_output *upipe_avfsrc_output)
-{
-    return &upipe_avfsrc_output->uchain;
-}
+UPIPE_HELPER_SUBPIPE(upipe_avfsrc, upipe_avfsrc_output, output, output_mgr,
+                     outputs, uchain)
 
 /** @internal @This allocates an output subpipe of an avfsrc pipe.
  *
@@ -200,16 +162,12 @@ static struct upipe *upipe_avfsrc_output_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_avfsrc_output_to_upipe(upipe_avfsrc_output);
     upipe_init(upipe, mgr, uprobe);
-    uchain_init(&upipe_avfsrc_output->uchain);
     upipe_avfsrc_output->id = UINT64_MAX;
     upipe_avfsrc_output_init_output(upipe);
     upipe_avfsrc_output_init_ubuf_mgr(upipe);
     urefcount_init(&upipe_avfsrc_output->refcount);
 
-    /* add the newly created output to the outputs list */
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_output_mgr(mgr);
-    ulist_add(&upipe_avfsrc->outputs,
-              upipe_avfsrc_output_to_uchain(upipe_avfsrc_output));
+    upipe_avfsrc_output_init_sub(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -325,17 +283,7 @@ static void upipe_avfsrc_output_release(struct upipe *upipe)
     if (unlikely(urefcount_release(&upipe_avfsrc_output->refcount))) {
         upipe_throw_dead(upipe);
 
-        /* remove output from the outputs list */
-        struct upipe_avfsrc *upipe_avfsrc =
-            upipe_avfsrc_from_output_mgr(upipe->mgr);
-        struct uchain *uchain;
-        ulist_delete_foreach(&upipe_avfsrc->outputs, uchain) {
-            if (upipe_avfsrc_output_from_uchain(uchain) ==
-                    upipe_avfsrc_output) {
-                ulist_delete(&upipe_avfsrc->outputs, uchain);
-                break;
-            }
-        }
+        upipe_avfsrc_output_clean_sub(upipe);
         upipe_avfsrc_output_clean_ubuf_mgr(upipe);
         upipe_avfsrc_output_clean_output(upipe);
 
@@ -343,26 +291,6 @@ static void upipe_avfsrc_output_release(struct upipe *upipe)
         urefcount_clean(&upipe_avfsrc_output->refcount);
         free(upipe_avfsrc_output);
     }
-}
-
-/** @This increments the reference count of a upipe manager.
- *
- * @param mgr pointer to upipe manager
- */
-static void upipe_avfsrc_output_mgr_use(struct upipe_mgr *mgr)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_output_mgr(mgr);
-    upipe_use(upipe_avfsrc_to_upipe(upipe_avfsrc));
-}
-
-/** @This decrements the reference count of a upipe manager or frees it.
- *
- * @param mgr pointer to upipe manager.
- */
-static void upipe_avfsrc_output_mgr_release(struct upipe_mgr *mgr)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_output_mgr(mgr);
-    upipe_release(upipe_avfsrc_to_upipe(upipe_avfsrc));
 }
 
 /** @internal @This initializes the output manager for an avfsrc pipe.
@@ -399,7 +327,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe_split_init(upipe, mgr, uprobe, upipe_avfsrc_init_output_mgr(upipe));
-    ulist_init(&upipe_avfsrc->outputs);
+    upipe_avfsrc_init_sub_outputs(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_uclock(upipe);
@@ -492,6 +420,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_throw_aerror(upipe);
         return;
     }
+
+    AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
     uint64_t systime = upipe_avfsrc->uclock != NULL ?
                        uclock_now(upipe_avfsrc->uclock) : 0;
     uint8_t *buffer;
@@ -507,9 +437,35 @@ static void upipe_avfsrc_worker(struct upump *upump)
     uref_block_unmap(uref, 0, read_size);
     av_free_packet(&pkt);
 
+    bool ret = true, ts = false;;
     if (upipe_avfsrc->uclock != NULL)
-        uref_clock_set_systime(uref, systime);
-    /* FIXME: fix and set PTS */
+        ret = ret && uref_clock_set_systime(uref, systime);
+    if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
+        uint64_t dts = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
+                       stream->time_base.den + AV_CLOCK_MIN;
+        ret = ret && uref_clock_set_dts_orig(uref, dts);
+        ret = ret && uref_clock_set_dts(uref, dts);
+        ts = true;
+
+        /* this is subtly wrong, but whatever */
+        upipe_throw_clock_ref(upipe, uref, dts);
+    }
+    if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+        uint64_t pts = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
+                       stream->time_base.den + AV_CLOCK_MIN;
+        ret = ret && uref_clock_set_pts_orig(uref, pts);
+        ret = ret && uref_clock_set_pts(uref, pts);
+        ts = true;
+    }
+    if (pkt.duration > 0) {
+        uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
+                            stream->time_base.den;
+        ret = ret && uref_clock_set_duration(uref, duration);
+    }
+
+    if (ts)
+        upipe_throw_clock_ts(upipe, uref);
+
     upipe_avfsrc_output_output(upipe_avfsrc_output_to_upipe(output), uref,
                                upump);
 }
@@ -1050,8 +1006,8 @@ static void upipe_avfsrc_release(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_avfsrc->refcount))) {
-        /* we can only arrive here if there is no output anymore, so no
-         * need to empty the outputs list */
+        upipe_avfsrc_clean_sub_outputs(upipe);
+
         upipe_avfsrc_abort_av_deal(upipe);
         if (likely(upipe_avfsrc->context != NULL)) {
             if (likely(upipe_avfsrc->url != NULL))

@@ -9,7 +9,7 @@
 
     @list
 
-      @item All methods of @ref upipe must be called from the same thread. As an exception, it is possible to allocate and configure a pipe in one thread, and migrate it to another thread afterwards, but a pipe is not required to be reentrant, nor to handle memory protection.
+      @item All methods of @ref upipe must be called from the same thread. As an exception, it is possible to allocate and configure a pipe in one thread, and migrate it to another thread afterwards, but a pipe is not required to be reentrant, nor to handle memory protection. This also applies to input and output subpipes of a pipe, which run in the same thread as the pipe.
 
       @item A @ref upipe shall throw @ref upipe_throw_ready as soon as it is ready to receive inputs and control commands, and before sending any other probe, including log messages.
 
@@ -23,6 +23,14 @@
 
       @item A @ref upipe shall not use a blocking system call. It should register a file descriptor or a timer with @ref upump_alloc_fd_read, @ref upump_alloc_fd_write, or @ref upump_alloc_timer.
 
+      @item Managers for various control structures (@ref uref_mgr, @ref ubuf_mgr, @ref upump_mgr, etc.) passed to a pipe shouldn't be set to NULL after having been set to a vlue different from NULL.
+
+      @item The @ref upump passed to @ref upipe_input is only valid for the time of execution of @ref upipe_input, and mustn't be kept by any downstream pipe.
+
+      @item The @ref uref passed to @ref upipe_input belongs to the callee, and must be freed at some point.
+
+      @item All parameters to @ref upipe_control belong to the caller. The @ref upipe must either duplicate or use (increment the refcount) structures it wants to keep. However if the control command is supposed to return information (such as control structures) from the @ref upipe, the structure belongs to the callee and should be duplicated or used, if required, by the caller.
+
     @end list
 
   @end section
@@ -34,6 +42,8 @@
       @item A @ref uprobe must be called from the same thread as the @ref upipe throwing the event; it is not required to be reentrant, nor to handle memory protection, but may opt to do so.
 
       @item A @ref uprobe shall not send control commands upon receiving a log event.
+
+      @item All parameters to a @ref uprobe belong to the caller pipe, and should not be kept by the probe.
 
     @end list
 

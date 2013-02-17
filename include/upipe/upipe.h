@@ -210,7 +210,8 @@ static inline struct upipe *upipe_alloc_output(struct upipe *upipe,
     return upipe_alloc(upipe->output_mgr, uprobe);
 }
 
-/** @This initializes the public members of a pipe.
+/** @This initializes the public members of a pipe that is neither join nor
+ * split.
  *
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
@@ -396,13 +397,25 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
  *
  * @param upipe description structure of the pipe
  * @param event event to throw
+ * @param args arguments
+ */
+static inline void upipe_throw_va(struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
+{
+    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+}
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param upipe description structure of the pipe
+ * @param event event to throw, followed by arguments
  */
 static inline void upipe_throw(struct upipe *upipe,
                                enum uprobe_event event, ...)
 {
     va_list args;
     va_start(args, event);
-    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+    upipe_throw_va(upipe, event, args);
     va_end(args);
 }
 
@@ -662,6 +675,32 @@ static inline void upipe_throw_sync_acquired(struct upipe *upipe)
 static inline void upipe_throw_sync_lost(struct upipe *upipe)
 {
     upipe_throw(upipe, UPROBE_SYNC_LOST);
+}
+
+/** @This throws an event telling that the given uref carries a clock reference.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying a clock reference
+ * @param clock_ref clock reference, in 27 MHz scale
+ */
+static inline void upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
+                                         uint64_t clock_ref)
+{
+    upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref);
+}
+
+/** @This throws an event telling that the given uref carries a presentation
+ * and/or a decoding timestamp. The uref must at least have k.pts.orig and/or
+ * k.dts.orig set. Depending on the module documentation, k.pts and k.dts may
+ * also be set. A probe is entitled to adding new attributes such as k.pts.sys
+ * and/or k.dts.sys.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying a presentation and/or a decoding timestamp
+ */
+static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
+{
+    upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
 #endif

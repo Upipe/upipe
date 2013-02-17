@@ -12,6 +12,7 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
+	valgrind.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
@@ -33,6 +34,7 @@ check_PROGRAMS = \
 	upipe_genaux_test \
 	upipe_null_test \
 	upipe_dup_test \
+	upipe_setattr_test \
 	upipe_mp2v_framer_test
 
 TESTS = \
@@ -50,6 +52,7 @@ TESTS = \
 	upipe_genaux_test \
 	upipe_null_test \
 	upipe_dup_test \
+	upipe_setattr_test \
 	upipe_mp2v_framer_test
 
 if HAVE_EV
@@ -116,7 +119,8 @@ TESTS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_pat_decoder_test \
-	upipe_ts_pmt_decoder_test
+	upipe_ts_pmt_decoder_test \
+	upipe_ts_demux_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -135,6 +139,7 @@ upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 

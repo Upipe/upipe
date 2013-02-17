@@ -71,9 +71,14 @@
         @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item @tt -lupipe-modules
         @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
+        @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
+        @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
+        @item @ref upipe_genaux_mgr_alloc @item pipe generating multicat-style auxiliary blocks @item @tt -lupipe-modules
+        @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe generating multicat-style directories @item @tt -lupipe-modules
         @item @ref upipe_avfsrc_mgr_alloc @item source pipe opening for reading a URL and using libavformat @item @tt -lupipe-av
         @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
         @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
+        @item @ref upipe_mp2vf_mgr_alloc @item pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
 
       @end table
 
@@ -96,12 +101,11 @@
 
       In Upipe's design, decision taking happens inside probes, while data processing is done in pipes with no intelligence whatsoever.
 
-      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 8 categories:
+      Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 7 categories:
 
       @list
 
         @item generic: commands and probes which can apply to any type of pipe (no prefix)
-        @item linear: for pipes that only have one output
         @item source: for pipes that have no input, but rely instead on external events to retrieve incoming data
         @item join: for pipes that have several inputs, such as a mux
         @item split: for pipes that have several outputs, such as a demux
@@ -125,6 +129,8 @@
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
         @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
         @item @ref #UPIPE_HELPER_SINK_DELAY @item helper for sink pipes outputting data at the given system time of packets, plus a configurable delay
+        @item @ref #UPIPE_HELPER_OCTET_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
+        @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
 
       @end table
 

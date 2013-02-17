@@ -44,6 +44,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
@@ -68,6 +69,7 @@ static uint8_t tsid = 42;
 static unsigned int program_sum;
 static unsigned int pid_sum;
 static unsigned int del_program_sum;
+static uint64_t systime = UINT32_MAX;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -80,6 +82,16 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
+        case UPROBE_TS_PATD_SYSTIME: {
+            unsigned int signature = va_arg(args, unsigned int);
+            struct uref *uref = va_arg(args, struct uref *);
+            uint64_t patd_systime = va_arg(args, uint64_t);
+            assert(signature == UPIPE_TS_PATD_SIGNATURE);
+            assert(uref != NULL);
+            assert(patd_systime == systime);
+            systime = 0;
+            break;
+        }
         case UPROBE_TS_PATD_TSID: {
             unsigned int signature = va_arg(args, unsigned int);
             struct uref *uref = va_arg(args, struct uref *);
@@ -172,6 +184,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0, size);
     program_sum = 12;
     pid_sum = 42;
+    assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -196,32 +209,11 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer); /* set invalid CRC */
     patn_set_pid(pat_program, 42);
     uref_block_unmap(uref, 0, size);
+    assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
-
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr,
-                            PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
-    assert(uref != NULL);
-    size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
-    pat_init(buffer);
-    pat_set_length(buffer, PAT_PROGRAM_SIZE);
-    pat_set_tsid(buffer, tsid);
-    psi_set_version(buffer, 2);
-    // don't set current
-    psi_set_section(buffer, 0);
-    psi_set_lastsection(buffer, 0);
-    pat_program = pat_get_program(buffer, 0);
-    patn_init(pat_program);
-    patn_set_program(pat_program, 12);
-    patn_set_pid(pat_program, 42);
-    psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
-    upipe_input(upipe_ts_patd, uref, NULL);
-    assert(!program_sum);
-    assert(!pid_sum);
+    assert(!systime);
 
     tsid++;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -243,9 +235,12 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
+    systime = UINT32_MAX;
+    assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
+    assert(systime);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
@@ -266,9 +261,11 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43); // invalid: program defined twice
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
+    assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
+    assert(systime);
 
     tsid++;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -290,9 +287,11 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0, size);
+    assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
+    assert(systime);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
@@ -315,9 +314,13 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0, size);
     program_sum = 13; // the first program already exists
     pid_sum = 43;
+    systime += UINT32_MAX;
+    assert(uref_clock_set_systime(uref, systime));
+    systime = UINT32_MAX;
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
+    assert(!systime);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
