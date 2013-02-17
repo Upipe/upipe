@@ -111,9 +111,12 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             const char *def;
             assert(uref_flow_get_def(uref, &def));
             assert(flow_id == wanted_flow_id);
-            if (!ubase_ncmp(def, "internal.")) {
-                if (upipe_ts_demux_output_pmt != NULL)
+            if (!ubase_ncmp(def, "program.")) {
+                if (upipe_ts_demux_output_pmt != NULL) {
                     upipe_release(upipe_ts_demux_output_pmt);
+                    upipe_release(upipe_ts_demux_output_video);
+                    upipe_ts_demux_output_video = NULL;
+                }
                 upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
                         uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                                "ts demux pmt"));
@@ -133,7 +136,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_SPLIT_DEL_FLOW: {
             uint64_t flow_id = va_arg(args, uint64_t);
-            assert(flow_id == deleted_flow_id);
+            deleted_flow_id -= flow_id;
             break;
         }
         case UPROBE_NEED_OUTPUT:
@@ -280,8 +283,9 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0, size);
     wanted_flow_id = 13;
-    deleted_flow_id = 12;
+    deleted_flow_id = 12 + 43;
     upipe_input(upipe_ts_demux, uref, NULL);
+    assert(!deleted_flow_id);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
@@ -390,8 +394,13 @@ int main(int argc, char *argv[])
     assert(!expect_need_output);
 
     upipe_release(upipe_ts_demux_output_video);
+    deleted_flow_id = 43;
     upipe_release(upipe_ts_demux_output_pmt);
+    assert(!deleted_flow_id);
+    deleted_flow_id = 13;
     upipe_release(upipe_ts_demux);
+    assert(!deleted_flow_id);
+
     upipe_mgr_release(upipe_ts_demux_mgr);
     upipe_mgr_release(upipe_mp2vf_mgr);
 

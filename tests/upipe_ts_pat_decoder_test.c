@@ -117,7 +117,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int program = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PATD_SIGNATURE);
-            assert(uref != NULL);
             del_program_sum -= program;
             break;
         }
@@ -343,6 +342,8 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0, size);
     del_program_sum = 12;
     upipe_input(upipe_ts_patd, uref, NULL);
+    assert(!program_sum);
+    assert(!pid_sum);
     assert(!del_program_sum);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -372,9 +373,16 @@ int main(int argc, char *argv[])
     program_sum = 14;
     pid_sum = 44;
     upipe_input(upipe_ts_patd, uref, NULL);
+    assert(!program_sum);
+    assert(!pid_sum);
     assert(!del_program_sum);
 
+    del_program_sum = 13 + 14;
     upipe_release(upipe_ts_patd);
+    assert(!program_sum);
+    assert(!pid_sum);
+    assert(!del_program_sum);
+
     upipe_mgr_release(upipe_ts_patd_mgr); // nop
 
     uref_mgr_release(uref_mgr);

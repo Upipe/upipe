@@ -136,7 +136,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             unsigned int pid = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            assert(uref != NULL);
             del_pid_sum -= pid;
             fprintf(stdout,
                     "ts probe: pipe %p deleted PID %u\n", upipe, pid);
@@ -469,7 +468,15 @@ int main(int argc, char *argv[])
     assert(!desc_size_sum);
     assert(!systime);
 
+    del_pid_sum = 12 + 14;
     upipe_release(upipe_ts_pmtd);
+    assert(!pid_sum);
+    assert(!streamtype_sum);
+    assert(!del_pid_sum);
+    assert(!desc_offset_sum);
+    assert(!desc_size_sum);
+    assert(!systime);
+
     upipe_mgr_release(upipe_ts_pmtd_mgr); // nop
 
     uref_mgr_release(uref_mgr);

@@ -458,6 +458,18 @@ static void upipe_ts_patd_release(struct upipe *upipe)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_patd->refcount))) {
+        if (upipe_ts_psid_table_validate(upipe_ts_patd->pat)) {
+            UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
+
+            uint16_t program = patn_get_program(pat_program);
+
+            UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat,
+                                           pat_program)
+
+            upipe_ts_patd_del_program(upipe, NULL, program);
+
+            UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->pat, pat_program)
+        }
         upipe_throw_dead(upipe);
 
         upipe_ts_psid_table_clean(upipe_ts_patd->pat);

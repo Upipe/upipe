@@ -1233,8 +1233,7 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
                        uref_flow_set_program_va(flow_def, "%u,",
                            upipe_ts_demux_program->program) &&
                        uref_ts_flow_set_max_delay(flow_def, MAX_DELAY_STILL)))
-                upipe_split_throw_add_flow(upipe_ts_demux_to_upipe(demux),
-                                           pid, flow_def);
+                upipe_split_throw_add_flow(upipe, pid, flow_def);
 
             if (flow_def != NULL)
                 uref_free(flow_def);
@@ -1252,8 +1251,7 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
                        uref_ts_flow_set_max_delay(flow_def,
                            upipe_ts_demux_program_pmtd_h264_max_delay(uref,
                                pmtd_desc_offset, pmtd_desc_size))))
-                upipe_split_throw_add_flow(upipe_ts_demux_to_upipe(demux),
-                                           pid, flow_def);
+                upipe_split_throw_add_flow(upipe, pid, flow_def);
 
             if (flow_def != NULL)
                 uref_free(flow_def);
@@ -1288,14 +1286,13 @@ static bool upipe_ts_demux_program_pmtd_del_es(struct uprobe *uprobe,
         container_of(uprobe, struct upipe_ts_demux_program, pmtd_probe);
     struct upipe *upipe =
         upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
-    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
 
     unsigned int signature = va_arg(args, unsigned int);
     assert(signature == UPIPE_TS_PMTD_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
     unsigned int pid = va_arg(args, unsigned int);
 
-    upipe_split_throw_del_flow(upipe_ts_demux_to_upipe(demux), pid);
+    upipe_split_throw_del_flow(upipe, pid);
 
     /* send read_end on the output */
     struct uchain *uchain;
@@ -1304,8 +1301,7 @@ static bool upipe_ts_demux_program_pmtd_del_es(struct uprobe *uprobe,
         if (output != NULL)
             upipe_release(upipe_ts_demux_output_to_upipe(output));
         output = upipe_ts_demux_output_from_uchain(uchain);
-        /* to avoid having the uchain disappear during
-         * upipe_throw_read_end */
+        /* to avoid having the uchain disappear during upipe_throw_read_end */
         upipe_use(upipe_ts_demux_output_to_upipe(output));
         if (output->pid == pid)
             upipe_throw_read_end(upipe_ts_demux_output_to_upipe(output), NULL);
@@ -1906,7 +1902,7 @@ static bool upipe_ts_demux_patd_add_program(struct uprobe *uprobe,
 
     struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
     if (likely(flow_def != NULL &&
-               uref_flow_set_def(flow_def, "internal.") &&
+               uref_flow_set_def(flow_def, "program.") &&
                uref_flow_set_raw_def(flow_def, "block.mpegtspsi.mpegtspmt.") &&
                uref_ts_flow_set_psi_filter(flow_def, filter, mask,
                                            PSI_HEADER_SIZE_SYNTAX1) &&

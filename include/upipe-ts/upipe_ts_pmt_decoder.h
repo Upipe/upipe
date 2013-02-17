@@ -43,7 +43,8 @@ enum uprobe_ts_pmtd_event {
     /** a new ES was found in the given uref (struct uref *, unsigned int,
      * unsigned int, unsigned int, unsigned int) */
     UPROBE_TS_PMTD_ADD_ES,
-    /** an ES was deleted in the given uref (struct uref *, unsigned int) */
+    /** an ES was deleted in the given uref, which may be NULL (struct uref *,
+     * unsigned int) */
     UPROBE_TS_PMTD_DEL_ES,
 };
 
