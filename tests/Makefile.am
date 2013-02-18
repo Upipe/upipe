@@ -35,6 +35,7 @@ check_PROGRAMS = \
 	upipe_null_test \
 	upipe_dup_test \
 	upipe_setattr_test \
+	upipe_filter_blend_test \
 	upipe_mp2v_framer_test
 
 TESTS = \
@@ -53,6 +54,7 @@ TESTS = \
 	upipe_null_test \
 	upipe_dup_test \
 	upipe_setattr_test \
+	upipe_filter_blend_test \
 	upipe_mp2v_framer_test
 
 if HAVE_EV
@@ -165,3 +167,4 @@ upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 
 upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)
+upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

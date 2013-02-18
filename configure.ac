@@ -109,6 +109,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-swscale/Makefile
                  include/upipe-ts/Makefile
                  include/upipe-gl/Makefile
+                 include/upipe-filters/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -126,6 +127,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-ts/libupipe_ts.pc
                  lib/upipe-gl/Makefile
                  lib/upipe-gl/libupipe_gl.pc
+                 lib/upipe-filters/Makefile
+                 lib/upipe-filters/libupipe_filters.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT

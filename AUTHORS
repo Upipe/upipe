@@ -6,6 +6,10 @@
 # The fields are: name (N), email (E), web-address (W),
 # PGP key ID and fingerprint (P), description (D), and snail-mail address (S).
 
+N: Benjamin Cohen
+E: bencoh AT notk DOT org
+D: a few modules
+
 N: Christophe Massiot
 E: cmassiot AT upipe DOT org
 D: design and implementation of the core
