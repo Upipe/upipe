@@ -24,8 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_uref_mgr events and providing a given uref
- * manager
+ * @short probe catching need_uref_mgr events and providing a given uref manager
  */
 
 #ifndef _UPIPE_UPROBE_UREF_MGR_H_
@@ -57,6 +56,6 @@ void uprobe_uref_mgr_free(struct uprobe *uprobe);
  * @param uprobe pointer to probe
  * @param uref_mgr new uref manager to provide to pipes
  */
-void uprobe_uref_mgr_set(struct uprobe *next, struct uref_mgr *uref_mgr);
+void uprobe_uref_mgr_set(struct uprobe *uprobe, struct uref_mgr *uref_mgr);
 
 #endif

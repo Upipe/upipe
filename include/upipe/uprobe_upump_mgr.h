@@ -56,6 +56,6 @@ void uprobe_upump_mgr_free(struct uprobe *uprobe);
  * @param uprobe pointer to probe
  * @param upump_mgr new upump manager to provide to pipes
  */
-void uprobe_upump_mgr_set(struct uprobe *next, struct upump_mgr *upump_mgr);
+void uprobe_upump_mgr_set(struct uprobe *uprobe, struct upump_mgr *upump_mgr);
 
 #endif

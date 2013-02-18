@@ -39,6 +39,7 @@ pkginclude_HEADERS = \
 	uprobe_helper_uprobe.h \
 	uprobe_log.h \
 	uprobe_prefix.h \
+	uprobe_select_programs.h \
 	uprobe_stdio.h \
 	uprobe_upump_mgr.h \
 	uprobe_uref_mgr.h \

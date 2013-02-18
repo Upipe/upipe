@@ -96,6 +96,7 @@
         @item @ref uprobe_ts_log_alloc @item log TS-related received events, for debug purposes @item @tt -lupipe-ts
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
+        @item @ref uprobe_selprog_alloc @item select programs according to criteria @item @tt -lupipe
 
       @end table
 
@@ -131,6 +132,8 @@
         @item @ref #UPIPE_HELPER_SINK_DELAY @item helper for sink pipes outputting data at the given system time of packets, plus a configurable delay
         @item @ref #UPIPE_HELPER_OCTET_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
+        @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
+        @item @ref #UPROBE_HELPER_ADHOC @item helper for automatic allocation and deallocation of probes bound to a single pipe
 
       @end table
 
