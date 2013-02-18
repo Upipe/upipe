@@ -43,8 +43,8 @@ enum uprobe_ts_patd_event {
     /** a new program was found in the given uref (struct uref *,
      * unsigned int, unsigned int) */
     UPROBE_TS_PATD_ADD_PROGRAM,
-    /** a program was deleted in the given uref (struct uref *,
-     * unsigned int) */
+    /** a program was deleted in the given uref, which may be NULL
+     * (struct uref *, unsigned int) */
     UPROBE_TS_PATD_DEL_PROGRAM,
 };
 

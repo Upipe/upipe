@@ -466,7 +466,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     struct uref *old_pmt = upipe_ts_pmtd->pmt;
     upipe_ts_pmtd->pmt = uref;
 
-    if (old_pmt) {
+    if (old_pmt != NULL) {
         UPIPE_TS_PMTD_HEADER(upipe, old_pmt, old_header, old_header_desc,
                              old_header_desclength)
         UPIPE_TS_PMTD_HEADER_UNMAP(upipe, old_pmt, old_header,
@@ -547,9 +547,29 @@ static void upipe_ts_pmtd_release(struct upipe *upipe)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_pmtd->refcount))) {
-        upipe_throw_dead(upipe);
+        /* send del_es on all elementary streams of the last PMT */
+        if (upipe_ts_pmtd->pmt != NULL) {
+            UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, old_header,
+                                 old_header_desc, old_header_desclength)
+            UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, old_header,
+                                       old_header_desc, old_header_desclength)
 
-        uref_free(upipe_ts_pmtd->pmt);
+            UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset,
+                               old_header_desclength, old_es, old_desc,
+                               old_desclength)
+
+            uint16_t pid = pmtn_get_pid(old_es);
+
+            UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, old_es,
+                                     old_desc, old_desclength)
+
+            upipe_ts_pmtd_del_es(upipe, NULL, pid);
+
+            UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
+
+            uref_free(upipe_ts_pmtd->pmt);
+        }
+        upipe_throw_dead(upipe);
 
         upipe_clean(upipe);
         urefcount_clean(&upipe_ts_pmtd->refcount);
