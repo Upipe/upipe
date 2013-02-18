@@ -448,7 +448,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ts = true;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref, dts);
+        upipe_throw_clock_ref(upipe, uref, dts, 0);
     }
     if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
         uint64_t pts = pkt.pts * stream->time_base.num * UCLOCK_FREQ /

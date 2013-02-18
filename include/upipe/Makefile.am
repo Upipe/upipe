@@ -35,6 +35,7 @@ pkginclude_HEADERS = \
 	upipe_helper_upump_mgr.h \
 	upipe_helper_uref_mgr.h \
 	uprobe.h \
+	uprobe_dejitter.h \
 	uprobe_helper_adhoc.h \
 	uprobe_helper_uprobe.h \
 	uprobe_log.h \

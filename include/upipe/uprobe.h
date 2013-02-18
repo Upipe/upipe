@@ -87,8 +87,8 @@ enum uprobe_event {
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */
     UPROBE_SYNC_LOST,
-    /** a pipe signals that a uref carries a new clock reference
-     * (struct uref *, uint64_t) */
+    /** a pipe signals that a uref carries a new clock reference, and
+     * potentially a clock discontinuity * (struct uref *, uint64_t, int) */
     UPROBE_CLOCK_REF,
     /** a pipe signals that a uref carries a presentation and/or a
      * decoding timestamp (struct uref *) */

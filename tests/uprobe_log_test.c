@@ -88,7 +88,8 @@ int main(int argc, char **argv)
     upipe_throw_sync_lost(&test_pipe);
 
     uref = uref_alloc(mgr);
-    upipe_throw_clock_ref(&test_pipe, uref, 42);
+    upipe_throw_clock_ref(&test_pipe, uref, 42, 0);
+    upipe_throw_clock_ref(&test_pipe, uref, 43, 1);
     uref_clock_set_pts_orig(uref, 42);
     uref_clock_set_dts_orig(uref, 12);
     upipe_throw_clock_ts(&test_pipe, uref);

@@ -682,11 +682,12 @@ static inline void upipe_throw_sync_lost(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param uref uref carrying a clock reference
  * @param clock_ref clock reference, in 27 MHz scale
+ * @param discontinuity 1 if there is a suspicion of discontinuity
  */
 static inline void upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
-                                         uint64_t clock_ref)
+                                         uint64_t clock_ref, int discontinuity)
 {
-    upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref);
+    upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
 }
 
 /** @This throws an event telling that the given uref carries a presentation

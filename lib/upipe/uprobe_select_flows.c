@@ -41,7 +41,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_prefix.h>
 #include <upipe/upipe.h>
 
 #include <stdlib.h>

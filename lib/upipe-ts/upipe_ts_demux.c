@@ -1382,12 +1382,13 @@ static bool upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
 
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t pcr_orig = va_arg(args, uint64_t);
+    int discontinuity = va_arg(args, int);
 
     /* handle 2^33 wrap-arounds */
     uint64_t delta =
         (TS_CLOCK_MAX + pcr_orig -
          (upipe_ts_demux_program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-    if (delta <= MAX_PCR_INTERVAL)
+    if (delta <= MAX_PCR_INTERVAL && !discontinuity)
         upipe_ts_demux_program->last_pcr += delta;
     else {
         upipe_ts_demux_program->last_pcr = pcr_orig;
@@ -1396,7 +1397,8 @@ static bool upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
     }
     upipe_throw_clock_ref(upipe, uref,
                           upipe_ts_demux_program->last_pcr +
-                          upipe_ts_demux_program->timestamp_offset);
+                          upipe_ts_demux_program->timestamp_offset,
+                          discontinuity);
 
     if (upipe_ts_demux_program->systime_pmt) {
         if (upipe_ts_demux_program->setattr_dict == NULL)

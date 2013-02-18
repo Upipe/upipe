@@ -152,8 +152,14 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_CLOCK_REF: {
             struct uref *uref = va_arg(args_copy, struct uref *);
             uint64_t pcr = va_arg(args_copy, uint64_t);
-            upipe_log_va(upipe, log->level,
-                         "probe caught new clock ref %"PRIu64, pcr);
+            int discontinuity = va_arg(args_copy, int);
+            if (discontinuity == 1)
+                upipe_log_va(upipe, log->level,
+                         "probe caught new clock ref %"PRIu64" (discontinuity)",
+                         pcr);
+            else
+                upipe_log_va(upipe, log->level,
+                             "probe caught new clock ref %"PRIu64, pcr);
             break;
         }
         case UPROBE_CLOCK_TS: {

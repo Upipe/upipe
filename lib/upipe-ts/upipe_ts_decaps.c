@@ -166,7 +166,8 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                         TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2, pcr);
                 assert(ret);
 
-                upipe_throw_clock_ref(upipe, uref, pcrval);
+                upipe_throw_clock_ref(upipe, uref, pcrval,
+                                      discontinuity ? 1 : 0);
             }
         }
 

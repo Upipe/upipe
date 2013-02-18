@@ -97,6 +97,7 @@
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
         @item @ref uprobe_selprog_alloc @item select programs according to criteria @item @tt -lupipe
+        @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
 
       @end table
 
