@@ -24,6 +24,37 @@
  *
  */
 
+/*
+graph {flow: east}
+( [qsrc] [glx]) {border-style: dashed;}
+[] -- stream --> [avfsrc]{rank: 0} -- encoded --> [avcdv] -- yuv --> [deint]
+-- progressive --> {flow: south; end: east} [yuvrgb]
+-- rgb --> {flow: west} [qsink] --> [qsrc] --> [glx]
+
+  |
+  | stream
+  v
++---------+  encoded     +-------+  yuv   +--------+
+| avfsrc  | --------->   | avcdv | -----> | deint  |   -+
++---------+              +-------+        +--------+    |
+                                                        |
+                                                        | progressive
+                                                        |
+                         +-------+  rgb   +--------+    |
+                         | qsink | <----- | yuvrgb |   <+
+                         +-------+        +--------+
+                           |
+                           |
+                           v
+                       +- - - - - - - - - - - - - - -+
+                       '                             '
+                       ' +-------+        +--------+ '
+                       ' | qsrc  | -----> |  glx   | '
+                       ' +-------+        +--------+ '
+                       '                             '
+                       +- - - - - - - - - - - - - - -+
+ */
+
 #include <stdlib.h>
 #include <strings.h>
 #include <stdint.h>
@@ -72,6 +103,7 @@
 #include <upipe-av/upipe_avcodec_dec_vid.h>
 #include <upipe-gl/upipe_glx_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
+#include <upipe-filters/upipe_filter_blend.h>
 
 #include <ev.h>
 #include <pthread.h>
@@ -273,6 +305,7 @@ const char *url = NULL;
 struct upipe *upipe_qsink;
 struct upipe_mgr *avcdv_mgr;
 struct upipe_mgr *upipe_null_mgr;
+struct upipe_mgr *upipe_filter_blend_mgr;
 struct uref_mgr *uref_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *rgb_mgr = NULL;
@@ -359,12 +392,17 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                 upipe_set_ubuf_mgr(upipe_sink, yuv_mgr);
                 /* avcdv doesn't need upump if there is only one avcodec pipe
                  * calling avcodec_open/_close at the same time */
+                struct upipe *deint = upipe_alloc(upipe_filter_blend_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, loglevel, "deint"));
+                upipe_set_ubuf_mgr(deint, yuv_mgr);
                 struct upipe *yuvrgb = upipe_alloc(&upipe_yuvrgb_mgr,
                     uprobe_pfx_adhoc_alloc_va(logger, loglevel,
                                                           "rgb %"PRIu64, id));
-                upipe_set_output(upipe_sink, yuvrgb);
-                upipe_release(yuvrgb);
                 upipe_set_ubuf_mgr(yuvrgb, rgb_mgr);
+                upipe_set_output(upipe_sink, deint);
+                upipe_release(deint);
+                upipe_set_output(deint, yuvrgb);
+                upipe_release(yuvrgb);
                 upipe_set_output(yuvrgb, upipe_qsink);
                 upipe_release(upipe_qsink);
             } else {
@@ -524,7 +562,9 @@ int main(int argc, char** argv)
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      loglevel);
     logger = uprobe_log_alloc(uprobe_stdio, loglevel);
+
     upipe_null_mgr = upipe_null_mgr_alloc();
+    upipe_filter_blend_mgr = upipe_filter_blend_mgr_alloc();
 
     // queue sink
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();

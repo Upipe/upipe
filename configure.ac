@@ -37,7 +37,7 @@ AC_CHECK_HEADERS([ev.h], [
                         AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
 
-PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 54.0.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
+PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.0 libavutil, [libswscale/swscale.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 
