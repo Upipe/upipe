@@ -47,9 +47,9 @@
 /** @This allocates a new uprobe_selprog structure.
  *
  * @param next next probe to test if this one doesn't catch the event
- * @param programs comma-separated list of programs to select, terminated by a
- * comma, or "auto" to automatically select the first program carrying
- * elementary streams, or "all"
+ * @param programs comma-separated list of programs or attribute/value pairs
+ * (name=ABC) to select, terminated by a comma, or "auto" to automatically
+ * select the first program carrying elementary streams, or "all"
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_selprog_alloc(struct uprobe *next, const char *programs);
@@ -63,8 +63,9 @@ void uprobe_selprog_free(struct uprobe *uprobe);
 /** @This returns the programs selected by this probe.
  *
  * @param uprobe pointer to probe
- * @param programs_p filled in with a comma-separated list of programs,
- * terminated by a comma, or "all", or "auto" if no program has been found yet
+ * @param programs_p filled in with a comma-separated list of programs or
+ * attribute/value pairs (name=ABC) to select, terminated by a comma, or "all",
+ * or "auto" if no program has been found yet
  */
 void uprobe_selprog_get(struct uprobe *uprobe, const char **programs_p);
 
@@ -72,16 +73,16 @@ void uprobe_selprog_get(struct uprobe *uprobe, const char **programs_p);
  *
  * @param uprobe pointer to probe
  * @param programs_p filled in with a comma-separated list of all programs,
- * termintated by a comma
+ * terminated by a comma
  */
 void uprobe_selprog_list(struct uprobe *uprobe, const char **programs_p);
 
 /** @This changes the programs selected by this probe.
  *
  * @param uprobe pointer to probe
- * @param programs comma-separated list of programs to select, terminated by a
- * comma, or "auto" to automatically select the first program carrying
- * elementary streams, or "all"
+ * @param programs comma-separated list of programs or attribute/value pairs
+ * (name=ABC) to select, terminated by a comma, or "auto" to automatically
+ * select the first program carrying elementary streams, or "all"
  */
 void uprobe_selprog_set(struct uprobe *uprobe, const char *programs);
 

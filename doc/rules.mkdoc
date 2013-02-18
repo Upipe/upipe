@@ -9,7 +9,7 @@
 
     @list
 
-      @item All methods of @ref upipe must be called from the same thread. As an exception, it is possible to allocate and configure a pipe in one thread, and migrate it to another thread afterwards, but a pipe is not required to be reentrant, nor to handle memory protection. This also applies to input and output subpipes of a pipe, which run in the same thread as the pipe.
+      @item All methods of @ref upipe must be called from the same thread. As an exception, it is possible to allocate and configure a pipe in one thread, and migrate it to another thread afterwards, but a pipe is not required to be reentrant, nor to handle memory protection. This also applies to input and output subpipes of a pipe, which run in the same thread as the pipe. Also, for the same reason, it is not recommended to create loops in the dataflow.
 
       @item A @ref upipe shall throw @ref upipe_throw_ready as soon as it is ready to receive inputs and control commands, and before sending any other probe, including log messages.
 

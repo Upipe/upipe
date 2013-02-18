@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ulist.h: upipe implementation of lists of structures (NOT thread-safe)
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe implementation of lists of structures (NOT thread-safe)
+ */
 
 #ifndef _UPIPE_ULIST_H_
 /** @hidden */
@@ -137,7 +139,7 @@ static inline struct uchain *ulist_pop(struct ulist *ulist)
              uchain_delete_next_p = likely((uchain) != NULL) ?              \
                                             &(uchain)->next : NULL)
 
-/** @This deletes an element from a struct ulist. This macro can only be called
+/** @This deletes an element from a ulist. This macro can only be called
  * from inside a ulist_delete_foreach loop.
  *
  * @param ulist pointer to a ulist structure

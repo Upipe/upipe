@@ -42,6 +42,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_program_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
@@ -1224,11 +1225,11 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
 
     switch (streamtype) {
         case 0x2: {
-            struct uref *flow_def = uref_block_flow_alloc_def(demux->uref_mgr,
-                                                              "mpeg2video.");
+            struct uref *flow_def =
+                uref_block_flow_alloc_def(demux->uref_mgr, "mpeg2video.pic.");
             if (likely(flow_def != NULL &&
                        uref_flow_set_raw_def(flow_def,
-                           "block.mpegts.mpegtspes.mpeg2video.") &&
+                           "block.mpegts.mpegtspes.mpeg2video.pic.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
                        uref_flow_set_program_va(flow_def, "%u,",
                            upipe_ts_demux_program->program) &&
@@ -1241,10 +1242,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
         }
         case 0x1b: {
             struct uref *flow_def = uref_block_flow_alloc_def(demux->uref_mgr,
-                                                              "h264.");
+                                                              "h264.pic.");
             if (likely(flow_def != NULL &&
                        uref_flow_set_raw_def(flow_def,
-                           "block.mpegts.mpegtspes.h264.") &&
+                           "block.mpegts.mpegtspes.h264.pic.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
                        uref_flow_set_program_va(flow_def, "%u,",
                            upipe_ts_demux_program->program) &&
@@ -1900,9 +1901,9 @@ static bool upipe_ts_demux_patd_add_program(struct uprobe *uprobe,
     psi_set_tableidext(filter, program);
     psi_set_tableidext(mask, 0xffff);
 
-    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
+    struct uref *flow_def =
+        uref_program_flow_alloc_def(upipe_ts_demux->uref_mgr);
     if (likely(flow_def != NULL &&
-               uref_flow_set_def(flow_def, "program.") &&
                uref_flow_set_raw_def(flow_def, "block.mpegtspsi.mpegtspmt.") &&
                uref_ts_flow_set_psi_filter(flow_def, filter, mask,
                                            PSI_HEADER_SIZE_SYNTAX1) &&

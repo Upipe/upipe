@@ -41,6 +41,8 @@
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uref.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_program_flow.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_select_programs.h>
@@ -189,8 +191,42 @@ static bool uprobe_selprog_check(struct uprobe *uprobe, uint64_t program_number)
         !strcmp(uprobe_selprog->programs, "auto"))
         return true;
 
+    /* try to find the flow definition for the program void output */
+    struct uref *flow_def = NULL;
+    struct uchain *uchain;
+    ulist_foreach (&uprobe_selprog->outputs, uchain) {
+        struct uprobe_selprog_output *output =
+            uprobe_selprog_output_from_uchain(uchain);
+        if (output->program_number == program_number && output->program_def) {
+            flow_def = output->flow_def;
+            break;
+        }
+    }
+
     /* comma-separated list of outputs */
-    return uprobe_selprog_lookup(uprobe_selprog->programs, program_number);
+    const char *programs = uprobe_selprog->programs;
+    uint64_t found;
+    char attr[strlen(programs) + 1];
+    char value[strlen(programs) + 1];
+    int consumed;
+    int tmp;
+    while ((tmp = sscanf(programs, "%"PRIu64",%n", &found, &consumed)) >= 1 ||
+           sscanf(programs, "%[a-zA-Z]=%[^,],%n", attr, value,
+                  &consumed) >= 2) {
+        programs += consumed;
+        if (tmp > 0) {
+            if (found == program_number)
+                return true;
+        }
+        else if (!strcmp(attr, "name")) {
+            const char *name;
+            if (flow_def != NULL &&
+                uref_program_flow_get_name(flow_def, &name) &&
+                !strcmp(name, value))
+                return true;
+        }
+    }
+    return false;
 }
 
 /** @internal @This sets the programs to output.
@@ -482,9 +518,9 @@ static bool uprobe_selprog_throw(struct uprobe *uprobe, struct upipe *upipe,
 /** @This allocates a new uprobe_selprog structure.
  *
  * @param next next probe to test if this one doesn't catch the event
- * @param programs comma-separated list of programs to select, terminated by a
- * comma, or "auto" to automatically select the first program carrying
- * elementary streams, or "all"
+ * @param programs comma-separated list of programs or attribute/value pairs
+ * (name=ABC) to select, terminated by a comma, or "auto" to automatically
+ * select the first program carrying elementary streams, or "all"
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_selprog_alloc(struct uprobe *next, const char *programs)
@@ -521,8 +557,9 @@ void uprobe_selprog_free(struct uprobe *uprobe)
 /** @This returns the programs selected by this probe.
  *
  * @param uprobe pointer to probe
- * @param programs_p filled in with a comma-separated list of programs,
- * terminated by a comma, or "all", or "auto" if no program has been found yet
+ * @param programs_p filled in with a comma-separated list of programs or
+ * attribute/value pairs (name=ABC) to select, terminated by a comma, or "all",
+ * or "auto" if no program has been found yet
  */
 void uprobe_selprog_get(struct uprobe *uprobe, const char **programs_p)
 {
@@ -535,7 +572,7 @@ void uprobe_selprog_get(struct uprobe *uprobe, const char **programs_p)
  *
  * @param uprobe pointer to probe
  * @param programs_p filled in with a comma-separated list of all programs,
- * termintated by a comma
+ * terminated by a comma
  */
 void uprobe_selprog_list(struct uprobe *uprobe, const char **programs_p)
 {
@@ -547,8 +584,9 @@ void uprobe_selprog_list(struct uprobe *uprobe, const char **programs_p)
 /** @This changes the programs selected by this probe.
  *
  * @param uprobe pointer to probe
- * @param programs comma-separated list of programs to select, terminated by a
- * comma, or "auto" to automatically select the first program carrying
+ * @param programs comma-separated list of programs or attribute/value pairs
+ * (name=ABC) to select, terminated by a comma, or "auto" to automatically
+ * select the first program carrying elementary streams, or "all"
  * elementary streams, or "all"
  */
 void uprobe_selprog_set(struct uprobe *uprobe, const char *programs)

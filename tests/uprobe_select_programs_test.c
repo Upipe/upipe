@@ -41,6 +41,8 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_block_flow.h>
+#include <upipe/uref_program_flow.h>
 #include <upipe/uref_std.h>
 
 #include <stdio.h>
@@ -212,10 +214,10 @@ int main(int argc, char **argv)
 
     struct uref *flow_def;
     const char *programs;
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "program."));
     assert(uref_flow_set_program(flow_def, "12,"));
+    assert(uref_program_flow_set_name(flow_def, "A 1"));
     add_programs = 12;
     del_programs = 0;
     add_es = 0;
@@ -229,10 +231,10 @@ int main(int argc, char **argv)
     assert(!strcmp(programs, "auto"));
     uref_free(flow_def);
 
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "program."));
     assert(uref_flow_set_program(flow_def, "13,"));
+    assert(uref_program_flow_set_name(flow_def, "B 2"));
     add_programs = 13;
     upipe_split_throw_add_flow(upipe, 13, flow_def);
     assert(!add_programs);
@@ -243,9 +245,8 @@ int main(int argc, char **argv)
     assert(!strcmp(programs, "auto"));
     uref_free(flow_def);
 
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_block_flow_alloc_def(uref_mgr, "");
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "block."));
     assert(uref_flow_set_program(flow_def, "12,"));
     del_programs = 13;
     add_es = 42;
@@ -258,9 +259,8 @@ int main(int argc, char **argv)
     assert(!strcmp(programs, "12,"));
     uref_free(flow_def);
 
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_block_flow_alloc_def(uref_mgr, "");
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "block."));
     assert(uref_flow_set_program(flow_def, "13,"));
     upipe_split_throw_add_flow(upipe, 43, flow_def);
     assert(!add_programs);
@@ -290,10 +290,10 @@ int main(int argc, char **argv)
     uprobe_selprog_get(uprobe_selprog, &programs);
     assert(!strcmp(programs, "13,"));
 
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "program."));
     assert(uref_flow_set_program(flow_def, "12,"));
+    assert(uref_program_flow_set_name(flow_def, "A 1"));
     upipe_split_throw_add_flow(upipe, 12, flow_def);
     assert(!add_programs);
     assert(!del_programs);
@@ -303,9 +303,8 @@ int main(int argc, char **argv)
     assert(!strcmp(programs, "13,"));
     uref_free(flow_def);
 
-    flow_def = uref_alloc_control(uref_mgr);
+    flow_def = uref_block_flow_alloc_def(uref_mgr, "");
     assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "block."));
     assert(uref_flow_set_program(flow_def, "12,"));
     upipe_split_throw_add_flow(upipe, 42, flow_def);
     assert(!add_programs);
@@ -328,7 +327,7 @@ int main(int argc, char **argv)
 
     add_programs = 13;
     add_es = 43;
-    uprobe_selprog_set(uprobe_selprog, "13,12,14,");
+    uprobe_selprog_set(uprobe_selprog, "name=B 2,name=A 1,foo=bar,");
     assert(!add_programs);
     assert(!del_programs);
     assert(!add_es);
