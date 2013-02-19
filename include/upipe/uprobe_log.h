@@ -48,4 +48,30 @@ struct uprobe *uprobe_log_alloc(struct uprobe *next,
  */
 void uprobe_log_free(struct uprobe *uprobe);
 
+/** @This masks an event from being logged.
+ *
+ * @param uprobe probe structure
+ * @param event event to mask
+ */
+void uprobe_log_mask_event(struct uprobe *uprobe, enum uprobe_event event);
+
+/** @This unmasks an event from being logged.
+ *
+ * @param uprobe probe structure
+ * @param event event to unmask
+ */
+void uprobe_log_unmask_event(struct uprobe *uprobe, enum uprobe_event event);
+
+/** @This masks unknown events from being logged.
+ *
+ * @param uprobe probe structure
+ */
+void uprobe_log_mask_unknown_events(struct uprobe *uprobe);
+
+/** @This unmasks unknown events from being logged.
+ *
+ * @param uprobe probe structure
+ */
+void uprobe_log_unmask_unknown_events(struct uprobe *uprobe);
+
 #endif

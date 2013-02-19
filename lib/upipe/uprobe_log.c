@@ -40,11 +40,20 @@
 #include <stdarg.h>
 #include <inttypes.h>
 
+/** first event to log */
+#define UPROBE_FIRST_EVENT UPROBE_READY
+/** last event to log */
+#define UPROBE_LAST_EVENT UPROBE_CLOCK_TS
+
 /** @This is a super-set of the uprobe structure with additional local members.
  */
 struct uprobe_log {
     /** level at which to log the messages */
     enum uprobe_log_level level;
+    /** events to log */
+    bool events[UPROBE_LAST_EVENT - UPROBE_FIRST_EVENT];
+    /** whether to log unknown events */
+    bool unknown_events;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -61,7 +70,7 @@ UPROBE_HELPER_UPROBE(uprobe_log, uprobe)
  * @return always false
  */
 static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
-                               enum uprobe_event event, va_list args)
+                             enum uprobe_event event, va_list args)
 {
     struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
     if (upipe == NULL)
@@ -69,6 +78,12 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
 
     va_list args_copy;
     va_copy(args_copy, args);
+
+    if (event >= UPROBE_FIRST_EVENT && event <= UPROBE_LAST_EVENT) {
+        if (!log->events[event - UPROBE_FIRST_EVENT])
+            return false;
+    } else if (!log->unknown_events)
+        return false;
 
     switch (event) {
         case UPROBE_READY:
@@ -205,6 +220,13 @@ struct uprobe *uprobe_log_alloc(struct uprobe *next,
         return NULL;
     struct uprobe *uprobe = uprobe_log_to_uprobe(log);
     log->level = level;
+    int i;
+    for (i = 0; i < UPROBE_LAST_EVENT - UPROBE_FIRST_EVENT; i++)
+        log->events[i] = true;
+    /* by default disable clock events and unknown events */
+    log->events[UPROBE_CLOCK_REF - UPROBE_FIRST_EVENT] = false;
+    log->events[UPROBE_CLOCK_TS - UPROBE_FIRST_EVENT] = false;
+    log->unknown_events = false;
     uprobe_init(uprobe, uprobe_log_throw, next);
     return uprobe;
 }
@@ -217,4 +239,50 @@ void uprobe_log_free(struct uprobe *uprobe)
 {
     struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
     free(log);
+}
+
+/** @This masks an event from being logged.
+ *
+ * @param uprobe probe structure
+ * @param event event to mask
+ */
+void uprobe_log_mask_event(struct uprobe *uprobe, enum uprobe_event event)
+{
+    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
+    assert(event >= UPROBE_FIRST_EVENT);
+    assert(event <= UPROBE_LAST_EVENT);
+    log->events[event - UPROBE_FIRST_EVENT] = false;
+}
+
+/** @This unmasks an event from being logged.
+ *
+ * @param uprobe probe structure
+ * @param event event to unmask
+ */
+void uprobe_log_unmask_event(struct uprobe *uprobe, enum uprobe_event event)
+{
+    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
+    assert(event >= UPROBE_FIRST_EVENT);
+    assert(event <= UPROBE_LAST_EVENT);
+    log->events[event - UPROBE_FIRST_EVENT] = true;
+}
+
+/** @This masks unknown events from being logged.
+ *
+ * @param uprobe probe structure
+ */
+void uprobe_log_mask_unknown_events(struct uprobe *uprobe)
+{
+    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
+    log->unknown_events = false;
+}
+
+/** @This unmasks unknown events from being logged.
+ *
+ * @param uprobe probe structure
+ */
+void uprobe_log_unmask_unknown_events(struct uprobe *uprobe)
+{
+    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
+    log->unknown_events = true;
 }

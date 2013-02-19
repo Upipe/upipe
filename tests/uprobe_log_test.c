@@ -68,6 +68,11 @@ int main(int argc, char **argv)
     assert(uprobe != NULL);
     test_pipe.uprobe = uprobe;
 
+    /* unmask all events */
+    uprobe_log_unmask_event(uprobe, UPROBE_CLOCK_REF);
+    uprobe_log_unmask_event(uprobe, UPROBE_CLOCK_TS);
+    uprobe_log_unmask_unknown_events(uprobe);
+
     upipe_throw_ready(&test_pipe);
     upipe_throw_aerror(&test_pipe);
     upipe_throw_upump_error(&test_pipe);
