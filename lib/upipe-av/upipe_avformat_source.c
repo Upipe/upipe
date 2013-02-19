@@ -86,6 +86,8 @@ struct upipe_avfsrc {
     struct upump *upump;
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
+    /** last random access point */
+    uint64_t systime_rap;
 
     /** list of outputs */
     struct ulist outputs;
@@ -331,6 +333,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_uclock(upipe);
+    upipe_avfsrc->systime_rap = UINT64_MAX;
 
     upipe_avfsrc->url = NULL;
 
@@ -447,6 +450,9 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ret = ret && uref_clock_set_dts(uref, dts);
         ts = true;
 
+        if (upipe_avfsrc->uclock != NULL && stream->reference_dts == pkt.dts)
+            upipe_avfsrc->systime_rap = systime;
+
         /* this is subtly wrong, but whatever */
         upipe_throw_clock_ref(upipe, uref, dts, 0);
     }
@@ -462,6 +468,9 @@ static void upipe_avfsrc_worker(struct upump *upump)
                             stream->time_base.den;
         ret = ret && uref_clock_set_duration(uref, duration);
     }
+    if (upipe_avfsrc->systime_rap != UINT64_MAX)
+        ret = ret && uref_clock_set_systime_rap(uref,
+                                                upipe_avfsrc->systime_rap);
 
     if (ts)
         upipe_throw_clock_ts(upipe, uref);
