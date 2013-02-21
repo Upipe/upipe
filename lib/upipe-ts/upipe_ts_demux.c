@@ -537,7 +537,10 @@ static bool upipe_ts_demux_output_framer_probe(struct uprobe *uprobe,
     if (!uprobe_plumber(uprobe, subpipe, event, args, &flow_def, &def))
         return false;
 
-    upipe_throw_need_output(upipe, flow_def);
+    if (upipe_ts_demux_output->output == NULL)
+        upipe_throw_need_output(upipe, flow_def);
+    if (upipe_ts_demux_output->output != NULL)
+        upipe_set_output(subpipe, upipe_ts_demux_output->output);
     return true;
 }
 
