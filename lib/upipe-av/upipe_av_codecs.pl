@@ -19,10 +19,17 @@ const struct {
 } upipe_av_codecs[] = {
 EOF
 
+my $suffix = ".pic.";
+
 while (<FILE>) {
 	if (/^\s*CODEC_ID_([A-Za-z0-9_]*).*$/) {
+		if ($1 eq "FIRST_AUDIO") {
+			$suffix = ".sound.";
+		} elsif ($1 eq "FIRST_SUBTITLE") {
+			$suffix = ".pic.sub.";
+		}
 		next if ($1 eq "NONE" || $1 eq "FIRST_AUDIO" || $1 eq "FIRST_SUBTITLE" || $1 eq "FIRST_UNKNOWN");
-		print "    { CODEC_ID_$1, \"".lc($1)."\" },\n";
+		print "    { CODEC_ID_$1, \"".lc($1).$suffix."\" },\n";
 	}
 }
 

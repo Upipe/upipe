@@ -583,8 +583,7 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
     if (unlikely(def == NULL))
         return NULL;
 
-    struct uref *flow_def = uref_block_flow_alloc_def_va(uref_mgr, "%s",
-                                                         def);
+    struct uref *flow_def = uref_block_flow_alloc_def_va(uref_mgr, "%s", def);
     if (unlikely(flow_def == NULL))
         return NULL;
 

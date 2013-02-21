@@ -695,6 +695,15 @@ static void upipe_avcdv_input_packet(struct upipe *upipe, struct uref *uref,
 static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    if (upipe_avcdv->uref_mgr == NULL) {
+        upipe_throw_need_uref_mgr(upipe);
+        if (unlikely(upipe_avcdv->uref_mgr == NULL)) {
+            uref_free(uref);
+            return;
+        }
+    }
+
     const char *def = NULL;
     if (unlikely(uref_flow_get_def(uref, &def))) {
         if (unlikely(ubase_ncmp(def, EXPECTED_FLOW))) {

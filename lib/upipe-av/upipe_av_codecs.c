@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_av.c: upipe-av flow def/libavcodec codec_id translation
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *          Benjamin Cohen     <bencoh@notk.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -24,7 +22,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short upipe-av flow def/libavcodec codec_id translation
+ */
 
 #include "upipe_av_internal.h"
 #include <libavcodec/avcodec.h>
@@ -41,7 +43,7 @@ const char *upipe_av_to_flow_def(enum CodecID id)
 enum CodecID upipe_av_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
-        if (!strcmp(upipe_av_codecs[i].flow_def, flow_def))
+        if (!ubase_ncmp(flow_def, upipe_av_codecs[i].flow_def))
             return upipe_av_codecs[i].id;
     return 0;
 }
