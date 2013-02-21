@@ -65,7 +65,7 @@
 #endif
 
 /** default size of buffers when unspecified */
-#define UBUF_DEFAULT_SIZE       4096
+#define UBUF_DEFAULT_SIZE       32768
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_fsrc {
@@ -452,9 +452,15 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (upipe_fsrc->upump_mgr != NULL && upipe_fsrc->fd != -1 &&
         upipe_fsrc->upump == NULL) {
+#if 1
         struct upump *upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
                                                   upipe_fsrc_worker, upipe,
                                                   true, upipe_fsrc->fd);
+#else
+        struct upump *upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
+                                                  upipe_fsrc_worker, upipe,
+                                                  true);
+#endif
         if (unlikely(upump == NULL)) {
             upipe_throw_upump_error(upipe);
             return false;
