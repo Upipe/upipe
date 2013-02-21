@@ -656,7 +656,7 @@ static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
         upipe_mp2vf->sequence_header = sequence_header;
         upipe_mp2vf->sequence_ext = sequence_ext;
         upipe_mp2vf->sequence_display = sequence_display;
-        return false;
+        return true;
     }
 
     if (upipe_mp2vf->sequence_header != NULL)
@@ -968,11 +968,11 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
                 case MP2VSEQ_START_CODE:
                     upipe_mp2vf_sync_acquired(upipe);
                     upipe_mp2vf->next_frame_sequence = true;
-                    upipe_mp2vf->next_frame_size += 4;
                     break;
                 default:
                     break;
             }
+            upipe_mp2vf->next_frame_size += 4;
             continue;
         }
 
@@ -999,6 +999,7 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
             upipe_mp2vf->next_frame_size += 4;
 
         if (unlikely(!upipe_mp2vf_output_frame(upipe, upump))) {
+            upipe_warn(upipe, "erroneous frame headers");
             upipe_mp2vf_consume_octet_stream(upipe,
                                              upipe_mp2vf->next_frame_size);
             upipe_mp2vf->next_frame_size = 0;
