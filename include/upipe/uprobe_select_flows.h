@@ -66,8 +66,9 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
 /** @This frees a uprobe_selflow structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_selflow_free(struct uprobe *uprobe);
+struct uprobe *uprobe_selflow_free(struct uprobe *uprobe);
 
 /** @This returns the flows selected by this probe.
  *

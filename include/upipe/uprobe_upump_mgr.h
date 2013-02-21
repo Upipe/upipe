@@ -48,8 +48,9 @@ struct uprobe *uprobe_upump_mgr_alloc(struct uprobe *next,
 /** @This frees a uprobe_upump_mgr structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_upump_mgr_free(struct uprobe *uprobe);
+struct uprobe *uprobe_upump_mgr_free(struct uprobe *uprobe);
 
 /** @This changes the upump_mgr set by this probe.
  *

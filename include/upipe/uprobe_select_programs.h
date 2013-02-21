@@ -57,8 +57,9 @@ struct uprobe *uprobe_selprog_alloc(struct uprobe *next, const char *programs);
 /** @This frees a uprobe_selprog structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_selprog_free(struct uprobe *uprobe);
+struct uprobe *uprobe_selprog_free(struct uprobe *uprobe);
 
 /** @This returns the programs selected by this probe.
  *

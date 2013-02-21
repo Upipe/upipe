@@ -234,11 +234,14 @@ struct uprobe *uprobe_log_alloc(struct uprobe *next,
 /** @This frees a uprobe log structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_log_free(struct uprobe *uprobe)
+struct uprobe *uprobe_log_free(struct uprobe *uprobe)
 {
+    struct uprobe *next = uprobe->next;
     struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
     free(log);
+    return next;
 }
 
 /** @This masks an event from being logged.

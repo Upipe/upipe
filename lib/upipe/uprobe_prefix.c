@@ -38,7 +38,7 @@
 #include <assert.h>
 
 /** @hidden */
-void uprobe_pfx_free(struct uprobe *uprobe);
+struct uprobe *uprobe_pfx_free(struct uprobe *uprobe);
 
 UPROBE_HELPER_ADHOC(uprobe_pfx, adhoc_pipe)
 
@@ -194,10 +194,13 @@ struct uprobe *uprobe_pfx_adhoc_alloc_va(struct uprobe *next,
 /** @This frees a uprobe pfx structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_pfx_free(struct uprobe *uprobe)
+struct uprobe *uprobe_pfx_free(struct uprobe *uprobe)
 {
+    struct uprobe *next = uprobe->next;
     struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
     uprobe_pfx_clean(uprobe_pfx);
     free(uprobe_pfx);
+    return next;
 }

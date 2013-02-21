@@ -487,16 +487,19 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
 
 /** @This frees a uprobe_selflow structure.
  *
+ * @return next probe
  * @param uprobe structure to free
  */
-void uprobe_selflow_free(struct uprobe *uprobe)
+struct uprobe *uprobe_selflow_free(struct uprobe *uprobe)
 {
+    struct uprobe *next = uprobe->next;
     struct uprobe_selflow *uprobe_selflow =
         uprobe_selflow_from_uprobe(uprobe);
     assert(ulist_empty(&uprobe_selflow->outputs));
     free(uprobe_selflow->flows);
     free(uprobe_selflow->all_flows);
     free(uprobe_selflow);
+    return next;
 }
 
 /** @This returns the flows selected by this probe.

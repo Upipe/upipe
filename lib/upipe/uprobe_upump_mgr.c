@@ -77,18 +77,6 @@ static bool uprobe_upump_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
     return false;
 }
 
-/** @This frees a uprobe_upump_mgr structure.
- *
- * @param uprobe structure to free
- */
-void uprobe_upump_mgr_free(struct uprobe *uprobe)
-{
-    struct uprobe_upump_mgr *uprobe_upump_mgr =
-        uprobe_upump_mgr_from_uprobe(uprobe);
-    upump_mgr_release(uprobe_upump_mgr->upump_mgr);
-    free(uprobe_upump_mgr);
-}
-
 /** @This allocates a new uprobe_upump_mgr structure.
  *
  * @param next next probe to test if this one doesn't catch the event
@@ -108,6 +96,21 @@ struct uprobe *uprobe_upump_mgr_alloc(struct uprobe *next,
         upump_mgr_use(upump_mgr);
     uprobe_init(uprobe, uprobe_upump_mgr_throw, next);
     return uprobe;
+}
+
+/** @This frees a uprobe_upump_mgr structure.
+ *
+ * @param uprobe structure to free
+ * @return next probe
+ */
+struct uprobe *uprobe_upump_mgr_free(struct uprobe *uprobe)
+{
+    struct uprobe *next = uprobe->next;
+    struct uprobe_upump_mgr *uprobe_upump_mgr =
+        uprobe_upump_mgr_from_uprobe(uprobe);
+    upump_mgr_release(uprobe_upump_mgr->upump_mgr);
+    free(uprobe_upump_mgr);
+    return next;
 }
 
 /** @This changes the upump_mgr set by this probe.

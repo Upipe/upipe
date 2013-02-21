@@ -75,18 +75,6 @@ static bool uprobe_uref_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
     return false;
 }
 
-/** @This frees a uprobe_uref_mgr structure.
- *
- * @param uprobe structure to free
- */
-void uprobe_uref_mgr_free(struct uprobe *uprobe)
-{
-    struct uprobe_uref_mgr *uprobe_uref_mgr =
-        uprobe_uref_mgr_from_uprobe(uprobe);
-    uref_mgr_release(uprobe_uref_mgr->uref_mgr);
-    free(uprobe_uref_mgr);
-}
-
 /** @This allocates a new uprobe_uref_mgr structure.
  *
  * @param next next probe to test if this one doesn't catch the event
@@ -106,6 +94,21 @@ struct uprobe *uprobe_uref_mgr_alloc(struct uprobe *next,
         uref_mgr_use(uref_mgr);
     uprobe_init(uprobe, uprobe_uref_mgr_throw, next);
     return uprobe;
+}
+
+/** @This frees a uprobe_uref_mgr structure.
+ *
+ * @param uprobe structure to free
+ * @return next probe
+ */
+struct uprobe *uprobe_uref_mgr_free(struct uprobe *uprobe)
+{
+    struct uprobe *next = uprobe->next;
+    struct uprobe_uref_mgr *uprobe_uref_mgr =
+        uprobe_uref_mgr_from_uprobe(uprobe);
+    uref_mgr_release(uprobe_uref_mgr->uref_mgr);
+    free(uprobe_uref_mgr);
+    return next;
 }
 
 /** @This changes the uref_mgr set by this probe.

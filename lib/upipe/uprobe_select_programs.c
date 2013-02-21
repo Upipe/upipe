@@ -248,6 +248,7 @@ static void uprobe_selprog_set_internal(struct uprobe *uprobe,
     }
 
     struct uchain *uchain;
+uprobe_selprog_set_internal_retry:
     ulist_foreach (&uprobe_selprog->outputs, uchain) {
         struct uprobe_selprog_output *output =
             uprobe_selprog_output_from_uchain(uchain);
@@ -265,8 +266,10 @@ static void uprobe_selprog_set_internal(struct uprobe *uprobe,
 
         } else {
             if (was_selected && !output->selected) {
-                upipe_release(output->void_pipe);
+                struct upipe *void_pipe = output->void_pipe;
                 output->void_pipe = NULL;
+                upipe_release(void_pipe);
+                goto uprobe_selprog_set_internal_retry;
             } else if (!was_selected && output->selected) {
                 output->void_pipe = upipe_alloc_output(output->split_pipe,
                     uprobe_pfx_adhoc_alloc_va(uprobe, UPROBE_LOG_DEBUG,
@@ -477,6 +480,7 @@ static bool uprobe_selprog_del_flow(struct uprobe *uprobe, struct upipe *upipe,
     ulist_delete_foreach(&uprobe_selprog->outputs, uchain) {
         if (uprobe_selprog_output_from_uchain(uchain) == output) {
             ulist_delete(&uprobe_selprog->outputs, uchain);
+            break;
         }
     }
     uprobe_selprog_update_list(uprobe);
@@ -531,27 +535,30 @@ struct uprobe *uprobe_selprog_alloc(struct uprobe *next, const char *programs)
     if (unlikely(uprobe_selprog == NULL))
         return NULL;
     struct uprobe *uprobe = uprobe_selprog_to_uprobe(uprobe_selprog);
+    uprobe_init(uprobe, uprobe_selprog_throw, next);
     uprobe_selprog->has_selection = false;
     uprobe_selprog->all_programs = strdup("");
     uprobe_selprog->programs = NULL;
     ulist_init(&uprobe_selprog->outputs);
     uprobe_selprog_set(uprobe, programs);
-    uprobe_init(uprobe, uprobe_selprog_throw, next);
     return uprobe;
 }
 
 /** @This frees a uprobe_selprog structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_selprog_free(struct uprobe *uprobe)
+struct uprobe *uprobe_selprog_free(struct uprobe *uprobe)
 {
+    struct uprobe *next = uprobe->next;
     struct uprobe_selprog *uprobe_selprog =
         uprobe_selprog_from_uprobe(uprobe);
     assert(ulist_empty(&uprobe_selprog->outputs));
     free(uprobe_selprog->programs);
     free(uprobe_selprog->all_programs);
     free(uprobe_selprog);
+    return next;
 }
 
 /** @This returns the programs selected by this probe.

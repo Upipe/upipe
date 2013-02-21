@@ -48,8 +48,9 @@ struct uprobe *uprobe_uref_mgr_alloc(struct uprobe *next,
 /** @This frees a uprobe_uref_mgr structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_uref_mgr_free(struct uprobe *uprobe);
+struct uprobe *uprobe_uref_mgr_free(struct uprobe *uprobe);
 
 /** @This changes the uref_mgr set by this probe.
  *

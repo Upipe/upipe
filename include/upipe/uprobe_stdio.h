@@ -45,7 +45,8 @@ struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
 /** @This frees a uprobe stdio structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_stdio_free(struct uprobe *uprobe);
+struct uprobe *uprobe_stdio_free(struct uprobe *uprobe);
 
 #endif

@@ -45,8 +45,9 @@ struct uprobe *uprobe_log_alloc(struct uprobe *next,
 /** @This frees a uprobe log structure.
  *
  * @param uprobe uprobe structure to free
+ * @return next probe
  */
-void uprobe_log_free(struct uprobe *uprobe);
+struct uprobe *uprobe_log_free(struct uprobe *uprobe);
 
 /** @This masks an event from being logged.
  *

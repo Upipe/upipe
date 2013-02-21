@@ -126,7 +126,8 @@ struct uprobe *uprobe_pfx_adhoc_alloc_va(struct uprobe *next,
 /** @This frees a uprobe pfx structure.
  *
  * @param uprobe uprobe structure to free
+ * @return next probe
  */
-void uprobe_pfx_free(struct uprobe *uprobe);
+struct uprobe *uprobe_pfx_free(struct uprobe *uprobe);
 
 #endif

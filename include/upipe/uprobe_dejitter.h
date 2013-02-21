@@ -45,7 +45,8 @@ struct uprobe *uprobe_dejitter_alloc(struct uprobe *next,
 /** @This frees a uprobe_dejitter structure.
  *
  * @param uprobe structure to free
+ * @return next probe
  */
-void uprobe_dejitter_free(struct uprobe *uprobe);
+struct uprobe *uprobe_dejitter_free(struct uprobe *uprobe);
 
 #endif
