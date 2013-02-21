@@ -129,6 +129,8 @@ graph {flow: east}
 #define UBUF_ALIGN_OFFSET   0
 #define READ_SIZE 4096
 
+#undef BENCH_TS
+
 /*
  * upipe-yuv-rgb
  */
@@ -328,7 +330,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         case UPROBE_READ_END:
-#if 0
+#ifdef BENCH_TS
             exit(EXIT_SUCCESS);
 #endif
             upipe_avfsrc_set_url(upipe, url);
@@ -351,7 +353,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     uprobe_pfx_adhoc_alloc(uprobe, loglevel, "video"));
             assert(output != NULL);
 
-#if 1
+#ifndef BENCH_TS
             struct upipe *avcdv = upipe_alloc(avcdv_mgr,
                     uprobe_pfx_adhoc_alloc_va(uprobe, loglevel, "avcdv"));
             assert(avcdv != NULL);
@@ -572,7 +574,7 @@ int main(int argc, char** argv)
     upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc);
     upipe_release(upipe_qsrc);
 
-#if 1
+#ifndef BENCH_TS
     // Fire display engine
     printf("Starting glx thread\n");
     struct thread thread;
