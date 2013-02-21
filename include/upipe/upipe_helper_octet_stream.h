@@ -135,6 +135,12 @@ static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
                                              size_t consumed)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(STRUCTURE->NEXT_UREF != NULL);                                   \
+    if (consumed < STRUCTURE->NEXT_UREF_SIZE) {                             \
+        uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);              \
+        STRUCTURE->NEXT_UREF_SIZE -= consumed;                              \
+        return;                                                             \
+    }                                                                       \
     while (consumed) {                                                      \
         assert(STRUCTURE->NEXT_UREF != NULL);                               \
         if (consumed < STRUCTURE->NEXT_UREF_SIZE) {                         \
@@ -145,13 +151,17 @@ static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
         consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
         uref_free(STRUCTURE->NEXT_UREF);                                    \
         STRUCTURE->NEXT_UREF = NULL;                                        \
-        struct ulist urefs = STRUCTURE->UREFS;                              \
-        ulist_init(&STRUCTURE->UREFS);                                      \
-        struct uchain *uchain;                                              \
-        while ((uchain = ulist_pop(&urefs)) != NULL)                        \
+        struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
+        if (uchain != NULL)                                                 \
             STRUCTURE##_append_octet_stream(upipe,                          \
                                             uref_from_uchain(uchain));      \
     }                                                                       \
+    struct ulist urefs = STRUCTURE->UREFS;                                  \
+    ulist_init(&STRUCTURE->UREFS);                                          \
+    struct uchain *uchain;                                                  \
+    while ((uchain = ulist_pop(&urefs)) != NULL)                            \
+        STRUCTURE##_append_octet_stream(upipe,                              \
+                                        uref_from_uchain(uchain));          \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
