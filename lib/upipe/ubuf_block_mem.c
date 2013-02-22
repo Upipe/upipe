@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -58,18 +58,13 @@ struct ubuf_block_mem_shared {
     struct umem umem;
 };
 
-/** @This is a super-set of the @ref ubuf (and @ref ubuf_block_common)
+/** @This is a super-set of the @ref ubuf (and @ref ubuf_block)
  * structure with private fields pointing to shared data. */
 struct ubuf_block_mem {
     /** pointer to shared structure */
     struct ubuf_block_mem_shared *shared;
-#ifndef NDEBUG
-    /** atomic counter of the number of readers, to check for unsufficient
-     * use of unmap() */
-    uatomic_uint32_t readers;
-#endif
-    /** common block structure */
-    struct ubuf_block_common ubuf_block_common;
+    /** block block_mem structure */
+    struct ubuf_block ubuf_block;
 };
 
 /** @This is a super-set of the ubuf_mgr structure with additional local
@@ -100,16 +95,18 @@ struct ubuf_block_mem_mgr {
 /** @hidden */
 static void ubuf_block_mem_free_inner(struct ubuf *ubuf);
 /** @hidden */
-static void ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared);
+static void
+    ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared);
 
 /** @internal @This returns the high-level ubuf structure.
  *
- * @param block pointer to the ubuf_block_mem structure
+ * @param block_mem pointer to the ubuf_block_mem structure
  * @return pointer to the ubuf structure
  */
-static inline struct ubuf *ubuf_block_mem_to_ubuf(struct ubuf_block_mem *block)
+static inline struct ubuf *
+    ubuf_block_mem_to_ubuf(struct ubuf_block_mem *block_mem)
 {
-    return ubuf_block_common_to_ubuf(&block->ubuf_block_common);
+    return ubuf_block_to_ubuf(&block_mem->ubuf_block);
 }
 
 /** @internal @This returns the private ubuf_block_mem structure.
@@ -119,18 +116,19 @@ static inline struct ubuf *ubuf_block_mem_to_ubuf(struct ubuf_block_mem *block)
  */
 static inline struct ubuf_block_mem *ubuf_block_mem_from_ubuf(struct ubuf *ubuf)
 {
-    struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);
-    return container_of(common, struct ubuf_block_mem, ubuf_block_common);
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    return container_of(block, struct ubuf_block_mem, ubuf_block);
 }
 
 /** @internal @This returns the high-level ubuf_mgr structure.
  *
- * @param block_mgr pointer to the ubuf_block_mem_mgr structure
+ * @param block_mem_mgr pointer to the ubuf_block_mem_mgr structure
  * @return pointer to the ubuf_mgr structure
  */
-static inline struct ubuf_mgr *ubuf_block_mem_mgr_to_ubuf_mgr(struct ubuf_block_mem_mgr *block_mgr)
+static inline struct ubuf_mgr *
+    ubuf_block_mem_mgr_to_ubuf_mgr(struct ubuf_block_mem_mgr *block_mem_mgr)
 {
-    return &block_mgr->mgr;
+    return &block_mem_mgr->mgr;
 }
 
 /** @internal @This returns the private ubuf_block_mem_mgr structure.
@@ -138,7 +136,8 @@ static inline struct ubuf_mgr *ubuf_block_mem_mgr_to_ubuf_mgr(struct ubuf_block_
  * @param mgr description structure of the ubuf manager
  * @return pointer to the ubuf_block_mem_mgr structure
  */
-static inline struct ubuf_block_mem_mgr *ubuf_block_mem_mgr_from_ubuf_mgr(struct ubuf_mgr *mgr)
+static inline struct ubuf_block_mem_mgr *
+    ubuf_block_mem_mgr_from_ubuf_mgr(struct ubuf_mgr *mgr)
 {
     return container_of(mgr, struct ubuf_block_mem_mgr, mgr);
 }
@@ -149,8 +148,8 @@ static inline struct ubuf_block_mem_mgr *ubuf_block_mem_mgr_from_ubuf_mgr(struct
  */
 static inline void ubuf_block_mem_use(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    urefcount_use(&block->shared->refcount);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    urefcount_use(&block_mem->shared->refcount);
 }
 
 /** @This checks whether there is only one reference to the shared buffer.
@@ -159,8 +158,8 @@ static inline void ubuf_block_mem_use(struct ubuf *ubuf)
  */
 static inline bool ubuf_block_mem_single(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    return urefcount_single(&block->shared->refcount);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    return urefcount_single(&block_mem->shared->refcount);
 }
 
 /** @This returns the shared buffer.
@@ -169,8 +168,8 @@ static inline bool ubuf_block_mem_single(struct ubuf *ubuf)
  */
 static inline uint8_t *ubuf_block_mem_buffer(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    return umem_buffer(&block->shared->umem);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    return umem_buffer(&block_mem->shared->umem);
 }
 
 /** @This returns the size of the shared buffer.
@@ -179,8 +178,8 @@ static inline uint8_t *ubuf_block_mem_buffer(struct ubuf *ubuf)
  */
 static inline size_t ubuf_block_mem_size(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    return umem_size(&block->shared->umem);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    return umem_size(&block_mem->shared->umem);
 }
 
 /** @This reallocated the shared buffer.
@@ -190,8 +189,11 @@ static inline size_t ubuf_block_mem_size(struct ubuf *ubuf)
  */
 static inline bool ubuf_block_mem_realloc(struct ubuf *ubuf, size_t size)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    return umem_realloc(&block->shared->umem, size);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    bool ret = umem_realloc(&block_mem->shared->umem, size);
+    if (likely(ret))
+        block_mem->ubuf_block.buffer = ubuf_block_mem_buffer(ubuf);
+    return ret;
 }
 
 /** @internal @This allocates the data structure or fetches it from the pool.
@@ -201,24 +203,21 @@ static inline bool ubuf_block_mem_realloc(struct ubuf *ubuf, size_t size)
  */
 static struct ubuf *ubuf_block_mem_alloc_inner(struct ubuf_mgr *mgr)
 {
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf = ulifo_pop(&block_mgr->ubuf_pool, struct ubuf *);
-    struct ubuf_block_mem *block;
+    struct ubuf *ubuf = ulifo_pop(&block_mem_mgr->ubuf_pool, struct ubuf *);
+    struct ubuf_block_mem *block_mem;
     if (ubuf == NULL) {
-        block = malloc(sizeof(struct ubuf_block_mem));
-        if (unlikely(block == NULL))
+        block_mem = malloc(sizeof(struct ubuf_block_mem));
+        if (unlikely(block_mem == NULL))
             return NULL;
-        ubuf = ubuf_block_mem_to_ubuf(block);
+        ubuf = ubuf_block_mem_to_ubuf(block_mem);
         ubuf->mgr = mgr;
-#ifndef NDEBUG
-        uatomic_init(&block->readers, 0);
-#endif
     } else
-        block = ubuf_block_mem_from_ubuf(ubuf);
+        block_mem = ubuf_block_mem_from_ubuf(ubuf);
 
-    block->shared = NULL;
-    ubuf_block_common_init(ubuf);
+    block_mem->shared = NULL;
+    ubuf_block_init(ubuf, false);
 
     return ubuf;
 }
@@ -238,43 +237,45 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
     int size = va_arg(args, int);
     assert(size >= 0);
 
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
     struct ubuf *ubuf = ubuf_block_mem_alloc_inner(mgr);
     if (unlikely(ubuf == NULL))
         return NULL;
 
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-    block->shared = ulifo_pop(&block_mgr->shared_pool,
-                              struct ubuf_block_mem_shared *);
-    if (block->shared == NULL) {
-        block->shared = malloc(sizeof(struct ubuf_block_mem_shared));
-        if (unlikely(block->shared == NULL)) {
-            if (unlikely(!ulifo_push(&block_mgr->ubuf_pool, ubuf)))
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    block_mem->shared = ulifo_pop(&block_mem_mgr->shared_pool,
+                                  struct ubuf_block_mem_shared *);
+    if (block_mem->shared == NULL) {
+        block_mem->shared = malloc(sizeof(struct ubuf_block_mem_shared));
+        if (unlikely(block_mem->shared == NULL)) {
+            if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
                 ubuf_block_mem_free_inner(ubuf);
             return NULL;
         }
 
-        urefcount_init(&block->shared->refcount);
+        urefcount_init(&block_mem->shared->refcount);
     } else
-        urefcount_reset(&block->shared->refcount);
+        urefcount_reset(&block_mem->shared->refcount);
 
-    size_t buffer_size = size + block_mgr->prepend + block_mgr->append +
-                         block_mgr->align;
-    if (unlikely(!umem_alloc(block_mgr->umem_mgr, &block->shared->umem,
+    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->append +
+                         block_mem_mgr->align;
+    if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
-        if (unlikely(!ulifo_push(&block_mgr->shared_pool, block->shared)))
-            ubuf_block_mem_shared_free_inner(block->shared);
-        if (unlikely(!ulifo_push(&block_mgr->ubuf_pool, ubuf)))
+        if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
+                                 block_mem->shared)))
+            ubuf_block_mem_shared_free_inner(block_mem->shared);
+        if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
             ubuf_block_mem_free_inner(ubuf);
         return NULL;
     }
 
-    size_t offset = block_mgr->prepend + block_mgr->align;
-    if (block_mgr->align)
+    size_t offset = block_mem_mgr->prepend + block_mem_mgr->align;
+    if (block_mem_mgr->align)
         offset -= ((uintptr_t)ubuf_block_mem_buffer(ubuf) + offset +
-                   block_mgr->align_offset) % block_mgr->align;
-    ubuf_block_common_set(ubuf, offset, size);
+                   block_mem_mgr->align_offset) % block_mem_mgr->align;
+    ubuf_block_set(ubuf, offset, size);
+    ubuf_block_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
 
     ubuf_mgr_use(mgr);
     return ubuf;
@@ -294,63 +295,34 @@ static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     if (unlikely(new_ubuf == NULL))
         return false;
 
-    if (unlikely(!ubuf_block_common_dup(ubuf, new_ubuf))) {
+    if (unlikely(!ubuf_block_dup(ubuf, new_ubuf))) {
         ubuf_free(new_ubuf);
         return false;
     }
     *new_ubuf_p = new_ubuf;
 
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
     struct ubuf_block_mem *new_block = ubuf_block_mem_from_ubuf(new_ubuf);
-    new_block->shared = block->shared;
+    new_block->shared = block_mem->shared;
     ubuf_block_mem_use(new_ubuf);
     ubuf_mgr_use(new_ubuf->mgr);
     return true;
 }
 
-/** @internal @This extends a block ubuf.
+/** @internal @This extends a block_mem ubuf.
  *
  * @param ubuf pointer to ubuf
- * @param skip number of octets to skip at the beginning of the buffer
- * (if < 0, extend buffer upwards)
- * @param new_size final size of the buffer (if set to -1, keep same buffer
- * end)
+ * @param new_size required size of the buffer
  * @return false in case of error, or if the ubuf is shared, or if the operation
  * is not possible
  */
-static bool ubuf_block_mem_extend(struct ubuf *ubuf, int prepend, int append)
+static bool ubuf_block_mem_extend(struct ubuf *ubuf, int new_size)
 {
-    size_t ubuf_offset, ubuf_size;
-    ubuf_block_common_get(ubuf, &ubuf_offset, &ubuf_size);
-
-    if (prepend) {
-        /* Extend block upwards */
-        if (!ubuf_block_mem_single(ubuf))
-            return false;
-        if (prepend > ubuf_offset)
-            return false;
-        /* Postpone the actual offset change because we need to check append
-         * before */
-    }
-
-    if (append) {
-        /* Extend block downwards */
-        bool handled;
-        if (!ubuf_block_common_extend(ubuf, append, &handled))
-            return false;
-        if (!handled) {
-            if (!ubuf_block_mem_single(ubuf))
-                return false;
-            if (unlikely(!ubuf_block_mem_realloc(ubuf,
-                                            ubuf_offset + ubuf_size + append)))
-                return false;
-            ubuf_size += append;
-        }
-    }
-
-    ubuf_offset -= prepend;
-    ubuf_size += prepend;
-    ubuf_block_common_set(ubuf, ubuf_offset, ubuf_size);
+    if (!ubuf_block_mem_single(ubuf))
+        return false;
+    if (unlikely(!ubuf_block_mem_realloc(ubuf, new_size)))
+        return false;
+    ubuf_block_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
     return true;
 }
 
@@ -369,88 +341,12 @@ static bool ubuf_block_mem_control(struct ubuf *ubuf,
             struct ubuf **new_ubuf_p = va_arg(args, struct ubuf **);
             return ubuf_block_mem_dup(ubuf, new_ubuf_p);
         }
-        case UBUF_SIZE_BLOCK: {
-            size_t *size_p = va_arg(args, size_t *);
-            return ubuf_block_common_size(ubuf, size_p);
-        }
-        case UBUF_READ_BLOCK: {
-            int offset = va_arg(args, int);
-            int *size_p = va_arg(args, int *);
-            const uint8_t **buffer_p = va_arg(args, const uint8_t **);
-            bool handled;
-            bool ret = ubuf_block_common_read(ubuf, offset, size_p, buffer_p,
-                                              &handled);
-            if (handled)
-                return ret;
+        case UBUF_SINGLE:
+            return ubuf_block_mem_single(ubuf);
 
-            size_t ubuf_offset, ubuf_size;
-            ubuf_block_common_get(ubuf, &ubuf_offset, &ubuf_size);
-
-            if (offset + *size_p > ubuf_size)
-                *size_p = ubuf_size - offset;
-            if (likely(buffer_p != NULL))
-                *buffer_p = ubuf_block_mem_buffer(ubuf) + ubuf_offset + offset;
-
-#ifndef NDEBUG
-            struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-            uatomic_fetch_add(&block->readers, 1);
-#endif
-            return true;
-        }
-        case UBUF_WRITE_BLOCK: {
-            int offset = va_arg(args, int);
-            int *size_p = va_arg(args, int *);
-            uint8_t **buffer_p = va_arg(args, uint8_t **);
-            bool handled;
-            bool ret = ubuf_block_common_write(ubuf, offset, size_p, buffer_p,
-                                               &handled);
-            if (handled)
-                return ret;
-
-            size_t ubuf_offset, ubuf_size;
-            ubuf_block_common_get(ubuf, &ubuf_offset, &ubuf_size);
-
-            if (!ubuf_block_mem_single(ubuf))
-                return false;
-            if (offset + *size_p > ubuf_size)
-                *size_p = ubuf_size - offset;
-            if (likely(buffer_p != NULL))
-                *buffer_p = ubuf_block_mem_buffer(ubuf) + ubuf_offset + offset;
-
-#ifndef NDEBUG
-            struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-            uatomic_fetch_add(&block->readers, 1);
-#endif
-            return true;
-        }
-        case UBUF_UNMAP_BLOCK: {
-            int offset = va_arg(args, int);
-            int size = va_arg(args, int);
-            bool handled;
-            bool ret = ubuf_block_common_unmap(ubuf, offset, size, &handled);
-            if (handled)
-                return ret;
-
-#ifndef NDEBUG
-            struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-            uatomic_fetch_sub(&block->readers, 1);
-#endif
-            return true;
-        }
-        case UBUF_INSERT_BLOCK: {
-            int offset = va_arg(args, int);
-            struct ubuf *insert = va_arg(args, struct ubuf *);
-            return ubuf_block_common_insert(ubuf, offset, insert);
-        }
-        case UBUF_DELETE_BLOCK: {
-            int offset = va_arg(args, int);
-            int size = va_arg(args, int);
-            return ubuf_block_common_delete(ubuf, offset, size);
-        }
         case UBUF_EXTEND_BLOCK: {
-            int prepend = va_arg(args, int);
-            int append = va_arg(args, int);
-            return ubuf_block_mem_extend(ubuf, prepend, append);
+            int new_size = va_arg(args, int);
+            return ubuf_block_mem_extend(ubuf, new_size);
         }
         default:
             return false;
@@ -463,18 +359,16 @@ static bool ubuf_block_mem_control(struct ubuf *ubuf,
  */
 static void ubuf_block_mem_free_inner(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
-#ifndef NDEBUG
-    uatomic_clean(&block->readers);
-#endif
-    free(block);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    free(block_mem);
 }
 
 /** @internal @This frees a shared buffer.
  *
  * @param shared pointer to shared structure to free
  */
-static void ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared)
+static void
+    ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared)
 {
     free(shared);
 }
@@ -485,43 +379,41 @@ static void ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *share
  */
 static void ubuf_block_mem_free(struct ubuf *ubuf)
 {
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(ubuf->mgr);
-    struct ubuf_block_mem *block = ubuf_block_mem_from_ubuf(ubuf);
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
 
-    ubuf_block_common_clean(ubuf);
+    ubuf_block_clean(ubuf);
 
-#ifndef NDEBUG
-    assert(uatomic_load(&block->readers) == 0);
-#endif
-
-    if (unlikely(urefcount_release(&block->shared->refcount))) {
-        umem_free(&block->shared->umem);
-        if (unlikely(!ulifo_push(&block_mgr->shared_pool, block->shared)))
-            ubuf_block_mem_shared_free_inner(block->shared);
+    if (unlikely(urefcount_release(&block_mem->shared->refcount))) {
+        umem_free(&block_mem->shared->umem);
+        if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
+                                 block_mem->shared)))
+            ubuf_block_mem_shared_free_inner(block_mem->shared);
     }
 
-    if (unlikely(!ulifo_push(&block_mgr->ubuf_pool, ubuf)))
+    if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
         ubuf_block_mem_free_inner(ubuf);
 
-    ubuf_mgr_release(ubuf_block_mem_mgr_to_ubuf_mgr(block_mgr));
+    ubuf_mgr_release(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
 }
 
-/** @This instructs an existing ubuf block mem manager to release all structures
+/** @This instructs an existing ubuf block_mem mem manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a ubuf manager
  */
 static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
 {
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
     struct ubuf *ubuf;
     struct ubuf_block_mem_shared *shared;
 
-    while ((ubuf = ulifo_pop(&block_mgr->ubuf_pool, struct ubuf *)) != NULL)
+    while ((ubuf = ulifo_pop(&block_mem_mgr->ubuf_pool,
+                             struct ubuf *)) != NULL)
         ubuf_block_mem_free_inner(ubuf);
-    while ((shared = ulifo_pop(&block_mgr->shared_pool,
+    while ((shared = ulifo_pop(&block_mem_mgr->shared_pool,
                                struct ubuf_block_mem_shared *)) != NULL)
         ubuf_block_mem_shared_free_inner(shared);
 }
@@ -532,9 +424,9 @@ static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
  */
 static void ubuf_block_mem_mgr_use(struct ubuf_mgr *mgr)
 {
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    urefcount_use(&block_mgr->refcount);
+    urefcount_use(&block_mem_mgr->refcount);
 }
 
 /** @This decrements the reference count of a ubuf manager or frees it.
@@ -543,16 +435,16 @@ static void ubuf_block_mem_mgr_use(struct ubuf_mgr *mgr)
  */
 static void ubuf_block_mem_mgr_release(struct ubuf_mgr *mgr)
 {
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    if (unlikely(urefcount_release(&block_mgr->refcount))) {
+    if (unlikely(urefcount_release(&block_mem_mgr->refcount))) {
         ubuf_block_mem_mgr_vacuum(mgr);
-        ulifo_clean(&block_mgr->ubuf_pool);
-        ulifo_clean(&block_mgr->shared_pool);
-        umem_mgr_release(block_mgr->umem_mgr);
+        ulifo_clean(&block_mem_mgr->ubuf_pool);
+        ulifo_clean(&block_mem_mgr->shared_pool);
+        umem_mgr_release(block_mem_mgr->umem_mgr);
 
-        urefcount_clean(&block_mgr->refcount);
-        free(block_mgr);
+        urefcount_clean(&block_mem_mgr->refcount);
+        free(block_mem_mgr);
     }
 }
 
@@ -579,33 +471,34 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
 {
     assert(umem_mgr != NULL);
 
-    struct ubuf_block_mem_mgr *block_mgr =
+    struct ubuf_block_mem_mgr *block_mem_mgr =
         malloc(sizeof(struct ubuf_block_mem_mgr) +
                ulifo_sizeof(ubuf_pool_depth) +
                ulifo_sizeof(shared_pool_depth));
-    if (unlikely(block_mgr == NULL))
+    if (unlikely(block_mem_mgr == NULL))
         return NULL;
 
-    ulifo_init(&block_mgr->ubuf_pool, ubuf_pool_depth,
-               (void *)block_mgr + sizeof(struct ubuf_block_mem_mgr));
-    ulifo_init(&block_mgr->shared_pool, shared_pool_depth,
-               (void *)block_mgr + sizeof(struct ubuf_block_mem_mgr) +
+    ulifo_init(&block_mem_mgr->ubuf_pool, ubuf_pool_depth,
+               (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr));
+    ulifo_init(&block_mem_mgr->shared_pool, shared_pool_depth,
+               (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr) +
                ulifo_sizeof(ubuf_pool_depth));
-    block_mgr->umem_mgr = umem_mgr;
+    block_mem_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 
-    block_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
-    block_mgr->append = append >= 0 ? append : UBUF_DEFAULT_APPEND;
-    block_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
-    block_mgr->align_offset = align_offset;
+    block_mem_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
+    block_mem_mgr->append = append >= 0 ? append : UBUF_DEFAULT_APPEND;
+    block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
+    block_mem_mgr->align_offset = align_offset;
 
-    urefcount_init(&block_mgr->refcount);
-    block_mgr->mgr.ubuf_alloc = ubuf_block_mem_alloc;
-    block_mgr->mgr.ubuf_control = ubuf_block_mem_control;
-    block_mgr->mgr.ubuf_free = ubuf_block_mem_free;
-    block_mgr->mgr.ubuf_mgr_vacuum = ubuf_block_mem_mgr_vacuum;
-    block_mgr->mgr.ubuf_mgr_use = ubuf_block_mem_mgr_use;
-    block_mgr->mgr.ubuf_mgr_release = ubuf_block_mem_mgr_release;
+    urefcount_init(&block_mem_mgr->refcount);
+    block_mem_mgr->mgr.type = UBUF_ALLOC_BLOCK;
+    block_mem_mgr->mgr.ubuf_alloc = ubuf_block_mem_alloc;
+    block_mem_mgr->mgr.ubuf_control = ubuf_block_mem_control;
+    block_mem_mgr->mgr.ubuf_free = ubuf_block_mem_free;
+    block_mem_mgr->mgr.ubuf_mgr_vacuum = ubuf_block_mem_mgr_vacuum;
+    block_mem_mgr->mgr.ubuf_mgr_use = ubuf_block_mem_mgr_use;
+    block_mem_mgr->mgr.ubuf_mgr_release = ubuf_block_mem_mgr_release;
 
-    return ubuf_block_mem_mgr_to_ubuf_mgr(block_mgr);
+    return ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr);
 }

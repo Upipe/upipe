@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -69,12 +69,12 @@ enum ubuf_command {
      */
     /** duplicate a given ubuf (struct ubuf **) */
     UBUF_DUP,
+    /** returns true if the memory area's refcount is 1 (void) */
+    UBUF_SINGLE,
 
     /*
      * Size commands (do not map data)
      */
-    /** size block ubuf (size_t *) */
-    UBUF_SIZE_BLOCK,
     /** size picture ubuf (size_t *, size_t *, uint8_t *) */
     UBUF_SIZE_PICTURE,
     /** size a plane of a picture ubuf (const char *, size_t *,
@@ -82,19 +82,13 @@ enum ubuf_command {
     UBUF_SIZE_PICTURE_PLANE,
 
     /*
-     * Read commands
+     * Map commands
      */
-    /** read block ubuf (int, int *, const uint8_t **) */
-    UBUF_READ_BLOCK,
+    /** map block ubuf (const uint8_t **) */
+    UBUF_MAP_BLOCK,
     /** read a plane of a picture ubuf (const char *, int, int, int, int,
      * const uint8_t **) */
     UBUF_READ_PICTURE_PLANE,
-
-    /*
-     * Write commands
-     */
-    /** write block ubuf (int, int *, uint8_t **) */
-    UBUF_WRITE_BLOCK,
     /** write a plane of a picture ubuf (const char *, int, int, int, int,
      * uint8_t **) */
     UBUF_WRITE_PICTURE_PLANE,
@@ -102,7 +96,7 @@ enum ubuf_command {
     /*
      * Unmap commands
      */
-    /** unmap block ubuf (int, int) */
+    /** unmap block ubuf (void) */
     UBUF_UNMAP_BLOCK,
     /** unmap a plane of a picture ubuf (const char *, int, int, int, int) */
     UBUF_UNMAP_PICTURE_PLANE,
@@ -110,11 +104,7 @@ enum ubuf_command {
     /*
      * Resize commands
      */
-    /** insert an ubuf into a block ubuf (int, struct ubuf *) */
-    UBUF_INSERT_BLOCK,
-    /** delete part of an ubuf (int, int) */
-    UBUF_DELETE_BLOCK,
-    /** extend block ubuf (int, int) */
+    /** extend block ubuf (int) */
     UBUF_EXTEND_BLOCK,
     /** resize picture ubuf (int, int, int, int) */
     UBUF_RESIZE_PICTURE,
@@ -133,6 +123,9 @@ enum ubuf_command {
 /** @This stores common management parameters for a ubuf pool.
  */
 struct ubuf_mgr {
+    /** type of allocator */
+    enum ubuf_alloc_type type;
+
     /** function to allocate a new ubuf, with optional arguments depending
      * on the ubuf manager */
     struct ubuf *(*ubuf_alloc)(struct ubuf_mgr *, enum ubuf_alloc_type,

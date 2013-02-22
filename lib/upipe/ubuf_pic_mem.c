@@ -594,6 +594,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     pic_mgr->align_hmoffset = align_hmoffset;
 
     urefcount_init(&pic_mgr->refcount);
+    mgr->type = UBUF_ALLOC_PICTURE;
     mgr->ubuf_alloc = ubuf_pic_mem_alloc;
     mgr->ubuf_control = ubuf_pic_mem_control;
     mgr->ubuf_free = ubuf_pic_mem_free;

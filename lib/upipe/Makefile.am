@@ -13,7 +13,6 @@ libupipe_la_SOURCES = \
 	umem_alloc.c \
 	umem_pool.c \
 	udict_inline.c \
-	ubuf_block_common.c \
 	ubuf_block_mem.c \
 	ubuf_pic_common.c \
 	ubuf_pic_mem.c \

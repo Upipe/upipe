@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     assert(ubuf_block_unmap(ubuf1, 42, wanted));
 
     /* test ubuf_block_mem_extend (prepend) */
-    assert(ubuf_block_resize(ubuf1, -UBUF_PREPEND, UBUF_SIZE + UBUF_PREPEND));
+    assert(ubuf_block_extend(ubuf1, UBUF_PREPEND, 0));
     wanted = -1;
     assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE + UBUF_PREPEND);
@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     assert(ubuf_block_unmap(ubuf1, 0, wanted));
 
     /* test ubuf_block_mem_extend (append) */
-    assert(ubuf_block_resize(ubuf1, 0, UBUF_SIZE + 3 * UBUF_PREPEND));
+    assert(ubuf_block_extend(ubuf1, 0, 2 * UBUF_PREPEND));
     wanted = -1;
     assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);
@@ -211,6 +211,7 @@ int main(int argc, char **argv)
     assert(ubuf_block_peek_unmap(ubuf1, 30, 4, buffer, r));
 
     r = ubuf_block_peek(ubuf1, 0, 4, buffer);
+    assert(r != NULL);
     assert(r != buffer);
     assert(r[0] == 0 && r[3] == 3);
     assert(ubuf_block_peek_unmap(ubuf1, 0, 4, buffer, r));

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -31,186 +31,91 @@
 /** @hidden */
 #define _UPIPE_UBUF_BLOCK_COMMON_H_
 
-#include <upipe/ubase.h>
 #include <upipe/ubuf.h>
+#include <upipe/ubuf_block.h>
 
 #include <stdint.h>
 #include <stdbool.h>
 
-/** @This is a proposed common section of block ubuf, allowing to segment
- * data. In an opaque area you would typically store a pointer to shared
- * buffer space. */
-struct ubuf_block_common {
-    /** current offset of the data in the buffer */
-    size_t offset;
-    /** currently exported size of the buffer */
-    size_t size;
-    /** pointer to the ubuf containing the next segment of data */
-    struct ubuf *next_ubuf;
-
-    /** common structure */
-    struct ubuf ubuf;
-};
-
-/** @This returns the high-level ubuf structure.
- *
- * @param common pointer to the ubuf_block_common structure
- * @return pointer to the ubuf structure
- */
-static inline struct ubuf *ubuf_block_common_to_ubuf(struct ubuf_block_common *common)
-{
-    return &common->ubuf;
-}
-
-/** @This returns the private ubuf_block_common structure.
+/** @This initializes common sections of a block ubuf.
  *
  * @param ubuf pointer to ubuf
- * @return pointer to the ubuf_block_common structure
+ * @param mandatory_unmap true if the buffer must be unmapped after use
+ * @return pointer to ubuf or NULL in case of failure
  */
-static inline struct ubuf_block_common *ubuf_block_common_from_ubuf(struct ubuf *ubuf)
+static inline void ubuf_block_init(struct ubuf *ubuf, bool mandatory_unmap)
 {
-    return container_of(ubuf, struct ubuf_block_common, ubuf);
-}
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    block->offset = 0;
+    block->size = 0;
+    block->next_ubuf = NULL;
+    block->total_size = 0;
 
-/** @This initializes the common fields of a block ubuf.
- *
- * @param ubuf pointer to ubuf
- */
-static inline void ubuf_block_common_init(struct ubuf *ubuf)
-{
-    struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);
-    common->offset = 0;
-    common->size = 0;
-    common->next_ubuf = NULL;
+    block->buffer = NULL;
+    block->mandatory_unmap = mandatory_unmap;
+
+    block->cached_ubuf = ubuf;
+    block->cached_offset = 0;
     uchain_init(&ubuf->uchain);
 }
 
-/** @This gets the offset and size members of the common structure for block
- * ubuf.
- *
- * @param ubuf pointer to ubuf
- * @param offset_p reference to offset (may be NULL)
- * @param size_p reference to size (may be NULL)
- */
-static inline void ubuf_block_common_get(struct ubuf *ubuf, size_t *offset_p,
-                                         size_t *size_p)
-{
-    struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);
-    if (offset_p != NULL)
-        *offset_p = common->offset;
-    if (size_p != NULL)
-        *size_p = common->size;
-}
-
-/** @This sets the offset and size members of the common structure for block
- * ubuf.
+/** @internal @This sets the members of the block structure for block ubuf.
  *
  * @param ubuf pointer to ubuf
  * @param offset new offset
  * @param size new size
  */
-static inline void ubuf_block_common_set(struct ubuf *ubuf, size_t offset,
-                                         size_t size)
+static inline void ubuf_block_set(struct ubuf *ubuf, size_t offset, size_t size)
 {
-    struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);
-    common->offset = offset;
-    common->size = size;
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    block->offset = offset;
+    block->total_size += size - block->size;
+    block->size = size;
 }
 
-/** @This frees the ubuf containg the next segments of the current ubuf.
+/** @internal @This sets the buffer member of the block structure for block
+ * ubuf.
  *
- * @param ubuf pointer to ubuf
+ * @param buffer optional pointer to the buffer
  */
-static inline void ubuf_block_common_clean(struct ubuf *ubuf)
+static inline void ubuf_block_set_buffer(struct ubuf *ubuf, uint8_t *buffer)
 {
-    struct ubuf_block_common *common = ubuf_block_common_from_ubuf(ubuf);
-    if (common->next_ubuf != NULL)
-        ubuf_free(common->next_ubuf);
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    block->buffer = buffer;
 }
 
-/** @This duplicates the content of the common structure for block ubuf.
+/** @This duplicates common sections of a block ubuf.
  *
  * @param ubuf pointer to ubuf
  * @param new_ubuf pointer to ubuf to overwrite
+ * @param buffer optional pointer to the buffer in new_ubuf
  * @return false in case of error
  */
-bool ubuf_block_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf);
+static inline bool ubuf_block_dup(struct ubuf *ubuf, struct ubuf *new_ubuf)
+{
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);
+    new_block->offset = block->offset;
+    new_block->size = block->size;
+    new_block->total_size = block->total_size;
+    new_block->buffer = block->buffer;
+    if (block->next_ubuf != NULL)
+        if (unlikely((new_block->next_ubuf = ubuf_dup(block->next_ubuf))
+                       == NULL))
+            return false;
+    return true;
+}
 
-/** @This returns the total size of the (segmented or not) ubuf.
+/** @internal @This frees the ubuf containg the next segments of the current
+ * ubuf.
  *
  * @param ubuf pointer to ubuf
- * @param size_p reference written with the size of the buffer space if not NULL
- * @return false in case of error
  */
-bool ubuf_block_common_size(struct ubuf *ubuf, size_t *size_p);
-
-/** This template allows to declare functions handling control commands on
- * segmented blocks. */
-#define UBUF_BLOCK_COMMON_TEMPLATE(name, ctype)                             \
-/** @This checks whether a name command applies to the current block or the \
- * next one.                                                                \
- *                                                                          \
- * @param ubuf pointer to ubuf                                              \
- * @param offset offset of the buffer space wanted in the whole block, in   \
- * octets                                                                   \
- * @param size_p pointer to the size of the buffer space wanted, in octets, \
- * changed during execution for the actual readable size                    \
- * @param buffer_p reference written with a pointer to buffer space if not  \
- * NULL                                                                     \
- * @param handled_p reference written with true if the request was handled  \
- * by this function                                                         \
- * @return false in case of error                                           \
- */                                                                         \
-bool ubuf_block_common_##name(struct ubuf *ubuf, int offset, int *size_p,   \
-                              ctype **buffer_p, bool *handled_p);
-UBUF_BLOCK_COMMON_TEMPLATE(read, const uint8_t)
-UBUF_BLOCK_COMMON_TEMPLATE(write, uint8_t)
-#undef UBUF_BLOCK_COMMON_TEMPLATE
-
-/** @This checks whether an unmap command applies to the current block or the
- * next one.
- *
- * @param ubuf pointer to ubuf
- * @param offset offset of the buffer space wanted in the whole block, in
- * octets
- * @param size size of the buffer space wanted, in octets
- * @param handled_p reference written with true if the request was handled
- * by this function
- * @return false in case of error
- */
-bool ubuf_block_common_unmap(struct ubuf *ubuf, int offset, int size,
-                             bool *handled_p);
-
-/** @This applies an insert command.
- *
- * @param ubuf pointer to ubuf
- * @param offset offset of the buffer space wanted in the whole block, in
- * octets
- * @param insert pointer to inserted ubuf
- * @return false in case of error
- */
-bool ubuf_block_common_insert(struct ubuf *ubuf, int offset,
-                              struct ubuf *insert);
-
-/** @This applies a delete command.
- *
- * @param ubuf pointer to ubuf
- * @param offset offset of the buffer space wanted in the whole block, in
- * octets
- * @param size size of the buffer space wanted, in octets
- * @return false in case of error
- */
-bool ubuf_block_common_delete(struct ubuf *ubuf, int offset, int size);
-
-/** @This walks down to the last segment and extends it. It doesn't deal
- * with prepend as it is supposed to be dealt with by the manager.
- *
- * @param ubuf pointer to ubuf
- * @param append number of octets to append to the last segment
- * @param handled_p reference written with true if the request was handled
- * by this function
- * @return false if an error occurred or the operation is not allowed
- */
-bool ubuf_block_common_extend(struct ubuf *ubuf, int append, bool *handled_p);
+static inline void ubuf_block_clean(struct ubuf *ubuf)
+{
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    if (block->next_ubuf != NULL)
+        ubuf_free(block->next_ubuf);
+}
 
 #endif

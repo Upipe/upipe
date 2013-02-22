@@ -117,7 +117,8 @@ static inline bool uref_block_append(struct uref *uref, struct ubuf *append)
 {
     if (uref->ubuf == NULL)
         return false;
-    return ubuf_block_append(uref->ubuf, append);
+    ubuf_block_append(uref->ubuf, append);
+    return true;
 }
 
 /** @see ubuf_block_delete */
