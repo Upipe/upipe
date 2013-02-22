@@ -680,6 +680,9 @@ static void upipe_avfsrc_probe(struct upump *upump)
         struct uref *flow_def;
         bool ret;
 
+        // discard all packets from this stream unless add_flow is throwed
+        stream->discard = AVDISCARD_ALL; 
+
         switch (codec->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
                 if (codec->codec_id >= CODEC_ID_FIRST_AUDIO &&
@@ -721,6 +724,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
             return;
         }
 
+        stream->discard = AVDISCARD_DEFAULT; 
         upipe_split_throw_add_flow(upipe, i, flow_def);
         uref_free(flow_def);
     }
@@ -1020,6 +1024,14 @@ static void upipe_avfsrc_release(struct upipe *upipe)
         if (likely(upipe_avfsrc->context != NULL)) {
             if (likely(upipe_avfsrc->url != NULL))
                 upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
+            
+            // Throw del_flow for non-discarded streams
+            for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++) {
+                if (upipe_avfsrc->context->streams[i]->discard != AVDISCARD_ALL) {
+                    upipe_split_throw_del_flow(upipe, i);
+                }
+            }
+
             avformat_close_input(&upipe_avfsrc->context);
         }
         upipe_throw_dead(upipe);
