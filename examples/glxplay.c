@@ -119,17 +119,18 @@ graph {flow: east}
 #define ALIVE() { printf("ALIVE %s %d\n", __func__, __LINE__); fflush(stdout);}
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define QUEUE_LENGTH 50
-#define UMEM_POOL 4096
-#define UDICT_POOL_DEPTH 1000
-#define UREF_POOL_DEPTH 1000
-#define UBUF_POOL_DEPTH 1000
+#define UMEM_POOL 512
+#define UDICT_POOL_DEPTH 500
+#define UREF_POOL_DEPTH 500
+#define UBUF_POOL_DEPTH 3000
+#define UBUF_SHARED_POOL_DEPTH 50
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
 #define READ_SIZE 4096
 
-#undef BENCH_TS
+#define BENCH_TS
 
 /*
  * upipe-yuv-rgb
@@ -330,10 +331,9 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         case UPROBE_READ_END:
-#ifdef BENCH_TS
-            exit(EXIT_SUCCESS);
-#endif
+#ifndef BENCH_TS
             upipe_avfsrc_set_url(upipe, url);
+#endif
             return true;
 
         case UPROBE_SPLIT_ADD_FLOW: {
@@ -519,7 +519,7 @@ int main(int argc, char** argv)
                                                    0);
     udict_mgr_release(udict_mgr);
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                        UBUF_POOL_DEPTH, umem_mgr,
+                                        UBUF_SHARED_POOL_DEPTH, umem_mgr,
                                         -1, -1, -1, 0);
     yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
                                       UBUF_PREPEND, UBUF_APPEND,
