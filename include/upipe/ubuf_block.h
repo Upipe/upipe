@@ -882,20 +882,17 @@ static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
 static inline bool ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
                                    uint8_t word)
 {
-    int offset = *offset_p;
     const uint8_t *buffer;
     int size = -1;
-    while (ubuf_block_read(ubuf, offset, &size, &buffer)) {
-        for (int i = 0; i < size; i++) {
-            if (buffer[i] == word) {
-                ubuf_block_unmap(ubuf, offset, size);
-                *offset_p += i;
-                return true;
-            }
+    while (ubuf_block_read(ubuf, *offset_p, &size, &buffer)) {
+        const void *match = memchr(buffer, word, size);
+        if (match != NULL) {
+            ubuf_block_unmap(ubuf, *offset_p, size);
+            *offset_p += (const uint8_t *)match - buffer;
+            return true;
         }
-        ubuf_block_unmap(ubuf, offset, size);
+        ubuf_block_unmap(ubuf, *offset_p, size);
         *offset_p += size;
-        offset += size;
         size = -1;
     }
     return false;
