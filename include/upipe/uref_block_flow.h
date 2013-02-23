@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -42,14 +42,19 @@
 /** @internal flow definition prefix for block allocator */
 #define UREF_BLOCK_FLOW_DEF "block."
 
-UREF_ATTR_TEMPLATE(block_flow, octetrate, "b.octetrate", unsigned, uint64_t, octets per second)
-UREF_ATTR_TEMPLATE(block_flow, max_octetrate, "b.max_octetrate", unsigned, uint64_t, maximum octets per second for profile/level)
-UREF_ATTR_TEMPLATE(block_flow, cpb_buffer, "b.cpb_buffer", unsigned, uint64_t, size of coded picture buffer in octets)
-UREF_ATTR_TEMPLATE(block_flow, prepend, "b.prepend", unsigned, uint64_t, extra octets added before buffer)
-UREF_ATTR_TEMPLATE(block_flow, append, "b.append", unsigned, uint64_t, extra octets added after buffer)
-UREF_ATTR_TEMPLATE(block_flow, align, "b.align", unsigned, uint64_t, alignment in octets)
-UREF_ATTR_TEMPLATE(block_flow, align_offset, "b.align_offset", int, int64_t, offset of the aligned octet)
-UREF_ATTR_TEMPLATE(block_flow, size, "b.size", unsigned, uint64_t, block size)
+UREF_ATTR_UNSIGNED(block_flow, octetrate, "b.octetrate", octets per second)
+UREF_ATTR_UNSIGNED(block_flow, max_octetrate, "b.max_octetrate",
+        maximum octets per second for profile/level)
+UREF_ATTR_UNSIGNED(block_flow, cpb_buffer, "b.cpb_buffer",
+        size of coded picture buffer in octets)
+UREF_ATTR_UNSIGNED(block_flow, prepend, "b.prepend",
+        extra octets added before buffer)
+UREF_ATTR_UNSIGNED(block_flow, append, "b.append",
+        extra octets added after buffer)
+UREF_ATTR_UNSIGNED(block_flow, align, "b.align", alignment in octets)
+UREF_ATTR_INT(block_flow, align_offset, "b.align_offset",
+        offset of the aligned octet)
+UREF_ATTR_UNSIGNED(block_flow, size, "b.size", block size)
 
 /** @This allocates a control packet to define a new block flow.
  *

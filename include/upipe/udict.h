@@ -64,8 +64,73 @@ enum udict_type {
     /** float attribute, stores a double-precision floating point */
     UDICT_TYPE_FLOAT = 10,
 
-    /** short-hand types are above this limit */
-    UDICT_TYPE_SHORTHAND = 0x80,
+    /* short-hand types */
+    UDICT_TYPE_SHORTHAND = 0x10,
+    /** f.disc */
+    UDICT_TYPE_FLOW_DISC,
+    /** f.random */
+    UDICT_TYPE_FLOW_RANDOM,
+    /** f.error */
+    UDICT_TYPE_FLOW_ERROR,
+    /** f.def */
+    UDICT_TYPE_FLOW_DEF,
+    /** f.rawdef */
+    UDICT_TYPE_FLOW_RAWDEF,
+    /** f.program */
+    UDICT_TYPE_FLOW_PROGRAM,
+    /** f.lang */
+    UDICT_TYPE_FLOW_LANG,
+
+    /** k.systime */
+    UDICT_TYPE_CLOCK_SYSTIME,
+    /** k.systime.rap */
+    UDICT_TYPE_CLOCK_SYSTIME_RAP,
+    /** k.pts */
+    UDICT_TYPE_CLOCK_PTS,
+    /** k.pts.orig */
+    UDICT_TYPE_CLOCK_PTS_ORIG,
+    /** k.pts.sys */
+    UDICT_TYPE_CLOCK_PTS_SYS,
+    /** k.dts */
+    UDICT_TYPE_CLOCK_DTS,
+    /** k.dts.orig */
+    UDICT_TYPE_CLOCK_DTS_ORIG,
+    /** k.dts.sys */
+    UDICT_TYPE_CLOCK_DTS_SYS,
+    /** k.vbvdelay */
+    UDICT_TYPE_CLOCK_VBVDELAY,
+    /** k.duration */
+    UDICT_TYPE_CLOCK_DURATION,
+
+    /** b.start */
+    UDICT_TYPE_BLOCK_START,
+    /** b.end */
+    UDICT_TYPE_BLOCK_END,
+
+    /** p.num */
+    UDICT_TYPE_PIC_NUM,
+    /** p.hsize */
+    UDICT_TYPE_PIC_HSIZE,
+    /** p.vsize */
+    UDICT_TYPE_PIC_VSIZE,
+    /** p.hsizevis */
+    UDICT_TYPE_PIC_HSIZE_VISIBLE,
+    /** p.vsizevis */
+    UDICT_TYPE_PIC_VSIZE_VISIBLE,
+    /** p.hposition */
+    UDICT_TYPE_PIC_HPOSITION,
+    /** p.vposition */
+    UDICT_TYPE_PIC_VPOSITION,
+    /** p.aspect */
+    UDICT_TYPE_PIC_ASPECT,
+    /** p.progressive */
+    UDICT_TYPE_PIC_PROGRESSIVE,
+    /** p.tf */
+    UDICT_TYPE_PIC_TF,
+    /** p.bf */
+    UDICT_TYPE_PIC_BF,
+    /** p.tff */
+    UDICT_TYPE_PIC_TFF
 };
 
 /** @This defines standard commands which udict modules may implement. */
@@ -82,6 +147,9 @@ enum udict_command {
     UDICT_SET,
     /** delete an attribute (const char *, enum udict_type) */
     UDICT_DELETE,
+    /** name a shorthand attribute (enum udict_type, const char **,
+     * enum udict_type *) */
+    UDICT_NAME,
 
     /** non-standard commands implemented by a module type can start from
      * there (first arg = signature) */
@@ -166,9 +234,9 @@ static inline struct udict *udict_dup(struct udict *udict)
  *
  * @param udict pointer to the udict
  * @param name_p reference to the name of the attribute to find, changed during
- * execution to the name of the next attribute, or NULL if it was the last
- * attribute; if it was NULL, it is changed to the name of the first attribute
- * @param type_p reference to the type of the attribute, if the name is valid
+ * execution to the name of the next attribute, or NULL if it is a shorthand
+ * @param type_p reference to the type of the attribute, changed to
+ * UDICT_TYPE_END at the end of the iteration; start with UDICT_TYPE_END as well
  * @return false in case of error
  */
 static inline bool udict_iterate(struct udict *udict, const char **name_p,
@@ -181,8 +249,8 @@ static inline bool udict_iterate(struct udict *udict, const char **name_p,
  * a pointer to the beginning of its value.
  *
  * @param udict pointer to the udict
- * @param name name of the attribute
- * @param type type of the attribute
+ * @param name name of the attribute (NULL if type is a shorthand)
+ * @param type type of the attribute (potentially a shorthand)
  * @param size_p size of the value, written on execution
  * @return pointer to the value of the found attribute, or NULL
  */
@@ -195,56 +263,40 @@ static inline const uint8_t *udict_get(struct udict *udict, const char *name,
     return p;
 }
 
-/** @This returns the value of an opaque attribute.
+/** @internal @This returns the value of an opaque attribute, potentially
+ * shorthand.
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
  * @param size_p size of the value, written on execution
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_opaque(struct udict *udict, const uint8_t **p,
-                                    size_t *size_p, const char *name)
+                                    size_t *size_p, enum udict_type type,
+                                    const char *name)
 {
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_OPAQUE, size_p);
+    const uint8_t *attr = udict_get(udict, name, type, size_p);
     if (unlikely(attr == NULL))
         return false;
     *p = attr;
     return true;
 }
 
-/** @This returns the value of an opaque attribute with printf-style name
- * generation.
- *
- * @param udict pointer to the udict
- * @param p pointer to the retrieved value (modified during execution)
- * @param size_p size of the value, written on execution
- * @param format printf-style format of the attribute, followed by a
- * variable list of arguments
- * @return true if the attribute was found, otherwise p is not modified
- */
-static inline bool udict_get_opaque_va(struct udict *udict, const uint8_t **p,
-                                       size_t *size_p, const char *format, ...)
-                   __attribute__ ((format(printf, 4, 5)));
-/** @hidden */
-static inline bool udict_get_opaque_va(struct udict *udict, const uint8_t **p,
-                                       size_t *size_p, const char *format, ...)
-{
-    UBASE_VARARG(udict_get_opaque(udict, p, size_p, string))
-}
-
 /** @This returns the value of a string attribute.
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_string(struct udict *udict, const char **p,
-                                    const char *name)
+                                    enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_STRING, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     *p = (const char *)attr;
@@ -256,13 +308,14 @@ static inline bool udict_get_string(struct udict *udict, const char **p,
  *
  * @param udict pointer to the udict
  * @param p actually unused, but kept for API consistency (should be NULL)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found
  */
 static inline bool udict_get_void(struct udict *udict, void *p,
-                                  const char *name)
+                                  enum udict_type type, const char *name)
 {
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_VOID, NULL);
+    const uint8_t *attr = udict_get(udict, name, type, NULL);
     return (attr != NULL);
 }
 
@@ -270,14 +323,15 @@ static inline bool udict_get_void(struct udict *udict, void *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_bool(struct udict *udict, bool *p,
-                                  const char *name)
+                                  enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_BOOL, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 1);
@@ -289,15 +343,16 @@ static inline bool udict_get_bool(struct udict *udict, bool *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_small_unsigned(struct udict *udict, uint8_t *p,
+                                            enum udict_type type,
                                             const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name,
-                                    UDICT_TYPE_SMALL_UNSIGNED, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 1);
@@ -309,14 +364,15 @@ static inline bool udict_get_small_unsigned(struct udict *udict, uint8_t *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_small_int(struct udict *udict, int8_t *p,
-                                       const char *name)
+                                       enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_SMALL_INT, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 1);
@@ -358,15 +414,15 @@ static inline int64_t udict_get_int64(const uint8_t *attr)
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_unsigned(struct udict *udict, uint64_t *p,
-                                      const char *name)
+                                      enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_UNSIGNED,
-                                        &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 8);
@@ -378,14 +434,15 @@ static inline bool udict_get_unsigned(struct udict *udict, uint64_t *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_int(struct udict *udict, int64_t *p,
-                                 const char *name)
+                                 enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_INT, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 8);
@@ -397,11 +454,12 @@ static inline bool udict_get_int(struct udict *udict, int64_t *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_float(struct udict *udict, double *p,
-                                   const char *name)
+                                   enum udict_type type, const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
@@ -409,7 +467,7 @@ static inline bool udict_get_float(struct udict *udict, double *p,
         uint64_t i;
     } u;
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_FLOAT, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 8);
@@ -422,14 +480,15 @@ static inline bool udict_get_float(struct udict *udict, double *p,
  *
  * @param udict pointer to the udict
  * @param p pointer to the retrieved value (modified during execution)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if the attribute was found, otherwise p is not modified
  */
 static inline bool udict_get_rational(struct udict *udict, struct urational *p,
-                                      const char *name)
+                                      enum udict_type type, const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, UDICT_TYPE_RATIONAL, &size);
+    const uint8_t *attr = udict_get(udict, name, type, &size);
     if (unlikely(attr == NULL))
         return false;
     assert(size == 16);
@@ -460,56 +519,34 @@ static inline uint8_t *udict_set(struct udict *udict, const char *name,
  * @param udict the pointer to the udict
  * @param value value to set
  * @param attr_size size of the opaque value
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_opaque(struct udict *udict,
                                     const uint8_t *value, size_t attr_size,
-                                    const char *name)
+                                    enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_OPAQUE, attr_size);
+    uint8_t *attr = udict_set(udict, name, type, attr_size);
     if (unlikely(attr == NULL))
         return false;
     memcpy(attr, value, attr_size);
     return true;
 }
 
-/** @This sets the value of an opaque attribute, optionally creating it, with
- * printf-style name generation.
- 
- * @param udict the pointer to the udict
- * @param value value to set
- * @param attr_size size of the opaque value
- * @param format printf-style format of the attribute, followed by a
- * variable list of arguments
- * @return true if no allocation failure occurred
- */
-static inline bool udict_set_opaque_va(struct udict *udict,
-                                       const uint8_t *value,
-                                       size_t attr_size,
-                                       const char *format, ...)
-                   __attribute__ ((format(printf, 4, 5)));
-/** @hidden */
-static inline bool udict_set_opaque_va(struct udict *udict,
-                                       const uint8_t *value,
-                                       size_t attr_size,
-                                       const char *format, ...)
-{
-    UBASE_VARARG(udict_set_opaque(udict, value, attr_size, string))
-}
-
 /** @This sets the value of a string attribute, optionally creating it.
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_string(struct udict *udict, const char *value,
-                                    const char *name)
+                                    enum udict_type type, const char *name)
 {
     size_t attr_size = strlen(value) + 1;
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_STRING, attr_size);
+    uint8_t *attr = udict_set(udict, name, type, attr_size);
     if (unlikely(attr == NULL))
         return false;
     memcpy(attr, value, attr_size);
@@ -520,13 +557,14 @@ static inline bool udict_set_string(struct udict *udict, const char *value,
  *
  * @param udict the pointer to the udict
  * @param value actually unused, but kept for API consistency (should be NULL)
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_void(struct udict *udict, void *value,
-                                  const char *name)
+                                  enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_VOID, 0);
+    uint8_t *attr = udict_set(udict, name, type, 0);
     return (attr != NULL);
 }
 
@@ -534,13 +572,14 @@ static inline bool udict_set_void(struct udict *udict, void *value,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_bool(struct udict *udict, bool value,
-                                  const char *name)
+                                  enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_BOOL, 1);
+    uint8_t *attr = udict_set(udict, name, type, 1);
     if (unlikely(attr == NULL))
         return false;
     *attr = value ? 1 : 0;
@@ -551,13 +590,15 @@ static inline bool udict_set_bool(struct udict *udict, bool value,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_small_unsigned(struct udict *udict,
-                                            uint8_t value, const char *name)
+                                            uint8_t value, enum udict_type type,
+                                            const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_SMALL_UNSIGNED, 1);
+    uint8_t *attr = udict_set(udict, name, type, 1);
     if (unlikely(attr == NULL))
         return false;
     *attr = value;
@@ -568,13 +609,14 @@ static inline bool udict_set_small_unsigned(struct udict *udict,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_small_int(struct udict *udict, int8_t value,
-                                       const char *name)
+                                       enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_SMALL_INT, 1);
+    uint8_t *attr = udict_set(udict, name, type, 1);
     if (unlikely(attr == NULL))
         return false;
     int8_t *value_p = (int8_t *)attr;
@@ -619,13 +661,14 @@ static inline void udict_set_int64(uint8_t *attr, int64_t value)
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_unsigned(struct udict *udict, uint64_t value,
-                                      const char *name)
+                                      enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_UNSIGNED, 8);
+    uint8_t *attr = udict_set(udict, name, type, 8);
     if (unlikely(attr == NULL))
         return false;
     udict_set_uint64(attr, value);
@@ -636,13 +679,14 @@ static inline bool udict_set_unsigned(struct udict *udict, uint64_t value,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_int(struct udict *udict, uint64_t value,
-                                 const char *name)
+                                 enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_INT, 8);
+    uint8_t *attr = udict_set(udict, name, type, 8);
     if (unlikely(attr == NULL))
         return false;
     udict_set_int64(attr, value);
@@ -653,18 +697,19 @@ static inline bool udict_set_int(struct udict *udict, uint64_t value,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_float(struct udict *udict, double value,
-                                   const char *name)
+                                   enum udict_type type, const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
         double f;
         uint64_t i;
     } u;
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_FLOAT, 8);
+    uint8_t *attr = udict_set(udict, name, type, 8);
     if (unlikely(attr == NULL))
         return false;
     u.f = value;
@@ -676,13 +721,15 @@ static inline bool udict_set_float(struct udict *udict, double value,
  *
  * @param udict the pointer to the udict
  * @param value value to set
+ * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
  * @return true if no allocation failure occurred
  */
 static inline bool udict_set_rational(struct udict *udict,
-                                      struct urational value, const char *name)
+                                      struct urational value,
+                                      enum udict_type type, const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, UDICT_TYPE_RATIONAL, 16);
+    uint8_t *attr = udict_set(udict, name, type, 16);
     if (unlikely(attr == NULL))
         return false;
     udict_set_int64(attr, value.num);
@@ -690,285 +737,160 @@ static inline bool udict_set_rational(struct udict *udict,
     return true;
 }
 
-/** @internal @This deletes an attribute.
+/** @This deletes an attribute.
  *
  * @param udict pointer to the udict
- * @param name name of the attribute
  * @param type type of the attribute
+ * @param name name of the attribute
  * @return true if the attribute existed before
  */
-static inline bool udict_delete(struct udict *udict, const char *name,
-                                enum udict_type type)
+static inline bool udict_delete(struct udict *udict, enum udict_type type,
+                                const char *name)
 {
     return udict_control(udict, UDICT_DELETE, name, type);
 }
-/* type-specific deletion primitives are simple and auto-generated below */
 
-/** @internal This template allows to quickly define printf-stype get and
- * set functions, except for opaque type.
+/** @This deletes an attribute with printf-style name generation.
  *
- * @param type upipe attribute type name
+ * @param udict pointer to the udict
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return true if the attribute existed before
+ */
+static inline bool udict_delete_va(struct udict *udict,
+                                   enum udict_type type,
+                                   const char *format, ...)
+                   __attribute__ ((format(printf, 3, 4)));
+/** @hidden */
+static inline bool udict_delete_va(struct udict *udict,
+                                   enum udict_type type,
+                                   const char *format, ...)
+{
+    UBASE_VARARG(udict_delete(udict, type, string))
+}
+
+/** @This returns the value of an opaque attribute with printf-style name
+ * generation.
+ *
+ * @param udict pointer to the udict
+ * @param p pointer to the retrieved value (modified during execution)
+ * @param size_p size of the value, written on execution
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return true if the attribute was found, otherwise p is not modified
+ */
+static inline bool udict_get_opaque_va(struct udict *udict, const uint8_t **p,
+                                       size_t *size_p, enum udict_type type,
+                                       const char *format, ...)
+                   __attribute__ ((format(printf, 5, 6)));
+/** @hidden */
+static inline bool udict_get_opaque_va(struct udict *udict, const uint8_t **p,
+                                       size_t *size_p, enum udict_type type,
+                                       const char *format, ...)
+{
+    UBASE_VARARG(udict_get_opaque(udict, p, size_p, type, string))
+}
+
+/** @This sets the value of an opaque attribute, optionally creating it, with
+ * printf-style name generation.
+ *
+ * @param udict the pointer to the udict
+ * @param v value to set
+ * @param attr_size size of the opaque value
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return true if no allocation failure occurred
+ */
+static inline bool udict_set_opaque_va(struct udict *udict,
+                                       const uint8_t *v,
+                                       size_t attr_size, enum udict_type type,
+                                       const char *format, ...)
+                   __attribute__ ((format(printf, 5, 6)));
+/** @hidden */
+static inline bool udict_set_opaque_va(struct udict *udict,
+                                       const uint8_t *v,
+                                       size_t attr_size, enum udict_type type,
+                                       const char *format, ...)
+{
+    UBASE_VARARG(udict_set_opaque(udict, v, attr_size, type, string))
+}
+
+/** @internal This template allows to quickly define printf-stype get,
+ * set and delete functions, except for opaque type.
+ *
+ * @param utype upipe attribute type name
  * @param ctype type of the attribute value in C
  */
-#define UDICT_TEMPLATE_TYPE1(type, ctype)                                   \
+#define UDICT_TEMPLATE(utype, ctype)                                        \
 /** @This returns the value of a type attribute with printf-style name      \
  * generation.                                                              \
  *                                                                          \
  * @param udict pointer to the udict                                        \
  * @param p pointer to the retrieved value (modified during execution)      \
+ * @param type type of the attribute (potentially a shorthand)              \
  * @param format printf-style format of the attribute, followed by a        \
  * variable list of arguments                                               \
  * @return true if the attribute was found, otherwise p is not modified     \
  */                                                                         \
-static inline bool udict_get_##type##_va(struct udict *udict, ctype *p,     \
-                                         const char *format, ...)           \
-                   __attribute__ ((format(printf, 3, 4)));                  \
+static inline bool udict_get_##utype##_va(struct udict *udict, ctype *p,    \
+                                          enum udict_type type,             \
+                                          const char *format, ...)          \
+                   __attribute__ ((format(printf, 4, 5)));                  \
 /** @hidden */                                                              \
-static inline bool udict_get_##type##_va(struct udict *udict, ctype *p,     \
-                                         const char *format, ...)           \
+static inline bool udict_get_##utype##_va(struct udict *udict, ctype *p,    \
+                                          enum udict_type type,             \
+                                          const char *format, ...)          \
 {                                                                           \
-    UBASE_VARARG(udict_get_##type(udict, p, string))                        \
+    UBASE_VARARG(udict_get_##utype(udict, p, type, string))                 \
 }                                                                           \
 /** @This sets the value of a type attribute, optionally creating it, with  \
  * printf-style name generation.                                            \
  *                                                                          \
  * @param udict pointer to the udict                                        \
- * @param value value to set                                                \
+ * @param v value to set                                                    \
+ * @param type type of the attribute (potentially a shorthand)              \
  * @param format printf-style format of the attribute, followed by a        \
  * variable list of arguments                                               \
  * @return true if no allocation failure occurred                           \
  */                                                                         \
-static inline bool udict_set_##type##_va(struct udict *udict,               \
-                                         ctype value,                       \
-                                         const char *format, ...)           \
-                   __attribute__ ((format(printf, 3, 4)));                  \
+static inline bool udict_set_##utype##_va(struct udict *udict,              \
+                                          ctype v, enum udict_type type,    \
+                                          const char *format, ...)          \
+                   __attribute__ ((format(printf, 4, 5)));                  \
 /** @hidden */                                                              \
-static inline bool udict_set_##type##_va(struct udict *udict,               \
-                                         ctype value,                       \
-                                         const char *format, ...)           \
+static inline bool udict_set_##utype##_va(struct udict *udict,              \
+                                          ctype v, enum udict_type type,    \
+                                          const char *format, ...)          \
 {                                                                           \
-    UBASE_VARARG(udict_set_##type(udict, value, string))                    \
+    UBASE_VARARG(udict_set_##utype(udict, v, type, string))                 \
 }
 
-UDICT_TEMPLATE_TYPE1(string, const char *)
-UDICT_TEMPLATE_TYPE1(void, void *)
-UDICT_TEMPLATE_TYPE1(bool, bool)
-UDICT_TEMPLATE_TYPE1(small_unsigned, uint8_t)
-UDICT_TEMPLATE_TYPE1(small_int, int8_t)
-UDICT_TEMPLATE_TYPE1(unsigned, uint64_t)
-UDICT_TEMPLATE_TYPE1(int, int64_t)
-UDICT_TEMPLATE_TYPE1(float, double)
-UDICT_TEMPLATE_TYPE1(rational, struct urational)
-#undef UDICT_TEMPLATE_TYPE1
+UDICT_TEMPLATE(string, const char *)
+UDICT_TEMPLATE(void, void *)
+UDICT_TEMPLATE(bool, bool)
+UDICT_TEMPLATE(small_unsigned, uint8_t)
+UDICT_TEMPLATE(small_int, int8_t)
+UDICT_TEMPLATE(unsigned, uint64_t)
+UDICT_TEMPLATE(int, int64_t)
+UDICT_TEMPLATE(float, double)
+UDICT_TEMPLATE(rational, struct urational)
+#undef UDICT_TEMPLATE
 
-/** @internal This template allows to quickly define type-specific delete
- * functions.
+/** @This names a shorthand attribute.
  *
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
- * @param attrtype upipe attribute type enum
+ * @param udict pointer to the udict
+ * @param type shorthand type
+ * @param name_p filled in with the name of the shorthand attribute
+ * @param base_type_p filled in with the base type of the shorthand attribute
+ * @return false in case the shorthand doesn't exist
  */
-#define UDICT_TEMPLATE_TYPE2(type, ctype, dicttype)                         \
-/** @This deletes a type attribute.                                         \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param name name of the attribute                                        \
- * @return true if the attribute existed before                             \
- */                                                                         \
-static inline bool udict_delete_##type(struct udict *udict,                 \
-                                       const char *name)                    \
-{                                                                           \
-    return udict_delete(udict, name, dicttype);                             \
-}                                                                           \
-/** @This deletes a type attribute with printf-style name generation.       \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param format printf-style format of the attribute, followed by a        \
- * variable list of arguments                                               \
- * @return true if the attribute existed before                             \
- */                                                                         \
-static inline bool udict_delete_##type##_va(struct udict *udict,            \
-                                            const char *format, ...)        \
-                   __attribute__ ((format(printf, 2, 3)));                  \
-/** @hidden */                                                              \
-static inline bool udict_delete_##type##_va(struct udict *udict,            \
-                                            const char *format, ...)        \
-{                                                                           \
-    UBASE_VARARG(udict_delete_##type(udict, string))                        \
-}
-
-UDICT_TEMPLATE_TYPE2(opaque, uint8_t *, UDICT_TYPE_OPAQUE)
-UDICT_TEMPLATE_TYPE2(string, const char *, UDICT_TYPE_STRING)
-UDICT_TEMPLATE_TYPE2(void, void *, UDICT_TYPE_VOID)
-UDICT_TEMPLATE_TYPE2(bool, bool, UDICT_TYPE_BOOL)
-UDICT_TEMPLATE_TYPE2(small_unsigned, uint8_t, UDICT_TYPE_SMALL_UNSIGNED)
-UDICT_TEMPLATE_TYPE2(small_int, int8_t, UDICT_TYPE_SMALL_INT)
-UDICT_TEMPLATE_TYPE2(unsigned, uint64_t, UDICT_TYPE_UNSIGNED)
-UDICT_TEMPLATE_TYPE2(int, int64_t, UDICT_TYPE_INT)
-UDICT_TEMPLATE_TYPE2(float, double, UDICT_TYPE_FLOAT)
-UDICT_TEMPLATE_TYPE2(rational, struct urational, UDICT_TYPE_RATIONAL)
-#undef UDICT_TEMPLATE_TYPE2
-
-/* @This allows to define accessors for a standard attribute.
- *
- * @param group group of attributes
- * @param attr readable name of the attribute, for the function names
- * @param name string defining the attribute
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
- * @param desc description of the attribute
- */
-#define UDICT_TEMPLATE(group, attr, name, type, ctype, desc)                \
-/** @This returns the desc attribute of a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param p pointer to the retrieved value (modified during execution)      \
- * @return true if the attribute was found, otherwise p is not modified     \
- */                                                                         \
-static inline bool udict_##group##_get_##attr(struct udict *udict, ctype *p)\
-{                                                                           \
-    return udict_get_##type(udict, p, name);                                \
-}                                                                           \
-/** @This sets the desc attribute of a udict.                               \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param value value to set                                                \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_set_##attr(struct udict *udict,          \
-                                              ctype value)                  \
-{                                                                           \
-    return udict_set_##type(udict, value, name);                            \
-}                                                                           \
-/** @This deletes the desc attribute of a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_delete_##attr(struct udict *udict)       \
-{                                                                           \
-    return udict_delete_##type(udict, name);                                \
-}
-
-/* @This allows to define accessors for a standard void attribute.
- *
- * @param group group of attributes
- * @param attr readable name of the attribute, for the function names
- * @param name string defining the attribute
- * @param desc description of the attribute
- */
-#define UDICT_TEMPLATE_VOID(group, attr, name, desc)                        \
-/** @This returns the presence of a desc attribute in a udict.              \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if the attribute was found, otherwise p is not modified     \
- */                                                                         \
-static inline bool udict_##group##_get_##attr(struct udict *udict)          \
-{                                                                           \
-    return udict_get_void(udict, NULL, name);                               \
-}                                                                           \
-/** @This sets a desc attribute in a udict.                                 \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_set_##attr(struct udict *udict)          \
-{                                                                           \
-    return udict_set_void(udict, NULL, name);                               \
-}                                                                           \
-/** @This deletes a desc attribute from a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_delete_##attr(struct udict *udict)       \
-{                                                                           \
-    return udict_delete_void(udict, name);                                  \
-}
-
-/* @This allows to define accessors for a standard attribute, with a name
- * depending on printf arguments.
- *
- * @param group group of attributes
- * @param attr readable name of the attribute, for the function names
- * @param format printf-style format of the attribute
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
- * @param desc description of the attribute
- */
-#define UDICT_TEMPLATE_VA(group, attr, format, type, ctype, desc,           \
-                          args_decl, args)                                  \
-/** @This returns the desc attribute of a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param p pointer to the retrieved value (modified during execution)      \
- * @return true if the attribute was found, otherwise p is not modified     \
- */                                                                         \
-static inline bool udict_##group##_get_##attr(struct udict *udict, ctype *p,\
-                                              args_decl)                    \
-{                                                                           \
-    return udict_get_##type##_va(udict, p, format, args);                   \
-}                                                                           \
-/** @This sets the desc attribute of a udict.                               \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @param value value to set                                                \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_set_##attr(struct udict *udict,          \
-                                              ctype value, args_decl)       \
-{                                                                           \
-    return udict_set_##type##_va(udict, value, format, args);               \
-}                                                                           \
-/** @This deletes the desc attribute of a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_delete_##attr(struct udict *udict,       \
-                                                 args_decl)                 \
-{                                                                           \
-    return udict_delete_##type##_va(udict, format, args);                   \
-}
-
-/* @This allows to define accessors for a standard void attribute, with a name
- * depending on printf arguments.
- *
- * @param group group of attributes
- * @param attr readable name of the attribute, for the function names
- * @param format printf-style format of the attribute
- * @param desc description of the attribute
- */
-#define UDICT_TEMPLATE_VOID_VA(group, attr, name, desc, args_decl, args)    \
-/** @This returns the presence of a desc attribute in a udict.              \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if the attribute was found, otherwise p is not modified     \
- */                                                                         \
-static inline bool udict_##group##_get_##attr(struct udict *udict,          \
-                                              args_decl)                    \
-{                                                                           \
-    return udict_get_void_va(udict, NULL, format, args);                    \
-}                                                                           \
-/** @This sets a desc attribute in a udict.                                 \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_set_##attr(struct udict *udict,          \
-                                              args_decl)                    \
-{                                                                           \
-    return udict_set_void_va(udict, NULL, format, args);                    \
-}                                                                           \
-/** @This deletes a desc attribute from a udict.                            \
- *                                                                          \
- * @param udict pointer to the udict                                        \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool udict_##group##_delete_##attr(struct udict *udict,       \
-                                                 args_decl)                 \
-{                                                                           \
-    return udict_delete_void_va(udict, format, args);                       \
+static inline bool udict_name(struct udict *udict, enum udict_type type,
+                              const char **name_p, enum udict_type *base_type_p)
+{
+    return udict_control(udict, UDICT_NAME, type, name_p, base_type_p);
 }
 
 /** @This frees a udict.
@@ -994,11 +916,11 @@ static inline struct udict *udict_copy(struct udict_mgr *mgr,
         return NULL;
 
     const char *name = NULL;
-    enum udict_type type;
+    enum udict_type type = UDICT_TYPE_END;
 
     for ( ; ; ) {
         udict_iterate(udict, &name, &type);
-        if (unlikely(name == NULL))
+        if (unlikely(type == UDICT_TYPE_END))
             break;
 
         size_t attr_size;

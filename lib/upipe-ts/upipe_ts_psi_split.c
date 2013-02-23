@@ -201,8 +201,6 @@ static void upipe_ts_psi_split_output_release(struct upipe *upipe)
     struct upipe_ts_psi_split_output *upipe_ts_psi_split_output =
         upipe_ts_psi_split_output_from_upipe(upipe);
     if (unlikely(urefcount_release(&upipe_ts_psi_split_output->refcount))) {
-        struct upipe_ts_psi_split *upipe_ts_psi_split =
-            upipe_ts_psi_split_from_output_mgr(upipe->mgr);
         upipe_throw_dead(upipe);
 
         upipe_ts_psi_split_output_clean_sub(upipe);

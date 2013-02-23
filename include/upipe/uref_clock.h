@@ -36,15 +36,24 @@
 
 #include <stdint.h>
 
-UREF_ATTR_TEMPLATE(clock, systime, "k.systime", unsigned, uint64_t, reception time in system clock)
-UREF_ATTR_TEMPLATE(clock, systime_rap, "k.systime.rap", unsigned, uint64_t, reception time in system clock of the last random access point)
-UREF_ATTR_TEMPLATE(clock, pts, "k.pts", unsigned, uint64_t, presentation timestamp in Upipe clock)
-UREF_ATTR_TEMPLATE(clock, pts_orig, "k.pts.orig", unsigned, uint64_t, original presentation timestamp in stream clock)
-UREF_ATTR_TEMPLATE(clock, pts_sys, "k.pts.sys", unsigned, uint64_t, presentation timestamp in system clock)
-UREF_ATTR_TEMPLATE(clock, dts, "k.dts", unsigned, uint64_t, decoding timestamp in Upipe clock)
-UREF_ATTR_TEMPLATE(clock, dts_orig, "k.dts.orig", unsigned, uint64_t, original decoding timestamp in stream clock)
-UREF_ATTR_TEMPLATE(clock, dts_sys, "k.dts.sys", unsigned, uint64_t, decoding timestamp in system clock)
-UREF_ATTR_TEMPLATE(clock, vbv_delay, "k.vbvdelay", unsigned, uint64_t, vbv/dts delay)
-UREF_ATTR_TEMPLATE(clock, duration, "k.duration", unsigned, uint64_t, duration)
+UREF_ATTR_UNSIGNED_SH(clock, systime, UDICT_TYPE_CLOCK_SYSTIME,
+        reception time in system clock)
+UREF_ATTR_UNSIGNED_SH(clock, systime_rap, UDICT_TYPE_CLOCK_SYSTIME_RAP,
+        reception time in system clock of the last random access point)
+UREF_ATTR_UNSIGNED_SH(clock, pts, UDICT_TYPE_CLOCK_PTS,
+        presentation timestamp in Upipe clock)
+UREF_ATTR_UNSIGNED_SH(clock, pts_orig, UDICT_TYPE_CLOCK_PTS_ORIG,
+        original presentation timestamp in stream clock)
+UREF_ATTR_UNSIGNED_SH(clock, pts_sys, UDICT_TYPE_CLOCK_PTS_SYS,
+        presentation timestamp in system clock)
+UREF_ATTR_UNSIGNED_SH(clock, dts, UDICT_TYPE_CLOCK_DTS,
+        decoding timestamp in Upipe clock)
+UREF_ATTR_UNSIGNED_SH(clock, dts_orig, UDICT_TYPE_CLOCK_DTS_ORIG,
+        original decoding timestamp in stream clock)
+UREF_ATTR_UNSIGNED_SH(clock, dts_sys, UDICT_TYPE_CLOCK_DTS_SYS,
+        decoding timestamp in system clock)
+UREF_ATTR_UNSIGNED_SH(clock, vbv_delay, UDICT_TYPE_CLOCK_VBVDELAY,
+        vbv/dts delay)
+UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
 
 #endif

@@ -43,19 +43,30 @@
 /** @internal flow definition prefix for pic allocator */
 #define UREF_PIC_FLOW_DEF "pic."
 
-UREF_ATTR_TEMPLATE(pic_flow, macropixel, "p.macropixel", small_unsigned, uint8_t, number of pixels in a macropixel)
-UREF_ATTR_TEMPLATE(pic_flow, planes, "p.planes", small_unsigned, uint8_t, number of planes)
-UREF_ATTR_TEMPLATE_VA(pic_flow, hsubsampling, "p.hsub[%"PRIu8"]", small_unsigned, uint8_t, horizontal subsampling, uint8_t plane, plane)
-UREF_ATTR_TEMPLATE_VA(pic_flow, vsubsampling, "p.vsub[%"PRIu8"]", small_unsigned, uint8_t, vertical subsampling, uint8_t plane, plane)
-UREF_ATTR_TEMPLATE_VA(pic_flow, macropixel_size, "p.macropix[%"PRIu8"]", small_unsigned, uint8_t, size of a compound, uint8_t plane, plane)
-UREF_ATTR_TEMPLATE_VA(pic_flow, chroma, "p.chroma[%"PRIu8"]", string, const char *, chroma type, uint8_t plane, plane)
-UREF_ATTR_TEMPLATE(pic_flow, fps, "p.fps", rational, struct urational, frames per second)
-UREF_ATTR_TEMPLATE(pic_flow, hmprepend, "p.hmprepend", small_unsigned, uint8_t, extra macropixels added before each line)
-UREF_ATTR_TEMPLATE(pic_flow, hmappend, "p.hmappend", small_unsigned, uint8_t, extra macropixels added after each line)
-UREF_ATTR_TEMPLATE(pic_flow, vprepend, "p.vprepend", small_unsigned, uint8_t, extra lines added before buffer)
-UREF_ATTR_TEMPLATE(pic_flow, vappend, "p.vappend", small_unsigned, uint8_t, extra lines added after buffer)
-UREF_ATTR_TEMPLATE(pic_flow, align, "p.align", unsigned, uint64_t, alignment in octets)
-UREF_ATTR_TEMPLATE(pic_flow, align_hmoffset, "p.align_hmoffset", int, int64_t, horizontal offset of the aligned macropixel)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, macropixel, "p.macropixel",
+        number of pixels in a macropixel)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, planes, "p.planes",
+        number of planes)
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, hsubsampling, "p.hsub[%"PRIu8"]",
+        horizontal subsampling, uint8_t plane, plane)
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, vsubsampling, "p.vsub[%"PRIu8"]",
+        vertical subsampling, uint8_t plane, plane)
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, macropixel_size, "p.macropix[%"PRIu8"]",
+        size of a compound, uint8_t plane, plane)
+UREF_ATTR_STRING_VA(pic_flow, chroma, "p.chroma[%"PRIu8"]",
+        chroma type, uint8_t plane, plane)
+UREF_ATTR_RATIONAL(pic_flow, fps, "p.fps", frames per second)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, hmprepend, "p.hmprepend",
+        extra macropixels added before each line)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, hmappend, "p.hmappend",
+        extra macropixels added after each line)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, vprepend, "p.vprepend",
+        extra lines added before buffer)
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, vappend, "p.vappend",
+        extra lines added after buffer)
+UREF_ATTR_UNSIGNED(pic_flow, align, "p.align", alignment in octets)
+UREF_ATTR_INT(pic_flow, align_hmoffset, "p.align_hmoffset",
+        horizontal offset of the aligned macropixel)
 
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.

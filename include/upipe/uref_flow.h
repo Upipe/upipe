@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,18 +37,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-UREF_ATTR_TEMPLATE_VOID(flow, discontinuity, "f.disc", flow discontinuity flag
-                        that may be present in any uref carrying data)
-UREF_ATTR_TEMPLATE_VOID(flow, random, "f.random", random access flag
-                        that may be present in any uref carrying data)
-UREF_ATTR_TEMPLATE_VOID(flow, error, "f.error", error flag
-                        that may be present in any uref carrying data)
-UREF_ATTR_TEMPLATE(flow, def, "f.def", string, const char *, flow definition)
-UREF_ATTR_TEMPLATE(flow, raw_def, "f.rawdef", string, const char *,
-                   raw flow definition)
-UREF_ATTR_TEMPLATE(flow, program, "f.program", string, const char *,
-                   flow program)
-UREF_ATTR_TEMPLATE(flow, lang, "f.lang", string, const char *, flow language)
+UREF_ATTR_VOID_SH(flow, discontinuity, UDICT_TYPE_FLOW_DISC,
+        flow discontinuity flag that may be present in any uref carrying data)
+UREF_ATTR_VOID_SH(flow, random, UDICT_TYPE_FLOW_RANDOM,
+        random access flag that may be present in any uref carrying data)
+UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
+        error flag that may be present in any uref carrying data)
+UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
+UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
+UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
+UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)
 
 /** @This sets the flow definition attribute of a uref, with printf-style
  * generation.

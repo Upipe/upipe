@@ -54,6 +54,9 @@
 #define UBUF_POOL_DEPTH 10
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
+UREF_ATTR_STRING(test, 1, "x.test1", test 1)
+UREF_ATTR_UNSIGNED(test, 2, "x.test2", test 2)
+
 static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
@@ -92,10 +95,10 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     }
 
     const char *string;
-    assert(uref_attr_get_string(uref, &string, "x.test1"));
+    assert(uref_test_get_1(uref, &string));
     assert(!strcmp(string, "test"));
     uint64_t num;
-    assert(uref_attr_get_unsigned(uref, &num, "x.test2"));
+    assert(uref_test_get_2(uref, &num));
     assert(num == 42);
     uref_free(uref);
     nb_packets++;
@@ -155,8 +158,8 @@ int main(int argc, char *argv[])
     upipe_input(upipe_setattr, uref, NULL);
 
     struct uref *dict = uref_alloc(uref_mgr);
-    assert(uref_attr_set_string(dict, "test", "x.test1"));
-    assert(uref_attr_set_unsigned(dict, 42, "x.test2"));
+    assert(uref_test_set_1(dict, "test"));
+    assert(uref_test_set_2(dict, 42));
     assert(upipe_setattr_set_dict(upipe_setattr, dict));
     uref_free(dict);
 

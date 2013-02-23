@@ -48,49 +48,8 @@
 /** @hidden */
 static void udict_inline_free_inner(struct udict *udict);
 
-/** explicit names for inline_shorthands attributes */
-enum udict_type_shorthands {
-    UDICT_TYPE_SENTINEL = UDICT_TYPE_SHORTHAND,
-
-    UDICT_TYPE_FLOW_DISC,
-    UDICT_TYPE_FLOW_RANDOM,
-    UDICT_TYPE_FLOW_ERROR,
-    UDICT_TYPE_FLOW_DEF,
-    UDICT_TYPE_FLOW_RAWDEF,
-    UDICT_TYPE_FLOW_PROGRAM,
-    UDICT_TYPE_FLOW_LANG,
-
-    UDICT_TYPE_CLOCK_SYSTIME,
-    UDICT_TYPE_CLOCK_SYSTIME_RAP,
-    UDICT_TYPE_CLOCK_PTS,
-    UDICT_TYPE_CLOCK_PTS_ORIG,
-    UDICT_TYPE_CLOCK_PTS_SYS,
-    UDICT_TYPE_CLOCK_DTS,
-    UDICT_TYPE_CLOCK_DTS_ORIG,
-    UDICT_TYPE_CLOCK_DTS_SYS,
-    UDICT_TYPE_CLOCK_VBVDELAY,
-    UDICT_TYPE_CLOCK_DURATION,
-
-    UDICT_TYPE_BLOCK_START,
-    UDICT_TYPE_BLOCK_END,
-
-    UDICT_TYPE_PIC_NUM,
-    UDICT_TYPE_PIC_HSIZE,
-    UDICT_TYPE_PIC_VSIZE,
-    UDICT_TYPE_PIC_HSIZE_VISIBLE,
-    UDICT_TYPE_PIC_VSIZE_VISIBLE,
-    UDICT_TYPE_PIC_HPOSITION,
-    UDICT_TYPE_PIC_VPOSITION,
-    UDICT_TYPE_PIC_ASPECT,
-    UDICT_TYPE_PIC_PROGRESSIVE,
-    UDICT_TYPE_PIC_TF,
-    UDICT_TYPE_PIC_BF,
-    UDICT_TYPE_PIC_TFF
-};
-
 /** @internal @This represents a shorthand attribute type. */
 struct inline_shorthand {
-    uint8_t type;
     const char *name;
     enum udict_type base_type;
 };
@@ -98,46 +57,43 @@ struct inline_shorthand {
 /** @This stores a list of inline_shorthands attributes.
  *
  * Please note that the code expects the first line to be
- * UDICT_TYPE_SHORTHAND + 1, and the last UDICT_TYPE_END, and there
- * should be no gap in number in-between.
+ * UDICT_TYPE_SHORTHAND + 1.
  */
 static const struct inline_shorthand inline_shorthands[] = {
-    { UDICT_TYPE_FLOW_DISC, "f.disc", UDICT_TYPE_VOID },
-    { UDICT_TYPE_FLOW_RANDOM, "f.random", UDICT_TYPE_VOID },
-    { UDICT_TYPE_FLOW_ERROR, "f.error", UDICT_TYPE_VOID },
-    { UDICT_TYPE_FLOW_DEF, "f.def", UDICT_TYPE_STRING },
-    { UDICT_TYPE_FLOW_RAWDEF, "f.rawdef", UDICT_TYPE_STRING },
-    { UDICT_TYPE_FLOW_PROGRAM, "f.program", UDICT_TYPE_STRING },
-    { UDICT_TYPE_FLOW_LANG, "f.lang", UDICT_TYPE_STRING },
+    { "f.disc", UDICT_TYPE_VOID },
+    { "f.random", UDICT_TYPE_VOID },
+    { "f.error", UDICT_TYPE_VOID },
+    { "f.def", UDICT_TYPE_STRING },
+    { "f.rawdef", UDICT_TYPE_STRING },
+    { "f.program", UDICT_TYPE_STRING },
+    { "f.lang", UDICT_TYPE_STRING },
 
-    { UDICT_TYPE_CLOCK_SYSTIME, "k.systime", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_SYSTIME_RAP, "k.systime.rap", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_PTS, "k.pts", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_PTS_ORIG, "k.pts.orig", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_PTS_SYS, "k.pts.sys", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_DTS, "k.dts", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_DTS_ORIG, "k.dts.orig", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_DTS_SYS, "k.dts.sys", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_VBVDELAY, "k.vbvdelay", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_CLOCK_DURATION, "k.duration", UDICT_TYPE_UNSIGNED },
+    { "k.systime", UDICT_TYPE_UNSIGNED },
+    { "k.systime.rap", UDICT_TYPE_UNSIGNED },
+    { "k.pts", UDICT_TYPE_UNSIGNED },
+    { "k.pts.orig", UDICT_TYPE_UNSIGNED },
+    { "k.pts.sys", UDICT_TYPE_UNSIGNED },
+    { "k.dts", UDICT_TYPE_UNSIGNED },
+    { "k.dts.orig", UDICT_TYPE_UNSIGNED },
+    { "k.dts.sys", UDICT_TYPE_UNSIGNED },
+    { "k.vbvdelay", UDICT_TYPE_UNSIGNED },
+    { "k.duration", UDICT_TYPE_UNSIGNED },
 
-    { UDICT_TYPE_BLOCK_START, "b.start", UDICT_TYPE_VOID },
-    { UDICT_TYPE_BLOCK_END, "b.end", UDICT_TYPE_VOID },
+    { "b.start", UDICT_TYPE_VOID },
+    { "b.end", UDICT_TYPE_VOID },
 
-    { UDICT_TYPE_PIC_NUM, "p.num", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_HSIZE, "p.hsize", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_VSIZE, "p.vsize", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_HSIZE_VISIBLE, "p.hsizevis", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_VSIZE_VISIBLE, "p.vsizevis", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_HPOSITION, "p.hposition", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_VPOSITION, "p.vposition", UDICT_TYPE_UNSIGNED },
-    { UDICT_TYPE_PIC_ASPECT, "p.aspect", UDICT_TYPE_RATIONAL },
-    { UDICT_TYPE_PIC_PROGRESSIVE, "p.progressive", UDICT_TYPE_VOID },
-    { UDICT_TYPE_PIC_TF, "p.tf", UDICT_TYPE_VOID },
-    { UDICT_TYPE_PIC_BF, "p.bf", UDICT_TYPE_VOID },
-    { UDICT_TYPE_PIC_TFF, "p.tff", UDICT_TYPE_VOID },
-
-    { UDICT_TYPE_END, "", UDICT_TYPE_END }
+    { "p.num", UDICT_TYPE_UNSIGNED },
+    { "p.hsize", UDICT_TYPE_UNSIGNED },
+    { "p.vsize", UDICT_TYPE_UNSIGNED },
+    { "p.hsizevis", UDICT_TYPE_UNSIGNED },
+    { "p.vsizevis", UDICT_TYPE_UNSIGNED },
+    { "p.hposition", UDICT_TYPE_UNSIGNED },
+    { "p.vposition", UDICT_TYPE_UNSIGNED },
+    { "p.aspect", UDICT_TYPE_RATIONAL },
+    { "p.progressive", UDICT_TYPE_VOID },
+    { "p.tf", UDICT_TYPE_VOID },
+    { "p.bf", UDICT_TYPE_VOID },
+    { "p.tff", UDICT_TYPE_VOID },
 };
 
 /** @This stores the size of the value of basic attribute types. */
@@ -268,22 +224,18 @@ static bool udict_inline_dup(struct udict *udict, struct udict **new_udict_p)
     return true;
 }
 
-/** @internal @This looks up an attribute in the list of shorthands.
+/** @internal @This looks up a shorthand attribute in the list of shorthands.
  *
- * @param name name of the attribute
- * @param type type of the attribute
+ * @param type shorthand attribute
  * @return pointer to the found shorthand entry, or NULL
  */
-static const struct inline_shorthand *udict_inline_shorthand(const char *name,
-                                                         enum udict_type type)
+static const struct inline_shorthand *
+    udict_inline_shorthand(enum udict_type type)
 {
-    const struct inline_shorthand *shorthands = inline_shorthands;
-    while (shorthands->base_type != UDICT_TYPE_END) {
-        if (shorthands->base_type == type && !strcmp(shorthands->name, name))
-            return shorthands;
-        shorthands++;
-    }
-    return NULL;
+    if (unlikely(type > UDICT_TYPE_SHORTHAND + 1 + sizeof(inline_shorthands) /
+                                               sizeof(struct inline_shorthand)))
+        return NULL;
+    return &inline_shorthands[type - UDICT_TYPE_SHORTHAND - 1];
 }
 
 /** @internal @This jumps to the next attribute.
@@ -293,62 +245,21 @@ static const struct inline_shorthand *udict_inline_shorthand(const char *name,
  */
 static uint8_t *udict_inline_next(uint8_t *attr)
 {
-    if (unlikely(*attr == UDICT_TYPE_END))
+    if (*attr == UDICT_TYPE_END)
         return NULL;
 
     if (likely(*attr > UDICT_TYPE_SHORTHAND)) {
-        const struct inline_shorthand *shorthand = inline_shorthands +
-                (*attr - UDICT_TYPE_SHORTHAND - 1);
-        if (likely(shorthand->base_type != UDICT_TYPE_OPAQUE &&
-                   shorthand->base_type != UDICT_TYPE_STRING)) {
-            assert(shorthand->base_type <= UDICT_TYPE_FLOAT);
+        const struct inline_shorthand *shorthand =
+            udict_inline_shorthand(*attr);
+        if (unlikely(shorthand == NULL))
+            return NULL;
+        if (shorthand->base_type != UDICT_TYPE_OPAQUE &&
+            shorthand->base_type != UDICT_TYPE_STRING)
             return attr + attr_sizes[shorthand->base_type] + 1;
-        }
     }
 
     uint16_t size = (attr[1] << 8) | attr[2];
     return attr + 3 + size;
-}
-
-/** @internal @This finds an attribute of the given type.
- *
- * @param udict pointer to the udict
- * @param type type of the attribute (including inline_shorthands)
- * @return pointer to the found attribute, or NULL
- */
-static uint8_t *udict_inline_find_type(struct udict *udict, uint8_t type)
-{
-    struct udict_inline *inl = udict_inline_from_udict(udict);
-    uint8_t *attr = umem_buffer(&inl->umem);
-    while (likely(attr != NULL)) {
-        if (unlikely(*attr == type))
-            return attr;
-        attr = udict_inline_next(attr);
-    }
-    return NULL;
-}
-
-/** @internal @This finds a non-shorthand attribute of the given name and type.
- *
- * @param udict pointer to the udict
- * @param name name of the attribute
- * @param type type of the attribute (excluding inline_shorthands)
- * @return pointer to the found attribute, or NULL
- */
-static uint8_t *udict_inline_find_name(struct udict *udict, const char *name,
-                                       enum udict_type type)
-{
-    /* This is not to be used for shorthands */
-    assert(type < UDICT_TYPE_SHORTHAND);
-    struct udict_inline *inl = udict_inline_from_udict(udict);
-    uint8_t *attr = umem_buffer(&inl->umem);
-    while (likely(attr != NULL)) {
-        const char *attr_name = (const char *)(attr + 3);
-        if (unlikely(*attr == type && !strcmp(attr_name, name)))
-            return attr;
-        attr = udict_inline_next(attr);
-    }
-    return NULL;
 }
 
 /** @internal @This finds an attribute (shorthand or not) of the given name
@@ -362,12 +273,16 @@ static uint8_t *udict_inline_find_name(struct udict *udict, const char *name,
 static uint8_t *udict_inline_find(struct udict *udict, const char *name,
                                    enum udict_type type)
 {
-    const struct inline_shorthand *shorthand =
-        udict_inline_shorthand(name, type);
-    if (likely(shorthand != NULL))
-        return udict_inline_find_type(udict, shorthand->type);
-
-    return udict_inline_find_name(udict, name, type);
+    struct udict_inline *inl = udict_inline_from_udict(udict);
+    uint8_t *attr = umem_buffer(&inl->umem);
+    while (attr != NULL) {
+        if (*attr == type &&
+             (type > UDICT_TYPE_SHORTHAND || type == UDICT_TYPE_END ||
+              !strcmp((const char *)(attr + 3), name)))
+            return attr;
+        attr = udict_inline_next(attr);
+    }
+    return NULL;
 }
 
 /** @internal @This finds an attribute (shorthand or not) of the given name
@@ -375,9 +290,9 @@ static uint8_t *udict_inline_find(struct udict *udict, const char *name,
  *
  * @param udict pointer to the udict
  * @param name_p reference to the name of the attribute to find, changed during
- * execution to the name of the next attribute, or NULL if it was the last
- * attribute; if it was NULL, it is changed to the name of the first attribute
- * @param type_p reference to the type of the attribute, if the name is valid
+ * execution to the name of the next attribute, or NULL if it is a shorthand
+ * @param type_p reference to the type of the attribute, changed to
+ * UDICT_TYPE_END at the end of the iteration; start with UDICT_TYPE_END as well
  */
 static void udict_inline_iterate(struct udict *udict, const char **name_p,
                                  enum udict_type *type_p)
@@ -387,27 +302,19 @@ static void udict_inline_iterate(struct udict *udict, const char **name_p,
     struct udict_inline *inl = udict_inline_from_udict(udict);
     uint8_t *attr;
 
-    if (likely(*name_p != NULL)) {
+    if (likely(*type_p != UDICT_TYPE_END)) {
         attr = udict_inline_find(udict, *name_p, *type_p);
         if (likely(attr != NULL))
             attr = udict_inline_next(attr);
     } else
         attr = umem_buffer(&inl->umem);
     if (unlikely(attr == NULL || *attr == UDICT_TYPE_END)) {
-        *name_p = NULL;
+        *type_p = UDICT_TYPE_END;
         return;
     }
 
-    if (likely(*attr > UDICT_TYPE_SHORTHAND)) {
-        const struct inline_shorthand *shorthand = inline_shorthands +
-                (*attr - UDICT_TYPE_SHORTHAND - 1);
-        *name_p = shorthand->name;
-        *type_p = shorthand->base_type;
-        return;
-    }
-
-    *name_p = (const char *)(attr + 3);
     *type_p = *attr;
+    *name_p = *attr > UDICT_TYPE_SHORTHAND ? NULL : (const char *)(attr + 3);
 }
 
 /** @internal @This finds an attribute (shorthand or not) of the given name
@@ -422,36 +329,34 @@ static void udict_inline_iterate(struct udict *udict, const char **name_p,
 static uint8_t *_udict_inline_get(struct udict *udict, const char *name,
                                   enum udict_type type, size_t *size_p)
 {
-    assert(type < UDICT_TYPE_SHORTHAND);
-    uint8_t *attr;
-    const struct inline_shorthand *shorthand =
-        udict_inline_shorthand(name, type);
-    if (likely(shorthand != NULL)) {
-        attr = udict_inline_find_type(udict, shorthand->type);
-        if (likely(attr != NULL)) {
-            if (likely(type != UDICT_TYPE_OPAQUE &&
-                       type != UDICT_TYPE_STRING)) {
-                if (likely(size_p != NULL))
-                    *size_p = attr_sizes[shorthand->base_type];
-                attr++;
-            } else {
-                uint16_t size = (attr[1] << 8) | attr[2];
-                if (likely(size_p != NULL))
-                    *size_p = size;
-                attr += 3;
-            }
-        }
-        return attr;
-    }
+    uint8_t *attr = udict_inline_find(udict, name, type);
+    if (unlikely(attr == NULL))
+        return NULL;
 
-    attr = udict_inline_find_name(udict, name, type);
-    if (likely(attr != NULL)) {
+    if (likely(type > UDICT_TYPE_SHORTHAND)) {
+        const struct inline_shorthand *shorthand =
+            udict_inline_shorthand(*attr);
+        if (unlikely(shorthand == NULL))
+            return NULL;
+
+        if (shorthand->base_type != UDICT_TYPE_OPAQUE &&
+            shorthand->base_type != UDICT_TYPE_STRING) {
+            if (likely(size_p != NULL))
+                *size_p = attr_sizes[shorthand->base_type];
+            attr++;
+        } else {
+            uint16_t size = (attr[1] << 8) | attr[2];
+            if (likely(size_p != NULL))
+                *size_p = size;
+            attr += 3;
+        }
+    } else {
         uint16_t size = (attr[1] << 8) | attr[2];
         size_t namelen = strlen(name);
         assert(size > namelen);
         if (likely(size_p != NULL))
             *size_p = size - namelen - 1;
-        attr += 4 + strlen(name);
+        attr += 4 + namelen;
     }
     return attr;
 }
@@ -488,19 +393,13 @@ static bool udict_inline_get(struct udict *udict, const char *name,
 static bool udict_inline_delete(struct udict *udict, const char *name,
                                 enum udict_type type)
 {
-    assert(type < UDICT_TYPE_SHORTHAND && type != UDICT_TYPE_END);
+    assert(type != UDICT_TYPE_END);
     struct udict_inline *inl = udict_inline_from_udict(udict);
-    uint8_t *attr, *end;
-    const struct inline_shorthand *shorthand =
-        udict_inline_shorthand(name, type);
-    if (likely(shorthand != NULL))
-        attr = udict_inline_find_type(udict, shorthand->type);
-    else
-        attr = udict_inline_find_name(udict, name, type);
+    uint8_t *attr = udict_inline_find(udict, name, type);
     if (unlikely(attr == NULL))
         return false;
 
-    end = udict_inline_next(attr);
+    uint8_t *end = udict_inline_next(attr);
     memmove(attr, end, umem_buffer(&inl->umem) + umem_size(&inl->umem) - end);
     return true;
 }
@@ -518,17 +417,27 @@ static bool udict_inline_set(struct udict *udict, const char *name,
                              uint8_t **attr_p)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
+    const struct inline_shorthand *shorthand = NULL;
+    enum udict_type base_type = type;
+    if (likely(type > UDICT_TYPE_SHORTHAND)) {
+        shorthand = udict_inline_shorthand(type);
+        if (unlikely(shorthand == NULL))
+            return false;
+        base_type = shorthand->base_type;
+    }
+
     /* check if it already exists */
     size_t current_size;
     uint8_t *attr = _udict_inline_get(udict, name, type, &current_size);
     if (unlikely(attr != NULL)) {
-        if (likely((type != UDICT_TYPE_OPAQUE &&
-                    type != UDICT_TYPE_STRING) ||
-                   current_size == attr_size)) {
+        if ((base_type != UDICT_TYPE_OPAQUE &&
+             base_type != UDICT_TYPE_STRING) ||
+            current_size == attr_size) {
             *attr_p = attr;
             return true;
         }
-        if (likely(type == UDICT_TYPE_STRING && current_size > attr_size)) {
+        if (likely(base_type == UDICT_TYPE_STRING &&
+                   current_size > attr_size)) {
             /* Just zero out superfluous bytes */
             memset(attr + attr_size, 0, current_size - attr_size);
             *attr_p = attr;
@@ -539,16 +448,17 @@ static bool udict_inline_set(struct udict *udict, const char *name,
 
     /* calculate header size */
     size_t header_size = 1;
-    size_t namelen = strlen(name);
-    const struct inline_shorthand *shorthand = udict_inline_shorthand(name, type);
-    if (unlikely(shorthand == NULL))
+    size_t namelen;
+    if (likely(shorthand != NULL)) {
+        if (base_type == UDICT_TYPE_OPAQUE || base_type == UDICT_TYPE_STRING)
+            header_size += 2;
+    } else {
+        namelen = strlen(name);
         header_size += 2 + namelen + 1;
-    else if (unlikely(type == UDICT_TYPE_OPAQUE ||
-                      type == UDICT_TYPE_STRING))
-        header_size += 2;
+    }
 
     /* check total attributes size */
-    attr = udict_inline_find_type(udict, UDICT_TYPE_END);
+    attr = udict_inline_find(udict, NULL, UDICT_TYPE_END);
     size_t total_size = (attr - umem_buffer(&inl->umem)) + header_size +
                         attr_size + 1;
     if (unlikely(total_size >= umem_size(&inl->umem))) {
@@ -558,7 +468,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
                                                inline_mgr->extra_size)))
             return false;
 
-        attr = udict_inline_find_type(udict, UDICT_TYPE_END);
+        attr = udict_inline_find(udict, NULL, UDICT_TYPE_END);
     }
 
     /* write attribute header */
@@ -570,18 +480,41 @@ static bool udict_inline_set(struct udict *udict, const char *name,
         *attr++ = size & 0xff;
         memcpy(attr, name, namelen + 1);
         attr += namelen + 1;
-   } else if (unlikely(type == UDICT_TYPE_OPAQUE ||
-                       type == UDICT_TYPE_STRING)) {
+   } else if (shorthand->base_type == UDICT_TYPE_OPAQUE ||
+              shorthand->base_type == UDICT_TYPE_STRING) {
         assert(attr_size <= UINT16_MAX);
         uint16_t size = attr_size;
-        *attr++ = shorthand->type;
+        *attr++ = type;
         *attr++ = size >> 8;
         *attr++ = size & 0xff;
    } else
-        *attr++ = shorthand->type;
+        *attr++ = type;
 
     attr[attr_size] = UDICT_TYPE_END;
     *attr_p = attr;
+    return true;
+}
+
+/** @internal @This names a shorthand attribute.
+ *
+ * @param udict pointer to the udict
+ * @param type shorthand type
+ * @param name_p filled in with the name of the shorthand attribute
+ * @param base_type_p filled in with the base type of the shorthand attribute
+ * @return false in case the shorthand doesn't exist
+ */
+static bool udict_inline_name(struct udict *udict, enum udict_type type,
+                              const char **name_p, enum udict_type *base_type_p)
+{
+    if (type <= UDICT_TYPE_SHORTHAND)
+        return false;
+
+    const struct inline_shorthand *shorthand = udict_inline_shorthand(type);
+    if (unlikely(shorthand == NULL))
+        return false;
+
+    *name_p = shorthand->name;
+    *base_type_p = shorthand->base_type;
     return true;
 }
 
@@ -624,6 +557,12 @@ static bool udict_inline_control(struct udict *udict,
             const char *name = va_arg(args, const char *);
             enum udict_type type = va_arg(args, enum udict_type);
             return udict_inline_delete(udict, name, type);
+        }
+        case UDICT_NAME: {
+            enum udict_type type = va_arg(args, enum udict_type);
+            const char **name_p = va_arg(args, const char **);
+            enum udict_type *base_type_p = va_arg(args, enum udict_type *);
+            return udict_inline_name(udict, type, name_p, base_type_p);
         }
         default:
             return false;

@@ -37,8 +37,9 @@
 #include <string.h>
 #include <stdint.h>
 
-UREF_ATTR_TEMPLATE(ts_flow, pid, "t.pid", unsigned, uint64_t, PID)
-UREF_ATTR_TEMPLATE(ts_flow, max_delay, "t.maxdelay", unsigned, uint64_t, maximum retention time)
+UREF_ATTR_UNSIGNED(ts_flow, pid, "t.pid", PID)
+UREF_ATTR_UNSIGNED(ts_flow, max_delay, "t.maxdelay", maximum retention time)
+UREF_ATTR_OPAQUE(ts_flow, psi_filter_internal, "t.psi.filter", PSI filter)
 
 /** @This returns the value of a PSI section filter.
  *
@@ -55,7 +56,7 @@ static inline bool uref_ts_flow_get_psi_filter(struct uref *uref,
 {
     const uint8_t *attr;
     size_t size;
-    if (unlikely(!uref_attr_get_opaque(uref, &attr, &size, "t.psi.filter") ||
+    if (unlikely(!uref_ts_flow_get_psi_filter_internal(uref, &attr, &size) ||
                  !size || size % 2))
         return false;
     *size_p = size / 2;
@@ -80,7 +81,7 @@ static inline bool uref_ts_flow_set_psi_filter(struct uref *uref,
     uint8_t attr[2 * size];
     memcpy(attr, filter, size);
     memcpy(attr + size, mask, size);
-    return uref_attr_set_opaque(uref, attr, 2 * size, "t.psi.filter");
+    return uref_ts_flow_set_psi_filter_internal(uref, attr, 2 * size);
 }
 
 /** @This deletes a PSI section filter.
@@ -90,7 +91,7 @@ static inline bool uref_ts_flow_set_psi_filter(struct uref *uref,
  */
 static inline bool uref_ts_flow_delete_psi_filter(struct uref *uref)
 {
-    return uref_attr_delete_opaque(uref, "t.psi.filter");
+    return uref_ts_flow_delete_psi_filter_internal(uref);
 }
 
 #endif

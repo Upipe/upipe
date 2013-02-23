@@ -41,165 +41,42 @@ static inline bool uref_attr_iterate(struct uref *uref, const char **name_p,
     return udict_iterate(uref->udict, name_p, type_p);
 }
 
-/** @see udict_get_opaque */
-static inline bool uref_attr_get_opaque(struct uref *uref, const uint8_t **p,
-                                        size_t *size_p, const char *name)
-{
-    return udict_get_opaque(uref->udict, p, size_p, name);
-}
-/** @see udict_get_opaque_va */
-static inline bool uref_attr_get_opaque_va(struct uref *uref, const uint8_t **p,
-                                           size_t *size_p,
-                                           const char *format, ...)
-                   __attribute__ ((format(printf, 4, 5)));
-/** @hidden */
-static inline bool uref_attr_get_opaque_va(struct uref *uref, const uint8_t **p,
-                                           size_t *size_p,
-                                           const char *format, ...)
-{
-    UBASE_VARARG(uref_attr_get_opaque(uref, p, size_p, string))
-}
-/** @see udict_set_opaque */
-static inline bool uref_attr_set_opaque(struct uref *uref,
-                                        const uint8_t *value, size_t attr_size,
-                                        const char *name)
-{
-    return udict_set_opaque(uref->udict, value, attr_size, name);
-}
-/** @see udict_set_opaque_va */
-static inline bool uref_attr_set_opaque_va(struct uref *uref,
-                                           const uint8_t *value,
-                                           size_t attr_size,
-                                           const char *format, ...)
-                   __attribute__ ((format(printf, 4, 5)));
-/** @hidden */
-static inline bool uref_attr_set_opaque_va(struct uref *uref,
-                                           const uint8_t *value,
-                                           size_t attr_size,
-                                           const char *format, ...)
-{
-    UBASE_VARARG(uref_attr_set_opaque(uref, value, attr_size, string))
-}
 
-/** @internal This template allows to quickly define uref attributes
- * functions mapped on udict.
- *
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
+/*
+ * Opaque attributes
  */
-#define UREF_ATTR_TEMPLATE_TYPE1(type, ctype)                               \
-/** @see udict_get_##type */                                                \
-static inline bool uref_attr_get_##type(struct uref *uref, ctype *p,        \
-                                        const char *name)                   \
-{                                                                           \
-    return udict_get_##type(uref->udict, p, name);                          \
-}                                                                           \
-/** @see udict_get_##type##_va */                                           \
-static inline bool uref_attr_get_##type##_va(struct uref *uref, ctype *p,   \
-                                             const char *format, ...)       \
-                   __attribute__ ((format(printf, 3, 4)));                  \
-/** @hidden */                                                              \
-static inline bool uref_attr_get_##type##_va(struct uref *uref, ctype *p,   \
-                                             const char *format, ...)       \
-{                                                                           \
-    UBASE_VARARG(uref_attr_get_##type(uref, p, string))                     \
-}                                                                           \
-/** @see udict_set_##type */                                                \
-static inline bool uref_attr_set_##type(struct uref *uref, ctype value,     \
-                                        const char *name)                   \
-{                                                                           \
-    return udict_set_##type(uref->udict, value, name);                      \
-}                                                                           \
-/** @see udict_set_##type##_va */                                           \
-static inline bool uref_attr_set_##type##_va(struct uref *uref,             \
-                                             ctype value,                   \
-                                             const char *format, ...)       \
-                   __attribute__ ((format(printf, 3, 4)));                  \
-/** @hidden */                                                              \
-static inline bool uref_attr_set_##type##_va(struct uref *uref,             \
-                                             ctype value,                   \
-                                             const char *format, ...)       \
-{                                                                           \
-    UBASE_VARARG(uref_attr_set_##type(uref, value, string))                 \
-}
 
-UREF_ATTR_TEMPLATE_TYPE1(string, const char *)
-UREF_ATTR_TEMPLATE_TYPE1(void, void *)
-UREF_ATTR_TEMPLATE_TYPE1(bool, bool)
-UREF_ATTR_TEMPLATE_TYPE1(small_unsigned, uint8_t)
-UREF_ATTR_TEMPLATE_TYPE1(small_int, int8_t)
-UREF_ATTR_TEMPLATE_TYPE1(unsigned, uint64_t)
-UREF_ATTR_TEMPLATE_TYPE1(int, int64_t)
-UREF_ATTR_TEMPLATE_TYPE1(float, double)
-UREF_ATTR_TEMPLATE_TYPE1(rational, struct urational)
-#undef UREF_ATTR_TEMPLATE_TYPE1
-
-/** @internal This template allows to quickly define uref attributes
- * functions mapped on udict.
- *
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
- */
-#define UREF_ATTR_TEMPLATE_TYPE2(type, ctype)                               \
-/** @see udict_delete_##type */                                             \
-static inline bool uref_attr_delete_##type(struct uref *uref,               \
-                                           const char *name)                \
-{                                                                           \
-    return udict_delete_##type(uref->udict, name);                          \
-}                                                                           \
-/** @see udict_delete_##type##_va */                                        \
-static inline bool uref_attr_delete_##type##_va(struct uref *uref,          \
-                                                const char *format, ...)    \
-                   __attribute__ ((format(printf, 2, 3)));                  \
-/** @hidden */                                                              \
-static inline bool uref_attr_delete_##type##_va(struct uref *uref,          \
-                                                const char *format, ...)    \
-{                                                                           \
-    UBASE_VARARG(uref_attr_delete_##type(uref, string))                     \
-}
-
-UREF_ATTR_TEMPLATE_TYPE2(opaque, uint8_t *)
-UREF_ATTR_TEMPLATE_TYPE2(string, const char *)
-UREF_ATTR_TEMPLATE_TYPE2(void, void *)
-UREF_ATTR_TEMPLATE_TYPE2(bool, bool)
-UREF_ATTR_TEMPLATE_TYPE2(small_unsigned, uint8_t)
-UREF_ATTR_TEMPLATE_TYPE2(small_int, int8_t)
-UREF_ATTR_TEMPLATE_TYPE2(unsigned, uint64_t)
-UREF_ATTR_TEMPLATE_TYPE2(int, int64_t)
-UREF_ATTR_TEMPLATE_TYPE2(float, double)
-UREF_ATTR_TEMPLATE_TYPE2(rational, struct urational)
-#undef UREF_ATTR_TEMPLATE_TYPE2
-
-/* @This allows to define accessors for a standard attribute.
+/* @This allows to define accessors for a opaque attribute.
  *
  * @param group group of attributes
  * @param attr readable name of the attribute, for the function names
- * @param name string defining the attribute
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
+ * @param name opaque defining the attribute
  * @param desc description of the attribute
  */
-#define UREF_ATTR_TEMPLATE(group, attr, name, type, ctype, desc)            \
+#define UREF_ATTR_OPAQUE(group, attr, name, desc)                           \
 /** @This returns the desc attribute of a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return true if the attribute was found, otherwise p is not modified     \
  */                                                                         \
-static inline bool uref_##group##_get_##attr(struct uref *uref, ctype *p)   \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const uint8_t **p,             \
+                                             size_t *size_p)                \
 {                                                                           \
-    return uref_attr_get_##type(uref, p, name);                             \
+    return udict_get_opaque(uref->udict, p, size_p, UDICT_TYPE_OPAQUE,      \
+                            name);                                          \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @param value value to set                                                \
+ * @param v value to set                                                    \
  * @return true if no allocation failure occurred                           \
  */                                                                         \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
-                                             ctype value)                   \
+                                             const uint8_t *v, size_t size) \
 {                                                                           \
-    return uref_attr_set_##type(uref, value, name);                         \
+    return udict_set_opaque(uref->udict, v, size, UDICT_TYPE_OPAQUE, name); \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -208,78 +85,84 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return uref_attr_delete_##type(uref, name);                             \
+    return udict_delete(uref->udict, UDICT_TYPE_OPAQUE, name);              \
 }
 
-/* @This allows to define accessors for a standard void attribute.
+/* @This allows to define accessors for a shorthand opaque attribute.
  *
  * @param group group of attributes
  * @param attr readable name of the attribute, for the function names
- * @param name string defining the attribute
+ * @param type shorthand type
  * @param desc description of the attribute
  */
-#define UREF_ATTR_TEMPLATE_VOID(group, attr, name, desc)                    \
-/** @This returns the presence of a desc attribute in a uref.               \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @return true if the attribute was found, otherwise p is not modified     \
- */                                                                         \
-static inline bool uref_##group##_get_##attr(struct uref *uref)             \
-{                                                                           \
-    return uref_attr_get_void(uref, NULL, name);                            \
-}                                                                           \
-/** @This sets a desc attribute in a uref.                                  \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool uref_##group##_set_##attr(struct uref *uref)             \
-{                                                                           \
-    return uref_attr_set_void(uref, NULL, name);                            \
-}                                                                           \
-/** @This deletes a desc attribute from a uref.                             \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @return true if no allocation failure occurred                           \
- */                                                                         \
-static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
-{                                                                           \
-    return uref_attr_delete_void(uref, name);                               \
-}
-
-/* @This allows to define accessors for a standard attribute, with a name
- * depending on printf arguments.
- *
- * @param group group of attributes
- * @param attr readable name of the attribute, for the function names
- * @param format printf-style format of the attribute
- * @param type upipe attribute type name
- * @param ctype type of the attribute value in C
- * @param desc description of the attribute
- */
-#define UREF_ATTR_TEMPLATE_VA(group, attr, format, type, ctype, desc,       \
-                              args_decl, args)                              \
+#define UREF_ATTR_OPAQUE_SH(group, attr, type, desc)                        \
 /** @This returns the desc attribute of a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return true if the attribute was found, otherwise p is not modified     \
  */                                                                         \
-static inline bool uref_##group##_get_##attr(struct uref *uref, ctype *p,   \
-                                             args_decl)                     \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const uint8_t **p,             \
+                                             size_t *size_p)                \
 {                                                                           \
-    return uref_attr_get_##type##_va(uref, p, format, args);                \
+    return udict_get_opaque(uref->udict, p, size_p, type, NULL);            \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @param value value to set                                                \
+ * @param v value to set                                                    \
  * @return true if no allocation failure occurred                           \
  */                                                                         \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
-                                             ctype value, args_decl)        \
+                                             const uint8_t *v, size_t size) \
 {                                                                           \
-    return uref_attr_set_##type##_va(uref, value, format, args);            \
+    return udict_set_opaque(uref->udict, v, size, type, NULL);              \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a opaque attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_OPAQUE_VA(group, attr, format, desc, args_decl, args)     \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const uint8_t **p,             \
+                                             size_t *size_p, args_decl)     \
+{                                                                           \
+    return udict_get_opaque_va(uref->udict, p, size_p, UDICT_TYPE_OPAQUE,   \
+                               format, args);                               \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             const uint8_t *v,              \
+                                             size_t size, args_decl)        \
+{                                                                           \
+    return udict_set_opaque_va(uref->udict, v, size, UDICT_TYPE_OPAQUE,     \
+                               format, args);                               \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -289,10 +172,95 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return uref_attr_delete_##type##_va(uref, format, args);                \
+    return udict_delete_va(uref->udict, UDICT_TYPE_OPAQUE, format, args);   \
 }
 
-/* @This allows to define accessors for a standard void attribute, with a name
+
+/*
+ * String attributes
+ */
+
+/* @This allows to define accessors for a string attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_STRING(group, attr, name, desc)                           \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const char **p)                \
+{                                                                           \
+    return udict_get_string(uref->udict, p, UDICT_TYPE_STRING, name);       \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             const char *v)                 \
+{                                                                           \
+    return udict_set_string(uref->udict, v, UDICT_TYPE_STRING, name);       \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_STRING, name);              \
+}
+
+/* @This allows to define accessors for a shorthand string attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_STRING_SH(group, attr, type, desc)                        \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const char **p)                \
+{                                                                           \
+    return udict_get_string(uref->udict, p, type, NULL);                    \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             const char *v)                 \
+{                                                                           \
+    return udict_set_string(uref->udict, v, type, NULL);                    \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a string attribute, with a name
  * depending on printf arguments.
  *
  * @param group group of attributes
@@ -300,7 +268,128 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  * @param format printf-style format of the attribute
  * @param desc description of the attribute
  */
-#define UREF_ATTR_TEMPLATE_VOID_VA(group, attr, name, desc, args_decl, args)\
+#define UREF_ATTR_STRING_VA(group, attr, format, desc, args_decl, args)     \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             const char **p, args_decl)     \
+{                                                                           \
+    return udict_get_string_va(uref->udict, p, UDICT_TYPE_STRING,           \
+                               format, args);                               \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             const char *v, args_decl)      \
+{                                                                           \
+    return udict_set_string_va(uref->udict, v, UDICT_TYPE_STRING,           \
+                               format, args);                               \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
+                                                args_decl)                  \
+{                                                                           \
+    return udict_delete_va(uref->udict, UDICT_TYPE_STRING, format, args);   \
+}
+
+
+/*
+ * Void attributes
+ */
+
+/* @This allows to define accessors for a void attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_VOID(group, attr, name, desc)                             \
+/** @This returns the presence of a desc attribute in a uref.               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref)             \
+{                                                                           \
+    return udict_get_void(uref->udict, NULL, UDICT_TYPE_VOID, name);        \
+}                                                                           \
+/** @This sets a desc attribute in a uref.                                  \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref)             \
+{                                                                           \
+    return udict_set_void(uref->udict, NULL, UDICT_TYPE_VOID, name);        \
+}                                                                           \
+/** @This deletes a desc attribute from a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_VOID, name);                \
+}
+
+/* @This allows to define accessors for a shorthand void attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_VOID_SH(group, attr, type, desc)                          \
+/** @This returns the presence of a desc attribute in a uref.               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref)             \
+{                                                                           \
+    return udict_get_void(uref->udict, NULL, type, NULL);                   \
+}                                                                           \
+/** @This sets a desc attribute in a uref.                                  \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref)             \
+{                                                                           \
+    return udict_set_void(uref->udict, NULL, type, NULL);                   \
+}                                                                           \
+/** @This deletes a desc attribute from a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a void attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_VOID_VA(group, attr, name, desc, args_decl, args)         \
 /** @This returns the presence of a desc attribute in a uref.               \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -308,7 +397,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref, args_decl)  \
 {                                                                           \
-    return uref_attr_get_void_va(uref, NULL, format, args);                 \
+    return udict_get_void_va(uref->udict, NULL, UDICT_TYPE_VOID,            \
+                             format, args);                                 \
 }                                                                           \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
@@ -318,7 +408,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref, args_decl)  \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              args_decl)                     \
 {                                                                           \
-    return uref_attr_set_void_va(uref, NULL, format, args);                 \
+    return udict_set_void_va(uref->udict, NULL, UDICT_TYPE_VOID,            \
+                             format, args);                                 \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
  *                                                                          \
@@ -328,7 +419,529 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return uref_attr_delete_void_va(uref, format, args);                    \
+    return udict_delete_va(uref->udict, UDICT_TYPE_VOID, format, args);     \
+}
+
+
+/*
+ * Small unsigned attributes
+ */
+
+/* @This allows to define accessors for a small_unsigned attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SMALL_UNSIGNED(group, attr, name, desc)                   \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint8_t *p)                    \
+{                                                                           \
+    return udict_get_small_unsigned(uref->udict, p,                         \
+                                    UDICT_TYPE_SMALL_UNSIGNED, name);       \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint8_t v)                     \
+{                                                                           \
+    return udict_set_small_unsigned(uref->udict, v,                         \
+                                    UDICT_TYPE_SMALL_UNSIGNED, name);       \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_SMALL_UNSIGNED, name);            \
+}
+
+/* @This allows to define accessors for a shorthand small_unsigned attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SMALL_UNSIGNED_SH(group, attr, type, desc)                \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint8_t *p)                    \
+{                                                                           \
+    return udict_get_small_unsigned(uref->udict, p, type, NULL);            \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint8_t v)                     \
+{                                                                           \
+    return udict_set_small_unsigned(uref->udict, v, type, NULL);            \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a small_unsigned attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SMALL_UNSIGNED_VA(group, attr, format, desc, args_decl,   \
+                                    args)                                   \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint8_t *p, args_decl)         \
+{                                                                           \
+    return udict_get_small_unsigned_va(uref->udict, p,                      \
+                                       UDICT_TYPE_SMALL_UNSIGNED,           \
+                                       format, args);                       \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint8_t v, args_decl)          \
+{                                                                           \
+    return udict_set_small_unsigned_va(uref->udict, v,                      \
+                                       UDICT_TYPE_SMALL_UNSIGNED,           \
+                                       format, args);                       \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
+                                                args_decl)                  \
+{                                                                           \
+    return udict_delete_va(uref->udict, UDICT_TYPE_SMALL_UNSIGNED,          \
+                           format, args);                                   \
+}
+
+
+/*
+ * Unsigned attributes
+ */
+
+/* @This allows to define accessors for a unsigned attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_UNSIGNED(group, attr, name, desc)                         \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint64_t *p)                   \
+{                                                                           \
+    return udict_get_unsigned(uref->udict, p, UDICT_TYPE_UNSIGNED, name);   \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint64_t v)                    \
+{                                                                           \
+    return udict_set_unsigned(uref->udict, v, UDICT_TYPE_UNSIGNED, name);   \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_UNSIGNED, name);            \
+}
+
+/* @This allows to define accessors for a shorthand unsigned attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_UNSIGNED_SH(group, attr, type, desc)                      \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint64_t *p)                   \
+{                                                                           \
+    return udict_get_unsigned(uref->udict, p, type, NULL);                  \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint64_t v)                    \
+{                                                                           \
+    return udict_set_unsigned(uref->udict, v, type, NULL);                  \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a unsigned attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_UNSIGNED_VA(group, attr, format, desc, args_decl, args)   \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint64_t *p, args_decl)        \
+{                                                                           \
+    return udict_get_unsigned_va(uref->udict, p, UDICT_TYPE_UNSIGNED,       \
+                                 format, args);                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint64_t v, args_decl)         \
+{                                                                           \
+    return udict_set_unsigned_va(uref->udict, v, UDICT_TYPE_UNSIGNED,       \
+                                 format, args);                             \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
+                                                args_decl)                  \
+{                                                                           \
+    return udict_delete_va(uref->udict, UDICT_TYPE_UNSIGNED, format, args); \
+}
+
+
+/*
+ * Int attributes
+ */
+
+/* @This allows to define accessors for a int attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_INT(group, attr, name, desc)                              \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             int64_t *p)                    \
+{                                                                           \
+    return udict_get_int(uref->udict, p, UDICT_TYPE_INT, name);             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             int64_t v)                     \
+{                                                                           \
+    return udict_set_int(uref->udict, v, UDICT_TYPE_INT, name);             \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_INT, name);                 \
+}
+
+/* @This allows to define accessors for a shorthand int attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_INT_SH(group, attr, type, desc)                           \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             int64_t *p)                    \
+{                                                                           \
+    return udict_get_int(uref->udict, p, type, NULL);                       \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             int64_t v)                     \
+{                                                                           \
+    return udict_set_int(uref->udict, v, type, NULL);                       \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a int attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_INT_VA(group, attr, format, desc, args_decl, args)        \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             int64_t *p, args_decl)         \
+{                                                                           \
+    return udict_get_int_va(uref->udict, p, UDICT_TYPE_INT,                 \
+                                 format, args);                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             int64_t v, args_decl)          \
+{                                                                           \
+    return udict_set_int_va(uref->udict, v, UDICT_TYPE_INT,                 \
+                                 format, args);                             \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
+                                                args_decl)                  \
+{                                                                           \
+    return udict_delete_va(uref->udict, UDICT_TYPE_INT, format, args);      \
+}
+
+
+/*
+ * Rational attributes
+ */
+
+/* @This allows to define accessors for a rational attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_RATIONAL(group, attr, name, desc)                         \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             struct urational *p)           \
+{                                                                           \
+    return udict_get_rational(uref->udict, p, UDICT_TYPE_RATIONAL, name);   \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             struct urational v)            \
+{                                                                           \
+    return udict_set_rational(uref->udict, v, UDICT_TYPE_RATIONAL, name);   \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, UDICT_TYPE_RATIONAL, name);            \
+}
+
+/* @This allows to define accessors for a shorthand rational attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_RATIONAL_SH(group, attr, type, desc)                      \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             struct urational *p)           \
+{                                                                           \
+    return udict_get_rational(uref->udict, p, type, NULL);                  \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             struct urational v)            \
+{                                                                           \
+    return udict_set_rational(uref->udict, v, type, NULL);                  \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    return udict_delete(uref->udict, type, NULL);                           \
+}
+
+/* @This allows to define accessors for a rational attribute, with a name
+ * depending on prrationalf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format prrationalf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_RATIONAL_VA(group, attr, format, desc, args_decl, args)   \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             struct urational *p, args_decl)\
+{                                                                           \
+    return udict_get_rational_va(uref->udict, p, UDICT_TYPE_RATIONAL,       \
+                                 format, args);                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             struct urational v, args_decl) \
+{                                                                           \
+    return udict_set_rational_va(uref->udict, v, UDICT_TYPE_RATIONAL,       \
+                                 format, args);                             \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
+                                                args_decl)                  \
+{                                                                           \
+    return udict_delete_va(uref->udict, UDICT_TYPE_RATIONAL, format, args); \
 }
 
 #endif

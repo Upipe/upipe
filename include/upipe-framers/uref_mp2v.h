@@ -34,6 +34,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_TEMPLATE(mp2v, type, "mp2v.type", small_unsigned, uint8_t, picture coding type)
+UREF_ATTR_SMALL_UNSIGNED(mp2v, type, "mp2v.type", picture coding type)
 
 #endif

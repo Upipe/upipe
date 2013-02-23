@@ -58,6 +58,8 @@
 #define QUEUE_LENGTH 6
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
+UREF_ATTR_SMALL_UNSIGNED(test, test, "x.test", test)
+
 static struct ev_loop *loop;
 static struct upump_mgr *upump_mgr;
 static struct upipe *upipe_qsink;
@@ -104,7 +106,7 @@ static void queue_test_input(struct upipe *upipe, struct uref *uref,
         upipe_release(upipe_qsink);
     } else {
         uint8_t uref_counter;
-        assert(uref_attr_get_small_unsigned(uref, &uref_counter, "x.test"));
+        assert(uref_test_get_test(uref, &uref_counter));
         assert(uref_counter == counter);
     }
     counter++;
@@ -181,12 +183,12 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_attr_set_small_unsigned(uref, 1, "x.test"));
+    assert(uref_test_set_test(uref, 1));
     upipe_input(upipe_qsink, uref, NULL);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_attr_set_small_unsigned(uref, 2, "x.test"));
+    assert(uref_test_set_test(uref, 2));
     upipe_input(upipe_qsink, uref, NULL);
 
     unsigned int length;

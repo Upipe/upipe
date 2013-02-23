@@ -34,7 +34,8 @@
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_TEMPLATE(mp2v_flow, profilelevel, "mp2v.profilelevel", small_unsigned, uint8_t, profile and level)
-UREF_ATTR_TEMPLATE_VOID(mp2v_flow, lowdelay, "mp2v.lowdelay", low delay mode)
+UREF_ATTR_SMALL_UNSIGNED(mp2v_flow, profilelevel, "mp2v.profilelevel",
+        profile and level)
+UREF_ATTR_VOID(mp2v_flow, lowdelay, "mp2v.lowdelay", low delay mode)
 
 #endif

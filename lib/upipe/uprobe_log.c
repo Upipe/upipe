@@ -51,7 +51,7 @@ struct uprobe_log {
     /** level at which to log the messages */
     enum uprobe_log_level level;
     /** events to log */
-    bool events[UPROBE_LAST_EVENT - UPROBE_FIRST_EVENT];
+    bool events[UPROBE_LAST_EVENT + 1 - UPROBE_FIRST_EVENT];
     /** whether to log unknown events */
     bool unknown_events;
 

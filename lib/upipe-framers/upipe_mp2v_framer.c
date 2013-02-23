@@ -412,10 +412,14 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
         if (lowdelay)
             ret = ret && uref_mp2v_flow_set_lowdelay(flow_def);
     } else
-        upipe_mp2vf->progressive_sequence = false;
+        upipe_mp2vf->progressive_sequence = true;
 
     ret = ret && uref_pic_set_hsize(flow_def, horizontal);
+    if (unlikely(!ret))
+        upipe_err(upipe, "pouet 1");
     ret = ret && uref_pic_set_vsize(flow_def, vertical);
+    if (unlikely(!ret))
+        upipe_err(upipe, "pouet 2");
     struct urational sar;
     switch (aspect) {
         case MP2VSEQ_ASPECT_SQUARE:
@@ -443,11 +447,15 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     }
     ret = ret && uref_pic_set_aspect(flow_def, sar);
     ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
+    if (unlikely(!ret))
+        upipe_err(upipe, "pouet 3");
     upipe_mp2vf->fps = frame_rate;
     ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
     ret = ret && uref_block_flow_set_cpb_buffer(flow_def,
                                                 vbvbuffer * 16 * 1024 / 8);
 
+    if (unlikely(!ret))
+        upipe_err(upipe, "pouet 4");
     if (upipe_mp2vf->sequence_display != NULL) {
         size_t size;
         uint8_t display_buffer[MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE];

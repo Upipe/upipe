@@ -45,11 +45,18 @@
  */
 static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 {
-    const char *name = NULL;
-    enum udict_type type;
+    const char *iname = NULL;
+    enum udict_type itype = UDICT_TYPE_END;
     uprobe_dbg_va(uprobe, NULL, "dumping udict %p", udict);
 
-    while (udict_iterate(udict, &name, &type) && name != NULL) {
+    while (udict_iterate(udict, &iname, &itype) && itype != UDICT_TYPE_END) {
+        const char *name;
+        enum udict_type type;
+        if (!udict_name(udict, itype, &name, &type)) {
+            name = iname;
+            type = itype;
+        }
+
         switch (type) {
             default:
                 uprobe_dbg_va(uprobe, NULL, " - \"%s\" [unknown]", name);
@@ -61,7 +68,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 
             case UDICT_TYPE_STRING: {
                 const char *val;
-                if (likely(udict_get_string(udict, &val, name)))
+                if (likely(udict_get_string(udict, &val, itype, iname)))
                     uprobe_dbg_va(uprobe, NULL, " - \"%s\" [string]: \"%s\"",
                                   name, val);
                 else
@@ -76,7 +83,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 
             case UDICT_TYPE_BOOL: {
                 bool val;
-                if (likely(udict_get_bool(udict, &val, name)))
+                if (likely(udict_get_bool(udict, &val, itype, iname)))
                     uprobe_dbg_va(uprobe, NULL, " - \"%s\" [bool]: %s", name,
                                   val ? "true" : "false");
                 else
@@ -87,7 +94,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 
             case UDICT_TYPE_RATIONAL: {
                 struct urational val;
-                if (likely(udict_get_rational(udict, &val, name)))
+                if (likely(udict_get_rational(udict, &val, itype, iname)))
                     uprobe_dbg_va(uprobe, NULL,
                                   " - \"%s\" [rational]: %"PRId64"/%"PRIu64,
                                   name, val.num, val.den);
@@ -97,16 +104,16 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 break;
             }
 
-#define UDICT_DUMP_TEMPLATE(TYPE, type, ctype, ftype)                       \
+#define UDICT_DUMP_TEMPLATE(TYPE, utype, ctype, ftype)                      \
             case UDICT_TYPE_##TYPE: {                                       \
                 ctype val;                                                  \
-                if (likely(udict_get_##type(udict, &val, name)))            \
+                if (likely(udict_get_##utype(udict, &val, itype, iname)))   \
                     uprobe_dbg_va(uprobe, NULL,                             \
-                                  " - \"%s\" [" #type "]: " ftype,          \
+                                  " - \"%s\" [" #utype "]: " ftype,         \
                                   name, val);                               \
                 else                                                        \
                     uprobe_dbg_va(uprobe, NULL,                             \
-                                  " - \"%s\" [" #type "]: [invalid]",       \
+                                  " - \"%s\" [" #utype "]: [invalid]",      \
                                   name);                                    \
                 break;                                                      \
             }

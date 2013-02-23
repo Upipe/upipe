@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,8 +40,8 @@
 #include <stdbool.h>
 #include <sys/uio.h>
 
-UREF_ATTR_TEMPLATE_VOID(block, start, "b.start", start)
-UREF_ATTR_TEMPLATE_VOID(block, end, "b.end", end)
+UREF_ATTR_VOID_SH(block, start, UDICT_TYPE_BLOCK_START, start)
+UREF_ATTR_VOID_SH(block, end, UDICT_TYPE_BLOCK_END, end)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.

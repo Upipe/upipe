@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -41,13 +41,16 @@
 /** @internal flow definition prefix for sound allocator */
 #define UREF_SOUND_FLOW_DEF "sound."
 
-UREF_ATTR_TEMPLATE(sound_flow, channels, "s.channels", small_unsigned, uint8_t, number of channels)
-UREF_ATTR_TEMPLATE(sound_flow, sample_size, "s.sample_size", small_unsigned, uint8_t, size in octets of a sample of an audio channel)
-UREF_ATTR_TEMPLATE(sound_flow, rate, "s.rate", unsigned, uint64_t, samples per second)
-UREF_ATTR_TEMPLATE(sound_flow, prepend, "s.prepend", small_unsigned, uint8_t, extra samples added before each channel)
-UREF_ATTR_TEMPLATE(sound_flow, align, "s.align", unsigned, uint64_t, alignment in octets)
-UREF_ATTR_TEMPLATE(sound_flow, align_offset, "s.align_offset", int, int64_t, offset of the aligned sample)
-UREF_ATTR_TEMPLATE(sound_flow, samples, "s.samples", unsigned, uint64_t, number of samples)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",
+        size in octets of a sample of an audio channel)
+UREF_ATTR_UNSIGNED(sound_flow, rate, "s.rate", samples per second)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, prepend, "s.prepend",
+        extra samples added before each channel)
+UREF_ATTR_UNSIGNED(sound_flow, align, "s.align", alignment in octets)
+UREF_ATTR_INT(sound_flow, align_offset, "s.align_offset",
+        offset of the aligned sample)
+UREF_ATTR_UNSIGNED(sound_flow, samples, "s.samples", number of samples)
 
 /** @This allocates a control packet to define a new sound flow.
  *

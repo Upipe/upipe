@@ -34,6 +34,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_TEMPLATE(av_flow, id, "a.id", unsigned, uint64_t, libavformat ID)
+UREF_ATTR_UNSIGNED(av_flow, id, "a.id", libavformat ID)
 
 #endif

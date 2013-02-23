@@ -216,7 +216,7 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
     frame->opaque = uref_dup(upipe_avcdv->uref);
 
     uint64_t framenum = 0; // DEBUG
-    uref_attr_get_unsigned(frame->opaque, &framenum, "avcdv.framenum");
+    uref_pic_get_number(frame->opaque, &framenum);
 
     upipe_dbg_va(upipe, "Allocating frame for %u (%p) - %ux%u",
                  framenum, frame->opaque, frame->width, frame->height);
@@ -264,7 +264,7 @@ static void upipe_avcdv_release_buffer(struct AVCodecContext *context, AVFrame *
     struct uref *uref = frame->opaque;
 
     uint64_t framenum = 0; // DEBUG
-    uref_attr_get_unsigned(uref, &framenum, "avcdv.framenum");
+    uref_pic_get_number(uref, &framenum);
 
     upipe_dbg_va(upipe, "Releasing frame %u (%p)", (uint64_t) framenum, uref);
 
@@ -582,7 +582,7 @@ static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
 
     // Copy frame to ubuf_pic if any frame has been decoded
     if (gotframe) {
-        uref_attr_get_unsigned(frame->opaque, &framenum, "avcdv.framenum"); // DEBUG
+        uref_pic_get_number(frame->opaque, &framenum); // DEBUG
 
         upipe_dbg_va(upipe, "%u\t - Picture decoded ! %dx%d - %u",
                 upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
@@ -673,7 +673,7 @@ static void upipe_avcdv_input_packet(struct upipe *upipe, struct uref *uref,
     uref_block_extract(uref, 0, insize, inbuf); 
     ubuf_free(uref_detach_ubuf(uref));
 
-    uref_attr_set_unsigned(uref, upipe_avcdv->counter, "avcdv.framenum"); // DEBUG
+    uref_pic_set_number(uref, upipe_avcdv->counter); // DEBUG
 
     /* Track current uref in pipe structure - required for buffer allocation
      * in upipe_avcdv_get_buffer */

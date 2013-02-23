@@ -107,9 +107,9 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
     }
 
     const char *name = NULL;
-    enum udict_type type;
+    enum udict_type type = UDICT_TYPE_END;
     while (uref_attr_iterate(upipe_setattr->dict, &name, &type) &&
-           name != NULL) {
+           type != UDICT_TYPE_END) {
         size_t size;
         const uint8_t *v1 = udict_get(upipe_setattr->dict->udict, name, type,
                                       &size);

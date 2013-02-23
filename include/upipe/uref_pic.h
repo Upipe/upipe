@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,18 +40,22 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-UREF_ATTR_TEMPLATE(pic, number, "p.num", unsigned, uint64_t, picture number)
-UREF_ATTR_TEMPLATE(pic, hsize, "p.hsize", unsigned, uint64_t, horizontal size)
-UREF_ATTR_TEMPLATE(pic, vsize, "p.vsize", unsigned, uint64_t, vertical size)
-UREF_ATTR_TEMPLATE(pic, hsize_visible, "p.hsizevis", unsigned, uint64_t, horizontal visible size)
-UREF_ATTR_TEMPLATE(pic, vsize_visible, "p.vsizevis", unsigned, uint64_t, vertical visible size)
-UREF_ATTR_TEMPLATE(pic, hposition, "p.hposition", unsigned, uint64_t, horizontal position)
-UREF_ATTR_TEMPLATE(pic, vposition, "p.vposition", unsigned, uint64_t, vertical position)
-UREF_ATTR_TEMPLATE(pic, aspect, "p.aspect", rational, struct urational, sample aspect ratio)
-UREF_ATTR_TEMPLATE_VOID(pic, progressive, "p.progressive", progressive)
-UREF_ATTR_TEMPLATE_VOID(pic, tf, "p.tf", top field present)
-UREF_ATTR_TEMPLATE_VOID(pic, bf, "p.bf", bottom field present)
-UREF_ATTR_TEMPLATE_VOID(pic, tff, "p.tff", top field first)
+UREF_ATTR_UNSIGNED_SH(pic, number, UDICT_TYPE_PIC_NUM, picture number)
+UREF_ATTR_UNSIGNED_SH(pic, hsize, UDICT_TYPE_PIC_HSIZE, horizontal size)
+UREF_ATTR_UNSIGNED_SH(pic, vsize, UDICT_TYPE_PIC_VSIZE, vertical size)
+UREF_ATTR_UNSIGNED_SH(pic, hsize_visible, UDICT_TYPE_PIC_HSIZE_VISIBLE,
+        horizontal visible size)
+UREF_ATTR_UNSIGNED_SH(pic, vsize_visible, UDICT_TYPE_PIC_VSIZE_VISIBLE,
+        vertical visible size)
+UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
+        horizontal position)
+UREF_ATTR_UNSIGNED_SH(pic, vposition, UDICT_TYPE_PIC_VPOSITION,
+        vertical position)
+UREF_ATTR_RATIONAL_SH(pic, aspect, UDICT_TYPE_PIC_ASPECT, sample aspect ratio)
+UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
+UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
+UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
+UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a picture.
  * This is equivalent to the two operations sequentially, and is a shortcut.

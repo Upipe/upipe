@@ -42,7 +42,7 @@
 /** @internal flow definition prefix for programs */
 #define UREF_PROGRAM_FLOW_DEF "program."
 
-UREF_ATTR_TEMPLATE(program_flow, name, "prog.name", string, const char *, name of the program)
+UREF_ATTR_STRING(program_flow, name, "prog.name", name of the program)
 
 /** @This allocates a control packet to define a new program flow.
  *
