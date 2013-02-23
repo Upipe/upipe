@@ -32,6 +32,7 @@
 #define _UPIPE_UPUMP_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -79,6 +80,8 @@ struct upump {
 
 /** @This stores common management parameters for a given event loop. */
 struct upump_mgr {
+    /** refcount management structure */
+    urefcount refcount;
     /** number of blocked sinks */
     unsigned int nb_blocked_sinks;
 
@@ -92,10 +95,8 @@ struct upump_mgr {
     /** function to free the watcher */
     void (*upump_free)(struct upump *);
 
-    /** function to increment the refcount of the upump manager */
-    void (*upump_mgr_use)(struct upump_mgr *);
-    /** function to decrement the refcount of the upump manager or free it */
-    void (*upump_mgr_release)(struct upump_mgr *);
+    /** function to free upump manager */
+    void (*upump_mgr_free)(struct upump_mgr *);
 };
 
 /** @internal @This allocates and initializes a watcher.
@@ -272,8 +273,7 @@ static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
  */
 static inline void upump_mgr_use(struct upump_mgr *mgr)
 {
-    if (likely(mgr->upump_mgr_use != NULL))
-        mgr->upump_mgr_use(mgr);
+    urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a upump manager of frees it.
@@ -282,8 +282,8 @@ static inline void upump_mgr_use(struct upump_mgr *mgr)
  */
 static inline void upump_mgr_release(struct upump_mgr *mgr)
 {
-    if (likely(mgr->upump_mgr_release != NULL))
-        mgr->upump_mgr_release(mgr);
+    if (unlikely(urefcount_release(&mgr->refcount)))
+        mgr->upump_mgr_free(mgr);
 }
 
 /** @This increments the number of blocked sinks.

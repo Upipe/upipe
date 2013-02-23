@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -77,8 +76,6 @@ struct upipe_ts_sync {
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -109,7 +106,6 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
     upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
-    urefcount_init(&upipe_ts_sync->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -380,35 +376,22 @@ static bool upipe_ts_sync_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_sync_use(struct upipe *upipe)
+static void upipe_ts_sync_free(struct upipe *upipe)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    urefcount_use(&upipe_ts_sync->refcount);
-}
+    upipe_ts_sync_flush(upipe, NULL);
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_sync_release(struct upipe *upipe)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_sync->refcount))) {
-        upipe_ts_sync_flush(upipe, NULL);
-        upipe_throw_dead(upipe);
+    upipe_ts_sync_clean_octet_stream(upipe);
+    upipe_ts_sync_clean_output(upipe);
+    upipe_ts_sync_clean_sync(upipe);
 
-        upipe_ts_sync_clean_octet_stream(upipe);
-        upipe_ts_sync_clean_output(upipe);
-        upipe_ts_sync_clean_sync(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_sync->refcount);
-        free(upipe_ts_sync);
-    }
+    upipe_clean(upipe);
+    free(upipe_ts_sync);
 }
 
 /** module manager static descriptor */
@@ -418,11 +401,9 @@ static struct upipe_mgr upipe_ts_sync_mgr = {
     .upipe_alloc = upipe_ts_sync_alloc,
     .upipe_input = upipe_ts_sync_input,
     .upipe_control = upipe_ts_sync_control,
-    .upipe_use = upipe_ts_sync_use,
-    .upipe_release = upipe_ts_sync_release,
+    .upipe_free = upipe_ts_sync_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_sync pipes.

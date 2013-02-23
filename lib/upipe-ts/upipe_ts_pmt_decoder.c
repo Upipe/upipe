@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -54,8 +53,6 @@ struct upipe_ts_pmtd {
     /** true if we received a compatible flow definition */
     bool flow_def_ok;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -79,7 +76,6 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_ts_pmtd->pmt = NULL;
     upipe_ts_pmtd->flow_def_ok = false;
-    urefcount_init(&upipe_ts_pmtd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -529,52 +525,39 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_pmtd_work(upipe, uref);
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_pmtd_use(struct upipe *upipe)
+static void upipe_ts_pmtd_free(struct upipe *upipe)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    urefcount_use(&upipe_ts_pmtd->refcount);
-}
+    /* send del_es on all elementary streams of the last PMT */
+    if (upipe_ts_pmtd->pmt != NULL) {
+        UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, old_header,
+                             old_header_desc, old_header_desclength)
+        UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, old_header,
+                                   old_header_desc, old_header_desclength)
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_pmtd_release(struct upipe *upipe)
-{
-    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_pmtd->refcount))) {
-        /* send del_es on all elementary streams of the last PMT */
-        if (upipe_ts_pmtd->pmt != NULL) {
-            UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, old_header,
-                                 old_header_desc, old_header_desclength)
-            UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, old_header,
-                                       old_header_desc, old_header_desclength)
+        UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset,
+                           old_header_desclength, old_es, old_desc,
+                           old_desclength)
 
-            UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset,
-                               old_header_desclength, old_es, old_desc,
-                               old_desclength)
+        uint16_t pid = pmtn_get_pid(old_es);
 
-            uint16_t pid = pmtn_get_pid(old_es);
+        UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, old_es,
+                                 old_desc, old_desclength)
 
-            UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, old_es,
-                                     old_desc, old_desclength)
+        upipe_ts_pmtd_del_es(upipe, NULL, pid);
 
-            upipe_ts_pmtd_del_es(upipe, NULL, pid);
+        UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
 
-            UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
-
-            uref_free(upipe_ts_pmtd->pmt);
-        }
-        upipe_throw_dead(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_pmtd->refcount);
-        free(upipe_ts_pmtd);
+        uref_free(upipe_ts_pmtd->pmt);
     }
+    upipe_throw_dead(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_ts_pmtd);
 }
 
 /** module manager static descriptor */
@@ -584,11 +567,9 @@ static struct upipe_mgr upipe_ts_pmtd_mgr = {
     .upipe_alloc = upipe_ts_pmtd_alloc,
     .upipe_input = upipe_ts_pmtd_input,
     .upipe_control = NULL,
-    .upipe_use = upipe_ts_pmtd_use,
-    .upipe_release = upipe_ts_pmtd_release,
+    .upipe_free = upipe_ts_pmtd_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_pmtd pipes.

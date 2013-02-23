@@ -33,6 +33,7 @@
 #define _UPIPE_UBUF_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -123,6 +124,8 @@ enum ubuf_command {
 /** @This stores common management parameters for a ubuf pool.
  */
 struct ubuf_mgr {
+    /** refcount management structure */
+    urefcount refcount;
     /** type of allocator */
     enum ubuf_alloc_type type;
 
@@ -137,10 +140,8 @@ struct ubuf_mgr {
 
     /** function to release all buffers kept in pools */
     void (*ubuf_mgr_vacuum)(struct ubuf_mgr *);
-    /** function to increment the refcount of the ubuf manager */
-    void (*ubuf_mgr_use)(struct ubuf_mgr *);
-    /** function to decrement the refcount of the ubuf manager or free it */
-    void (*ubuf_mgr_release)(struct ubuf_mgr *);
+    /** function to free the ubuf manager */
+    void (*ubuf_mgr_free)(struct ubuf_mgr *);
 };
 
 /** @internal @This returns a new ubuf. Optional ubuf manager
@@ -240,8 +241,7 @@ static inline void ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
  */
 static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
 {
-    if (likely(mgr->ubuf_mgr_use != NULL))
-        mgr->ubuf_mgr_use(mgr);
+    urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a ubuf manager or frees it.
@@ -250,8 +250,8 @@ static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
  */
 static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
 {
-    if (likely(mgr->ubuf_mgr_release != NULL))
-        mgr->ubuf_mgr_release(mgr);
+    if (unlikely(urefcount_release(&mgr->refcount)))
+        mgr->ubuf_mgr_free(mgr);
 }
 
 #endif

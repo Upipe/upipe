@@ -51,8 +51,6 @@ struct uclock_std {
     clock_serv_t cclock;
 #endif
 
-    /** refcount management structure */
-    urefcount refcount;
     /** structure exported to modules */
     struct uclock uclock;
 };
@@ -104,30 +102,18 @@ static uint64_t uclock_std_now(struct uclock *uclock)
     return now;
 }
 
-/** @This increments the reference count of a uclock.
+/** @This frees a uclock.
  *
  * @param uclock pointer to uclock
  */
-static void uclock_std_use(struct uclock *uclock)
+static void uclock_std_free(struct uclock *uclock)
 {
     struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
-    urefcount_use(&uclock_std->refcount);
-}
-
-/** @This decrements the reference count of a uclock or frees it.
- *
- * @param uclock pointer to uclock
- */
-static void uclock_std_release(struct uclock *uclock)
-{
-    struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
-    if (unlikely(urefcount_release(&uclock_std->refcount))) {
 #ifdef __MACH__
-        mach_port_deallocate(mach_task_self(), uclock_std->cclock);
+    mach_port_deallocate(mach_task_self(), uclock_std->cclock);
 #endif
-        urefcount_clean(&uclock_std->refcount);
-        free(uclock_std);
-    }
+    urefcount_clean(&uclock_std->uclock.refcount);
+    free(uclock_std);
 }
 
 /** @This allocates a new uclock structure.
@@ -155,12 +141,12 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
 #endif
 
     struct uclock_std *uclock_std = malloc(sizeof(struct uclock_std));
-    if (unlikely(uclock_std == NULL)) return NULL;
+    if (unlikely(uclock_std == NULL))
+        return NULL;
     uclock_std->flags = flags;
-    urefcount_init(&uclock_std->refcount);
+    urefcount_init(&uclock_std->uclock.refcount);
     uclock_std->uclock.uclock_now = uclock_std_now;
-    uclock_std->uclock.uclock_use = uclock_std_use;
-    uclock_std->uclock.uclock_release = uclock_std_release;
+    uclock_std->uclock.uclock_free = uclock_std_free;
 #ifdef __MACH__
     memcpy(&uclock_std->cclock, &cclock, sizeof(cclock));
 #endif

@@ -24,7 +24,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -65,8 +64,6 @@ struct upipe_ts_pesd {
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -93,7 +90,6 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
     upipe_ts_pesd_init_sync(upipe);
     upipe_ts_pesd_init_output(upipe);
     upipe_ts_pesd->next_uref = NULL;
-    urefcount_init(&upipe_ts_pesd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -368,36 +364,23 @@ static bool upipe_ts_pesd_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_pesd_use(struct upipe *upipe)
+static void upipe_ts_pesd_free(struct upipe *upipe)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    urefcount_use(&upipe_ts_pesd->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_pesd_release(struct upipe *upipe)
-{
-    struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_pesd->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_ts_pesd_clean_output(upipe);
+    upipe_ts_pesd_clean_sync(upipe);
 
-        upipe_ts_pesd_clean_output(upipe);
-        upipe_ts_pesd_clean_sync(upipe);
+    if (upipe_ts_pesd->next_uref != NULL)
+        uref_free(upipe_ts_pesd->next_uref);
 
-        if (upipe_ts_pesd->next_uref != NULL)
-            uref_free(upipe_ts_pesd->next_uref);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_pesd->refcount);
-        free(upipe_ts_pesd);
-    }
+    upipe_clean(upipe);
+    free(upipe_ts_pesd);
 }
 
 /** module manager static descriptor */
@@ -407,11 +390,9 @@ static struct upipe_mgr upipe_ts_pesd_mgr = {
     .upipe_alloc = upipe_ts_pesd_alloc,
     .upipe_input = upipe_ts_pesd_input,
     .upipe_control = upipe_ts_pesd_control,
-    .upipe_use = upipe_ts_pesd_use,
-    .upipe_release = upipe_ts_pesd_release,
+    .upipe_free = upipe_ts_pesd_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_pesd pipes.

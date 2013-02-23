@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,7 @@
 #define _UPIPE_UREF_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
 
@@ -56,6 +57,8 @@ struct uref {
 /** @This stores common management parameters for a uref pool.
  */
 struct uref_mgr {
+    /** refcount management structure */
+    urefcount refcount;
     /** minimum size of a control uref */
     size_t control_attr_size;
     /** udict manager */
@@ -68,10 +71,8 @@ struct uref_mgr {
 
     /** function to release all buffers kept in pools */
     void (*uref_mgr_vacuum)(struct uref_mgr *);
-    /** function to increment the refcount of the uref manager */
-    void (*uref_mgr_use)(struct uref_mgr *);
-    /** function to decrement the refcount of the uref manager or free it */
-    void (*uref_mgr_release)(struct uref_mgr *);
+    /** function to free the uref manager */
+    void (*uref_mgr_free)(struct uref_mgr *);
 };
 
 /** @This frees a uref and other sub-structures.
@@ -221,8 +222,7 @@ static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
  */
 static inline void uref_mgr_use(struct uref_mgr *mgr)
 {
-    if (likely(mgr->uref_mgr_use != NULL))
-        mgr->uref_mgr_use(mgr);
+    urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a uref manager or frees it.
@@ -231,8 +231,8 @@ static inline void uref_mgr_use(struct uref_mgr *mgr)
  */
 static inline void uref_mgr_release(struct uref_mgr *mgr)
 {
-    if (likely(mgr->uref_mgr_release != NULL))
-        mgr->uref_mgr_release(mgr);
+    if (unlikely(urefcount_release(&mgr->refcount)))
+        mgr->uref_mgr_free(mgr);
 }
 
 #endif

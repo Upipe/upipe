@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -55,8 +54,6 @@ struct upipe_dup {
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -75,8 +72,6 @@ struct upipe_dup_output {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -103,7 +98,6 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
     upipe_init(upipe, mgr, uprobe);
     upipe_dup_output_init_output(upipe);
-    urefcount_init(&upipe_dup_output->refcount);
 
     upipe_dup_output_init_sub(upipe);
 
@@ -146,35 +140,21 @@ static bool upipe_dup_output_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_dup_output_use(struct upipe *upipe)
+static void upipe_dup_output_free(struct upipe *upipe)
 {
     struct upipe_dup_output *upipe_dup_output =
         upipe_dup_output_from_upipe(upipe);
-    urefcount_use(&upipe_dup_output->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_dup_output_release(struct upipe *upipe)
-{
-    struct upipe_dup_output *upipe_dup_output =
-        upipe_dup_output_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_dup_output->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_dup_output_clean_output(upipe);
 
-        upipe_dup_output_clean_sub(upipe);
-        upipe_dup_output_clean_output(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_dup_output->refcount);
-        free(upipe_dup_output);
-    }
+    upipe_clean(upipe);
+    upipe_dup_output_clean_sub(upipe);
+    free(upipe_dup_output);
 }
 
 /** @internal @This initializes the output manager for a dup pipe.
@@ -190,10 +170,8 @@ static struct upipe_mgr *upipe_dup_init_output_mgr(struct upipe *upipe)
     output_mgr->upipe_alloc = upipe_dup_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_dup_output_control;
-    output_mgr->upipe_use = upipe_dup_output_use;
-    output_mgr->upipe_release = upipe_dup_output_release;
-    output_mgr->upipe_mgr_use = upipe_dup_output_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_dup_output_mgr_release;
+    output_mgr->upipe_free = upipe_dup_output_free;
+    output_mgr->upipe_mgr_free = NULL;
     return output_mgr;
 }
 
@@ -213,7 +191,6 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
     upipe_split_init(upipe, mgr, uprobe, upipe_dup_init_output_mgr(upipe));
     upipe_dup_init_sub_outputs(upipe);
     upipe_dup->flow_def = NULL;
-    urefcount_init(&upipe_dup->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -273,32 +250,19 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_dup_use(struct upipe *upipe)
-{
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    urefcount_use(&upipe_dup->refcount);
-}
-
 /** @This decrements the reference count of a upipe or frees it.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_dup_release(struct upipe *upipe)
+static void upipe_dup_free(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_dup->refcount))) {
-        upipe_throw_dead(upipe);
-        upipe_dup_clean_sub_outputs(upipe);
-        if (upipe_dup->flow_def != NULL)
-            uref_free(upipe_dup->flow_def);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_dup->refcount);
-        free(upipe_dup);
-    }
+    upipe_throw_dead(upipe);
+    upipe_dup_clean_sub_outputs(upipe);
+    if (upipe_dup->flow_def != NULL)
+        uref_free(upipe_dup->flow_def);
+    upipe_clean(upipe);
+    free(upipe_dup);
 }
 
 /** module manager static descriptor */
@@ -308,11 +272,9 @@ static struct upipe_mgr upipe_dup_mgr = {
     .upipe_alloc = upipe_dup_alloc,
     .upipe_input = upipe_dup_input,
     .upipe_control = NULL,
-    .upipe_use = upipe_dup_use,
-    .upipe_release = upipe_dup_release,
+    .upipe_free = upipe_dup_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all dup pipes.

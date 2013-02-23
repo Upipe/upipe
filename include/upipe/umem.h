@@ -32,6 +32,7 @@
 #define _UPIPE_UMEM_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -77,6 +78,9 @@ static inline size_t umem_size(struct umem *umem)
 /** @This defines a memory allocator management structure.
  */
 struct umem_mgr {
+    /** refcount management structure */
+    urefcount refcount;
+
     /** function to allocate a new memory block */
     bool (*umem_alloc)(struct umem_mgr *, struct umem *, size_t);
     /** function to resize umem */
@@ -86,10 +90,8 @@ struct umem_mgr {
 
     /** function to release all buffers kept in pools */
     void (*umem_mgr_vacuum)(struct umem_mgr *);
-    /** function to increment the refcount of the umem manager */
-    void (*umem_mgr_use)(struct umem_mgr *);
-    /** function to decrement the refcount of the umem manager or free it */
-    void (*umem_mgr_release)(struct umem_mgr *);
+    /** function to free the umem manager */
+    void (*umem_mgr_free)(struct umem_mgr *);
 };
 
 /** @This allocates a new umem buffer space.
@@ -151,8 +153,7 @@ static inline void umem_mgr_vacuum(struct umem_mgr *mgr)
  */
 static inline void umem_mgr_use(struct umem_mgr *mgr)
 {
-    if (likely(mgr->umem_mgr_use != NULL))
-        mgr->umem_mgr_use(mgr);
+    urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a umem manager or frees it.
@@ -161,8 +162,8 @@ static inline void umem_mgr_use(struct umem_mgr *mgr)
  */
 static inline void umem_mgr_release(struct umem_mgr *mgr)
 {
-    if (likely(mgr->umem_mgr_release != NULL))
-        mgr->umem_mgr_release(mgr);
+    if (unlikely(urefcount_release(&mgr->refcount)))
+        mgr->umem_mgr_free(mgr);
 }
 
 #endif

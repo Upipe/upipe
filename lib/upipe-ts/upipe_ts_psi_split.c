@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -58,8 +57,6 @@ struct upipe_ts_psi_split {
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -78,8 +75,6 @@ struct upipe_ts_psi_split_output {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -107,7 +102,6 @@ static struct upipe *upipe_ts_psi_split_output_alloc(struct upipe_mgr *mgr,
         upipe_ts_psi_split_output_to_upipe(upipe_ts_psi_split_output);
     upipe_init(upipe, mgr, uprobe);
     upipe_ts_psi_split_output_init_output(upipe);
-    urefcount_init(&upipe_ts_psi_split_output->refcount);
 
     upipe_ts_psi_split_output_init_sub(upipe);
 
@@ -181,35 +175,21 @@ static bool upipe_ts_psi_split_output_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_psi_split_output_use(struct upipe *upipe)
+static void upipe_ts_psi_split_output_free(struct upipe *upipe)
 {
     struct upipe_ts_psi_split_output *upipe_ts_psi_split_output =
-        upipe_ts_psi_split_output_from_upipe(upipe);
-    urefcount_use(&upipe_ts_psi_split_output->refcount);
-}
+    upipe_ts_psi_split_output_from_upipe(upipe);
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psi_split_output_release(struct upipe *upipe)
-{
-    struct upipe_ts_psi_split_output *upipe_ts_psi_split_output =
-        upipe_ts_psi_split_output_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_psi_split_output->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_ts_psi_split_output_clean_output(upipe);
 
-        upipe_ts_psi_split_output_clean_sub(upipe);
-        upipe_ts_psi_split_output_clean_output(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_psi_split_output->refcount);
-        free(upipe_ts_psi_split_output);
-    }
+    upipe_clean(upipe);
+    upipe_ts_psi_split_output_clean_sub(upipe);
+    free(upipe_ts_psi_split_output);
 }
 
 /** @internal @This initializes the output manager for a ts_psi_split pipe.
@@ -226,10 +206,8 @@ static struct upipe_mgr *upipe_ts_psi_split_init_output_mgr(struct upipe *upipe)
     output_mgr->upipe_alloc = upipe_ts_psi_split_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_psi_split_output_control;
-    output_mgr->upipe_use = upipe_ts_psi_split_output_use;
-    output_mgr->upipe_release = upipe_ts_psi_split_output_release;
-    output_mgr->upipe_mgr_use = upipe_ts_psi_split_output_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_ts_psi_split_output_mgr_release;
+    output_mgr->upipe_free = upipe_ts_psi_split_output_free;
+    output_mgr->upipe_mgr_free = NULL;
     return output_mgr;
 }
 
@@ -250,7 +228,6 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
     upipe_split_init(upipe, mgr, uprobe,
                      upipe_ts_psi_split_init_output_mgr(upipe));
     upipe_ts_psi_split_init_sub_outputs(upipe);
-    urefcount_init(&upipe_ts_psi_split->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -330,33 +307,19 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_psi_split_work(upipe, uref, upump);
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_psi_split_use(struct upipe *upipe)
+static void upipe_ts_psi_split_free(struct upipe *upipe)
 {
     struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_upipe(upipe);
-    urefcount_use(&upipe_ts_psi_split->refcount);
-}
+    upipe_ts_psi_split_from_upipe(upipe);
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psi_split_release(struct upipe *upipe)
-{
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_psi_split->refcount))) {
-        upipe_throw_dead(upipe);
-
-        upipe_ts_psi_split_clean_sub_outputs(upipe);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_psi_split->refcount);
-        free(upipe_ts_psi_split);
-    }
+    upipe_ts_psi_split_clean_sub_outputs(upipe);
+    upipe_clean(upipe);
+    free(upipe_ts_psi_split);
 }
 
 /** module manager static descriptor */
@@ -366,11 +329,9 @@ static struct upipe_mgr upipe_ts_psi_split_mgr = {
     .upipe_alloc = upipe_ts_psi_split_alloc,
     .upipe_input = upipe_ts_psi_split_input,
     .upipe_control = NULL,
-    .upipe_use = upipe_ts_psi_split_use,
-    .upipe_release = upipe_ts_psi_split_release,
+    .upipe_free = upipe_ts_psi_split_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_psi_split pipes.

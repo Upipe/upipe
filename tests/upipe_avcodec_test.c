@@ -59,7 +59,6 @@
 #include <upipe-av/upipe_avcodec_dec_vid.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/urefcount.h>
 
 #include <upipe/upipe_helper_upipe.h>
 #include <libavformat/avformat.h>
@@ -239,48 +238,29 @@ static struct upipe_mgr avcdv_test_mgr = {
     .upipe_alloc = avcdv_test_alloc,
     .upipe_input = avcdv_test_input,
     .upipe_control = NULL,
-    .upipe_release = NULL,
-    .upipe_use = NULL,
+    .upipe_free = NULL,
 
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
-
-/** nullpipe (/dev/null) */
-struct nullpipe {
-    struct upipe upipe;
-    urefcount refcount;
-};
-UPIPE_HELPER_UPIPE(nullpipe, upipe);
 
 /** nullpipe (/dev/null) */
 static struct upipe *nullpipe_alloc(struct upipe_mgr *mgr,
                                     struct uprobe *uprobe)
 {
-    struct nullpipe *nullpipe = malloc(sizeof(struct nullpipe));
-    if (unlikely(!nullpipe)) return NULL;
-    upipe_init(&nullpipe->upipe, mgr, uprobe);
-    urefcount_init(&nullpipe->refcount);
-    upipe_throw_ready(&nullpipe->upipe);
-    return &nullpipe->upipe;
+    struct upipe *upipe = malloc(sizeof(struct upipe));
+    if (unlikely(!upipe))
+        return NULL;
+    upipe_init(upipe, mgr, uprobe);
+    upipe_throw_ready(upipe);
+    return upipe;
 }
 
 /** nullpipe (/dev/null) */
-static void nullpipe_use(struct upipe *upipe)
+static void nullpipe_free(struct upipe *upipe)
 {
-    struct nullpipe *nullpipe = nullpipe_from_upipe(upipe);
-    urefcount_use(&nullpipe->refcount);
-}
-
-/** nullpipe (/dev/null) */
-static void nullpipe_release(struct upipe *upipe)
-{
-    struct nullpipe *nullpipe = nullpipe_from_upipe(upipe);
-    if (unlikely(urefcount_release(&nullpipe->refcount))) {
-        upipe_throw_dead(upipe);
-        upipe_clean(upipe);
-        urefcount_clean(&nullpipe->refcount);
-        free(nullpipe);
-    }
+    upipe_throw_dead(upipe);
+    upipe_clean(upipe);
+    free(upipe);
 }
 
 /** nullpipe (/dev/null) */
@@ -295,9 +275,8 @@ static struct upipe_mgr nullpipe_mgr = {
     .upipe_alloc = nullpipe_alloc,
     .upipe_input = nullpipe_input,
     .upipe_control = NULL,
-    .upipe_release = nullpipe_release,
-    .upipe_use = nullpipe_use,
-    .upipe_mgr_release = NULL
+    .upipe_free = nullpipe_free,
+    .upipe_mgr_free = NULL
 };
 
 /** Fetch video packets using avformat and send them to avcdv pipe.

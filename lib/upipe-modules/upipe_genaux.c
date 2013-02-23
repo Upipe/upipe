@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref_clock.h>
@@ -66,8 +65,6 @@ struct upipe_genaux {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -201,39 +198,25 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
 
-    urefcount_init(&upipe_genaux->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_genaux_use(struct upipe *upipe)
-{
-    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    urefcount_use(&upipe_genaux->refcount);
 }
 
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_genaux_release(struct upipe *upipe)
+static void upipe_genaux_free(struct upipe *upipe)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_genaux->refcount))) {
-        upipe_dbg_va(upipe, "releasing pipe %p", upipe);
-        upipe_throw_dead(upipe);
+    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+    upipe_throw_dead(upipe);
 
-        upipe_genaux_clean_ubuf_mgr(upipe);
-        upipe_genaux_clean_output(upipe);
+    upipe_genaux_clean_ubuf_mgr(upipe);
+    upipe_genaux_clean_output(upipe);
 
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_genaux->refcount);
-        free(upipe_genaux);
-    }
+    upipe_clean(upipe);
+    free(upipe_genaux);
 }
 
 static struct upipe_mgr upipe_genaux_mgr = {
@@ -242,11 +225,9 @@ static struct upipe_mgr upipe_genaux_mgr = {
     .upipe_alloc = upipe_genaux_alloc,
     .upipe_input = upipe_genaux_input,
     .upipe_control = upipe_genaux_control,
-    .upipe_release = upipe_genaux_release,
-    .upipe_use = upipe_genaux_use,
+    .upipe_free = upipe_genaux_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for genaux pipes

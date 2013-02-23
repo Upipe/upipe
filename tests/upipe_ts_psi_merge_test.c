@@ -137,11 +137,9 @@ static struct upipe_mgr ts_test_mgr = {
     .upipe_alloc = ts_test_alloc,
     .upipe_input = ts_test_input,
     .upipe_control = NULL,
-    .upipe_use = NULL,
-    .upipe_release = NULL,
+    .upipe_free = NULL,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 int main(int argc, char *argv[])

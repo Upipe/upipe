@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
@@ -91,8 +90,6 @@ struct upipe_sws {
     /** true if we have thrown the ready event */
     bool ready;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -123,7 +120,6 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     memset(&upipe_sws->srcsize, 0, sizeof(struct picsize));
     memset(&upipe_sws->dstsize, 0, sizeof(struct picsize));
 
-    urefcount_init(&upipe_sws->refcount);
     upipe_sws->ready = false;
     return upipe;
 }
@@ -407,38 +403,25 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
     return ret;
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sws_use(struct upipe *upipe)
+static void upipe_sws_free(struct upipe *upipe)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    urefcount_use(&upipe_sws->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_sws_release(struct upipe *upipe)
-{
-    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_sws->refcount))) {
-        upipe_throw_dead(upipe);
-        upipe_sws_clean_output(upipe);
-        upipe_sws_clean_ubuf_mgr(upipe);
-        if (upipe_sws->input_flow) {
-            uref_free(upipe_sws->input_flow);
-        }
-        if (upipe_sws->convert_ctx) {
-            sws_freeContext(upipe_sws->convert_ctx);
-        }
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_sws->refcount);
-        free(upipe_sws);
+    upipe_throw_dead(upipe);
+    upipe_sws_clean_output(upipe);
+    upipe_sws_clean_ubuf_mgr(upipe);
+    if (upipe_sws->input_flow) {
+        uref_free(upipe_sws->input_flow);
     }
+    if (upipe_sws->convert_ctx) {
+        sws_freeContext(upipe_sws->convert_ctx);
+    }
+
+    upipe_clean(upipe);
+    free(upipe_sws);
 }
 
 /** module manager static descriptor */
@@ -448,11 +431,9 @@ static struct upipe_mgr upipe_sws_mgr = {
     .upipe_alloc = upipe_sws_alloc,
     .upipe_input = upipe_sws_input,
     .upipe_control = upipe_sws_control,
-    .upipe_use = upipe_sws_use,
-    .upipe_release = upipe_sws_release,
+    .upipe_free = upipe_sws_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for swscale pipes

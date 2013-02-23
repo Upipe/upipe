@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
@@ -65,8 +64,6 @@ struct upipe_qsink {
     /** true if the sink currently blocks the pipe */
     bool blocked;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -93,7 +90,6 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
     upipe_qsink->flow_def = NULL;
     upipe_qsink->blocked = false;
     ulist_init(&upipe_qsink->urefs);
-    urefcount_init(&upipe_qsink->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -335,45 +331,32 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_qsink_use(struct upipe *upipe)
+static void upipe_qsink_free(struct upipe *upipe)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    urefcount_use(&upipe_qsink->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_qsink_release(struct upipe *upipe)
-{
-    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_qsink->refcount))) {
-        if (likely(upipe_qsink->qsrc != NULL)) {
-            upipe_notice_va(upipe, "releasing queue source %p",
-                            upipe_qsink->qsrc);
-            upipe_release(upipe_qsink->qsrc);
-        }
-        upipe_throw_dead(upipe);
-
-        if (upipe_qsink->flow_def != NULL)
-            uref_free(upipe_qsink->flow_def);
-        upipe_qsink_clean_upump_mgr(upipe);
-
-        struct uchain *uchain;
-        ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
-            ulist_delete(&upipe_qsink->urefs, uchain);
-            uref_free(uref_from_uchain(uchain));
-        }
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_qsink->refcount);
-        free(upipe_qsink);
+    if (likely(upipe_qsink->qsrc != NULL)) {
+        upipe_notice_va(upipe, "releasing queue source %p",
+                        upipe_qsink->qsrc);
+        upipe_release(upipe_qsink->qsrc);
     }
+    upipe_throw_dead(upipe);
+
+    if (upipe_qsink->flow_def != NULL)
+        uref_free(upipe_qsink->flow_def);
+    upipe_qsink_clean_upump_mgr(upipe);
+
+    struct uchain *uchain;
+    ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
+        ulist_delete(&upipe_qsink->urefs, uchain);
+        uref_free(uref_from_uchain(uchain));
+    }
+
+    upipe_clean(upipe);
+    free(upipe_qsink);
 }
 
 /** module manager static descriptor */
@@ -383,11 +366,9 @@ static struct upipe_mgr upipe_qsink_mgr = {
     .upipe_alloc = upipe_qsink_alloc,
     .upipe_input = upipe_qsink_input,
     .upipe_control = upipe_qsink_control,
-    .upipe_use = upipe_qsink_use,
-    .upipe_release = upipe_qsink_release,
+    .upipe_free = upipe_qsink_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all queue sink pipes.

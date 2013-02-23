@@ -34,7 +34,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
@@ -130,8 +129,6 @@ struct upipe_ts_demux_mgr {
     /** pointer to mp2vf manager */
     struct upipe_mgr *mp2vf_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
 };
@@ -225,8 +222,6 @@ struct upipe_ts_demux {
     /** manager to create programs */
     struct upipe_mgr program_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -278,8 +273,6 @@ struct upipe_ts_demux_program {
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -321,8 +314,6 @@ struct upipe_ts_demux_output {
     /** pointer to the output of the last subpipe */
     struct upipe *output;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -755,7 +746,6 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_output_probe, upipe->uprobe);
     uprobe_init(&upipe_ts_demux_output->framer_probe,
                 upipe_ts_demux_output_framer_probe, upipe->uprobe);
-    urefcount_init(&upipe_ts_demux_output->refcount);
 
     upipe_ts_demux_output_init_sub(upipe);
 
@@ -959,46 +949,32 @@ static bool upipe_ts_demux_output_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_output_use(struct upipe *upipe)
+static void upipe_ts_demux_output_free(struct upipe *upipe)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    urefcount_use(&upipe_ts_demux_output->refcount);
-}
+    upipe_ts_demux_output_from_upipe(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_output_release(struct upipe *upipe)
-{
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_demux_output->refcount))) {
-        upipe_ts_demux_output_clean_sub(upipe);
+    if (upipe_ts_demux_output->split_output != NULL)
+        upipe_release(upipe_ts_demux_output->split_output);
+    if (upipe_ts_demux_output->setattr != NULL)
+        upipe_release(upipe_ts_demux_output->setattr);
+    if (upipe_ts_demux_output->last_subpipe != NULL)
+        upipe_release(upipe_ts_demux_output->last_subpipe);
+    if (upipe_ts_demux_output->output != NULL)
+        upipe_release(upipe_ts_demux_output->output);
+    upipe_throw_dead(upipe);
 
-        if (upipe_ts_demux_output->split_output != NULL)
-            upipe_release(upipe_ts_demux_output->split_output);
-        if (upipe_ts_demux_output->setattr != NULL)
-            upipe_release(upipe_ts_demux_output->setattr);
-        if (upipe_ts_demux_output->last_subpipe != NULL)
-            upipe_release(upipe_ts_demux_output->last_subpipe);
-        if (upipe_ts_demux_output->output != NULL)
-            upipe_release(upipe_ts_demux_output->output);
-        upipe_throw_dead(upipe);
+    if (upipe_ts_demux_output->flow_def != NULL)
+        uref_free(upipe_ts_demux_output->flow_def);
+    upipe_ts_demux_output_clean_sync(upipe);
 
-        if (upipe_ts_demux_output->flow_def != NULL)
-            uref_free(upipe_ts_demux_output->flow_def);
-        upipe_ts_demux_output_clean_sync(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_demux_output->refcount);
-        free(upipe_ts_demux_output);
-    }
+    upipe_clean(upipe);
+    upipe_ts_demux_output_clean_sub(upipe);
+    free(upipe_ts_demux_output);
 }
 
 /** @internal @This initializes the output manager for a ts_demux_program
@@ -1017,10 +993,8 @@ static struct upipe_mgr *
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_output_control;
-    output_mgr->upipe_use = upipe_ts_demux_output_use;
-    output_mgr->upipe_release = upipe_ts_demux_output_release;
-    output_mgr->upipe_mgr_use = upipe_ts_demux_output_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_ts_demux_output_mgr_release;
+    output_mgr->upipe_free = upipe_ts_demux_output_free;
+    output_mgr->upipe_mgr_free = NULL;
     return output_mgr;
 }
 
@@ -1464,7 +1438,6 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_program_pmtd_probe, upipe->uprobe);
     uprobe_init(&upipe_ts_demux_program->pcr_probe,
                 upipe_ts_demux_program_pcr_probe, upipe->uprobe);
-    urefcount_init(&upipe_ts_demux_program->refcount);
 
     upipe_ts_demux_program_init_sub(upipe);
 
@@ -1610,50 +1583,36 @@ static bool upipe_ts_demux_program_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_program_use(struct upipe *upipe)
+static void upipe_ts_demux_program_free(struct upipe *upipe)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
-    urefcount_use(&upipe_ts_demux_program->refcount);
-}
+    struct upipe_ts_demux *demux =
+        upipe_ts_demux_from_program_mgr(upipe->mgr);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_program_release(struct upipe *upipe)
-{
-    struct upipe_ts_demux_program *upipe_ts_demux_program =
-        upipe_ts_demux_program_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_demux_program->refcount))) {
-        struct upipe_ts_demux *demux =
-            upipe_ts_demux_from_program_mgr(upipe->mgr);
-
-        if (upipe_ts_demux_program->psi_split_output != NULL) {
-            upipe_release(upipe_ts_demux_program->psi_split_output);
-            upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                           upipe_ts_demux_program->psi_pid);
-        }
-        if (upipe_ts_demux_program->pcr_split_output != NULL)
-            upipe_release(upipe_ts_demux_program->pcr_split_output);
-        upipe_throw_dead(upipe);
-
-        upipe_ts_demux_program_clean_sub(upipe);
-        upipe_ts_demux_program_clean_sub_outputs(upipe);
-
-        if (upipe_ts_demux_program->setattr_dict != NULL)
-            uref_free(upipe_ts_demux_program->setattr_dict);
-        if (upipe_ts_demux_program->flow_def != NULL)
-            uref_free(upipe_ts_demux_program->flow_def);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_demux_program->refcount);
-        free(upipe_ts_demux_program);
+    if (upipe_ts_demux_program->psi_split_output != NULL) {
+        upipe_release(upipe_ts_demux_program->psi_split_output);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                       upipe_ts_demux_program->psi_pid);
     }
+    if (upipe_ts_demux_program->pcr_split_output != NULL)
+        upipe_release(upipe_ts_demux_program->pcr_split_output);
+    upipe_throw_dead(upipe);
+
+    upipe_ts_demux_program_clean_sub_outputs(upipe);
+
+    if (upipe_ts_demux_program->setattr_dict != NULL)
+        uref_free(upipe_ts_demux_program->setattr_dict);
+    if (upipe_ts_demux_program->flow_def != NULL)
+        uref_free(upipe_ts_demux_program->flow_def);
+
+    upipe_clean(upipe);
+    upipe_ts_demux_program_clean_sub(upipe);
+    free(upipe_ts_demux_program);
 }
 
 /** @internal @This initializes the output manager for a ts_demux pipe.
@@ -1669,10 +1628,8 @@ static struct upipe_mgr *upipe_ts_demux_init_output_mgr(struct upipe *upipe)
     output_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_program_control;
-    output_mgr->upipe_use = upipe_ts_demux_program_use;
-    output_mgr->upipe_release = upipe_ts_demux_program_release;
-    output_mgr->upipe_mgr_use = upipe_ts_demux_program_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_ts_demux_program_mgr_release;
+    output_mgr->upipe_free = upipe_ts_demux_program_free;
+    output_mgr->upipe_mgr_free = NULL;
     return output_mgr;
 }
 
@@ -2093,7 +2050,6 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     uprobe_init(&upipe_ts_demux->split_probe,
                 upipe_ts_demux_split_probe, upipe->uprobe);
 
-    urefcount_init(&upipe_ts_demux->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -2442,91 +2398,65 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_use(struct upipe *upipe)
+static void upipe_ts_demux_free(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    urefcount_use(&upipe_ts_demux->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_release(struct upipe *upipe)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_demux->refcount))) {
-        if (upipe_ts_demux->split != NULL) {
-            upipe_ts_demux_set_input_mode(upipe, UPIPE_TS_DEMUX_OFF);
-            upipe_release(upipe_ts_demux->psi_split_output_pat);
-            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-            upipe_release(upipe_ts_demux->split);
-            upipe_release(upipe_ts_demux->setattr);
-            upipe_release(upipe_ts_demux->null);
-        }
-        upipe_throw_dead(upipe);
-        upipe_ts_demux_clean_sub_programs(upipe);
-        upipe_ts_demux_clean_sync(upipe);
-        upipe_ts_demux_clean_uref_mgr(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_demux->refcount);
-        free(upipe_ts_demux);
+    if (upipe_ts_demux->split != NULL) {
+        upipe_ts_demux_set_input_mode(upipe, UPIPE_TS_DEMUX_OFF);
+        upipe_release(upipe_ts_demux->psi_split_output_pat);
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
+        upipe_release(upipe_ts_demux->split);
+        upipe_release(upipe_ts_demux->setattr);
+        upipe_release(upipe_ts_demux->null);
     }
+    upipe_throw_dead(upipe);
+    upipe_ts_demux_clean_sub_programs(upipe);
+    upipe_ts_demux_clean_sync(upipe);
+    upipe_ts_demux_clean_uref_mgr(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_ts_demux);
 }
 
-/** @This increments the reference count of a upipe manager.
+/** @This frees a upipe manager.
  *
  * @param mgr pointer to manager
  */
-static void upipe_ts_demux_mgr_use(struct upipe_mgr *mgr)
+static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(mgr);
-    urefcount_use(&ts_demux_mgr->refcount);
-}
+    if (ts_demux_mgr->null_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->null_mgr);
+    if (ts_demux_mgr->setattr_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->setattr_mgr);
+    if (ts_demux_mgr->ts_split_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
+    if (ts_demux_mgr->ts_sync_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_sync_mgr);
+    if (ts_demux_mgr->ts_check_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_check_mgr);
+    if (ts_demux_mgr->ts_decaps_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_decaps_mgr);
+    if (ts_demux_mgr->ts_psim_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_psim_mgr);
+    if (ts_demux_mgr->ts_psi_split_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_psi_split_mgr);
+    if (ts_demux_mgr->ts_patd_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
+    if (ts_demux_mgr->ts_pmtd_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
+    if (ts_demux_mgr->ts_pesd_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
+    if (ts_demux_mgr->mp2vf_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
 
-/** @This decrements the reference count of a upipe manager or frees it.
- *
- * @param mgr pointer to manager
- */
-static void upipe_ts_demux_mgr_release(struct upipe_mgr *mgr)
-{
-    struct upipe_ts_demux_mgr *ts_demux_mgr =
-        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
-    if (unlikely(urefcount_release(&ts_demux_mgr->refcount))) {
-        if (ts_demux_mgr->null_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->null_mgr);
-        if (ts_demux_mgr->setattr_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->setattr_mgr);
-        if (ts_demux_mgr->ts_split_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
-        if (ts_demux_mgr->ts_sync_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_sync_mgr);
-        if (ts_demux_mgr->ts_check_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_check_mgr);
-        if (ts_demux_mgr->ts_decaps_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_decaps_mgr);
-        if (ts_demux_mgr->ts_psim_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_psim_mgr);
-        if (ts_demux_mgr->ts_psi_split_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_psi_split_mgr);
-        if (ts_demux_mgr->ts_patd_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
-        if (ts_demux_mgr->ts_pmtd_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
-        if (ts_demux_mgr->ts_pesd_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
-        if (ts_demux_mgr->mp2vf_mgr != NULL)
-            upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
-
-        urefcount_clean(&ts_demux_mgr->refcount);
-        free(ts_demux_mgr);
-    }
+    urefcount_clean(&ts_demux_mgr->mgr.refcount);
+    free(ts_demux_mgr);
 }
 
 /** @This returns the management structure for all ts_demux pipes.
@@ -2559,11 +2489,9 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;
     ts_demux_mgr->mgr.upipe_input = upipe_ts_demux_input;
     ts_demux_mgr->mgr.upipe_control = upipe_ts_demux_control;
-    ts_demux_mgr->mgr.upipe_use = upipe_ts_demux_use;
-    ts_demux_mgr->mgr.upipe_release = upipe_ts_demux_release;
-    ts_demux_mgr->mgr.upipe_mgr_use = upipe_ts_demux_mgr_use;
-    ts_demux_mgr->mgr.upipe_mgr_release = upipe_ts_demux_mgr_release;
-    urefcount_init(&ts_demux_mgr->refcount);
+    ts_demux_mgr->mgr.upipe_free = upipe_ts_demux_free;
+    ts_demux_mgr->mgr.upipe_mgr_free = upipe_ts_demux_mgr_free;
+    urefcount_init(&ts_demux_mgr->mgr.refcount);
     return upipe_ts_demux_mgr_to_upipe_mgr(ts_demux_mgr);
 }
 
@@ -2581,7 +2509,7 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_demux_mgr->refcount));
+    assert(urefcount_single(&ts_demux_mgr->mgr.refcount));
 
     switch (command) {
 #define GET_SET_MGR(name, NAME)                                             \

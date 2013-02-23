@@ -86,8 +86,6 @@ struct ubuf_block_mem_mgr {
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** common management structure */
     struct ubuf_mgr mgr;
 };
@@ -418,34 +416,21 @@ static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
         ubuf_block_mem_shared_free_inner(shared);
 }
 
-/** @This increments the reference count of a ubuf manager.
- *
- * @param mgr pointer to ubuf manager
- */
-static void ubuf_block_mem_mgr_use(struct ubuf_mgr *mgr)
-{
-    struct ubuf_block_mem_mgr *block_mem_mgr =
-        ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    urefcount_use(&block_mem_mgr->refcount);
-}
-
-/** @This decrements the reference count of a ubuf manager or frees it.
+/** @This frees a ubuf manager.
  *
  * @param mgr pointer to a ubuf manager
  */
-static void ubuf_block_mem_mgr_release(struct ubuf_mgr *mgr)
+static void ubuf_block_mem_mgr_free(struct ubuf_mgr *mgr)
 {
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    if (unlikely(urefcount_release(&block_mem_mgr->refcount))) {
-        ubuf_block_mem_mgr_vacuum(mgr);
-        ulifo_clean(&block_mem_mgr->ubuf_pool);
-        ulifo_clean(&block_mem_mgr->shared_pool);
-        umem_mgr_release(block_mem_mgr->umem_mgr);
+    ubuf_block_mem_mgr_vacuum(mgr);
+    ulifo_clean(&block_mem_mgr->ubuf_pool);
+    ulifo_clean(&block_mem_mgr->shared_pool);
+    umem_mgr_release(block_mem_mgr->umem_mgr);
 
-        urefcount_clean(&block_mem_mgr->refcount);
-        free(block_mem_mgr);
-    }
+    urefcount_clean(&block_mem_mgr->mgr.refcount);
+    free(block_mem_mgr);
 }
 
 /** @This allocates a new instance of the ubuf manager for block formats
@@ -491,14 +476,13 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     block_mem_mgr->align_offset = align_offset;
 
-    urefcount_init(&block_mem_mgr->refcount);
+    urefcount_init(&block_mem_mgr->mgr.refcount);
     block_mem_mgr->mgr.type = UBUF_ALLOC_BLOCK;
     block_mem_mgr->mgr.ubuf_alloc = ubuf_block_mem_alloc;
     block_mem_mgr->mgr.ubuf_control = ubuf_block_mem_control;
     block_mem_mgr->mgr.ubuf_free = ubuf_block_mem_free;
     block_mem_mgr->mgr.ubuf_mgr_vacuum = ubuf_block_mem_mgr_vacuum;
-    block_mem_mgr->mgr.ubuf_mgr_use = ubuf_block_mem_mgr_use;
-    block_mem_mgr->mgr.ubuf_mgr_release = ubuf_block_mem_mgr_release;
+    block_mem_mgr->mgr.ubuf_mgr_free = ubuf_block_mem_mgr_free;
 
     return ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr);
 }

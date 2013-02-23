@@ -27,7 +27,6 @@
  * - modules/video_filter/deinterlace/algo_basic.c 
  */
 
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/udict.h>
@@ -60,8 +59,6 @@ struct upipe_filter_blend {
     struct uref *output_flow;
     /** has flow def been sent ?*/
     bool output_flow_sent;
-    /** pipe refcount */
-    urefcount refcount;
     /** public structure */
     struct upipe upipe;
 };
@@ -86,7 +83,6 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
     memset(upipe_filter_blend, 0, sizeof(struct upipe_filter_blend));
     struct upipe *upipe = upipe_filter_blend_to_upipe(upipe_filter_blend);
     upipe_init(upipe, mgr, uprobe);
-    urefcount_init(&upipe_filter_blend->refcount);
     upipe_filter_blend_init_ubuf_mgr(upipe);
     upipe_filter_blend_init_output(upipe);
     upipe_throw_ready(upipe);
@@ -257,32 +253,19 @@ static bool upipe_filter_blend_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_filter_blend_use(struct upipe *upipe)
+static void upipe_filter_blend_free(struct upipe *upipe)
 {
     struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
-    urefcount_use(&upipe_filter_blend->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_filter_blend_release(struct upipe *upipe)
-{
-    struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_filter_blend->refcount))) {
-        upipe_throw_dead(upipe);
-
-        upipe_filter_blend_clean_ubuf_mgr(upipe);
-        upipe_filter_blend_clean_output(upipe);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_filter_blend->refcount);
-        free(upipe_filter_blend);
-    }
+    upipe_filter_blend_clean_ubuf_mgr(upipe);
+    upipe_filter_blend_clean_output(upipe);
+    upipe_clean(upipe);
+    free(upipe_filter_blend);
 }
 
 /** module manager static descriptor */
@@ -291,11 +274,9 @@ static struct upipe_mgr upipe_filter_blend_mgr = {
     .upipe_alloc = upipe_filter_blend_alloc,
     .upipe_input = upipe_filter_blend_input,
     .upipe_control = upipe_filter_blend_control,
-    .upipe_release = upipe_filter_blend_release,
-    .upipe_use = upipe_filter_blend_use,
+    .upipe_free = upipe_filter_blend_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for glx_sink pipes

@@ -44,8 +44,6 @@ struct upump_ev_mgr {
     /** ev private structure */
     struct ev_loop *ev_loop;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** common structure */
     struct upump_common_mgr common_mgr;
 };
@@ -262,29 +260,15 @@ static void upump_ev_free(struct upump *upump)
     free(upump_ev);
 }
 
-/** @This increments the reference count of an ev upump manager.
+/** @This frees a upump manager.
  *
  * @param mgr pointer to upump manager
  */
-static void upump_ev_mgr_use(struct upump_mgr *mgr)
+static void upump_ev_mgr_free(struct upump_mgr *mgr)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
-    urefcount_use(&ev_mgr->refcount);
-}
-
-/** @This decrements the reference count of a upump manager or frees it
- * (note that all watchers have to be stopped before).
- *
- * @param mgr pointer to upump manager
- */
-static void upump_ev_mgr_release(struct upump_mgr *mgr)
-{
-    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
-    if (unlikely(urefcount_release(&ev_mgr->refcount))) {
-        upump_common_mgr_clean(mgr);
-        urefcount_clean(&ev_mgr->refcount);
-        free(ev_mgr);
-    }
+    upump_common_mgr_clean(mgr);
+    free(ev_mgr);
 }
 
 /** @This allocates and initializes a upump_ev_mgr structure.
@@ -299,14 +283,12 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop)
 
     ev_mgr->ev_loop = ev_loop;
 
-    urefcount_init(&ev_mgr->refcount);
     upump_common_mgr_init(&ev_mgr->common_mgr.mgr);
 
     ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
     ev_mgr->common_mgr.mgr.upump_start = upump_ev_start;
     ev_mgr->common_mgr.mgr.upump_stop = upump_ev_stop;
     ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
-    ev_mgr->common_mgr.mgr.upump_mgr_use = upump_ev_mgr_use;
-    ev_mgr->common_mgr.mgr.upump_mgr_release = upump_ev_mgr_release;
+    ev_mgr->common_mgr.mgr.upump_mgr_free = upump_ev_mgr_free;
     return upump_ev_mgr_to_upump_mgr(ev_mgr);
 }

@@ -108,6 +108,7 @@ void upump_common_mgr_init(struct upump_mgr *mgr)
     common_mgr->nb_source_watchers = 0;
 
     common_mgr->mgr.nb_blocked_sinks = 0;
+    urefcount_init(&common_mgr->mgr.refcount);
 }
 
 /** @This cleans up the common parts of a upump_common_mgr structure.
@@ -119,5 +120,6 @@ void upump_common_mgr_init(struct upump_mgr *mgr)
 void upump_common_mgr_clean(struct upump_mgr *mgr)
 {
     struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
+    urefcount_clean(&common_mgr->mgr.refcount);
     free(common_mgr->source_watchers);
 }

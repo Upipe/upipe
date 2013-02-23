@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -62,8 +61,6 @@ struct upipe_ts_psim {
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -90,7 +87,6 @@ static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
     upipe_ts_psim_init_sync(upipe);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
-    urefcount_init(&upipe_ts_psim->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -296,36 +292,23 @@ static bool upipe_ts_psim_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_psim_use(struct upipe *upipe)
+static void upipe_ts_psim_free(struct upipe *upipe)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    urefcount_use(&upipe_ts_psim->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psim_release(struct upipe *upipe)
-{
-    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_psim->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_ts_psim_clean_output(upipe);
+    upipe_ts_psim_clean_sync(upipe);
 
-        upipe_ts_psim_clean_output(upipe);
-        upipe_ts_psim_clean_sync(upipe);
+    if (upipe_ts_psim->next_uref != NULL)
+        uref_free(upipe_ts_psim->next_uref);
 
-        if (upipe_ts_psim->next_uref != NULL)
-            uref_free(upipe_ts_psim->next_uref);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_psim->refcount);
-        free(upipe_ts_psim);
-    }
+    upipe_clean(upipe);
+    free(upipe_ts_psim);
 }
 
 /** module manager static descriptor */
@@ -335,11 +318,9 @@ static struct upipe_mgr upipe_ts_psim_mgr = {
     .upipe_alloc = upipe_ts_psim_alloc,
     .upipe_input = upipe_ts_psim_input,
     .upipe_control = upipe_ts_psim_control,
-    .upipe_use = upipe_ts_psim_use,
-    .upipe_release = upipe_ts_psim_release,
+    .upipe_free = upipe_ts_psim_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_psim pipes.

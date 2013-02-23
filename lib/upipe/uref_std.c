@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -43,8 +43,6 @@ struct uref_std_mgr {
     /** uref pool */
     struct ulifo uref_pool;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** common management structure */
     struct uref_mgr mgr;
 };
@@ -127,31 +125,19 @@ static void uref_std_mgr_vacuum(struct uref_mgr *mgr)
         uref_std_free_inner(uref);
 }
 
-/** @This increments the reference count of a uref manager.
- *
- * @param mgr pointer to uref manager
- */
-static void uref_std_mgr_use(struct uref_mgr *mgr)
-{
-    struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
-    urefcount_use(&std_mgr->refcount);
-}
-
-/** @This decrements the reference count of a uref manager or frees it.
+/** @This frees a uref manager.
  *
  * @param mgr pointer to a uref manager
  */
-static void uref_std_mgr_release(struct uref_mgr *mgr)
+static void uref_std_mgr_free(struct uref_mgr *mgr)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
-    if (unlikely(urefcount_release(&std_mgr->refcount))) {
-        uref_std_mgr_vacuum(mgr);
-        ulifo_clean(&std_mgr->uref_pool);
-        udict_mgr_release(mgr->udict_mgr);
+    uref_std_mgr_vacuum(mgr);
+    ulifo_clean(&std_mgr->uref_pool);
+    udict_mgr_release(mgr->udict_mgr);
 
-        urefcount_clean(&std_mgr->refcount);
-        free(std_mgr);
-    }
+    urefcount_clean(&std_mgr->mgr.refcount);
+    free(std_mgr);
 }
 
 /** @This allocates a new instance of the standard uref manager
@@ -180,12 +166,11 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     std_mgr->mgr.udict_mgr = udict_mgr;
     udict_mgr_use(udict_mgr);
 
-    urefcount_init(&std_mgr->refcount);
+    urefcount_init(&std_mgr->mgr.refcount);
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_free = uref_std_free;
     std_mgr->mgr.uref_mgr_vacuum = uref_std_mgr_vacuum;
-    std_mgr->mgr.uref_mgr_use = uref_std_mgr_use;
-    std_mgr->mgr.uref_mgr_release = uref_std_mgr_release;
+    std_mgr->mgr.uref_mgr_free = uref_std_mgr_free;
     
     return uref_std_mgr_to_uref_mgr(std_mgr);
 }

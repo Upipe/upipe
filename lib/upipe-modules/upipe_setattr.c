@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref.h>
@@ -55,8 +54,6 @@ struct upipe_setattr {
     /** dictionary to set */
     struct uref *dict;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -80,7 +77,6 @@ static struct upipe *upipe_setattr_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_setattr_init_output(upipe);
     upipe_setattr->dict = NULL;
-    urefcount_init(&upipe_setattr->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -196,35 +192,22 @@ static bool upipe_setattr_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_setattr_use(struct upipe *upipe)
+static void upipe_setattr_free(struct upipe *upipe)
 {
     struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
-    urefcount_use(&upipe_setattr->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_setattr_release(struct upipe *upipe)
-{
-    struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_setattr->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_setattr_clean_output(upipe);
 
-        upipe_setattr_clean_output(upipe);
+    if (upipe_setattr->dict != NULL)
+        uref_free(upipe_setattr->dict);
 
-        if (upipe_setattr->dict != NULL)
-            uref_free(upipe_setattr->dict);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_setattr->refcount);
-        free(upipe_setattr);
-    }
+    upipe_clean(upipe);
+    free(upipe_setattr);
 }
 
 /** module manager static descriptor */
@@ -234,11 +217,9 @@ static struct upipe_mgr upipe_setattr_mgr = {
     .upipe_alloc = upipe_setattr_alloc,
     .upipe_input = upipe_setattr_input,
     .upipe_control = upipe_setattr_control,
-    .upipe_use = upipe_setattr_use,
-    .upipe_release = upipe_setattr_release,
+    .upipe_free = upipe_setattr_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all setattr pipes.

@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uclock.h>
@@ -80,8 +79,6 @@ struct upipe_multicat_sink {
 	/** file opening mode */
 	enum upipe_fsink_mode mode;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -447,43 +444,29 @@ static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr, struct upr
     upipe_multicat_sink->fileidx = -1;
     upipe_multicat_sink->rotate = UPIPE_MULTICAT_SINK_DEF_ROTATE;
     upipe_multicat_sink->mode = UPIPE_FSINK_APPEND;
-    urefcount_init(&upipe_multicat_sink->refcount);
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_multicat_sink_use(struct upipe *upipe)
-{
-    struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
-    urefcount_use(&upipe_multicat_sink->refcount);
 }
 
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_multicat_sink_release(struct upipe *upipe)
+static void upipe_multicat_sink_free(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_multicat_sink->refcount))) {
-        if (upipe_multicat_sink->flow_def != NULL)
-            uref_free(upipe_multicat_sink->flow_def);
-        if (upipe_multicat_sink->fsink != NULL)
-            upipe_release(upipe_multicat_sink->fsink);
+    if (upipe_multicat_sink->flow_def != NULL)
+        uref_free(upipe_multicat_sink->flow_def);
+    if (upipe_multicat_sink->fsink != NULL)
+        upipe_release(upipe_multicat_sink->fsink);
 
-        upipe_dbg_va(upipe, "releasing pipe %p", upipe);
-        upipe_throw_dead(upipe);
+    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+    upipe_throw_dead(upipe);
 
-        free(upipe_multicat_sink->dirpath);
-        free(upipe_multicat_sink->suffix);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_multicat_sink->refcount);
-        free(upipe_multicat_sink);
-    }
+    free(upipe_multicat_sink->dirpath);
+    free(upipe_multicat_sink->suffix);
+    upipe_clean(upipe);
+    free(upipe_multicat_sink);
 }
 
 static struct upipe_mgr upipe_multicat_sink_mgr = {
@@ -492,11 +475,9 @@ static struct upipe_mgr upipe_multicat_sink_mgr = {
     .upipe_alloc = upipe_multicat_sink_alloc,
     .upipe_input = upipe_multicat_sink_input,
     .upipe_control = upipe_multicat_sink_control,
-    .upipe_use = upipe_multicat_sink_use,
-    .upipe_release = upipe_multicat_sink_release,
+    .upipe_free = upipe_multicat_sink_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for multicat_sink pipes

@@ -32,6 +32,7 @@
 #define _UPIPE_UDICT_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -172,6 +173,9 @@ struct udict {
 /** @This stores common management parameters for a udict pool.
  */
 struct udict_mgr {
+    /** refcount management structure */
+    urefcount refcount;
+
     /** function to allocate a udict with a given initial size */
     struct udict *(*udict_alloc)(struct udict_mgr *, size_t);
     /** control function for standard or local commands */
@@ -181,10 +185,8 @@ struct udict_mgr {
 
     /** function to release all buffers kept in pools */
     void (*udict_mgr_vacuum)(struct udict_mgr *);
-    /** function to increment the refcount of the udict manager */
-    void (*udict_mgr_use)(struct udict_mgr *);
-    /** function to decrement the refcount of the udict manager or free it */
-    void (*udict_mgr_release)(struct udict_mgr *);
+    /** function to free the udict manager */
+    void (*udict_mgr_free)(struct udict_mgr *);
 };
 
 /** @This allocates and initializes a new udict.
@@ -958,8 +960,7 @@ static inline void udict_mgr_vacuum(struct udict_mgr *mgr)
  */
 static inline void udict_mgr_use(struct udict_mgr *mgr)
 {
-    if (likely(mgr->udict_mgr_use != NULL))
-        mgr->udict_mgr_use(mgr);
+    urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a udict manager or frees it.
@@ -968,8 +969,8 @@ static inline void udict_mgr_use(struct udict_mgr *mgr)
  */
 static inline void udict_mgr_release(struct udict_mgr *mgr)
 {
-    if (likely(mgr->udict_mgr_release != NULL))
-        mgr->udict_mgr_release(mgr);
+    if (unlikely(urefcount_release(&mgr->refcount)))
+        mgr->udict_mgr_free(mgr);
 }
 
 #endif

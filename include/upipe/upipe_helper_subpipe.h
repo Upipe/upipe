@@ -83,19 +83,14 @@
  * adds the output to the list in upipe_foo.
  *
  * @item @code
- *  void upipe_foo_output_init_sub(struct upipe *upipe)
+ *  void upipe_foo_output_clean_sub(struct upipe *upipe)
  * @end code
  * Cleans up the private members of upipe_foo_output for this helper and
- * removes the output from the list in upipe_foo.
+ * removes the output from the list in upipe_foo. It must be called after
+ * @ref upipe_clean.
  *
  * @item @code
- *  void upipe_foo_output_mgr_use(struct upipe_mgr *mgr)
- * @end code
- * Increments the reference count of the subpipe manager by increasing the
- * reference count of the pipe.
- *
- * @item @code
- *  void upipe_foo_output_mgr_release(struct upipe_mgr *mgr)
+ *  void upipe_foo_output_mgr_free(struct upipe_mgr *mgr)
  * @end code
  * Decrements the reference count of the subpipe manager by decreasing the
  * reference count of the pipe.
@@ -174,9 +169,11 @@ static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
     uchain_init(&sub->UCHAIN);                                              \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
     ulist_add(&s->ULIST, STRUCTURE_SUB##_to_uchain(sub));                   \
+    upipe_use(STRUCTURE##_to_upipe(s));                                     \
 }                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE_SUB,   \
- * and removes it from the ULIST in STRUCTURE.                              \
+ * and removes it from the ULIST in STRUCTURE. Please note that since       \
+ * this releases the pipe, it must be called after @ref upipe_clean.        \
  *                                                                          \
  * @param upipe description structure of the subpipe.                       \
  */                                                                         \
@@ -191,25 +188,6 @@ static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
             break;                                                          \
         }                                                                   \
     }                                                                       \
-}                                                                           \
-/** @This increments the reference count of MGR by increasing the reference \
- * count of the corresponding pipe.                                         \
- *                                                                          \
- * @param mgr pointer to subpipe manager                                    \
- */                                                                         \
-static void STRUCTURE_SUB##_mgr_use(struct upipe_mgr *mgr)                  \
-{                                                                           \
-    struct STRUCTURE *s = STRUCTURE##_from_##MGR(mgr);                      \
-    upipe_use(STRUCTURE##_to_upipe(s));                                     \
-}                                                                           \
-/** @This decrements the reference count of MGR by decreasing the reference \
- * count of the corresponding pipe.                                         \
- *                                                                          \
- * @param mgr pointer to subpipe manager.                                   \
- */                                                                         \
-static void STRUCTURE_SUB##_mgr_release(struct upipe_mgr *mgr)              \
-{                                                                           \
-    struct STRUCTURE *s = STRUCTURE##_from_##MGR(mgr);                      \
     upipe_release(STRUCTURE##_to_upipe(s));                                 \
 }                                                                           \
 /** @This initializes the private members for this helper in STRUCTURE.     \

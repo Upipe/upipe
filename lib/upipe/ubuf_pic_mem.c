@@ -100,8 +100,6 @@ struct ubuf_pic_mem_mgr {
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** common picture management structure */
     struct ubuf_pic_common_mgr common_mgr;
 };
@@ -503,34 +501,21 @@ static void ubuf_pic_mem_mgr_vacuum(struct ubuf_mgr *mgr)
         ubuf_pic_mem_shared_free_inner(shared);
 }
 
-/** @This increments the reference count of a ubuf manager.
- *
- * @param mgr pointer to ubuf manager
- */
-static void ubuf_pic_mem_mgr_use(struct ubuf_mgr *mgr)
-{
-    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    urefcount_use(&pic_mgr->refcount);
-}
-
-/** @This decrements the reference count of a ubuf manager or frees it.
+/** @This frees a ubuf manager.
  *
  * @param mgr pointer to a ubuf manager
  */
-static void ubuf_pic_mem_mgr_release(struct ubuf_mgr *mgr)
+static void ubuf_pic_mem_mgr_free(struct ubuf_mgr *mgr)
 {
     struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    if (unlikely(urefcount_release(&pic_mgr->refcount))) {
-        ubuf_pic_mem_mgr_vacuum(mgr);
-        ulifo_clean(&pic_mgr->ubuf_pool);
-        ulifo_clean(&pic_mgr->shared_pool);
-        umem_mgr_release(pic_mgr->umem_mgr);
+    ubuf_pic_mem_mgr_vacuum(mgr);
+    ulifo_clean(&pic_mgr->ubuf_pool);
+    ulifo_clean(&pic_mgr->shared_pool);
+    umem_mgr_release(pic_mgr->umem_mgr);
 
-        ubuf_pic_common_mgr_clean(mgr);
+    ubuf_pic_common_mgr_clean(mgr);
 
-        urefcount_clean(&pic_mgr->refcount);
-        free(pic_mgr);
-    }
+    free(pic_mgr);
 }
 
 /** @This allocates a new instance of the ubuf manager for picture formats
@@ -593,14 +578,12 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     pic_mgr->align = align >= 0 ? align : UBUF_DEFAULT_ALIGN;
     pic_mgr->align_hmoffset = align_hmoffset;
 
-    urefcount_init(&pic_mgr->refcount);
     mgr->type = UBUF_ALLOC_PICTURE;
     mgr->ubuf_alloc = ubuf_pic_mem_alloc;
     mgr->ubuf_control = ubuf_pic_mem_control;
     mgr->ubuf_free = ubuf_pic_mem_free;
     mgr->ubuf_mgr_vacuum = ubuf_pic_mem_mgr_vacuum;
-    mgr->ubuf_mgr_use = ubuf_pic_mem_mgr_use;
-    mgr->ubuf_mgr_release = ubuf_pic_mem_mgr_release;
+    mgr->ubuf_mgr_free = ubuf_pic_mem_mgr_free;
 
     return mgr;
 }
@@ -623,7 +606,6 @@ bool ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
     assert(mgr != NULL);
 
     struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    assert(urefcount_single(&pic_mgr->refcount));
     ubuf_pic_mem_mgr_vacuum(mgr);
 
     return ubuf_pic_common_mgr_add_plane(mgr, chroma, hsub, vsub,

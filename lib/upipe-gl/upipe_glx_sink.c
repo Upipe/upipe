@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
@@ -80,8 +79,6 @@ struct upipe_glx_sink {
     struct upump_mgr *upump_mgr;
     /** event loop watcher */
     struct upump *upump_watcher;
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -323,7 +320,6 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     }
     struct upipe *upipe = upipe_glx_sink_to_upipe(upipe_glx_sink);
     upipe_init(upipe, mgr, uprobe);
-    urefcount_init(&upipe_glx_sink->refcount);
     upipe_glx_sink_init_upump_mgr(upipe);
 
     upipe_glx_sink->display = NULL;
@@ -468,33 +464,20 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_glx_sink_use(struct upipe *upipe)
+static void upipe_glx_sink_free(struct upipe *upipe)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
-    urefcount_use(&upipe_glx_sink->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_glx_sink_release(struct upipe *upipe)
-{
-    struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_glx_sink->refcount))) {
-        upipe_throw_dead(upipe);
-        upipe_glx_sink_clean_upump_mgr(upipe);
-        if (upipe_glx_sink->display) {
-            upipe_glx_sink_clean_glx(upipe);
-        }
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_glx_sink->refcount);
-        free(upipe_glx_sink);
+    upipe_throw_dead(upipe);
+    upipe_glx_sink_clean_upump_mgr(upipe);
+    if (upipe_glx_sink->display) {
+        upipe_glx_sink_clean_glx(upipe);
     }
+    upipe_clean(upipe);
+    free(upipe_glx_sink);
 }
 
 /** module manager static descriptor */
@@ -504,11 +487,9 @@ static struct upipe_mgr upipe_glx_sink_mgr = {
     .upipe_alloc = upipe_glx_sink_alloc,
     .upipe_input = upipe_glx_sink_input,
     .upipe_control = upipe_glx_sink_control,
-    .upipe_use = upipe_glx_sink_use,
-    .upipe_release = upipe_glx_sink_release,
+    .upipe_free = upipe_glx_sink_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for glx_sink pipes

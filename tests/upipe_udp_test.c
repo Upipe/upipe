@@ -180,11 +180,9 @@ static struct upipe_mgr udpsrc_test_mgr = {
     .upipe_alloc = udpsrc_test_alloc,
     .upipe_input = udpsrc_test_input,
     .upipe_control = NULL,
-    .upipe_use = NULL,
-    .upipe_release = NULL,
+    .upipe_free = NULL,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 // packet generator

@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
@@ -53,8 +52,6 @@
 struct upipe_null {
     /** dump dict */
     bool dump;
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -73,7 +70,6 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
     if (unlikely(!upipe_null)) return NULL;
     upipe_init(&upipe_null->upipe, mgr, uprobe);
     upipe_null->dump = false;
-    urefcount_init(&upipe_null->refcount);
     upipe_throw_ready(&upipe_null->upipe);
     return &upipe_null->upipe;
 }
@@ -117,30 +113,16 @@ static bool upipe_null_control(struct upipe *upipe, enum upipe_command command,
     }
 }
 
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_null_use(struct upipe *upipe)
-{
-    struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
-    urefcount_use(&upipe_null->refcount);
-}
-
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
  */
-
-static void upipe_null_release(struct upipe *upipe)
+static void upipe_null_free(struct upipe *upipe)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_null->refcount))) {
-        upipe_throw_dead(upipe);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_null->refcount);
-        free(upipe_null);
-    }
+    upipe_throw_dead(upipe);
+    upipe_clean(upipe);
+    free(upipe_null);
 }
 
 /** upipe_null (/dev/null) */
@@ -148,9 +130,8 @@ static struct upipe_mgr upipe_null_mgr = {
     .upipe_alloc = upipe_null_alloc,
     .upipe_input = upipe_null_input,
     .upipe_control = upipe_null_control,
-    .upipe_release = upipe_null_release,
-    .upipe_use = upipe_null_use,
-    .upipe_mgr_release = NULL
+    .upipe_free = upipe_null_free,
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for null pipes

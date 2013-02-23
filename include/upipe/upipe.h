@@ -31,6 +31,7 @@
 /** @hidden */
 #define _UPIPE_UPIPE_H_
 
+#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 
 #include <stdint.h>
@@ -109,6 +110,9 @@ enum upipe_command {
 
 /** @This stores common parameters for upipe structures. */
 struct upipe {
+    /** refcount management structure */
+    urefcount refcount;
+
     /** pointer to the uprobe hierarchy passed on initialization */
     struct uprobe *uprobe;
     /** pointer to the manager for this pipe type */
@@ -122,6 +126,8 @@ struct upipe {
 
 /** @This stores common management parameters for a pipe type. */
 struct upipe_mgr {
+    /** refcount management structure */
+    urefcount refcount;
     /** signature of the pipe allocator */
     unsigned int signature;
 
@@ -133,15 +139,11 @@ struct upipe_mgr {
     /** control function for standard or local commands - all parameters
      * belong to the caller */
     bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
-    /** function to increment the refcount of the pipe */
-    void (*upipe_use)(struct upipe *);
-    /** function to decrement the refcount of the pipe or free it */
-    void (*upipe_release)(struct upipe *);
+    /** function to free the pipe */
+    void (*upipe_free)(struct upipe *);
 
-    /** function to increment the refcount of the upipe manager */
-    void (*upipe_mgr_use)(struct upipe_mgr *);
-    /** function to decrement the refcount of the upipe manager or free it */
-    void (*upipe_mgr_release)(struct upipe_mgr *);
+    /** function to free the upipe manager */
+    void (*upipe_mgr_free)(struct upipe_mgr *);
 };
 
 /** @This increments the reference count of a upipe manager.
@@ -150,8 +152,8 @@ struct upipe_mgr {
  */
 static inline void upipe_mgr_use(struct upipe_mgr *mgr)
 {
-    if (unlikely(mgr->upipe_mgr_use != NULL))
-        mgr->upipe_mgr_use(mgr);
+    if (mgr->upipe_mgr_free != NULL)
+        urefcount_use(&mgr->refcount);
 }
 
 /** @This decrements the reference count of a upipe manager or frees it.
@@ -160,8 +162,8 @@ static inline void upipe_mgr_use(struct upipe_mgr *mgr)
  */
 static inline void upipe_mgr_release(struct upipe_mgr *mgr)
 {
-    if (unlikely(mgr->upipe_mgr_release != NULL))
-        mgr->upipe_mgr_release(mgr);
+    if (mgr->upipe_mgr_free != NULL && urefcount_release(&mgr->refcount))
+        mgr->upipe_mgr_free(mgr);
 }
 
 /** @This allocates and initializes a pipe.
@@ -221,6 +223,7 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
                               struct uprobe *uprobe)
 {
     assert(upipe != NULL);
+    urefcount_init(&upipe->refcount);
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
@@ -240,6 +243,7 @@ static inline void upipe_join_init(struct upipe *upipe, struct upipe_mgr *mgr,
                                    struct upipe_mgr *input_mgr)
 {
     assert(upipe != NULL);
+    urefcount_init(&upipe->refcount);
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
@@ -259,6 +263,7 @@ static inline void upipe_split_init(struct upipe *upipe, struct upipe_mgr *mgr,
                                     struct upipe_mgr *output_mgr)
 {
     assert(upipe != NULL);
+    urefcount_init(&upipe->refcount);
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
@@ -272,8 +277,8 @@ static inline void upipe_split_init(struct upipe *upipe, struct upipe_mgr *mgr,
  */
 static inline void upipe_use(struct upipe *upipe)
 {
-    if (likely(upipe->mgr->upipe_use != NULL))
-        upipe->mgr->upipe_use(upipe);
+    if (upipe->mgr->upipe_free != NULL)
+        urefcount_use(&upipe->refcount);
 }
 
 /** @This decrements the reference count of a upipe or frees it.
@@ -282,8 +287,8 @@ static inline void upipe_use(struct upipe *upipe)
  */
 static inline void upipe_release(struct upipe *upipe)
 {
-    if (likely(upipe->mgr->upipe_release != NULL))
-        upipe->mgr->upipe_release(upipe);
+    if (upipe->mgr->upipe_free != NULL && urefcount_release(&upipe->refcount))
+        upipe->mgr->upipe_free(upipe);
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
@@ -338,6 +343,7 @@ static inline bool upipe_control(struct upipe *upipe,
 static inline void upipe_clean(struct upipe *upipe)
 {
     assert(upipe != NULL);
+    urefcount_clean(&upipe->refcount);
     upipe_mgr_release(upipe->mgr);
 }
 

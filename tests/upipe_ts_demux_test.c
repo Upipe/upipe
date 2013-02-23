@@ -113,8 +113,11 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(flow_id == wanted_flow_id);
             if (!ubase_ncmp(def, "program.")) {
                 if (upipe_ts_demux_output_pmt != NULL) {
+                    printf("pmt\n");
                     upipe_release(upipe_ts_demux_output_pmt);
+                    printf("video\n");
                     upipe_release(upipe_ts_demux_output_video);
+                    printf("done\n");
                     upipe_ts_demux_output_video = NULL;
                 }
                 upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,

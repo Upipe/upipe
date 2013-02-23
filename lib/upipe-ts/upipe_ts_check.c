@@ -24,7 +24,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -63,8 +62,6 @@ struct upipe_ts_check {
     /** TS packet size */
     size_t ts_size;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -90,7 +87,6 @@ static struct upipe *upipe_ts_check_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_ts_check_init_output(upipe);
     upipe_ts_check->ts_size = TS_SIZE;
-    urefcount_init(&upipe_ts_check->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -275,32 +271,19 @@ static bool upipe_ts_check_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_check_use(struct upipe *upipe)
-{
-    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
-    urefcount_use(&upipe_ts_check->refcount);
-}
-
 /** @This decrements the reference count of a upipe or frees it.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_check_release(struct upipe *upipe)
+static void upipe_ts_check_free(struct upipe *upipe)
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_check->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_throw_dead(upipe);
 
-        upipe_ts_check_clean_output(upipe);
+    upipe_ts_check_clean_output(upipe);
 
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_check->refcount);
-        free(upipe_ts_check);
-    }
+    upipe_clean(upipe);
+    free(upipe_ts_check);
 }
 
 /** module manager static descriptor */
@@ -310,11 +293,9 @@ static struct upipe_mgr upipe_ts_check_mgr = {
     .upipe_alloc = upipe_ts_check_alloc,
     .upipe_input = upipe_ts_check_input,
     .upipe_control = upipe_ts_check_control,
-    .upipe_use = upipe_ts_check_use,
-    .upipe_release = upipe_ts_check_release,
+    .upipe_free = upipe_ts_check_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_check pipes.

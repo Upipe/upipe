@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_log.h>
@@ -84,7 +83,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 struct test_output {
     uint64_t program_number;
-    urefcount refcount;
     struct upipe upipe;
 };
 
@@ -97,7 +95,6 @@ static struct upipe *test_output_alloc(struct upipe_mgr *mgr,
     assert(test_output != NULL);
     upipe_init(&test_output->upipe, mgr, uprobe);
     test_output->program_number = UINT64_MAX;
-    urefcount_init(&test_output->refcount);
     upipe_throw_ready(&test_output->upipe);
     return &test_output->upipe;
 }
@@ -127,25 +124,15 @@ static bool test_output_control(struct upipe *upipe, enum upipe_command command,
 }
 
 /** helper phony pipe to test upipe_avfsrc */
-static void test_output_use(struct upipe *upipe)
+static void test_output_free(struct upipe *upipe)
 {
     struct test_output *test_output =
         container_of(upipe, struct test_output, upipe);
-    urefcount_use(&test_output->refcount);
-}
-
-/** helper phony pipe to test upipe_avfsrc */
-static void test_output_release(struct upipe *upipe)
-{
-    struct test_output *test_output =
-        container_of(upipe, struct test_output, upipe);
-    if (unlikely(urefcount_release(&test_output->refcount))) {
-        upipe_throw_dead(upipe);
-        assert(test_output->program_number != UINT64_MAX);
-        del_programs -= test_output->program_number;
-        upipe_clean(upipe);
-        free(test_output);
-    }
+    upipe_throw_dead(upipe);
+    assert(test_output->program_number != UINT64_MAX);
+    del_programs -= test_output->program_number;
+    upipe_clean(upipe);
+    free(test_output);
 }
 
 /** helper phony pipe to test uprobe_select_programs */
@@ -153,11 +140,9 @@ static struct upipe_mgr test_output_mgr = {
     .upipe_alloc = test_output_alloc,
     .upipe_input = NULL,
     .upipe_control = test_output_control,
-    .upipe_use = test_output_use,
-    .upipe_release = test_output_release,
+    .upipe_free = test_output_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** helper phony pipe to test uprobe_select_programs */
@@ -181,11 +166,9 @@ static struct upipe_mgr test_mgr = {
     .upipe_alloc = NULL,
     .upipe_input = NULL,
     .upipe_control = NULL,
-    .upipe_use = NULL,
-    .upipe_release = NULL,
+    .upipe_free = NULL,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 int main(int argc, char **argv)

@@ -111,8 +111,6 @@ struct udict_inline_mgr {
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** common management structure */
     struct udict_mgr mgr;
 };
@@ -615,31 +613,19 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
         udict_inline_free_inner(udict);
 }
 
-/** @This increments the reference count of a udict manager.
- *
- * @param mgr pointer to udict manager
- */
-static void udict_inline_mgr_use(struct udict_mgr *mgr)
-{
-    struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
-    urefcount_use(&inline_mgr->refcount);
-}
-
-/** @This decrements the reference count of a udict manager or frees it.
+/** @This frees a udict manager.
  *
  * @param mgr pointer to a udict manager
  */
-static void udict_inline_mgr_release(struct udict_mgr *mgr)
+static void udict_inline_mgr_free(struct udict_mgr *mgr)
 {
     struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
-    if (unlikely(urefcount_release(&inline_mgr->refcount))) {
-        udict_inline_mgr_vacuum(mgr);
-        ulifo_clean(&inline_mgr->udict_pool);
-        umem_mgr_release(inline_mgr->umem_mgr);
+    udict_inline_mgr_vacuum(mgr);
+    ulifo_clean(&inline_mgr->udict_pool);
+    umem_mgr_release(inline_mgr->umem_mgr);
 
-        urefcount_clean(&inline_mgr->refcount);
-        free(inline_mgr);
-    }
+    urefcount_clean(&inline_mgr->mgr.refcount);
+    free(inline_mgr);
 }
 
 /** @This allocates a new instance of the inline udict manager.
@@ -670,13 +656,12 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     inline_mgr->min_size = min_size > 0 ? min_size : UDICT_MIN_SIZE;
     inline_mgr->extra_size = extra_size > 0 ? extra_size : UDICT_EXTRA_SIZE;
 
-    urefcount_init(&inline_mgr->refcount);
+    urefcount_init(&inline_mgr->mgr.refcount);
     inline_mgr->mgr.udict_alloc = udict_inline_alloc;
     inline_mgr->mgr.udict_control = udict_inline_control;
     inline_mgr->mgr.udict_free = udict_inline_free;
     inline_mgr->mgr.udict_mgr_vacuum = udict_inline_mgr_vacuum;
-    inline_mgr->mgr.udict_mgr_use = udict_inline_mgr_use;
-    inline_mgr->mgr.udict_mgr_release = udict_inline_mgr_release;
+    inline_mgr->mgr.udict_mgr_free = udict_inline_mgr_free;
     
     return udict_inline_mgr_to_udict_mgr(inline_mgr);
 }

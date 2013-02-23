@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
@@ -107,8 +106,6 @@ struct upipe_avfsrc {
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -136,8 +133,6 @@ struct upipe_avfsrc_output {
     /** ubuf manager for this output */
     struct ubuf_mgr *ubuf_mgr;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -167,7 +162,6 @@ static struct upipe *upipe_avfsrc_output_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_output->id = UINT64_MAX;
     upipe_avfsrc_output_init_output(upipe);
     upipe_avfsrc_output_init_ubuf_mgr(upipe);
-    urefcount_init(&upipe_avfsrc_output->refcount);
 
     upipe_avfsrc_output_init_sub(upipe);
 
@@ -263,36 +257,22 @@ static bool upipe_avfsrc_output_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_output_use(struct upipe *upipe)
-{
-    struct upipe_avfsrc_output *upipe_avfsrc_output =
-        upipe_avfsrc_output_from_upipe(upipe);
-    urefcount_use(&upipe_avfsrc_output->refcount);
-}
-
 /** @This decrements the reference count of a upipe or frees it.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_avfsrc_output_release(struct upipe *upipe)
+static void upipe_avfsrc_output_free(struct upipe *upipe)
 {
     struct upipe_avfsrc_output *upipe_avfsrc_output =
         upipe_avfsrc_output_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_avfsrc_output->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_throw_dead(upipe);
 
-        upipe_avfsrc_output_clean_sub(upipe);
-        upipe_avfsrc_output_clean_ubuf_mgr(upipe);
-        upipe_avfsrc_output_clean_output(upipe);
+    upipe_avfsrc_output_clean_ubuf_mgr(upipe);
+    upipe_avfsrc_output_clean_output(upipe);
 
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_avfsrc_output->refcount);
-        free(upipe_avfsrc_output);
-    }
+    upipe_clean(upipe);
+    upipe_avfsrc_output_clean_sub(upipe);
+    free(upipe_avfsrc_output);
 }
 
 /** @internal @This initializes the output manager for an avfsrc pipe.
@@ -308,10 +288,8 @@ static struct upipe_mgr *upipe_avfsrc_init_output_mgr(struct upipe *upipe)
     output_mgr->upipe_alloc = upipe_avfsrc_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_avfsrc_output_control;
-    output_mgr->upipe_use = upipe_avfsrc_output_use;
-    output_mgr->upipe_release = upipe_avfsrc_output_release;
-    output_mgr->upipe_mgr_use = upipe_avfsrc_output_mgr_use;
-    output_mgr->upipe_mgr_release = upipe_avfsrc_output_mgr_release;
+    output_mgr->upipe_free = upipe_avfsrc_output_free;
+    output_mgr->upipe_mgr_free = NULL;
     return output_mgr;
 }
 
@@ -341,7 +319,6 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
     upipe_avfsrc->probed = false;
-    urefcount_init(&upipe_avfsrc->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -996,45 +973,32 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
     return true;
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_avfsrc_use(struct upipe *upipe)
+static void upipe_avfsrc_free(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    urefcount_use(&upipe_avfsrc->refcount);
-}
+    upipe_avfsrc_clean_sub_outputs(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_release(struct upipe *upipe)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_avfsrc->refcount))) {
-        upipe_avfsrc_clean_sub_outputs(upipe);
-
-        upipe_avfsrc_abort_av_deal(upipe);
-        if (likely(upipe_avfsrc->context != NULL)) {
-            if (likely(upipe_avfsrc->url != NULL))
-                upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
-            avformat_close_input(&upipe_avfsrc->context);
-        }
-        upipe_throw_dead(upipe);
-
-        av_dict_free(&upipe_avfsrc->options);
-        free(upipe_avfsrc->url);
-
-        upipe_avfsrc_clean_uclock(upipe);
-        upipe_avfsrc_clean_upump_mgr(upipe);
-        upipe_avfsrc_clean_uref_mgr(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_avfsrc->refcount);
-        free(upipe_avfsrc);
+    upipe_avfsrc_abort_av_deal(upipe);
+    if (likely(upipe_avfsrc->context != NULL)) {
+        if (likely(upipe_avfsrc->url != NULL))
+            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
+        avformat_close_input(&upipe_avfsrc->context);
     }
+    upipe_throw_dead(upipe);
+
+    av_dict_free(&upipe_avfsrc->options);
+    free(upipe_avfsrc->url);
+
+    upipe_avfsrc_clean_uclock(upipe);
+    upipe_avfsrc_clean_upump_mgr(upipe);
+    upipe_avfsrc_clean_uref_mgr(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_avfsrc);
 }
 
 /** module manager static descriptor */
@@ -1044,11 +1008,9 @@ static struct upipe_mgr upipe_avfsrc_mgr = {
     .upipe_alloc = upipe_avfsrc_alloc,
     .upipe_input = NULL,
     .upipe_control = upipe_avfsrc_control,
-    .upipe_use = upipe_avfsrc_use,
-    .upipe_release = upipe_avfsrc_release,
+    .upipe_free = upipe_avfsrc_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all avformat source pipes.

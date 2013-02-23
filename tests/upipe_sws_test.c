@@ -260,11 +260,9 @@ static struct upipe_mgr sws_test_mgr = {
     .upipe_alloc = sws_test_alloc,
     .upipe_input = sws_test_input,
     .upipe_control = NULL,
-    .upipe_use = NULL,
-    .upipe_release = NULL,
+    .upipe_free = NULL,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 // DEBUG - from swscale/swscale_unscaled.c

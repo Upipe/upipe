@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -59,8 +58,6 @@ struct upipe_ts_decaps {
     /** last continuity counter for this PID, or -1 */
     int8_t last_cc;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -86,7 +83,6 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
-    urefcount_init(&upipe_ts_decaps->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -267,32 +263,19 @@ static bool upipe_ts_decaps_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_decaps_use(struct upipe *upipe)
+static void upipe_ts_decaps_free(struct upipe *upipe)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
-    urefcount_use(&upipe_ts_decaps->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_decaps_release(struct upipe *upipe)
-{
-    struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_decaps->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_ts_decaps_clean_output(upipe);
 
-        upipe_ts_decaps_clean_output(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_decaps->refcount);
-        free(upipe_ts_decaps);
-    }
+    upipe_clean(upipe);
+    free(upipe_ts_decaps);
 }
 
 /** module manager static descriptor */
@@ -302,11 +285,9 @@ static struct upipe_mgr upipe_ts_decaps_mgr = {
     .upipe_alloc = upipe_ts_decaps_alloc,
     .upipe_input = upipe_ts_decaps_input,
     .upipe_control = upipe_ts_decaps_control,
-    .upipe_use = upipe_ts_decaps_use,
-    .upipe_release = upipe_ts_decaps_release,
+    .upipe_free = upipe_ts_decaps_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_decaps pipes.

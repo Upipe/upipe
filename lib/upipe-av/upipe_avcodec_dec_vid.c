@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
@@ -111,8 +110,6 @@ struct upipe_avcdv {
     /** avcodec_open parameters */
     struct upipe_avcodec_open_params open_params;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -132,10 +129,6 @@ enum plane_action {
     WRITE
 };
 
-/** @internal */
-static void upipe_avcdv_use(struct upipe *upipe);
-/** @internal */
-static void upipe_avcdv_release(struct upipe *upipe);
 /** @internal */
 static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
                                     size_t size, struct upump *upump);
@@ -462,9 +455,8 @@ static bool upipe_avcdv_set_context(struct upipe *upipe, const char *codec_def,
         if (unlikely(upipe_avcdv->upump_av_deal)) {
             upipe_dbg(upipe, "previous upump_av_deal still running, cleaning first");
             upipe_avcdv_abort_av_deal(upipe);
-        } else {
-            upipe_avcdv_use(upipe);
-        }
+        } else
+            upipe_use(upipe);
         struct upump *upump_av_deal = upipe_av_deal_upump_alloc(upipe_avcdv->upump_mgr,
                                                         upipe_avcdv_open_codec_cb, upipe);
         if (unlikely(!upump_av_deal)) {
@@ -485,7 +477,7 @@ static bool upipe_avcdv_set_context(struct upipe *upipe, const char *codec_def,
         return true;
     } else {
         upipe_dbg(upipe, "no upump_mgr present, direct call to avcdv_open");
-        upipe_avcdv_use(upipe);
+        upipe_use(upipe);
         return upipe_avcdv_open_codec(upipe, codec, extradata_padded, extradata_size);
     }
 }
@@ -817,63 +809,50 @@ static bool upipe_avcdv_control(struct upipe *upipe, enum upipe_command command,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_avcdv_use(struct upipe *upipe)
+static void upipe_avcdv_free(struct upipe *upipe)
 {
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
-    urefcount_use(&upipe_avcdv->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdv_release(struct upipe *upipe)
-{
-    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_avcdv->refcount))) {
-        if (upipe_avcdv->context) {
-            upipe_avcdv_set_context(upipe, NULL, NULL, 0);
-            return; // set_context() calls _use()/_release()
-        }
-
-        upipe_throw_dead(upipe);
-
-        if (upipe_avcdv->frame) {
-            av_free(upipe_avcdv->frame);
-        }
-
-        if (upipe_avcdv->input_flow) {
-            uref_free(upipe_avcdv->input_flow);
-        }
-
-        if (upipe_avcdv->saved_uref) {
-            uref_free(upipe_avcdv->saved_uref);
-        }
-        #if 0
-        if (upipe_avcdv->saved_upump) {
-            upump_start(upipe_avcdv->saved_upump);
-        }
-        #else
-        if (upipe_avcdv->saved_upump_mgr) {
-            upump_mgr_sink_unblock(upipe_avcdv->saved_upump_mgr);
-            upump_mgr_release(upipe_avcdv->saved_upump_mgr);
-        }
-        #endif
-
-        upipe_avcdv_abort_av_deal(upipe);
-        upipe_avcdv_clean_output(upipe);
-        upipe_avcdv_clean_ubuf_mgr(upipe);
-        upipe_avcdv_clean_uref_mgr(upipe);
-        upipe_avcdv_clean_upump_mgr(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_avcdv->refcount);
-        free(upipe_avcdv);
+    if (upipe_avcdv->context) {
+        upipe_avcdv_set_context(upipe, NULL, NULL, 0);
+        return; // set_context() calls _use()/_release()
     }
+
+    upipe_throw_dead(upipe);
+
+    if (upipe_avcdv->frame) {
+        av_free(upipe_avcdv->frame);
+    }
+
+    if (upipe_avcdv->input_flow) {
+        uref_free(upipe_avcdv->input_flow);
+    }
+
+    if (upipe_avcdv->saved_uref) {
+        uref_free(upipe_avcdv->saved_uref);
+    }
+    #if 0
+    if (upipe_avcdv->saved_upump) {
+        upump_start(upipe_avcdv->saved_upump);
+    }
+    #else
+    if (upipe_avcdv->saved_upump_mgr) {
+        upump_mgr_sink_unblock(upipe_avcdv->saved_upump_mgr);
+        upump_mgr_release(upipe_avcdv->saved_upump_mgr);
+    }
+    #endif
+
+    upipe_avcdv_abort_av_deal(upipe);
+    upipe_avcdv_clean_output(upipe);
+    upipe_avcdv_clean_ubuf_mgr(upipe);
+    upipe_avcdv_clean_uref_mgr(upipe);
+    upipe_avcdv_clean_upump_mgr(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_avcdv);
 }
 
 /** @internal @This allocates a avcdv pipe.
@@ -883,7 +862,7 @@ static void upipe_avcdv_release(struct upipe *upipe)
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe)
+                                      struct uprobe *uprobe)
 {
     struct upipe_avcdv *upipe_avcdv = malloc(sizeof(struct upipe_avcdv));
     if (unlikely(upipe_avcdv == NULL))
@@ -891,7 +870,6 @@ static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_avcdv_to_upipe(upipe_avcdv);
     upipe_init(upipe, mgr, uprobe);
 
-    urefcount_init(&upipe_avcdv->refcount);
     upipe_avcdv_init_uref_mgr(upipe);
     upipe_avcdv_init_ubuf_mgr(upipe);
     upipe_avcdv_init_upump_mgr(upipe);
@@ -918,11 +896,9 @@ static struct upipe_mgr upipe_avcdv_mgr = {
     .upipe_alloc = upipe_avcdv_alloc,
     .upipe_input = upipe_avcdv_input,
     .upipe_control = upipe_avcdv_control,
-    .upipe_use = upipe_avcdv_use,
-    .upipe_release = upipe_avcdv_release,
+    .upipe_free = upipe_avcdv_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for avcdv pipes

@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -156,8 +155,6 @@ struct upipe_mp2vf {
      * sequence header) */
     bool acquired;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -244,7 +241,6 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf->sequence_header = upipe_mp2vf->sequence_ext =
         upipe_mp2vf->sequence_display = NULL;
     upipe_mp2vf->acquired = false;
-    urefcount_init(&upipe_mp2vf->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -1164,43 +1160,30 @@ static bool upipe_mp2vf_control(struct upipe *upipe,
     }
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_mp2vf_use(struct upipe *upipe)
+static void upipe_mp2vf_free(struct upipe *upipe)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    urefcount_use(&upipe_mp2vf->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_mp2vf_release(struct upipe *upipe)
-{
-    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_mp2vf->refcount))) {
-        upipe_throw_dead(upipe);
+    upipe_mp2vf_clean_octet_stream(upipe);
+    upipe_mp2vf_clean_output(upipe);
+    upipe_mp2vf_clean_sync(upipe);
 
-        upipe_mp2vf_clean_octet_stream(upipe);
-        upipe_mp2vf_clean_output(upipe);
-        upipe_mp2vf_clean_sync(upipe);
+    if (upipe_mp2vf->flow_def_input != NULL)
+        uref_free(upipe_mp2vf->flow_def_input);
+    if (upipe_mp2vf->sequence_header != NULL)
+        ubuf_free(upipe_mp2vf->sequence_header);
+    if (upipe_mp2vf->sequence_ext != NULL)
+        ubuf_free(upipe_mp2vf->sequence_ext);
+    if (upipe_mp2vf->sequence_display != NULL)
+        ubuf_free(upipe_mp2vf->sequence_display);
 
-        if (upipe_mp2vf->flow_def_input != NULL)
-            uref_free(upipe_mp2vf->flow_def_input);
-        if (upipe_mp2vf->sequence_header != NULL)
-            ubuf_free(upipe_mp2vf->sequence_header);
-        if (upipe_mp2vf->sequence_ext != NULL)
-            ubuf_free(upipe_mp2vf->sequence_ext);
-        if (upipe_mp2vf->sequence_display != NULL)
-            ubuf_free(upipe_mp2vf->sequence_display);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_mp2vf->refcount);
-        free(upipe_mp2vf);
-    }
+    upipe_clean(upipe);
+    free(upipe_mp2vf);
 }
 
 /** module manager static descriptor */
@@ -1210,11 +1193,9 @@ static struct upipe_mgr upipe_mp2vf_mgr = {
     .upipe_alloc = upipe_mp2vf_alloc,
     .upipe_input = upipe_mp2vf_input,
     .upipe_control = upipe_mp2vf_control,
-    .upipe_use = upipe_mp2vf_use,
-    .upipe_release = upipe_mp2vf_release,
+    .upipe_free = upipe_mp2vf_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all mp2vf pipes.

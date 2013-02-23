@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
@@ -93,7 +92,6 @@ struct avformat_test {
     bool got_flow_def;
     unsigned int nb_packets;
     size_t octets;
-    urefcount refcount;
     struct upipe upipe;
 };
 
@@ -107,7 +105,6 @@ static struct upipe *avformat_test_alloc(struct upipe_mgr *mgr,
     avformat_test->got_flow_def = false;
     avformat_test->nb_packets = 0;
     avformat_test->octets = 0;
-    urefcount_init(&avformat_test->refcount);
     upipe_throw_ready(&avformat_test->upipe);
     return &avformat_test->upipe;
 }
@@ -137,25 +134,15 @@ static void avformat_test_input(struct upipe *upipe, struct uref *uref,
 }
 
 /** helper phony pipe to test upipe_avfsrc */
-static void avformat_test_use(struct upipe *upipe)
+static void avformat_test_free(struct upipe *upipe)
 {
     struct avformat_test *avformat_test =
         container_of(upipe, struct avformat_test, upipe);
-    urefcount_use(&avformat_test->refcount);
-}
-
-/** helper phony pipe to test upipe_avfsrc */
-static void avformat_test_release(struct upipe *upipe)
-{
-    struct avformat_test *avformat_test =
-        container_of(upipe, struct avformat_test, upipe);
-    if (unlikely(urefcount_release(&avformat_test->refcount))) {
-        upipe_dbg_va(upipe, "got %u packets totalizing %zu octets",
-                     avformat_test->nb_packets, avformat_test->octets);
-        upipe_throw_dead(upipe);
-        upipe_clean(upipe);
-        free(avformat_test);
-    }
+    upipe_dbg_va(upipe, "got %u packets totalizing %zu octets",
+                 avformat_test->nb_packets, avformat_test->octets);
+    upipe_throw_dead(upipe);
+    upipe_clean(upipe);
+    free(avformat_test);
 }
 
 /** helper phony pipe to test upipe_avfsrc */
@@ -163,11 +150,9 @@ static struct upipe_mgr avformat_test_mgr = {
     .upipe_alloc = avformat_test_alloc,
     .upipe_input = avformat_test_input,
     .upipe_control = NULL,
-    .upipe_use = avformat_test_use,
-    .upipe_release = avformat_test_release,
+    .upipe_free = avformat_test_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** definition of our uprobe */

@@ -29,7 +29,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
@@ -113,8 +112,6 @@ struct upipe_udpsrc {
     /** udp socket uri */
     char *uri;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -143,7 +140,6 @@ static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_udpsrc_to_upipe(upipe_udpsrc);
     upipe_init(upipe, mgr, uprobe);
-    urefcount_init(&upipe_udpsrc->refcount);
     upipe_udpsrc_init_uref_mgr(upipe);
     upipe_udpsrc_init_ubuf_mgr(upipe);
     upipe_udpsrc_init_output(upipe);
@@ -929,43 +925,30 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
     return true;
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_udpsrc_use(struct upipe *upipe)
+static void upipe_udpsrc_free(struct upipe *upipe)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
-    urefcount_use(&upipe_udpsrc->refcount);
-}
+    upipe_throw_dead(upipe);
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_udpsrc_release(struct upipe *upipe)
-{
-    struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_udpsrc->refcount))) {
-        upipe_throw_dead(upipe);
-
-        if (likely(upipe_udpsrc->fd != -1)) {
-            if (likely(upipe_udpsrc->uri != NULL))
-                upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
-            close(upipe_udpsrc->fd);
-        }
-        free(upipe_udpsrc->uri);
-        upipe_udpsrc_clean_read_size(upipe);
-        upipe_udpsrc_clean_uclock(upipe);
-        upipe_udpsrc_clean_upump_mgr(upipe);
-        upipe_udpsrc_clean_output(upipe);
-        upipe_udpsrc_clean_ubuf_mgr(upipe);
-        upipe_udpsrc_clean_uref_mgr(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_udpsrc->refcount);
-        free(upipe_udpsrc);
+    if (likely(upipe_udpsrc->fd != -1)) {
+        if (likely(upipe_udpsrc->uri != NULL))
+            upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
+        close(upipe_udpsrc->fd);
     }
+    free(upipe_udpsrc->uri);
+    upipe_udpsrc_clean_read_size(upipe);
+    upipe_udpsrc_clean_uclock(upipe);
+    upipe_udpsrc_clean_upump_mgr(upipe);
+    upipe_udpsrc_clean_output(upipe);
+    upipe_udpsrc_clean_ubuf_mgr(upipe);
+    upipe_udpsrc_clean_uref_mgr(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_udpsrc);
 }
 
 /** module manager static descriptor */
@@ -975,11 +958,9 @@ static struct upipe_mgr upipe_udpsrc_mgr = {
     .upipe_alloc = upipe_udpsrc_alloc,
     .upipe_input = NULL,
     .upipe_control = upipe_udpsrc_control,
-    .upipe_use = upipe_udpsrc_use,
-    .upipe_release = upipe_udpsrc_release,
+    .upipe_free = upipe_udpsrc_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all udp socket sources

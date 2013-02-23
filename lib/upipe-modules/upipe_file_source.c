@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
@@ -95,8 +94,6 @@ struct upipe_fsrc {
     /** file path */
     char *path;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -125,7 +122,6 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
     upipe_init(upipe, mgr, uprobe);
-    urefcount_init(&upipe_fsrc->refcount);
     upipe_fsrc_init_uref_mgr(upipe);
     upipe_fsrc_init_ubuf_mgr(upipe);
     upipe_fsrc_init_output(upipe);
@@ -472,43 +468,30 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
     return true;
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_fsrc_use(struct upipe *upipe)
+static void upipe_fsrc_free(struct upipe *upipe)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    urefcount_use(&upipe_fsrc->refcount);
-}
-
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_fsrc_release(struct upipe *upipe)
-{
-    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_fsrc->refcount))) {
-        if (likely(upipe_fsrc->fd != -1)) {
-            if (likely(upipe_fsrc->path != NULL))
-                upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
-            close(upipe_fsrc->fd);
-        }
-        upipe_throw_dead(upipe);
-
-        free(upipe_fsrc->path);
-        upipe_fsrc_clean_read_size(upipe);
-        upipe_fsrc_clean_uclock(upipe);
-        upipe_fsrc_clean_upump_mgr(upipe);
-        upipe_fsrc_clean_output(upipe);
-        upipe_fsrc_clean_ubuf_mgr(upipe);
-        upipe_fsrc_clean_uref_mgr(upipe);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_fsrc->refcount);
-        free(upipe_fsrc);
+    if (likely(upipe_fsrc->fd != -1)) {
+        if (likely(upipe_fsrc->path != NULL))
+            upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
+        close(upipe_fsrc->fd);
     }
+    upipe_throw_dead(upipe);
+
+    free(upipe_fsrc->path);
+    upipe_fsrc_clean_read_size(upipe);
+    upipe_fsrc_clean_uclock(upipe);
+    upipe_fsrc_clean_upump_mgr(upipe);
+    upipe_fsrc_clean_output(upipe);
+    upipe_fsrc_clean_ubuf_mgr(upipe);
+    upipe_fsrc_clean_uref_mgr(upipe);
+
+    upipe_clean(upipe);
+    free(upipe_fsrc);
 }
 
 /** module manager static descriptor */
@@ -518,11 +501,9 @@ static struct upipe_mgr upipe_fsrc_mgr = {
     .upipe_alloc = upipe_fsrc_alloc,
     .upipe_input = NULL,
     .upipe_control = upipe_fsrc_control,
-    .upipe_use = upipe_fsrc_use,
-    .upipe_release = upipe_fsrc_release,
+    .upipe_free = upipe_fsrc_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all file source pipes.

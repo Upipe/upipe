@@ -65,7 +65,6 @@ graph {flow: east}
 
 #include <libswscale/swscale.h>
 
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
@@ -130,7 +129,7 @@ graph {flow: east}
 #define UBUF_ALIGN_OFFSET   0
 #define READ_SIZE 4096
 
-#define BENCH_TS
+#undef BENCH_TS
 
 /*
  * upipe-yuv-rgb
@@ -143,7 +142,6 @@ struct upipe_yuvrgb {
     struct upipe *output;
     struct uref *output_flow;
     bool output_flow_sent;
-    urefcount refcount;
     struct upipe upipe;
 };
 
@@ -161,7 +159,6 @@ static struct upipe *upipe_yuvrgb_alloc(struct upipe_mgr *mgr,
     memset(upipe_yuvrgb, 0, sizeof(struct upipe_yuvrgb));
     struct upipe *upipe = upipe_yuvrgb_to_upipe(upipe_yuvrgb);
     upipe_init(upipe, mgr, uprobe);
-    urefcount_init(&upipe_yuvrgb->refcount);
     upipe_yuvrgb_init_ubuf_mgr(upipe);
     upipe_yuvrgb_init_output(upipe);
     upipe_throw_ready(upipe);
@@ -263,28 +260,19 @@ static bool upipe_yuvrgb_control(struct upipe *upipe,
     }
 }
 
-static void upipe_yuvrgb_use(struct upipe *upipe)
+static void upipe_yuvrgb_free(struct upipe *upipe)
 {
     struct upipe_yuvrgb *upipe_yuvrgb = upipe_yuvrgb_from_upipe(upipe);
-    urefcount_use(&upipe_yuvrgb->refcount);
-}
+    upipe_throw_dead(upipe);
 
-static void upipe_yuvrgb_release(struct upipe *upipe)
-{
-    struct upipe_yuvrgb *upipe_yuvrgb = upipe_yuvrgb_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_yuvrgb->refcount))) {
-        upipe_throw_dead(upipe);
-
-        if (upipe_yuvrgb->swsctx) {
-            sws_freeContext(upipe_yuvrgb->swsctx);
-        }
-
-        upipe_yuvrgb_clean_ubuf_mgr(upipe);
-        upipe_yuvrgb_clean_output(upipe);
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_yuvrgb->refcount);
-        free(upipe_yuvrgb);
+    if (upipe_yuvrgb->swsctx) {
+        sws_freeContext(upipe_yuvrgb->swsctx);
     }
+
+    upipe_yuvrgb_clean_ubuf_mgr(upipe);
+    upipe_yuvrgb_clean_output(upipe);
+    upipe_clean(upipe);
+    free(upipe_yuvrgb);
 }
 
 static struct upipe_mgr upipe_yuvrgb_mgr = {
@@ -292,11 +280,9 @@ static struct upipe_mgr upipe_yuvrgb_mgr = {
     .upipe_alloc = upipe_yuvrgb_alloc,
     .upipe_input = upipe_yuvrgb_input,
     .upipe_control = upipe_yuvrgb_control,
-    .upipe_release = upipe_yuvrgb_release,
-    .upipe_use = upipe_yuvrgb_use,
+    .upipe_free = upipe_yuvrgb_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /*

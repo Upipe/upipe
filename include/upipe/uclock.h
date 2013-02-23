@@ -32,6 +32,7 @@
 #define _UPIPE_UCLOCK_H_
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 
 #include <stdint.h>
 
@@ -39,12 +40,13 @@
 
 /** @This is a structure allowing to retrieve system time. */
 struct uclock {
+    /** refcount management structure */
+    urefcount refcount;
+
     /** function returning the current system time */
     uint64_t (*uclock_now)(struct uclock *);
-    /** function to increment the refcount of the uclock */
-    void (*uclock_use)(struct uclock *);
-    /** function to decrement the refcount of the uclock or free it */
-    void (*uclock_release)(struct uclock *);
+    /** function to free the uclock */
+    void (*uclock_free)(struct uclock *);
 };
 
 /** @This returns the current system time.
@@ -63,8 +65,7 @@ static inline uint64_t uclock_now(struct uclock *uclock)
  */
 static inline void uclock_use(struct uclock *uclock)
 {
-    if (likely(uclock->uclock_use != NULL))
-        uclock->uclock_use(uclock);
+    urefcount_use(&uclock->refcount);
 }
 
 /** @This decrements the reference count of a uclock or frees it.
@@ -73,8 +74,8 @@ static inline void uclock_use(struct uclock *uclock)
  */
 static inline void uclock_release(struct uclock *uclock)
 {
-    if (likely(uclock->uclock_release != NULL))
-        uclock->uclock_release(uclock);
+    if (unlikely(urefcount_release(&uclock->refcount)))
+        uclock->uclock_free(uclock);
 }
 
 #endif

@@ -33,8 +33,6 @@
 
 /** @This defines the private data structures of the umem alloc manager. */
 struct umem_alloc_mgr {
-    /** refcount management structure */
-    urefcount refcount;
     /** common management structure */
     struct umem_mgr mgr;
 };
@@ -113,27 +111,15 @@ static void umem_alloc_free(struct umem *umem)
     umem->mgr = NULL;
 }
 
-/** @This increments the reference count of a umem manager.
+/** @This frees a umem manager.
  *
  * @param mgr pointer to umem manager
  */
-static void umem_alloc_mgr_use(struct umem_mgr *mgr)
+static void umem_alloc_mgr_free(struct umem_mgr *mgr)
 {
     struct umem_alloc_mgr *alloc_mgr = umem_alloc_mgr_from_umem_mgr(mgr);
-    urefcount_use(&alloc_mgr->refcount);
-}
-
-/** @This decrements the reference count of a umem manager or frees it.
- *
- * @param mgr pointer to umem manager
- */
-static void umem_alloc_mgr_release(struct umem_mgr *mgr)
-{
-    struct umem_alloc_mgr *alloc_mgr = umem_alloc_mgr_from_umem_mgr(mgr);
-    if (unlikely(urefcount_release(&alloc_mgr->refcount))) {
-        urefcount_clean(&alloc_mgr->refcount);
-        free(alloc_mgr);
-    }
+    urefcount_clean(&alloc_mgr->mgr.refcount);
+    free(alloc_mgr);
 }
 
 /** @This allocates a new instance of the umem alloc manager allocating buffers
@@ -147,13 +133,12 @@ struct umem_mgr *umem_alloc_mgr_alloc(void)
     if (unlikely(alloc_mgr == NULL))
         return NULL;
 
-    urefcount_init(&alloc_mgr->refcount);
+    urefcount_init(&alloc_mgr->mgr.refcount);
     alloc_mgr->mgr.umem_alloc = umem_alloc_alloc;
     alloc_mgr->mgr.umem_realloc = umem_alloc_realloc;
     alloc_mgr->mgr.umem_free = umem_alloc_free;
     alloc_mgr->mgr.umem_mgr_vacuum = NULL;
-    alloc_mgr->mgr.umem_mgr_use = umem_alloc_mgr_use;
-    alloc_mgr->mgr.umem_mgr_release = umem_alloc_mgr_release;
+    alloc_mgr->mgr.umem_mgr_free = umem_alloc_mgr_free;
 
     return umem_alloc_mgr_to_umem_mgr(alloc_mgr);
 }

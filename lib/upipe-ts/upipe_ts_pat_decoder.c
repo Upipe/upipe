@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -60,8 +59,6 @@ struct upipe_ts_patd {
     /** true if we received a compatible flow definition */
     bool flow_def_ok;
 
-    /** refcount management structure */
-    urefcount refcount;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -87,7 +84,6 @@ static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
     upipe_ts_patd->tsid = -1;
     upipe_ts_patd->flow_def_ok = false;
-    urefcount_init(&upipe_ts_patd->refcount);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -440,45 +436,32 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_patd_work(upipe, uref);
 }
 
-/** @This increments the reference count of a upipe.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_patd_use(struct upipe *upipe)
+static void upipe_ts_patd_free(struct upipe *upipe)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    urefcount_use(&upipe_ts_patd->refcount);
-}
+    if (upipe_ts_psid_table_validate(upipe_ts_patd->pat)) {
+        UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
 
-/** @This decrements the reference count of a upipe or frees it.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_patd_release(struct upipe *upipe)
-{
-    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    if (unlikely(urefcount_release(&upipe_ts_patd->refcount))) {
-        if (upipe_ts_psid_table_validate(upipe_ts_patd->pat)) {
-            UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
+        uint16_t program = patn_get_program(pat_program);
 
-            uint16_t program = patn_get_program(pat_program);
+        UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat,
+                                       pat_program)
 
-            UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat,
-                                           pat_program)
+        upipe_ts_patd_del_program(upipe, NULL, program);
 
-            upipe_ts_patd_del_program(upipe, NULL, program);
-
-            UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->pat, pat_program)
-        }
-        upipe_throw_dead(upipe);
-
-        upipe_ts_psid_table_clean(upipe_ts_patd->pat);
-        upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
-
-        upipe_clean(upipe);
-        urefcount_clean(&upipe_ts_patd->refcount);
-        free(upipe_ts_patd);
+        UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->pat, pat_program)
     }
+    upipe_throw_dead(upipe);
+
+    upipe_ts_psid_table_clean(upipe_ts_patd->pat);
+    upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
+
+    upipe_clean(upipe);
+    free(upipe_ts_patd);
 }
 
 /** module manager static descriptor */
@@ -488,11 +471,9 @@ static struct upipe_mgr upipe_ts_patd_mgr = {
     .upipe_alloc = upipe_ts_patd_alloc,
     .upipe_input = upipe_ts_patd_input,
     .upipe_control = NULL,
-    .upipe_use = upipe_ts_patd_use,
-    .upipe_release = upipe_ts_patd_release,
+    .upipe_free = upipe_ts_patd_free,
 
-    .upipe_mgr_use = NULL,
-    .upipe_mgr_release = NULL
+    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all ts_patd pipes.
