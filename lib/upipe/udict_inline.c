@@ -121,6 +121,8 @@ struct udict_inline_mgr {
 struct udict_inline {
     /** umem structure pointing to buffer */
     struct umem umem;
+    /** used size */
+    size_t size;
 
     /** common structure */
     struct udict udict;
@@ -196,6 +198,7 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
 
     uint8_t *buffer = umem_buffer(&inl->umem);
     buffer[0] = UDICT_TYPE_END;
+    inl->size = 1;
 
     udict_mgr_use(mgr);
     return udict;
@@ -212,15 +215,15 @@ static bool udict_inline_dup(struct udict *udict, struct udict **new_udict_p)
 {
     assert(new_udict_p != NULL);
     struct udict_inline *inl = udict_inline_from_udict(udict);
-    size_t size = umem_size(&inl->umem);
-    struct udict *new_udict = udict_inline_alloc(udict->mgr, size);
+    struct udict *new_udict = udict_inline_alloc(udict->mgr, inl->size);
     if (unlikely(new_udict == NULL))
         return false;
 
     *new_udict_p = new_udict;
 
     struct udict_inline *new_inl = udict_inline_from_udict(new_udict);
-    memcpy(umem_buffer(&new_inl->umem), umem_buffer(&inl->umem), size);
+    memcpy(umem_buffer(&new_inl->umem), umem_buffer(&inl->umem), inl->size);
+    new_inl->size = inl->size;
     return true;
 }
 
@@ -400,7 +403,8 @@ static bool udict_inline_delete(struct udict *udict, const char *name,
         return false;
 
     uint8_t *end = udict_inline_next(attr);
-    memmove(attr, end, umem_buffer(&inl->umem) + umem_size(&inl->umem) - end);
+    memmove(attr, end, umem_buffer(&inl->umem) + inl->size - end);
+    inl->size -= end - attr;
     return true;
 }
 
@@ -458,7 +462,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
     }
 
     /* check total attributes size */
-    attr = udict_inline_find(udict, NULL, UDICT_TYPE_END);
+    attr = umem_buffer(&inl->umem) + inl->size - 1;
     size_t total_size = (attr - umem_buffer(&inl->umem)) + header_size +
                         attr_size + 1;
     if (unlikely(total_size >= umem_size(&inl->umem))) {
@@ -468,8 +472,9 @@ static bool udict_inline_set(struct udict *udict, const char *name,
                                                inline_mgr->extra_size)))
             return false;
 
-        attr = udict_inline_find(udict, NULL, UDICT_TYPE_END);
+        attr = umem_buffer(&inl->umem) + inl->size - 1;
     }
+    assert(*attr == UDICT_TYPE_END);
 
     /* write attribute header */
     if (unlikely(shorthand == NULL)) {
@@ -492,6 +497,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
 
     attr[attr_size] = UDICT_TYPE_END;
     *attr_p = attr;
+    inl->size += header_size + attr_size;
     return true;
 }
 
