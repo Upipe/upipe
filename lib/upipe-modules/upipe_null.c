@@ -88,7 +88,7 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_dbg(upipe, "sending uref to devnull");
     upipe_null->counter++;
-    if (upipe_null->dump) {
+    if (upipe_null->dump && uref->udict != NULL) {
         udict_dump(uref->udict, upipe->uprobe);
     }
     uref_free(uref);

@@ -111,7 +111,8 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
     const char *def;
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
-    udict_dump(uref->udict, upipe->uprobe);
+    if (uref->udict != NULL)
+        udict_dump(uref->udict, upipe->uprobe);
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
         assert(def);

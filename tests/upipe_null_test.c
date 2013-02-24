@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     /* Same with dump */
     upipe_null_dump_dict(nullpipe, true);
     for (i=0; i < ITERATIONS; i++) {
-        upipe_input(nullpipe, uref_alloc(uref_mgr), NULL);
+        upipe_input(nullpipe, uref_alloc_control(uref_mgr), NULL);
     }
 
     /* release pipe */

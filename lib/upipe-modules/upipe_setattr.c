@@ -102,20 +102,30 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    const char *name = NULL;
-    enum udict_type type = UDICT_TYPE_END;
-    while (udict_iterate(upipe_setattr->dict->udict, &name, &type) &&
-           type != UDICT_TYPE_END) {
-        size_t size;
-        const uint8_t *v1 = udict_get(upipe_setattr->dict->udict, name, type,
-                                      &size);
-        uint8_t *v2 = udict_set(uref->udict, name, type, size);
-        if (unlikely(v1 == NULL || v2 == NULL)) {
-            uref_free(uref);
-            upipe_throw_aerror(upipe);
-            return;
+    if (upipe_setattr->dict->udict != NULL) {
+        if (uref->udict == NULL) {
+            uref->udict = udict_alloc(uref->mgr->udict_mgr, 0);
+            if (unlikely(uref->udict == NULL)) {
+                upipe_throw_aerror(upipe);
+                uref_free(uref);
+                return;
+            }
         }
-        memcpy(v2, v1, size);
+        const char *name = NULL;
+        enum udict_type type = UDICT_TYPE_END;
+        while (udict_iterate(upipe_setattr->dict->udict, &name, &type) &&
+               type != UDICT_TYPE_END) {
+            size_t size;
+            const uint8_t *v1 = udict_get(upipe_setattr->dict->udict, name,
+                                          type, &size);
+            uint8_t *v2 = udict_set(uref->udict, name, type, size);
+            if (unlikely(v1 == NULL || v2 == NULL)) {
+                uref_free(uref);
+                upipe_throw_aerror(upipe);
+                return;
+            }
+            memcpy(v2, v1, size);
+        }
     }
     if (upipe_setattr->dict->systime != UINT64_MAX)
         uref->systime = upipe_setattr->dict->systime;

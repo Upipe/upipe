@@ -123,7 +123,7 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
         return NULL;
 
     uref->ubuf = NULL;
-    uref->udict = udict_alloc(mgr->udict_mgr, 0);
+    uref->udict = NULL;
 
     uref->flow_disc = false;
     uref->block_start = false;
@@ -173,11 +173,14 @@ static inline struct uref *uref_dup(struct uref *uref)
         return NULL;
 
     new_uref->ubuf = NULL;
-    new_uref->udict = udict_dup(uref->udict);
-    if (unlikely(new_uref->udict == NULL)) {
-        uref_free(new_uref);
-        return NULL;
-    }
+    if (uref->udict != NULL) {
+        new_uref->udict = udict_dup(uref->udict);
+        if (unlikely(new_uref->udict == NULL)) {
+            uref_free(new_uref);
+            return NULL;
+        }
+    } else
+        new_uref->udict = NULL;
 
     new_uref->flow_disc = uref->flow_disc;
     new_uref->block_start = uref->block_start;

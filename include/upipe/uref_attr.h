@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,6 +34,122 @@
 #include <upipe/uref.h>
 #include <upipe/udict.h>
 
+#define UREF_ATTR_TEMPLATE(utype, ctype)                                    \
+/** @This returns the value of a utype attribute.                           \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param name name of the attribute                                        \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_attr_get_##utype(struct uref *uref, ctype *p,       \
+                                         enum udict_type type,              \
+                                         const char *name)                  \
+{                                                                           \
+    if (uref->udict == NULL)                                                \
+        return false;                                                       \
+    return udict_get_##utype(uref->udict, p, type, name);                   \
+}                                                                           \
+/** @This returns the value of a utype attribute, with printf-style name    \
+ * generation.                                                              \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param format printf-style format of the attribute, followed by a        \
+ * variable list of arguments                                               \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_attr_get_##utype##_va(struct uref *uref,            \
+                                              ctype *p,                     \
+                                              enum udict_type type,         \
+                                              const char *format, ...)      \
+{                                                                           \
+    UBASE_VARARG(uref_attr_get_##utype(uref, p, type, string))              \
+}                                                                           \
+/** @This sets the value of a utype attribute, optionally creating it.      \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param name name of the attribute                                        \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_attr_set_##utype(struct uref *uref, ctype v,        \
+                                         enum udict_type type,              \
+                                         const char *name)                  \
+{                                                                           \
+    if (uref->udict == NULL) {                                              \
+        uref->udict = udict_alloc(uref->mgr->udict_mgr, 0);                 \
+        if (unlikely(uref->udict == NULL))                                  \
+            return false;                                                   \
+    }                                                                       \
+    return udict_set_##utype(uref->udict, v, type, name);                   \
+}                                                                           \
+/** @This sets the value of a utype attribute, optionally creating it, with \
+ * printf-style name generation.                                            \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param format printf-style format of the attribute, followed by a        \
+ * variable list of arguments                                               \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_attr_set_##utype##_va(struct uref *uref,            \
+                                              ctype v,                      \
+                                              enum udict_type type,         \
+                                              const char *format, ...)      \
+{                                                                           \
+    UBASE_VARARG(uref_attr_set_##utype(uref, v, type, string))              \
+}
+
+UREF_ATTR_TEMPLATE(opaque, struct udict_opaque)
+UREF_ATTR_TEMPLATE(string, const char *)
+UREF_ATTR_TEMPLATE(void, void *)
+UREF_ATTR_TEMPLATE(bool, bool)
+UREF_ATTR_TEMPLATE(small_unsigned, uint8_t)
+UREF_ATTR_TEMPLATE(small_int, int8_t)
+UREF_ATTR_TEMPLATE(unsigned, uint64_t)
+UREF_ATTR_TEMPLATE(int, int64_t)
+UREF_ATTR_TEMPLATE(float, double)
+UREF_ATTR_TEMPLATE(rational, struct urational)
+#undef UREF_ATTR_TEMPLATE
+
+/** @This deletes an attribute.
+ *
+ * @param uref pointer to the uref
+ * @param type type of the attribute (potentially a shorthand)
+ * @param name name of the attribute
+ * @return true if the attribute existed before
+ */
+static inline bool uref_attr_delete(struct uref *uref, enum udict_type type,
+                                    const char *name)
+{
+    if (uref->udict == NULL)
+        return false;
+    return udict_delete(uref->udict, type, name);
+}
+
+/** @This deletes an attribute, with printf-style name generation.
+ *
+ * @param uref pointer to the uref
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return true if the attribute existed before
+ */
+static inline bool uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                       const char *format, ...)
+                   __attribute__ ((format(printf, 3, 4)));
+/** @hidden */
+static inline bool uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                       const char *format, ...)
+{
+    UBASE_VARARG(uref_attr_delete(uref, type, string))
+}
+
 /*
  * Opaque attributes
  */
@@ -56,8 +172,13 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const uint8_t **p,             \
                                              size_t *size_p)                \
 {                                                                           \
-    return udict_get_opaque(uref->udict, p, size_p, UDICT_TYPE_OPAQUE,      \
-                            name);                                          \
+    struct udict_opaque opaque;                                             \
+    bool ret = uref_attr_get_opaque(uref, &opaque, UDICT_TYPE_OPAQUE, name);\
+    if (ret) {                                                              \
+        *p = opaque.v;                                                      \
+        *size_p = opaque.size;                                              \
+    }                                                                       \
+    return ret;                                                             \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -68,7 +189,10 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const uint8_t *v, size_t size) \
 {                                                                           \
-    return udict_set_opaque(uref->udict, v, size, UDICT_TYPE_OPAQUE, name); \
+    struct udict_opaque opaque;                                             \
+    opaque.v = v;                                                           \
+    opaque.size = size;                                                     \
+    return uref_attr_set_opaque(uref, opaque, UDICT_TYPE_OPAQUE, name);     \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -77,7 +201,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_OPAQUE, name);              \
+    return uref_attr_delete(uref, UDICT_TYPE_OPAQUE, name);                 \
 }
 
 /* @This allows to define accessors for a shorthand opaque attribute.
@@ -98,7 +222,13 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const uint8_t **p,             \
                                              size_t *size_p)                \
 {                                                                           \
-    return udict_get_opaque(uref->udict, p, size_p, type, NULL);            \
+    struct udict_opaque opaque;                                             \
+    bool ret = uref_attr_get_opaque(uref, &opaque, type, NULL);             \
+    if (ret) {                                                              \
+        *p = opaque.v;                                                      \
+        *size_p = opaque.size;                                              \
+    }                                                                       \
+    return ret;                                                             \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -109,7 +239,10 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const uint8_t *v, size_t size) \
 {                                                                           \
-    return udict_set_opaque(uref->udict, v, size, type, NULL);              \
+    struct udict_opaque opaque;                                             \
+    opaque.v = v;                                                           \
+    opaque.size = size;                                                     \
+    return uref_attr_set_opaque(uref, opaque, type, NULL);                  \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -118,7 +251,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a opaque attribute, with a name
@@ -140,8 +273,14 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const uint8_t **p,             \
                                              size_t *size_p, args_decl)     \
 {                                                                           \
-    return udict_get_opaque_va(uref->udict, p, size_p, UDICT_TYPE_OPAQUE,   \
-                               format, args);                               \
+    struct udict_opaque opaque;                                             \
+    bool ret = uref_attr_get_opaque_va(uref, &opaque, UDICT_TYPE_OPAQUE,    \
+                                       format, args);                       \
+    if (ret) {                                                              \
+        *p = opaque.v;                                                      \
+        *size_p = opaque.size;                                              \
+    }                                                                       \
+    return ret;                                                             \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -153,8 +292,11 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const uint8_t *v,              \
                                              size_t size, args_decl)        \
 {                                                                           \
-    return udict_set_opaque_va(uref->udict, v, size, UDICT_TYPE_OPAQUE,     \
-                               format, args);                               \
+    struct udict_opaque opaque;                                             \
+    opaque.v = v;                                                           \
+    opaque.size = size;                                                     \
+    return uref_attr_set_opaque_va(uref, opaque, UDICT_TYPE_OPAQUE,         \
+                                   format, args);                           \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -164,7 +306,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_OPAQUE, format, args);   \
+    return uref_attr_delete_va(uref, UDICT_TYPE_OPAQUE, format, args);      \
 }
 
 
@@ -189,7 +331,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const char **p)                \
 {                                                                           \
-    return udict_get_string(uref->udict, p, UDICT_TYPE_STRING, name);       \
+    return uref_attr_get_string(uref, p, UDICT_TYPE_STRING, name);          \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -200,7 +342,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const char *v)                 \
 {                                                                           \
-    return udict_set_string(uref->udict, v, UDICT_TYPE_STRING, name);       \
+    return uref_attr_set_string(uref, v, UDICT_TYPE_STRING, name);          \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -209,7 +351,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_STRING, name);              \
+    return uref_attr_delete(uref, UDICT_TYPE_STRING, name);                 \
 }
 
 /* @This allows to define accessors for a shorthand string attribute.
@@ -229,7 +371,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const char **p)                \
 {                                                                           \
-    return udict_get_string(uref->udict, p, type, NULL);                    \
+    return uref_attr_get_string(uref, p, type, NULL);                       \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -240,7 +382,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const char *v)                 \
 {                                                                           \
-    return udict_set_string(uref->udict, v, type, NULL);                    \
+    return uref_attr_set_string(uref, v, type, NULL);                       \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -249,7 +391,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a string attribute, with a name
@@ -270,8 +412,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              const char **p, args_decl)     \
 {                                                                           \
-    return udict_get_string_va(uref->udict, p, UDICT_TYPE_STRING,           \
-                               format, args);                               \
+    return uref_attr_get_string_va(uref, p, UDICT_TYPE_STRING,              \
+                                   format, args);                           \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -282,8 +424,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              const char *v, args_decl)      \
 {                                                                           \
-    return udict_set_string_va(uref->udict, v, UDICT_TYPE_STRING,           \
-                               format, args);                               \
+    return uref_attr_set_string_va(uref, v, UDICT_TYPE_STRING,              \
+                                  format, args);                            \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -293,7 +435,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_STRING, format, args);   \
+    return uref_attr_delete_va(uref, UDICT_TYPE_STRING, format, args);      \
 }
 
 
@@ -316,7 +458,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref)             \
 {                                                                           \
-    return udict_get_void(uref->udict, NULL, UDICT_TYPE_VOID, name);        \
+    return uref_attr_get_void(uref, NULL, UDICT_TYPE_VOID, name);           \
 }                                                                           \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
@@ -325,7 +467,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_set_##attr(struct uref *uref)             \
 {                                                                           \
-    return udict_set_void(uref->udict, NULL, UDICT_TYPE_VOID, name);        \
+    return uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, name);           \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
  *                                                                          \
@@ -334,7 +476,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_VOID, name);                \
+    return uref_attr_delete(uref, UDICT_TYPE_VOID, name);                   \
 }
 
 /* @This allows to define accessors for a shorthand void attribute.
@@ -352,7 +494,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref)             \
 {                                                                           \
-    return udict_get_void(uref->udict, NULL, type, NULL);                   \
+    return uref_attr_get_void(uref, NULL, type, NULL);                      \
 }                                                                           \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
@@ -361,7 +503,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_set_##attr(struct uref *uref)             \
 {                                                                           \
-    return udict_set_void(uref->udict, NULL, type, NULL);                   \
+    return uref_attr_set_void(uref, NULL, type, NULL);                      \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
  *                                                                          \
@@ -370,7 +512,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a void attribute, with a name
@@ -389,8 +531,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref, args_decl)  \
 {                                                                           \
-    return udict_get_void_va(uref->udict, NULL, UDICT_TYPE_VOID,            \
-                             format, args);                                 \
+    return uref_attr_get_void_va(uref, NULL, UDICT_TYPE_VOID,               \
+                                 format, args);                             \
 }                                                                           \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
@@ -400,8 +542,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref, args_decl)  \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              args_decl)                     \
 {                                                                           \
-    return udict_set_void_va(uref->udict, NULL, UDICT_TYPE_VOID,            \
-                             format, args);                                 \
+    return uref_attr_set_void_va(uref, NULL, UDICT_TYPE_VOID,               \
+                                 format, args);                             \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
  *                                                                          \
@@ -411,7 +553,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_VOID, format, args);     \
+    return uref_attr_delete_va(uref, UDICT_TYPE_VOID, format, args);        \
 }
 
 /* @This allows to define accessors for a void attribute directly in the uref
@@ -475,8 +617,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint8_t *p)                    \
 {                                                                           \
-    return udict_get_small_unsigned(uref->udict, p,                         \
-                                    UDICT_TYPE_SMALL_UNSIGNED, name);       \
+    return uref_attr_get_small_unsigned(uref, p,                            \
+                                        UDICT_TYPE_SMALL_UNSIGNED, name);   \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -487,8 +629,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint8_t v)                     \
 {                                                                           \
-    return udict_set_small_unsigned(uref->udict, v,                         \
-                                    UDICT_TYPE_SMALL_UNSIGNED, name);       \
+    return uref_attr_set_small_unsigned(uref, v,                            \
+                                        UDICT_TYPE_SMALL_UNSIGNED, name);   \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -497,7 +639,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_SMALL_UNSIGNED, name);            \
+    return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
 }
 
 /* @This allows to define accessors for a shorthand small_unsigned attribute.
@@ -517,7 +659,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint8_t *p)                    \
 {                                                                           \
-    return udict_get_small_unsigned(uref->udict, p, type, NULL);            \
+    return uref_attr_get_small_unsigned(uref, p, type, NULL);               \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -528,7 +670,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint8_t v)                     \
 {                                                                           \
-    return udict_set_small_unsigned(uref->udict, v, type, NULL);            \
+    return uref_attr_set_small_unsigned(uref, v, type, NULL);               \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -537,7 +679,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a small_unsigned attribute, with a name
@@ -559,9 +701,9 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint8_t *p, args_decl)         \
 {                                                                           \
-    return udict_get_small_unsigned_va(uref->udict, p,                      \
-                                       UDICT_TYPE_SMALL_UNSIGNED,           \
-                                       format, args);                       \
+    return uref_attr_get_small_unsigned_va(uref, p,                         \
+                                           UDICT_TYPE_SMALL_UNSIGNED,       \
+                                           format, args);                   \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -572,9 +714,9 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint8_t v, args_decl)          \
 {                                                                           \
-    return udict_set_small_unsigned_va(uref->udict, v,                      \
-                                       UDICT_TYPE_SMALL_UNSIGNED,           \
-                                       format, args);                       \
+    return uref_attr_set_small_unsigned_va(uref, v,                         \
+                                           UDICT_TYPE_SMALL_UNSIGNED,       \
+                                           format, args);                   \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -584,8 +726,8 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_SMALL_UNSIGNED,          \
-                           format, args);                                   \
+    return uref_attr_delete_va(uref, UDICT_TYPE_SMALL_UNSIGNED,             \
+                               format, args);                               \
 }
 
 
@@ -610,7 +752,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint64_t *p)                   \
 {                                                                           \
-    return udict_get_unsigned(uref->udict, p, UDICT_TYPE_UNSIGNED, name);   \
+    return uref_attr_get_unsigned(uref, p, UDICT_TYPE_UNSIGNED, name);      \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -621,7 +763,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint64_t v)                    \
 {                                                                           \
-    return udict_set_unsigned(uref->udict, v, UDICT_TYPE_UNSIGNED, name);   \
+    return uref_attr_set_unsigned(uref, v, UDICT_TYPE_UNSIGNED, name);      \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -630,7 +772,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_UNSIGNED, name);            \
+    return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
 }
 
 /* @This allows to define accessors for a shorthand unsigned attribute.
@@ -650,7 +792,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint64_t *p)                   \
 {                                                                           \
-    return udict_get_unsigned(uref->udict, p, type, NULL);                  \
+    return uref_attr_get_unsigned(uref, p, type, NULL);                     \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -661,7 +803,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint64_t v)                    \
 {                                                                           \
-    return udict_set_unsigned(uref->udict, v, type, NULL);                  \
+    return uref_attr_set_unsigned(uref, v, type, NULL);                     \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -670,7 +812,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for an unsigned attribute, with a name
@@ -691,8 +833,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              uint64_t *p, args_decl)        \
 {                                                                           \
-    return udict_get_unsigned_va(uref->udict, p, UDICT_TYPE_UNSIGNED,       \
-                                 format, args);                             \
+    return uref_attr_get_unsigned_va(uref, p, UDICT_TYPE_UNSIGNED,          \
+                                     format, args);                         \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -703,8 +845,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              uint64_t v, args_decl)         \
 {                                                                           \
-    return udict_set_unsigned_va(uref->udict, v, UDICT_TYPE_UNSIGNED,       \
-                                 format, args);                             \
+    return uref_attr_set_unsigned_va(uref, v, UDICT_TYPE_UNSIGNED,          \
+                                     format, args);                         \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -714,7 +856,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_UNSIGNED, format, args); \
+    return uref_attr_delete_va(uref, UDICT_TYPE_UNSIGNED, format, args);    \
 }
 
 /* @This allows to define accessors for an unsigned attribute directly in the
@@ -786,7 +928,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              int64_t *p)                    \
 {                                                                           \
-    return udict_get_int(uref->udict, p, UDICT_TYPE_INT, name);             \
+    return uref_attr_get_int(uref, p, UDICT_TYPE_INT, name);                \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -797,7 +939,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              int64_t v)                     \
 {                                                                           \
-    return udict_set_int(uref->udict, v, UDICT_TYPE_INT, name);             \
+    return uref_attr_set_int(uref, v, UDICT_TYPE_INT, name);                \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -806,7 +948,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_INT, name);                 \
+    return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
 }
 
 /* @This allows to define accessors for a shorthand int attribute.
@@ -826,7 +968,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              int64_t *p)                    \
 {                                                                           \
-    return udict_get_int(uref->udict, p, type, NULL);                       \
+    return uref_attr_get_int(uref, p, type, NULL);                          \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -837,7 +979,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              int64_t v)                     \
 {                                                                           \
-    return udict_set_int(uref->udict, v, type, NULL);                       \
+    return uref_attr_set_int(uref, v, type, NULL);                          \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -846,7 +988,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a int attribute, with a name
@@ -867,8 +1009,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              int64_t *p, args_decl)         \
 {                                                                           \
-    return udict_get_int_va(uref->udict, p, UDICT_TYPE_INT,                 \
-                                 format, args);                             \
+    return uref_attr_get_int_va(uref, p, UDICT_TYPE_INT,                    \
+                                format, args);                              \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -879,8 +1021,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              int64_t v, args_decl)          \
 {                                                                           \
-    return udict_set_int_va(uref->udict, v, UDICT_TYPE_INT,                 \
-                                 format, args);                             \
+    return uref_attr_set_int_va(uref, v, UDICT_TYPE_INT,                    \
+                                format, args);                              \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -890,7 +1032,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_INT, format, args);      \
+    return uref_attr_delete_va(uref, UDICT_TYPE_INT, format, args);         \
 }
 
 
@@ -915,7 +1057,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              struct urational *p)           \
 {                                                                           \
-    return udict_get_rational(uref->udict, p, UDICT_TYPE_RATIONAL, name);   \
+    return uref_attr_get_rational(uref, p, UDICT_TYPE_RATIONAL, name);      \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -926,7 +1068,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              struct urational v)            \
 {                                                                           \
-    return udict_set_rational(uref->udict, v, UDICT_TYPE_RATIONAL, name);   \
+    return uref_attr_set_rational(uref, v, UDICT_TYPE_RATIONAL, name);      \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -935,7 +1077,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, UDICT_TYPE_RATIONAL, name);            \
+    return uref_attr_delete(uref, UDICT_TYPE_RATIONAL, name);               \
 }
 
 /* @This allows to define accessors for a shorthand rational attribute.
@@ -955,7 +1097,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              struct urational *p)           \
 {                                                                           \
-    return udict_get_rational(uref->udict, p, type, NULL);                  \
+    return uref_attr_get_rational(uref, p, type, NULL);                     \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -966,7 +1108,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              struct urational v)            \
 {                                                                           \
-    return udict_set_rational(uref->udict, v, type, NULL);                  \
+    return uref_attr_set_rational(uref, v, type, NULL);                     \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -975,7 +1117,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    return udict_delete(uref->udict, type, NULL);                           \
+    return uref_attr_delete(uref, type, NULL);                              \
 }
 
 /* @This allows to define accessors for a rational attribute, with a name
@@ -996,8 +1138,8 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 static inline bool uref_##group##_get_##attr(struct uref *uref,             \
                                              struct urational *p, args_decl)\
 {                                                                           \
-    return udict_get_rational_va(uref->udict, p, UDICT_TYPE_RATIONAL,       \
-                                 format, args);                             \
+    return uref_attr_get_rational_va(uref, p, UDICT_TYPE_RATIONAL,          \
+                                   format, args);                           \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
@@ -1008,8 +1150,8 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
 static inline bool uref_##group##_set_##attr(struct uref *uref,             \
                                              struct urational v, args_decl) \
 {                                                                           \
-    return udict_set_rational_va(uref->udict, v, UDICT_TYPE_RATIONAL,       \
-                                 format, args);                             \
+    return uref_attr_set_rational_va(uref, v, UDICT_TYPE_RATIONAL,          \
+                                   format, args);                           \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
@@ -1019,7 +1161,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
-    return udict_delete_va(uref->udict, UDICT_TYPE_RATIONAL, format, args); \
+    return uref_attr_delete_va(uref, UDICT_TYPE_RATIONAL, format, args);    \
 }
 
 #endif
