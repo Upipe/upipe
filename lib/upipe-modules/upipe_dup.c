@@ -98,7 +98,6 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
     upipe_init(upipe, mgr, uprobe);
     upipe_dup_output_init_output(upipe);
-
     upipe_dup_output_init_sub(upipe);
 
     /* set flow definition if available */
@@ -110,6 +109,7 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
         else
             upipe_dup_output_store_flow_def(upipe, uref);
     }
+    upipe_use(upipe_dup_to_upipe(upipe_dup));
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -148,13 +148,16 @@ static void upipe_dup_output_free(struct upipe *upipe)
 {
     struct upipe_dup_output *upipe_dup_output =
         upipe_dup_output_from_upipe(upipe);
+    struct upipe_dup *upipe_dup = upipe_dup_from_output_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_dup_output_clean_output(upipe);
+    upipe_dup_output_clean_sub(upipe);
 
     upipe_clean(upipe);
-    upipe_dup_output_clean_sub(upipe);
     free(upipe_dup_output);
+
+    upipe_release(upipe_dup_to_upipe(upipe_dup));
 }
 
 /** @internal @This initializes the output manager for a dup pipe.

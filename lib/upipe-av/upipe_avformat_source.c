@@ -165,6 +165,9 @@ static struct upipe *upipe_avfsrc_output_alloc(struct upipe_mgr *mgr,
 
     upipe_avfsrc_output_init_sub(upipe);
 
+    struct upipe_avfsrc *upipe_avfsrc =
+        upipe_avfsrc_from_output_mgr(upipe->mgr);
+    upipe_use(upipe_avfsrc_to_upipe(upipe_avfsrc));
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -265,14 +268,18 @@ static void upipe_avfsrc_output_free(struct upipe *upipe)
 {
     struct upipe_avfsrc_output *upipe_avfsrc_output =
         upipe_avfsrc_output_from_upipe(upipe);
+    struct upipe_avfsrc *upipe_avfsrc =
+        upipe_avfsrc_from_output_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_avfsrc_output_clean_ubuf_mgr(upipe);
     upipe_avfsrc_output_clean_output(upipe);
+    upipe_avfsrc_output_clean_sub(upipe);
 
     upipe_clean(upipe);
-    upipe_avfsrc_output_clean_sub(upipe);
     free(upipe_avfsrc_output);
+
+    upipe_release(upipe_avfsrc_to_upipe(upipe_avfsrc));
 }
 
 /** @internal @This initializes the output manager for an avfsrc pipe.

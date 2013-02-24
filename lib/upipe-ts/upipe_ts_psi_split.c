@@ -102,9 +102,11 @@ static struct upipe *upipe_ts_psi_split_output_alloc(struct upipe_mgr *mgr,
         upipe_ts_psi_split_output_to_upipe(upipe_ts_psi_split_output);
     upipe_init(upipe, mgr, uprobe);
     upipe_ts_psi_split_output_init_output(upipe);
-
     upipe_ts_psi_split_output_init_sub(upipe);
 
+    struct upipe_ts_psi_split *upipe_ts_psi_split =
+        upipe_ts_psi_split_from_output_mgr(mgr);
+    upipe_use(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -182,14 +184,18 @@ static bool upipe_ts_psi_split_output_control(struct upipe *upipe,
 static void upipe_ts_psi_split_output_free(struct upipe *upipe)
 {
     struct upipe_ts_psi_split_output *upipe_ts_psi_split_output =
-    upipe_ts_psi_split_output_from_upipe(upipe);
+        upipe_ts_psi_split_output_from_upipe(upipe);
+    struct upipe_ts_psi_split *upipe_ts_psi_split =
+        upipe_ts_psi_split_from_output_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_ts_psi_split_output_clean_output(upipe);
+    upipe_ts_psi_split_output_clean_sub(upipe);
 
     upipe_clean(upipe);
-    upipe_ts_psi_split_output_clean_sub(upipe);
     free(upipe_ts_psi_split_output);
+
+    upipe_release(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
 }
 
 /** @internal @This initializes the output manager for a ts_psi_split pipe.

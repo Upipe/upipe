@@ -86,14 +86,7 @@
  *  void upipe_foo_output_clean_sub(struct upipe *upipe)
  * @end code
  * Cleans up the private members of upipe_foo_output for this helper and
- * removes the output from the list in upipe_foo. It must be called after
- * @ref upipe_clean.
- *
- * @item @code
- *  void upipe_foo_output_mgr_free(struct upipe_mgr *mgr)
- * @end code
- * Decrements the reference count of the subpipe manager by decreasing the
- * reference count of the pipe.
+ * removes the output from the list in upipe_foo.
  *
  * @item @code
  *  void upipe_foo_init_sub_outputs(struct upipe *upipe)
@@ -169,11 +162,9 @@ static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
     uchain_init(&sub->UCHAIN);                                              \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
     ulist_add(&s->ULIST, STRUCTURE_SUB##_to_uchain(sub));                   \
-    upipe_use(STRUCTURE##_to_upipe(s));                                     \
 }                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE_SUB,   \
- * and removes it from the ULIST in STRUCTURE. Please note that since       \
- * this releases the pipe, it must be called after @ref upipe_clean.        \
+ * and removes it from the ULIST in STRUCTURE.                              \
  *                                                                          \
  * @param upipe description structure of the subpipe.                       \
  */                                                                         \
@@ -188,7 +179,6 @@ static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
             break;                                                          \
         }                                                                   \
     }                                                                       \
-    upipe_release(STRUCTURE##_to_upipe(s));                                 \
 }                                                                           \
 /** @This initializes the private members for this helper in STRUCTURE.     \
  *                                                                          \
