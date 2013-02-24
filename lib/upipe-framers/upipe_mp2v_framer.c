@@ -1,5 +1,7 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (c) 2000,2001 Fabrice Bellard
+ * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  *
  * Authors: Christophe Massiot
  *
@@ -54,15 +56,6 @@
 
 /** we only accept the ISO 13818-2 elementary stream */
 #define EXPECTED_FLOW_DEF "block.mpeg2video."
-
-/** token to find MPEG-2 start codes */
-#define FIND_START      3, 0, 0, 1
-
-/** token to find MPEG-2 GOP header start codes */
-#define FIND_GOP        4, 0, 0, 1, MP2VGOP_START_CODE
-
-/** token to find MPEG-2 extension start codes */
-#define FIND_EXTENSION  4, 0, 0, 1, MP2VX_START_CODE
 
 /** @internal @This translates the MPEG frame_rate_code to double */
 static const struct urational frame_rate_from_code[] = {
@@ -135,8 +128,16 @@ struct upipe_mp2vf {
     size_t next_frame_size;
     /** true if the next uref begins with a sequence header */
     bool next_frame_sequence;
+    /** offset of the sequence extension in next_uref, or -1 */
+    ssize_t next_frame_sequence_ext_offset;
+    /** offset of the sequence display in next_uref, or -1 */
+    ssize_t next_frame_sequence_display_offset;
+    /** offset of the GOP header in next_uref, or -1 */
+    ssize_t next_frame_gop_offset;
     /** offset of the picture header in next_uref, or -1 */
     ssize_t next_frame_offset;
+    /** offset of the picture extension in next_uref, or -1 */
+    ssize_t next_frame_ext_offset;
     /** true if we have found at least one slice header */
     bool next_frame_slice;
     /** original PTS of the next picture, or UINT64_MAX */
@@ -234,7 +235,11 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf->insert_sequence = false;
     upipe_mp2vf->next_frame_size = 0;
     upipe_mp2vf->next_frame_sequence = false;
+    upipe_mp2vf->next_frame_sequence_ext_offset = -1;
+    upipe_mp2vf->next_frame_sequence_display_offset = -1;
+    upipe_mp2vf->next_frame_gop_offset = -1;
     upipe_mp2vf->next_frame_offset = -1;
+    upipe_mp2vf->next_frame_ext_offset = -1;
     upipe_mp2vf->next_frame_slice = false;
     upipe_mp2vf_flush_pts(upipe);
     upipe_mp2vf_flush_dts(upipe);
@@ -245,38 +250,87 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This scans for an MPEG-2 start code in a linear buffer.
+ *
+ * @param p linear buffer
+ * @param end end of linear buffer
+ * @param state state of the algorithm
+ * @return pointer to start code, or end if not found
+ */
+/* Code from libav/libavcodec/mpegvideo.c, published under LGPL 2.1+ */
+static const uint8_t *upipe_mp2vf_scan(const uint8_t *restrict p,
+                                       const uint8_t *end,
+                                       uint32_t *restrict state)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        uint32_t tmp = *state << 8;
+        *state = tmp + *(p++);
+        if (tmp == 0x100 || p == end)
+            return p;
+    }
+
+    while (p < end) {
+        if      (p[-1] > 1      ) p += 3;
+        else if (p[-2]          ) p += 2;
+        else if (p[-3]|(p[-1]-1)) p++;
+        else {
+            p++;
+            break;
+        }
+    }
+
+    if (p > end)
+        p = end;
+    *state = (p[-4] << 24) | (p[-3] << 16) | (p[-2] << 8) | p[-1];
+
+    return p;
+}
+/* End code */
+
 /** @internal @This finds an MPEG-2 start code and returns its value.
  *
- * @param upipe description structure of the pipe
- * @param start value of the start code
+ * @param uref uref to search
+ * @param offset_p pointer to offset at which to start, filled in with the
+ * offset of the start code
+ * @param start_p filled in with the value of the start code
+ * @param next_p filled in with the value of the first octet, if not NULL
  * @return true if a start code was found
  */
-static bool upipe_mp2vf_find(struct upipe *upipe, uint8_t *start)
+static bool upipe_mp2vf_find(struct uref *uref, size_t *offset_p,
+                             uint8_t *start_p, uint8_t *next_p)
 {
-    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    return uref_block_find(upipe_mp2vf->next_uref,
-                           &upipe_mp2vf->next_frame_size, FIND_START) &&
-           uref_block_extract(upipe_mp2vf->next_uref,
-                              upipe_mp2vf->next_frame_size + 3, 1, start);
-}
+    const uint8_t *buffer;
+    int size = -1;
+    uint32_t word = UINT32_MAX;
+    uint8_t next = 0;
+    while (uref_block_read(uref, *offset_p, &size, &buffer)) {
+        const uint8_t *p = upipe_mp2vf_scan(buffer, buffer + size, &word);
+        if (p < buffer + size)
+            next = *p;
+        uref_block_unmap(uref, *offset_p, size);
 
-/** @internal @This finds an MPEG-2 extension start code and returns its value.
- *
- * @param upipe description structure of the pipe
- * @param uref uref containing a frame
- * @param offset_p reference to offset at which to start the scan, filled in
- * with the position of the start code
- * @param start value of the extension start code
- * @return true if a start code was found
- */
-static bool upipe_mp2vf_find_ext(struct upipe *upipe, struct uref *uref,
-                                 size_t *offset_p, uint8_t *start)
-{
-    bool ret = uref_block_find(uref, offset_p, FIND_EXTENSION) &&
-               uref_block_extract(uref, *offset_p + 4, 1, start);
-    if (ret)
-        *start >>= 4;
-    return ret;
+        if ((word & 0xffffff00) == 0x100) {
+            *offset_p += p - buffer;
+            *offset_p -= 4;
+            *start_p = word & 0xff;
+            if (next_p != NULL) {
+                if (p < buffer + size)
+                    *next_p = next;
+                else if (*start_p == MP2VEND_START_CODE)
+                    *next_p = 0;
+                else if (!uref_block_extract(uref, *offset_p + 4, 1, next_p)) {
+                    *offset_p -= 4;
+                    return false;
+                }
+            }
+            return true;
+        }
+        *offset_p += size;
+        size = -1;
+    }
+    *offset_p -= 3;
+    return false;
 }
 
 /** @internal @This parses a new sequence header, and outputs a flow
@@ -411,11 +465,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
         upipe_mp2vf->progressive_sequence = true;
 
     ret = ret && uref_pic_set_hsize(flow_def, horizontal);
-    if (unlikely(!ret))
-        upipe_err(upipe, "pouet 1");
     ret = ret && uref_pic_set_vsize(flow_def, vertical);
-    if (unlikely(!ret))
-        upipe_err(upipe, "pouet 2");
     struct urational sar;
     switch (aspect) {
         case MP2VSEQ_ASPECT_SQUARE:
@@ -443,15 +493,11 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     }
     ret = ret && uref_pic_set_aspect(flow_def, sar);
     ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
-    if (unlikely(!ret))
-        upipe_err(upipe, "pouet 3");
     upipe_mp2vf->fps = frame_rate;
     ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
     ret = ret && uref_block_flow_set_cpb_buffer(flow_def,
                                                 vbvbuffer * 16 * 1024 / 8);
 
-    if (unlikely(!ret))
-        upipe_err(upipe, "pouet 4");
     if (upipe_mp2vf->sequence_display != NULL) {
         size_t size;
         uint8_t display_buffer[MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE];
@@ -491,13 +537,10 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing a frame, beginning with a sequence header
- * @param offset_p filled in with the length of the sequence header on
- * execution
  * @return pointer to ubuf containing only the sequence header
  */
 static struct ubuf *upipe_mp2vf_extract_sequence(struct upipe *upipe,
-                                                 struct uref *uref,
-                                                 size_t *offset_p)
+                                                 struct uref *uref)
 {
     struct ubuf *sequence_header = ubuf_dup(uref->ubuf);
     uint8_t word;
@@ -530,7 +573,6 @@ static struct ubuf *upipe_mp2vf_extract_sequence(struct upipe *upipe,
         upipe_throw_aerror(upipe);
         return NULL;
     }
-    *offset_p = sequence_header_size;
     return sequence_header;
 }
 
@@ -538,24 +580,22 @@ static struct ubuf *upipe_mp2vf_extract_sequence(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing a frame, beginning with a sequence header
- * @param offset_p offset of the sequence extension in the uref, adds its
- * length on execution
+ * @param offset offset of the sequence extension in the uref
  * @return pointer to ubuf containing only the sequence extension
  */
 static struct ubuf *upipe_mp2vf_extract_extension(struct upipe *upipe,
                                                   struct uref *uref,
-                                                  size_t *offset_p)
+                                                  size_t offset)
 {
     struct ubuf *sequence_ext = ubuf_dup(uref->ubuf);
     if (unlikely(sequence_ext == NULL ||
-                 !ubuf_block_resize(sequence_ext, *offset_p,
+                 !ubuf_block_resize(sequence_ext, offset,
                                     MP2VSEQX_HEADER_SIZE))) {
         if (sequence_ext != NULL)
             ubuf_free(sequence_ext);
         upipe_throw_aerror(upipe);
         return NULL;
     }
-    *offset_p += MP2VSEQX_HEADER_SIZE;
     return sequence_ext;
 }
 
@@ -563,18 +603,16 @@ static struct ubuf *upipe_mp2vf_extract_extension(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing a frame, beginning with a sequence header
- * @param offset_p offset of the sequence display extension in the uref,
- * adds its length on execution
  * @return pointer to ubuf containing only the sequence extension
  */
 static struct ubuf *upipe_mp2vf_extract_display(struct upipe *upipe,
                                                 struct uref *uref,
-                                                size_t *offset_p)
+                                                size_t offset)
 {
     struct ubuf *sequence_display = ubuf_dup(uref->ubuf);
     uint8_t word;
     if (unlikely(sequence_display == NULL ||
-                 !ubuf_block_extract(sequence_display, *offset_p, 1, &word))) {
+                 !ubuf_block_extract(sequence_display, offset, 1, &word))) {
         if (sequence_display != NULL)
             ubuf_free(sequence_display);
         upipe_throw_aerror(upipe);
@@ -582,13 +620,12 @@ static struct ubuf *upipe_mp2vf_extract_display(struct upipe *upipe,
     }
     size_t sequence_display_size = MP2VSEQDX_HEADER_SIZE + 
                                    ((word & 0x1) ? MP2VSEQDX_COLOR_SIZE : 0);
-    if (unlikely(!ubuf_block_resize(sequence_display, *offset_p,
+    if (unlikely(!ubuf_block_resize(sequence_display, offset,
                                     sequence_display_size))) {
         ubuf_free(sequence_display);
         upipe_throw_aerror(upipe);
         return NULL;
     }
-    *offset_p += sequence_display_size;
     return sequence_display;
 }
 
@@ -601,34 +638,23 @@ static struct ubuf *upipe_mp2vf_extract_display(struct upipe *upipe,
 static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    size_t ext_offset;
     struct ubuf *sequence_ext = NULL;
     struct ubuf *sequence_display = NULL;
-    struct ubuf *sequence_header = upipe_mp2vf_extract_sequence(upipe, uref,
-                                                                &ext_offset);
+    struct ubuf *sequence_header = upipe_mp2vf_extract_sequence(upipe, uref);
     if (unlikely(sequence_header == NULL))
         return false;
 
-    uint8_t ext_header;
-    if (upipe_mp2vf_find_ext(upipe, uref, &ext_offset, &ext_header)) {
-        if (unlikely(ext_header != MP2VX_ID_SEQX)) {
-            /* if extensions are in use, we are in MPEG-2 mode, and therefore
-             * we must have a sequence extension */
-            ubuf_free(sequence_header);
-            upipe_err_va(upipe, "wrong header extension %"PRIu8, ext_header);
-            return false;
-        }
-
-        sequence_ext = upipe_mp2vf_extract_extension(upipe, uref, &ext_offset);
+    if (upipe_mp2vf->next_frame_sequence_ext_offset != -1) {
+        sequence_ext = upipe_mp2vf_extract_extension(upipe, uref,
+                upipe_mp2vf->next_frame_sequence_ext_offset);
         if (unlikely(sequence_ext == NULL)) {
             ubuf_free(sequence_header);
             return false;
         }
 
-        if (upipe_mp2vf_find_ext(upipe, uref, &ext_offset, &ext_header) &&
-            ext_header == MP2VX_ID_SEQDX) {
+        if (upipe_mp2vf->next_frame_sequence_display_offset != -1) {
             sequence_display = upipe_mp2vf_extract_display(upipe, uref,
-                                                           &ext_offset);
+                    upipe_mp2vf->next_frame_sequence_display_offset);
             if (unlikely(sequence_display == NULL)) {
                 ubuf_free(sequence_header);
                 ubuf_free(sequence_ext);
@@ -688,28 +714,26 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     bool closedgop = false;
     bool brokenlink = false;
-    if (upipe_mp2vf->next_frame_offset) {
-        /* there is some header in front, there may be a GOP header */
-        size_t gop_offset = 0;
-        if (uref_block_find(uref, &gop_offset, FIND_GOP)) {
-            uint8_t gop_buffer[MP2VGOP_HEADER_SIZE];
-            const uint8_t *gop;
-            if (unlikely((gop = uref_block_peek(uref, gop_offset,
-                                                MP2VGOP_HEADER_SIZE,
-                                                gop_buffer)) == NULL)) {
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-            closedgop = mp2vgop_get_closedgop(gop);
-            brokenlink = mp2vgop_get_brokenlink(gop);
-            if (unlikely(!uref_block_peek_unmap(uref, gop_offset,
-                                                MP2VGOP_HEADER_SIZE, gop_buffer,
-                                                gop))) {
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-            upipe_mp2vf->last_temporal_reference = -1;
+    if (upipe_mp2vf->next_frame_gop_offset != -1) {
+        uint8_t gop_buffer[MP2VGOP_HEADER_SIZE];
+        const uint8_t *gop;
+        if (unlikely((gop = uref_block_peek(uref,
+                                            upipe_mp2vf->next_frame_gop_offset,
+                                            MP2VGOP_HEADER_SIZE,
+                                            gop_buffer)) == NULL)) {
+            upipe_throw_aerror(upipe);
+            return false;
         }
+        closedgop = mp2vgop_get_closedgop(gop);
+        brokenlink = mp2vgop_get_brokenlink(gop);
+        if (unlikely(!uref_block_peek_unmap(uref,
+                                            upipe_mp2vf->next_frame_gop_offset,
+                                            MP2VGOP_HEADER_SIZE, gop_buffer,
+                                            gop))) {
+            upipe_throw_aerror(upipe);
+            return false;
+        }
+        upipe_mp2vf->last_temporal_reference = -1;
     }
 
     if ((brokenlink || (!closedgop && upipe_mp2vf->got_discontinuity)) &&
@@ -751,21 +775,13 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
         return false;
     }
 
-    size_t ext_offset = upipe_mp2vf->next_frame_offset + MP2VPIC_HEADER_SIZE;
-    uint8_t ext_header;
     uint64_t duration = UCLOCK_FREQ * upipe_mp2vf->fps.den /
                                       upipe_mp2vf->fps.num;
-    if (upipe_mp2vf_find_ext(upipe, uref, &ext_offset, &ext_header)) {
-        if (unlikely(ext_header != MP2VX_ID_PICX)) {
-            /* if extensions are in use, we are in MPEG-2 mode, and therefore
-             * we must have a picture extension */
-            upipe_err_va(upipe, "wrong header extension %"PRIu8, ext_header);
-            return false;
-        }
-
+    if (upipe_mp2vf->next_frame_ext_offset != -1) {
         uint8_t ext_buffer[MP2VPICX_HEADER_SIZE];
         const uint8_t *ext;
-        if (unlikely((ext = uref_block_peek(uref, ext_offset,
+        if (unlikely((ext = uref_block_peek(uref,
+                                            upipe_mp2vf->next_frame_ext_offset,
                                             MP2VPICX_HEADER_SIZE,
                                             ext_buffer)) == NULL)) {
             upipe_throw_aerror(upipe);
@@ -776,7 +792,8 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
         bool tff = mp2vpicx_get_tff(ext);
         bool rff = mp2vpicx_get_rff(ext);
         bool progressive = mp2vpicx_get_progressive(ext);
-        if (unlikely(!uref_block_peek_unmap(uref, ext_offset,
+        if (unlikely(!uref_block_peek_unmap(uref,
+                                            upipe_mp2vf->next_frame_ext_offset,
                                             MP2VPICX_HEADER_SIZE, ext_buffer,
                                             ext))) {
             upipe_throw_aerror(upipe);
@@ -899,7 +916,8 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    struct uref *uref = uref_dup(upipe_mp2vf->next_uref);
+    struct uref *uref = upipe_mp2vf_extract_octet_stream(upipe,
+            upipe_mp2vf->next_frame_size);
     if (unlikely(uref == NULL ||
                  !uref_block_resize(uref, 0,
                                     upipe_mp2vf->next_frame_size))) {
@@ -955,9 +973,11 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     while (upipe_mp2vf->next_uref != NULL) {
-        uint8_t start;
-        if (!upipe_mp2vf_find(upipe, &start))
+        uint8_t start, next;
+        if (!upipe_mp2vf_find(upipe_mp2vf->next_uref,
+                              &upipe_mp2vf->next_frame_size, &start, &next))
             return;
+        //upipe_err_va(upipe, "pouet %x", start);
 
         if (unlikely(!upipe_mp2vf->acquired)) {
             upipe_mp2vf_consume_octet_stream(upipe,
@@ -981,13 +1001,26 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
         }
 
         if (unlikely(upipe_mp2vf->next_frame_offset == -1)) {
-            if (start == MP2VPIC_START_CODE)
+            if (start == MP2VX_START_CODE) {
+                if (next == MP2VX_ID_SEQX)
+                    upipe_mp2vf->next_frame_sequence_ext_offset =
+                        upipe_mp2vf->next_frame_size;
+                else if (next == MP2VX_ID_SEQDX)
+                    upipe_mp2vf->next_frame_sequence_display_offset =
+                        upipe_mp2vf->next_frame_size;
+            } else if (start == MP2VGOP_START_CODE)
+                upipe_mp2vf->next_frame_gop_offset =
+                    upipe_mp2vf->next_frame_size;
+            else if (start == MP2VPIC_START_CODE)
                 upipe_mp2vf->next_frame_offset = upipe_mp2vf->next_frame_size;
             upipe_mp2vf->next_frame_size += 4;
             continue;
         }
 
         if (start == MP2VX_START_CODE) {
+            if (next == MP2VX_ID_PICX)
+                upipe_mp2vf->next_frame_ext_offset =
+                    upipe_mp2vf->next_frame_size;
             upipe_mp2vf->next_frame_size += 4;
             continue;
         }
@@ -1004,20 +1037,26 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
 
         if (unlikely(!upipe_mp2vf_output_frame(upipe, upump))) {
             upipe_warn(upipe, "erroneous frame headers");
-            upipe_mp2vf_consume_octet_stream(upipe,
-                                             upipe_mp2vf->next_frame_size);
             upipe_mp2vf->next_frame_size = 0;
             upipe_mp2vf_sync_lost(upipe);
             upipe_mp2vf->next_frame_sequence = false;
+            upipe_mp2vf->next_frame_sequence_ext_offset = -1;
+            upipe_mp2vf->next_frame_sequence_display_offset = -1;
+            upipe_mp2vf->next_frame_gop_offset = -1;
             upipe_mp2vf->next_frame_offset = -1;
+            upipe_mp2vf->next_frame_ext_offset = -1;
             upipe_mp2vf->next_frame_slice = false;
             continue;
         }
-        upipe_mp2vf_consume_octet_stream(upipe, upipe_mp2vf->next_frame_size);
         upipe_mp2vf->next_frame_sequence = false;
+        upipe_mp2vf->next_frame_sequence_ext_offset = -1;
+        upipe_mp2vf->next_frame_sequence_display_offset = -1;
+        upipe_mp2vf->next_frame_gop_offset = -1;
         upipe_mp2vf->next_frame_offset = -1;
+        upipe_mp2vf->next_frame_ext_offset = -1;
         upipe_mp2vf->next_frame_slice = false;
         upipe_mp2vf->next_frame_size = 4;
+
         switch (start) {
             case MP2VSEQ_START_CODE:
                 upipe_mp2vf->next_frame_sequence = true;
@@ -1029,8 +1068,10 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
                 break;
             case MP2VEND_START_CODE:
                 upipe_mp2vf->next_frame_size = 0;
-                /* intended pass-through */
+                upipe_mp2vf_sync_lost(upipe);
+                break;
             default:
+                upipe_warn_va(upipe, "erroneous start code %x", start);
                 upipe_mp2vf_sync_lost(upipe);
                 break;
         }

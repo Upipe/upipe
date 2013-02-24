@@ -163,6 +163,51 @@ static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
         STRUCTURE##_append_octet_stream(upipe,                              \
                                         uref_from_uchain(uchain));          \
 }                                                                           \
+/** @internal @This extracts the given number of octets from the octet      \
+ * stream, and rotates the buffers accordingly.                             \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param extracted number of octets to extract from the octet stream       \
+ * @return uref containing extracted octets                                 \
+ */                                                                         \
+static struct uref *STRUCTURE##_extract_octet_stream(struct upipe *upipe,   \
+                                                     size_t extracted)      \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(STRUCTURE->NEXT_UREF != NULL);                                   \
+    if (extracted < STRUCTURE->NEXT_UREF_SIZE) {                            \
+        struct uref *uref = uref_dup(STRUCTURE->NEXT_UREF);                 \
+        uref_block_resize(uref, 0, extracted);                              \
+        uref_block_resize(STRUCTURE->NEXT_UREF, extracted, -1);             \
+        STRUCTURE->NEXT_UREF_SIZE -= extracted;                             \
+        return uref;                                                        \
+    }                                                                       \
+    struct uref *uref = STRUCTURE->NEXT_UREF;                               \
+    uref_block_resize(uref, 0, extracted);                                  \
+    STRUCTURE->NEXT_UREF = NULL;                                            \
+    extracted -= STRUCTURE->NEXT_UREF_SIZE;                                 \
+    while (extracted) {                                                     \
+        struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
+        if (uchain != NULL)                                                 \
+            STRUCTURE##_append_octet_stream(upipe,                          \
+                                            uref_from_uchain(uchain));      \
+        if (extracted < STRUCTURE->NEXT_UREF_SIZE) {                        \
+            uref_block_resize(STRUCTURE->NEXT_UREF, extracted, -1);         \
+            STRUCTURE->NEXT_UREF_SIZE -= extracted;                         \
+            break;                                                          \
+        }                                                                   \
+        extracted -= STRUCTURE->NEXT_UREF_SIZE;                             \
+        uref_free(STRUCTURE->NEXT_UREF);                                    \
+        STRUCTURE->NEXT_UREF = NULL;                                        \
+    }                                                                       \
+    struct ulist urefs = STRUCTURE->UREFS;                                  \
+    ulist_init(&STRUCTURE->UREFS);                                          \
+    struct uchain *uchain;                                                  \
+    while ((uchain = ulist_pop(&urefs)) != NULL)                            \
+        STRUCTURE##_append_octet_stream(upipe,                              \
+                                        uref_from_uchain(uchain));          \
+    return uref;                                                            \
+}                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \

@@ -172,8 +172,8 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
 
         /* upipe_ts_sync_check said there is at least one TS packet there. */
         upipe_ts_sync_sync_acquired(upipe);
-        struct uref *output = uref_dup(upipe_ts_sync->next_uref);
-        upipe_ts_sync_consume_octet_stream(upipe, upipe_ts_sync->ts_size);
+        struct uref *output = upipe_ts_sync_extract_octet_stream(upipe,
+                                                    upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
             upipe_throw_aerror(upipe);
             continue;
