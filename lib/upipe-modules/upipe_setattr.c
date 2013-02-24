@@ -104,7 +104,7 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
 
     const char *name = NULL;
     enum udict_type type = UDICT_TYPE_END;
-    while (uref_attr_iterate(upipe_setattr->dict, &name, &type) &&
+    while (udict_iterate(upipe_setattr->dict->udict, &name, &type) &&
            type != UDICT_TYPE_END) {
         size_t size;
         const uint8_t *v1 = udict_get(upipe_setattr->dict->udict, name, type,
@@ -117,6 +117,22 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
         }
         memcpy(v2, v1, size);
     }
+    if (upipe_setattr->dict->systime != UINT64_MAX)
+        uref->systime = upipe_setattr->dict->systime;
+    if (upipe_setattr->dict->systime_rap != UINT64_MAX)
+        uref->systime_rap = upipe_setattr->dict->systime_rap;
+    if (upipe_setattr->dict->pts != UINT64_MAX)
+        uref->pts = upipe_setattr->dict->pts;
+    if (upipe_setattr->dict->pts_orig != UINT64_MAX)
+        uref->pts_orig = upipe_setattr->dict->pts_orig;
+    if (upipe_setattr->dict->pts_sys != UINT64_MAX)
+        uref->pts_sys = upipe_setattr->dict->pts_sys;
+    if (upipe_setattr->dict->dts != UINT64_MAX)
+        uref->dts = upipe_setattr->dict->dts;
+    if (upipe_setattr->dict->dts_orig != UINT64_MAX)
+        uref->dts_orig = upipe_setattr->dict->dts_orig;
+    if (upipe_setattr->dict->dts_sys != UINT64_MAX)
+        uref->dts_sys = upipe_setattr->dict->dts_sys;
     upipe_setattr_output(upipe, uref, upump);
 }
 

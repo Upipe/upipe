@@ -66,7 +66,8 @@ int main(int argc, char **argv)
     assert(udict_set_string(udict1, "pouet", UDICT_TYPE_FLOW_DEF, NULL));
     assert(udict_set_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
     assert(udict_set_bool(udict1, true, UDICT_TYPE_BOOL, "x.truc"));
-    assert(udict_set_unsigned(udict1, UINT64_MAX, UDICT_TYPE_CLOCK_PTS, NULL));
+    assert(udict_set_unsigned(udict1, UINT64_MAX, UDICT_TYPE_CLOCK_DURATION,
+                              NULL));
     assert(udict_set_int_va(udict1, INT64_MAX, UDICT_TYPE_INT,
                             "x.date[%d]", 400));
     assert(udict_set_float(udict1, 1.0, UDICT_TYPE_FLOAT, "x.version"));
@@ -97,7 +98,7 @@ int main(int argc, char **argv)
     assert(udict_get_bool(udict1, &b, UDICT_TYPE_BOOL, "x.truc"));
     assert(b);
     uint64_t u;
-    assert(udict_get_unsigned(udict1, &u, UDICT_TYPE_CLOCK_PTS, NULL));
+    assert(udict_get_unsigned(udict1, &u, UDICT_TYPE_CLOCK_DURATION, NULL));
     assert(u == UINT64_MAX);
     int64_t d;
     assert(udict_get_int_va(udict1, &d, UDICT_TYPE_INT, "x.date[%d]", 400));

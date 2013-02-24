@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,8 +38,11 @@
 #include <upipe/udict_inline.h>
 
 #include <stdlib.h>
+#include <inttypes.h>
 #include <assert.h>
 
+/** define to activate statistics */
+#undef STATS
 /** default minimal size of the dictionary */
 #define UDICT_MIN_SIZE 128
 /** default extra space added on udict expansion */
@@ -60,7 +63,6 @@ struct inline_shorthand {
  * UDICT_TYPE_SHORTHAND + 1.
  */
 static const struct inline_shorthand inline_shorthands[] = {
-    { "f.disc", UDICT_TYPE_VOID },
     { "f.random", UDICT_TYPE_VOID },
     { "f.error", UDICT_TYPE_VOID },
     { "f.def", UDICT_TYPE_STRING },
@@ -68,18 +70,9 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "f.program", UDICT_TYPE_STRING },
     { "f.lang", UDICT_TYPE_STRING },
 
-    { "k.systime", UDICT_TYPE_UNSIGNED },
-    { "k.systime.rap", UDICT_TYPE_UNSIGNED },
-    { "k.pts", UDICT_TYPE_UNSIGNED },
-    { "k.pts.orig", UDICT_TYPE_UNSIGNED },
-    { "k.pts.sys", UDICT_TYPE_UNSIGNED },
-    { "k.dts", UDICT_TYPE_UNSIGNED },
-    { "k.dts.orig", UDICT_TYPE_UNSIGNED },
-    { "k.dts.sys", UDICT_TYPE_UNSIGNED },
     { "k.vbvdelay", UDICT_TYPE_UNSIGNED },
     { "k.duration", UDICT_TYPE_UNSIGNED },
 
-    { "b.start", UDICT_TYPE_VOID },
     { "b.end", UDICT_TYPE_VOID },
 
     { "p.num", UDICT_TYPE_UNSIGNED },
@@ -110,6 +103,10 @@ struct udict_inline_mgr {
     struct ulifo udict_pool;
     /** umem allocator */
     struct umem_mgr *umem_mgr;
+
+#ifdef STATS
+    uint64_t stats[sizeof(inline_shorthands) / sizeof(struct inline_shorthand)];
+#endif
 
     /** common management structure */
     struct udict_mgr mgr;
@@ -275,6 +272,13 @@ static uint8_t *udict_inline_find(struct udict *udict, const char *name,
                                    enum udict_type type)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
+#ifdef STATS
+    if (type > UDICT_TYPE_SHORTHAND) {
+        struct udict_inline_mgr *inline_mgr =
+            udict_inline_mgr_from_udict_mgr(udict->mgr);
+        inline_mgr->stats[type - UDICT_TYPE_SHORTHAND - 1]++;
+    }
+#endif
     uint8_t *attr = umem_buffer(&inl->umem);
     while (attr != NULL) {
         if (*attr == type &&
@@ -501,13 +505,12 @@ static bool udict_inline_set(struct udict *udict, const char *name,
 
 /** @internal @This names a shorthand attribute.
  *
- * @param udict pointer to the udict
  * @param type shorthand type
  * @param name_p filled in with the name of the shorthand attribute
  * @param base_type_p filled in with the base type of the shorthand attribute
  * @return false in case the shorthand doesn't exist
  */
-static bool udict_inline_name(struct udict *udict, enum udict_type type,
+static bool udict_inline_name(enum udict_type type,
                               const char **name_p, enum udict_type *base_type_p)
 {
     if (type <= UDICT_TYPE_SHORTHAND)
@@ -566,7 +569,7 @@ static bool udict_inline_control(struct udict *udict,
             enum udict_type type = va_arg(args, enum udict_type);
             const char **name_p = va_arg(args, const char **);
             enum udict_type *base_type_p = va_arg(args, enum udict_type *);
-            return udict_inline_name(udict, type, name_p, base_type_p);
+            return udict_inline_name(type, name_p, base_type_p);
         }
         default:
             return false;
@@ -620,6 +623,17 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
 static void udict_inline_mgr_free(struct udict_mgr *mgr)
 {
     struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
+#ifdef STATS
+    int i;
+    for (i = 0; i < sizeof(inline_shorthands) / sizeof(struct inline_shorthand);
+         i++) {
+        const char *name;
+        enum udict_type base_type;
+        udict_inline_name(UDICT_TYPE_SHORTHAND + 1 + i, &name, &base_type);
+        printf("%s: %"PRIu64"\n", name, inline_mgr->stats[i]);
+    }
+#endif
+
     udict_inline_mgr_vacuum(mgr);
     ulifo_clean(&inline_mgr->udict_pool);
     umem_mgr_release(inline_mgr->umem_mgr);
@@ -662,6 +676,13 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     inline_mgr->mgr.udict_free = udict_inline_free;
     inline_mgr->mgr.udict_mgr_vacuum = udict_inline_mgr_vacuum;
     inline_mgr->mgr.udict_mgr_free = udict_inline_mgr_free;
+
+#ifdef STATS
+    int i;
+    for (i = 0; i < sizeof(inline_shorthands) / sizeof(struct inline_shorthand);
+         i++)
+        inline_mgr->stats[i] = 0;
+#endif
     
     return udict_inline_mgr_to_udict_mgr(inline_mgr);
 }

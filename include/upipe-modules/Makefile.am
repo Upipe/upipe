@@ -9,4 +9,5 @@ myinclude_HEADERS = \
 	upipe_queue_sink.h \
 	upipe_queue_source.h \
 	upipe_setattr.h \
+	upipe_setrap.h \
 	upipe_udp_source.h

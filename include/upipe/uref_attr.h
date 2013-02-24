@@ -34,14 +34,6 @@
 #include <upipe/uref.h>
 #include <upipe/udict.h>
 
-/** @see udict_iterate */
-static inline bool uref_attr_iterate(struct uref *uref, const char **name_p,
-                                     enum udict_type *type_p)
-{
-    return udict_iterate(uref->udict, name_p, type_p);
-}
-
-
 /*
  * Opaque attributes
  */
@@ -389,7 +381,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
  * @param format printf-style format of the attribute
  * @param desc description of the attribute
  */
-#define UREF_ATTR_VOID_VA(group, attr, name, desc, args_decl, args)         \
+#define UREF_ATTR_VOID_VA(group, attr, format, desc, args_decl, args)       \
 /** @This returns the presence of a desc attribute in a uref.               \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -420,6 +412,45 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
     return udict_delete_va(uref->udict, UDICT_TYPE_VOID, format, args);     \
+}
+
+/* @This allows to define accessors for a void attribute directly in the uref
+ * structure.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param member name of the member in uref structure
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_VOID_UREF(group, attr, member, desc)                      \
+/** @This returns the presence of a desc attribute in a uref.               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref)             \
+{                                                                           \
+    return uref->member;                                                    \
+}                                                                           \
+/** @This sets a desc attribute in a uref.                                  \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref)             \
+{                                                                           \
+    uref->member = true;                                                    \
+    return true;                                                            \
+}                                                                           \
+/** @This deletes a desc attribute from a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    uref->member = false;                                                   \
+    return true;                                                            \
 }
 
 
@@ -562,7 +593,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  * Unsigned attributes
  */
 
-/* @This allows to define accessors for a unsigned attribute.
+/* @This allows to define accessors for an unsigned attribute.
  *
  * @param group group of attributes
  * @param attr readable name of the attribute, for the function names
@@ -642,7 +673,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
     return udict_delete(uref->udict, type, NULL);                           \
 }
 
-/* @This allows to define accessors for a unsigned attribute, with a name
+/* @This allows to define accessors for an unsigned attribute, with a name
  * depending on printf arguments.
  *
  * @param group group of attributes
@@ -684,6 +715,53 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
     return udict_delete_va(uref->udict, UDICT_TYPE_UNSIGNED, format, args); \
+}
+
+/* @This allows to define accessors for an unsigned attribute directly in the
+ * uref structure.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param member name of the member in uref structure
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_UNSIGNED_UREF(group, attr, member, desc)                  \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return true if the attribute was found, otherwise p is not modified     \
+ */                                                                         \
+static inline bool uref_##group##_get_##attr(struct uref *uref,             \
+                                             uint64_t *p)                   \
+{                                                                           \
+    if (uref->member != UINT64_MAX) {                                       \
+        *p = uref->member;                                                  \
+        return true;                                                        \
+    }                                                                       \
+    return false;                                                           \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+                                             uint64_t v)                    \
+{                                                                           \
+    uref->member = v;                                                       \
+    return true;                                                            \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if no allocation failure occurred                           \
+ */                                                                         \
+static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+{                                                                           \
+    uref->member = UINT64_MAX;                                              \
+    return true;                                                            \
 }
 
 

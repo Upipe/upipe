@@ -51,7 +51,7 @@
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_null.h>
-#include <upipe-modules/upipe_setattr.h>
+#include <upipe-modules/upipe_setrap.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_split.h>
@@ -98,8 +98,8 @@
 struct upipe_ts_demux_mgr {
     /** pointer to null manager */
     struct upipe_mgr *null_mgr;
-    /** pointer to setattr manager */
-    struct upipe_mgr *setattr_mgr;
+    /** pointer to setrap manager */
+    struct upipe_mgr *setrap_mgr;
 
     /** pointer to ts_split manager */
     struct upipe_mgr *ts_split_mgr;
@@ -187,8 +187,8 @@ struct upipe_ts_demux {
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 
-    /** pointer to setattr subpipe */
-    struct upipe *setattr;
+    /** pointer to setrap subpipe */
+    struct upipe *setrap;
     /** pointer to ts_split subpipe */
     struct upipe *split;
     /** psi_pid structure for PAT */
@@ -243,8 +243,10 @@ struct upipe_ts_demux_program {
     struct upipe *psi_split_output;
     /** pointer to psi_pid structure */
     struct upipe_ts_demux_psi_pid *psi_pid;
-    /** systime of the last PMT */
+    /** systime_rap of the last PMT */
     uint64_t systime_pmt;
+    /** systime_rap of the last PCR */
+    uint64_t systime_pcr;
 
     /** PCR PID */
     uint16_t pcr_pid;
@@ -257,8 +259,6 @@ struct upipe_ts_demux_program {
     uint64_t last_pcr;
     /** highest Upipe timestamp given to a frame */
     uint64_t timestamp_highest;
-    /** dictionary for setattr subpipes of outputs */
-    struct uref *setattr_dict;
 
     /** probe to get events from subpipes */
     struct uprobe plumber;
@@ -296,8 +296,8 @@ struct upipe_ts_demux_output {
     uint64_t pid;
     /** ts_split_output subpipe */
     struct upipe *split_output;
-    /** setattr subpipe */
-    struct upipe *setattr;
+    /** setrap subpipe */
+    struct upipe *setrap;
     /** systime of the last random-access frame */
     uint64_t systime_random;
 
@@ -635,19 +635,19 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
             return true;
         }
 
-        upipe_ts_demux_output->setattr = upipe_alloc(ts_demux_mgr->setattr_mgr,
+        upipe_ts_demux_output->setrap = upipe_alloc(ts_demux_mgr->setrap_mgr,
                                            uprobe_pfx_adhoc_alloc(uprobe,
-                                                UPROBE_LOG_DEBUG, "setattr"));
-        if (unlikely(upipe_ts_demux_output->setattr == NULL ||
-                     !upipe_setattr_set_dict(upipe_ts_demux_output->setattr,
-                                             program->setattr_dict) ||
-                     !upipe_set_output(upipe_ts_demux_output->setattr,
+                                                UPROBE_LOG_DEBUG, "setrap"));
+        if (unlikely(upipe_ts_demux_output->setrap == NULL ||
+                     !upipe_setrap_set_rap(upipe_ts_demux_output->setrap,
+                                           program->systime_pcr) ||
+                     !upipe_set_output(upipe_ts_demux_output->setrap,
                                        output) ||
                      !upipe_set_output(subpipe,
-                                       upipe_ts_demux_output->setattr))) {
-            if (upipe_ts_demux_output->setattr != NULL) {
-                upipe_release(upipe_ts_demux_output->setattr);
-                upipe_ts_demux_output->setattr = NULL;
+                                       upipe_ts_demux_output->setrap))) {
+            if (upipe_ts_demux_output->setrap != NULL) {
+                upipe_release(upipe_ts_demux_output->setrap);
+                upipe_ts_demux_output->setrap = NULL;
             }
             upipe_release(output);
             upipe_throw_aerror(upipe);
@@ -740,7 +740,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output->flow_def = NULL;
     upipe_ts_demux_output->pid = 0;
     upipe_ts_demux_output->split_output = NULL;
-    upipe_ts_demux_output->setattr = NULL;
+    upipe_ts_demux_output->setrap = NULL;
     upipe_ts_demux_output->last_subpipe = upipe_ts_demux_output->output = NULL;
     uprobe_init(&upipe_ts_demux_output->probe,
                 upipe_ts_demux_output_probe, upipe->uprobe);
@@ -960,8 +960,8 @@ static void upipe_ts_demux_output_free(struct upipe *upipe)
 
     if (upipe_ts_demux_output->split_output != NULL)
         upipe_release(upipe_ts_demux_output->split_output);
-    if (upipe_ts_demux_output->setattr != NULL)
-        upipe_release(upipe_ts_demux_output->setattr);
+    if (upipe_ts_demux_output->setrap != NULL)
+        upipe_release(upipe_ts_demux_output->setrap);
     if (upipe_ts_demux_output->last_subpipe != NULL)
         upipe_release(upipe_ts_demux_output->last_subpipe);
     if (upipe_ts_demux_output->output != NULL)
@@ -1352,7 +1352,6 @@ static bool upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
         container_of(uprobe, struct upipe_ts_demux_program, pcr_probe);
     struct upipe *upipe =
         upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
-    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
 
     if (event != UPROBE_CLOCK_REF)
         return false;
@@ -1378,24 +1377,16 @@ static bool upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
                           discontinuity);
 
     if (upipe_ts_demux_program->systime_pmt) {
-        if (upipe_ts_demux_program->setattr_dict == NULL)
-            upipe_ts_demux_program->setattr_dict = uref_alloc(demux->uref_mgr);
-        if (unlikely(upipe_ts_demux_program->setattr_dict == NULL ||
-                     !uref_clock_set_systime_rap(
-                         upipe_ts_demux_program->setattr_dict,
-                         upipe_ts_demux_program->systime_pmt))) {
-            upipe_throw_aerror(upipe);
-            return true;
-        }
-
         bool ret = true;
         struct uchain *uchain;
         struct upipe_ts_demux_output *output = NULL;
+        upipe_ts_demux_program->systime_pcr =
+            upipe_ts_demux_program->systime_pmt;
         ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
             output = upipe_ts_demux_output_from_uchain(uchain);
-            if (output->setattr != NULL)
-                ret = ret && upipe_setattr_set_dict(output->setattr,
-                                    upipe_ts_demux_program->setattr_dict);
+            if (output->setrap != NULL)
+                ret = ret && upipe_setrap_set_rap(output->setrap,
+                                    upipe_ts_demux_program->systime_pcr);
         }
         if (!ret)
             upipe_throw_aerror(upipe);
@@ -1425,13 +1416,13 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program->flow_def = NULL;
     upipe_ts_demux_program->program = 0;
     upipe_ts_demux_program->systime_pmt = 0;
+    upipe_ts_demux_program->systime_pcr = 0;
     upipe_ts_demux_program->pcr_pid = 0;
     upipe_ts_demux_program->pcr_split_output = NULL;
     upipe_ts_demux_program->psi_split_output = NULL;
     upipe_ts_demux_program->timestamp_offset = 0;
     upipe_ts_demux_program->timestamp_highest = TS_CLOCK_MAX;
     upipe_ts_demux_program->last_pcr = TS_CLOCK_MAX;
-    upipe_ts_demux_program->setattr_dict = NULL;
     uprobe_init(&upipe_ts_demux_program->plumber,
                 upipe_ts_demux_program_plumber, upipe->uprobe);
     uprobe_init(&upipe_ts_demux_program->pmtd_probe,
@@ -1605,8 +1596,6 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
 
     upipe_ts_demux_program_clean_sub_outputs(upipe);
 
-    if (upipe_ts_demux_program->setattr_dict != NULL)
-        uref_free(upipe_ts_demux_program->setattr_dict);
     if (upipe_ts_demux_program->flow_def != NULL)
         uref_free(upipe_ts_demux_program->flow_def);
 
@@ -1808,15 +1797,8 @@ static bool upipe_ts_demux_patd_systime(struct uprobe *uprobe,
     uint64_t systime = va_arg(args, uint64_t);
     assert(signature == UPIPE_TS_PATD_SIGNATURE);
 
-    struct uref *dict = uref_alloc(upipe_ts_demux->uref_mgr);
-    if (unlikely(dict == NULL ||
-                 !uref_clock_set_systime_rap(dict, systime) ||
-                 !upipe_setattr_set_dict(upipe_ts_demux->setattr, dict))) {
-        if (dict != NULL)
-            uref_free(dict);
+    if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap, systime)))
         upipe_throw_aerror(upipe);
-    } else
-        uref_free(dict);
 
     upipe_throw(upipe, event, signature, uref, systime);
     return true;
@@ -2082,15 +2064,15 @@ static void upipe_ts_demux_init(struct upipe *upipe)
         return;
     }
 
-    upipe_ts_demux->setattr = upipe_alloc(ts_demux_mgr->setattr_mgr,
+    upipe_ts_demux->setrap = upipe_alloc(ts_demux_mgr->setrap_mgr,
                                           uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                              UPROBE_LOG_DEBUG, "setattr"));
-    if (unlikely(upipe_ts_demux->setattr == NULL ||
-                 !upipe_set_output(upipe_ts_demux->setattr,
+                                              UPROBE_LOG_DEBUG, "setrap"));
+    if (unlikely(upipe_ts_demux->setrap == NULL ||
+                 !upipe_set_output(upipe_ts_demux->setrap,
                                    upipe_ts_demux->split))) {
-        if (upipe_ts_demux->setattr != NULL) {
-            upipe_release(upipe_ts_demux->setattr);
-            upipe_ts_demux->setattr = NULL;
+        if (upipe_ts_demux->setrap != NULL) {
+            upipe_release(upipe_ts_demux->setrap);
+            upipe_ts_demux->setrap = NULL;
         }
         upipe_release(upipe_ts_demux->split);
         upipe_ts_demux->split = NULL;
@@ -2103,8 +2085,8 @@ static void upipe_ts_demux_init(struct upipe *upipe)
     /* get psi_split subpipe */
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, 0);
     if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
-        upipe_release(upipe_ts_demux->setattr);
-        upipe_ts_demux->setattr = NULL;
+        upipe_release(upipe_ts_demux->setrap);
+        upipe_ts_demux->setrap = NULL;
         upipe_release(upipe_ts_demux->split);
         upipe_ts_demux->split = NULL;
         upipe_release(upipe_ts_demux->null);
@@ -2119,8 +2101,8 @@ static void upipe_ts_demux_init(struct upipe *upipe)
                                 UPROBE_LOG_DEBUG, "psi_split output"));
     if (unlikely(upipe_ts_demux->psi_split_output_pat == NULL)) {
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-        upipe_release(upipe_ts_demux->setattr);
-        upipe_ts_demux->setattr = NULL;
+        upipe_release(upipe_ts_demux->setrap);
+        upipe_ts_demux->setrap = NULL;
         upipe_release(upipe_ts_demux->split);
         upipe_ts_demux->split = NULL;
         upipe_release(upipe_ts_demux->null);
@@ -2137,8 +2119,8 @@ static void upipe_ts_demux_init(struct upipe *upipe)
     if (unlikely(patd == NULL)) {
         upipe_release(upipe_ts_demux->psi_split_output_pat);
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-        upipe_release(upipe_ts_demux->setattr);
-        upipe_ts_demux->setattr = NULL;
+        upipe_release(upipe_ts_demux->setrap);
+        upipe_ts_demux->setrap = NULL;
         upipe_release(upipe_ts_demux->split);
         upipe_ts_demux->split = NULL;
         upipe_release(upipe_ts_demux->null);
@@ -2171,8 +2153,8 @@ static void upipe_ts_demux_init(struct upipe *upipe)
             uref_free(flow_def);
         upipe_release(upipe_ts_demux->psi_split_output_pat);
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-        upipe_release(upipe_ts_demux->setattr);
-        upipe_ts_demux->setattr = NULL;
+        upipe_release(upipe_ts_demux->setrap);
+        upipe_ts_demux->setrap = NULL;
         upipe_release(upipe_ts_demux->split);
         upipe_ts_demux->split = NULL;
         upipe_release(upipe_ts_demux->null);
@@ -2207,8 +2189,8 @@ static void upipe_ts_demux_set_input_mode(struct upipe *upipe,
         case UPIPE_TS_DEMUX_OFF:
             return;
         case UPIPE_TS_DEMUX_SYNC:
-            upipe_ts_demux->input = upipe_ts_demux->setattr;
-            upipe_use(upipe_ts_demux->setattr);
+            upipe_ts_demux->input = upipe_ts_demux->setrap;
+            upipe_use(upipe_ts_demux->setrap);
             upipe_ts_demux_sync_acquired(upipe);
             return;
 
@@ -2230,7 +2212,7 @@ static void upipe_ts_demux_set_input_mode(struct upipe *upipe,
     }
     if (unlikely(upipe_ts_demux->input == NULL ||
                  !upipe_set_output(upipe_ts_demux->input,
-                                   upipe_ts_demux->setattr))) {
+                                   upipe_ts_demux->setrap))) {
         if (upipe_ts_demux->input != NULL) {
             upipe_release(upipe_ts_demux->input);
             upipe_ts_demux->input = NULL;
@@ -2410,7 +2392,7 @@ static void upipe_ts_demux_free(struct upipe *upipe)
         upipe_release(upipe_ts_demux->psi_split_output_pat);
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
         upipe_release(upipe_ts_demux->split);
-        upipe_release(upipe_ts_demux->setattr);
+        upipe_release(upipe_ts_demux->setrap);
         upipe_release(upipe_ts_demux->null);
     }
     upipe_throw_dead(upipe);
@@ -2432,8 +2414,8 @@ static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
         upipe_ts_demux_mgr_from_upipe_mgr(mgr);
     if (ts_demux_mgr->null_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->null_mgr);
-    if (ts_demux_mgr->setattr_mgr != NULL)
-        upipe_mgr_release(ts_demux_mgr->setattr_mgr);
+    if (ts_demux_mgr->setrap_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->setrap_mgr);
     if (ts_demux_mgr->ts_split_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
     if (ts_demux_mgr->ts_sync_mgr != NULL)
@@ -2471,7 +2453,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
         return NULL;
 
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
-    ts_demux_mgr->setattr_mgr = upipe_setattr_mgr_alloc();
+    ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
 
     ts_demux_mgr->ts_split_mgr = upipe_ts_split_mgr_alloc();
     ts_demux_mgr->ts_sync_mgr = upipe_ts_sync_mgr_alloc();

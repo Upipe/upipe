@@ -67,8 +67,6 @@ enum udict_type {
 
     /* short-hand types */
     UDICT_TYPE_SHORTHAND = 0x10,
-    /** f.disc */
-    UDICT_TYPE_FLOW_DISC,
     /** f.random */
     UDICT_TYPE_FLOW_RANDOM,
     /** f.error */
@@ -82,29 +80,11 @@ enum udict_type {
     /** f.lang */
     UDICT_TYPE_FLOW_LANG,
 
-    /** k.systime */
-    UDICT_TYPE_CLOCK_SYSTIME,
-    /** k.systime.rap */
-    UDICT_TYPE_CLOCK_SYSTIME_RAP,
-    /** k.pts */
-    UDICT_TYPE_CLOCK_PTS,
-    /** k.pts.orig */
-    UDICT_TYPE_CLOCK_PTS_ORIG,
-    /** k.pts.sys */
-    UDICT_TYPE_CLOCK_PTS_SYS,
-    /** k.dts */
-    UDICT_TYPE_CLOCK_DTS,
-    /** k.dts.orig */
-    UDICT_TYPE_CLOCK_DTS_ORIG,
-    /** k.dts.sys */
-    UDICT_TYPE_CLOCK_DTS_SYS,
     /** k.vbvdelay */
     UDICT_TYPE_CLOCK_VBVDELAY,
     /** k.duration */
     UDICT_TYPE_CLOCK_DURATION,
 
-    /** b.start */
-    UDICT_TYPE_BLOCK_START,
     /** b.end */
     UDICT_TYPE_BLOCK_END,
 

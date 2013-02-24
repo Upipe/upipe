@@ -36,24 +36,22 @@
 
 #include <stdint.h>
 
-UREF_ATTR_UNSIGNED_SH(clock, systime, UDICT_TYPE_CLOCK_SYSTIME,
-        reception time in system clock)
-UREF_ATTR_UNSIGNED_SH(clock, systime_rap, UDICT_TYPE_CLOCK_SYSTIME_RAP,
+UREF_ATTR_UNSIGNED_UREF(clock, systime, systime, reception time in system clock)
+UREF_ATTR_UNSIGNED_UREF(clock, systime_rap, systime_rap,
         reception time in system clock of the last random access point)
-UREF_ATTR_UNSIGNED_SH(clock, pts, UDICT_TYPE_CLOCK_PTS,
-        presentation timestamp in Upipe clock)
-UREF_ATTR_UNSIGNED_SH(clock, pts_orig, UDICT_TYPE_CLOCK_PTS_ORIG,
+UREF_ATTR_UNSIGNED_UREF(clock, pts, pts, presentation timestamp in Upipe clock)
+UREF_ATTR_UNSIGNED_UREF(clock, pts_orig, pts_orig,
         original presentation timestamp in stream clock)
-UREF_ATTR_UNSIGNED_SH(clock, pts_sys, UDICT_TYPE_CLOCK_PTS_SYS,
+UREF_ATTR_UNSIGNED_UREF(clock, pts_sys, pts_sys,
         presentation timestamp in system clock)
-UREF_ATTR_UNSIGNED_SH(clock, dts, UDICT_TYPE_CLOCK_DTS,
-        decoding timestamp in Upipe clock)
-UREF_ATTR_UNSIGNED_SH(clock, dts_orig, UDICT_TYPE_CLOCK_DTS_ORIG,
+UREF_ATTR_UNSIGNED_UREF(clock, dts, dts, decoding timestamp in Upipe clock)
+UREF_ATTR_UNSIGNED_UREF(clock, dts_orig, dts_orig,
         original decoding timestamp in stream clock)
-UREF_ATTR_UNSIGNED_SH(clock, dts_sys, UDICT_TYPE_CLOCK_DTS_SYS,
+UREF_ATTR_UNSIGNED_UREF(clock, dts_sys, dts_sys,
         decoding timestamp in system clock)
 UREF_ATTR_UNSIGNED_SH(clock, vbv_delay, UDICT_TYPE_CLOCK_VBVDELAY,
         vbv/dts delay)
 UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
+
 
 #endif

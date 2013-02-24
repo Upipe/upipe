@@ -37,6 +37,8 @@
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
 
+#include <inttypes.h>
+
 /** @hidden */
 struct uref_mgr;
 
@@ -52,6 +54,27 @@ struct uref {
     struct ubuf *ubuf;
     /** pointer to udict */
     struct udict *udict;
+
+    /** true in case of discontinuity */
+    bool flow_disc;
+    /** true if the block is a starting point */
+    bool block_start;
+    /** reception systime */
+    uint64_t systime;
+    /** reception systime of the random access point */
+    uint64_t systime_rap;
+    /** presentation timestamp in simulated stream clock */
+    uint64_t pts;
+    /** presentation timestamp in original stream clock */
+    uint64_t pts_orig;
+    /** presentation timestamp in system clock */
+    uint64_t pts_sys;
+    /** decoding timestamp in simulated stream clock */
+    uint64_t dts;
+    /** decoding timestamp in original stream clock */
+    uint64_t dts_orig;
+    /** decoding timestamp in system clock */
+    uint64_t dts_sys;
 };
 
 /** @This stores common management parameters for a uref pool.
@@ -101,10 +124,17 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
 
     uref->ubuf = NULL;
     uref->udict = udict_alloc(mgr->udict_mgr, 0);
-    if (unlikely(uref->udict == NULL)) {
-        uref_free(uref);
-        return NULL;
-    }
+
+    uref->flow_disc = false;
+    uref->block_start = false;
+    uref->systime = UINT64_MAX;
+    uref->systime_rap = UINT64_MAX;
+    uref->pts = UINT64_MAX;
+    uref->pts_orig = UINT64_MAX;
+    uref->pts_sys = UINT64_MAX;
+    uref->dts = UINT64_MAX;
+    uref->dts_orig = UINT64_MAX;
+    uref->dts_sys = UINT64_MAX;
 
     return uref;
 }
@@ -148,6 +178,17 @@ static inline struct uref *uref_dup(struct uref *uref)
         uref_free(new_uref);
         return NULL;
     }
+
+    new_uref->flow_disc = uref->flow_disc;
+    new_uref->block_start = uref->block_start;
+    new_uref->systime = uref->systime;
+    new_uref->systime_rap = uref->systime_rap;
+    new_uref->pts = uref->pts;
+    new_uref->pts_orig = uref->pts_orig;
+    new_uref->pts_sys = uref->pts_sys;
+    new_uref->dts = uref->dts;
+    new_uref->dts_orig = uref->dts_orig;
+    new_uref->dts_sys = uref->dts_sys;
 
     if (uref->ubuf != NULL) {
         new_uref->ubuf = ubuf_dup(uref->ubuf);

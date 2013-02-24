@@ -52,6 +52,8 @@
 struct upipe_null {
     /** dump dict */
     bool dump;
+    /** counter */
+    uint64_t counter;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -70,6 +72,7 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
     if (unlikely(!upipe_null)) return NULL;
     upipe_init(&upipe_null->upipe, mgr, uprobe);
     upipe_null->dump = false;
+    upipe_null->counter = 0;
     upipe_throw_ready(&upipe_null->upipe);
     return &upipe_null->upipe;
 }
@@ -84,6 +87,7 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_dbg(upipe, "sending uref to devnull");
+    upipe_null->counter++;
     if (upipe_null->dump) {
         udict_dump(uref->udict, upipe->uprobe);
     }
@@ -120,6 +124,7 @@ static bool upipe_null_control(struct upipe *upipe, enum upipe_command command,
 static void upipe_null_free(struct upipe *upipe)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
+    upipe_warn_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
     upipe_throw_dead(upipe);
     upipe_clean(upipe);
     free(upipe_null);

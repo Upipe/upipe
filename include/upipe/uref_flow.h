@@ -37,16 +37,40 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-UREF_ATTR_VOID_SH(flow, discontinuity, UDICT_TYPE_FLOW_DISC,
-        flow discontinuity flag that may be present in any uref carrying data)
+UREF_ATTR_VOID_UREF(flow, discontinuity, flow_disc,
+        random access flag that may be present in any uref carrying data)
 UREF_ATTR_VOID_SH(flow, random, UDICT_TYPE_FLOW_RANDOM,
         random access flag that may be present in any uref carrying data)
 UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
         error flag that may be present in any uref carrying data)
-UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
+UREF_ATTR_STRING_SH(flow, def_internal, UDICT_TYPE_FLOW_DEF, flow definition)
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
 UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
 UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)
+
+/** @This returns the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param p pointer to the retrieved value (modified during execution)
+ * @return true if the attribute was found, otherwise p is not modified
+ */
+static inline bool uref_flow_get_def(struct uref *uref, const char **p)
+{
+    if (uref->ubuf != NULL)
+        return false;
+    return uref_flow_get_def_internal(uref, p);
+}
+
+/** @This sets the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @return true if no allocation failure occurred
+ */
+static inline bool uref_flow_set_def(struct uref *uref, const char *v)
+{
+    return uref_flow_set_def_internal(uref, v);
+}
 
 /** @This sets the flow definition attribute of a uref, with printf-style
  * generation.
@@ -60,6 +84,16 @@ static inline bool uref_flow_set_def_va(struct uref *uref,
                                         const char *format, ...)
 {
     UBASE_VARARG(uref_flow_set_def(uref, string))
+}
+
+/** @This deletes the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @return true if no allocation failure occurred
+ */
+static inline bool uref_flow_delete_def(struct uref *uref)
+{
+    return uref_flow_delete_def_internal(uref);
 }
 
 /** @This sets the flow program attribute of a uref, with printf-style program
