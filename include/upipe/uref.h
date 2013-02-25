@@ -42,8 +42,17 @@
 /** @hidden */
 struct uref_mgr;
 
-/** @This stores references to a ubuf and a udict.
- */
+/** @This lists all void attributes handled in flags. */
+enum uref_flag {
+    /** the upstream pipe has disconnected */
+    UREF_FLAG_FLOW_END = 0x1,
+    /** there is a discontinuity in the flow */
+    UREF_FLAG_FLOW_DISC = 0x2,
+    /** the block is a starting point */
+    UREF_FLAG_BLOCK_START = 0x4
+};
+
+/** @This stores references to a ubuf wth attributes. */
 struct uref {
     /** structure for double-linked lists */
     struct uchain uchain;
@@ -55,10 +64,8 @@ struct uref {
     /** pointer to udict */
     struct udict *udict;
 
-    /** true in case of discontinuity */
-    bool flow_disc;
-    /** true if the block is a starting point */
-    bool block_start;
+    /** void flags */
+    uint64_t flags;
     /** reception systime */
     uint64_t systime;
     /** reception systime of the random access point */
@@ -127,8 +134,7 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     uref->ubuf = NULL;
     uref->udict = NULL;
 
-    uref->flow_disc = false;
-    uref->block_start = false;
+    uref->flags = 0;
     uref->systime = UINT64_MAX;
     uref->systime_rap = UINT64_MAX;
     uref->pts = UINT64_MAX;
@@ -149,11 +155,10 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
  */
 static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
 {
-    struct uref *uref = mgr->uref_alloc(mgr);
+    struct uref *uref = uref_alloc(mgr);
     if (unlikely(uref == NULL))
         return NULL;
 
-    uref->ubuf = NULL;
     uref->udict = udict_alloc(mgr->udict_mgr, mgr->control_attr_size);
     if (unlikely(uref->udict == NULL)) {
         uref_free(uref);
@@ -184,8 +189,7 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
     } else
         new_uref->udict = NULL;
 
-    new_uref->flow_disc = uref->flow_disc;
-    new_uref->block_start = uref->block_start;
+    new_uref->flags = uref->flags;
     new_uref->systime = uref->systime;
     new_uref->systime_rap = uref->systime_rap;
     new_uref->pts = uref->pts;

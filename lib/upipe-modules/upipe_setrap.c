@@ -97,6 +97,12 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (likely(upipe_setrap->systime_rap != UINT64_MAX))
         uref->systime_rap = upipe_setrap->systime_rap;
     upipe_setrap_output(upipe, uref, upump);

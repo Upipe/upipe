@@ -288,8 +288,8 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(uref_flow_get_def(uref, &def))) {
         if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
             upipe_fsink->flow_def_ok = false;
-            upipe_throw_flow_def_error(upipe, uref);
             uref_free(uref);
+            upipe_throw_flow_def_error(upipe, uref);
             return;
         }
 
@@ -299,9 +299,15 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_fsink->flow_def_ok)) {
-        upipe_throw_flow_def_error(upipe, uref);
+    if (unlikely(uref_flow_get_end(uref))) {
         uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
+    if (unlikely(!upipe_fsink->flow_def_ok)) {
+        uref_free(uref);
+        upipe_throw_flow_def_error(upipe, uref);
         return;
     }
 

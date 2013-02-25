@@ -152,6 +152,12 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
         upipe_filter_blend_store_flow_def(upipe, uref);
         return;
     }
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (unlikely(!uref->ubuf)) { // no ubuf in uref
         upipe_warn(upipe, "dropping empty uref");
         uref_free(uref);

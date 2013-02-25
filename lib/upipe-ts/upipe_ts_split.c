@@ -31,6 +31,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
 
@@ -57,6 +58,8 @@ struct upipe_ts_split_pid {
 
 /** @internal @This is the private context of a ts_split pipe. */
 struct upipe_ts_split {
+    /** list of all outputs */
+    struct ulist outputs;
     /** true if we received a compatible flow definition */
     bool flow_def_ok;
 
@@ -72,32 +75,12 @@ struct upipe_ts_split {
 
 UPIPE_HELPER_UPIPE(upipe_ts_split, upipe)
 
-/** @internal @This returns the public output_mgr structure.
- *
- * @param upipe_ts_split pointer to the private upipe_ts_split structure
- * @return pointer to the public output_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_ts_split_to_output_mgr(struct upipe_ts_split *s)
-{
-    return &s->output_mgr;
-}
-
-/** @internal @This returns the private upipe_ts_split structure.
- *
- * @param output_mgr public output_mgr structure of the pipe
- * @return pointer to the private upipe_ts_split structure
- */
-static inline struct upipe_ts_split *
-    upipe_ts_split_from_output_mgr(struct upipe_mgr *output_mgr)
-{
-    return container_of(output_mgr, struct upipe_ts_split, output_mgr);
-}
-
 /** @internal @This is the private context of an output of a ts_split pipe. */
 struct upipe_ts_split_output {
-    /** structure for double-linked lists */
+    /** structure for double-linked lists, all outputs */
     struct uchain uchain;
+    /** structure for double-linked lists, PID */
+    struct uchain uchain_pid;
 
     /** pipe acting as output */
     struct upipe *output;
@@ -113,6 +96,9 @@ struct upipe_ts_split_output {
 UPIPE_HELPER_UPIPE(upipe_ts_split_output, upipe)
 UPIPE_HELPER_OUTPUT(upipe_ts_split_output, output, flow_def, flow_def_sent)
 
+UPIPE_HELPER_SUBPIPE(upipe_ts_split, upipe_ts_split_output, output, output_mgr,
+                     outputs, uchain)
+
 /** @hidden */
 static void upipe_ts_split_pid_set(struct upipe *upipe, uint16_t pid,
                                    struct upipe_ts_split_output *output);
@@ -127,9 +113,9 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
  * @return pointer to the upipe_ts_split_output structure
  */
 static inline struct upipe_ts_split_output *
-    upipe_ts_split_output_from_uchain(struct uchain *uchain)
+    upipe_ts_split_output_from_uchain_pid(struct uchain *uchain_pid)
 {
-    return container_of(uchain, struct upipe_ts_split_output, uchain);
+    return container_of(uchain_pid, struct upipe_ts_split_output, uchain_pid);
 }
 
 /** @This returns the uchain structure used for FIFO, LIFO and lists.
@@ -138,9 +124,9 @@ static inline struct upipe_ts_split_output *
  * @return pointer to the uchain structure
  */
 static inline struct uchain *
-    upipe_ts_split_output_to_uchain(struct upipe_ts_split_output *upipe_ts_split_output)
+    upipe_ts_split_output_to_uchain_pid(struct upipe_ts_split_output *upipe_ts_split_output)
 {
-    return &upipe_ts_split_output->uchain;
+    return &upipe_ts_split_output->uchain_pid;
 }
 
 /** @internal @This allocates an output subpipe of a ts_split pipe.
@@ -160,11 +146,11 @@ static struct upipe *upipe_ts_split_output_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     uchain_init(&upipe_ts_split_output->uchain);
     upipe_ts_split_output_init_output(upipe);
+    upipe_ts_split_output_init_sub(upipe);
 
     struct upipe_ts_split *upipe_ts_split =
         upipe_ts_split_from_output_mgr(upipe->mgr);
     upipe_use(upipe_ts_split_to_upipe(upipe_ts_split));
-
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -263,10 +249,12 @@ static void upipe_ts_split_output_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
     upipe_ts_split_output_clean_output(upipe);
+    upipe_ts_split_output_clean_sub(upipe);
 
     upipe_clean(upipe);
-    upipe_release(upipe_ts_split_to_upipe(upipe_ts_split));
     free(upipe_ts_split_output);
+
+    upipe_release(upipe_ts_split_to_upipe(upipe_ts_split));
 }
 
 /** @internal @This initializes the output manager for a ts_split pipe.
@@ -302,6 +290,7 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe = upipe_ts_split_to_upipe(upipe_ts_split);
     upipe_split_init(upipe, mgr, uprobe, upipe_ts_split_init_output_mgr(upipe));
+    upipe_ts_split_init_sub_outputs(upipe);
     upipe_ts_split->flow_def_ok = false;
 
     int i;
@@ -350,7 +339,7 @@ static void upipe_ts_split_pid_set(struct upipe *upipe, uint16_t pid,
     assert(pid < MAX_PIDS);
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     ulist_add(&upipe_ts_split->pids[pid].outputs,
-              upipe_ts_split_output_to_uchain(output));
+              upipe_ts_split_output_to_uchain_pid(output));
     upipe_ts_split_pid_check(upipe, pid);
 }
 
@@ -367,7 +356,7 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     struct uchain *uchain;
     ulist_delete_foreach (&upipe_ts_split->pids[pid].outputs, uchain) {
-        if (output == upipe_ts_split_output_from_uchain(uchain)) {
+        if (output == upipe_ts_split_output_from_uchain_pid(uchain)) {
             ulist_delete(&upipe_ts_split->pids[pid].outputs, uchain);
         }
     }
@@ -400,7 +389,7 @@ static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref,
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_split->pids[pid].outputs, uchain) {
         struct upipe_ts_split_output *output =
-                upipe_ts_split_output_from_uchain(uchain);
+                upipe_ts_split_output_from_uchain_pid(uchain);
         if (likely(uchain->next == NULL)) {
             upipe_ts_split_output_output(upipe_ts_split_output_to_upipe(output),
                                          uref, upump);
@@ -447,6 +436,13 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        upipe_ts_split_throw_sub_outputs(upipe, UPROBE_NEED_INPUT);
+        return;
+    }
+
     if (unlikely(!upipe_ts_split->flow_def_ok)) {
         uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);
@@ -469,9 +465,7 @@ static void upipe_ts_split_free(struct upipe *upipe)
 {
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     upipe_throw_dead(upipe);
-
-    /* we can only arrive here if there is no output anymore, so no
-     * need to empty the outputs list */
+    upipe_ts_split_clean_sub_outputs(upipe);
     upipe_clean(upipe);
     free(upipe_ts_split);
 }

@@ -112,9 +112,15 @@ static void upipe_qsrc_worker(struct upump *upump)
             return;
         }
 
-        if (unlikely(upipe_qsrc->flow_def == NULL)) {
-            upipe_throw_flow_def_error(upipe, uref);
+        if (unlikely(uref_flow_get_end(uref))) {
             uref_free(uref);
+            upipe_throw_need_input(upipe);
+            return;
+        }
+
+        if (unlikely(upipe_qsrc->flow_def == NULL)) {
+            uref_free(uref);
+            upipe_throw_flow_def_error(upipe, uref);
             return;
         }
 

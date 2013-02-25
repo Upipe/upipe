@@ -436,7 +436,7 @@ static struct upipe_ts_demux_psi_pid *
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     struct uchain *uchain;
-    ulist_foreach(&upipe_ts_demux->psi_pids, uchain) {
+    ulist_foreach (&upipe_ts_demux->psi_pids, uchain) {
         struct upipe_ts_demux_psi_pid *psi_pid =
             upipe_ts_demux_psi_pid_from_uchain(uchain);
         if (psi_pid->pid == pid)
@@ -479,7 +479,7 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
     psi_pid->refcount--;
     if (!psi_pid->refcount) {
         struct uchain *uchain;
-        ulist_delete_foreach(&upipe_ts_demux->psi_pids, uchain) {
+        ulist_delete_foreach (&upipe_ts_demux->psi_pids, uchain) {
             if (uchain == upipe_ts_demux_psi_pid_to_uchain(psi_pid)) {
                 ulist_delete(&upipe_ts_demux->psi_pids, uchain);
             }
@@ -2388,6 +2388,21 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_demux->flow_def_ok = true;
         upipe_ts_demux_set_input_mode(upipe, input_mode);
         upipe_ts_demux_work(upipe, uref, upump);
+        return;
+    }
+
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        upipe_ts_demux_throw_sub_programs(upipe, UPROBE_NEED_INPUT);
+        struct uchain *uchain;
+        ulist_foreach (&upipe_ts_demux->programs, uchain) {
+            struct upipe_ts_demux_program *program =
+                upipe_ts_demux_program_from_uchain(uchain);
+            upipe_ts_demux_program_throw_sub_outputs(
+                    upipe_ts_demux_program_to_upipe(program),
+                    UPROBE_NEED_INPUT);
+        }
         return;
     }
 

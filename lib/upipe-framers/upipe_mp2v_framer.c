@@ -1067,6 +1067,12 @@ static void upipe_mp2vf_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (unlikely(upipe_mp2vf->flow_def_input == NULL)) {
         uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);

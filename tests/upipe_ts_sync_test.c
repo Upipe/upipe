@@ -100,7 +100,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     const char *def;
-    if (uref_flow_get_def(uref, &def)) {
+    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
         uref_free(uref);
         return;
     }

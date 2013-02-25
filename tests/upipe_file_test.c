@@ -83,6 +83,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_READ_END:
+        case UPROBE_NEED_INPUT:
             break;
     }
     return true;

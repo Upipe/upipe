@@ -64,7 +64,7 @@ enum uprobe_event {
      * the pipe is undefined, except @ref upipe_release */
     UPROBE_UPUMP_ERROR,
     /** unable to read from an input because the end of file was reached, or
-     * because of an error (const char *) */
+     * the component disappeared, or because of an error (const char *) */
     UPROBE_READ_END,
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
@@ -73,6 +73,8 @@ enum uprobe_event {
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (void) */
     UPROBE_NEED_UPUMP_MGR,
+    /** an input pipe is necessary to operate (void) */
+    UPROBE_NEED_INPUT,
     /** an output pipe is necessary to operate (struct uref *) */
     UPROBE_NEED_OUTPUT,
     /** a ubuf manager is necessary to operate (struct uref *) */

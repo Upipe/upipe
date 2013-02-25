@@ -125,6 +125,10 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    if (uref_flow_get_end(uref)) {
+        uref_free(uref);
+        return;
+    }
 
     assert(ts_test->got_flow_def);
     ts_test->nb_packets++;

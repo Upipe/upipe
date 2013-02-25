@@ -259,9 +259,16 @@ static bool STRUCTURE##_set_output(struct upipe *upipe,                     \
 static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->OUTPUT != NULL))                                  \
+    if (likely(STRUCTURE->OUTPUT != NULL)) {                                \
+        if (likely(STRUCTURE->FLOW_DEF_SENT)) {                             \
+            uref_flow_set_end(STRUCTURE->FLOW_DEF);                         \
+            uref_flow_delete_def(STRUCTURE->FLOW_DEF);                      \
+            upipe_input(STRUCTURE->OUTPUT, STRUCTURE->FLOW_DEF, NULL);      \
+            STRUCTURE->FLOW_DEF = NULL;                                     \
+        }                                                                   \
         upipe_release(STRUCTURE->OUTPUT);                                   \
-    if (likely(STRUCTURE->FLOW_DEF != NULL))                                \
+    }                                                                       \
+    if (unlikely(STRUCTURE->FLOW_DEF != NULL))                              \
         uref_free(STRUCTURE->FLOW_DEF);                                     \
 }
 

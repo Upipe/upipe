@@ -561,10 +561,10 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  *
  * @param group group of attributes
  * @param attr readable name of the attribute, for the function names
- * @param member name of the member in uref structure
+ * @param flag name of the flag in @ref uref_flag
  * @param desc description of the attribute
  */
-#define UREF_ATTR_VOID_UREF(group, attr, member, desc)                      \
+#define UREF_ATTR_VOID_UREF(group, attr, flag, desc)                        \
 /** @This returns the presence of a desc attribute in a uref.               \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -572,7 +572,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref)             \
 {                                                                           \
-    return uref->member;                                                    \
+    return uref->flags & flag;                                              \
 }                                                                           \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
@@ -581,7 +581,7 @@ static inline bool uref_##group##_get_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_set_##attr(struct uref *uref)             \
 {                                                                           \
-    uref->member = true;                                                    \
+    uref->flags |= flag;                                                    \
     return true;                                                            \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
@@ -591,7 +591,7 @@ static inline bool uref_##group##_set_##attr(struct uref *uref)             \
  */                                                                         \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
-    uref->member = false;                                                   \
+    uref->flags &= ~(uint64_t)flag;                                         \
     return true;                                                            \
 }
 

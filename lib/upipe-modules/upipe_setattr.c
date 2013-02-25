@@ -97,6 +97,12 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (unlikely(upipe_setattr->dict == NULL)) {
         upipe_setattr_output(upipe, uref, upump);
         return;

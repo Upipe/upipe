@@ -91,6 +91,8 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
     if (upipe_null->dump && uref->udict != NULL) {
         udict_dump(uref->udict, upipe->uprobe);
     }
+    if (unlikely(uref_flow_get_end(uref)))
+        upipe_throw_need_input(upipe);
     uref_free(uref);
 }
 

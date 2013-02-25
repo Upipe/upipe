@@ -102,12 +102,14 @@ static void queue_test_input(struct upipe *upipe, struct uref *uref,
     if (counter == 0) {
         const char *def;
         assert(uref_flow_get_def(uref, &def));
-    } else if (counter == 2) {
-        upipe_release(upipe_qsink);
-    } else {
+    } else if (counter == 1) {
         uint8_t uref_counter;
         assert(uref_test_get_test(uref, &uref_counter));
         assert(uref_counter == counter);
+    } else if (counter == 2) {
+        upipe_release(upipe_qsink);
+    } else {
+        assert(uref_flow_get_end(uref));
     }
     counter++;
     uref_free(uref);
@@ -196,7 +198,7 @@ int main(int argc, char *argv[])
 
     ev_loop(loop, 0);
 
-    assert(counter == 3);
+    assert(counter == 4);
 
     upipe_mgr_release(upipe_qsink_mgr); // nop
     upipe_mgr_release(upipe_qsrc_mgr); // nop

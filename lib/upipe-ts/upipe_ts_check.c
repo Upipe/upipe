@@ -184,6 +184,12 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (unlikely(upipe_ts_check->flow_def == NULL)) {
         uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);

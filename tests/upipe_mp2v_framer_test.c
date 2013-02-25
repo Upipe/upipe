@@ -105,6 +105,11 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        return;
+    }
+
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     udict_dump(uref->udict, upipe->uprobe);
     size_t size;

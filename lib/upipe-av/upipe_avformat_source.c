@@ -383,6 +383,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_err_va(upipe, "read error from %s (%s)", upipe_avfsrc->url, buf);
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_throw_read_end(upipe, upipe_avfsrc->url);
+        upipe_avfsrc_throw_sub_outputs(upipe, UPROBE_READ_END,
+                                       upipe_avfsrc->url);
         return;
     }
 

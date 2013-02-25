@@ -217,7 +217,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
 
         /* also set it for every output */
         struct uchain *uchain;
-        ulist_foreach(&upipe_dup->outputs, uchain) {
+        ulist_foreach (&upipe_dup->outputs, uchain) {
             struct upipe_dup_output *upipe_dup_output =
                 upipe_dup_output_from_uchain(uchain);
             uref = uref_dup(upipe_dup->flow_def);
@@ -231,9 +231,16 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(upipe_dup->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
+    if (unlikely(uref_flow_get_end(uref))) {
         uref_free(uref);
+        upipe_throw_need_input(upipe);
+        upipe_dup_throw_sub_outputs(upipe, UPROBE_NEED_INPUT);
+        return;
+    }
+
+    if (unlikely(upipe_dup->flow_def == NULL)) {
+        uref_free(uref);
+        upipe_throw_flow_def_error(upipe, uref);
         return;
     }
 

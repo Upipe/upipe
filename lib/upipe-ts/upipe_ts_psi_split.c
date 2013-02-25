@@ -250,7 +250,7 @@ static void upipe_ts_psi_split_work(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_upipe(upipe);
     struct uchain *uchain;
-    ulist_foreach(&upipe_ts_psi_split->outputs, uchain) {
+    ulist_foreach (&upipe_ts_psi_split->outputs, uchain) {
         struct upipe_ts_psi_split_output *output =
                 upipe_ts_psi_split_output_from_uchain(uchain);
         const uint8_t *filter, *mask;
@@ -304,6 +304,13 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
         upipe_dbg_va(upipe, "flow definition: %s", def);
         upipe_ts_psi_split->flow_def_ok = true;
         uref_free(uref);
+        return;
+    }
+
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        upipe_ts_psi_split_throw_sub_outputs(upipe, UPROBE_NEED_INPUT);
         return;
     }
 

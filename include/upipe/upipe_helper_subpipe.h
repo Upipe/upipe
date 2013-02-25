@@ -189,6 +189,26 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_init(&s->ULIST);                                                  \
 }                                                                           \
+/** @This throws an event from all subpipes.                                \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param event event to throw, followed by arguments                       \
+ */                                                                         \
+static void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,             \
+                                           enum uprobe_event event, ...)    \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    struct uchain *uchain;                                                  \
+    /* we use delete because there is a possibility that the subpipe is     \
+     * deleted during the probe */                                          \
+    ulist_delete_foreach (&s->ULIST, uchain) {                              \
+        struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_uchain(uchain);    \
+        va_list args;                                                       \
+        va_start(args, event);                                              \
+        upipe_throw_va(STRUCTURE_SUB##_to_upipe(sub), event, args);         \
+        va_end(args);                                                       \
+    }                                                                       \
+}                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE.       \
  * It currently does nothing because by construction, the ULIST must be     \
  * empty before STRUCTURE can be destroyed.                                 \

@@ -103,6 +103,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_PMTD_ADD_ES:
         case UPROBE_TS_PMTD_DEL_ES:
         case UPROBE_READ_END:
+        case UPROBE_NEED_INPUT:
             break;
         case UPROBE_SPLIT_ADD_FLOW: {
             uint64_t flow_id = va_arg(args, uint64_t);

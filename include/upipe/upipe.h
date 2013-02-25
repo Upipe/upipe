@@ -615,6 +615,15 @@ static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
 }
 
+/** @This throws an event asking for an input.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_need_input(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_NEED_INPUT);
+}
+
 /** @This throws an event asking for an output.
  *
  * @param upipe description structure of the pipe
