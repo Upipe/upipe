@@ -77,6 +77,15 @@ static inline bool uref_block_size(struct uref *uref, size_t *size_p)
     return ubuf_block_size(uref->ubuf, size_p);
 }
 
+/** @see ubuf_block_size_linear */
+static inline bool uref_block_size_linear(struct uref *uref, int offset,
+                                          size_t *size_p)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_size_linear(uref->ubuf, offset, size_p);
+}
+
 /** @see ubuf_block_read */
 static inline bool uref_block_read(struct uref *uref, int offset, int *size_p,
                                    const uint8_t **buffer_p)

@@ -162,6 +162,27 @@ static inline struct ubuf *ubuf_block_get(struct ubuf *ubuf, int *offset_p,
     return ubuf;
 }
 
+/** @This returns the size of the largest linear buffer that can be read at a
+ * given offset.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size_p reference written with the size of the buffer space if not NULL
+ * @return false in case of error
+ */
+static inline bool ubuf_block_size_linear(struct ubuf *ubuf, int offset,
+                                          size_t *size_p)
+{
+    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+                 (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
+        return false;
+
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    *size_p = block->size - offset;
+    return true;
+}
+
 /** @This returns a read-only pointer to the buffer space. You must call
  * @ref ubuf_block_unmap when you're done with the pointer.
  *
