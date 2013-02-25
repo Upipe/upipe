@@ -241,16 +241,21 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach (&upipe_dup->outputs, uchain) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
-        struct uref *new_uref = uref_dup(uref);
-        if (unlikely(new_uref == NULL)) {
-            uref_free(uref);
-            upipe_throw_aerror(upipe);
-            return;
+        if (uchain->next == NULL) {
+            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
+                                    uref, upump);
+            uref = NULL;
+        } else {
+            struct uref *new_uref = uref_dup(uref);
+            if (unlikely(new_uref == NULL)) {
+                uref_free(uref);
+                upipe_throw_aerror(upipe);
+                return;
+            }
+            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
+                                    new_uref, upump);
         }
-        upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
-                                new_uref, upump);
     }
-    uref_free(uref);
 }
 
 /** @This decrements the reference count of a upipe or frees it.

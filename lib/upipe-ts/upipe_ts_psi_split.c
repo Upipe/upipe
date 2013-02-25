@@ -258,19 +258,27 @@ static void upipe_ts_psi_split_work(struct upipe *upipe, struct uref *uref,
         if (uref_ts_flow_get_psi_filter(output->flow_def, &filter, &mask,
                                         &size) &&
             uref_block_match(uref, filter, mask, size)) {
-            struct uref *new_uref = uref_dup(uref);
-            if (likely(new_uref != NULL))
+            if (likely(uchain->next == NULL)) {
                 upipe_ts_psi_split_output_output(
-                        upipe_ts_psi_split_output_to_upipe(output), new_uref,
+                        upipe_ts_psi_split_output_to_upipe(output), uref,
                         upump);
-            else {
-                uref_free(uref);
-                upipe_throw_aerror(upipe);
-                return;
+                uref = NULL;
+            } else {
+                struct uref *new_uref = uref_dup(uref);
+                if (likely(new_uref != NULL))
+                    upipe_ts_psi_split_output_output(
+                            upipe_ts_psi_split_output_to_upipe(output), new_uref,
+                            upump);
+                else {
+                    uref_free(uref);
+                    upipe_throw_aerror(upipe);
+                    return;
+                }
             }
         }
     }
-    uref_free(uref);
+    if (uref != NULL)
+        uref_free(uref);
 }
 
 /** @internal @This receives data.
