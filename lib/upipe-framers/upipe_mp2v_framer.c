@@ -124,6 +124,8 @@ struct upipe_mp2vf {
     struct ulist urefs;
 
     /* octet stream parser stuff */
+    /** context of the scan function */
+    uint32_t scan_context;
     /** current size of next frame (in next_uref) */
     size_t next_frame_size;
     /** true if the next uref begins with a sequence header */
@@ -233,6 +235,7 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf->last_temporal_reference = -1;
     upipe_mp2vf->got_discontinuity = false;
     upipe_mp2vf->insert_sequence = false;
+    upipe_mp2vf->scan_context = UINT32_MAX;
     upipe_mp2vf->next_frame_size = 0;
     upipe_mp2vf->next_frame_sequence = false;
     upipe_mp2vf->next_frame_sequence_ext_offset = -1;
@@ -290,46 +293,41 @@ static const uint8_t *upipe_mp2vf_scan(const uint8_t *restrict p,
 
 /** @internal @This finds an MPEG-2 start code and returns its value.
  *
- * @param uref uref to search
- * @param offset_p pointer to offset at which to start, filled in with the
- * offset of the start code
+ * @param upipe description structure of the pipe
  * @param start_p filled in with the value of the start code
- * @param next_p filled in with the value of the first octet, if not NULL
+ * @param next_p filled in with the value of the extension code, if applicable
  * @return true if a start code was found
  */
-static bool upipe_mp2vf_find(struct uref *uref, size_t *offset_p,
+static bool upipe_mp2vf_find(struct upipe *upipe,
                              uint8_t *start_p, uint8_t *next_p)
 {
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     const uint8_t *buffer;
     int size = -1;
-    uint32_t word = UINT32_MAX;
-    uint8_t next = 0;
-    while (uref_block_read(uref, *offset_p, &size, &buffer)) {
-        const uint8_t *p = upipe_mp2vf_scan(buffer, buffer + size, &word);
+    while (uref_block_read(upipe_mp2vf->next_uref, upipe_mp2vf->next_frame_size,
+                           &size, &buffer)) {
+        const uint8_t *p = upipe_mp2vf_scan(buffer, buffer + size,
+                                            &upipe_mp2vf->scan_context);
         if (p < buffer + size)
-            next = *p;
-        uref_block_unmap(uref, *offset_p, size);
+            *next_p = *p;
+        uref_block_unmap(upipe_mp2vf->next_uref, upipe_mp2vf->next_frame_size,
+                         size);
 
-        if ((word & 0xffffff00) == 0x100) {
-            *offset_p += p - buffer;
-            *offset_p -= 4;
-            *start_p = word & 0xff;
-            if (next_p != NULL) {
-                if (p < buffer + size)
-                    *next_p = next;
-                else if (*start_p == MP2VEND_START_CODE)
-                    *next_p = 0;
-                else if (!uref_block_extract(uref, *offset_p + 4, 1, next_p)) {
-                    *offset_p -= 4;
-                    return false;
-                }
+        if ((upipe_mp2vf->scan_context & 0xffffff00) == 0x100) {
+            *start_p = upipe_mp2vf->scan_context & 0xff;
+            upipe_mp2vf->next_frame_size += p - buffer;
+            if (*start_p == MP2VX_START_CODE && p >= buffer + size &&
+                !uref_block_extract(upipe_mp2vf->next_uref,
+                                    upipe_mp2vf->next_frame_size, 1, next_p)) {
+                upipe_mp2vf->scan_context = UINT32_MAX;
+                upipe_mp2vf->next_frame_size -= 4;
+                return false;
             }
             return true;
         }
-        *offset_p += size;
+        upipe_mp2vf->next_frame_size += size;
         size = -1;
     }
-    *offset_p -= 3;
     return false;
 }
 
@@ -974,15 +972,14 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     while (upipe_mp2vf->next_uref != NULL) {
         uint8_t start, next;
-        if (!upipe_mp2vf_find(upipe_mp2vf->next_uref,
-                              &upipe_mp2vf->next_frame_size, &start, &next))
+        if (!upipe_mp2vf_find(upipe, &start, &next))
             return;
         //upipe_err_va(upipe, "pouet %x", start);
 
         if (unlikely(!upipe_mp2vf->acquired)) {
             upipe_mp2vf_consume_octet_stream(upipe,
-                                             upipe_mp2vf->next_frame_size);
-            upipe_mp2vf->next_frame_size = 0;
+                                             upipe_mp2vf->next_frame_size - 4);
+            upipe_mp2vf->next_frame_size = 4;
 
             switch (start) {
                 case MP2VPIC_START_CODE:
@@ -996,7 +993,6 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
                 default:
                     break;
             }
-            upipe_mp2vf->next_frame_size += 4;
             continue;
         }
 
@@ -1004,40 +1000,39 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
             if (start == MP2VX_START_CODE) {
                 if (next == MP2VX_ID_SEQX)
                     upipe_mp2vf->next_frame_sequence_ext_offset =
-                        upipe_mp2vf->next_frame_size;
+                        upipe_mp2vf->next_frame_size - 4;
                 else if (next == MP2VX_ID_SEQDX)
                     upipe_mp2vf->next_frame_sequence_display_offset =
-                        upipe_mp2vf->next_frame_size;
+                        upipe_mp2vf->next_frame_size - 4;
             } else if (start == MP2VGOP_START_CODE)
                 upipe_mp2vf->next_frame_gop_offset =
-                    upipe_mp2vf->next_frame_size;
+                    upipe_mp2vf->next_frame_size - 4;
             else if (start == MP2VPIC_START_CODE)
-                upipe_mp2vf->next_frame_offset = upipe_mp2vf->next_frame_size;
-            upipe_mp2vf->next_frame_size += 4;
+                upipe_mp2vf->next_frame_offset =
+                    upipe_mp2vf->next_frame_size - 4;
             continue;
         }
 
         if (start == MP2VX_START_CODE) {
             if (next == MP2VX_ID_PICX)
                 upipe_mp2vf->next_frame_ext_offset =
-                    upipe_mp2vf->next_frame_size;
-            upipe_mp2vf->next_frame_size += 4;
+                    upipe_mp2vf->next_frame_size - 4;
             continue;
         }
 
         if (start > MP2VPIC_START_CODE && start <= MP2VPIC_LAST_CODE) {
             /* slice header */
             upipe_mp2vf->next_frame_slice = true;
-            upipe_mp2vf->next_frame_size += 4;
             continue;
         }
 
-        if (start == MP2VEND_START_CODE)
-            upipe_mp2vf->next_frame_size += 4;
+        if (start != MP2VEND_START_CODE)
+            upipe_mp2vf->next_frame_size -= 4;
 
         if (unlikely(!upipe_mp2vf_output_frame(upipe, upump))) {
             upipe_warn(upipe, "erroneous frame headers");
             upipe_mp2vf->next_frame_size = 0;
+            upipe_mp2vf->scan_context = UINT32_MAX;
             upipe_mp2vf_sync_lost(upipe);
             upipe_mp2vf->next_frame_sequence = false;
             upipe_mp2vf->next_frame_sequence_ext_offset = -1;
@@ -1062,6 +1057,7 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
                 upipe_mp2vf->next_frame_sequence = true;
                 break;
             case MP2VGOP_START_CODE:
+                upipe_mp2vf->next_frame_gop_offset = 0;
                 break;
             case MP2VPIC_START_CODE:
                 upipe_mp2vf->next_frame_offset = 0;
