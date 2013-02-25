@@ -147,14 +147,12 @@ static inline struct ubuf *ubuf_block_get(struct ubuf *ubuf, int *offset_p,
         block = ubuf_block_from_ubuf(ubuf);
     }
 
-    unsigned int counter = 0;
     while (*offset_p >= block->size) {
         *offset_p -= block->size;
         ubuf = block->next_ubuf;
         if (unlikely(ubuf == NULL))
             return NULL;
         block = ubuf_block_from_ubuf(ubuf);
-        counter++;
     }
 
     head_block->cached_ubuf = ubuf;
