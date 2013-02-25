@@ -63,7 +63,7 @@ static inline bool ulist_empty(struct ulist *ulist)
     return ulist->first == NULL;
 }
 
-/** @debug @This calculates the depth of the list (suboptimal, only for debug).
+/** @This calculates the depth of the list (suboptimal, only for debug).
  *
  * @param ulist pointer to a ulist structure
  */
