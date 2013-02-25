@@ -63,6 +63,21 @@ static inline bool ulist_empty(struct ulist *ulist)
     return ulist->first == NULL;
 }
 
+/** @debug @This calculates the depth of the list (suboptimal, only for debug).
+ *
+ * @param ulist pointer to a ulist structure
+ */
+static inline size_t ulist_depth(struct ulist *ulist)
+{
+    struct uchain *uchain = ulist->first;
+    size_t depth = 0;
+    while (uchain != NULL) {
+        depth ++;
+        uchain = uchain->next;
+    }
+    return depth;
+}
+
 /** @This adds a new element at the end.
  *
  * @param ulist pointer to a ulist structure
@@ -111,6 +126,8 @@ static inline struct uchain *ulist_pop(struct ulist *ulist)
     if (uchain != NULL) {
         ulist->first = uchain->next;
         uchain->next = NULL;
+        if (ulist->first == NULL)
+            ulist->last_p = &ulist->first;
     }
     return uchain;
 }
