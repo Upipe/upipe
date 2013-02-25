@@ -409,7 +409,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     if (upipe_ts_pmtd->pmt != NULL &&
-        uref_block_compare(upipe_ts_pmtd->pmt, uref)) {
+        uref_block_equal(upipe_ts_pmtd->pmt, uref)) {
         /* Identical PMT. */
         upipe_ts_pmtd_systime(upipe, uref);
         uref_free(uref);

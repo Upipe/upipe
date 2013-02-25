@@ -105,10 +105,10 @@ static inline bool upipe_ts_psid_validate(struct uref *section)
  * @param section2 PSI section 2
  * @return false if the tables are different
  */
-static inline bool upipe_ts_psid_compare(struct uref *section1,
-                                         struct uref *section2)
+static inline bool upipe_ts_psid_equal(struct uref *section1,
+                                       struct uref *section2)
 {
-    return uref_block_compare(section1, section2);
+    return uref_block_equal(section1, section2);
 }
 
 /** @This declares a PSI table in a structure.
@@ -281,7 +281,7 @@ static inline bool upipe_ts_psid_table_compare(struct uref **sections1,
     for (int i = 0; i <= last_section; i++) {
         struct uref *section1 = upipe_ts_psid_table_get_section(sections1, i);
         struct uref *section2 = upipe_ts_psid_table_get_section(sections2, i);
-        if (!upipe_ts_psid_compare(section1, section2))
+        if (!upipe_ts_psid_equal(section1, section2))
             return false;
     }
 

@@ -625,17 +625,17 @@ static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
     }
 
     if (likely(upipe_mp2vf->sequence_header != NULL &&
-               ubuf_block_compare(sequence_header,
+               ubuf_block_equal(sequence_header,
                                   upipe_mp2vf->sequence_header) &&
                ((upipe_mp2vf->sequence_ext == NULL && sequence_ext == NULL) ||
                 (upipe_mp2vf->sequence_ext != NULL && sequence_ext != NULL &&
-                 ubuf_block_compare(sequence_ext,
+                 ubuf_block_equal(sequence_ext,
                                     upipe_mp2vf->sequence_ext))) &&
                ((upipe_mp2vf->sequence_display == NULL &&
                  sequence_display == NULL) ||
                 (upipe_mp2vf->sequence_display != NULL &&
                  sequence_display != NULL &&
-                 ubuf_block_compare(sequence_display,
+                 ubuf_block_equal(sequence_display,
                                     upipe_mp2vf->sequence_display))))) {
         /* identical sequence header, extension and display, but we rotate them
          * to free older buffers */

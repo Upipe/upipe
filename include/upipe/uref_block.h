@@ -260,13 +260,20 @@ static inline bool uref_block_merge(struct uref *uref,
 }
 
 /** @see ubuf_block_compare */
-static inline bool uref_block_compare(struct uref *uref1, struct uref *uref2)
+static inline bool uref_block_compare(struct uref *uref, int offset,
+                                      struct uref *uref_small)
+{
+    if (uref->ubuf == NULL || uref_small->ubuf == NULL)
+        return false;
+    return ubuf_block_compare(uref->ubuf, offset, uref_small->ubuf);
+}
+
+/** @see ubuf_block_equal */
+static inline bool uref_block_equal(struct uref *uref1, struct uref *uref2)
 {
     if (uref1->ubuf == NULL || uref2->ubuf == NULL)
         return false;
-    if (uref1->ubuf == uref2->ubuf)
-        return true;
-    return ubuf_block_compare(uref1->ubuf, uref2->ubuf);
+    return ubuf_block_equal(uref1->ubuf, uref2->ubuf);
 }
 
 /** @see ubuf_block_match */

@@ -880,43 +880,64 @@ static inline bool ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
     return true;
 }
 
-/** @This compares the content of two block ubufs.
+/** @This compares the content of a block ubuf in a larger ubuf.
  *
- * @param ubuf1 pointer to first ubuf
- * @param ubuf2 pointer to second ubuf
- * @return false if the ubufs are different
+ * @param ubuf pointer to large ubuf
+ * @param offset supposed offset of the small ubuf in the large ubuf
+ * @param ubuf_small pointer to small ubuf
+ * @return false if the small ubuf doesn't match the larger ubuf
  */
-static inline bool ubuf_block_compare(struct ubuf *ubuf1, struct ubuf *ubuf2)
+static inline bool ubuf_block_compare(struct ubuf *ubuf, int offset,
+                                      struct ubuf *ubuf_small)
 {
-    size_t ubuf1_size, ubuf2_size;
-    if (unlikely(!ubuf_block_size(ubuf1, &ubuf1_size) ||
-                 !ubuf_block_size(ubuf2, &ubuf2_size) ||
-                 ubuf1_size != ubuf2_size))
+    size_t ubuf_size, ubuf_size_small;
+    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) ||
+                 !ubuf_block_size(ubuf_small, &ubuf_size_small) ||
+                 ubuf_size < ubuf_size_small + offset))
         return false;
 
-    int offset = 0;
-    int size = ubuf1_size;
+    int i = 0;
+    int size = ubuf_size_small;
     while (size > 0) {
-        int read_size1 = size, read_size2 = size;
-        const uint8_t *read_buffer1, *read_buffer2;
-        if (unlikely(!ubuf_block_read(ubuf1, offset, &read_size1,
-                                      &read_buffer1)))
+        int read_size = size, read_size_small = size;
+        const uint8_t *read_buffer, *read_buffer_small;
+        if (unlikely(!ubuf_block_read(ubuf, offset + i, &read_size,
+                                      &read_buffer)))
             return false;
-        if (unlikely(!ubuf_block_read(ubuf2, offset, &read_size2,
-                                      &read_buffer2))) {
-            ubuf_block_unmap(ubuf1, offset, read_size1);
+        if (unlikely(!ubuf_block_read(ubuf_small, i, &read_size_small,
+                                      &read_buffer_small))) {
+            ubuf_block_unmap(ubuf, offset + i, read_size);
             return false;
         }
-        int compare_size = read_size1 < read_size2 ? read_size1 : read_size2;
-        bool ret = !memcmp(read_buffer1, read_buffer2, compare_size);
-        ret = ubuf_block_unmap(ubuf1, offset, read_size1) && ret;
-        ret = ubuf_block_unmap(ubuf2, offset, read_size2) && ret;
+        int compare_size = read_size < read_size_small ?
+                           read_size : read_size_small;
+        bool ret = !memcmp(read_buffer, read_buffer_small, compare_size);
+        ret = ubuf_block_unmap(ubuf, offset + i, read_size) && ret;
+        ret = ubuf_block_unmap(ubuf_small, i, read_size_small) && ret;
         if (!ret)
             return false;
         size -= compare_size;
-        offset += compare_size;
+        i += compare_size;
     }
     return true;
+}
+
+/** @This compares whether two ubufs are identical.
+ *
+ * @param ubuf pointer to large ubuf
+ * @param offset supposed offset of the small ubuf in the large ubuf
+ * @param ubuf_small pointer to small ubuf
+ * @return false if the small ubuf doesn't match the larger ubuf
+ */
+static inline bool ubuf_block_equal(struct ubuf *ubuf1, struct ubuf *ubuf2)
+{
+    size_t ubuf_size1, ubuf_size2;
+    if (unlikely(!ubuf_block_size(ubuf1, &ubuf_size1) ||
+                 !ubuf_block_size(ubuf2, &ubuf_size2) ||
+                 ubuf_size1 != ubuf_size2))
+        return false;
+
+    return ubuf_block_compare(ubuf1, 0, ubuf2);
 }
 
 /** @This checks if the beginning of a block ubuf matches a filter with a

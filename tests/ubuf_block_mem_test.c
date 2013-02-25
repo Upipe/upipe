@@ -256,10 +256,10 @@ int main(int argc, char **argv)
     assert(ubuf_block_unmap(ubuf2, 0, wanted));
     ubuf_free(ubuf2);
 
-    /* test ubuf_block_compare */
+    /* test ubuf_block_equal */
     ubuf2 = ubuf_block_copy(mgr, ubuf1, 0, -1);
     assert(ubuf2 != NULL);
-    assert(ubuf_block_compare(ubuf1, ubuf2));
+    assert(ubuf_block_equal(ubuf1, ubuf2));
     ubuf_free(ubuf2);
 
     /* test ubuf_block_match */
