@@ -604,8 +604,6 @@ bool ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
                                 uint8_t macropixel_size)
 {
     assert(mgr != NULL);
-
-    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
     ubuf_pic_mem_mgr_vacuum(mgr);
 
     return ubuf_pic_common_mgr_add_plane(mgr, chroma, hsub, vsub,

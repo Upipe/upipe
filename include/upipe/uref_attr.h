@@ -1164,4 +1164,6 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
     return uref_attr_delete_va(uref, UDICT_TYPE_RATIONAL, format, args);    \
 }
 
+UREF_ATTR_UNSIGNED_UREF(attr, priv, priv, private (internal pipe use))
+
 #endif

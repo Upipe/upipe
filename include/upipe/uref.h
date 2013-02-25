@@ -75,6 +75,8 @@ struct uref {
     uint64_t dts_orig;
     /** decoding timestamp in system clock */
     uint64_t dts_sys;
+    /** private for local pipe user */
+    uint64_t priv;
 };
 
 /** @This stores common management parameters for a uref pool.

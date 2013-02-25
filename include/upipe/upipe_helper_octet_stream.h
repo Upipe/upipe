@@ -35,6 +35,7 @@
 #include <upipe/ulist.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
+#include <upipe/uref_attr.h>
 #include <upipe/uref_block.h>
 #include <upipe/upipe.h>
 
@@ -107,23 +108,29 @@ static void STRUCTURE##_append_octet_stream(struct upipe *upipe,            \
                                             struct uref *uref)              \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    size_t size;                                                            \
+    if (unlikely(!uref_block_size(uref, &size))) {                          \
+        uref_free(uref);                                                    \
+        upipe_throw_aerror(upipe);                                          \
+        return;                                                             \
+    }                                                                       \
     if (STRUCTURE->NEXT_UREF == NULL) {                                     \
         STRUCTURE->NEXT_UREF = uref;                                        \
-        uref_block_size(STRUCTURE->NEXT_UREF, &STRUCTURE->NEXT_UREF_SIZE);  \
+        STRUCTURE->NEXT_UREF_SIZE = size;                                   \
         void (*cb)(struct upipe *) = APPEND_CB;                             \
         if (cb != NULL)                                                     \
             cb(upipe);                                                      \
         return;                                                             \
     }                                                                       \
-    struct ubuf *ubuf = ubuf_dup(uref->ubuf);                               \
-    if (unlikely(ubuf == NULL ||                                            \
-                 !uref_block_append(STRUCTURE->NEXT_UREF, ubuf))) {         \
-        upipe_throw_aerror(upipe);                                          \
+    struct ubuf *ubuf = uref_detach_ubuf(uref);                             \
+    if (unlikely(!uref_block_append(STRUCTURE->NEXT_UREF, ubuf))) {         \
         uref_free(uref);                                                    \
-        if (ubuf != NULL)                                                   \
-            ubuf_free(ubuf);                                                \
-    } else                                                                  \
-        ulist_add(&STRUCTURE->UREFS, uref_to_uchain(uref));                 \
+        ubuf_free(ubuf);                                                    \
+        upipe_throw_aerror(upipe);                                          \
+        return;                                                             \
+    }                                                                       \
+    uref_attr_set_priv(uref, size);                                         \
+    ulist_add(&STRUCTURE->UREFS, uref_to_uchain(uref));                     \
 }                                                                           \
 /** @internal @This consumes the given number of octets from the octet      \
  * stream, and rotates the buffers accordingly.                             \
@@ -136,32 +143,28 @@ static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    if (consumed < STRUCTURE->NEXT_UREF_SIZE) {                             \
-        uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);              \
-        STRUCTURE->NEXT_UREF_SIZE -= consumed;                              \
-        return;                                                             \
-    }                                                                       \
-    while (consumed) {                                                      \
-        assert(STRUCTURE->NEXT_UREF != NULL);                               \
-        if (consumed < STRUCTURE->NEXT_UREF_SIZE) {                         \
-            uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);          \
-            STRUCTURE->NEXT_UREF_SIZE -= consumed;                          \
-            break;                                                          \
-        }                                                                   \
-        consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
-        uref_free(STRUCTURE->NEXT_UREF);                                    \
-        STRUCTURE->NEXT_UREF = NULL;                                        \
+    while (consumed >= STRUCTURE->NEXT_UREF_SIZE) {                         \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
-        if (uchain != NULL)                                                 \
-            STRUCTURE##_append_octet_stream(upipe,                          \
-                                            uref_from_uchain(uchain));      \
+        if (uchain == NULL) {                                               \
+            uref_free(STRUCTURE->NEXT_UREF);                                \
+            STRUCTURE->NEXT_UREF = NULL;                                    \
+            return;                                                         \
+        }                                                                   \
+        struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);         \
+        uref_free(STRUCTURE->NEXT_UREF);                                    \
+        STRUCTURE->NEXT_UREF = uref_from_uchain(uchain);                    \
+        uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                       \
+        uref_block_resize(STRUCTURE->NEXT_UREF, STRUCTURE->NEXT_UREF_SIZE,  \
+                          -1);                                              \
+        consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
+        uint64_t size;                                                      \
+        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
+        STRUCTURE->NEXT_UREF_SIZE = size;                                   \
+        void (*cb)(struct upipe *) = APPEND_CB;                             \
+        if (cb != NULL)                                                     \
+            cb(upipe);                                                      \
     }                                                                       \
-    struct ulist urefs = STRUCTURE->UREFS;                                  \
-    ulist_init(&STRUCTURE->UREFS);                                          \
-    struct uchain *uchain;                                                  \
-    while ((uchain = ulist_pop(&urefs)) != NULL)                            \
-        STRUCTURE##_append_octet_stream(upipe,                              \
-                                        uref_from_uchain(uchain));          \
+    uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);                  \
 }                                                                           \
 /** @internal @This extracts the given number of octets from the octet      \
  * stream, and rotates the buffers accordingly.                             \
@@ -175,37 +178,32 @@ static struct uref *STRUCTURE##_extract_octet_stream(struct upipe *upipe,   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    if (extracted < STRUCTURE->NEXT_UREF_SIZE) {                            \
-        struct uref *uref = uref_block_splice(STRUCTURE->NEXT_UREF, 0,      \
-                                              extracted);                   \
-        uref_block_resize(STRUCTURE->NEXT_UREF, extracted, -1);             \
-        STRUCTURE->NEXT_UREF_SIZE -= extracted;                             \
-        return uref;                                                        \
-    }                                                                       \
-    struct uref *uref = STRUCTURE->NEXT_UREF;                               \
-    uref_block_resize(uref, 0, extracted);                                  \
-    STRUCTURE->NEXT_UREF = NULL;                                            \
-    extracted -= STRUCTURE->NEXT_UREF_SIZE;                                 \
-    while (extracted) {                                                     \
+    size_t offset = 0;                                                      \
+    while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
-        if (uchain != NULL)                                                 \
-            STRUCTURE##_append_octet_stream(upipe,                          \
-                                            uref_from_uchain(uchain));      \
-        if (extracted < STRUCTURE->NEXT_UREF_SIZE) {                        \
-            uref_block_resize(STRUCTURE->NEXT_UREF, extracted, -1);         \
-            STRUCTURE->NEXT_UREF_SIZE -= extracted;                         \
-            break;                                                          \
+        if (uchain == NULL) {                                               \
+            struct uref *uref = STRUCTURE->NEXT_UREF;                       \
+            STRUCTURE->NEXT_UREF = NULL;                                    \
+            return uref;                                                    \
         }                                                                   \
-        extracted -= STRUCTURE->NEXT_UREF_SIZE;                             \
+        struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);         \
         uref_free(STRUCTURE->NEXT_UREF);                                    \
-        STRUCTURE->NEXT_UREF = NULL;                                        \
+        STRUCTURE->NEXT_UREF = uref_from_uchain(uchain);                    \
+        uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                       \
+        offset += STRUCTURE->NEXT_UREF_SIZE;                                \
+        extracted -= STRUCTURE->NEXT_UREF_SIZE;                             \
+        uint64_t size = 0;                                                  \
+        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
+        STRUCTURE->NEXT_UREF_SIZE = size;                                   \
+        void (*cb)(struct upipe *) = APPEND_CB;                             \
+        if (cb != NULL)                                                     \
+            cb(upipe);                                                      \
     }                                                                       \
-    struct ulist urefs = STRUCTURE->UREFS;                                  \
-    ulist_init(&STRUCTURE->UREFS);                                          \
-    struct uchain *uchain;                                                  \
-    while ((uchain = ulist_pop(&urefs)) != NULL)                            \
-        STRUCTURE##_append_octet_stream(upipe,                              \
-                                        uref_from_uchain(uchain));          \
+    offset += extracted;                                                    \
+    STRUCTURE->NEXT_UREF_SIZE -= extracted;                                 \
+    struct uref *uref = STRUCTURE->NEXT_UREF;                               \
+    STRUCTURE->NEXT_UREF = uref_block_splice(uref, offset, -1);             \
+    uref_block_truncate(uref, offset);                                      \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
