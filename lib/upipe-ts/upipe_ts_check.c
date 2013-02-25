@@ -139,13 +139,13 @@ static void upipe_ts_check_work(struct upipe *upipe, struct uref *uref,
     }
 
     while (size > upipe_ts_check->ts_size) {
-        struct uref *output = uref_dup(uref);
+        struct uref *output = uref_block_splice(uref, 0,
+                                                upipe_ts_check->ts_size);
         if (unlikely(output == NULL)) {
             uref_free(uref);
             upipe_throw_aerror(upipe);
             return;
         }
-        uref_block_resize(output, 0, upipe_ts_check->ts_size);
         if (!upipe_ts_check_check(upipe, output, upump)) {
             uref_free(uref);
             return;

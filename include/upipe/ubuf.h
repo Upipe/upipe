@@ -107,6 +107,8 @@ enum ubuf_command {
      */
     /** extend block ubuf (int) */
     UBUF_EXTEND_BLOCK,
+    /** duplicates and resize block ubuf (struct ubuf **, int) */
+    UBUF_SPLICE_BLOCK,
     /** resize picture ubuf (int, int, int, int) */
     UBUF_RESIZE_PICTURE,
 

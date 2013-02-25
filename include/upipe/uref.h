@@ -161,12 +161,12 @@ static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
     return uref;
 }
 
-/** @This duplicates a uref.
+/** @internal @This duplicates a uref without duplicating the ubuf.
  *
  * @param uref source structure to duplicate
  * @return duplicated uref or NULL in case of allocation failure
  */
-static inline struct uref *uref_dup(struct uref *uref)
+static inline struct uref *uref_dup_inner(struct uref *uref)
 {
     struct uref *new_uref = uref->mgr->uref_alloc(uref->mgr);
     if (unlikely(new_uref == NULL))
@@ -192,6 +192,20 @@ static inline struct uref *uref_dup(struct uref *uref)
     new_uref->dts = uref->dts;
     new_uref->dts_orig = uref->dts_orig;
     new_uref->dts_sys = uref->dts_sys;
+
+    return new_uref;
+}
+
+/** @This duplicates a uref.
+ *
+ * @param uref source structure to duplicate
+ * @return duplicated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_dup(struct uref *uref)
+{
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
 
     if (uref->ubuf != NULL) {
         new_uref->ubuf = ubuf_dup(uref->ubuf);

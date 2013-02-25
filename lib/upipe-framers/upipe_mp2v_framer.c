@@ -540,38 +540,23 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
 static struct ubuf *upipe_mp2vf_extract_sequence(struct upipe *upipe,
                                                  struct uref *uref)
 {
-    struct ubuf *sequence_header = ubuf_dup(uref->ubuf);
     uint8_t word;
-    if (unlikely(sequence_header == NULL ||
-                 !ubuf_block_extract(sequence_header, 11, 1, &word))) {
-        if (sequence_header != NULL)
-            ubuf_free(sequence_header);
-        upipe_throw_aerror(upipe);
+    if (unlikely(!uref_block_extract(uref, 11, 1, &word)))
         return NULL;
-    }
 
     size_t sequence_header_size = MP2VSEQ_HEADER_SIZE;
     if (word & 0x2) {
         /* intra quantiser matrix */
         sequence_header_size += 64;
-        if (unlikely(!ubuf_block_extract(sequence_header, 11 + 64, 1, &word))) {
-            ubuf_free(sequence_header);
-            upipe_throw_aerror(upipe);
+        if (unlikely(!uref_block_extract(uref, 11 + 64, 1, &word)))
             return NULL;
-        }
     }
     if (word & 0x1) {
         /* non-intra quantiser matrix */
         sequence_header_size += 64;
     }
 
-    if (unlikely(!ubuf_block_resize(sequence_header, 0,
-                                    sequence_header_size))) {
-        ubuf_free(sequence_header);
-        upipe_throw_aerror(upipe);
-        return NULL;
-    }
-    return sequence_header;
+    return ubuf_block_splice(uref->ubuf, 0, sequence_header_size);
 }
 
 /** @internal @This extracts the sequence extension from a uref.
@@ -585,16 +570,7 @@ static struct ubuf *upipe_mp2vf_extract_extension(struct upipe *upipe,
                                                   struct uref *uref,
                                                   size_t offset)
 {
-    struct ubuf *sequence_ext = ubuf_dup(uref->ubuf);
-    if (unlikely(sequence_ext == NULL ||
-                 !ubuf_block_resize(sequence_ext, offset,
-                                    MP2VSEQX_HEADER_SIZE))) {
-        if (sequence_ext != NULL)
-            ubuf_free(sequence_ext);
-        upipe_throw_aerror(upipe);
-        return NULL;
-    }
-    return sequence_ext;
+    return ubuf_block_splice(uref->ubuf, offset, MP2VSEQX_HEADER_SIZE);
 }
 
 /** @internal @This extracts the sequence display extension from a uref.
@@ -607,24 +583,11 @@ static struct ubuf *upipe_mp2vf_extract_display(struct upipe *upipe,
                                                 struct uref *uref,
                                                 size_t offset)
 {
-    struct ubuf *sequence_display = ubuf_dup(uref->ubuf);
     uint8_t word;
-    if (unlikely(sequence_display == NULL ||
-                 !ubuf_block_extract(sequence_display, offset, 1, &word))) {
-        if (sequence_display != NULL)
-            ubuf_free(sequence_display);
-        upipe_throw_aerror(upipe);
+    if (unlikely(!uref_block_extract(uref, offset + 4, 1, &word)))
         return NULL;
-    }
-    size_t sequence_display_size = MP2VSEQDX_HEADER_SIZE + 
-                                   ((word & 0x1) ? MP2VSEQDX_COLOR_SIZE : 0);
-    if (unlikely(!ubuf_block_resize(sequence_display, offset,
-                                    sequence_display_size))) {
-        ubuf_free(sequence_display);
-        upipe_throw_aerror(upipe);
-        return NULL;
-    }
-    return sequence_display;
+    return ubuf_block_splice(uref->ubuf, offset, MP2VSEQDX_HEADER_SIZE + 
+                                   ((word & 0x1) ? MP2VSEQDX_COLOR_SIZE : 0));
 }
 
 /** @internal @This handles a uref containing a sequence header.

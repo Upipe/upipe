@@ -176,8 +176,8 @@ static struct uref *STRUCTURE##_extract_octet_stream(struct upipe *upipe,   \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
     if (extracted < STRUCTURE->NEXT_UREF_SIZE) {                            \
-        struct uref *uref = uref_dup(STRUCTURE->NEXT_UREF);                 \
-        uref_block_resize(uref, 0, extracted);                              \
+        struct uref *uref = uref_block_splice(STRUCTURE->NEXT_UREF, 0,      \
+                                              extracted);                   \
         uref_block_resize(STRUCTURE->NEXT_UREF, extracted, -1);             \
         STRUCTURE->NEXT_UREF_SIZE -= extracted;                             \
         return uref;                                                        \

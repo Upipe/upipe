@@ -215,7 +215,7 @@ static struct ubuf *ubuf_block_mem_alloc_inner(struct ubuf_mgr *mgr)
         block_mem = ubuf_block_mem_from_ubuf(ubuf);
 
     block_mem->shared = NULL;
-    ubuf_block_init(ubuf, false);
+    ubuf_block_common_init(ubuf, false);
 
     return ubuf;
 }
@@ -272,8 +272,8 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
     if (block_mem_mgr->align)
         offset -= ((uintptr_t)ubuf_block_mem_buffer(ubuf) + offset +
                    block_mem_mgr->align_offset) % block_mem_mgr->align;
-    ubuf_block_set(ubuf, offset, size);
-    ubuf_block_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
+    ubuf_block_common_set(ubuf, offset, size);
+    ubuf_block_common_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
 
     ubuf_mgr_use(mgr);
     return ubuf;
@@ -293,7 +293,38 @@ static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     if (unlikely(new_ubuf == NULL))
         return false;
 
-    if (unlikely(!ubuf_block_dup(ubuf, new_ubuf))) {
+    if (unlikely(!ubuf_block_common_dup(ubuf, new_ubuf))) {
+        ubuf_free(new_ubuf);
+        return false;
+    }
+    *new_ubuf_p = new_ubuf;
+
+    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
+    struct ubuf_block_mem *new_block = ubuf_block_mem_from_ubuf(new_ubuf);
+    new_block->shared = block_mem->shared;
+    ubuf_block_mem_use(new_ubuf);
+    ubuf_mgr_use(new_ubuf->mgr);
+    return true;
+}
+
+/** @This asks for the creation of a new reference to the same buffer space.
+ *
+ * @param ubuf pointer to ubuf
+ * @param new_ubuf_p reference written with a pointer to the newly allocated
+ * ubuf
+ * @param offset offset in the buffer
+ * @param size final size of the buffer
+ * @return false in case of error
+ */
+static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
+                                  int offset, int size)
+{
+    assert(new_ubuf_p != NULL);
+    struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
+    if (unlikely(new_ubuf == NULL))
+        return false;
+
+    if (unlikely(!ubuf_block_common_splice(ubuf, new_ubuf, offset, size))) {
         ubuf_free(new_ubuf);
         return false;
     }
@@ -320,7 +351,7 @@ static bool ubuf_block_mem_extend(struct ubuf *ubuf, int new_size)
         return false;
     if (unlikely(!ubuf_block_mem_realloc(ubuf, new_size)))
         return false;
-    ubuf_block_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
+    ubuf_block_common_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
     return true;
 }
 
@@ -345,6 +376,12 @@ static bool ubuf_block_mem_control(struct ubuf *ubuf,
         case UBUF_EXTEND_BLOCK: {
             int new_size = va_arg(args, int);
             return ubuf_block_mem_extend(ubuf, new_size);
+        }
+        case UBUF_SPLICE_BLOCK: {
+            struct ubuf **new_ubuf_p = va_arg(args, struct ubuf **);
+            int offset = va_arg(args, int);
+            int size = va_arg(args, int);
+            return ubuf_block_mem_splice(ubuf, new_ubuf_p, offset, size);
         }
         default:
             return false;
@@ -381,7 +418,7 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
         ubuf_block_mem_mgr_from_ubuf_mgr(ubuf->mgr);
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
 
-    ubuf_block_clean(ubuf);
+    ubuf_block_common_clean(ubuf);
 
     if (unlikely(urefcount_release(&block_mem->shared->refcount))) {
         umem_free(&block_mem->shared->umem);

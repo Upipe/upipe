@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     assert(ubuf_block_unmap(ubuf1, 0, wanted));
 
     /* test ubuf_block_mem_extend (append) */
-    assert(ubuf_block_extend(ubuf1, 0, 2 * UBUF_PREPEND));
+    assert(ubuf_block_extend(ubuf1, 0, 2 * UBUF_APPEND));
     wanted = -1;
     assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);
@@ -116,7 +116,8 @@ int main(int argc, char **argv)
     w[UBUF_SIZE + 3 * UBUF_PREPEND - 1] = 0xAB;
     assert(ubuf_block_unmap(ubuf1, 0, wanted));
 
-    assert(!ubuf_block_resize(ubuf1, -UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
+    assert(!ubuf_block_extend(ubuf1, UBUF_PREPEND, 0));
+
     /* test ubuf_block_merge */
     assert(ubuf_block_merge(mgr, &ubuf1, -UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
     wanted = -1;
@@ -184,11 +185,11 @@ int main(int argc, char **argv)
     assert(ubuf_block_size(ubuf1, &size));
     assert(size == 49);
 
-    ubuf2 = ubuf_block_alloc(mgr, 16);
+    ubuf2 = ubuf_block_alloc(mgr, 17);
     assert(ubuf2 != NULL);
     wanted = -1;
     assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
-    assert(wanted == 16);
+    assert(wanted == 17);
     for (int i = 0; i < 16; i++)
         w[i] = i + 49;
     assert(ubuf_block_unmap(ubuf2, 0, wanted));
@@ -196,12 +197,30 @@ int main(int argc, char **argv)
     /* ubuf2 pointer is now invalid */
 
     assert(ubuf_block_size(ubuf1, &size));
-    assert(size == 65);
+    assert(size == 66);
 
     wanted = 32;
     assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == 16);
     assert(ubuf_block_unmap(ubuf1, 0, wanted));
+
+    /* test ubuf_block_truncate */
+    assert(ubuf_block_truncate(ubuf1, 65));
+    assert(ubuf_block_size(ubuf1, &size));
+    assert(size == 65);
+
+    /* test ubuf_block_splice */
+    ubuf2 = ubuf_block_splice(ubuf1, 49, -1);
+    assert(ubuf2 != NULL);
+
+    wanted = -1;
+    assert(!ubuf_block_write(ubuf2, 0, &wanted, &w));
+    assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
+    assert(wanted == 16);
+    for (int i = 0; i < 16; i++)
+        assert(r[i] == i + 49);
+    assert(ubuf_block_unmap(ubuf2, 0, wanted));
+    ubuf_free(ubuf2);
 
     /* test ubuf_block_peek */
     uint8_t buffer[4];

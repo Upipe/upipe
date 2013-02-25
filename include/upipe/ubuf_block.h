@@ -56,10 +56,10 @@ struct ubuf_block {
     /** total size of the ubuf, including next segments */
     size_t total_size;
 
+    /** true if UBUF_MAP_BLOCK & UBUF_UNMAP_BLOCK need to be called */
+    bool map;
     /** mapped buffer */
     uint8_t *buffer;
-    /** true if the manager asks for a mandatory unmap after usage */
-    bool mandatory_unmap;
 
     /** cached last ubuf */
     struct ubuf *cached_ubuf;
@@ -186,6 +186,9 @@ static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    if (unlikely(block->map && !ubuf_control(ubuf, UBUF_MAP_BLOCK)))
+        return false;
+
     if (buffer_p != NULL) {
         if (block->buffer == NULL)
             if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, &block->buffer))
@@ -225,6 +228,9 @@ static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    if (unlikely(block->map && !ubuf_control(ubuf, UBUF_MAP_BLOCK)))
+        return false;
+
     if (buffer_p != NULL) {
         if (block->buffer == NULL)
             if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, &block->buffer))
@@ -254,10 +260,8 @@ static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset, int size)
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (block->mandatory_unmap) {
-        block->buffer = NULL;
+    if (block->map)
         return ubuf_control(ubuf, UBUF_UNMAP_BLOCK);
-    }
     return true;
 }
 
@@ -368,7 +372,7 @@ static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
         return false;
     int delete_size = size;
 
-    while (ubuf != NULL) {
+    do {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
         if (!offset) {
             /* Delete from the beginning */
@@ -395,11 +399,52 @@ static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
             offset = 0;
         }
         ubuf = block->next_ubuf;
-    }
+    } while (ubuf != NULL);
     return false;
 
 ubuf_block_delete_done:
     head_block->total_size -= delete_size;
+    return true;
+}
+
+/** @This truncates a ubuf at a given offset, possibly releasing segments.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset at which to truncate data
+ * @return false in case of error
+ */
+static inline bool ubuf_block_truncate(struct ubuf *ubuf, int offset)
+{
+    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+        return false;
+
+    struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
+    if (!offset) {
+        if (head_block->next_ubuf != NULL) {
+            ubuf_free(head_block->next_ubuf);
+            head_block->next_ubuf = NULL;
+        }
+        head_block->size = 0;
+        head_block->total_size = 0;
+        head_block->cached_ubuf = &head_block->ubuf;
+        head_block->cached_offset = 0;
+        return true;
+    }
+
+    int saved_size = offset;
+    offset--;
+    if (unlikely((ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
+        return false;
+
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    if (block->next_ubuf != NULL) {
+        ubuf_free(block->next_ubuf);
+        block->next_ubuf = NULL;
+    }
+    block->size = offset + 1;
+    head_block->total_size = saved_size;
+    head_block->cached_ubuf = &head_block->ubuf;
+    head_block->cached_offset = 0;
     return true;
 }
 
@@ -429,7 +474,7 @@ static inline bool ubuf_block_resize(struct ubuf *ubuf, int offset,
         if (new_size + offset > block->total_size)
             return false;
         if (new_size + offset < block->total_size)
-            if (unlikely(!ubuf_block_delete(ubuf, new_size + offset, -1)))
+            if (unlikely(!ubuf_block_truncate(ubuf, new_size + offset)))
                 return false; /* should not happen */
     }
 
@@ -478,6 +523,28 @@ static inline bool ubuf_block_extend(struct ubuf *ubuf, int prepend, int append)
     block->total_size += prepend + append;
     block->cached_offset += prepend;
     return true;
+}
+
+/** @This duplicates part of a ubuf.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param buffer pointer to buffer space of at least size octets
+ * @return false in case of error
+ */
+static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
+                                             int size)
+{
+    struct ubuf *new_ubuf;
+    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+                 (ubuf = ubuf_block_get(ubuf, &offset, &size)) == NULL ||
+                 !ubuf_control(ubuf, UBUF_SPLICE_BLOCK, &new_ubuf,
+                               offset, size)))
+        return NULL;
+    return new_ubuf;
 }
 
 /** @internal @This checks the offset and size parameters of a lot of functions,

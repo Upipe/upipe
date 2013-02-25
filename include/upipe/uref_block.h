@@ -129,6 +129,48 @@ static inline bool uref_block_delete(struct uref *uref, int offset, int size)
     return ubuf_block_delete(uref->ubuf, offset, size);
 }
 
+/** @see ubuf_block_truncate */
+static inline bool uref_block_truncate(struct uref *uref, int offset)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_truncate(uref->ubuf, offset);
+}
+
+/** @see ubuf_block_resize */
+static inline bool uref_block_resize(struct uref *uref, int skip, int new_size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_resize(uref->ubuf, skip, new_size);
+}
+
+/** @see ubuf_block_extend */
+static inline bool uref_block_extend(struct uref *uref, int prepend, int append)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    return ubuf_block_extend(uref->ubuf, prepend, append);
+}
+
+/** @see ubuf_block_splice */
+static inline struct uref *uref_block_splice(struct uref *uref, int offset,
+                                             int size)
+{
+    if (uref->ubuf == NULL)
+        return false;
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    new_uref->ubuf = ubuf_block_splice(uref->ubuf, offset, size);
+    if (unlikely(new_uref->ubuf == NULL)) {
+        uref_free(new_uref);
+        return NULL;
+    }
+    return new_uref;
+}
+
 /** @see ubuf_block_peek */
 static inline const uint8_t *uref_block_peek(struct uref *uref,
                                              int offset, int size,
@@ -185,14 +227,6 @@ static inline bool uref_block_iovec_unmap(struct uref *uref,
     if (uref->ubuf == NULL)
         return false;
     return ubuf_block_iovec_unmap(uref->ubuf, offset, size, iovecs);
-}
-
-/** @see ubuf_block_resize */
-static inline bool uref_block_resize(struct uref *uref, int skip, int new_size)
-{
-    if (uref->ubuf == NULL)
-        return false;
-    return ubuf_block_resize(uref->ubuf, skip, new_size);
 }
 
 /** @This allocates a new ubuf of size new_size, and copies part of the old

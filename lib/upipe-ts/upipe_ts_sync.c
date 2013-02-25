@@ -178,7 +178,6 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
             upipe_throw_aerror(upipe);
             continue;
         }
-        uref_block_resize(output, 0, upipe_ts_sync->ts_size);
         upipe_ts_sync_output(upipe, output, upump);
     }
 }
@@ -198,13 +197,12 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
                size >= upipe_ts_sync->ts_size &&
                uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC) &&
                !offset) {
-            struct uref *output = uref_dup(upipe_ts_sync->next_uref);
-            upipe_ts_sync_consume_octet_stream(upipe, upipe_ts_sync->ts_size);
+            struct uref *output = upipe_ts_sync_extract_octet_stream(upipe,
+                                                        upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
                 upipe_throw_aerror(upipe);
                 continue;
             }
-            uref_block_resize(output, 0, upipe_ts_sync->ts_size);
             upipe_ts_sync_output(upipe, output, upump);
         }
     }
