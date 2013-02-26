@@ -36,6 +36,7 @@ digraph "Upipe objects dependancies" {
 		fontcolor="#203080";
 		ubuf;
 		uref;
+		udict;
 	}
 
 	subgraph cluster_core {
@@ -51,7 +52,6 @@ digraph "Upipe objects dependancies" {
 			ulist;
 			uqueue;
 			urefcount;
-			udict;
 			umem;
 		}
 		uchain;
@@ -64,15 +64,14 @@ digraph "Upipe objects dependancies" {
 	}
 
 	uref->ubuf [style="dashed"];
-	uref->udict;
-	uref->upump [style="dashed"];
+	uref->udict [style="dashed"];
 	uref->uchain;
 
 	ubuf->uchain;
 	ubuf->umem [style="dashed"];
 	ubuf->urefcount [style="dashed"];
 
-	udict->umem [style="dashed"];
+	udict->umem;
 
 	umem->ulifo [style="dashed"];
 
@@ -93,7 +92,7 @@ digraph "Upipe objects dependancies" {
 	upipe->uprobe;
 	upipe->uref;
 	upipe->urefcount;
-	upipe->upump [style="dashed"];
+	upipe->upump;
 	upipe->uclock [style="dashed"];
 	upipe->udeal [style="dashed"];
 	upipe->uqueue [style="dashed"];
