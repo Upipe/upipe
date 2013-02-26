@@ -35,7 +35,7 @@
 #include <upipe/ulist.h>
 #include <upipe/upipe.h>
 
-/** @This declares ten functions dealing with subpipes of split and join pipes.
+/** @This declares nine functions dealing with subpipes of split and join pipes.
  *
  * You must add two members to your private pipe structure:
  * @code
@@ -92,6 +92,12 @@
  *  void upipe_foo_init_sub_outputs(struct upipe *upipe)
  * @end code
  * Initializes the list in upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_throw_sub_outputs(struct upipe *upipe,
+ *                                   enum uprobe_event event, ...)
+ * @end code
+ * Throws the given event from all subpipes.                              
  *
  * @item @code
  *  void upipe_foo_clean_sub_outputs(struct upipe *upipe)
