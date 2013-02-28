@@ -2378,9 +2378,9 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
         else if (!ubase_ncmp(def, EXPECTED_FLOW_DEF))
             input_mode = UPIPE_TS_DEMUX_SCAN;
         else {
-            uref_free(uref);
             upipe_ts_demux->flow_def_ok = false;
             upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
             return;
         }
 
@@ -2407,8 +2407,8 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(!upipe_ts_demux->flow_def_ok)) {
-        uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);
+        uref_free(uref);
         return;
     }
 

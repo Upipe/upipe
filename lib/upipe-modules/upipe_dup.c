@@ -239,8 +239,8 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(upipe_dup->flow_def == NULL)) {
-        uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);
+        uref_free(uref);
         return;
     }
 

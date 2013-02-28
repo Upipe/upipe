@@ -315,9 +315,9 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_pesd_flush(upipe);
 
         if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            uref_free(uref);
             upipe_ts_pesd_store_flow_def(upipe, NULL);
             upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
             return;
         }
 
@@ -334,8 +334,8 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(upipe_ts_pesd->flow_def == NULL)) {
-        uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);
+        uref_free(uref);
         return;
     }
 

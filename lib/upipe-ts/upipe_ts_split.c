@@ -424,9 +424,9 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (unlikely(uref_flow_get_def(uref, &def))) {
         if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            uref_free(uref);
             upipe_ts_split->flow_def_ok = false;
             upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
             return;
         }
 
@@ -444,8 +444,8 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(!upipe_ts_split->flow_def_ok)) {
-        uref_free(uref);
         upipe_throw_flow_def_error(upipe, uref);
+        uref_free(uref);
         return;
     }
 
