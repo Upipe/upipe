@@ -602,7 +602,7 @@ static void upipe_avcdv_input_packet(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     uint8_t *inbuf;
-    size_t insize;
+    size_t insize = 0;
 
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
     assert(upipe);
@@ -654,6 +654,11 @@ static void upipe_avcdv_input_packet(struct upipe *upipe, struct uref *uref,
        Thus, extract ubuf content in a properly allocated buffer.
        Padding must be zeroed. */
     uref_block_size(uref, &insize);
+    if (unlikely(!insize)) {
+        upipe_warn(upipe, "Received packet with size 0, dropping");
+        uref_free(uref);
+        return;
+    }
 
     upipe_dbg_va(upipe, "Received packet %u - size : %u", upipe_avcdv->counter, insize);
     inbuf = malloc(insize + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -708,6 +713,12 @@ static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
         upipe_dbg_va(upipe, "flow definition %s", def);
         def += strlen(EXPECTED_FLOW);
         upipe_avcdv_set_context(upipe, def, NULL, 0);
+        uref_free(uref);
+        return;
+    }
+
+    if (unlikely(!uref->ubuf)) {
+        upipe_warn(upipe, "uref has no ubuf, dropping");
         uref_free(uref);
         return;
     }
