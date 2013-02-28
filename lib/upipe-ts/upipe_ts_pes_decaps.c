@@ -183,7 +183,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         return;
     }
 
-    if (unlikely(headerlength + PES_HEADER_OPTIONAL_SIZE > length ||
+    if (unlikely((length != 0 &&
+                  headerlength + PES_HEADER_OPTIONAL_SIZE > length) ||
                  (has_pts && headerlength < PES_HEADER_SIZE_PTS -
                                             PES_HEADER_SIZE_NOPTS) ||
                  (has_dts && headerlength < PES_HEADER_SIZE_PTSDTS -
