@@ -717,6 +717,12 @@ static void upipe_avcdv_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
     if (unlikely(!uref->ubuf)) {
         upipe_warn(upipe, "uref has no ubuf, dropping");
         uref_free(uref);
