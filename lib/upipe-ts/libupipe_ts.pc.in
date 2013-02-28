@@ -5,5 +5,6 @@ includedir=@includedir@
 Name: libupipe_ts
 Description: Upipe multimedia framework, MPEG-2 transport stream modules
 Version: @VERSION@
-Libs: -L${libdir} -lupipe
+Requires: libupipe
+Libs: -L${libdir} -lupipe_ts
 Cflags: -I${includedir}
