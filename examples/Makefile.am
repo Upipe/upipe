@@ -9,6 +9,7 @@ UPIPEGL_LIBS = $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la
 UPIPEFILTERS_LIBS = $(top_builddir)/lib/upipe-filters/libupipe_filters.la
 UPIPEFRAMERS_LIBS = $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 UPIPETS_LIBS = $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+UPIPEX264_LIBS = $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 
 noinst_PROGRAMS = 
 
@@ -18,7 +19,12 @@ noinst_PROGRAMS += udpmulticat
 if HAVE_GLX
 noinst_PROGRAMS += glxplay
 endif
+
+if HAVE_X264
+noinst_PROGRAMS += transcode_x264
+endif
 endif
 
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 glxplay_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPESWS_LIBS) $(UPIPEAV_LIBS) $(UPIPEGL_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS)
+transcode_x264_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEAV_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) $(UPIPEX264_LIBS)
