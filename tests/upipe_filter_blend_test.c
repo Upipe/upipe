@@ -33,7 +33,6 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>

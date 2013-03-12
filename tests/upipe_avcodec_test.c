@@ -41,7 +41,6 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
@@ -53,6 +52,7 @@
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-av/upipe_av.h>
@@ -210,7 +210,7 @@ static void avcdv_test_input(struct upipe *upipe, struct uref *uref, struct upum
 
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
-    udict_dump(uref->udict, upipe->uprobe);
+    uref_dump(uref, upipe->uprobe);
     if (uref->ubuf) {
         uref_pic_plane_read(uref, "y8", 0, 0, -1, -1, &buf);
         uref_pic_plane_size(uref, "y8", &stride, NULL, NULL, NULL);

@@ -30,9 +30,9 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
-#include <upipe/udict_dump.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe-modules/upipe_null.h>
 
@@ -88,9 +88,8 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_dbg(upipe, "sending uref to devnull");
     upipe_null->counter++;
-    if (upipe_null->dump && uref->udict != NULL) {
-        udict_dump(uref->udict, upipe->uprobe);
-    }
+    if (upipe_null->dump)
+        uref_dump(uref, upipe->uprobe);
     if (unlikely(uref_flow_get_end(uref)))
         upipe_throw_need_input(upipe);
     uref_free(uref);

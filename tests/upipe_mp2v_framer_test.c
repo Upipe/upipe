@@ -37,7 +37,6 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
@@ -47,6 +46,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
 
@@ -100,7 +100,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (uref_flow_get_def(uref, &def)) {
         upipe_dbg_va(upipe, "flow def: %s", def);
-        udict_dump(uref->udict, upipe->uprobe);
+        uref_dump(uref, upipe->uprobe);
         uref_free(uref);
         return;
     }
@@ -111,7 +111,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
-    udict_dump(uref->udict, upipe->uprobe);
+    uref_dump(uref, upipe->uprobe);
     size_t size;
     assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
