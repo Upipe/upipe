@@ -33,8 +33,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/udict.h>
 #include <upipe/uref.h>
-#include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
@@ -54,8 +54,6 @@
 #include <ctype.h>
 
 #include <x264.h>
-
-#include <upipe/udict_dump.h>
 
 #define EXPECTED_FLOW "pic."
 #define OUT_FLOW "block.h264.pic."
@@ -89,6 +87,7 @@ UPIPE_HELPER_OUTPUT(upipe_x264, output, output_flow, output_flow_sent)
 
 static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref, struct upump *upump);
 
+/** @internal loglevel map from x264 to uprobe_log */
 static const enum uprobe_log_level loglevel_map[] = {
     [X264_LOG_ERROR] = UPROBE_LOG_ERROR,
     [X264_LOG_WARNING] = UPROBE_LOG_WARNING,
@@ -123,6 +122,62 @@ static void upipe_x264_log(void *_upipe, int loglevel,
     free(string);
 }
 
+/** @internal @This reconfigures encoder with updated parameters
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool _upipe_x264_reconfigure(struct upipe *upipe)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    int ret;
+    if (unlikely(!upipe_x264->encoder)) {
+        return false;
+    }
+    ret = x264_encoder_reconfig(upipe_x264->encoder, &upipe_x264->params);
+    return ( (ret < 0) ? false : true );
+}
+
+/** @internal @This reset parameters to default
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool _upipe_x264_set_default(struct upipe *upipe)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    x264_param_default(&upipe_x264->params);
+    return true;
+}
+
+/** @internal @This sets default parameters for specified preset.
+ *
+ * @param upipe description structure of the pipe
+ * @param preset x264 preset
+ * @param tuning x264 tuning
+ * @return false in case of error
+ */
+static bool _upipe_x264_set_default_preset(struct upipe *upipe,
+                                const char *preset, const char *tune)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    int ret;
+    ret = x264_param_default_preset(&upipe_x264->params, preset, tune);
+    return ( (ret < 0) ? false : true );
+}
+
+/** @internal @This enforces profile.
+ *
+ * @param upipe description structure of the pipe
+ * @param profile x264 profile
+ * @return false in case of error
+ */
+static bool _upipe_x264_set_profile(struct upipe *upipe, const char *profile)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    int ret;
+    ret = x264_param_apply_profile(&upipe_x264->params, profile);
+    return ( (ret < 0) ? false : true );
+}
+
 /** @internal @This allocates a filter pipe.
  *
  * @param mgr common management structure
@@ -140,7 +195,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_x264->encoder = NULL;
-    x264_param_default(&upipe_x264->params);
+    _upipe_x264_set_default(upipe);
 
     upipe_x264_init_ubuf_mgr(upipe);
     upipe_x264_init_uref_mgr(upipe);
@@ -154,6 +209,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param width image width
  * @param height image height
+ * @param aspect SAR
  */
 static bool upipe_x264_open(struct upipe *upipe, int width, int height,
                             struct urational *aspect)
@@ -161,40 +217,22 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_t *params = &upipe_x264->params;
 
-    params->i_threads = 1;
-
     params->pf_log = upipe_x264_log;
     params->p_log_private = upipe;
     params->i_log_level = X264_LOG_DEBUG;
-
-//    params->i_fps_num = 25;
-//    params->i_fps_den = 1;
-#if 0
-    x264_param_default_preset(params, "veryfast", "film");
-
-    params->i_keyint_max = 25;
-    params->b_intra_refresh = 1;
-
-    params->rc.i_rc_method = X264_RC_CRF;
-    params->rc.f_rf_constant = 25;
-    params->rc.f_rf_constant_max = 35;
-
-    params->i_csp = X264_CSP_I420;
-
-    params->b_repeat_headers = 1;
-    params->b_annexb = 1;
-
-    x264_param_apply_profile(params, "baseline");
-#endif
 
     params->vui.i_sar_width = aspect->num;
     params->vui.i_sar_height = aspect->den;
     params->i_width = width;
     params->i_height = height;
 
-    upipe_x264->encoder = x264_encoder_open(params);
-    if (unlikely(!upipe_x264->encoder)) {
-        return false;
+    if (unlikely(upipe_x264->encoder)) {
+        return _upipe_x264_reconfigure(upipe);
+    } else {
+        upipe_x264->encoder = x264_encoder_open(params);
+        if (unlikely(!upipe_x264->encoder)) {
+            return false;
+        }
     }
 
     return true;
@@ -212,9 +250,31 @@ static void upipe_x264_close(struct upipe *upipe)
             upipe_x264_input_pic(upipe, NULL, NULL);
         }
 
-        upipe_notice(upipe, "closing decoder");
+        upipe_notice(upipe, "closing encoder");
         x264_encoder_close(upipe_x264->encoder);
     }
+}
+
+/** @internal @This checks incoming pic against cached parameters
+ *
+ * @param upipe description structure of the pipe
+ * @param width image width
+ * @param height image height
+ * @param aspect SAR
+ * @return true if parameters update needed
+ */
+static inline bool upipe_x264_need_update(struct upipe *upipe, int width, int height,
+                            struct urational *aspect)
+{
+    x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+    if ( params->i_width != width ||
+         params->i_height != height ||
+         params->vui.i_sar_width != aspect->num ||
+         params->vui.i_sar_height != aspect->den )
+    {
+        return true;
+    }
+    return false;
 }
 
 /** @internal @This processes pictures.
@@ -236,6 +296,8 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     struct uref *uref_block;
     uint8_t *buf = NULL;
     struct urational aspect;
+    uint64_t pts;
+    bool needopen = false;
 
     // init x264 picture
     x264_picture_init(&pic);
@@ -244,19 +306,28 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     if (likely(uref)) {
         aspect.den = aspect.num = 1;
         uref_pic_get_aspect(uref, &aspect);
+        urational_simplify(&aspect);
         uref_pic_size(uref, &width, &height, NULL);
 
-        //udict_dump(uref->udict, upipe->uprobe);
-
-        // open decoder if not already opened
+        // open encoder if not already opened or if update needed
         if (unlikely(!upipe_x264->encoder)) {
-            upipe_x264_open(upipe, width, height, &aspect);
-            if (unlikely(!upipe_x264->encoder)) {
-                upipe_err(upipe, "Could not open decoder");
+            needopen = true;
+        } else if (unlikely(upipe_x264_need_update(upipe, width, height, &aspect))) {
+            needopen = true;
+            upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
+        }
+        if (unlikely(needopen)) {
+            if (unlikely(!upipe_x264_open(upipe, width, height, &aspect))) {
+                upipe_err(upipe, "Could not open encoder");
                 uref_free(uref);
                 return;
             }
         }
+
+        // Set pts
+        pts = 0;
+        uref_clock_get_pts(uref, &pts);
+        pic.i_pts = pts;
 
         // map
         for (i=0; uref_pic_plane_iterate(uref, &chroma) && chroma; i++) {
@@ -278,14 +349,16 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
             uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
         }
         uref_free(uref);
-    } else { // NULL-uref, flushing delayed frame
+    }
+    else {
+        // NULL uref, flushing delayed frame
         x264_encoder_encode(upipe_x264->encoder, &nals, &nals_num, NULL, &pic);
     }
 
     if (unlikely(nals < 0)) {
         upipe_warn(upipe, "Error encoding frame");
         return;
-    }else if (unlikely(nals == 0)) {
+    } else if (unlikely(nals == 0)) {
         upipe_dbg(upipe, "No nal units returned");
         return;
     }
@@ -303,6 +376,11 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     uref_block_write(uref_block, 0, &size, &buf);
     memcpy(buf, nals[0].p_payload, size);
     uref_block_unmap(uref_block, 0, size);
+
+    /* dts shouldn't be negative in upipe because of pts definition
+     * see x264.h */
+    uref_clock_set_dts(uref_block, pic.i_dts); 
+    uref_clock_set_pts(uref_block, pic.i_pts);
 
     upipe_x264_output(upipe, uref_block, upump);
 }
@@ -326,7 +404,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        udict_dump(uref->udict, upipe->uprobe);
+        upipe_dbg_va(upipe, "flow definition %s", def);
         if (unlikely(!uref_flow_set_def(uref, OUT_FLOW))) {
             upipe_throw_aerror(upipe);
         }
@@ -346,16 +424,19 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(!upipe_x264->ubuf_mgr)) {
-        upipe_err(upipe, "No ubuf_mgr defined, dropping uref");
-        uref_free(uref);
-        return;
+        upipe_throw_need_ubuf_mgr(upipe, upipe_x264->output_flow);
+        if (unlikely(upipe_x264->ubuf_mgr == NULL)) {
+            uref_free(uref);
+            return;
+        }
     }
     if (unlikely(!upipe_x264->uref_mgr)) {
-        upipe_err(upipe, "No uref_mgr defined, dropping uref");
-        uref_free(uref);
-        return;
+        upipe_throw_need_uref_mgr(upipe);
+        if (unlikely(upipe_x264->uref_mgr == NULL)) {
+            uref_free(uref);
+            return;
+        }
     }
-
 
     upipe_x264_input_pic(upipe, uref, upump);
 }
@@ -387,7 +468,6 @@ static bool upipe_x264_control(struct upipe *upipe,
             struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
             return upipe_x264_set_uref_mgr(upipe, uref_mgr);
         }
-
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_x264_get_output(upipe, p);
@@ -395,6 +475,30 @@ static bool upipe_x264_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_x264_set_output(upipe, output);
+        }
+
+        case UPIPE_X264_RECONFIG: {
+            int signature = va_arg(args, int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            return _upipe_x264_reconfigure(upipe);
+        }
+        case UPIPE_X264_SET_DEFAULT: {
+            int signature = va_arg(args, int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            return _upipe_x264_set_default(upipe);
+        }
+        case UPIPE_X264_SET_DEFAULT_PRESET: {
+            int signature = va_arg(args, int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            const char *preset = va_arg(args, const char *);
+            const char *tune = va_arg(args, const char *);
+            return _upipe_x264_set_default_preset(upipe, preset, tune);
+        }
+        case UPIPE_X264_SET_PROFILE: {
+            int signature = va_arg(args, int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            const char *profile = va_arg(args, const char *);
+            return _upipe_x264_set_profile(upipe, profile);
         }
         default:
             return false;
