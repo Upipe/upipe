@@ -52,6 +52,7 @@ pkginclude_HEADERS = \
 	uref_block_flow.h \
 	uref_block.h \
 	uref_clock.h \
+	uref_dump.h \
 	urefcount.h \
 	uref_flow.h \
 	uref.h \
