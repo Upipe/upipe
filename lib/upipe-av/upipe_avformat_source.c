@@ -431,22 +431,22 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ret = ret && uref_clock_set_systime(uref, systime);
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
         uint64_t dts = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
-                       stream->time_base.den + AV_CLOCK_MIN;
+                       stream->time_base.den;
         ret = ret && uref_clock_set_dts_orig(uref, dts);
-        ret = ret && uref_clock_set_dts(uref, dts);
+        ret = ret && uref_clock_set_dts(uref, dts + AV_CLOCK_MIN);
         ts = true;
 
         if (upipe_avfsrc->uclock != NULL && stream->reference_dts == pkt.dts)
             upipe_avfsrc->systime_rap = systime;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref, dts, 0);
+        upipe_throw_clock_ref(upipe, uref, dts + AV_CLOCK_MIN, 0);
     }
     if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
         uint64_t pts = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
-                       stream->time_base.den + AV_CLOCK_MIN;
+                       stream->time_base.den;
         ret = ret && uref_clock_set_pts_orig(uref, pts);
-        ret = ret && uref_clock_set_pts(uref, pts);
+        ret = ret && uref_clock_set_pts(uref, pts + AV_CLOCK_MIN);
         ts = true;
     }
     if (pkt.duration > 0) {
