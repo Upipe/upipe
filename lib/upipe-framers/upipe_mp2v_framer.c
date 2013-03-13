@@ -1,7 +1,5 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
- * Copyright (c) 2000,2001 Fabrice Bellard
- * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  *
  * Authors: Christophe Massiot
  *
@@ -44,6 +42,8 @@
 #include <upipe-framers/upipe_mp2v_framer.h>
 #include <upipe-framers/uref_mp2v.h>
 #include <upipe-framers/uref_mp2v_flow.h>
+
+#include "upipe_framers_common.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -253,44 +253,6 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This scans for an MPEG-2 start code in a linear buffer.
- *
- * @param p linear buffer
- * @param end end of linear buffer
- * @param state state of the algorithm
- * @return pointer to start code, or end if not found
- */
-/* Code from libav/libavcodec/mpegvideo.c, published under LGPL 2.1+ */
-static const uint8_t *upipe_mp2vf_scan(const uint8_t *restrict p,
-                                       const uint8_t *end,
-                                       uint32_t *restrict state)
-{
-    int i;
-    for (i = 0; i < 3; i++) {
-        uint32_t tmp = *state << 8;
-        *state = tmp + *(p++);
-        if (tmp == 0x100 || p == end)
-            return p;
-    }
-
-    while (p < end) {
-        if      (p[-1] > 1      ) p += 3;
-        else if (p[-2]          ) p += 2;
-        else if (p[-3]|(p[-1]-1)) p++;
-        else {
-            p++;
-            break;
-        }
-    }
-
-    if (p > end)
-        p = end;
-    *state = (p[-4] << 24) | (p[-3] << 16) | (p[-2] << 8) | p[-1];
-
-    return p;
-}
-/* End code */
-
 /** @internal @This finds an MPEG-2 start code and returns its value.
  *
  * @param upipe description structure of the pipe
@@ -306,8 +268,8 @@ static bool upipe_mp2vf_find(struct upipe *upipe,
     int size = -1;
     while (uref_block_read(upipe_mp2vf->next_uref, upipe_mp2vf->next_frame_size,
                            &size, &buffer)) {
-        const uint8_t *p = upipe_mp2vf_scan(buffer, buffer + size,
-                                            &upipe_mp2vf->scan_context);
+        const uint8_t *p = upipe_framers_mpeg_scan(buffer, buffer + size,
+                                                   &upipe_mp2vf->scan_context);
         if (p < buffer + size)
             *next_p = *p;
         uref_block_unmap(upipe_mp2vf->next_uref, upipe_mp2vf->next_frame_size,
@@ -695,7 +657,11 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
             return false;
         }
         upipe_mp2vf->last_temporal_reference = -1;
-    }
+        if (upipe_mp2vf->next_frame_gop_offset)
+            uref_block_set_header_size(uref,
+                                       upipe_mp2vf->next_frame_gop_offset);
+    } else if (upipe_mp2vf->next_frame_offset)
+        uref_block_set_header_size(uref, upipe_mp2vf->next_frame_offset);
 
     if ((brokenlink || (!closedgop && upipe_mp2vf->got_discontinuity)) &&
         !uref_flow_set_discontinuity(uref)) {
@@ -805,7 +771,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
     upipe_mp2vf_flush_pts(upipe);
     upipe_mp2vf_increment_dts(upipe, duration);
 
-    if (!ret) {
+    if (unlikely(!ret)) {
         uref_free(uref);
         upipe_throw_aerror(upipe);
         return true;
@@ -879,9 +845,7 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     struct uref *uref = upipe_mp2vf_extract_octet_stream(upipe,
             upipe_mp2vf->next_frame_size);
-    if (unlikely(uref == NULL ||
-                 !uref_block_resize(uref, 0,
-                                    upipe_mp2vf->next_frame_size))) {
+    if (unlikely(uref == NULL)) {
         upipe_throw_aerror(upipe);
         return true;
     }
@@ -923,6 +887,22 @@ static void upipe_mp2vf_promote_uref(struct upipe *upipe)
     SET_TIMESTAMP(dts)
     SET_TIMESTAMP(dts_sys)
 #undef SET_TIMESTAMP
+}
+
+/** @internal @This resets the internal parsing state.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_mp2vf_reset(struct upipe *upipe)
+{
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
+    upipe_mp2vf->next_frame_sequence = false;
+    upipe_mp2vf->next_frame_sequence_ext_offset = -1;
+    upipe_mp2vf->next_frame_sequence_display_offset = -1;
+    upipe_mp2vf->next_frame_gop_offset = -1;
+    upipe_mp2vf->next_frame_offset = -1;
+    upipe_mp2vf->next_frame_ext_offset = -1;
+    upipe_mp2vf->next_frame_slice = false;
 }
 
 /** @internal @This tries to output frames from the queue of input buffers.
@@ -997,22 +977,10 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
             upipe_mp2vf->next_frame_size = 0;
             upipe_mp2vf->scan_context = UINT32_MAX;
             upipe_mp2vf_sync_lost(upipe);
-            upipe_mp2vf->next_frame_sequence = false;
-            upipe_mp2vf->next_frame_sequence_ext_offset = -1;
-            upipe_mp2vf->next_frame_sequence_display_offset = -1;
-            upipe_mp2vf->next_frame_gop_offset = -1;
-            upipe_mp2vf->next_frame_offset = -1;
-            upipe_mp2vf->next_frame_ext_offset = -1;
-            upipe_mp2vf->next_frame_slice = false;
+            upipe_mp2vf_reset(upipe);
             continue;
         }
-        upipe_mp2vf->next_frame_sequence = false;
-        upipe_mp2vf->next_frame_sequence_ext_offset = -1;
-        upipe_mp2vf->next_frame_sequence_display_offset = -1;
-        upipe_mp2vf->next_frame_gop_offset = -1;
-        upipe_mp2vf->next_frame_offset = -1;
-        upipe_mp2vf->next_frame_ext_offset = -1;
-        upipe_mp2vf->next_frame_slice = false;
+        upipe_mp2vf_reset(upipe);
         upipe_mp2vf->next_frame_size = 4;
 
         switch (start) {
@@ -1091,6 +1059,10 @@ static void upipe_mp2vf_input(struct upipe *upipe, struct uref *uref,
             upipe_mp2vf_clean_octet_stream(upipe);
             upipe_mp2vf_init_octet_stream(upipe);
             upipe_mp2vf->got_discontinuity = true;
+            upipe_mp2vf->next_frame_size = 0;
+            upipe_mp2vf->scan_context = UINT32_MAX;
+            upipe_mp2vf_sync_lost(upipe);
+            upipe_mp2vf_reset(upipe);
         } else
             uref_flow_set_error(upipe_mp2vf->next_uref);
     }

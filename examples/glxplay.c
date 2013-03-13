@@ -100,6 +100,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_null.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
+#include <upipe-framers/upipe_h264_framer.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -605,13 +606,12 @@ int main(int argc, char** argv)
         }
 
         struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
-#if 1
         struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
-#else
-        struct upipe_mgr *upipe_mp2vf_mgr = upipe_null_mgr_alloc();
-#endif
         upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr, upipe_mp2vf_mgr);
         upipe_mgr_release(upipe_mp2vf_mgr);
+        struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
+        upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
+        upipe_mgr_release(upipe_h264f_mgr);
         struct upipe *ts_demux = upipe_alloc(upipe_ts_demux_mgr,
                 uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "ts demux"));
         upipe_set_output(upipe_src, ts_demux);

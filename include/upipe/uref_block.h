@@ -42,6 +42,7 @@
 
 UREF_ATTR_VOID_UREF(block, start, UREF_FLAG_BLOCK_START, start)
 UREF_ATTR_VOID_SH(block, end, UDICT_TYPE_BLOCK_END, end)
+UREF_ATTR_UNSIGNED(block, header_size, "b.header", global headers size)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.

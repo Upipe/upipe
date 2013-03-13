@@ -128,6 +128,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_pesd_mgr;
     /** pointer to mp2vf manager */
     struct upipe_mgr *mp2vf_mgr;
+    /** pointer to h264f manager */
+    struct upipe_mgr *h264f_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -717,6 +719,21 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
         struct upipe *output = upipe_alloc(ts_demux_mgr->mp2vf_mgr,
                 uprobe_pfx_adhoc_alloc(&upipe_ts_demux_output->framer_probe,
                                        UPROBE_LOG_DEBUG, "mp2vf"));
+        if (unlikely(output == NULL))
+            upipe_throw_aerror(upipe);
+        else {
+            upipe_set_output(subpipe, output);
+            upipe_ts_demux_output->last_subpipe = output;
+        }
+        return true;
+    }
+
+    if (!ubase_ncmp(def, "block.h264.") &&
+        ts_demux_mgr->h264f_mgr != NULL) {
+        /* allocate mp2vf subpipe */
+        struct upipe *output = upipe_alloc(ts_demux_mgr->h264f_mgr,
+                uprobe_pfx_adhoc_alloc(&upipe_ts_demux_output->framer_probe,
+                                       UPROBE_LOG_DEBUG, "h264f"));
         if (unlikely(output == NULL))
             upipe_throw_aerror(upipe);
         else {
@@ -2555,6 +2572,8 @@ static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
     if (ts_demux_mgr->mp2vf_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
+    if (ts_demux_mgr->h264f_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->h264f_mgr);
 
     urefcount_clean(&ts_demux_mgr->mgr.refcount);
     free(ts_demux_mgr);
@@ -2585,6 +2604,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
 
     ts_demux_mgr->mp2vf_mgr = NULL;
+    ts_demux_mgr->h264f_mgr = NULL;
 
     ts_demux_mgr->mgr.signature = UPIPE_TS_DEMUX_SIGNATURE;
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;
@@ -2640,6 +2660,7 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_pesd, TS_PESD)
 
         GET_SET_MGR(mp2vf, MP2VF)
+        GET_SET_MGR(h264f, H264F)
 #undef GET_SET_MGR
 
         default:
