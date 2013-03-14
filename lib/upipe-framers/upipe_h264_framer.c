@@ -37,7 +37,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_octet_stream.h>
+#include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-framers/upipe_h264_framer.h>
 #if 0
@@ -162,8 +162,8 @@ static void upipe_h264f_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_h264f, upipe)
 UPIPE_HELPER_SYNC(upipe_h264f, acquired)
-UPIPE_HELPER_OCTET_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
-                          upipe_h264f_promote_uref)
+UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
+                         upipe_h264f_promote_uref)
 
 UPIPE_HELPER_OUTPUT(upipe_h264f, output, flow_def, flow_def_sent)
 
@@ -207,7 +207,7 @@ static void upipe_h264f_increment_dts(struct upipe *upipe, uint64_t duration)
         upipe_h264f->au_dts_sys += duration;
 }
 
-/** @internal @This is called back by @ref upipe_h264f_append_octet_stream
+/** @internal @This is called back by @ref upipe_h264f_append_uref_stream
  * whenever a new uref is promoted in next_uref.
  *
  * @param upipe description structure of the pipe
@@ -243,7 +243,7 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_h264f_to_upipe(upipe_h264f);
     upipe_init(upipe, mgr, uprobe);
     upipe_h264f_init_sync(upipe);
-    upipe_h264f_init_octet_stream(upipe);
+    upipe_h264f_init_uref_stream(upipe);
     upipe_h264f_init_output(upipe);
     upipe_h264f->flow_def_input = NULL;
     upipe_h264f->systime_rap = UINT64_MAX;
@@ -319,20 +319,6 @@ static bool upipe_h264f_find(struct upipe *upipe,
  */
 static void upipe_h264f_handle_sps(struct upipe *upipe)
 {
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    if (upipe_h264f->flow_def == NULL) {
-        struct uref *flow_def = uref_dup(upipe_h264f->flow_def_input);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_aerror(upipe);
-            return;
-        }
-        bool ret = true;
-        if (unlikely(!ret)) {
-            upipe_throw_aerror(upipe);
-            return;
-        }
-        upipe_h264f_store_flow_def(upipe, flow_def);
-    }
 }
 
 /** @internal @This handles a sequence parameter set extension.
@@ -374,6 +360,20 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
  */
 static bool upipe_h264f_parse_slice(struct upipe *upipe)
 {
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    if (upipe_h264f->flow_def == NULL) {
+        struct uref *flow_def = uref_dup(upipe_h264f->flow_def_input);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_aerror(upipe);
+            return true;
+        }
+        bool ret = true;
+        if (unlikely(!ret)) {
+            upipe_throw_aerror(upipe);
+            return true;
+        }
+        upipe_h264f_store_flow_def(upipe, flow_def);
+    }
     return true;
 }
 
@@ -388,7 +388,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     if (!upipe_h264f->au_size)
         return;
 
-    struct uref *uref = upipe_h264f_extract_octet_stream(upipe,
+    struct uref *uref = upipe_h264f_extract_uref_stream(upipe,
                                                          upipe_h264f->au_size);
     upipe_h264f->au_size = 0;
     upipe_h264f->au_vcl_offset = -1;
@@ -439,7 +439,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (unlikely(!upipe_h264f->acquired)) {
         /* we need to discard previous data */
-        upipe_h264f_consume_octet_stream(upipe, upipe_h264f->au_size);
+        upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
         upipe_h264f->au_size = 0;
         upipe_h264f_sync_acquired(upipe);
         return;
@@ -650,7 +650,7 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_h264f->got_discontinuity = true;
 
-    upipe_h264f_append_octet_stream(upipe, uref);
+    upipe_h264f_append_uref_stream(upipe, uref);
     upipe_h264f_work(upipe, upump);
 }
 
@@ -687,7 +687,7 @@ static void upipe_h264f_free(struct upipe *upipe)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
-    upipe_h264f_clean_octet_stream(upipe);
+    upipe_h264f_clean_uref_stream(upipe);
     upipe_h264f_clean_output(upipe);
     upipe_h264f_clean_sync(upipe);
 

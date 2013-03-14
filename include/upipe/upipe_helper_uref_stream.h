@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe helper functions to work on input as an octet stream
+ * @short Upipe helper functions to work on input as an uref stream
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_OCTET_STREAM_H_
+#ifndef _UPIPE_UPIPE_HELPER_UREF_STREAM_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_OCTET_STREAM_H_
+#define _UPIPE_UPIPE_HELPER_UREF_STREAM_H_
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -42,7 +42,7 @@
 #include <assert.h>
 
 /** @This declares four functions allowing to process input urefs as an
- * octet stream.
+ * uref stream.
  *
  * You must add three members to your private pipe structure, for instance:
  * @code
@@ -56,22 +56,22 @@
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  void upipe_foo_init_octet_stream(struct upipe_foo *s)
+ *  void upipe_foo_init_uref_stream(struct upipe_foo *s)
  * @end code
  * Initializes the fields.
  *
  * @item @code
- *  void upipe_foo_append_octet_stream(struct upipe_foo *s, struct uref *uref)
+ *  void upipe_foo_append_uref_stream(struct upipe_foo *s, struct uref *uref)
  * @end code
- * Appends the given uref to the octet stream.
+ * Appends the given uref to the uref stream.
  *
  * @item @code
- *  void upipe_foo_consume_octet_stream(struct upipe_foo *s, size_t consumed)
+ *  void upipe_foo_consume_uref_stream(struct upipe_foo *s, size_t consumed)
  * @end code
- * Consumes the given number of octets from the octet stream.
+ * Consumes the given number of urefs from the uref stream.
  *
  * @item @code
- *  void upipe_foo_clean_octet_stream(struct upipe_foo *s)
+ *  void upipe_foo_clean_uref_stream(struct upipe_foo *s)
  * @end code
  * Releases all buffers.
  * @end list
@@ -86,26 +86,26 @@
  * @param APPEND_CB function @tt{(struct upipe *)} that will be called when
  * a new uref starts being consumed (may be NULL)
  */
-#define UPIPE_HELPER_OCTET_STREAM(STRUCTURE, NEXT_UREF, NEXT_UREF_SIZE,     \
-                                  UREFS, APPEND_CB)                         \
+#define UPIPE_HELPER_UREF_STREAM(STRUCTURE, NEXT_UREF, NEXT_UREF_SIZE,      \
+                                 UREFS, APPEND_CB)                          \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_init_octet_stream(struct upipe *upipe)              \
+static void STRUCTURE##_init_uref_stream(struct upipe *upipe)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->NEXT_UREF = NULL;                                            \
     ulist_init(&STRUCTURE->UREFS);                                          \
 }                                                                           \
 /** @internal @This appends a new uref to the list of received urefs, and   \
- * also appends it to the uref of the octet stream.                         \
+ * also appends it to the uref of the uref stream.                          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param uref uref structure to append                                     \
  */                                                                         \
-static void STRUCTURE##_append_octet_stream(struct upipe *upipe,            \
-                                            struct uref *uref)              \
+static void STRUCTURE##_append_uref_stream(struct upipe *upipe,             \
+                                           struct uref *uref)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     size_t size;                                                            \
@@ -132,14 +132,14 @@ static void STRUCTURE##_append_octet_stream(struct upipe *upipe,            \
     uref_attr_set_priv(uref, size);                                         \
     ulist_add(&STRUCTURE->UREFS, uref_to_uchain(uref));                     \
 }                                                                           \
-/** @internal @This consumes the given number of octets from the octet      \
+/** @internal @This consumes the given number of octets from the uref       \
  * stream, and rotates the buffers accordingly.                             \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param consumed number of octets consumed from the octet stream          \
+ * @param consumed number of octets consumed from the uref stream           \
  */                                                                         \
-static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
-                                             size_t consumed)               \
+static void STRUCTURE##_consume_uref_stream(struct upipe *upipe,            \
+                                            size_t consumed)                \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
@@ -166,15 +166,15 @@ static void STRUCTURE##_consume_octet_stream(struct upipe *upipe,           \
     }                                                                       \
     uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);                  \
 }                                                                           \
-/** @internal @This extracts the given number of octets from the octet      \
+/** @internal @This extracts the given number of octets from the uref       \
  * stream, and rotates the buffers accordingly.                             \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param extracted number of octets to extract from the octet stream       \
- * @return uref containing extracted octets                                 \
+ * @param extracted number of octets to extract from the uref stream        \
+ * @return uref containing extracted urefs                                  \
  */                                                                         \
-static struct uref *STRUCTURE##_extract_octet_stream(struct upipe *upipe,   \
-                                                     size_t extracted)      \
+static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
+                                                    size_t extracted)       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
@@ -210,7 +210,7 @@ static struct uref *STRUCTURE##_extract_octet_stream(struct upipe *upipe,   \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_clean_octet_stream(struct upipe *upipe)             \
+static void STRUCTURE##_clean_uref_stream(struct upipe *upipe)              \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (STRUCTURE->NEXT_UREF != NULL) {                                     \

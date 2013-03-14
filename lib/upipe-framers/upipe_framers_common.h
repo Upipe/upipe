@@ -29,7 +29,6 @@
  * @param state state of the algorithm
  * @return pointer to start code, or end if not found
  */
-/* Code from libav/libavcodec/mpegvideo.c, published under LGPL 2.1+ */
 const uint8_t *upipe_framers_mpeg_scan(const uint8_t *restrict p,
                                        const uint8_t *end,
                                        uint32_t *restrict state);

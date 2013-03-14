@@ -37,7 +37,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_octet_stream.h>
+#include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
 #include <upipe-framers/uref_mp2v.h>
@@ -167,8 +167,8 @@ static void upipe_mp2vf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mp2vf, upipe)
 UPIPE_HELPER_SYNC(upipe_mp2vf, acquired)
-UPIPE_HELPER_OCTET_STREAM(upipe_mp2vf, next_uref, next_uref_size, urefs,
-                          upipe_mp2vf_promote_uref)
+UPIPE_HELPER_UREF_STREAM(upipe_mp2vf, next_uref, next_uref_size, urefs,
+                         upipe_mp2vf_promote_uref)
 
 UPIPE_HELPER_OUTPUT(upipe_mp2vf, output, flow_def, flow_def_sent)
 
@@ -227,7 +227,7 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_mp2vf_to_upipe(upipe_mp2vf);
     upipe_init(upipe, mgr, uprobe);
     upipe_mp2vf_init_sync(upipe);
-    upipe_mp2vf_init_octet_stream(upipe);
+    upipe_mp2vf_init_uref_stream(upipe);
     upipe_mp2vf_init_output(upipe);
     upipe_mp2vf->flow_def_input = NULL;
     upipe_mp2vf->systime_rap = UINT64_MAX;
@@ -843,7 +843,7 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    struct uref *uref = upipe_mp2vf_extract_octet_stream(upipe,
+    struct uref *uref = upipe_mp2vf_extract_uref_stream(upipe,
             upipe_mp2vf->next_frame_size);
     if (unlikely(uref == NULL)) {
         upipe_throw_aerror(upipe);
@@ -868,7 +868,7 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
     return true;
 }
 
-/** @internal @This is called back by @ref upipe_mp2vf_append_octet_stream
+/** @internal @This is called back by @ref upipe_mp2vf_append_uref_stream
  * whenever a new uref is promoted in next_uref.
  *
  * @param upipe description structure of the pipe
@@ -920,7 +920,7 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
         //upipe_err_va(upipe, "pouet %x", start);
 
         if (unlikely(!upipe_mp2vf->acquired)) {
-            upipe_mp2vf_consume_octet_stream(upipe,
+            upipe_mp2vf_consume_uref_stream(upipe,
                                              upipe_mp2vf->next_frame_size - 4);
             upipe_mp2vf->next_frame_size = 4;
 
@@ -1056,8 +1056,8 @@ static void upipe_mp2vf_input(struct upipe *upipe, struct uref *uref,
         if (!upipe_mp2vf->next_frame_slice) {
             /* we do not want discontinuities in the headers before the first
              * slice header; inside the slices it is less destructive */
-            upipe_mp2vf_clean_octet_stream(upipe);
-            upipe_mp2vf_init_octet_stream(upipe);
+            upipe_mp2vf_clean_uref_stream(upipe);
+            upipe_mp2vf_init_uref_stream(upipe);
             upipe_mp2vf->got_discontinuity = true;
             upipe_mp2vf->next_frame_size = 0;
             upipe_mp2vf->scan_context = UINT32_MAX;
@@ -1067,7 +1067,7 @@ static void upipe_mp2vf_input(struct upipe *upipe, struct uref *uref,
             uref_flow_set_error(upipe_mp2vf->next_uref);
     }
 
-    upipe_mp2vf_append_octet_stream(upipe, uref);
+    upipe_mp2vf_append_uref_stream(upipe, uref);
     upipe_mp2vf_work(upipe, upump);
 }
 
@@ -1147,7 +1147,7 @@ static void upipe_mp2vf_free(struct upipe *upipe)
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
-    upipe_mp2vf_clean_octet_stream(upipe);
+    upipe_mp2vf_clean_uref_stream(upipe);
     upipe_mp2vf_clean_output(upipe);
     upipe_mp2vf_clean_sync(upipe);
 
