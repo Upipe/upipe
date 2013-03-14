@@ -154,8 +154,8 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     assert(psi_header != NULL);
 
     uint16_t length = psi_get_length(psi_header);
-    ret = uref_block_peek_unmap(upipe_ts_psim->next_uref, 0, PSI_HEADER_SIZE,
-                                buffer, psi_header);
+    ret = uref_block_peek_unmap(upipe_ts_psim->next_uref, 0, buffer,
+                                psi_header);
     assert(ret);
 
     if (unlikely(length + PSI_HEADER_SIZE > PSI_PRIVATE_MAX_SIZE)) {

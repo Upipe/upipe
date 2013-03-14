@@ -140,7 +140,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     if (ts_test->table_id == 69) {
         assert(psi_get_tableidext(buffer) == ts_test->table_id);
     }
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 68);
     psi_set_tableidext(buffer, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_psi_split, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 69);
     psi_set_tableidext(buffer, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_psi_split, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 69);
     psi_set_tableidext(buffer, 69);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_psi_split, uref, NULL);
 
     upipe_release(upipe_ts_psi_split_output68);

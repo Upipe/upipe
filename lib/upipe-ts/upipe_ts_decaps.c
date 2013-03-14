@@ -111,7 +111,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
     uint8_t cc = ts_get_cc(ts_header);
     bool has_payload = ts_has_payload(ts_header);
     bool has_adaptation = ts_has_adaptation(ts_header);
-    ret = uref_block_peek_unmap(uref, 0, TS_HEADER_SIZE, buffer, ts_header);
+    ret = uref_block_peek_unmap(uref, 0, buffer, ts_header);
     assert(ret);
     ret = uref_block_resize(uref, TS_HEADER_SIZE, -1);
     assert(ret);
@@ -158,8 +158,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                 uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
                                    tsaf_get_pcrext(pcr - TS_HEADER_SIZE_AF));
                 pcrval *= UCLOCK_FREQ / 27000000;
-                ret = uref_block_peek_unmap(uref, 2,
-                        TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2, pcr);
+                ret = uref_block_peek_unmap(uref, 2, buffer2, pcr);
                 assert(ret);
 
                 upipe_throw_clock_ref(upipe, uref, pcrval,

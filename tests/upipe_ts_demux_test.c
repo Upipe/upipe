@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
     psi_set_crc(payload);
     payload += PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     wanted_flow_id = 12;
     upipe_input(upipe_ts_demux, uref, NULL);
 
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
     psi_set_crc(payload);
     payload += PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
     upipe_input(upipe_ts_demux, uref, NULL);
 
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
     psi_set_crc(payload);
     payload += PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     wanted_flow_id = 13;
     deleted_flow_id = 12 + 43;
     upipe_input(upipe_ts_demux, uref, NULL);
@@ -320,7 +320,7 @@ int main(int argc, char *argv[])
     psi_set_crc(payload);
     payload += PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE;
     *payload = 0xff;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
     upipe_input(upipe_ts_demux, uref, NULL);
 
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
     payload += 4;
 
     mp2vend_init(payload);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     expect_need_output = true;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_need_output);

@@ -108,7 +108,7 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     }
     ubuf_block_write(dst, 0, &size, &aux);
     upipe_genaux_hton64(aux, systime);
-    ubuf_block_unmap(dst, 0, size);
+    ubuf_block_unmap(dst, 0);
     ubuf_free(uref_detach_ubuf(uref));
     uref_attach_ubuf(uref, dst);
     upipe_genaux_output(upipe, uref, upump);

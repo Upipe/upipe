@@ -120,7 +120,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_block_read(uref, 0, &wanted, &buffer));
     assert(wanted == 1);
     assert(*buffer == tableid);
-    assert(uref_block_unmap(uref, 0, 1));
+    assert(uref_block_unmap(uref, 0));
     uref_free(uref);
     nb_packets--;
 }
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     psi_init(buffer + 1, false);
     psi_set_tableid(buffer + 1, tableid);
     psi_set_length(buffer + 1, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     nb_packets++;
     upipe_input(upipe_ts_psim, uref, NULL);
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
     psi_set_length(buffer + 12, 1);
     memset(buffer + 12 + PSI_HEADER_SIZE + 1, 0xff, 11);
     payload_size = 1;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     assert(uref_flow_set_discontinuity(uref));
     nb_packets++;
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
     tableid++;
     psi_set_tableid(buffer + 1, tableid);
     psi_set_length(buffer + 1, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     payload_size = 12;
 
     /* now cut it into pieces - two by two because the pointer_byte must be in
@@ -266,7 +266,7 @@ int main(int argc, char *argv[])
     tableid++;
     psi_set_tableid(buffer + 1, tableid);
     psi_set_length(buffer + 1, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     /* do not increment nb_packets */
     expect_acquired = true;
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
     psi_init(buffer + 1 + 6, false);
     psi_set_tableid(buffer + 1 + 6, tableid);
     psi_set_length(buffer + 1 + 6, 12);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     nb_packets += 2;
     payload_size = 12;

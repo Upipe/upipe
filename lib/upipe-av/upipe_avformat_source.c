@@ -423,7 +423,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     }
     assert(read_size == pkt.size);
     memcpy(buffer, pkt.data, pkt.size);
-    uref_block_unmap(uref, 0, read_size);
+    uref_block_unmap(uref, 0);
     av_free_packet(&pkt);
 
     bool ret = true, ts = false;;

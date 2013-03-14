@@ -106,11 +106,11 @@ static inline bool uref_block_write(struct uref *uref, int offset, int *size_p,
 }
 
 /** @see ubuf_block_unmap */
-static inline bool uref_block_unmap(struct uref *uref, int offset, int size)
+static inline bool uref_block_unmap(struct uref *uref, int offset)
 {
     if (uref->ubuf == NULL)
         return false;
-    return ubuf_block_unmap(uref->ubuf, offset, size);
+    return ubuf_block_unmap(uref->ubuf, offset);
 }
 
 /** @see ubuf_block_insert */
@@ -193,12 +193,12 @@ static inline const uint8_t *uref_block_peek(struct uref *uref,
 
 /** @see ubuf_block_peek_unmap */
 static inline bool uref_block_peek_unmap(struct uref *uref,
-                                         int offset, int size, uint8_t *buffer,
+                                         int offset, uint8_t *buffer,
                                          const uint8_t *read_buffer)
 {
     if (uref->ubuf == NULL)
         return false;
-    return ubuf_block_peek_unmap(uref->ubuf, offset, size, buffer, read_buffer);
+    return ubuf_block_peek_unmap(uref->ubuf, offset, buffer, read_buffer);
 }
 
 /** @see ubuf_block_extract */

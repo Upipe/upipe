@@ -116,7 +116,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == 1);
     assert(ts_validate(buffer));
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     uref_free(uref);
     nb_packets--;
 }
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     assert(size == 2 * TS_SIZE);
     ts_pad(buffer);
     ts_pad(buffer + TS_SIZE);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets++;
     upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
     memset(buffer + 1, 0, 11);
     ts_pad(buffer + 12);
     ts_pad(buffer + 12 + TS_SIZE);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets += 2;
     expect_loss = 1;
     upipe_input(upipe_ts_sync, uref, NULL);
@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
     assert(size == TS_SIZE / 2);
     buffer[0] = 0x47;
     memset(buffer + 1, 0, TS_SIZE / 2 - 1);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets++; // because this will release the previous packet
     upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
     assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE / 2);
     memset(buffer, 0, TS_SIZE / 2);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
 

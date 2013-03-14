@@ -159,8 +159,7 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
         header_desc = uref_block_peek(pmt, PMT_HEADER_SIZE,                 \
                               header_desclength, header_desc_buffer);       \
         if (unlikely(header_desc == NULL)) {                                \
-            uref_block_peek_unmap(pmt, 0, PMT_HEADER_SIZE,                  \
-                                  header_buffer, header);                   \
+            uref_block_peek_unmap(pmt, 0, header_buffer, header);           \
             header = NULL;                                                  \
         }                                                                   \
     }                                                                       \
@@ -175,11 +174,10 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
  */
 #define UPIPE_TS_PMTD_HEADER_UNMAP(upipe, pmt, header, header_desc,         \
                                    header_desclength)                       \
-    bool ret = uref_block_peek_unmap(pmt, 0, PMT_HEADER_SIZE,               \
-                                     header_buffer, header);                \
+    bool ret = uref_block_peek_unmap(pmt, 0, header_buffer, header);        \
     if (header_desclength)                                                  \
         ret = uref_block_peek_unmap(pmt, PMT_HEADER_SIZE,                   \
-                 header_desclength, header_desc_buffer, header_desc) && ret;\
+                                    header_desc_buffer, header_desc) && ret;\
     assert(ret);
 
 /** @internal @This walks through the elementary streams in a PMT.
@@ -214,8 +212,7 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
             desc = uref_block_peek(pmt, offset + PMT_ES_SIZE,               \
                                    desclength, desc_buffer);                \
             if (unlikely(desc == NULL)) {                                   \
-                uref_block_peek_unmap(pmt, offset, PMT_ES_SIZE, es_buffer,  \
-                                      es);                                  \
+                uref_block_peek_unmap(pmt, offset, es_buffer, es);          \
                 break;                                                      \
             }                                                               \
         } else                                                              \
@@ -232,11 +229,10 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
  * @param desclength pointing to size of ES descriptors
  */
 #define UPIPE_TS_PMTD_PEEK_UNMAP(upipe, pmt, offset, es, desc, desclength)  \
-        ret = uref_block_peek_unmap(pmt, offset, PMT_ES_SIZE,               \
-                                    es_buffer, es);                         \
+        ret = uref_block_peek_unmap(pmt, offset, es_buffer, es);            \
         if (desc != NULL)                                                   \
             ret = uref_block_peek_unmap(pmt, offset + PMT_ES_SIZE,          \
-                            desclength, desc_buffer, desc) && ret;          \
+                                        desc_buffer, desc) && ret;          \
         assert(ret);                                                        \
         offset += PMT_ES_SIZE + desclength;
 

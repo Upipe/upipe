@@ -1186,8 +1186,7 @@ static uint64_t upipe_ts_demux_program_pmtd_h264_max_delay(struct uref *uref,
     if (desc != NULL)
         still = desc28_get_avc_still_present(desc);
 
-    uref_block_peek_unmap(uref, pmtd_desc_offset, pmtd_desc_size, buffer,
-                          descl);
+    uref_block_peek_unmap(uref, pmtd_desc_offset, buffer, descl);
 
     return still ? MAX_DELAY_STILL : MAX_DELAY_14496;
 }

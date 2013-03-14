@@ -156,7 +156,7 @@ static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
         snprintf((char *)str, sizeof(str), FORMAT, udpsrc_test->counter);
         assert(strncmp((char *)str, (char *)rbuf, BUF_SIZE) == 0);
         udpsrc_test->counter++;
-        uref_block_peek_unmap(uref, 0, -1, buf, rbuf);
+        uref_block_peek_unmap(uref, 0, buf, rbuf);
     }
 
     uref_free(uref);

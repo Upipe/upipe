@@ -126,8 +126,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     bool validate = pes_validate(pes_header);
     uint8_t streamid = pes_get_streamid(pes_header);
     uint16_t length = pes_get_length(pes_header);
-    ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref, 0, PES_HEADER_SIZE,
-                                buffer, pes_header);
+    ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref, 0, buffer,
+                                pes_header);
     assert(ret);
 
     if (unlikely(!validate)) {
@@ -174,7 +174,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     bool has_dts = pes_has_dts(pes_header - PES_HEADER_SIZE);
     uint8_t headerlength = pes_get_headerlength(pes_header - PES_HEADER_SIZE);
     ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref, PES_HEADER_SIZE,
-                                PES_HEADER_OPTIONAL_SIZE, buffer2, pes_header);
+                                buffer2, pes_header);
     assert(ret);
 
     if (unlikely(!validate)) {
@@ -226,8 +226,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         } else
             dts = pts;
         ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref,
-                PES_HEADER_SIZE_NOPTS, PES_HEADER_TS_SIZE * (has_dts ? 2 : 1),
-                buffer3, ts_fields);
+                                    PES_HEADER_SIZE_NOPTS, buffer3, ts_fields);
         assert(ret);
 
         if (unlikely(!validate)) {

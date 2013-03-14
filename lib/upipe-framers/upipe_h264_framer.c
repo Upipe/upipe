@@ -295,8 +295,7 @@ static bool upipe_h264f_find(struct upipe *upipe,
                                                    &upipe_h264f->scan_context);
         if (p > buffer + 4)
             *prev_p = p[-4];
-        uref_block_unmap(upipe_h264f->next_uref, upipe_h264f->au_size,
-                         size);
+        uref_block_unmap(upipe_h264f->next_uref, upipe_h264f->au_size);
 
         if ((upipe_h264f->scan_context & 0xffffff00) == 0x100) {
             *start_p = upipe_h264f->scan_context & 0xff;

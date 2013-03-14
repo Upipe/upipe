@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
     pes_set_dataalignment(buffer);
     pes_set_pts(buffer, pts);
     pes_set_dts(buffer, dts);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
     pes_set_headerlength(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE_NOPTS);
     dataalignment = false;
     pes_set_pts(buffer, pts);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     payload_size = 0;
 
     /* now cut it into pieces */
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_PADDING);
     pes_set_length(buffer, 42);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     payload_size = 0;
     expect_lost = true;
     assert(uref_block_set_start(uref));
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
     pes_set_length(buffer, PES_HEADER_SIZE_NOPTS + 12 - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, 0);
     dataalignment = false;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_block_set_start(uref));
     payload_size = 12;
     expect_acquired = true;

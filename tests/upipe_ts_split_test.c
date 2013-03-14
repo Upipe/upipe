@@ -141,7 +141,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(size == TS_SIZE); //because of the way we allocated it
     assert(ts_validate(buffer));
     assert(ts_get_pid(buffer) == ts_test->pid);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 68);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_split, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 69);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_split, uref, NULL);
 
     upipe_release(upipe_ts_split_output68);

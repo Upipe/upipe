@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
     buffer += 4;
 
     mp2vend_init(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     uref_clock_set_pts_orig(uref, 27000000);
     uref_clock_set_dts_orig(uref, 27000000);
     uref_clock_set_systime(uref, 84);

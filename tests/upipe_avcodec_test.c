@@ -306,7 +306,7 @@ static void fetch_av_packets(struct upump *pump)
             uref = uref_block_alloc(uref_mgr, block_mgr, size);
             uref_block_write(uref, 0, &size, &buf);
             memcpy(buf, avpkt.data, size);
-            uref_block_unmap(uref, 0, size);
+            uref_block_unmap(uref, 0);
 
             // Send uref to avcdv pipe and free avpkt
             upipe_input(avcdv, uref, pump);

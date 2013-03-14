@@ -382,8 +382,7 @@ static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref,
         return;
     }
     uint16_t pid = ts_get_pid(ts_header);
-    bool ret = uref_block_peek_unmap(uref, 0, TS_HEADER_SIZE,
-                                     buffer, ts_header);
+    bool ret = uref_block_peek_unmap(uref, 0, buffer, ts_header);
     assert(ret);
 
     struct uchain *uchain;

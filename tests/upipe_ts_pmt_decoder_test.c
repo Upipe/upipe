@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
     pmtn_set_streamtype(pmt_es, 42);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     pid_sum = 12;
     streamtype_sum = 42;
     del_pid_sum = 0;
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
     desc_set_length(desc, 3);
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     pid_sum = 12;
     streamtype_sum = 42;
     desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
     desc_set_length(desc, 3);
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     header_desc_size = 5;
     del_pid_sum = 12;
     pid_sum = 13;
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
     desc_set_length(desc, 3);
     desc[2] = desc[3] = desc[4] = 0xff;
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     header_desc_size = 5;
     systime = 4 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
@@ -370,7 +370,7 @@ int main(int argc, char *argv[])
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer); //set invalid CRC
     pmtn_set_streamtype(pmt_es, 44);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     header_desc_size = 0;
     systime = 5 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
@@ -408,7 +408,7 @@ int main(int argc, char *argv[])
     pmtn_set_streamtype(pmt_es, 44);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     header_desc_size = 0;
     pid_sum = 13 + 14;
     streamtype_sum = 43 + 44;
@@ -450,7 +450,7 @@ int main(int argc, char *argv[])
     pmtn_set_streamtype(pmt_es, 44);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     header_desc_size = 0;
     pid_sum = 12;
     streamtype_sum = 42;

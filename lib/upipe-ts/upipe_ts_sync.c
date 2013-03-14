@@ -139,7 +139,7 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
                 return false;
             assert(size == 1);
             word = *buffer;
-            uref_block_unmap(upipe_ts_sync->next_uref, offset, size);
+            uref_block_unmap(upipe_ts_sync->next_uref, offset);
             if (word != TS_SYNC) {
                 *offset_p += 1;
                 break;

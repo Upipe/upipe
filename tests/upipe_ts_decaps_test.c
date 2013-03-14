@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
     ts_set_unitstart(buffer);
     ts_set_cc(buffer, 0);
     ts_set_payload(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets++;
     upipe_input(upipe_ts_decaps, uref, NULL);
     assert(!nb_packets);
@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
     ts_set_payload(buffer);
     ts_set_adaptation(buffer, 0);
     payload_size = 183;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets++;
     upipe_input(upipe_ts_decaps, uref, NULL);
     assert(!nb_packets);
@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
     pcr = 0x112121212;
     tsaf_set_pcr(buffer, pcr / 300);
     tsaf_set_pcrext(buffer, pcr % 300);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets++;
     upipe_input(upipe_ts_decaps, uref, NULL);
     assert(!nb_packets);

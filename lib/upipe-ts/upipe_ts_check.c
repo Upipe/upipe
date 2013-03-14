@@ -110,7 +110,7 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
     }
     assert(size == 1);
     word = *buffer;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     if (word != TS_SYNC) {
         uref_free(uref);
         upipe_warn_va(upipe, "invalid TS sync 0x%"PRIx8, word);

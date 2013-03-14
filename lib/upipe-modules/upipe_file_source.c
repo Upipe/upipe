@@ -166,7 +166,7 @@ static void upipe_fsrc_worker(struct upump *upump)
     assert(read_size == upipe_fsrc->read_size);
 
     ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->read_size);
-    uref_block_unmap(uref, 0, read_size);
+    uref_block_unmap(uref, 0);
 
     if (unlikely(ret == -1)) {
         uref_free(uref);

@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 12);
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     program_sum = 12;
     pid_sum = 42;
     assert(uref_clock_set_systime(uref, systime));
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 12);
     psi_set_crc(buffer); /* set invalid CRC */
     patn_set_pid(pat_program, 42);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 12);
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     systime = UINT32_MAX;
     assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 12);
     patn_set_pid(pat_program, 43); // invalid: program defined twice
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 12);
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     assert(uref_clock_set_systime(uref, systime));
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 13);
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     program_sum = 13; // the first program already exists
     pid_sum = 43;
     systime += UINT32_MAX;
@@ -339,7 +339,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 13);
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     del_program_sum = 12;
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
     patn_set_program(pat_program, 14);
     patn_set_pid(pat_program, 44);
     psi_set_crc(buffer);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     program_sum = 14;
     pid_sum = 44;
     upipe_input(upipe_ts_patd, uref, NULL);

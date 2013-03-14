@@ -205,15 +205,12 @@ static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (unlikely(block->map && !ubuf_control(ubuf, UBUF_MAP_BLOCK)))
-        return false;
-
-    if (buffer_p != NULL) {
-        if (block->buffer == NULL)
-            if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, &block->buffer))
-                return false;
-        *buffer_p = block->buffer + block->offset + offset;
-    }
+    if (block->map) {
+        if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
+            return false;
+    } else
+        *buffer_p = block->buffer;
+    *buffer_p += block->offset + offset;
 
     if (size_p != NULL && *size_p > block->size - offset)
         *size_p = block->size - offset;
@@ -247,15 +244,12 @@ static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (unlikely(block->map && !ubuf_control(ubuf, UBUF_MAP_BLOCK)))
-        return false;
-
-    if (buffer_p != NULL) {
-        if (block->buffer == NULL)
-            if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, &block->buffer))
-                return false;
-        *buffer_p = block->buffer + block->offset + offset;
-    }
+    if (block->map) {
+        if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
+            return false;
+    } else
+        *buffer_p = block->buffer;
+    *buffer_p += block->offset + offset;
 
     if (size_p != NULL && *size_p > block->size - offset)
         *size_p = block->size - offset;
@@ -268,11 +262,9 @@ static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
  * @param ubuf pointer to ubuf
  * @param offset offset of the buffer space wanted in the whole block, in
  * octets, negative values start from the end
- * @param size size of the buffer space wanted, in octets, or -1 for the end
- * of the block
  * @return false in case of error
  */
-static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset, int size)
+static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
@@ -625,7 +617,7 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
     uint8_t *write_buffer = buffer;
     for ( ; ; ) {
         memcpy(write_buffer, read_buffer, read_size);
-        if (unlikely(!ubuf_block_unmap(ubuf, offset, read_size)))
+        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
             return NULL;
         size -= read_size;
         write_buffer += read_size;
@@ -645,20 +637,18 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
  * @param ubuf pointer to ubuf
  * @param offset offset of the buffer space wanted in the whole block, in
  * octets, negative values start from the end
- * @param size size of the buffer space wanted, in octets, or -1 for the end
- * of the block
  * @param buffer caller-supplied buffer space passed to @ref ubuf_block_peek
  * @param read_buffer buffer returned by @ref ubuf_block_peek
  * @return false in case of error
  */
 static inline bool ubuf_block_peek_unmap(struct ubuf *ubuf,
-                                         int offset, int size, uint8_t *buffer,
+                                         int offset, uint8_t *buffer,
                                          const uint8_t *read_buffer)
 {
     if (buffer == read_buffer)
         return true;
 
-    return ubuf_block_unmap(ubuf, offset, size);
+    return ubuf_block_unmap(ubuf, offset);
 }
 
 /** @This extracts a ubuf to an arbitrary memory space.
@@ -683,7 +673,7 @@ static inline bool ubuf_block_extract(struct ubuf *ubuf, int offset, int size,
         if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
             return false;
         memcpy(buffer, read_buffer, read_size);
-        if (unlikely(!ubuf_block_unmap(ubuf, offset, read_size)))
+        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
             return false;
         size -= read_size;
         buffer += read_size;
@@ -709,10 +699,11 @@ static inline int ubuf_block_iovec_count(struct ubuf *ubuf,
         return -1;
 
     while (size > 0) {
-        int read_size = size;
-        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, NULL) ||
-                     !ubuf_block_unmap(ubuf, offset, read_size)))
+        size_t read_size;
+        if (unlikely(!ubuf_block_size_linear(ubuf, offset, &read_size)))
             return -1;
+        if (read_size > size)
+            read_size = size;
         size -= read_size;
         offset += read_size;
         count++;
@@ -773,7 +764,7 @@ static inline bool ubuf_block_iovec_unmap(struct ubuf *ubuf,
         return false;
 
     while (size > 0) {
-        if (unlikely(!ubuf_block_unmap(ubuf, offset, iovecs[count].iov_len)))
+        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
             return false;
         size -= iovecs[count].iov_len;
         offset += iovecs[count].iov_len;
@@ -846,7 +837,7 @@ static inline struct ubuf *ubuf_block_copy(struct ubuf_mgr *mgr,
                                    &buffer)))
         goto ubuf_block_copy_err;
     bool ret = ubuf_block_extract(ubuf, extract_skip, extract_size, buffer);
-    if (unlikely(!ubuf_block_unmap(new_ubuf, extract_offset, extract_size) ||
+    if (unlikely(!ubuf_block_unmap(new_ubuf, extract_offset) ||
                  !ret))
         goto ubuf_block_copy_err;
     return new_ubuf;
@@ -906,14 +897,14 @@ static inline bool ubuf_block_compare(struct ubuf *ubuf, int offset,
             return false;
         if (unlikely(!ubuf_block_read(ubuf_small, i, &read_size_small,
                                       &read_buffer_small))) {
-            ubuf_block_unmap(ubuf, offset + i, read_size);
+            ubuf_block_unmap(ubuf, offset + i);
             return false;
         }
         int compare_size = read_size < read_size_small ?
                            read_size : read_size_small;
         bool ret = !memcmp(read_buffer, read_buffer_small, compare_size);
-        ret = ubuf_block_unmap(ubuf, offset + i, read_size) && ret;
-        ret = ubuf_block_unmap(ubuf_small, i, read_size_small) && ret;
+        ret = ubuf_block_unmap(ubuf, offset + i) && ret;
+        ret = ubuf_block_unmap(ubuf_small, i) && ret;
         if (!ret)
             return false;
         size -= compare_size;
@@ -969,7 +960,7 @@ static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
                 ret = false;
                 break;
             }
-        ret = ubuf_block_unmap(ubuf, offset, read_size) && ret;
+        ret = ubuf_block_unmap(ubuf, offset) && ret;
         if (!ret)
             return false;
         size -= compare_size;
@@ -994,11 +985,11 @@ static inline bool ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
     while (ubuf_block_read(ubuf, *offset_p, &size, &buffer)) {
         const void *match = memchr(buffer, word, size);
         if (match != NULL) {
-            ubuf_block_unmap(ubuf, *offset_p, size);
+            ubuf_block_unmap(ubuf, *offset_p);
             *offset_p += (const uint8_t *)match - buffer;
             return true;
         }
-        ubuf_block_unmap(ubuf, *offset_p, size);
+        ubuf_block_unmap(ubuf, *offset_p);
         *offset_p += size;
         size = -1;
     }
@@ -1039,8 +1030,7 @@ static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
                 break;
         }
         va_end(args_copy);
-        ubuf_block_peek_unmap(ubuf, *offset_p + 1, nb_octets - 1, rbuffer,
-                              buffer);
+        ubuf_block_peek_unmap(ubuf, *offset_p + 1, rbuffer, buffer);
         if (i == nb_octets - 1)
             return true;
         (*offset_p)++;

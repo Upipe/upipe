@@ -111,7 +111,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == 1);
     assert(ts_validate(buffer));
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     uref_free(uref);
     nb_packets--;
 }
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     assert(size == 7 * TS_SIZE);
     for (i = 0; i < 7; i++)
         ts_pad(buffer + i * TS_SIZE);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets = 7;
     upipe_input(upipe_ts_check, uref, NULL);
     assert(!nb_packets);
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < 7; i++)
         ts_pad(buffer + i * TS_SIZE);
     buffer[3 * TS_SIZE] = 0xff;
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets = 3;
     upipe_input(upipe_ts_check, uref, NULL);
     assert(!nb_packets);
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
     buffer[0] = 0xff;
     for (i = 0; i < 7; i++)
         ts_pad(buffer + 1 + i * TS_SIZE);
-    uref_block_unmap(uref, 0, size);
+    uref_block_unmap(uref, 0);
     nb_packets = 0;
     upipe_input(upipe_ts_check, uref, NULL);
     assert(!nb_packets);

@@ -172,8 +172,8 @@ static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
  * @param pat_program iterator pointing to program definition
  */
 #define UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, sections, pat_program)        \
-            ret = uref_block_peek_unmap(section, offset, PAT_PROGRAM_SIZE,  \
-                                        program_buffer, pat_program);       \
+            ret = uref_block_peek_unmap(section, offset, program_buffer,    \
+                                        pat_program);                       \
             assert(ret);                                                    \
             offset += PAT_PROGRAM_SIZE;
 
@@ -325,7 +325,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
     }
     bool validate = pat_validate(pat_header);
     uint16_t tsid = psi_get_tableidext(pat_header);
-    ret = uref_block_peek_unmap(uref, 0, PAT_HEADER_SIZE, buffer, pat_header);
+    ret = uref_block_peek_unmap(uref, 0, buffer, pat_header);
     assert(ret);
 
     if (unlikely(!validate)) {
