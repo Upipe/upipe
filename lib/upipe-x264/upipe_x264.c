@@ -375,7 +375,7 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     }
     uref_block_write(uref_block, 0, &size, &buf);
     memcpy(buf, nals[0].p_payload, size);
-    uref_block_unmap(uref_block, 0, size);
+    uref_block_unmap(uref_block, 0);
 
     /* dts shouldn't be negative in upipe because of pts definition
      * see x264.h */
