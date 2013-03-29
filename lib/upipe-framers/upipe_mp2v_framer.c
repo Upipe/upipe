@@ -57,7 +57,7 @@
 /** we only accept the ISO 13818-2 elementary stream */
 #define EXPECTED_FLOW_DEF "block.mpeg2video."
 
-/** @internal @This translates the MPEG frame_rate_code to double */
+/** @internal @This translates the MPEG frame_rate_code to urational. */
 static const struct urational frame_rate_from_code[] = {
     { .num = 0, .den = 0 }, /* invalid */
     { .num = 24000, .den = 1001 },
@@ -335,6 +335,8 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     bool ret = true;
 
     uint64_t max_octetrate = 1500000 / 8;
+    bool progressive = true;
+    uint8_t chroma = MP2VSEQX_CHROMA_420;
     if (upipe_mp2vf->sequence_ext != NULL) {
         uint8_t ext_buffer[MP2VSEQX_HEADER_SIZE];
         const uint8_t *ext;
@@ -347,8 +349,8 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
         }
 
         uint8_t profilelevel = mp2vseqx_get_profilelevel(ext);
-        bool progressive = mp2vseqx_get_progressive(ext);
-        uint8_t chroma = mp2vseqx_get_chroma(ext);
+        progressive = mp2vseqx_get_progressive(ext);
+        chroma = mp2vseqx_get_chroma(ext);
         horizontal |= mp2vseqx_get_horizontal(ext) << 12;
         vertical |= mp2vseqx_get_vertical(ext) << 12;
         bitrate |= mp2vseqx_get_bitrate(ext) << 18;
@@ -385,41 +387,42 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
                 uref_free(flow_def);
                 return false;
         }
-        ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
-        if (progressive)
-            ret = ret && uref_pic_set_progressive(flow_def);
-        upipe_mp2vf->progressive_sequence = progressive;
-        ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
-        ret = ret && uref_pic_flow_set_planes(flow_def, 0);
-        ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
-        switch (chroma) {
-            case MP2VSEQX_CHROMA_420:
-                ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8");
-                ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8");
-                ret = ret && uref_flow_set_def(flow_def,
-                        EXPECTED_FLOW_DEF "pic.planar8_420.");
-                break;
-            case MP2VSEQX_CHROMA_422:
-                ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8");
-                ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8");
-                ret = ret && uref_flow_set_def(flow_def,
-                        EXPECTED_FLOW_DEF "pic.planar8_422.");
-                break;
-            case MP2VSEQX_CHROMA_444:
-                ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8");
-                ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8");
-                ret = ret && uref_flow_set_def(flow_def,
-                        EXPECTED_FLOW_DEF "pic.planar8_444.");
-                break;
-            default:
-                upipe_err_va(upipe, "invalid chroma format %d", chroma);
-                uref_free(flow_def);
-                return false;
-        }
         if (lowdelay)
-            ret = ret && uref_mp2v_flow_set_lowdelay(flow_def);
+            ret = ret && uref_flow_set_lowdelay(flow_def);
     } else
         upipe_mp2vf->progressive_sequence = true;
+
+    ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
+    upipe_mp2vf->progressive_sequence = progressive;
+    if (progressive)
+        ret = ret && uref_pic_set_progressive(flow_def);
+    ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+    ret = ret && uref_pic_flow_set_planes(flow_def, 0);
+    ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
+    switch (chroma) {
+        case MP2VSEQX_CHROMA_420:
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8");
+            ret = ret && uref_flow_set_def(flow_def,
+                    EXPECTED_FLOW_DEF "pic.planar8_8_420.");
+            break;
+        case MP2VSEQX_CHROMA_422:
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8");
+            ret = ret && uref_flow_set_def(flow_def,
+                    EXPECTED_FLOW_DEF "pic.planar8_8_422.");
+            break;
+        case MP2VSEQX_CHROMA_444:
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8");
+            ret = ret && uref_flow_set_def(flow_def,
+                    EXPECTED_FLOW_DEF "pic.planar8_8_444.");
+            break;
+        default:
+            upipe_err_va(upipe, "invalid chroma format %d", chroma);
+            uref_free(flow_def);
+            return false;
+    }
 
     ret = ret && uref_pic_set_hsize(flow_def, horizontal);
     ret = ret && uref_pic_set_vsize(flow_def, vertical);
@@ -589,13 +592,13 @@ static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
                ((upipe_mp2vf->sequence_ext == NULL && sequence_ext == NULL) ||
                 (upipe_mp2vf->sequence_ext != NULL && sequence_ext != NULL &&
                  ubuf_block_equal(sequence_ext,
-                                    upipe_mp2vf->sequence_ext))) &&
+                                  upipe_mp2vf->sequence_ext))) &&
                ((upipe_mp2vf->sequence_display == NULL &&
                  sequence_display == NULL) ||
                 (upipe_mp2vf->sequence_display != NULL &&
                  sequence_display != NULL &&
                  ubuf_block_equal(sequence_display,
-                                    upipe_mp2vf->sequence_display))))) {
+                                  upipe_mp2vf->sequence_display))))) {
         /* identical sequence header, extension and display, but we rotate them
          * to free older buffers */
         ubuf_free(upipe_mp2vf->sequence_header);
@@ -956,6 +959,9 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
                     upipe_mp2vf->next_frame_size - 4;
             continue;
         }
+
+        if (start == MP2VUSR_START_CODE)
+            continue;
 
         if (start > MP2VPIC_START_CODE && start <= MP2VPIC_LAST_CODE) {
             /* slice header */

@@ -83,6 +83,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "p.hposition", UDICT_TYPE_UNSIGNED },
     { "p.vposition", UDICT_TYPE_UNSIGNED },
     { "p.aspect", UDICT_TYPE_RATIONAL },
+    { "p.overscan", UDICT_TYPE_VOID },
     { "p.progressive", UDICT_TYPE_VOID },
     { "p.tf", UDICT_TYPE_VOID },
     { "p.bf", UDICT_TYPE_VOID },

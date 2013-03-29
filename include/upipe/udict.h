@@ -104,6 +104,8 @@ enum udict_type {
     UDICT_TYPE_PIC_VPOSITION,
     /** p.aspect */
     UDICT_TYPE_PIC_ASPECT,
+    /** p.overscan */
+    UDICT_TYPE_PIC_OVERSCAN,
     /** p.progressive */
     UDICT_TYPE_PIC_PROGRESSIVE,
     /** p.tf */

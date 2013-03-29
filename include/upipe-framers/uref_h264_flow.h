@@ -24,17 +24,17 @@
  */
 
 /** @file
- * @short Upipe mp2v flow definition attributes for uref
+ * @short Upipe h264 flow definition attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MP2V_FLOW_H_
+#ifndef _UPIPE_UREF_H264_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_MP2V_FLOW_H_
+#define _UPIPE_UREF_H264_FLOW_H_
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_SMALL_UNSIGNED(mp2v_flow, profilelevel, "mp2v.profilelevel",
-        profile and level)
+UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile, "h264.profile", profile)
+UREF_ATTR_SMALL_UNSIGNED(h264_flow, level, "h264.level", level)
 
 #endif

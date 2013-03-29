@@ -158,7 +158,8 @@ static void STRUCTURE##_consume_uref_stream(struct upipe *upipe,            \
                           -1);                                              \
         consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
         uint64_t size;                                                      \
-        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
+        bool ret = uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);         \
+        assert(ret);                                                        \
         STRUCTURE->NEXT_UREF_SIZE = size;                                   \
         void (*cb)(struct upipe *) = APPEND_CB;                             \
         if (cb != NULL)                                                     \

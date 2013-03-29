@@ -22,6 +22,8 @@
  * @short Upipe common utils for framers
  */
 
+#include <upipe/ubuf_block_stream.h>
+
 /** @This scans for an MPEG-style 3-octet start code in a linear buffer.
  *
  * @param p linear buffer

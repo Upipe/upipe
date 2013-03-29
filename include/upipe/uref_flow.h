@@ -49,6 +49,7 @@ UREF_ATTR_STRING_SH(flow, def_internal, UDICT_TYPE_FLOW_DEF, flow definition)
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
 UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
 UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)
+UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 
 /** @This returns the flow definition attribute of a uref.
  *

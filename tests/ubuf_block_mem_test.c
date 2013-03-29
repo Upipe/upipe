@@ -33,6 +33,7 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
+#include <upipe/ubuf_block_stream.h>
 #include <upipe/ubuf_block_mem.h>
 
 #include <stdio.h>
@@ -278,6 +279,21 @@ int main(int argc, char **argv)
     offset = 0;
     assert(ubuf_block_find(ubuf1, &offset, 2, 2, 3));
     assert(offset == 2);
+
+    /* test ubuf_block_stream */
+    struct ubuf_block_stream s;
+    ubuf_block_stream_init(&s, ubuf1, 0);
+    ubuf_block_stream_fill_bits(&s, 24);
+    uint32_t bits = ubuf_block_stream_show_bits(&s, 1);
+    ubuf_block_stream_skip_bits(&s, 1);
+    assert(!bits);
+    for (int i = 0; i < 64; i++) {
+        ubuf_block_stream_fill_bits(&s, 8);
+        bits = ubuf_block_stream_show_bits(&s, 8);
+        ubuf_block_stream_skip_bits(&s, 8);
+        assert(bits == i << 1);
+    }
+    ubuf_block_stream_clean(&s);
 
     /* test ubuf_block_delete */
     assert(ubuf_block_delete(ubuf1, 8, 32));
