@@ -48,9 +48,10 @@
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_pic_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block_mem.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
@@ -68,8 +69,7 @@
 #define UBUF_POOL_DEPTH 3000
 #define UBUF_SHARED_POOL_DEPTH 50
 
-static struct urational fps = { .num = 0, .den = 0 };
-static unsigned int nb_pics = 0;
+static uint64_t first_dts = UINT64_MAX, last_dts = 0;
 struct upipe *output = NULL;
 
 /** helper phony pipe to count pictures */
@@ -86,18 +86,17 @@ static void count_input(struct upipe *upipe, struct uref *uref,
                         struct upump *upump)
 {
     const char *def;
-    if (uref_flow_get_def(uref, &def)) {
-        if (!uref_pic_flow_get_fps(uref, &fps))
-            fps = (struct urational){ .num = 25, .den = 1 };
-        uref_free(uref);
-        return;
-    }
-    if (uref_flow_get_end(uref)) {
+    if (uref_flow_get_def(uref, &def) && uref_flow_get_end(uref)) {
         uref_free(uref);
         return;
     }
 
-    nb_pics++;
+    uint64_t dts;
+    if (uref_clock_get_dts(uref, &dts)) {
+        if (first_dts == UINT64_MAX)
+            first_dts = dts;
+        last_dts = dts;
+    }
     uref_free(uref);
 }
 
@@ -230,10 +229,8 @@ int main(int argc, char **argv)
     uprobe_stdio_free(uprobe);
 
     ev_default_destroy();
-    if (fps.num) {
-        double duration = (double)nb_pics * fps.den / fps.num;
-        printf("%.2f\n", duration);
-    }
+    if (first_dts != UINT64_MAX)
+        printf("%.2f\n", (double)(last_dts - first_dts) / UCLOCK_FREQ);
 
     return 0;
 }
