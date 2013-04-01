@@ -136,12 +136,16 @@ struct upipe_h264f {
     uint64_t cpb_length;
     /** duration of a frame */
     uint64_t duration;
+    /** true if picture structure is present */
+    bool pic_struct_present;
     /** true if bottom_field_pic_order_in_frame is present */
     bool bf_poc;
 
     /* parsing results - slice */
     /** field */
     int64_t initial_cpb_removal_delay;
+    /** picture structure */
+    int pic_struct;
     /** frame number */
     uint32_t frame_num;
     /** field pic */
@@ -297,6 +301,7 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
     upipe_h264f->initial_cpb_removal_delay = INT64_MAX;
+    upipe_h264f->pic_struct = -1;
     upipe_h264f->got_discontinuity = false;
     upipe_h264f->scan_context = UINT32_MAX;
     upipe_h264f->au_size = 0;
@@ -952,8 +957,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             if (ubuf_block_stream_show_bits(s, 1)) { /* fixed_frame_rate */
                 struct urational frame_rate = {
                     .num = upipe_h264f->time_scale,
-                    .den = num_units_in_ticks *
-                           (upipe_h264f->frame_mbs_only ? 1 : 2)
+                    .den = num_units_in_ticks
                 };
                 urational_simplify(&frame_rate);
                 ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
@@ -992,6 +996,13 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 ret = ret && uref_flow_set_lowdelay(flow_def);
             ubuf_block_stream_skip_bits(s, 1);
         }
+
+        upipe_h264f_stream_fill_bits(s, 1);
+        upipe_h264f->pic_struct_present = !!ubuf_block_stream_show_bits(s, 1);
+        ubuf_block_stream_skip_bits(s, 1);
+    } else {
+        upipe_h264f->duration = 0;
+        upipe_h264f->pic_struct_present = false;
     }
 
     upipe_h264f->active_sps = sps_id;
@@ -1089,6 +1100,14 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
         ubuf_block_stream_show_bits(s,
                 upipe_h264f->initial_cpb_removal_delay_length + 1) *
         UCLOCK_FREQ / 90000;
+    ubuf_block_stream_skip_bits(s,
+                upipe_h264f->initial_cpb_removal_delay_length + 1);
+
+    if (upipe_h264f->pic_struct_present) {
+        upipe_h264f_stream_fill_bits(s, 4);
+        upipe_h264f->pic_struct = ubuf_block_stream_show_bits(s, 4);
+        ubuf_block_stream_skip_bits(s, 4);
+    }
 
     ubuf_block_stream_clean(s);
 }
@@ -1120,8 +1139,74 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     }
     ret = ret && uref_pic_set_number(uref, picture_number);
 
-    if (upipe_h264f->duration)
-        ret = ret && uref_clock_set_duration(uref, upipe_h264f->duration);
+    uint64_t duration = upipe_h264f->duration;
+    if (upipe_h264f->pic_struct == -1) {
+        if (upipe_h264f->field_pic)
+            upipe_h264f->pic_struct = upipe_h264f->bf ? H264SEI_STRUCT_BOT :
+                                                        H264SEI_STRUCT_TOP;
+        else {
+            int32_t delta_poc_bottom = 0;
+            if (upipe_h264f->poc_type == 0)
+                delta_poc_bottom = upipe_h264f->delta_poc_bottom;
+            else if (upipe_h264f->poc_type == 1 &&
+                     !upipe_h264f->delta_poc_always_zero)
+                delta_poc_bottom = upipe_h264f->delta_poc1 -
+                                   upipe_h264f->delta_poc0;
+            if (delta_poc_bottom == 0) {
+                upipe_h264f->pic_struct = H264SEI_STRUCT_FRAME;
+                duration *= 2;
+            } else if (delta_poc_bottom < 0)
+                upipe_h264f->pic_struct = H264SEI_STRUCT_TOP_BOT;
+            else
+                upipe_h264f->pic_struct = H264SEI_STRUCT_BOT_TOP;
+        }
+    }
+
+    switch (upipe_h264f->pic_struct) {
+        case H264SEI_STRUCT_FRAME:
+            ret = ret && uref_pic_set_progressive(uref);
+            break;
+        case H264SEI_STRUCT_TOP:
+            ret = ret && uref_pic_set_tf(uref);
+            break;
+        case H264SEI_STRUCT_BOT:
+            ret = ret && uref_pic_set_bf(uref);
+            break;
+        case H264SEI_STRUCT_TOP_BOT:
+            ret = ret && uref_pic_set_tf(uref);
+            ret = ret && uref_pic_set_bf(uref);
+            ret = ret && uref_pic_set_tff(uref);
+            duration *= 2;
+            break;
+        case H264SEI_STRUCT_BOT_TOP:
+            ret = ret && uref_pic_set_tf(uref);
+            ret = ret && uref_pic_set_bf(uref);
+            duration *= 2;
+            break;
+        case H264SEI_STRUCT_TOP_BOT_TOP:
+            ret = ret && uref_pic_set_tf(uref);
+            ret = ret && uref_pic_set_bf(uref);
+            ret = ret && uref_pic_set_tff(uref);
+            duration *= 3;
+            break;
+        case H264SEI_STRUCT_BOT_TOP_BOT:
+            ret = ret && uref_pic_set_tf(uref);
+            ret = ret && uref_pic_set_bf(uref);
+            duration *= 3;
+            break;
+        case H264SEI_STRUCT_DOUBLE:
+            duration *= 4;
+            break;
+        case H264SEI_STRUCT_TRIPLE:
+            duration *= 6;
+            break;
+        default:
+            upipe_warn_va(upipe, "invalid picture structure %"PRId32,
+                          upipe_h264f->pic_struct);
+            break;
+    }
+    if (duration)
+        ret = ret && uref_clock_set_duration(uref, duration);
 
 #define SET_TIMESTAMP(name)                                                 \
     if (upipe_h264f->au_##name != UINT64_MAX)                               \
@@ -1136,8 +1221,8 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     SET_TIMESTAMP(dts_sys)
 #undef SET_TIMESTAMP
     upipe_h264f_flush_pts(upipe);
-    if (upipe_h264f->duration)
-        upipe_h264f_increment_dts(upipe, upipe_h264f->duration);
+    if (duration)
+        upipe_h264f_increment_dts(upipe, duration);
     else
         upipe_h264f_flush_dts(upipe);
 
@@ -1169,6 +1254,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     upipe_h264f->au_vcl_offset = -1;
     upipe_h264f->au_slice = false;
     upipe_h264f->au_slice_nal = UINT8_MAX;
+    upipe_h264f->pic_struct = -1;
 
     if (unlikely(!ret)) {
         uref_free(uref);

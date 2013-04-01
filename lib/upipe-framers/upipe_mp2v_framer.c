@@ -700,6 +700,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
         return false;
     }
 
+    bool ret = true;
     uint64_t duration = UCLOCK_FREQ * upipe_mp2vf->fps.den /
                                       upipe_mp2vf->fps.num;
     if (upipe_mp2vf->next_frame_ext_offset != -1) {
@@ -739,19 +740,21 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
                 duration /= 2;
         }
 
-        if (unlikely(((structure & MP2VPICX_TOP_FIELD) &&
-                      !uref_pic_set_tf(uref)) ||
-                     ((structure & MP2VPICX_BOTTOM_FIELD) &&
-                      !uref_pic_set_bf(uref)) ||
-                     (tff && !uref_pic_set_tff(uref)) ||
-                     (!uref_clock_set_duration(uref, duration)) ||
-                     (progressive && !uref_pic_set_progressive(uref)))) {
-            upipe_throw_aerror(upipe);
-            return false;
-        }
+        if (structure & MP2VPICX_TOP_FIELD)
+            ret = ret && uref_pic_set_tf(uref);
+        if (structure & MP2VPICX_BOTTOM_FIELD)
+            ret = ret && uref_pic_set_bf(uref);
+        if (tff)
+            ret = ret && uref_pic_set_tff(uref);
+        if (progressive)
+            ret = ret && uref_pic_set_progressive(uref);
+    } else {
+        ret = ret && uref_pic_set_tf(uref);
+        ret = ret && uref_pic_set_bf(uref);
+        ret = ret && uref_pic_set_progressive(uref);
     }
 
-    bool ret = true;
+    ret = ret && uref_clock_set_duration(uref, duration);
 #define SET_TIMESTAMP(name)                                                 \
     if (upipe_mp2vf->next_frame_##name != UINT64_MAX)                       \
         ret = ret &&                                                        \

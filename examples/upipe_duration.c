@@ -69,7 +69,7 @@
 #define UBUF_POOL_DEPTH 3000
 #define UBUF_SHARED_POOL_DEPTH 50
 
-static uint64_t first_dts = UINT64_MAX, last_dts = 0;
+static uint64_t duration = 0;
 struct upipe *output = NULL;
 
 /** helper phony pipe to count pictures */
@@ -91,12 +91,9 @@ static void count_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t dts;
-    if (uref_clock_get_dts(uref, &dts)) {
-        if (first_dts == UINT64_MAX)
-            first_dts = dts;
-        last_dts = dts;
-    }
+    uint64_t uref_duration;
+    if (uref_clock_get_duration(uref, &uref_duration))
+        duration += uref_duration;
     uref_free(uref);
 }
 
@@ -229,8 +226,7 @@ int main(int argc, char **argv)
     uprobe_stdio_free(uprobe);
 
     ev_default_destroy();
-    if (first_dts != UINT64_MAX)
-        printf("%.2f\n", (double)(last_dts - first_dts) / UCLOCK_FREQ);
+    printf("%.2f\n", (double)duration / UCLOCK_FREQ);
 
     return 0;
 }
