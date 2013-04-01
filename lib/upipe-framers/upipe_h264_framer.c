@@ -942,8 +942,9 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
 
             upipe_h264f_stream_fill_bits(s, 24);
             num_units_in_ticks |= ubuf_block_stream_show_bits(s, 8);
+            ubuf_block_stream_skip_bits(s, 8);
             upipe_h264f->time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
-            ubuf_block_stream_skip_bits(s, 24);
+            ubuf_block_stream_skip_bits(s, 16);
 
             upipe_h264f_stream_fill_bits(s, 17);
             upipe_h264f->time_scale |= ubuf_block_stream_show_bits(s, 16);
@@ -951,7 +952,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             if (ubuf_block_stream_show_bits(s, 1)) { /* fixed_frame_rate */
                 struct urational frame_rate = {
                     .num = upipe_h264f->time_scale,
-                    .den = num_units_in_ticks * 2
+                    .den = num_units_in_ticks *
+                           (upipe_h264f->frame_mbs_only ? 1 : 2)
                 };
                 urational_simplify(&frame_rate);
                 ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
