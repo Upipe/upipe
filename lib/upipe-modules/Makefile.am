@@ -10,6 +10,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_genaux.c \
 	upipe_multicat_sink.c \
 	upipe_null.c \
+	upipe_skip.c \
 	upipe_setattr.c \
 	upipe_setrap.c
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
