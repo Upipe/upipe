@@ -932,13 +932,15 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
 static void upipe_udpsrc_free(struct upipe *upipe)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
-    upipe_throw_dead(upipe);
 
     if (likely(upipe_udpsrc->fd != -1)) {
         if (likely(upipe_udpsrc->uri != NULL))
             upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
         close(upipe_udpsrc->fd);
     }
+
+    upipe_throw_dead(upipe);
+
     free(upipe_udpsrc->uri);
     upipe_udpsrc_clean_read_size(upipe);
     upipe_udpsrc_clean_uclock(upipe);
