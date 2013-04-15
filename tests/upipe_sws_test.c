@@ -116,6 +116,8 @@ static void filldata(struct uref *uref, int *strides, uint8_t **slices, enum pla
     fetch_chroma(uref, "y8", strides, slices, 0, action);
     fetch_chroma(uref, "u8", strides, slices, 1, action);
     fetch_chroma(uref, "v8", strides, slices, 2, action);
+    slices[3] = NULL;
+    strides[3] = 0;
 }
 
 /* fill picture with some reference */

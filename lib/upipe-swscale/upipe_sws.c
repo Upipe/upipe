@@ -163,6 +163,8 @@ static void upipe_sws_filldata(struct ubuf *ubuf, int *strides, uint8_t **slices
     upipe_sws_fetch_chroma(ubuf, "y8", strides, slices, 0, action);
     upipe_sws_fetch_chroma(ubuf, "u8", strides, slices, 1, action);
     upipe_sws_fetch_chroma(ubuf, "v8", strides, slices, 2, action);
+    slices[3] = NULL;
+    strides[3] = 0;
 }
 
 /** @internal @This configures swscale context
@@ -278,7 +280,6 @@ static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
     upipe_sws_filldata(dstpic, dstrides, dslices, WRITE);
 
     ret = sws_scale(upipe_sws->convert_ctx, (const uint8_t *const*) slices, strides, 0, srcsize->vsize, dslices, dstrides);
-
     
     upipe_sws_filldata(uref->ubuf, strides, slices, UNMAP);
     upipe_sws_filldata(dstpic, dstrides, dslices, UNMAP);
