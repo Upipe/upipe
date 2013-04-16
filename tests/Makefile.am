@@ -196,6 +196,11 @@ check_PROGRAMS += upipe_x264_test
 TESTS += upipe_x264_test
 endif
 
+if HAVE_ECORE
+check_PROGRAMS += upump_ecore_test
+TESTS += upump_ecore_test
+endif
+
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
@@ -270,3 +275,5 @@ upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/lib
 upipe_x264_test_CFLAGS = $(X264_CFLAGS) -Wall
 
 upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la
+upump_ecore_test_CFLAGS = $(ECORE_CFLAGS) -Wall
