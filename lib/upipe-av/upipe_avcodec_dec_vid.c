@@ -75,7 +75,6 @@ struct upipe_avcdv {
     struct uref *output_flow;
     /** true if the flow definition has already been sent */
     bool output_flow_sent;
-
     /** output pipe */
     struct upipe *output;
 
@@ -109,6 +108,8 @@ struct upipe_avcdv {
     AVFrame *frame;
     /** avcodec_open parameters */
     struct upipe_avcodec_open_params open_params;
+    /** lowres param */
+    int lowres;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -317,6 +318,13 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
         context->flags |= CODEC_FLAG_EMU_EDGE;
         context->extradata = extradata;
         context->extradata_size = extradata_size;
+
+        if (upipe_avcdv->lowres > codec->max_lowres) {
+            upipe_warn_va(upipe, "Unsupported lowres (%d > %hhu), setting to %hhu",
+                upipe_avcdv->lowres, codec->max_lowres, codec->max_lowres);
+            upipe_avcdv->lowres = codec->max_lowres;
+        }
+        context->lowres = upipe_avcdv->lowres;
     }
 
     if (unlikely(upipe_avcdv->context)) { // Close previously opened context
@@ -759,6 +767,44 @@ static bool _upipe_avcdv_get_codec(struct upipe *upipe, const char **codec_p)
     return true;
 }
 
+/** @This sets the low resolution parameter, if supported by codec.
+ * If some codec is already used, it is re-opened.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowres lowres parameter (0=disabled)
+ * @return false in case of error
+ */
+static bool _upipe_avcdv_set_lowres(struct upipe *upipe, int lowres)
+{
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    const char *codec_def;
+    bool ret = true;
+
+    if (lowres < 0) {
+        upipe_warn_va(upipe, "Invalid lowres parameter (%d)", lowres);
+        return false;
+    }
+    upipe_avcdv->lowres = lowres;
+    upipe_dbg_va(upipe, "Requesting lowres %d", lowres);
+
+    if (upipe_avcdv->context && upipe_avcdv->context->codec) {
+        codec_def = upipe_av_to_flow_def(upipe_avcdv->context->codec->id);
+        ret = upipe_avcdv_set_context(upipe, codec_def, upipe_avcdv->context->extradata,
+                                upipe_avcdv->context->extradata_size);
+    }
+    return ret;
+}
+
+/** @internal @This returns the lowres parameter
+ */
+static bool _upipe_avcdv_get_lowres(struct upipe *upipe, int *lowres_p)
+{
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    assert(lowres_p);
+    *lowres_p = upipe_avcdv->lowres;
+    return true;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -819,6 +865,18 @@ static bool upipe_avcdv_control(struct upipe *upipe, enum upipe_command command,
             uint8_t *extradata = va_arg(args, uint8_t *);
             int size = va_arg(args, int);
             return upipe_avcdv_set_context(upipe, codec, extradata, size);
+        }
+        case UPIPE_AVCDV_SET_LOWRES: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_AVCDV_SIGNATURE);
+            unsigned int lowres = va_arg(args, int);
+            return _upipe_avcdv_set_lowres(upipe, lowres);
+        }
+        case UPIPE_AVCDV_GET_LOWRES: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_AVCDV_SIGNATURE);
+            int *lowres_p = va_arg(args, int *);
+            return _upipe_avcdv_get_lowres(upipe, lowres_p);
         }
 
         default:
@@ -901,6 +959,7 @@ static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
     upipe_avcdv->saved_upump_mgr = NULL;
     #endif
     upipe_avcdv->frame = avcodec_alloc_frame();
+    upipe_avcdv->lowres = 0;
 
     upipe_throw_ready(upipe);
     return upipe;

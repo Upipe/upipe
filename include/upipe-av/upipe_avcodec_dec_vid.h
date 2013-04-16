@@ -44,6 +44,11 @@ enum upipe_avcdv_command {
     /** asks to open the given codec (const char *) */
     UPIPE_AVCDV_SET_CODEC,
 
+    /** sets lowres parameter, repoen codec if necessary (int) */
+    UPIPE_AVCDV_SET_LOWRES,
+    /** get lowres parameter (int *) */
+    UPIPE_AVCDV_GET_LOWRES,
+
     /** set extradata (const char *, int) */
     UPIPE_AVCDV_SET_EXTRADATA
 };
@@ -73,6 +78,32 @@ static inline bool upipe_avcdv_set_codec(struct upipe *upipe, const char *codec,
 {
     return upipe_control(upipe, UPIPE_AVCDV_SET_CODEC, UPIPE_AVCDV_SIGNATURE,
                          codec, extradata, size);
+}
+
+/** @This sets the low resolution parameter, if supported by codec.
+ * If some codec is already used, it is re-opened.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowres lowres parameter (0=disabled)
+ * @return false in case of error
+ */
+static inline bool upipe_avcdv_set_lowres(struct upipe *upipe, int lowres)
+{
+    return upipe_control(upipe, UPIPE_AVCDV_SET_LOWRES, UPIPE_AVCDV_SIGNATURE,
+                         lowres);
+}
+
+/** @This gets the low resolution parameter.
+ * If some codec is already used, it is re-opened.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowres lowres parameter (0=disabled)
+ * @return false in case of error
+ */
+static inline bool upipe_avcdv_get_lowres(struct upipe *upipe, int *lowres_p)
+{
+    return upipe_control(upipe, UPIPE_AVCDV_GET_LOWRES, UPIPE_AVCDV_SIGNATURE,
+                         lowres_p);
 }
 
 /** @This returns the management structure for all avformat sources.

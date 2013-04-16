@@ -331,7 +331,11 @@ static void setcodec_idler(struct upump *pump)
 //        upipe_release(avcdv);
         return;
     }
-    upipe_avcdv_set_codec(avcdv, thread->codec_def, NULL, 0);
+    if (thread->iteration >= ITER_LIMIT - 1) {
+        upipe_avcdv_set_lowres(avcdv, 2);
+    } else {
+        upipe_avcdv_set_codec(avcdv, thread->codec_def, NULL, 0);
+    }
     thread->iteration++;
 }
 
