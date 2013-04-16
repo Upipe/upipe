@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@     
+Name: libupump_ecore
+Description: Upipe multimedia framework, ecore event loop wrapper
+Version: @VERSION@
+Requires: libupipe
+Libs: -L${libdir} -lupump_ev @ECORE_LIBS@
+Cflags: -I${includedir}

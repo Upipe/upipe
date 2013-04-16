@@ -46,6 +46,10 @@ PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.0 libavutil, [libswscale/swscale.h li
 PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
+PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
+
+CFLAGS="${CFLAGS} -D_REENTRANT"
+LIBS="${LIBS} -lpthread"
 
 # x264-obe (with speedcontrol)
 CFLAGS_save="$CFLAGS" LDFLAGS_save="$LDFLAGS"
@@ -120,6 +124,7 @@ AC_CONFIG_FILES([Makefile
                  include/Makefile
                  include/upipe/Makefile
                  include/upump-ev/Makefile
+                 include/upump-ecore/Makefile
                  include/upipe-modules/Makefile
                  include/upipe-pthread/Makefile
                  include/upipe-framers/Makefile
@@ -138,6 +143,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe/libupipe.pc
                  lib/upump-ev/Makefile
                  lib/upump-ev/libupump_ev.pc
+                 lib/upump-ecore/Makefile
+                 lib/upump-ecore/libupump_ecore.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
                  lib/upipe-pthread/Makefile
