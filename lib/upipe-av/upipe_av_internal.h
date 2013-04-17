@@ -33,6 +33,7 @@
 #include <stdbool.h>
 
 #include <libavutil/error.h>
+#include <libavcodec/avcodec.h>
 
 /** typical size of the buffer for av_strerror() */
 #define UPIPE_AV_STRERROR_SIZE 64

@@ -28,8 +28,8 @@
  * @short upipe-av flow def/libavcodec codec_id translation
  */
 
-#include "upipe_av_internal.h"
 #include <libavcodec/avcodec.h>
+#include "upipe_av_internal.h"
 #include <upipe_av_codecs.h> // auto-generated header
 
 const char *upipe_av_to_flow_def(enum CodecID id)
