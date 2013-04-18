@@ -7,6 +7,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_queue_source.c \
 	upipe_queue_sink.c \
 	upipe_udp_source.c \
+	upipe_http_source.c \
+    http-parser/http_parser.c \
 	upipe_genaux.c \
 	upipe_multicat_sink.c \
 	upipe_null.c \

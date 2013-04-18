@@ -97,6 +97,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
+#include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
@@ -579,6 +580,7 @@ int main(int argc, char** argv)
     struct upipe *upipe_src;
 
     if (!upipe_ts) {
+        /* use avformat source (and internal demuxer) */
         struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
         upipe_src = upipe_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "avfsrc"));
@@ -586,12 +588,14 @@ int main(int argc, char** argv)
         upipe_set_uclock(upipe_src, uclock);
         upipe_mgr_release(upipe_avfsrc_mgr);
     } else {
+        /* try file source */
         struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
         upipe_src = upipe_alloc(upipe_fsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "fsrc"));
         upipe_mgr_release(upipe_fsrc_mgr);
         upipe_set_ubuf_mgr(upipe_src, block_mgr);
         if (!upipe_fsrc_set_path(upipe_src, url)) {
+            /* try udp source */
             upipe_release(upipe_src);
             struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
             upipe_src = upipe_alloc(upipe_udpsrc_mgr,
@@ -599,12 +603,22 @@ int main(int argc, char** argv)
             upipe_mgr_release(upipe_udpsrc_mgr);
             upipe_set_ubuf_mgr(upipe_src, block_mgr);
             if (!upipe_udpsrc_set_uri(upipe_src, url)) {
+                /* try http source */
                 upipe_release(upipe_src);
-                printf("invalid URL\n");
-                exit(EXIT_FAILURE);
+                struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
+                upipe_src = upipe_alloc(upipe_http_src_mgr,
+                    uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "http"));
+                upipe_mgr_release(upipe_http_src_mgr);
+                upipe_set_ubuf_mgr(upipe_src, block_mgr);
+                if (!upipe_http_src_set_url(upipe_src, url)) {
+                    upipe_release(upipe_src);
+                    printf("invalid URL\n");
+                    exit(EXIT_FAILURE);
+                }
             }
         }
 
+        /* upipe-ts demuxer */
         struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
         struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
         upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr, upipe_mp2vf_mgr);
