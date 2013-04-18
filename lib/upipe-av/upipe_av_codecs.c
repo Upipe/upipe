@@ -28,7 +28,6 @@
  * @short upipe-av flow def/libavcodec codec_id translation
  */
 
-#include <libavcodec/avcodec.h>
 #include "upipe_av_internal.h"
 #include <upipe_av_codecs.h> // auto-generated header
 
