@@ -35,6 +35,8 @@
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_sound_flow.h>
+#include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -54,6 +56,7 @@
 #include <assert.h>
 
 #include <libavcodec/avcodec.h>
+#include <libavutil/avutil.h>
 #include "upipe_av_internal.h"
 
 #define EXPECTED_FLOW "block."
@@ -248,6 +251,48 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
     return avcodec_default_get_buffer(context, frame);
 }
 
+/** @internal @This is called by avcodec when allocating a new audio buffer
+ * Used with audio decoders.
+ * @param context current avcodec context
+ * @param frame avframe handler entering avcodec black magic box
+ */
+static int upipe_avcdv_get_buffer_audio(struct AVCodecContext *context, AVFrame *frame)
+{
+    struct upipe *upipe = context->opaque;
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    struct ubuf *ubuf_samples;
+    uint8_t *buf;
+    int size;
+
+    frame->opaque = uref_dup(upipe_avcdv->uref);
+
+    // Direct Rendering - allocate ubuf for audio
+    if (upipe_avcdv->context->codec->capabilities & CODEC_CAP_DR1) {
+        
+        ubuf_samples = ubuf_block_alloc(upipe_avcdv->ubuf_mgr,
+                    av_samples_get_buffer_size(NULL, context->channels,
+                        frame->nb_samples, context->sample_fmt, 1));
+
+        if (likely(ubuf_samples)) {
+            ubuf_block_write(ubuf_samples, 0, &size, &buf);
+            uref_attach_ubuf(frame->opaque, ubuf_samples);
+
+            av_samples_fill_arrays(frame->data, frame->linesize, buf,
+                    context->channels, frame->nb_samples, context->sample_fmt, 1);
+
+            frame->extended_data = frame->data;
+            frame->type = FF_BUFFER_TYPE_USER;
+            
+            return 1; // success
+        } else {
+            upipe_dbg_va(upipe, "ubuf allocation failed, fallback");
+        }
+    }
+
+    // Default : DR failed or not available
+    return avcodec_default_get_buffer(context, frame);
+}
+
 /** @internal @This is called by avcodec when releasing a frame
  * @param context current avcodec context
  * @param frame avframe handler released by avcodec black magic box
@@ -313,11 +358,27 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
             ret = false;
         }
         context->opaque = upipe;
-        context->get_buffer = upipe_avcdv_get_buffer;
-        context->release_buffer = upipe_avcdv_release_buffer;
-        context->flags |= CODEC_FLAG_EMU_EDGE;
         context->extradata = extradata;
         context->extradata_size = extradata_size;
+
+        switch (codec->type) {
+            case AVMEDIA_TYPE_VIDEO: {
+                context->get_buffer = upipe_avcdv_get_buffer;
+                context->release_buffer = upipe_avcdv_release_buffer;
+                context->flags |= CODEC_FLAG_EMU_EDGE;
+                break;
+            }
+            case AVMEDIA_TYPE_AUDIO: {
+                context->get_buffer = upipe_avcdv_get_buffer_audio;
+                break;
+            }
+            default: {
+                av_free(context);
+                upipe_err_va(upipe, "Unsupported media type (%d)", codec->type);
+                ret = false;
+                break;
+            }
+        }
 
         if (upipe_avcdv->lowres > codec->max_lowres) {
             upipe_warn_va(upipe, "Unsupported lowres (%d > %hhu), setting to %hhu",
@@ -490,10 +551,11 @@ static bool upipe_avcdv_set_context(struct upipe *upipe, const char *codec_def,
     }
 }
 
-/** @internal @This handles data.
+/** @internal @This outputs video frames
  *
  * @param upipe description structure of the pipe
  * @param frame AVFrame structure
+ * @param upump upump structure
  */
 static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
                                      struct upump *upump)
@@ -534,7 +596,7 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
         uref_attach_ubuf(uref, ubuf);
     }
 
-    // Set aspect-ratio
+    // set aspect-ratio
     aspect.den = 0; // null denom is invalid
     if (upipe_avcdv->context->sample_aspect_ratio.den) {
         aspect.num = upipe_avcdv->context->sample_aspect_ratio.num;
@@ -546,6 +608,63 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
     if (aspect.den) {
         urational_simplify(&aspect);
         uref_pic_set_aspect(uref, aspect);
+    }
+
+    upipe_avcdv_output(upipe, uref, upump);
+}
+
+/** @internal @This outputs audio buffers
+ *
+ * @param upipe description structure of the pipe
+ * @param frame AVFrame structure
+ * @param upump upump structure
+ */
+static void upipe_avcdv_output_audio(struct upipe *upipe, AVFrame *frame,
+                                     struct upump *upump)
+{
+    struct ubuf *ubuf;
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    struct uref *uref = frame->opaque;
+    int bufsize = -1, samplesize;
+    size_t size = 0;
+    uint8_t *buf;
+
+    /* fetch audio sample size (in case it has been reduced) */
+    samplesize = av_samples_get_buffer_size(NULL, upipe_avcdv->context->channels,
+                       frame->nb_samples, upipe_avcdv->context->sample_fmt, 1);
+
+    /* if uref has no attached ubuf (ie DR not supported) */
+    if (unlikely(!uref->ubuf)) {
+        ubuf = ubuf_block_alloc(upipe_avcdv->ubuf_mgr, samplesize);
+        if (unlikely(!ubuf)) {
+            upipe_throw_aerror(upipe);
+            return;
+        }
+
+        ubuf_block_write(ubuf, 0, &bufsize, &buf);
+        memcpy(buf, frame->data[0], bufsize);
+
+        uref_attach_ubuf(uref, ubuf);
+    }
+
+    /* unmap, reduce block if needed */
+    uref_block_unmap(uref, 0);
+    uref_block_size(uref, &size);
+    if (unlikely(size != samplesize)) {
+        uref_block_resize(uref, 0, samplesize);
+    }
+
+    /* TODO: set attributes/need a real ubuf_audio structure (?) */
+    if (!upipe_avcdv->output_flow) {
+        #if 0
+        struct uref *outflow = uref_sound_flow_alloc_def(upipe_avcdv->uref_mgr,
+                    upipe_avcdv->context->channels,
+                    av_get_bytes_per_sample(upipe_avcdv->context->sample_fmt));
+        #else
+        struct uref *outflow = uref_block_flow_alloc_def(upipe_avcdv->uref_mgr,
+                                                        "sound");
+        #endif
+        upipe_avcdv_store_flow_def(upipe, outflow);
     }
 
     upipe_avcdv_output(upipe, uref, upump);
@@ -569,34 +688,60 @@ static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
     assert(upipe);
 
-    // Init avcodec packed and attach input buffer
+    /* init avcodec packed and attach input buffer */
     av_init_packet(&avpkt);
     avpkt.size = size;
     avpkt.data = buf;
 
     frame = upipe_avcdv->frame;
-    len = avcodec_decode_video2(upipe_avcdv->context, frame, &gotframe, &avpkt);
-    if (len < 0) {
-        upipe_warn(upipe, "Error while decoding frame");
-    }
 
-    // Copy frame to ubuf_pic if any frame has been decoded
-    if (gotframe) {
-        uref_pic_get_number(frame->opaque, &framenum); // DEBUG
+    switch (upipe_avcdv->context->codec->type) {
+        case AVMEDIA_TYPE_VIDEO: {
+            len = avcodec_decode_video2(upipe_avcdv->context, frame, &gotframe, &avpkt);
+            if (len < 0) {
+                upipe_warn(upipe, "Error while decoding frame");
+            }
 
-        upipe_dbg_va(upipe, "%u\t - Picture decoded ! %dx%d - %u",
-                upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
+            /* output frame if any has been decoded */
+            if (gotframe) {
+                uref_pic_get_number(frame->opaque, &framenum);
 
-        // FIXME DEVEL
-        if (!upipe_avcdv->output_flow) {
-            struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
-            upipe_avcdv_store_flow_def(upipe, outflow);
+                upipe_dbg_va(upipe, "%u\t - Picture decoded ! %dx%d - %u",
+                        upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
+
+                if (!upipe_avcdv->output_flow) {
+                    struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
+                    upipe_avcdv_store_flow_def(upipe, outflow);
+                }
+
+                upipe_avcdv_output_frame(upipe, frame, upump);
+                return true;
+            } else {
+                return false;
+            }
         }
 
-        upipe_avcdv_output_frame(upipe, frame, upump);
-        return true;
-    } else {
-        return false;
+        case AVMEDIA_TYPE_AUDIO: {
+            len = avcodec_decode_audio4(upipe_avcdv->context, frame, &gotframe, &avpkt);
+            if (len < 0) {
+                upipe_warn(upipe, "Error while decoding frame");
+            }
+
+            /* output samples if any has been decoded */
+            if (gotframe) {
+                upipe_avcdv_output_audio(upipe, frame, upump);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        default: {
+            /* should never be here */
+            upipe_err_va(upipe, "Unsupported media type (%d)",
+                                    upipe_avcdv->context->codec->type);
+            return false;
+        }
     }
 }
 

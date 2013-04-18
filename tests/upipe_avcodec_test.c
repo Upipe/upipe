@@ -94,7 +94,9 @@ struct thread {
     unsigned int num;
     unsigned int iteration;
     struct upipe *avcdv;
+    struct upipe *audiodec;
     const char *codec_def;
+    const char *audio_def;
     struct upump *fetchav_pump;
 
     int count;
@@ -107,6 +109,7 @@ struct thread {
 
 /** Global vars */
 int videoStream;
+int audioStream;
 struct uref_mgr *uref_mgr;
 struct ubuf_mgr *block_mgr;
 const char *pgm_prefix = NULL;
@@ -311,11 +314,25 @@ static void fetch_av_packets(struct upump *pump)
             // Send uref to avcdv pipe and free avpkt
             upipe_input(avcdv, uref, pump);
             thread->count++;
+        } else if (thread->audiodec && avpkt.stream_index == audioStream) {
+            size = avpkt.size;
+            printf("#[%d]# Reading audio %d - size : %d\n", thread->num, thread->count, size, avpkt.data);
+            // Allocate uref/ubuf_block and copy data
+            uref = uref_block_alloc(uref_mgr, block_mgr, size);
+            uref_block_write(uref, 0, &size, &buf);
+            memcpy(buf, avpkt.data, size);
+            uref_block_unmap(uref, 0);
+
+            // Send uref to audiodec pipe and free avpkt
+            upipe_input(thread->audiodec, uref, pump);
         }
         av_free_packet(&avpkt);
     } else {
         // Send empty uref to output last frame (move to decoder ?)
         upipe_release(thread->avcdv);
+        if (thread->audiodec) {
+            upipe_release(thread->audiodec);
+        }
         upump_stop(pump);
     }
 }
@@ -446,7 +463,8 @@ int main (int argc, char **argv)
     assert(upipe_av_init(false));
     struct upipe_mgr *upipe_avcdv_mgr = upipe_avcdv_mgr_alloc();
     assert(upipe_avcdv_mgr);
-    struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv"));
+    struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv"));
     assert(avcdv);
     assert(upipe_set_ubuf_mgr(avcdv, pic_mgr));
     assert(upipe_set_uref_mgr(avcdv, uref_mgr));
@@ -454,12 +472,15 @@ int main (int argc, char **argv)
      * Please do not add one, to check the nopump (direct call) case */
     mainthread.avcdv = avcdv;
 
+
     // test pipe
-    struct upipe *avcdv_test = upipe_alloc(&avcdv_test_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv_test"));
+    struct upipe *avcdv_test = upipe_alloc(&avcdv_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdv_test"));
     assert(upipe_set_output(avcdv, avcdv_test));
     
     // null pipe
-    struct upipe *nullpipe = upipe_alloc(&nullpipe_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"));
+    struct upipe *nullpipe = upipe_alloc(&nullpipe_mgr,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"));
 
     if (!pgm_prefix) {
         assert(upipe_set_output(avcdv, nullpipe));
@@ -474,13 +495,39 @@ int main (int argc, char **argv)
 
     // Find first video stream
     videoStream = -1;
+    audioStream = -1;
     for (i=0; i < mainthread.avfctx->nb_streams; i++) {
-        if (mainthread.avfctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-            videoStream = i;
+        switch (mainthread.avfctx->streams[i]->codec->codec_type) {
+            case AVMEDIA_TYPE_VIDEO:
+                videoStream = i;
+                break;
+            case AVMEDIA_TYPE_AUDIO:
+                audioStream = i;
+                break;
+            default:
+                break;
+        }
+        if (videoStream >= 0 && audioStream >= 0) {
             break;
         }
     }
+
     assert(videoStream != -1);
+
+    // audiodec pipe
+    mainthread.audiodec = NULL;
+    if (audioStream >= 0) {
+        mainthread.audiodec = upipe_alloc(upipe_avcdv_mgr,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "audiodec"));
+        upipe_set_ubuf_mgr(mainthread.audiodec, block_mgr);
+        upipe_set_uref_mgr(mainthread.audiodec, uref_mgr);
+        assert(upipe_set_output(mainthread.audiodec, nullpipe));
+        mainthread.audio_def = upipe_av_to_flow_def(mainthread.avfctx->streams[audioStream]->codec->codec_id);
+        upipe_input(mainthread.audiodec,
+                uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
+                NULL);
+    }
+
 
     // set codec def and test _context()/_release()
     mainthread.codec_def = upipe_av_to_flow_def(mainthread.avfctx->streams[videoStream]->codec->codec_id);
@@ -524,6 +571,8 @@ int main (int argc, char **argv)
         }
         assert(thread[i].videoStream != -1);
         thread[i].codec_def = upipe_av_to_flow_def(thread[i].avfctx->streams[videoStream]->codec->codec_id);
+        thread[i].audio_def = NULL;
+        thread[i].audiodec = NULL;
     }
 
     // Fire threads
