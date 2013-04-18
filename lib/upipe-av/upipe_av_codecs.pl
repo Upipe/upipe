@@ -9,7 +9,7 @@ getopt('I', \%opts);
 my $file = $opts{'I'}."/libavcodec/avcodec.h";
 
 (-f "$file") or die "couldn't find libavcodec/avcodec.h!";
-open(FILE, '<', $file) or die "couldn't open $file";
+open(FILE, '-|', "gcc -E \"$file\"") or die "couldn't open $file";
 
 print <<EOF;
 /* Auto-generated file from libavcodec/avcodec.h */
