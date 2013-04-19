@@ -96,6 +96,9 @@ static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe
     uref_pic_size(uref, &w, &h, NULL);
     aspect.num = aspect.den = 1;
     uref_pic_get_aspect(uref, &aspect);
+    if (unlikely(!aspect.num || !aspect.den)) {
+        aspect.num = aspect.den = 1;
+    }
     scale = (aspect.num * w)/((float) aspect.den * h);
 
     upipe_gl_sink_get_texture(upipe, &texture);
