@@ -392,13 +392,26 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         upipe_err_va(upipe, "can't open file %s (%m)", path);
         return false;
     }
-    if (likely(mode == UPIPE_FSINK_APPEND))
-        if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END)) == -1) {
-            upipe_err_va(upipe, "can't append to file %s (%m)", path);
-            close(upipe_fsink->fd);
-            upipe_fsink->fd = -1;
-            return false;
-        }
+    switch (mode) {
+        case UPIPE_FSINK_APPEND:
+            if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END) == -1)) {
+                upipe_err_va(upipe, "can't append to file %s (%m)", path);
+                close(upipe_fsink->fd);
+                upipe_fsink->fd = -1;
+                return false;
+            }
+            break;
+        case UPIPE_FSINK_OVERWRITE:
+            if (unlikely(ftruncate(upipe_fsink->fd, 0) == -1)) {
+                upipe_err_va(upipe, "can't truncate file %s (%m)", path);
+                close(upipe_fsink->fd);
+                upipe_fsink->fd = -1;
+                return false;
+            }
+            break;
+        default:
+            break;
+    }
 
     upipe_fsink->path = strdup(path);
     if (unlikely(upipe_fsink->path == NULL)) {
