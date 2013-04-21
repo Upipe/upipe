@@ -370,6 +370,9 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     const char *mode_desc;
     int flags;
     switch (mode) {
+        case UPIPE_FSINK_NONE:
+            flags = 0;
+            break;
         case UPIPE_FSINK_APPEND:
             mode_desc = "append";
             flags = O_CREAT;
