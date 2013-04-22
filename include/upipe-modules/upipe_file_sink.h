@@ -37,9 +37,11 @@
 
 /** @This defines file opening modes. */
 enum upipe_fsink_mode {
+    /** do not do anything besides opening the fd */
+    UPIPE_FSINK_NONE,
     /** append to an existing file (O_CREAT + lseek(SEEK_END)) */
     UPIPE_FSINK_APPEND,
-    /** overwrite an existing file, or create it (O_CREAT) */
+    /** overwrite an existing file, or create it (O_CREAT + ftruncate(0)) */
     UPIPE_FSINK_OVERWRITE,
     /** create a file, fail if it already exists (O_CREAT | O_EXCL) */
     UPIPE_FSINK_CREATE

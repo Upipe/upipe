@@ -205,15 +205,20 @@ static void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,             \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain;                                                  \
-    /* we use delete because there is a possibility that the subpipe is     \
-     * deleted during the probe */                                          \
-    ulist_delete_foreach (&s->ULIST, uchain) {                              \
-        struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_uchain(uchain);    \
+    struct STRUCTURE_SUB *sub = NULL;                                       \
+    ulist_foreach (&s->ULIST, uchain) {                                     \
+        if (sub != NULL)                                                    \
+            upipe_release(STRUCTURE_SUB##_to_upipe(sub));                   \
+        sub = STRUCTURE_SUB##_from_uchain(uchain);                          \
+        /* to avoid having the uchain disappear during throw */             \
+        upipe_use(STRUCTURE_SUB##_to_upipe(sub));                           \
         va_list args;                                                       \
         va_start(args, event);                                              \
         upipe_throw_va(STRUCTURE_SUB##_to_upipe(sub), event, args);         \
         va_end(args);                                                       \
     }                                                                       \
+    if (sub != NULL)                                                        \
+        upipe_release(STRUCTURE_SUB##_to_upipe(sub));                       \
 }                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE.       \
  * It currently does nothing because by construction, the ULIST must be     \
