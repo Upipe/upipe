@@ -367,7 +367,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
             return false;
     }
 
-    const char *mode_desc;
+    const char *mode_desc = NULL; /* hush gcc */
     int flags;
     switch (mode) {
         case UPIPE_FSINK_NONE:
@@ -379,7 +379,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
             break;
         case UPIPE_FSINK_OVERWRITE:
             mode_desc = "overwrite";
-            flags = O_CREAT;
+            flags = O_CREAT | O_TRUNC;
             break;
         case UPIPE_FSINK_CREATE:
             mode_desc = "create";
@@ -392,21 +392,14 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     upipe_fsink->fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC | flags,
                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (unlikely(upipe_fsink->fd == -1)) {
-        upipe_err_va(upipe, "can't open file %s (%m)", path);
+        upipe_err_va(upipe, "can't open file %s (%s)", path, mode_desc);
         return false;
     }
     switch (mode) {
+        /* O_APPEND seeks on each write, so use this instead */
         case UPIPE_FSINK_APPEND:
             if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END) == -1)) {
-                upipe_err_va(upipe, "can't append to file %s (%m)", path);
-                close(upipe_fsink->fd);
-                upipe_fsink->fd = -1;
-                return false;
-            }
-            break;
-        case UPIPE_FSINK_OVERWRITE:
-            if (unlikely(ftruncate(upipe_fsink->fd, 0) == -1)) {
-                upipe_err_va(upipe, "can't truncate file %s (%m)", path);
+                upipe_err_va(upipe, "can't append to file %s (%s)", path, mode_desc);
                 close(upipe_fsink->fd);
                 upipe_fsink->fd = -1;
                 return false;
