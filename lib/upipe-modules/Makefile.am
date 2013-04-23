@@ -9,6 +9,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_udp_source.c \
 	upipe_http_source.c \
     http-parser/http_parser.c \
+    http-parser/http_parser.h \
 	upipe_genaux.c \
 	upipe_multicat_sink.c \
 	upipe_null.c \
