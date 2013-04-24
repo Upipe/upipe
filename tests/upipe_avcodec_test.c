@@ -114,43 +114,6 @@ struct uref_mgr *uref_mgr;
 struct ubuf_mgr *block_mgr;
 const char *pgm_prefix = NULL;
 
-/** @internal @This fetches chroma from uref
- *  
- * @param ubuf ubuf structure
- * @param str name of the chroma
- * @param strides strides array
- * @param slices array of pointers to data plans
- * @param idx index of the chroma in slices[]/strides[]
- */
-static void inline upipe_avcdv_fetch_chroma(struct ubuf *ubuf, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
-{
-    size_t stride = 0;
-    switch(action) {
-
-    case READ:
-        ubuf_pic_plane_read(ubuf, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
-        break;
-    case WRITE:
-        ubuf_pic_plane_write(ubuf, str, 0, 0, -1, -1, slices+idx);
-        break;
-    case UNMAP:
-        ubuf_pic_plane_unmap(ubuf, str, 0, 0, -1, -1);
-        slices[idx] = NULL;
-        return;
-    }
-    ubuf_pic_plane_size(ubuf, str, &stride, NULL, NULL, NULL);
-    strides[idx] = (int) stride;
-}
-
-/** @internal */
-static void upipe_avcdv_map_frame(struct ubuf *ubuf, int *strides, uint8_t **slices, enum plane_action action)
-{
-    // FIXME - hardcoded chroma fetch
-    upipe_avcdv_fetch_chroma(ubuf, "y8", strides, slices, 0, action);
-    upipe_avcdv_fetch_chroma(ubuf, "u8", strides, slices, 1, action);
-    upipe_avcdv_fetch_chroma(ubuf, "v8", strides, slices, 2, action);
-}
-
 /** Save picture to pgm file */
 static void pgm_save(const uint8_t *buf, int wrap, int xsize, int ysize, int num, const char *prefix) // FIXME debug
 {
