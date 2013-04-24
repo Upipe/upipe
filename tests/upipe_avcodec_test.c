@@ -389,25 +389,35 @@ static void *test_thread(void *_thread)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s <source file>\n", argv0);
+    fprintf(stdout, "Usage: %s [-n threads] <source file> [pgmprefix]\n", argv0);
     exit(EXIT_FAILURE);
 }
 
 int main (int argc, char **argv)
 {
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
+    int opt;
+    int thread_num = THREAD_NUM;
+    while ((opt = getopt(argc, argv, "n:")) != -1) {
+        switch(opt) {
+            case 'n':
+                thread_num = strtod(optarg, NULL);
+                break;
+            default:
+                usage(argv[0]);
+        }
+    }
 
-    if (argc < 2) {
+    if (optind >= argc) {
         usage(argv[0]);
     }
-    const char *srcpath = argv[1];
-    if (argc > 2) {
-        pgm_prefix = argv[2];
+    const char *srcpath = argv[optind++];
+    if (argc > optind) {
+        pgm_prefix = argv[optind++];
     }
 
     int i, j;
     AVDictionary *options = NULL;
-    struct thread thread[THREAD_NUM];
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -522,7 +532,8 @@ int main (int argc, char **argv)
         upipe_set_ubuf_mgr(mainthread.audiodec, block_mgr);
         upipe_set_uref_mgr(mainthread.audiodec, uref_mgr);
         assert(upipe_set_output(mainthread.audiodec, nullpipe));
-        mainthread.audio_def = upipe_av_to_flow_def(mainthread.avfctx->streams[audioStream]->codec->codec_id);
+        mainthread.audio_def = upipe_av_to_flow_def(
+                        mainthread.avfctx->streams[audioStream]->codec->codec_id);
         upipe_input(mainthread.audiodec,
                 uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
                 NULL);
@@ -530,9 +541,11 @@ int main (int argc, char **argv)
 
 
     // set codec def and test _context()/_release()
-    mainthread.codec_def = upipe_av_to_flow_def(mainthread.avfctx->streams[videoStream]->codec->codec_id);
+    mainthread.codec_def = upipe_av_to_flow_def(
+                    mainthread.avfctx->streams[videoStream]->codec->codec_id);
     printf("Codec flow def: %s\n", mainthread.codec_def);
-    struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.codec_def);
+    struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
+                                                        mainthread.codec_def);
     upipe_use(avcdv);
     upipe_input(avcdv, flowdef, NULL);
     upipe_release(avcdv);
@@ -544,49 +557,53 @@ int main (int argc, char **argv)
     printf("upipe_avcdv_get_codec: %s\n", mainthread.codec_def);
 
     // pthread/udeal check
-    printf("Allocating %d avcdv pipes\n", THREAD_NUM);
-    for (i=0; i < THREAD_NUM; i++) {
-        memset(&thread[i], 0, sizeof(struct thread));
-        thread[i].num = i;
-        thread[i].iteration = 0;
-        thread[i].avcdv = upipe_alloc(upipe_avcdv_mgr,
-                        uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL, "avcdv_thread(%d)", i));
-        assert(thread[i].avcdv);
-        assert(upipe_set_ubuf_mgr(thread[i].avcdv, pic_mgr));
-        assert(upipe_set_uref_mgr(thread[i].avcdv, uref_mgr));
-        assert(upipe_set_output(thread[i].avcdv, nullpipe));
+    if (thread_num > 0) {
+        struct thread thread[thread_num];
+        printf("Allocating %d avcdv pipes\n", thread_num);
+        for (i=0; i < thread_num; i++) {
+            memset(&thread[i], 0, sizeof(struct thread));
+            thread[i].num = i;
+            thread[i].iteration = 0;
+            thread[i].avcdv = upipe_alloc(upipe_avcdv_mgr,
+                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL, "avcdv_thread(%d)", i));
+            assert(thread[i].avcdv);
+            assert(upipe_set_ubuf_mgr(thread[i].avcdv, pic_mgr));
+            assert(upipe_set_uref_mgr(thread[i].avcdv, uref_mgr));
+            assert(upipe_set_output(thread[i].avcdv, nullpipe));
 
-        // Init per-thread avformat
-        thread[i].avfctx = NULL;
-        avformat_open_input(&thread[i].avfctx, srcpath, NULL, NULL);
-        assert(avformat_find_stream_info(thread[i].avfctx, NULL) >= 0);
+            // Init per-thread avformat
+            thread[i].avfctx = NULL;
+            avformat_open_input(&thread[i].avfctx, srcpath, NULL, NULL);
+            assert(avformat_find_stream_info(thread[i].avfctx, NULL) >= 0);
 
-        // Find first video stream
-        thread[i].videoStream = -1;
-        for (j=0; j < thread[i].avfctx->nb_streams; j++) {
-            if (thread[i].avfctx->streams[j]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-                thread[i].videoStream = j;
-                break;
+            // Find first video stream
+            thread[i].videoStream = -1;
+            for (j=0; j < thread[i].avfctx->nb_streams; j++) {
+                if (thread[i].avfctx->streams[j]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+                    thread[i].videoStream = j;
+                    break;
+                }
             }
+            assert(thread[i].videoStream != -1);
+            thread[i].codec_def = upipe_av_to_flow_def(
+                            thread[i].avfctx->streams[videoStream]->codec->codec_id);
+            thread[i].audio_def = NULL;
+            thread[i].audiodec = NULL;
         }
-        assert(thread[i].videoStream != -1);
-        thread[i].codec_def = upipe_av_to_flow_def(thread[i].avfctx->streams[videoStream]->codec->codec_id);
-        thread[i].audio_def = NULL;
-        thread[i].audiodec = NULL;
-    }
 
-    // Fire threads
-    for (i=0; i < THREAD_NUM; i++) {
-        assert(pthread_create(&thread[i].id, NULL, test_thread, &thread[i]) == 0);
-    }
-    // Join (wait for threads to exit)
-    // pipes are cleaned in their respective thread
-    for (i=0; i < THREAD_NUM; i++) {
-        assert(!pthread_join(thread[i].id, NULL));
-        avformat_close_input(&thread[i].avfctx);
-    }
+        // Fire threads
+        for (i=0; i < thread_num; i++) {
+            assert(pthread_create(&thread[i].id, NULL, test_thread, &thread[i]) == 0);
+        }
+        // Join (wait for threads to exit)
+        // pipes are cleaned in their respective thread
+        for (i=0; i < thread_num; i++) {
+            assert(!pthread_join(thread[i].id, NULL));
+            avformat_close_input(&thread[i].avfctx);
+        }
 
-    printf("udeal/pthread test ended. Now launching decoding test.\n", THREAD_NUM);
+        printf("udeal/pthread test ended. Now launching decoding test.\n", thread_num);
+    }
 
     // Now read with avformat
     ev_loop(loop, 0);
