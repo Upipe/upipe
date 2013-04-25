@@ -110,6 +110,7 @@ graph {flow: east}
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_dec_vid.h>
+#include <upipe-swscale/upipe_sws.h>
 #include <upipe-gl/upipe_glx_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe-filters/upipe_filter_blend.h>
@@ -133,164 +134,6 @@ graph {flow: east}
 
 #undef BENCH_TS
 
-/*
- * upipe-yuv-rgb
- */
-
-#define UPIPE_YUVRGB_SIGNATURE 0x424242
-struct upipe_yuvrgb {
-    struct SwsContext *swsctx;
-    struct ubuf_mgr *ubuf_mgr;
-    struct upipe *output;
-    struct uref *output_flow;
-    bool output_flow_sent;
-    struct upipe upipe;
-};
-
-UPIPE_HELPER_UPIPE(upipe_yuvrgb, upipe);
-UPIPE_HELPER_UBUF_MGR(upipe_yuvrgb, ubuf_mgr);
-UPIPE_HELPER_OUTPUT(upipe_yuvrgb, output, output_flow, output_flow_sent)
-
-static struct upipe *upipe_yuvrgb_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
-{
-    struct upipe_yuvrgb *upipe_yuvrgb = malloc(sizeof(struct upipe_yuvrgb));
-    if (unlikely(upipe_yuvrgb == NULL)) {
-        return NULL;
-    }
-    memset(upipe_yuvrgb, 0, sizeof(struct upipe_yuvrgb));
-    struct upipe *upipe = upipe_yuvrgb_to_upipe(upipe_yuvrgb);
-    upipe_init(upipe, mgr, uprobe);
-    upipe_yuvrgb_init_ubuf_mgr(upipe);
-    upipe_yuvrgb_init_output(upipe);
-    upipe_throw_ready(upipe);
-    return upipe;
-}
-
-static void upipe_yuvrgb_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
-{
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        uref_flow_set_def(uref, "pic.rgb");
-        upipe_yuvrgb_store_flow_def(upipe, uref);
-        return;
-    }
-    if (unlikely(!uref->ubuf)) { // no ubuf in uref
-        uref_free(uref);
-        return;
-    }
-
-    struct upipe_yuvrgb *upipe_yuvrgb = upipe_yuvrgb_from_upipe(upipe);
-    const uint8_t *sdata[4];
-    uint8_t *ddata[4];
-    int sline[4], dline[4], i;
-    size_t stride = 0, width, height;
-    const char *chroma = NULL;
-    struct ubuf *ubuf_rgb = NULL;
-
-    // Now process frames
-    uref_pic_size(uref, &width, &height, NULL);
-    upipe_dbg_va(upipe, "received pic (%dx%d)", width, height);
-
-    // map input ubuf
-    i = 0;
-    while(uref_pic_plane_iterate(uref, &chroma) && chroma && i < 3) {
-        uref_pic_plane_read(uref, chroma, 0, 0, -1, -1, &sdata[i]);
-        uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL);
-        sline[i] = (int) stride;
-        i++;
-    }
-
-    // Alloc rgb buffer
-    assert(upipe_yuvrgb->ubuf_mgr);
-    ubuf_rgb = ubuf_pic_alloc(upipe_yuvrgb->ubuf_mgr, width, height);
-    assert(ubuf_rgb);
-
-    // map output ubuf
-    ddata[0] = ddata[1] = ddata[2] = ddata[3] = NULL;
-    dline[0] = dline[1] = dline[2] = dline[3] = 0;
-    ubuf_pic_plane_write(ubuf_rgb, "rgb24", 0, 0, -1, -1, &ddata[0]);
-    ubuf_pic_plane_size(ubuf_rgb, "rgb24", &stride, NULL, NULL, NULL);
-    dline[0] = (int) stride;
-
-    // init swscale context
-    upipe_yuvrgb->swsctx = sws_getCachedContext(upipe_yuvrgb->swsctx, width, height,
-            PIX_FMT_YUV420P, width, height, PIX_FMT_RGB24, SWS_BICUBIC, NULL, NULL, NULL);
-    // fire conversion
-    sws_scale(upipe_yuvrgb->swsctx, sdata, sline, 0, height, ddata, dline);
-
-    // unmap output
-    ubuf_pic_plane_unmap(ubuf_rgb, "rgb24", 0, 0, -1, -1);
-
-    // unmap input
-    chroma = NULL;
-    i = 0;
-    while(uref_pic_plane_iterate(uref, &chroma) && chroma && i < 3) {
-        uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
-        i++;
-    }
-
-    ubuf_free(uref_detach_ubuf(uref));
-    uref_attach_ubuf(uref, ubuf_rgb);
-
-    upipe_yuvrgb_output(upipe, uref, upump);
-}
-
-static bool upipe_yuvrgb_control(struct upipe *upipe,
-                               enum upipe_command command, va_list args)
-{
-    switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_yuvrgb_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_yuvrgb_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_yuvrgb_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_yuvrgb_set_output(upipe, output);
-        }
-        default:
-            return false;
-    }
-}
-
-static void upipe_yuvrgb_free(struct upipe *upipe)
-{
-    struct upipe_yuvrgb *upipe_yuvrgb = upipe_yuvrgb_from_upipe(upipe);
-    upipe_throw_dead(upipe);
-
-    if (upipe_yuvrgb->swsctx) {
-        sws_freeContext(upipe_yuvrgb->swsctx);
-    }
-
-    upipe_yuvrgb_clean_ubuf_mgr(upipe);
-    upipe_yuvrgb_clean_output(upipe);
-    upipe_clean(upipe);
-    free(upipe_yuvrgb);
-}
-
-static struct upipe_mgr upipe_yuvrgb_mgr = {
-    .signature = UPIPE_YUVRGB_SIGNATURE,
-    .upipe_alloc = upipe_yuvrgb_alloc,
-    .upipe_input = upipe_yuvrgb_input,
-    .upipe_control = upipe_yuvrgb_control,
-    .upipe_free = upipe_yuvrgb_free,
-
-    .upipe_mgr_free = NULL
-};
-
-/*
- * example specific code
- */
-
 struct test_output {
     struct uchain uchain;
     struct upipe *upipe_avfsrc_output;
@@ -305,6 +148,7 @@ const char *url = NULL;
 struct upipe *upipe_qsink;
 struct upipe_mgr *avcdv_mgr;
 struct upipe_mgr *upipe_filter_blend_mgr;
+struct upipe_mgr *upipe_sws_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *rgb_mgr = NULL;
 struct ubuf_mgr *block_mgr;
@@ -354,7 +198,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(deint != NULL);
             upipe_set_ubuf_mgr(deint, yuv_mgr);
 
-            struct upipe *yuvrgb = upipe_alloc(&upipe_yuvrgb_mgr,
+            struct upipe *yuvrgb = upipe_alloc(upipe_sws_mgr,
                     uprobe_pfx_adhoc_alloc_va(uprobe, loglevel, "rgb"));
             assert(yuvrgb != NULL);
             upipe_set_ubuf_mgr(yuvrgb, rgb_mgr);
@@ -419,6 +263,7 @@ static bool thread_catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_GLX_SINK_KEYPRESS: {
             unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_GLX_SINK_SIGNATURE);
             unsigned long key = va_arg(args, unsigned long);
             keyhandler(upipe, key);
             return true;
@@ -547,6 +392,7 @@ int main(int argc, char** argv)
         uprobe_split = uprobe_selprog_alloc(uprobe_split, "auto");
 
     upipe_filter_blend_mgr = upipe_filter_blend_mgr_alloc();
+    upipe_sws_mgr = upipe_sws_mgr_alloc();
 
     // queue sink
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
