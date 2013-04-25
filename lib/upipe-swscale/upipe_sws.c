@@ -98,8 +98,8 @@ static inline bool upipe_sws_set_context(struct upipe *upipe,
                                          struct picsize *dstsize) {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
 
-    upipe_dbg_va(upipe, "Source size: %zu\t- %zu", srcsize->hsize, srcsize->vsize);
-    upipe_dbg_va(upipe, "Dest size:   %zu\t- %zu", dstsize->hsize, dstsize->vsize);
+    upipe_dbg_va(upipe, "%zux%zu => %zux%zu",
+          srcsize->hsize, srcsize->vsize, dstsize->hsize, dstsize->vsize);
 
     upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx,
                 srcsize->hsize, srcsize->vsize, upipe_sws->srcfmt->pixfmt,
@@ -264,7 +264,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
 
     /* check dst format */
     if (unlikely(!upipe_sws->dstfmt)) {
-        upipe_warn(upipe, "invalid dst format");
+        upipe_warn(upipe, "unrecognized dst format");
         uref_free(uref);
         return;
     }
@@ -290,6 +290,7 @@ static bool _upipe_sws_set_size(struct upipe *upipe, int hsize, int vsize)
     upipe_sws->dstsize->hsize = hsize;
     upipe_sws->dstsize->vsize = vsize;
 
+    upipe_dbg_va(upipe, "new output size: %dx%d", hsize, vsize);
     return true;
 }
 
