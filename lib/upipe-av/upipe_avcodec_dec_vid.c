@@ -57,7 +57,9 @@
 
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
+#include <libavutil/pixdesc.h>
 #include "upipe_av_internal.h"
+#include <upipe-av/upipe_av_pixfmt.h>
 
 #define EXPECTED_FLOW "block."
 
@@ -87,6 +89,9 @@ struct upipe_avcdv {
     struct uref_mgr *uref_mgr;
     /** upump mgr */
     struct upump_mgr *upump_mgr;
+
+    /** upipe/av pixfmt translator */
+    const struct upipe_av_pixfmt *pixfmt;
 
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
@@ -137,44 +142,6 @@ enum plane_action {
 static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
                                     size_t size, struct upump *upump);
 
-/** @internal @This fetches chroma from uref
- *  
- * @param ubuf ubuf structure
- * @param str name of the chroma
- * @param strides strides array
- * @param slices array of pointers to data plans
- * @param idx index of the chroma in slices[]/strides[]
- */
-static void inline upipe_avcdv_fetch_chroma(struct ubuf *ubuf, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
-{
-    size_t stride = 0;
-    switch(action) {
-
-    case READ:
-        ubuf_pic_plane_read(ubuf, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
-        break;
-    case WRITE:
-        ubuf_pic_plane_write(ubuf, str, 0, 0, -1, -1, slices+idx);
-        break;
-    case UNMAP:
-        ubuf_pic_plane_unmap(ubuf, str, 0, 0, -1, -1);
-        slices[idx] = NULL;
-        return;
-    }
-    ubuf_pic_plane_size(ubuf, str, &stride, NULL, NULL, NULL);
-    strides[idx] = (int) stride;
-}
-
-/** @internal
- */
-static void upipe_avcdv_map_frame(struct ubuf *ubuf, int *strides, uint8_t **slices, enum plane_action action)
-{
-    // FIXME - hardcoded YUV chroma fetch
-    upipe_avcdv_fetch_chroma(ubuf, "y8", strides, slices, 0, action);
-    upipe_avcdv_fetch_chroma(ubuf, "u8", strides, slices, 1, action);
-    upipe_avcdv_fetch_chroma(ubuf, "v8", strides, slices, 2, action);
-}
-
 /* Documentation from libavcodec.h (get_buffer) :
  * The function will set AVFrame.data[], AVFrame.linesize[].
  * AVFrame.extended_data[] must also be set, but it should be the same as
@@ -208,7 +175,9 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
     struct upipe *upipe = context->opaque;
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
     struct ubuf *ubuf_pic;
-    int width_aligned, height_aligned;
+    int width_aligned, height_aligned, i;
+    const struct upipe_av_plane *planes = NULL;
+    size_t stride = 0;
 
     frame->opaque = uref_dup(upipe_avcdv->uref);
 
@@ -218,10 +187,16 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
     upipe_dbg_va(upipe, "Allocating frame for %u (%p) - %ux%u",
                  framenum, frame->opaque, frame->width, frame->height);
 
-    if (context->pix_fmt != PIX_FMT_YUV420P) { // TODO: support different frame format
-        upipe_err_va(upipe, "Frame format != yuv420p (%d)", context->pix_fmt);
+    if (unlikely(!upipe_avcdv->pixfmt)) {
+        upipe_err_va(upipe, "frame format of ubuf manager not recognized");
+    }
+    if (context->pix_fmt != upipe_avcdv->pixfmt->pixfmt) {
+        upipe_err_va(upipe, "frame format not compatible (%s != %s",
+                                       av_get_pix_fmt_name(context->pix_fmt),
+                            av_get_pix_fmt_name(upipe_avcdv->pixfmt->pixfmt));
         return 0;
     }
+    planes = upipe_avcdv->pixfmt->planes;
 
     // Direct Rendering - allocate ubuf pic
     if (upipe_avcdv->context->codec->capabilities & CODEC_CAP_DR1) {
@@ -234,10 +209,16 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
 
         if (likely(ubuf_pic)) {
             ubuf_pic_resize(ubuf_pic, 0, 0, context->width, context->height);
-            upipe_avcdv_map_frame(ubuf_pic, frame->linesize, frame->data, WRITE);
             uref_attach_ubuf(frame->opaque, ubuf_pic);
-            frame->data[3] = NULL;
-            frame->linesize[3] = 0;
+
+            for (i=0; i < 4 && planes[i].chroma; i++) {
+                ubuf_pic_plane_write(ubuf_pic, planes[i].chroma,
+                        0, 0, -1, -1, &frame->data[i]);
+                ubuf_pic_plane_size(ubuf_pic, planes[i].chroma, &stride,
+                        NULL, NULL, NULL);
+                frame->linesize[i] = stride;
+            }
+
             frame->extended_data = frame->data;
             frame->type = FF_BUFFER_TYPE_USER;
             
@@ -301,6 +282,8 @@ static void upipe_avcdv_release_buffer(struct AVCodecContext *context, AVFrame *
 {
     struct upipe *upipe = context->opaque;
     struct uref *uref = frame->opaque;
+    const struct upipe_av_plane *planes = NULL;
+    int i;
 
     uint64_t framenum = 0; // DEBUG
     uref_pic_get_number(uref, &framenum);
@@ -308,7 +291,11 @@ static void upipe_avcdv_release_buffer(struct AVCodecContext *context, AVFrame *
     upipe_dbg_va(upipe, "Releasing frame %u (%p)", (uint64_t) framenum, uref);
 
     if (likely(uref->ubuf)) {
-        upipe_avcdv_map_frame(uref->ubuf, frame->linesize, frame->data, UNMAP);
+        planes = upipe_avcdv_from_upipe(upipe)->pixfmt->planes;
+        for (i=0; i < 4 && planes[i].chroma; i++) {
+            ubuf_pic_plane_unmap(uref->ubuf, planes[i].chroma, 0, 0, -1, -1);
+            frame->data[i] = NULL;
+        }
     } else {
         avcodec_default_release_buffer(context, frame);
     }
@@ -562,6 +549,7 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
 {
     struct ubuf *ubuf;
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    const struct upipe_av_plane *planes = upipe_avcdv->pixfmt->planes;
     struct uref *uref = uref_dup(frame->opaque);
 
     uint8_t *data, *src, hsub, vsub;
@@ -578,8 +566,9 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
             return;
         }
 
+        /* iterate through planes and copy data */
         i = j = 0;
-        while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma && i < 3) {
+        for (i=0; i < 4 && (chroma = planes[i].chroma); i++) {
             ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &data);
             ubuf_pic_plane_size(ubuf, chroma, &dstride, &hsub, &vsub, NULL);
             src = frame->data[i];
@@ -590,7 +579,6 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
                 src += sstride;
             }
             ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, -1, -1);
-            i++;
         }
 
         uref_attach_ubuf(uref, ubuf);
@@ -950,6 +938,18 @@ static bool _upipe_avcdv_get_lowres(struct upipe *upipe, int *lowres_p)
     return true;
 }
 
+/** @internal @This sets ubuf_mgr and finds corresponding pixfmt
+ * @param upipe description structure of the pipe
+ * @param ubuf_mgr ubuf manager
+ * @return false in case of error
+ */
+static bool _upipe_avcdv_set_ubuf_mgr(struct upipe *upipe, struct ubuf_mgr *mgr)
+{
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    upipe_avcdv->pixfmt = upipe_av_pixfmt_from_ubuf_mgr(mgr);
+    return upipe_avcdv_set_ubuf_mgr(upipe, mgr);
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -977,7 +977,7 @@ static bool upipe_avcdv_control(struct upipe *upipe, enum upipe_command command,
         }
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_avcdv_set_ubuf_mgr(upipe, ubuf_mgr);
+            return _upipe_avcdv_set_ubuf_mgr(upipe, ubuf_mgr);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -1103,6 +1103,7 @@ static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
     #else
     upipe_avcdv->saved_upump_mgr = NULL;
     #endif
+    upipe_avcdv->pixfmt = NULL;
     upipe_avcdv->frame = avcodec_alloc_frame();
     upipe_avcdv->lowres = 0;
 
