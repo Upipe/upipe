@@ -37,6 +37,44 @@
 
 #define UPIPE_SWS_SIGNATURE UBASE_FOURCC('s','w','s',' ')
 
+/** @This extends upipe_command with specific commands for avcodec decode. */
+enum upipe_sws_command {
+    UPIPE_SWS_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set size (int, int) */
+    UPIPE_SWS_SET_SIZE,
+    /** get size (int*, int*) */
+    UPIPE_SWS_GET_SIZE,
+};
+
+/** @This sets the low resolution parameter, if supported by codec.
+ * If some codec is already used, it is re-opened.
+ *
+ * @param upipe description structure of the pipe
+ * @param size size parameter (0=disabled)
+ * @return false in case of error
+ */
+static inline bool upipe_sws_set_size(struct upipe *upipe,
+                                      int hsize, int vsize)
+{
+    return upipe_control(upipe, UPIPE_SWS_SET_SIZE, UPIPE_SWS_SIGNATURE,
+                         hsize, vsize);
+}
+
+/** @This gets the low resolution parameter.
+ * If some codec is already used, it is re-opened.
+ *
+ * @param upipe description structure of the pipe
+ * @param size size parameter (0=disabled)
+ * @return false in case of error
+ */
+static inline bool upipe_sws_get_size(struct upipe *upipe,
+                                      int *hsize_p, int *vsize_p)
+{
+    return upipe_control(upipe, UPIPE_SWS_GET_SIZE, UPIPE_SWS_SIGNATURE,
+                         hsize_p, vsize_p);
+}
+
 /** @This returns the management structure for sws pipes.
  *
  * @return pointer to manager

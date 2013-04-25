@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-av/upipe_av_pixfmt.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -50,10 +51,8 @@
 #include <assert.h>
 
 #include <libswscale/swscale.h>
-#include <libavutil/pixdesc.h> // debug
 
 /** Picture size*/
-
 struct picsize {
     size_t hsize;
     size_t vsize;
@@ -61,13 +60,10 @@ struct picsize {
 
 /** upipe_sws structure with swscale parameters */ 
 struct upipe_sws {
-    /** input flow */
-    struct uref *input_flow;
     /** output flow */
     struct uref *output_flow;
     /** true if the flow definition has already been sent */
     bool output_flow_sent;
-
     /** output pipe */
     struct upipe *output;
 
@@ -77,131 +73,243 @@ struct upipe_sws {
     /** swscale image conversion context */
     struct SwsContext *convert_ctx;
 
-    /** input image size */
-    struct picsize srcsize;
     /** output image size */
-    struct picsize dstsize;
+    struct picsize *dstsize;
 
     /** input image swscale format */
-    enum PixelFormat srcformat;
+    const struct upipe_av_pixfmt *srcfmt;
     /** output image swscale format */
-    enum PixelFormat dstformat;
-
-    /** true if we have thrown the ready event */
-    bool ready;
+    const struct upipe_av_pixfmt *dstfmt;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
-
 UPIPE_HELPER_UPIPE(upipe_sws, upipe);
 UPIPE_HELPER_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);
 
-/** @internal @This allocates a swscale pipe.
- *
- * @param mgr common management structure
- * @param uprobe structure used to raise events
- * @return pointer to upipe or NULL in case of allocation error
- */
-static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe)
-{
-    struct upipe_sws *upipe_sws = malloc(sizeof(struct upipe_sws));
-    if (unlikely(upipe_sws == NULL))
-        return NULL;
-    struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
-    upipe_init(upipe, mgr, uprobe);
-    upipe_sws_init_ubuf_mgr(upipe);
-    upipe_sws_init_output(upipe);
-    upipe_sws->input_flow = NULL;
-    upipe_sws->convert_ctx = NULL;
-    memset(&upipe_sws->srcsize, 0, sizeof(struct picsize));
-    memset(&upipe_sws->dstsize, 0, sizeof(struct picsize));
-
-    upipe_sws->ready = false;
-    return upipe;
-}
-
-enum plane_action {
-    UNMAP,
-    READ,
-    WRITE
-};
-
-/** @internal @This fetches chroma from uref
- *  
- * @param uref uref structure
- * @param str name of the chroma
- * @param strides strides array
- * @param slices array of pointers to data plans
- * @param idx index of the chroma in slices[]/strides[]
- */
-static void inline upipe_sws_fetch_chroma(struct ubuf *ubuf, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
-{
-    size_t stride = 0;
-    switch(action) {
-
-    case READ:
-        ubuf_pic_plane_read(ubuf, str, 0, 0, -1, -1, (const uint8_t**)slices+idx);
-        break;
-    case WRITE:
-        ubuf_pic_plane_write(ubuf, str, 0, 0, -1, -1, slices+idx);
-        break;
-    case UNMAP:
-        ubuf_pic_plane_unmap(ubuf, str, 0, 0, -1, -1);
-        return;
-    }
-    ubuf_pic_plane_size(ubuf, str, &stride, NULL, NULL, NULL);
-    strides[idx] = (int) stride;
-}
-
-static void upipe_sws_filldata(struct ubuf *ubuf, int *strides, uint8_t **slices, enum plane_action action)
-{
-    // FIXME - hardcoded chroma fetch
-    upipe_sws_fetch_chroma(ubuf, "y8", strides, slices, 0, action);
-    upipe_sws_fetch_chroma(ubuf, "u8", strides, slices, 1, action);
-    upipe_sws_fetch_chroma(ubuf, "v8", strides, slices, 2, action);
-    slices[3] = NULL;
-    strides[3] = 0;
-}
-
 /** @internal @This configures swscale context
  *
  * @param upipe_sws upipe_sws structure
- * @param flow uref to the new flow
- * @param src pointer to new input picture size (can be NULL)
- * @param dst pointer to new output picture size (can be NULL)
  */
-
-static bool upipe_sws_set_context(struct upipe *upipe, struct uref *flow, struct picsize *src, struct picsize *dst) // FIXME - refactor this
-{
-    assert(upipe);
+static inline bool upipe_sws_set_context(struct upipe *upipe, 
+                                         struct picsize *srcsize,
+                                         struct picsize *dstsize) {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    struct picsize *srcsize = &upipe_sws->srcsize;
-    struct picsize *dstsize = &upipe_sws->dstsize;
-
-    if (flow) {
-        upipe_warn(upipe, "sws_set_context: setting flow not implemented yet"); // FIXME
-        assert(0);
-    }
-    if (src) {
-        srcsize->hsize =  src->hsize;
-        srcsize->vsize =  src->vsize;
-    }
-    if (dst) {
-        dstsize->hsize =  dst->hsize;
-        dstsize->vsize =  dst->vsize;
-    }
 
     upipe_dbg_va(upipe, "Source size: %zu\t- %zu", srcsize->hsize, srcsize->vsize);
     upipe_dbg_va(upipe, "Dest size:   %zu\t- %zu", dstsize->hsize, dstsize->vsize);
-    // FIXME hardcoded format, algorithm, filters
-    upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx, srcsize->hsize, srcsize->vsize, PIX_FMT_YUV420P, dstsize->hsize, dstsize->vsize, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
-    if (!upipe_sws->convert_ctx) {
+
+    upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx,
+                srcsize->hsize, srcsize->vsize, upipe_sws->srcfmt->pixfmt,
+                dstsize->hsize, dstsize->vsize, upipe_sws->dstfmt->pixfmt,
+                SWS_BICUBIC, NULL, NULL, NULL);
+
+    if (unlikely(!upipe_sws->convert_ctx)) {
         upipe_err(upipe, "could not get swscale context");
         return false;
+    }
+
+    return true;
+}
+
+/** @internal @This receives incoming pictures.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure describing the picture
+ * @param upump pump that generated the buffer
+ */
+static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
+{
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
+    const struct upipe_av_plane *planes;
+    struct ubuf *dstpic;
+    struct picsize inputsize, *dstsize;
+    size_t stride;
+    int strides[4], dstrides[4];
+    const uint8_t *slices[4];
+    uint8_t *dslices[4];
+    int ret, i;
+
+    /* detect input format */
+    if (unlikely(!upipe_sws->srcfmt)) {
+        upipe_sws->srcfmt = upipe_av_pixfmt_from_ubuf(uref->ubuf);
+        if (unlikely(!upipe_sws->srcfmt)) {
+            upipe_warn(upipe, "unrecognized input format");
+            uref_free(uref);
+            return;
+        }
+    }
+
+    /* set picture sizes */
+    memset(&inputsize, 0, sizeof(struct picsize));
+    uref_pic_size(uref, &inputsize.hsize, &inputsize.vsize, NULL);
+    dstsize = upipe_sws->dstsize;
+    if (!dstsize) {
+        /* comes handy in case of format conversion with no rescaling */
+        dstsize = &inputsize;
+    }
+
+    /* get sws context */
+    if (unlikely(!upipe_sws_set_context(upipe, &inputsize, dstsize))) {
+        uref_free(uref);
+        return;
+    }
+
+    /* allocate dest ubuf */
+    dstpic = ubuf_pic_alloc(upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
+    if (unlikely(!dstpic)) {
+        upipe_throw_aerror(upipe);
+        uref_free(uref);
+        return;
+    }
+
+    /* map input */
+    memset(slices, 0, sizeof(slices));
+    memset(strides, 0, sizeof(strides));
+    planes = upipe_sws->srcfmt->planes;
+    for (i=0; i < 4 && planes[i].chroma; i++) {
+        uref_pic_plane_read(uref, planes[i].chroma, 0, 0, -1, -1, &slices[i]);
+        uref_pic_plane_size(uref, planes[i].chroma, &stride, NULL, NULL, NULL);
+        strides[i] = stride;
+    }
+    /* map output */
+    memset(dslices, 0, sizeof(dslices));
+    memset(dstrides, 0, sizeof(dstrides));
+    planes = upipe_sws->dstfmt->planes;
+    for (i=0; i < 4 && planes[i].chroma; i++) {
+        ubuf_pic_plane_write(dstpic, planes[i].chroma, 0, 0, -1, -1, &dslices[i]);
+        ubuf_pic_plane_size(dstpic, planes[i].chroma, &stride, NULL, NULL, NULL);
+        dstrides[i] = stride;
+    }
+
+    /* fire ! */
+    ret = sws_scale(upipe_sws->convert_ctx,
+                    (const uint8_t *const*) slices, strides, 0, inputsize.vsize,
+                    dslices, dstrides);
+
+    /* unmap pictures */
+    planes = upipe_sws->srcfmt->planes;
+    for (i=0; i < 4 && planes[i].chroma; i++) {
+        uref_pic_plane_unmap(uref, planes[i].chroma, 0, 0, -1, -1);
+    }
+    planes = upipe_sws->dstfmt->planes;
+    for (i=0; i < 4 && planes[i].chroma; i++) {
+        ubuf_pic_plane_unmap(dstpic, planes[i].chroma, 0, 0, -1, -1);
+    }
+
+    /* clean and output */
+    ubuf_free(uref_detach_ubuf(uref));
+    if (unlikely(ret <= 0)) {
+        upipe_warn(upipe, "error during sws conversion");
+        ubuf_free(dstpic);
+        uref_free(uref);
+        return;
+    }
+    uref_attach_ubuf(uref, dstpic);
+    upipe_sws_output(upipe, uref, upump);
+}
+
+/** @internal @This receives incoming uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure describing the picture
+ * @param upump pump that generated the buffer
+ */
+static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
+{
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
+    const char *def;
+
+    /* flow def */
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        if(unlikely(ubase_ncmp(def, "pic."))) {
+            upipe_throw_flow_def_error(upipe, uref);
+            uref_free(uref);
+            return;
+        }
+        upipe_dbg_va(upipe, "flow definition %s", def);
+        /* reset input format */
+        upipe_sws->srcfmt = NULL;
+        upipe_sws_store_flow_def(upipe, uref);
+        return;
+    }
+
+    /* flow end */
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_need_input(upipe);
+        return;
+    }
+
+    /* empty uref */
+    if (unlikely(!uref->ubuf)) { 
+        upipe_warn(upipe, "dropping empty uref");
+        uref_free(uref);
+        return;
+    }
+
+    /* check ubuf manager */
+    if (unlikely(!upipe_sws->ubuf_mgr)) {
+        upipe_throw_need_ubuf_mgr(upipe, upipe_sws->output_flow);
+        if (unlikely(!upipe_sws->ubuf_mgr)) {
+            upipe_warn(upipe, "ubuf_mgr not set !");
+            uref_free(uref);
+            return;
+        }
+    }
+
+    /* check dst format */
+    if (unlikely(!upipe_sws->dstfmt)) {
+        upipe_warn(upipe, "invalid dst format");
+        uref_free(uref);
+        return;
+    }
+
+    upipe_sws_input_pic(upipe, uref, upump);
+}
+
+/** @internal @This sets output pictures size
+ * @param upipe description structure of the pipe
+ * @param hsize horizontal size
+ * @param vsize vertical size
+ * @return false in case of error
+ */
+static bool _upipe_sws_set_size(struct upipe *upipe, int hsize, int vsize)
+{
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
+    upipe_sws->dstsize = realloc(upipe_sws->dstsize,
+                                 sizeof(struct picsize));
+    if (unlikely(!upipe_sws->dstsize)) {
+        upipe_throw_aerror(upipe);
+        return false;
+    }
+    upipe_sws->dstsize->hsize = hsize;
+    upipe_sws->dstsize->vsize = vsize;
+
+    return true;
+}
+
+/** @internal @This retrieves output pictures size
+ * @param upipe description structure of the pipe
+ * @param hsize_p horizontal size
+ * @param vsize_p vertical size
+ * @return false in case of error
+ */
+static bool _upipe_sws_get_size(struct upipe *upipe, int *hsize_p, int *vsize_p)
+{
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
+    if (unlikely(!upipe_sws->dstsize)) {
+        return false;
+    }
+    if (hsize_p) {
+        *hsize_p = upipe_sws->dstsize->hsize;
+    }
+    if (vsize_p) {
+        *vsize_p = upipe_sws->dstsize->vsize;
     }
 
     return true;
@@ -215,126 +323,32 @@ static bool upipe_sws_set_context(struct upipe *upipe, struct uref *flow, struct
  */
 static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow)
 {
-    uint64_t size = 0;
+    uint64_t hsize = 0, vsize = 0;
     if (!flow) {
         return false;
     }
-    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    // TODO - detect associated PixelFormat
 
-    uref_pic_get_hsize(flow, &size);
-    upipe_sws->dstsize.hsize = size;
-    uref_pic_get_vsize(flow, &size);
-    upipe_sws->dstsize.vsize = size;
-
-    struct uref *uref = uref_dup(flow);
-    if (unlikely(uref == NULL))
+    uref_pic_get_hsize(flow, &hsize);
+    uref_pic_get_vsize(flow, &vsize);
+    if (unlikely(!_upipe_sws_set_size(upipe, hsize, vsize))) {
+        uref_free(flow);
         return false;
+    }
 
-    upipe_sws_store_flow_def(upipe, uref);
+    upipe_sws_store_flow_def(upipe, flow);
     return true;
 }
 
-
-/** @internal @This receives pictures.
- *
+/** @internal @This sets ubuf_mgr and finds corresponding pixfmt
  * @param upipe description structure of the pipe
- * @param uref uref structure describing the picture
- * @param upump pump that generated the buffer
+ * @param ubuf_mgr ubuf manager
+ * @return false in case of error
  */
-static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
-{
-
-    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    struct ubuf *dstpic;
-    struct picsize inputsize, *srcsize, *dstsize;
-    int strides[4], dstrides[4];
-    uint8_t *slices[4], *dslices[4];
-    int ret;
-
-    if(unlikely(!upipe_sws->ready)) {
-        upipe_warn(upipe, "pipe not ready");
-        uref_free(uref);
-        return;
-    }
-    
-    uref_pic_size(uref, &inputsize.hsize, &inputsize.vsize, NULL);
-    srcsize = &upipe_sws->srcsize;
-    if ( unlikely((srcsize->hsize != inputsize.hsize) || (srcsize->vsize != inputsize.vsize)) )
-    {
-        upipe_notice(upipe, "received picture with a new size");
-        upipe_sws_set_context(upipe, NULL, &inputsize, NULL);
-    }
-
-    dstsize = &upipe_sws->dstsize;
-    dstpic = ubuf_pic_alloc(upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
-    if (unlikely(dstpic == NULL)) {
-        upipe_dbg(upipe, "dstpic == NULL");
-        upipe_throw_aerror(upipe);
-        uref_free(uref);
-        return;
-    }
-
-    upipe_sws_filldata(uref->ubuf, strides, slices, READ);
-    upipe_sws_filldata(dstpic, dstrides, dslices, WRITE);
-
-    ret = sws_scale(upipe_sws->convert_ctx, (const uint8_t *const*) slices, strides, 0, srcsize->vsize, dslices, dstrides);
-    
-    upipe_sws_filldata(uref->ubuf, strides, slices, UNMAP);
-    upipe_sws_filldata(dstpic, dstrides, dslices, UNMAP);
-
-    ubuf_free(uref_detach_ubuf(uref));
-    if(unlikely(ret <= 0)) {
-        ubuf_free(dstpic);
-        uref_free(uref);
-        return;
-    }
-    uref_attach_ubuf(uref, dstpic);
-    upipe_sws_output(upipe, uref, upump);
-}
-
-/** @internal @This handles data.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
- */
-static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
-                            struct upump *upump)
+static bool _upipe_sws_set_ubuf_mgr(struct upipe *upipe, struct ubuf_mgr *mgr)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    const char *def;
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_sws->input_flow) {
-            uref_free(upipe_sws->input_flow);
-            upipe_sws->input_flow = NULL;
-        }
-
-        if (unlikely(ubase_ncmp(def, "pic."))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-        upipe_sws->input_flow = uref;
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        return;
-    }
-
-    if (unlikely(upipe_sws->input_flow == NULL)) {
-        upipe_warn(upipe, "pipe has no registered input flow");
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
-    upipe_dbg(upipe, "calling input_pic");
-    upipe_sws_input_pic(upipe, uref, upump);
+    upipe_sws->dstfmt = upipe_av_pixfmt_from_ubuf_mgr(mgr);
+    return upipe_sws_set_ubuf_mgr(upipe, mgr);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -345,18 +359,18 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
  * @param args arguments of the command
  * @return false in case of error
  */
-
-static bool _upipe_sws_control(struct upipe *upipe, enum upipe_command command,
+static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
     switch (command) {
+        /* generic commands */
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_sws_get_ubuf_mgr(upipe, p);
         }
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_sws_set_ubuf_mgr(upipe, ubuf_mgr);
+            return _upipe_sws_set_ubuf_mgr(upipe, ubuf_mgr);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -374,34 +388,52 @@ static bool _upipe_sws_control(struct upipe *upipe, enum upipe_command command,
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sws_set_flow_def(upipe, flow);
         }
+
+        /* specific commands */
+        case UPIPE_SWS_GET_SIZE: {
+            int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_SWS_SIGNATURE);
+            int *hsize_p = va_arg(args, int*);
+            int *vsize_p = va_arg(args, int*);
+            return _upipe_sws_get_size(upipe, hsize_p, vsize_p);
+        }
+        case UPIPE_SWS_SET_SIZE: {
+            int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_SWS_SIGNATURE);
+            int hsize = va_arg(args, int);
+            int vsize = va_arg(args, int);
+            return _upipe_sws_set_size(upipe, hsize, vsize);
+        }
         default:
             return false;
     }
 }
 
-/** @internal @This processes control commands on a file source pipe, and
- * checks the status of the pipe afterwards.
+/** @internal @This allocates a swscale pipe.
  *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @return pointer to upipe or NULL in case of allocation error
  */
-
-static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
+                                     struct uprobe *uprobe)
 {
-    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    int ret = _upipe_sws_control(upipe, command, args);
-   
-    // FIXME - check convert_ctx
-    if (upipe_sws->output && upipe_sws->ubuf_mgr && upipe_sws->output_flow) {
-        if (!upipe_sws->ready) {
-            upipe_sws->ready = true;
-            upipe_throw_ready(upipe);
-        }
-    }
-    return ret;
+    struct upipe_sws *upipe_sws = malloc(sizeof(struct upipe_sws));
+    if (unlikely(upipe_sws == NULL))
+        return NULL;
+    struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
+    upipe_init(upipe, mgr, uprobe);
+
+    upipe_sws_init_ubuf_mgr(upipe);
+    upipe_sws_init_output(upipe);
+
+    upipe_sws->convert_ctx = NULL;
+    upipe_sws->srcfmt = NULL;
+    upipe_sws->dstfmt = NULL;
+    memset(&upipe_sws->dstsize, 0, sizeof(struct picsize));
+
+    upipe_throw_ready(upipe);
+    return upipe;
 }
 
 /** @This frees a upipe.
@@ -411,16 +443,15 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
 static void upipe_sws_free(struct upipe *upipe)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    upipe_throw_dead(upipe);
     upipe_sws_clean_output(upipe);
     upipe_sws_clean_ubuf_mgr(upipe);
-    if (upipe_sws->input_flow) {
-        uref_free(upipe_sws->input_flow);
-    }
+
     if (upipe_sws->convert_ctx) {
         sws_freeContext(upipe_sws->convert_ctx);
     }
+    free(upipe_sws->dstsize);
 
+    upipe_throw_dead(upipe);
     upipe_clean(upipe);
     free(upipe_sws);
 }
@@ -445,3 +476,4 @@ struct upipe_mgr *upipe_sws_mgr_alloc(void)
 {
     return &upipe_sws_mgr;
 }
+

@@ -341,7 +341,10 @@ int main(int argc, char **argv)
     assert(uref2);
     assert(uref2->ubuf);
 
-    img_convert_ctx = sws_getCachedContext(NULL, SRCSIZE, SRCSIZE, PIX_FMT_YUV420P, DSTSIZE, DSTSIZE, PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
+    img_convert_ctx = sws_getCachedContext(NULL,
+                                    SRCSIZE, SRCSIZE, PIX_FMT_YUV420P,
+                                    DSTSIZE, DSTSIZE, PIX_FMT_YUV420P,
+                                    SWS_BICUBIC, NULL, NULL, NULL); 
     assert(img_convert_ctx);
 
     filldata(uref1, strides, slices, READ);
@@ -358,7 +361,9 @@ int main(int argc, char **argv)
     assert(check_image_pointers((const uint8_t * const*) dslices, PIX_FMT_YUV420P, dstrides));
 
     // fire raw swscale test
-    ret = sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides, 0, SRCSIZE, dslices, dstrides);
+    ret = sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides,
+                                     0, SRCSIZE,
+                                     dslices, dstrides);
     sws_freeContext(img_convert_ctx);
 
     filldata(uref1, strides, slices, UNMAP);
@@ -378,12 +383,14 @@ int main(int argc, char **argv)
     assert(log != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
-    struct upipe *sws = upipe_alloc(upipe_sws_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws")); 
+    struct upipe *sws = upipe_alloc(upipe_sws_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws")); 
     assert(sws != NULL);
     assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_alloc(&sws_test_mgr, uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
+    struct upipe *sws_test = upipe_alloc(&sws_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
     uprobe_dbg_va(log, NULL, "Pipe addr: sws:\t %p", sws);
     uprobe_dbg_va(log, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
@@ -401,6 +408,7 @@ int main(int argc, char **argv)
     uref_pic_set_hsize(pic_flow, DSTSIZE);
     uref_pic_set_vsize(pic_flow, DSTSIZE);
     assert(upipe_set_flow_def(sws, pic_flow));
+    pic_flow = NULL;
 
     /* Now send pic */
     struct uref *pic = uref_dup(uref1);
@@ -414,7 +422,6 @@ int main(int argc, char **argv)
     /* release urefs */
     uref_free(uref1);
     uref_free(uref2);
-    uref_free(pic_flow);
 
     /* release pipes */
     upipe_release(sws);
