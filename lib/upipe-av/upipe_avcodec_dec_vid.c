@@ -188,7 +188,11 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
                  framenum, frame->opaque, frame->width, frame->height);
 
     if (unlikely(!upipe_avcdv->pixfmt)) {
-        upipe_err_va(upipe, "frame format of ubuf manager not recognized");
+        upipe_avcdv->pixfmt = upipe_av_pixfmt_from_ubuf_mgr(upipe_avcdv->ubuf_mgr);
+        if (unlikely(!upipe_avcdv->pixfmt)) {
+            upipe_err_va(upipe, "frame format of ubuf manager not recognized");
+            return 0;
+        }
     }
     if (context->pix_fmt != upipe_avcdv->pixfmt->pixfmt) {
         upipe_err_va(upipe, "frame format not compatible (%s != %s",
@@ -338,6 +342,7 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
         upipe_avcdv->upump_av_deal = NULL;
     }
 
+    /* allocate and configure codec context */
     if (codec) {
         context = avcodec_alloc_context3(codec);
         if (unlikely(!context)) {
@@ -375,12 +380,13 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
         context->lowres = upipe_avcdv->lowres;
     }
 
-    if (unlikely(upipe_avcdv->context)) { // Close previously opened context
-        // First send empty packet to send/release retained frames
+    /* close previously opened context */
+    if (unlikely(upipe_avcdv->context)) {
+        /* first send empty packet to flush retained frames */
         upipe_dbg(upipe, "flushing frames in decoder");
         while (upipe_avcdv_process_buf(upipe, NULL, 0, NULL));
 
-        // Now close codec and free extradata if any
+        /* now close codec and free extradata if any */
         upipe_notice_va(upipe, "avcodec context (%s) closed (%d)",
                     upipe_avcdv->context->codec->name, upipe_avcdv->counter);
         avcodec_close(upipe_avcdv->context);
@@ -389,17 +395,19 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
         }
         av_free(upipe_avcdv->context);
         upipe_avcdv->context = NULL;
+        upipe_avcdv_store_flow_def(upipe, NULL);
     }
 
-    if (context) { // Open new context
+    /* open new context */
+    if (context) {         
         if (unlikely(avcodec_open2(context, codec, NULL) < 0)) {
             upipe_warn(upipe, "could not open codec");
-            // FIXME: send probe (?)
             av_free(context);
             ret = false;
         }
     }
 
+    /* clean dealer */
     if (upump_av_deal) {
         if (unlikely(!upipe_av_deal_yield(upump_av_deal))) {
             upump_free(upump_av_deal);
@@ -425,6 +433,7 @@ static bool upipe_avcdv_open_codec(struct upipe *upipe, AVCodec *codec,
                    codec->long_name, codec->id);
 
 
+        /* unblock pump */
         #if 0
         if (upipe_avcdv->saved_upump) {
             upump_start(upipe_avcdv->saved_upump);
@@ -598,6 +607,11 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
         uref_pic_set_aspect(uref, aspect);
     }
 
+    if (!upipe_avcdv->output_flow) {
+        struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
+        upipe_avcdv_store_flow_def(upipe, outflow);
+    }
+
     upipe_avcdv_output(upipe, uref, upump);
 }
 
@@ -613,17 +627,18 @@ static void upipe_avcdv_output_audio(struct upipe *upipe, AVFrame *frame,
     struct ubuf *ubuf;
     struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
     struct uref *uref = frame->opaque;
-    int bufsize = -1, samplesize;
+    int bufsize = -1, avbufsize;
     size_t size = 0;
     uint8_t *buf;
+    AVCodecContext *context = upipe_avcdv->context;
 
     /* fetch audio sample size (in case it has been reduced) */
-    samplesize = av_samples_get_buffer_size(NULL, upipe_avcdv->context->channels,
-                       frame->nb_samples, upipe_avcdv->context->sample_fmt, 1);
+    avbufsize = av_samples_get_buffer_size(NULL, context->channels,
+                       frame->nb_samples, context->sample_fmt, 1);
 
     /* if uref has no attached ubuf (ie DR not supported) */
     if (unlikely(!uref->ubuf)) {
-        ubuf = ubuf_block_alloc(upipe_avcdv->ubuf_mgr, samplesize);
+        ubuf = ubuf_block_alloc(upipe_avcdv->ubuf_mgr, avbufsize);
         if (unlikely(!ubuf)) {
             upipe_throw_aerror(upipe);
             return;
@@ -638,23 +653,31 @@ static void upipe_avcdv_output_audio(struct upipe *upipe, AVFrame *frame,
     /* unmap, reduce block if needed */
     uref_block_unmap(uref, 0);
     uref_block_size(uref, &size);
-    if (unlikely(size != samplesize)) {
-        uref_block_resize(uref, 0, samplesize);
+    if (unlikely(size != avbufsize)) {
+        uref_block_resize(uref, 0, avbufsize);
     }
 
     /* TODO: set attributes/need a real ubuf_audio structure (?) */
     if (!upipe_avcdv->output_flow) {
         #if 0
         struct uref *outflow = uref_sound_flow_alloc_def(upipe_avcdv->uref_mgr,
-                    upipe_avcdv->context->channels,
-                    av_get_bytes_per_sample(upipe_avcdv->context->sample_fmt));
+                    context->channels,
+                    av_get_bytes_per_sample(context->sample_fmt));
         #else
+
         struct uref *outflow = uref_block_flow_alloc_def(upipe_avcdv->uref_mgr,
-                                                        "sound");
+                                                        "sound.");
+
         #endif
+        uref_sound_flow_set_channels(outflow, context->channels);
+        uref_sound_flow_set_sample_size(outflow,
+                                 av_get_bytes_per_sample(context->sample_fmt));
+        uref_sound_flow_set_rate(outflow, context->sample_rate);
+
         upipe_avcdv_store_flow_def(upipe, outflow);
     }
 
+    uref_sound_flow_set_samples(uref, frame->nb_samples);
     upipe_avcdv_output(upipe, uref, upump);
 }
 
@@ -685,6 +708,7 @@ static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
 
     switch (upipe_avcdv->context->codec->type) {
         case AVMEDIA_TYPE_VIDEO: {
+
             len = avcodec_decode_video2(upipe_avcdv->context, frame, &gotframe, &avpkt);
             if (len < 0) {
                 upipe_warn(upipe, "Error while decoding frame");
@@ -696,11 +720,6 @@ static bool upipe_avcdv_process_buf(struct upipe *upipe, uint8_t *buf,
 
                 upipe_dbg_va(upipe, "%u\t - Picture decoded ! %dx%d - %u",
                         upipe_avcdv->counter, frame->width, frame->height, (uint64_t) framenum);
-
-                if (!upipe_avcdv->output_flow) {
-                    struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
-                    upipe_avcdv_store_flow_def(upipe, outflow);
-                }
 
                 upipe_avcdv_output_frame(upipe, frame, upump);
                 return true;
@@ -938,18 +957,6 @@ static bool _upipe_avcdv_get_lowres(struct upipe *upipe, int *lowres_p)
     return true;
 }
 
-/** @internal @This sets ubuf_mgr and finds corresponding pixfmt
- * @param upipe description structure of the pipe
- * @param ubuf_mgr ubuf manager
- * @return false in case of error
- */
-static bool _upipe_avcdv_set_ubuf_mgr(struct upipe *upipe, struct ubuf_mgr *mgr)
-{
-    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
-    upipe_avcdv->pixfmt = upipe_av_pixfmt_from_ubuf_mgr(mgr);
-    return upipe_avcdv_set_ubuf_mgr(upipe, mgr);
-}
-
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -977,7 +984,7 @@ static bool upipe_avcdv_control(struct upipe *upipe, enum upipe_command command,
         }
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return _upipe_avcdv_set_ubuf_mgr(upipe, ubuf_mgr);
+            return upipe_avcdv_set_ubuf_mgr(upipe, ubuf_mgr);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
