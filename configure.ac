@@ -44,6 +44,9 @@ PKG_CHECK_UPIPE(X264, x264, [x264.h])
 
 AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
 
+AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
+AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, true) AM_CONDITIONAL(HAVE_OSX_DARWIN, true)], AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, false))
+
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])
@@ -112,6 +115,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-gl/Makefile
                  include/upipe-filters/Makefile
                  include/upipe-x264/Makefile
+                 include/upipe-osx/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -133,6 +137,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-filters/libupipe_filters.pc
                  lib/upipe-x264/Makefile
                  lib/upipe-x264/libupipe_x264.pc
+                 lib/upipe-osx/Makefile
+                 lib/upipe-osx/libupipe_osx.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
