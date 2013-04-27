@@ -93,6 +93,8 @@ struct upipe_mp2vf {
     struct uref *flow_def_input;
     /** last random access point */
     uint64_t systime_rap;
+    /** random access point of the last ref */
+    uint64_t systime_rap_ref;
 
     /* picture parsing stuff */
     /** last output picture number */
@@ -114,6 +116,8 @@ struct upipe_mp2vf {
     bool progressive_sequence;
     /** frames per second */
     struct urational fps;
+    /** closed GOP */
+    bool closed_gop;
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -231,6 +235,7 @@ static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
     upipe_mp2vf_init_output(upipe);
     upipe_mp2vf->flow_def_input = NULL;
     upipe_mp2vf->systime_rap = UINT64_MAX;
+    upipe_mp2vf->systime_rap_ref = UINT64_MAX;
     upipe_mp2vf->last_picture_number = 0;
     upipe_mp2vf->last_temporal_reference = -1;
     upipe_mp2vf->got_discontinuity = false;
@@ -635,7 +640,7 @@ static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
 static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    bool closedgop = false;
+    upipe_mp2vf->closed_gop = false;
     bool brokenlink = false;
     if (upipe_mp2vf->next_frame_gop_offset != -1) {
         uint8_t gop_buffer[MP2VGOP_HEADER_SIZE];
@@ -647,7 +652,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
             upipe_throw_aerror(upipe);
             return false;
         }
-        closedgop = mp2vgop_get_closedgop(gop);
+        upipe_mp2vf->closed_gop = mp2vgop_get_closedgop(gop);
         brokenlink = mp2vgop_get_brokenlink(gop);
         if (unlikely(!uref_block_peek_unmap(uref,
                                             upipe_mp2vf->next_frame_gop_offset,
@@ -662,7 +667,8 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
     } else if (upipe_mp2vf->next_frame_offset)
         uref_block_set_header_size(uref, upipe_mp2vf->next_frame_offset);
 
-    if ((brokenlink || (!closedgop && upipe_mp2vf->got_discontinuity)) &&
+    if ((brokenlink ||
+        (!upipe_mp2vf->closed_gop && upipe_mp2vf->got_discontinuity)) &&
         !uref_flow_set_discontinuity(uref)) {
         upipe_throw_aerror(upipe);
         return false;
@@ -788,6 +794,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
  */
 static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 {
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     if (unlikely(!upipe_mp2vf_parse_picture(upipe, uref)))
         return false;
 
@@ -795,42 +802,58 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
     if (!uref_mp2v_get_type(uref, &type))
         return false;
 
-    if (type == MP2VPIC_TYPE_I) {
-        struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-        uint64_t systime_rap = UINT64_MAX;
-        uref_clock_get_systime_rap(uref, &systime_rap);
+    switch (type) {
+        case MP2VPIC_TYPE_I: {
+            if (upipe_mp2vf->next_frame_sequence)
+                uref_flow_set_random(uref);
+            else if (upipe_mp2vf->insert_sequence) {
+                struct ubuf *ubuf;
+                if (upipe_mp2vf->sequence_display != NULL) {
+                    ubuf = ubuf_dup(upipe_mp2vf->sequence_display);
+                    if (unlikely(ubuf == NULL)) {
+                        upipe_throw_aerror(upipe);
+                        return false;
+                    }
+                    uref_block_insert(uref, 0, ubuf);
+                }
+                if (upipe_mp2vf->sequence_ext != NULL) {
+                    ubuf = ubuf_dup(upipe_mp2vf->sequence_ext);
+                    if (unlikely(ubuf == NULL)) {
+                        upipe_throw_aerror(upipe);
+                        return false;
+                    }
+                    uref_block_insert(uref, 0, ubuf);
+                }
+                ubuf = ubuf_dup(upipe_mp2vf->sequence_header);
+                if (unlikely(ubuf == NULL)) {
+                    upipe_throw_aerror(upipe);
+                    return false;
+                }
+                uref_block_insert(uref, 0, ubuf);
+                uref_flow_set_random(uref);
+            }
 
-        if (upipe_mp2vf->next_frame_sequence) {
-            uref_flow_set_random(uref);
+            uint64_t systime_rap = UINT64_MAX;
+            uref_clock_get_systime_rap(uref, &systime_rap);
+            upipe_mp2vf->systime_rap_ref = upipe_mp2vf->systime_rap;
             upipe_mp2vf->systime_rap = systime_rap;
-        } else if (upipe_mp2vf->insert_sequence) {
-            struct ubuf *ubuf;
-            if (upipe_mp2vf->sequence_display != NULL) {
-                ubuf = ubuf_dup(upipe_mp2vf->sequence_display);
-                if (unlikely(ubuf == NULL)) {
-                    upipe_throw_aerror(upipe);
-                    return false;
-                }
-                uref_block_insert(uref, 0, ubuf);
-            }
-            if (upipe_mp2vf->sequence_ext != NULL) {
-                ubuf = ubuf_dup(upipe_mp2vf->sequence_ext);
-                if (unlikely(ubuf == NULL)) {
-                    upipe_throw_aerror(upipe);
-                    return false;
-                }
-                uref_block_insert(uref, 0, ubuf);
-            }
-            ubuf = ubuf_dup(upipe_mp2vf->sequence_header);
-            if (unlikely(ubuf == NULL)) {
-                upipe_throw_aerror(upipe);
-                return false;
-            }
-            uref_block_insert(uref, 0, ubuf);
-            uref_flow_set_random(uref);
-            upipe_mp2vf->systime_rap = systime_rap;
+            break;
         }
+
+        case MP2VPIC_TYPE_P:
+            upipe_mp2vf->systime_rap_ref = upipe_mp2vf->systime_rap;
+            if (upipe_mp2vf->systime_rap != UINT64_MAX)
+                uref_clock_set_systime_rap(uref, upipe_mp2vf->systime_rap);
+            break;
+
+        case MP2VPIC_TYPE_B:
+            if (upipe_mp2vf->systime_rap_ref != UINT64_MAX)
+                uref_clock_set_systime_rap(uref, upipe_mp2vf->systime_rap_ref);
+            break;
     }
+
+    if (upipe_mp2vf->closed_gop)
+        upipe_mp2vf->systime_rap_ref = upipe_mp2vf->systime_rap;
     return true;
 }
 
@@ -862,8 +885,6 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         return false;
     }
 
-    if (upipe_mp2vf->systime_rap != UINT64_MAX)
-        uref_clock_set_systime_rap(uref, upipe_mp2vf->systime_rap);
     upipe_mp2vf_output(upipe, uref, upump);
     return true;
 }
