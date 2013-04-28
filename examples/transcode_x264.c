@@ -26,28 +26,23 @@
 
  /*
 
-[] -- stream --> [avfsrc] --> [avcdv] --> [x264] --> [fsink] -- file --> []
+([qsrc][x264][fsink]) {border-style: dashed; flow: west}
+[] -- stream --> [avfsrc] --> [avcdv] --> [qsink] --> {flow: south; end: east}
+[qsrc] --> [x264] --> [fsink] -- file --> {flow: west}[]
 
-     stream   +--------+     +-------+     +------+     +-------+  file
-    --------> | avfsrc | --> | avcdv | --> | x264 | --> | fsink | ------>
-              +--------+     +-------+     +------+     +-------+
+     stream     +--------+     +-------+     +-------+
+    -------->   | avfsrc | --> | avcdv | --> | qsink |   -+
+                +--------+     +-------+     +-------+    |
+                                                          |
+              + - - - - - - - - - - - - - - - - - - - -+  |
+              '                                        '  |
+     file     ' +--------+     +-------+     +-------+ '  |
+    <-------- ' | fsink  | <-- | x264  | <-- | qsrc  | ' <+
+              ' +--------+     +-------+     +-------+ '
+              '                                        '
+              + - - - - - - - - - - - - - - - - - - - -+
  */
 
-#undef NDEBUG
-
-#include <stdlib.h>
-#include <strings.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <sys/time.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <sys/errno.h>
-#include <unistd.h>
-#include <libgen.h>
-
-#include <upipe/urefcount.h>
-#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -61,10 +56,7 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
@@ -73,11 +65,22 @@
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_file_sink.h>
+#include <upipe-modules/upipe_queue_source.h>
+#include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_dec_vid.h>
 #include <upipe-x264/upipe_x264.h>
+
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <ev.h>
+
+
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define QUEUE_LENGTH 50
@@ -88,54 +91,41 @@
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
-#define READ_SIZE 4096
-
-struct test_output {
-    struct uchain uchain;
-    struct upipe *upipe_avfsrc_output;
-};
 
 enum upipe_fsink_mode mode = UPIPE_FSINK_OVERWRITE;
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uprobe *logger;
-struct ulist upipe_avfsrc_outputs;
-
-struct upipe_mgr *upipe_avcdv_mgr;
-struct upipe_mgr *upipe_x264_mgr;
+struct uprobe uprobe_outputs;
 
 struct uref_mgr *uref_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *block_mgr;
 
-struct upipe *sinkpipe;
+struct upipe *qsink;
+const char *sink_path = NULL;
+const char *profile = NULL;
+const char *preset = NULL;
+const char *tuning = NULL;
 
-static inline struct upipe *build_video_pipeline(uint64_t id)
+/* clean outputs */
+static bool catch_outputs(struct uprobe *uprobe, struct upipe *upipe,
+                         enum uprobe_event event, va_list args)
 {
-    struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdv %"PRIu64, id));
-    upipe_set_uref_mgr(avcdv, uref_mgr);
-    upipe_set_ubuf_mgr(avcdv, yuv_mgr);
-
-    struct upipe *x264 = upipe_alloc(upipe_x264_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"));
-    upipe_set_ubuf_mgr(x264, block_mgr);
-    upipe_set_uref_mgr(x264, uref_mgr);
-    upipe_set_output(avcdv, x264);
-    upipe_release(x264);
-
-    upipe_set_output(x264, sinkpipe);
-    upipe_release(sinkpipe);
-
-    return avcdv;
+    switch(event) {
+        case UPROBE_NEED_INPUT:
+        case UPROBE_READ_END:
+            upipe_release(upipe);
+            return true;
+        default:
+            return false;
+    }
 }
 
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
+static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
-    struct upipe *upipe_sink;
     switch (event) {
         default:
-            assert(0);
             break;
         case UPROBE_NEED_INPUT:
         case UPROBE_DEAD:
@@ -145,10 +135,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
-            break;
-        case UPROBE_READ_END: {
-            break;
-        }
+        case UPROBE_READ_END:
+            return true;
 
         case UPROBE_SPLIT_ADD_FLOW: {
             uint64_t flow_id = va_arg(args, uint64_t);
@@ -157,55 +145,110 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             uref_flow_get_def(flow_def, &def);
             if (ubase_ncmp(def, "block.")) {
                 upipe_warn_va(upipe,
-                             "flow def %s is not supported by unit test", def);
+                         "flow def %s (%d) is not supported", def, flow_id);
                 break;
             }
+            upipe_notice_va(upipe, "adding flow %s (%d)", def, flow_id);
 
-            uint64_t id = 0;
-            uref_av_flow_get_id(flow_def, &id);
+            struct upipe *output = upipe_alloc_output(upipe,
+                    uprobe_pfx_adhoc_alloc_va(&uprobe_outputs, loglevel,
+                                                      "output %"PRIu64, flow_id));
 
-            struct test_output *output = malloc(sizeof(struct test_output));
-            uchain_init(&output->uchain);
-            ulist_add(&upipe_avfsrc_outputs, &output->uchain);
-            output->upipe_avfsrc_output = upipe_alloc_output(upipe,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel,
-                                                      "output %"PRIu64, id));
+            upipe_set_flow_def(output, flow_def);
+            upipe_set_ubuf_mgr(output, block_mgr);
 
-            upipe_sink = build_video_pipeline(id);
-            upipe_set_flow_def(output->upipe_avfsrc_output, flow_def);
-            upipe_set_ubuf_mgr(output->upipe_avfsrc_output, block_mgr);
-            upipe_set_output(output->upipe_avfsrc_output, upipe_sink);
-            upipe_release(upipe_sink);
-            break;
+            struct upipe_mgr *upipe_avcdv_mgr = upipe_avcdv_mgr_alloc();
+            struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr,
+                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdv"));
+            upipe_set_uref_mgr(avcdv, uref_mgr);
+            upipe_set_ubuf_mgr(avcdv, yuv_mgr);
+            upipe_set_output(output, avcdv);
+            upipe_release(avcdv);
+
+            upipe_set_output(avcdv, qsink);
+            upipe_release(qsink);
+            return true;
         }
     }
-    return true;
+    return false;
+}
+
+static void *encoding_thread(void *_qsrc)
+{
+    struct upipe *qsrc = _qsrc;
+
+    printf("Starting encoding thread\n");
+
+    struct ev_loop *loop = ev_loop_new(0);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    upipe_set_upump_mgr(qsrc, upump_mgr);
+
+    struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
+    struct upipe *x264 = upipe_alloc(upipe_x264_mgr,
+            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"));
+    upipe_set_ubuf_mgr(x264, block_mgr);
+    upipe_set_uref_mgr(x264, uref_mgr);
+    upipe_set_output(qsrc, x264);
+    upipe_release(x264);
+    if (preset || tuning) {
+        upipe_x264_set_default_preset(x264, preset, tuning);
+    }
+    if (profile) {
+        upipe_x264_set_profile(x264, profile);
+    }
+
+    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+    struct upipe *sinkpipe = upipe_alloc(upipe_fsink_mgr,
+            uprobe_pfx_adhoc_alloc(logger, loglevel, "fsink"));
+    upipe_set_upump_mgr(sinkpipe, upump_mgr);
+    upipe_fsink_set_path(sinkpipe, sink_path, mode);
+
+    upipe_set_output(x264, sinkpipe);
+    upipe_release(sinkpipe);
+
+    ev_loop(loop, 0);
+
+    return NULL;
+}
+
+void usage(const char *argv0)
+{
+    printf("Usage: %s [-d] [-p profile] [-s preset] [-g tuning] stream file.x264\n", argv0);
+    exit(-1);
 }
 
 int main(int argc, char **argv)
 {
     int opt;
-    const char *url = NULL, *sink_path = NULL;
+    const char *url = NULL;
 
-    // parse options
-    while ((opt = getopt(argc, argv, "d")) != -1) {
+    /* parse options */
+    while ((opt = getopt(argc, argv, "dp:s:g:")) != -1) {
         switch (opt) {
             case 'd':
                 loglevel = UPROBE_LOG_DEBUG;
                 break;
-            default:
+            case 'p':
+                profile = optarg;
                 break;
+            case 's':
+                preset = optarg;
+                break;
+            case 'g':
+                tuning = optarg;
+                break;
+            default:
+                usage(argv[0]);
         }
     }
     if (optind >= argc -1) {
-        printf("Usage: %s [-d] stream file.x264\n", argv[0]);
-        exit(-1);
+        usage(argv[0]);
     }
 
     url = argv[optind++];
     sink_path = argv[optind++];
 
-    // upipe env
+    /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -224,55 +267,54 @@ int main(int argc, char **argv)
     ubuf_pic_mem_mgr_add_plane(yuv_mgr, "u8", 2, 2, 1);
     ubuf_pic_mem_mgr_add_plane(yuv_mgr, "v8", 2, 2, 1);
 
-    struct uprobe uprobe;
-    uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     loglevel);
+    /* log probes */
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout, loglevel);
     logger = uprobe_log_alloc(uprobe_stdio, loglevel);
-
-    // uclock
-    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
-
-    // global pipe managers
-    upipe_x264_mgr = upipe_x264_mgr_alloc();
-
-    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
-    sinkpipe = upipe_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(logger, loglevel, "file sink"));
-    upipe_set_upump_mgr(sinkpipe, upump_mgr);
-    upipe_fsink_set_path(sinkpipe, sink_path, mode);
-
-    /* split probe */
-    struct uprobe *uprobe_split = logger;
+    /* split probes */
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch_split, logger);
+    struct uprobe *uprobe_split = &uprobe;
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_PIC, "auto");
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SOUND, "");
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SUBPIC, "");
+    /* output probe */
+    uprobe_init(&uprobe_outputs, catch_outputs, logger);
 
-    // upipe-av
+    /* uclock */
+    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+
+    /* queue sink */
+    struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
+    qsink = upipe_alloc(upipe_qsink_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, loglevel, "qsink"));
+    upipe_set_upump_mgr(qsink, upump_mgr);
+
+    /* queue source */
+    struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
+    struct upipe *qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
+        uprobe_pfx_adhoc_alloc(&uprobe_outputs, loglevel, "qsrc"), QUEUE_LENGTH);
+    upipe_qsink_set_qsrc(qsink, qsrc);
+
+    /* launch encoding thread */
+    pthread_t thread;
+    memset(&thread, 0, sizeof(pthread_t));
+    pthread_create(&thread, NULL, encoding_thread, qsrc);
+
+    /* upipe-av */
     upipe_av_init(false);
-    ulist_init(&upipe_avfsrc_outputs);
-    upipe_avcdv_mgr = upipe_avcdv_mgr_alloc();
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     struct upipe *upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "avfsrc"));
     upipe_set_upump_mgr(upipe_avfsrc, upump_mgr);
     upipe_set_uref_mgr(upipe_avfsrc, uref_mgr);
     upipe_set_uclock(upipe_avfsrc, uclock);
-    upipe_avfsrc_set_url(upipe_avfsrc, url); // run this last
+    upipe_avfsrc_set_url(upipe_avfsrc, url); /* run this last */
 
-    // Fire decode engine and main loop
+    /* fire decode engine and main loop */
     printf("Starting main thread ev_loop\n");
     ev_loop(loop, 0);
 
-    // Now clean everything
-    struct uchain *uchain;
-    {ulist_delete_foreach(&upipe_avfsrc_outputs, uchain) {
-        struct test_output *output = container_of(uchain, struct test_output,
-                                                  uchain);
-        ulist_delete(&upipe_avfsrc_outputs, uchain);
-        upipe_release(output->upipe_avfsrc_output);
-        free(output);
-    }}
+    pthread_join(thread, NULL);
 
     upipe_release(upipe_avfsrc);
     upipe_av_clean();
