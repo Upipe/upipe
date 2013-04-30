@@ -52,6 +52,8 @@ UREF_ATTR_UNSIGNED_UREF(clock, dts_sys, dts_sys,
 UREF_ATTR_UNSIGNED_SH(clock, vbv_delay, UDICT_TYPE_CLOCK_VBVDELAY,
         vbv/dts delay)
 UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
+UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
+                    frame offset from last random access point)
 
 
 #endif
