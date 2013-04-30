@@ -68,7 +68,7 @@ static const struct upipe_av_pixfmt upipe_av_pixfmt[] = {
 };
 
 /** @This finds the upipe_av_pixfmt structure corresponding to a picture ubuf
- * @params ubuf picture ubuf
+ * @param ubuf picture ubuf
  * @return pointer to upipe_av_pixfmt description structure
  */
 static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf(struct ubuf *ubuf)
@@ -123,7 +123,7 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_pixfmt(enum Pix
 
 /** @This finds the upipe_av_pixfmt structure corresponding to a picture ubuf manager.
  * It works by allocating a tiny picture ubuf.
- * @params ubuf_mgr picture ubuf manager
+ * @param ubuf_mgr picture ubuf manager
  * @return pointer to upipe_av_pixfmt description structure
  */
 static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf_mgr(struct ubuf_mgr *mgr)

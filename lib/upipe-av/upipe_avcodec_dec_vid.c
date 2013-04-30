@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
@@ -107,6 +108,10 @@ struct upipe_avcdv {
 
     /** frame counter */
     uint64_t counter;
+    /** rap offset */
+    uint8_t index_rap;
+    /** previous rap */
+    uint64_t prev_rap;
     /** latest incoming uref */
     struct uref *uref;
 
@@ -547,6 +552,26 @@ static bool upipe_avcdv_set_context(struct upipe *upipe, const char *codec_def,
     }
 }
 
+/** @internal @This sets the index_rap attribute.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ */
+static void upipe_avcdv_set_index_rap(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_avcdv *upipe_avcdv = upipe_avcdv_from_upipe(upipe);
+    uint64_t rap = 0;
+
+    uref_clock_get_systime_rap(uref, &rap);
+    if (unlikely(rap != upipe_avcdv->prev_rap)) {
+        upipe_avcdv->prev_rap = rap;
+        upipe_avcdv->index_rap = 0;
+    }
+    uref_clock_set_index_rap(uref, upipe_avcdv->index_rap);
+    upipe_avcdv->index_rap++;
+
+}
+
 /** @internal @This outputs video frames
  *
  * @param upipe description structure of the pipe
@@ -611,6 +636,9 @@ static void upipe_avcdv_output_frame(struct upipe *upipe, AVFrame *frame,
         struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdv->uref_mgr, 1);
         upipe_avcdv_store_flow_def(upipe, outflow);
     }
+
+    /* index rap attribute */
+    upipe_avcdv_set_index_rap(upipe, uref);
 
     upipe_avcdv_output(upipe, uref, upump);
 }
@@ -677,7 +705,12 @@ static void upipe_avcdv_output_audio(struct upipe *upipe, AVFrame *frame,
         upipe_avcdv_store_flow_def(upipe, outflow);
     }
 
+    /* samples in uref */
     uref_sound_flow_set_samples(uref, frame->nb_samples);
+
+    /* index rap attribute */
+    upipe_avcdv_set_index_rap(upipe, uref);
+
     upipe_avcdv_output(upipe, uref, upump);
 }
 
@@ -1113,6 +1146,9 @@ static struct upipe *upipe_avcdv_alloc(struct upipe_mgr *mgr,
     upipe_avcdv->pixfmt = NULL;
     upipe_avcdv->frame = avcodec_alloc_frame();
     upipe_avcdv->lowres = 0;
+
+    upipe_avcdv->index_rap = 0;
+    upipe_avcdv->prev_rap = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
