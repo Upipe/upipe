@@ -27,8 +27,14 @@
  * @short upipe/avutil pixelformat conversion
  */
 
+#ifndef _UPIPE_AV_UPIPE_AV_PIXFMT_H_
+/** @hidden */
+#define _UPIPE_AV_UPIPE_AV_PIXFMT_H_
+
 #include <upipe/ubuf_pic.h>
 #include <libavutil/avutil.h>
+#include <libavutil/pixdesc.h>
+#include <string.h>
 
 /** plane definition */
 struct upipe_av_plane {
@@ -109,7 +115,8 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf(struct ubu
  * @param format avutil pixel format
  * @returns pointer to upipe_av_pixfmt description structure
  */
-static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_pixfmt(enum PixelFormat format) {
+static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_pixfmt(enum PixelFormat format)
+{
     const struct upipe_av_pixfmt *pixfmt = NULL;
     for (pixfmt = upipe_av_pixfmt;
          pixfmt->pixfmt != PIX_FMT_NONE && pixfmt->pixfmt != format;
@@ -143,3 +150,52 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf_mgr(struct
     return pixfmt;
 }
 
+
+/** @This clears the given (sub)picture to obtain a black area
+ * @param ubuf picture ubuf
+ * @param fmt pointer to upipe_av_pixfmt description structure
+ */
+static inline void upipe_av_pixfmt_clear_picture(struct ubuf *ubuf,
+                    int hoffset, int voffset, int hsize, int vsize,
+                                 const struct upipe_av_pixfmt *fmt)
+{
+    int i, j;
+    size_t stride, width, height;
+    uint8_t val, hsub, vsub, macropixel, *buf;
+    const struct upipe_av_plane *plane = NULL;
+
+    if (unlikely(!ubuf)) {
+        return;
+    }
+    if (unlikely(fmt->pixfmt <= PIX_FMT_NONE || fmt->pixfmt >= PIX_FMT_NB)) {
+        return;
+    }
+    const AVPixFmtDescriptor *desc = av_pix_fmt_descriptors + fmt->pixfmt;
+
+    ubuf_pic_size(ubuf, &width, &height, NULL);
+    if (hsize <= 0) { 
+        hsize = width;
+    }
+    if (vsize <= 0) { 
+        vsize = height;
+    }
+    
+    plane = fmt->planes;
+    for (i=0; i < 4 && plane[i].chroma; i++) {
+        ubuf_pic_plane_write(ubuf, plane[i].chroma,
+                             hoffset, voffset, hsize, vsize, &buf);
+        ubuf_pic_plane_size(ubuf, plane[i].chroma,
+                            &stride, &hsub, &vsub, &macropixel);
+        val = 0;
+        if (i > 0 && !(desc->flags & PIX_FMT_RGB)) {
+            val = 0x80; /* UV value for black pixel */
+        }
+        for (j=0; j < vsize/vsub; j++) {
+            memset(buf, val, macropixel*hsize/hsub);
+            buf += stride;
+        }
+        ubuf_pic_plane_unmap(ubuf, plane[i].chroma, 0, 0, -1, -1);
+    }
+}
+
+#endif
