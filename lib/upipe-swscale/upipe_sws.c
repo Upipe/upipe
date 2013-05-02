@@ -431,7 +431,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws->convert_ctx = NULL;
     upipe_sws->srcfmt = NULL;
     upipe_sws->dstfmt = NULL;
-    memset(&upipe_sws->dstsize, 0, sizeof(struct picsize));
+    upipe_sws->dstsize = NULL;
 
     upipe_throw_ready(upipe);
     return upipe;
