@@ -47,8 +47,7 @@ enum upipe_sws_command {
     UPIPE_SWS_GET_SIZE,
 };
 
-/** @This sets the low resolution parameter, if supported by codec.
- * If some codec is already used, it is re-opened.
+/** @This sets the output dimensions.
  *
  * @param upipe description structure of the pipe
  * @param size size parameter (0=disabled)
@@ -61,7 +60,7 @@ static inline bool upipe_sws_set_size(struct upipe *upipe,
                          hsize, vsize);
 }
 
-/** @This gets the low resolution parameter.
+/** @This gets the output dimensions.
  * If some codec is already used, it is re-opened.
  *
  * @param upipe description structure of the pipe
