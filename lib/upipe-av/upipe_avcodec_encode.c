@@ -466,6 +466,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
         uref_block_write(uref_block, 0, &size, &buf);
         memcpy(buf, avpkt.data, size);
         uref_block_unmap(uref_block, 0);
+        free(avpkt.data);
 
         /* flow definition */
         if (unlikely(!upipe_avcenc->output_flow)) {
