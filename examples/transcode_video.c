@@ -26,21 +26,22 @@
 
  /*
 
-([qsrc][x264][fsink]) {border-style: dashed; flow: west}
+([qsrc][encoder]{label: x264\navcenc}[fsink]) {border-style: dashed; flow: west}
 [] -- stream --> [avfsrc] --> [avcdv] --> [qsink] --> {flow: south; end: east}
-[qsrc] --> [x264] --> [fsink] -- file --> {flow: west}[]
+[qsrc] --> [encoder] --> [fsink] -- file --> {flow: west}[]
 
-     stream     +--------+     +-------+     +-------+
-    -------->   | avfsrc | --> | avcdv | --> | qsink |   -+
-                +--------+     +-------+     +-------+    |
-                                                          |
-              + - - - - - - - - - - - - - - - - - - - -+  |
-              '                                        '  |
-     file     ' +--------+     +-------+     +-------+ '  |
-    <-------- ' | fsink  | <-- | x264  | <-- | qsrc  | ' <+
-              ' +--------+     +-------+     +-------+ '
-              '                                        '
-              + - - - - - - - - - - - - - - - - - - - -+
+     stream     +--------+     +--------+     +-------+
+    -------->   | avfsrc | --> | avcdv  | --> | qsink |   -+
+                +--------+     +--------+     +-------+    |
+                                                           |
+              + - - - - - - - - - - - - - - - - - - - - +  |
+              '                                         '  |
+              ' +--------+     +--------+     +-------+ '  |
+     file     ' | fsink  |     |  x264  |     | qsrc  | '  |
+    <-------- ' |        | <-- | avcenc | <-- |       | ' <+
+              ' +--------+     +--------+     +-------+ '
+              '                                         '
+              + - - - - - - - - - - - - - - - - - - - - +
  */
 
 #include <upipe/uprobe.h>
@@ -71,6 +72,7 @@
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_dec_vid.h>
+#include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe-x264/upipe_x264.h>
 
 #include <stdlib.h>
@@ -106,6 +108,9 @@ const char *sink_path = NULL;
 const char *profile = NULL;
 const char *preset = NULL;
 const char *tuning = NULL;
+
+bool use_x264 = false;
+const char *codec = "mpeg2video.pic.";
 
 /* clean outputs */
 static bool catch_outputs(struct uprobe *uprobe, struct upipe *upipe,
@@ -176,6 +181,7 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
 static void *encoding_thread(void *_qsrc)
 {
     struct upipe *qsrc = _qsrc;
+    struct upipe *encoder;
 
     printf("Starting encoding thread\n");
 
@@ -183,19 +189,32 @@ static void *encoding_thread(void *_qsrc)
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
     upipe_set_upump_mgr(qsrc, upump_mgr);
 
-    struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
-    struct upipe *x264 = upipe_alloc(upipe_x264_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"));
-    upipe_set_ubuf_mgr(x264, block_mgr);
-    upipe_set_uref_mgr(x264, uref_mgr);
-    upipe_set_output(qsrc, x264);
-    upipe_release(x264);
-    if (preset || tuning) {
-        upipe_x264_set_default_preset(x264, preset, tuning);
+    if (use_x264) {
+        struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
+        encoder = upipe_alloc(upipe_x264_mgr,
+                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"));
+        if (preset || tuning) {
+            upipe_x264_set_default_preset(encoder, preset, tuning);
+        }
+        if (profile) {
+            upipe_x264_set_profile(encoder, profile);
+        }
+    } else {
+        char *codec_def = NULL;
+        struct upipe_mgr *upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
+        encoder = upipe_alloc(upipe_avcenc_mgr,
+                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcenc"));
+        asprintf(&codec_def, "%s.pic.", codec);
+        if (!upipe_avcenc_set_codec(encoder, codec_def)) {
+            exit(1);
+        }
+        free(codec_def);
     }
-    if (profile) {
-        upipe_x264_set_profile(x264, profile);
-    }
+
+    upipe_set_ubuf_mgr(encoder, block_mgr);
+    upipe_set_uref_mgr(encoder, uref_mgr);
+    upipe_set_output(qsrc, encoder);
+    upipe_release(encoder);
 
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     struct upipe *sinkpipe = upipe_alloc(upipe_fsink_mgr,
@@ -203,7 +222,7 @@ static void *encoding_thread(void *_qsrc)
     upipe_set_upump_mgr(sinkpipe, upump_mgr);
     upipe_fsink_set_path(sinkpipe, sink_path, mode);
 
-    upipe_set_output(x264, sinkpipe);
+    upipe_set_output(encoder, sinkpipe);
     upipe_release(sinkpipe);
 
     ev_loop(loop, 0);
@@ -213,7 +232,9 @@ static void *encoding_thread(void *_qsrc)
 
 void usage(const char *argv0)
 {
-    printf("Usage: %s [-d] [-p profile] [-s preset] [-g tuning] stream file.x264\n", argv0);
+    printf("Usage: %s [-d] [-c codec] [-x [-p profile] [-s preset] [-g tuning]] stream file.video\n", argv0);
+    printf("   -x: use upipe_x264 instead of upipe_avcenc\n");
+    printf("   -c: codec to be used with upipe_avcenc\n");
     exit(-1);
 }
 
@@ -223,10 +244,16 @@ int main(int argc, char **argv)
     const char *url = NULL;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dp:s:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "dxp:s:g:c:")) != -1) {
         switch (opt) {
             case 'd':
                 loglevel = UPROBE_LOG_DEBUG;
+                break;
+            case 'c':
+                codec = optarg;
+                break;
+            case 'x':
+                use_x264 = true;
                 break;
             case 'p':
                 profile = optarg;
@@ -295,13 +322,15 @@ int main(int argc, char **argv)
         uprobe_pfx_adhoc_alloc(&uprobe_outputs, loglevel, "qsrc"), QUEUE_LENGTH);
     upipe_qsink_set_qsrc(qsink, qsrc);
 
+    /* upipe-av */
+    upipe_av_init(false);
+
     /* launch encoding thread */
     pthread_t thread;
     memset(&thread, 0, sizeof(pthread_t));
     pthread_create(&thread, NULL, encoding_thread, qsrc);
 
-    /* upipe-av */
-    upipe_av_init(false);
+    /* avformat source */
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     struct upipe *upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "avfsrc"));
