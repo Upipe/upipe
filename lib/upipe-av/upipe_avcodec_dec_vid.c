@@ -199,10 +199,10 @@ static int upipe_avcdv_get_buffer(struct AVCodecContext *context, AVFrame *frame
             return 0;
         }
     }
-    if (context->pix_fmt != upipe_avcdv->pixfmt->pixfmt) {
+    if (context->pix_fmt != *upipe_avcdv->pixfmt->pixfmt) {
         upipe_err_va(upipe, "frame format not compatible (%s != %s",
                                        av_get_pix_fmt_name(context->pix_fmt),
-                            av_get_pix_fmt_name(upipe_avcdv->pixfmt->pixfmt));
+                            av_get_pix_fmt_name(*upipe_avcdv->pixfmt->pixfmt));
         return 0;
     }
     planes = upipe_avcdv->pixfmt->planes;

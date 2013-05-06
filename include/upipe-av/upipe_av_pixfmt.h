@@ -51,7 +51,7 @@ struct upipe_av_plane {
 /** format definition */
 struct upipe_av_pixfmt {
     /** avutil pixelformat */
-    enum PixelFormat pixfmt;
+    enum PixelFormat pixfmt[PIX_FMT_NB];
     /** planes */
     struct upipe_av_plane planes[4];
 };
@@ -59,18 +59,18 @@ struct upipe_av_pixfmt {
 /** @internal @This is the upipe/avutil pixelformat array
  */
 static const struct upipe_av_pixfmt upipe_av_pixfmt[] = {
-    {PIX_FMT_YUV420P, {
+    {{PIX_FMT_YUV420P, PIX_FMT_YUVJ420P, PIX_FMT_NONE}, {
         {"y8", 1, 1, 1},
         {"u8", 2, 2, 1},
         {"v8", 2, 2, 1},
         {NULL, 0, 0, 0}
     }},
-    {PIX_FMT_RGB24, {
+    {{PIX_FMT_RGB24, PIX_FMT_NONE}, {
         {"rgb24", 1, 1, 3},
         {NULL, 0, 0, 0}
     }},
 
-    {PIX_FMT_NONE, {}}
+    {{PIX_FMT_NONE}, {}}
 };
 
 /** @This finds the upipe_av_pixfmt structure corresponding to a picture ubuf
@@ -85,7 +85,7 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf(struct ubu
     int i;
     
     /* iterate through known formats */
-    for (pixfmt = upipe_av_pixfmt; pixfmt->pixfmt != PIX_FMT_NONE; pixfmt++) {
+    for (pixfmt = upipe_av_pixfmt; *pixfmt->pixfmt != PIX_FMT_NONE; pixfmt++) {
         /* iterate through knwon planes */
         for (i = 0, plane = pixfmt->planes;
                 i < 4
@@ -103,7 +103,7 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf(struct ubu
     }
     
     /* if pixfmt->pixfmt != NONE, current format is suitable */
-    if (pixfmt->pixfmt != PIX_FMT_NONE) {
+    if (*pixfmt->pixfmt != PIX_FMT_NONE) {
         return pixfmt;
     }
 
@@ -119,9 +119,9 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_pixfmt(enum Pix
 {
     const struct upipe_av_pixfmt *pixfmt = NULL;
     for (pixfmt = upipe_av_pixfmt;
-         pixfmt->pixfmt != PIX_FMT_NONE && pixfmt->pixfmt != format;
+         *pixfmt->pixfmt != PIX_FMT_NONE && *pixfmt->pixfmt != format;
          pixfmt++);
-    if (pixfmt->pixfmt == format) {
+    if (*pixfmt->pixfmt == format) {
         return pixfmt;
     }
     return NULL;
@@ -150,6 +150,25 @@ static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf_mgr(struct
     return pixfmt;
 }
 
+/** @This returns the first PixelFormat in fmts_pref matching a
+ * format in fmts
+ * @param fmts_pref sorted preferred formats
+ * @param available available formats
+ */
+static inline enum PixelFormat upipe_av_pixfmt_best(const enum PixelFormat *fmts_pref,
+                                                    const enum PixelFormat *fmts)
+{
+    int i;
+    while (*fmts_pref != PIX_FMT_NONE) {
+        for (i=0; fmts[i] != PIX_FMT_NONE
+                && fmts[i] != *fmts_pref; i++);
+        if (fmts[i] != PIX_FMT_NONE) {
+            break;
+        }
+        fmts_pref++;
+    }
+    return *fmts_pref;
+}
 
 /** @This clears the given (sub)picture to obtain a black area
  * @param ubuf picture ubuf
@@ -167,10 +186,10 @@ static inline void upipe_av_pixfmt_clear_picture(struct ubuf *ubuf,
     if (unlikely(!ubuf)) {
         return;
     }
-    if (unlikely(fmt->pixfmt <= PIX_FMT_NONE || fmt->pixfmt >= PIX_FMT_NB)) {
+    if (unlikely(*fmt->pixfmt <= PIX_FMT_NONE || *fmt->pixfmt >= PIX_FMT_NB)) {
         return;
     }
-    const AVPixFmtDescriptor *desc = av_pix_fmt_descriptors + fmt->pixfmt;
+    const AVPixFmtDescriptor *desc = av_pix_fmt_descriptors + *fmt->pixfmt;
 
     ubuf_pic_size(ubuf, &width, &height, NULL);
     if (hsize <= 0) { 

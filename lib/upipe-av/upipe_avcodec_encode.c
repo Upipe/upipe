@@ -151,6 +151,7 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     AVCodecContext *context = NULL;
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     struct upipe_avcodec_open_params *params = &upipe_avcenc->open_params;
+    enum PixelFormat pix_fmt;
     AVCodec *codec = params->codec;
     assert(upipe);
 
@@ -189,9 +190,16 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
 
     switch (codec->type) {
         case AVMEDIA_TYPE_VIDEO: {
+            pix_fmt = *upipe_avcenc->pixfmt->pixfmt;
+            if (codec->pix_fmts) {
+                pix_fmt = upipe_av_pixfmt_best(upipe_avcenc->pixfmt->pixfmt,
+                                               codec->pix_fmts);
+            }
+
+
             context->time_base.num = 1;
             context->time_base.den = 25;
-            context->pix_fmt = upipe_avcenc->pixfmt->pixfmt;
+            context->pix_fmt = pix_fmt; //*upipe_avcenc->pixfmt->pixfmt;
             context->width = params->width;
             context->height = params->height;
 
@@ -221,14 +229,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     upipe_avcenc->counter = 0;
     upipe_notice_va(upipe, "codec %s (%s) %d opened (%dx%d)", codec->name,
             codec->long_name, codec->id, context->width, context->height);
-
-    /* unblock input pump*/
-    if (upipe_avcenc->saved_upump_mgr) {
-        upipe_dbg(upipe, "unblocking saved upump_mgr");
-        upump_mgr_sink_unblock(upipe_avcenc->saved_upump_mgr);
-        upump_mgr_release(upipe_avcenc->saved_upump_mgr);
-        upipe_avcenc->saved_upump_mgr = NULL;
-    }
 
     upipe_release(upipe);
     return true;
@@ -283,6 +283,7 @@ static void upipe_avcenc_open_codec_cb(struct upump *upump)
 static bool upipe_avcenc_open_codec_wrap(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    bool ret = false;
 
     /* use udeal/upump callback if available */
     if (upipe_avcenc->upump_mgr) {
@@ -306,13 +307,23 @@ static bool upipe_avcenc_open_codec_wrap(struct upipe *upipe)
 
         /* fire */
         upipe_av_deal_start(upump_av_deal);
-        return true;
+        ret = true;
 
     } else {
         upipe_dbg(upipe, "no upump_mgr present, direct call to avcenc_open");
         upipe_use(upipe);
-        return upipe_avcenc_open_codec(upipe);
+        ret = upipe_avcenc_open_codec(upipe);
     }
+
+    /* unblock input pump*/
+    if (upipe_avcenc->saved_upump_mgr) {
+        upipe_dbg(upipe, "unblocking saved upump_mgr");
+        upump_mgr_sink_unblock(upipe_avcenc->saved_upump_mgr);
+        upump_mgr_release(upipe_avcenc->saved_upump_mgr);
+        upipe_avcenc->saved_upump_mgr = NULL;
+    }
+
+    return ret;
 }
 
 /** @internal @This finds a codec corresponding to codec definition

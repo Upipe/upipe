@@ -115,8 +115,8 @@ static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
           srcsize->hsize, srcsize->vsize, dstsize->hsize, dstsize->vsize);
 
     upipe_sws_thumbs->convert_ctx = sws_getCachedContext(upipe_sws_thumbs->convert_ctx,
-                srcsize->hsize, srcsize->vsize, upipe_sws_thumbs->srcfmt->pixfmt,
-                dstsize->hsize, dstsize->vsize, upipe_sws_thumbs->dstfmt->pixfmt,
+                srcsize->hsize, srcsize->vsize, *upipe_sws_thumbs->srcfmt->pixfmt,
+                dstsize->hsize, dstsize->vsize, *upipe_sws_thumbs->dstfmt->pixfmt,
                 SWS_BICUBIC, NULL, NULL, NULL);
 
     if (unlikely(!upipe_sws_thumbs->convert_ctx)) {
