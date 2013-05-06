@@ -27,9 +27,9 @@
  * @short Upipe avcodec encode wrapper module
  */
 
-#ifndef _UPIPE_AV_UPIPE_AV_DECODE_H_
+#ifndef _UPIPE_AV_UPIPE_AV_ENCODE_H_
 /** @hidden */
-#define _UPIPE_AV_UPIPE_AV_DECODE_H_
+#define _UPIPE_AV_UPIPE_AV_ENCODE_H_
 
 #include <upipe/upipe.h>
 

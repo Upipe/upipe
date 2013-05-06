@@ -27,11 +27,11 @@
  /*
 
 ([qsrc][encoder]{label: x264\navcenc}[fsink]) {border-style: dashed; flow: west}
-[] -- stream --> [avfsrc] --> [avcdv] --> [qsink] --> {flow: south; end: east}
+[] -- stream --> [avfsrc] --> [avcdec] --> [qsink] --> {flow: south; end: east}
 [qsrc] --> [encoder] --> [fsink] -- file --> {flow: west}[]
 
      stream     +--------+     +--------+     +-------+
-    -------->   | avfsrc | --> | avcdv  | --> | qsink |   -+
+    -------->   | avfsrc | --> | avcdec  | --> | qsink |   -+
                 +--------+     +--------+     +-------+    |
                                                            |
               + - - - - - - - - - - - - - - - - - - - - +  |
@@ -71,7 +71,7 @@
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
-#include <upipe-av/upipe_avcodec_dec_vid.h>
+#include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe-x264/upipe_x264.h>
 
@@ -162,15 +162,15 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
             upipe_set_flow_def(output, flow_def);
             upipe_set_ubuf_mgr(output, block_mgr);
 
-            struct upipe_mgr *upipe_avcdv_mgr = upipe_avcdv_mgr_alloc();
-            struct upipe *avcdv = upipe_alloc(upipe_avcdv_mgr,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdv"));
-            upipe_set_uref_mgr(avcdv, uref_mgr);
-            upipe_set_ubuf_mgr(avcdv, yuv_mgr);
-            upipe_set_output(output, avcdv);
-            upipe_release(avcdv);
+            struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+            struct upipe *avcdec = upipe_alloc(upipe_avcdec_mgr,
+                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdec"));
+            upipe_set_uref_mgr(avcdec, uref_mgr);
+            upipe_set_ubuf_mgr(avcdec, yuv_mgr);
+            upipe_set_output(output, avcdec);
+            upipe_release(avcdec);
 
-            upipe_set_output(avcdv, qsink);
+            upipe_set_output(avcdec, qsink);
             upipe_release(qsink);
             return true;
         }
