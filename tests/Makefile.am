@@ -13,6 +13,7 @@ dist_check_SCRIPTS = \
 
 dist_check_DATA = \
 	valgrind.supp \
+	valgrind_osx.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
@@ -93,7 +94,10 @@ TESTS += \
 if HAVE_AVFORMAT
 check_PROGRAMS += \
 	upipe_avformat_test \
+	upipe_avcodec_decode_test \
 	upipe_avcodec_test
+TESTS += \
+    upipe_avcodec_test
 endif
 
 if HAVE_GLX
@@ -105,8 +109,8 @@ endif
 if HAVE_SWSCALE
 check_PROGRAMS += \
     upipe_sws_test
-#TESTS += \
-#    upipe_sws_test
+TESTS += \
+    upipe_sws_test
 endif
 
 if HAVE_BITSTREAM
@@ -167,7 +171,9 @@ upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupi
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
 upipe_avcodec_test_CFLAGS = @AVFORMAT_CFLAGS@
-upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
+upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
+upipe_avcodec_decode_test_CFLAGS = @AVFORMAT_CFLAGS@
+upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
 
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la

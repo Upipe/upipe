@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen
+ * Authors: Benjamin Cohen <bencoh@notk.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,20 +23,15 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#undef NDEBUG
-
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <assert.h>
-#include <ev.h>
-#include <pthread.h>
+/** @file
+ * @short unit tests for upipe_avcodec encode/decode pipes
+ */
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
+#include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -57,16 +52,19 @@
 #include <upump-ev/upump_ev.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_decode.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
+#include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe-modules/upipe_null.h>
 
-#include <upipe/upipe_helper_upipe.h>
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
+#undef NDEBUG
 
-#include "../lib/upipe-av/upipe_av_internal.h"
-
-#define ALIVE(a) { printf("# ALIVE[%d]: %s %s - %d\n", (a), __FILE__, __func__, __LINE__); fflush(stdout); }
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
+#include <ev.h>
+#include <pthread.h>
 
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
@@ -76,64 +74,35 @@
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
-#define THREAD_NUM          16
-#define ITER_LIMIT          1000
-#define FRAMES_LIMIT        200
-#define THREAD_FRAMES_LIMIT 200
+#define THREAD_NUM          4
+#define FRAMES_LIMIT        100
+#define SETCODEC_LIMIT      100
+#define THREAD_FRAMES_LIMIT (FRAMES_LIMIT / 8)
 
-/** @internal */
-enum plane_action {
-    UNMAP,
-    READ,
-    WRITE
-};
+struct upipe_mgr *upipe_avcdec_mgr;
+struct upipe_mgr *upipe_avcenc_mgr;
+struct upipe_mgr *upipe_null_mgr;
+struct uref_mgr *uref_mgr;
+struct ubuf_mgr *block_mgr;
+struct ubuf_mgr *pic_mgr;
+struct uprobe *logger;
 
-/** @internal */
 struct thread {
     pthread_t id;
     unsigned int num;
     unsigned int iteration;
-    struct upipe *avcdec;
-    struct upipe *audiodec;
-    const char *codec_def;
-    const char *audio_def;
-    struct upump *fetchav_pump;
-
-    int count;
-    int limit;
-    int videoStream;
-    bool extrasent;
-    struct upipe *pipe;
-    AVFormatContext *avfctx;
+    unsigned int limit;
+    struct upipe *avcenc;
+    struct upump *source;
 };
 
-/** Global vars */
-int videoStream;
-int audioStream;
-struct uref_mgr *uref_mgr;
-struct ubuf_mgr *block_mgr;
-const char *pgm_prefix = NULL;
-
-/** Save picture to pgm file */
-static void pgm_save(const uint8_t *buf, int wrap, int xsize, int ysize, int num, const char *prefix) // FIXME debug
-{
-    char filename[256];
-    FILE *f;
-    int i;
-    snprintf(filename, sizeof(filename), "%s-%04d.pgm", prefix, num);
-    f=fopen(filename,"w");
-    fprintf(f,"P5\n%d %d\n%d\n",xsize,ysize,255);
-    for(i=0;i<ysize;i++)
-        fwrite(buf + i * wrap,1,xsize,f);
-    fclose(f);
-}
-
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEED_INPUT:
             break;
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
@@ -148,239 +117,150 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
     return true;
 }
 
-/** phony pipe to test upipe_avcdec */
-struct avcdec_test {
-    struct upipe upipe;
-};
-
-/** helper phony pipe to test upipe_avcdec */
-UPIPE_HELPER_UPIPE(avcdec_test, upipe);
-
-/** helper phony pipe to test upipe_avcdec */
-static struct upipe *avcdec_test_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe)
+/* fill picture with some stuff */
+void fill_pic(struct ubuf *ubuf)
 {
-    struct avcdec_test *avcdec_test = malloc(sizeof(struct avcdec_test));
-    if (unlikely(!avcdec_test)) return NULL;
-    upipe_init(&avcdec_test->upipe, mgr, uprobe);
-    upipe_throw_ready(&avcdec_test->upipe);
-    return &avcdec_test->upipe;
-}
-
-/** helper phony pipe to test upipe_avcdec */
-static void avcdec_test_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
-{
-    const uint8_t *buf = NULL;
-    size_t stride = 0, hsize = 0, vsize = 0;
-    static int counter = 0;
-
-    assert(uref != NULL);
-    upipe_dbg(upipe, "===> received input uref");
-    uref_dump(uref, upipe->uprobe);
-    if (uref->ubuf) {
-        uref_pic_plane_read(uref, "y8", 0, 0, -1, -1, &buf);
-        uref_pic_plane_size(uref, "y8", &stride, NULL, NULL, NULL);
-        uref_pic_size(uref, &hsize, &vsize, NULL);
-        pgm_save(buf, stride, hsize, vsize, counter, pgm_prefix);
-        uref_pic_plane_unmap(uref, "y8", 0, 0, -1, -1);
-        counter++;
-    }
-    uref_free(uref);
-    // FIXME peek into buffer
-}
-
-/** helper phony pipe to test upipe_avcdec */
-static void avcdec_test_free(struct upipe *upipe)
-{
-    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
-    upipe_throw_dead(upipe);
-    struct avcdec_test *avcdec_test = avcdec_test_from_upipe(upipe);
-    upipe_clean(upipe);
-    free(avcdec_test);
-}
-
-/** helper phony pipe to test upipe_avcdec */
-static struct upipe_mgr avcdec_test_mgr = {
-    .upipe_alloc = avcdec_test_alloc,
-    .upipe_input = avcdec_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
-};
-
-/** nullpipe (/dev/null) */
-static struct upipe *nullpipe_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe)
-{
-    struct upipe *upipe = malloc(sizeof(struct upipe));
-    if (unlikely(!upipe))
-        return NULL;
-    upipe_init(upipe, mgr, uprobe);
-    upipe_throw_ready(upipe);
-    return upipe;
-}
-
-/** nullpipe (/dev/null) */
-static void nullpipe_free(struct upipe *upipe)
-{
-    upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(upipe);
-}
-
-/** nullpipe (/dev/null) */
-static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
-{
-    upipe_dbg(upipe, "sending uref to devnull");
-    uref_free(uref);
-}
-
-/** nullpipe (/dev/null) */
-static struct upipe_mgr nullpipe_mgr = {
-    .upipe_alloc = nullpipe_alloc,
-    .upipe_input = nullpipe_input,
-    .upipe_control = NULL,
-    .upipe_free = nullpipe_free,
-    .upipe_mgr_free = NULL
-};
-
-/** Fetch video packets using avformat and send them to avcdec pipe.
- * Also send extradata if present. */
-static void fetch_av_packets(struct upump *pump)
-{
-    uint8_t *buf = NULL;
-    AVPacket avpkt;
-    struct uref *uref;
-    int size;
-    struct thread *thread = upump_get_opaque(pump, struct thread*);
-    struct upipe *avcdec = thread->avcdec;
-    assert(avcdec);
-
-    if (thread->count < thread->limit && av_read_frame(thread->avfctx, &avpkt) >= 0) {
-        if(avpkt.stream_index == videoStream) {
-            size = avpkt.size;
-            printf("#[%d]# Reading video frame %d - size : %d\n", thread->num, thread->count, size, avpkt.data);
-
-            if ( !thread->extrasent && (thread->avfctx->streams[videoStream]->codec->extradata_size > 0) ) {
-                thread->extrasent = upipe_avcdec_set_codec(avcdec, thread->codec_def,
-                                thread->avfctx->streams[videoStream]->codec->extradata,
-                                thread->avfctx->streams[videoStream]->codec->extradata_size);
+    const char *chroma = NULL;
+    uint8_t *buf, hsub, vsub;
+    size_t stride, width, height;
+    int i, j;
+    
+    ubuf_pic_size(ubuf, &width, &height, NULL);
+    while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma) {
+        ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buf);
+        ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub, NULL);
+        for (j = 0; j < height/vsub; j++) {
+            for (i=0; i < width/hsub; i++) {
+                buf[i] = 2*i + j;
             }
-
-            // Allocate uref/ubuf_block and copy data
-            uref = uref_block_alloc(uref_mgr, block_mgr, size);
-            uref_block_write(uref, 0, &size, &buf);
-            memcpy(buf, avpkt.data, size);
-            uref_block_unmap(uref, 0);
-
-            // Send uref to avcdec pipe and free avpkt
-            upipe_input(avcdec, uref, pump);
-            thread->count++;
-        } else if (thread->audiodec && avpkt.stream_index == audioStream) {
-            size = avpkt.size;
-            printf("#[%d]# Reading audio %d - size : %d\n", thread->num, thread->count, size, avpkt.data);
-            // Allocate uref/ubuf_block and copy data
-            uref = uref_block_alloc(uref_mgr, block_mgr, size);
-            uref_block_write(uref, 0, &size, &buf);
-            memcpy(buf, avpkt.data, size);
-            uref_block_unmap(uref, 0);
-
-            // Send uref to audiodec pipe and free avpkt
-            upipe_input(thread->audiodec, uref, pump);
+            buf += stride;
         }
-        av_free_packet(&avpkt);
-    } else {
-        // Send empty uref to output last frame (move to decoder ?)
-        upipe_release(thread->avcdec);
-        if (thread->audiodec) {
-            upipe_release(thread->audiodec);
-        }
-        upump_stop(pump);
+        ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, -1, -1);
     }
 }
 
-static void setcodec_idler(struct upump *pump)
+/* build video pipeline */
+struct upipe *build_pipeline(const char *codec_def,
+                             struct upump_mgr *upump_mgr, int num)
 {
-    struct thread *thread = upump_get_opaque(pump, struct thread *);
-    struct upipe *avcdec = thread->avcdec;
-
-    if (thread->iteration >= ITER_LIMIT) {
-        upump_stop(pump);
-        upump_start(thread->fetchav_pump);
-//        upipe_release(avcdec);
-        return;
+    /* encoder */
+    struct upipe *avcenc = upipe_alloc(upipe_avcenc_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcenc %d", num));
+    assert(avcenc);
+    assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
+    assert(upipe_set_uref_mgr(avcenc, uref_mgr));
+    assert(upipe_avcenc_set_codec(avcenc, codec_def));
+    if (upump_mgr) {
+        assert(upipe_set_upump_mgr(avcenc, upump_mgr));
     }
-    if (thread->iteration >= ITER_LIMIT - 1) {
-        upipe_avcdec_set_lowres(avcdec, 2);
-    } else {
-        upipe_avcdec_set_codec(avcdec, thread->codec_def, NULL, 0);
+
+    /* decoder */
+    struct upipe *avcdec = upipe_alloc(upipe_avcdec_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcdec %d", num));
+    assert(avcdec);
+    assert(upipe_set_ubuf_mgr(avcdec, pic_mgr));
+    assert(upipe_set_uref_mgr(avcdec, uref_mgr));
+    if (upump_mgr) {
+        assert(upipe_set_upump_mgr(avcdec, upump_mgr));
+    }
+    assert(upipe_set_output(avcenc, avcdec));
+    upipe_release(avcdec);
+
+    /* /dev/null */
+    struct upipe *null = upipe_alloc(upipe_null_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num));
+    assert(null);
+    upipe_set_output(avcdec, null);
+    upipe_release(null);
+
+    return avcenc;
+}
+
+/* picture generator */
+void source_idler(struct upump *upump)
+{
+    struct thread *thread = upump_get_opaque(upump, struct thread*);
+    struct upipe *avcenc = thread->avcenc;
+    struct uref *pic;
+
+    pic = uref_pic_alloc(uref_mgr, pic_mgr, 64, 48);
+    fill_pic(pic->ubuf);
+    upipe_input(avcenc, pic, upump);
+
+    if (thread->iteration > thread->limit) {
+        upipe_release(thread->avcenc);
+        upump_stop(upump);
+        return;
     }
     thread->iteration++;
 }
 
-/** Thread function from which ev_loops are launched.
- * This allows us to test avcdec/udeal */
-static void *test_thread(void *_thread)
+/* set codec */
+void setcodec_idler(struct upump *upump)
 {
-    struct thread *thread = ((struct thread *)_thread);
-    struct upipe *avcdec = thread->avcdec;
+    struct thread *thread = upump_get_opaque(upump, struct thread*);
+    struct upipe *avcenc = thread->avcenc;
+
+    if (thread->iteration > thread->limit) {
+        /* enough played with set_codec(), start source */
+        thread->iteration = 0;
+        upump_stop(upump);
+        struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+        upipe_input(thread->avcenc, flow, thread->source);
+        upump_start(thread->source);
+        return;
+    }
+
+    upipe_avcenc_set_codec(avcenc, "mpeg2video.pic.");
+    thread->iteration++;
+}
+
+/* thread entry point */
+void *thread_start(void *_thread)
+{
+    struct thread *thread = _thread;
 
     printf("Thread %d launched.\n", thread->num);
+
     struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
-    assert (upump_mgr != NULL);
 
-    assert(upipe_set_upump_mgr(avcdec, upump_mgr));
+    thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num);
+    thread->limit = SETCODEC_LIMIT;
 
-    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler, thread, false);
-    assert(setcodec_pump);
-    assert(upump_start(setcodec_pump));
+    thread->source = upump_alloc_idler(upump_mgr, source_idler, thread, true);
+    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler,
+                                                    thread, false);
+    upump_start(setcodec_pump);
 
-    thread->limit = THREAD_FRAMES_LIMIT;
-    thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread, true);
-    assert(thread->fetchav_pump);
-
-    // Fire !
     ev_loop(loop, 0);
 
     printf("Thread %d ended.\n", thread->num);
+    upump_free(thread->source);
     upump_free(setcodec_pump);
-    upump_free(thread->fetchav_pump);
     upump_mgr_release(upump_mgr);
     ev_loop_destroy(loop);
+
+    return NULL;
 }
 
-static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-n threads] <source file> [pgmprefix]\n", argv0);
-    exit(EXIT_FAILURE);
-}
-
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
-    printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
+    struct uref *pic;
+    int i;
     int opt;
     int thread_num = THREAD_NUM;
+
+    printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
     while ((opt = getopt(argc, argv, "n:")) != -1) {
         switch(opt) {
             case 'n':
                 thread_num = strtod(optarg, NULL);
                 break;
             default:
-                usage(argv[0]);
+                exit(EXIT_FAILURE);
         }
     }
-
-    if (optind >= argc) {
-        usage(argv[0]);
-    }
-    const char *srcpath = argv[optind++];
-    if (argc > optind) {
-        pgm_prefix = argv[optind++];
-    }
-
-    int i, j;
-    AVDictionary *options = NULL;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -399,7 +279,7 @@ int main (int argc, char **argv)
     assert(block_mgr);
 
     /* planar YUV (I420) */
-    struct ubuf_mgr *pic_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+    pic_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_ALIGN, UBUF_ALIGN_OFFSET);
@@ -408,188 +288,63 @@ int main (int argc, char **argv)
     assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, "u8", 2, 2, 1));
     assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, "v8", 2, 2, 1));
 
-
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
+    logger = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
 
-    /* ev / pumps */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
-    assert(upump_mgr != NULL);
-    struct thread mainthread;
-    struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread, false);
-    assert(write_pump);
-    assert(upump_start(write_pump));
-
-    // main thread description
-    memset(&mainthread, 0, sizeof(struct thread));
-    mainthread.limit = FRAMES_LIMIT;
-    mainthread.num = -1;
-
-    // build avcodec pipe
+    /* init upipe_av */
     assert(upipe_av_init(false));
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    assert(upipe_avcdec_mgr);
-    struct upipe *avcdec = upipe_alloc(upipe_avcdec_mgr,
-                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdec"));
-    assert(avcdec);
-    assert(upipe_set_ubuf_mgr(avcdec, pic_mgr));
-    assert(upipe_set_uref_mgr(avcdec, uref_mgr));
-    /* mainthread avcdec runs alone (no thread) so it doesn't need any upump_mgr
-     * Please do not add one, to check the nopump (direct call) case */
-    mainthread.avcdec = avcdec;
 
+    /* global managers */
+    assert(upipe_avcdec_mgr = upipe_avcdec_mgr_alloc());
+    assert(upipe_avcenc_mgr = upipe_avcenc_mgr_alloc());
+    assert(upipe_null_mgr = upipe_null_mgr_alloc());
 
-    // test pipe
-    struct upipe *avcdec_test = upipe_alloc(&avcdec_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdec_test"));
-    assert(upipe_set_output(avcdec, avcdec_test));
-    
-    // null pipe
-    struct upipe *nullpipe = upipe_alloc(&nullpipe_mgr,
-                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"));
-
-    if (!pgm_prefix) {
-        assert(upipe_set_output(avcdec, nullpipe));
-    }
-
-    // Open file with avformat
-    printf("Trying to open %s ...\n", srcpath);
-    avformat_open_input(&mainthread.avfctx, srcpath, NULL, NULL);
-    assert(mainthread.avfctx);
-    assert(avformat_find_stream_info(mainthread.avfctx, NULL) >= 0);
-    av_dump_format(mainthread.avfctx, 0, srcpath, 0);
-
-    // Find first video stream
-    videoStream = -1;
-    audioStream = -1;
-    for (i=0; i < mainthread.avfctx->nb_streams; i++) {
-        switch (mainthread.avfctx->streams[i]->codec->codec_type) {
-            case AVMEDIA_TYPE_VIDEO:
-                videoStream = i;
-                break;
-            case AVMEDIA_TYPE_AUDIO:
-                audioStream = i;
-                break;
-            default:
-                break;
-        }
-        if (videoStream >= 0 && audioStream >= 0) {
-            break;
-        }
-    }
-
-    assert(videoStream != -1);
-
-    // audiodec pipe
-    mainthread.audiodec = NULL;
-    if (audioStream >= 0) {
-        mainthread.audiodec = upipe_alloc(upipe_avcdec_mgr,
-                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "audiodec"));
-        upipe_set_ubuf_mgr(mainthread.audiodec, block_mgr);
-        upipe_set_uref_mgr(mainthread.audiodec, uref_mgr);
-        assert(upipe_set_output(mainthread.audiodec, nullpipe));
-        mainthread.audio_def = upipe_av_to_flow_def(
-                        mainthread.avfctx->streams[audioStream]->codec->codec_id);
-        upipe_input(mainthread.audiodec,
-                uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
-                NULL);
-    }
-
-
-    // set codec def and test _context()/_release()
-    mainthread.codec_def = upipe_av_to_flow_def(
-                    mainthread.avfctx->streams[videoStream]->codec->codec_id);
-    printf("Codec flow def: %s\n", mainthread.codec_def);
-    struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
-                                                        mainthread.codec_def);
-    upipe_use(avcdec);
-    upipe_input(avcdec, flowdef, NULL);
-    upipe_release(avcdec);
-
-    // Check codec def back
-    const char *codec_def;
-    assert(upipe_avcdec_get_codec(avcdec, &codec_def));
-    assert(!strcmp(codec_def, mainthread.codec_def));
-    printf("upipe_avcdec_get_codec: %s\n", mainthread.codec_def);
-
-    // pthread/udeal check
+    /* multi-threaded test with upump_mgr */
     if (thread_num > 0) {
         struct thread thread[thread_num];
-        printf("Allocating %d avcdec pipes\n", thread_num);
         for (i=0; i < thread_num; i++) {
             memset(&thread[i], 0, sizeof(struct thread));
             thread[i].num = i;
-            thread[i].iteration = 0;
-            thread[i].avcdec = upipe_alloc(upipe_avcdec_mgr,
-                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL, "avcdec_thread(%d)", i));
-            assert(thread[i].avcdec);
-            assert(upipe_set_ubuf_mgr(thread[i].avcdec, pic_mgr));
-            assert(upipe_set_uref_mgr(thread[i].avcdec, uref_mgr));
-            assert(upipe_set_output(thread[i].avcdec, nullpipe));
-
-            // Init per-thread avformat
-            thread[i].avfctx = NULL;
-            avformat_open_input(&thread[i].avfctx, srcpath, NULL, NULL);
-            assert(avformat_find_stream_info(thread[i].avfctx, NULL) >= 0);
-
-            // Find first video stream
-            thread[i].videoStream = -1;
-            for (j=0; j < thread[i].avfctx->nb_streams; j++) {
-                if (thread[i].avfctx->streams[j]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-                    thread[i].videoStream = j;
-                    break;
-                }
-            }
-            assert(thread[i].videoStream != -1);
-            thread[i].codec_def = upipe_av_to_flow_def(
-                            thread[i].avfctx->streams[videoStream]->codec->codec_id);
-            thread[i].audio_def = NULL;
-            thread[i].audiodec = NULL;
+            assert(pthread_create(&thread[i].id, NULL, thread_start, &thread[i]) == 0);
         }
-
-        // Fire threads
-        for (i=0; i < thread_num; i++) {
-            assert(pthread_create(&thread[i].id, NULL, test_thread, &thread[i]) == 0);
-        }
-        // Join (wait for threads to exit)
-        // pipes are cleaned in their respective thread
         for (i=0; i < thread_num; i++) {
             assert(!pthread_join(thread[i].id, NULL));
-            avformat_close_input(&thread[i].avfctx);
         }
-
-        printf("udeal/pthread test ended. Now launching decoding test.\n", thread_num);
+        printf("Multi-threaded test ended. Start monothread\n");
     }
 
-    // Now read with avformat
-    ev_loop(loop, 0);
+    /* mono-threaded test without upump_mgr */
+    struct upipe *avcenc = build_pipeline("mpeg2video.pic.", NULL, -1);
+    struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+    upipe_input(avcenc, flow, NULL);
 
-    // Close avformat
-    avformat_close_input(&mainthread.avfctx);
+    for (i=0; i < FRAMES_LIMIT; i++) {
+        pic = uref_pic_alloc(uref_mgr, pic_mgr, 120, 96);
+        fill_pic(pic->ubuf);
+        upipe_input(avcenc, pic, NULL);
+   }
 
-    upipe_release(nullpipe);
-    avcdec_test_free(avcdec_test);
-    upipe_mgr_release(upipe_avcdec_mgr);
-	upump_free(write_pump);
+    flow = uref_alloc(uref_mgr);
+    uref_flow_set_end(flow);
+    upipe_input(avcenc, flow, NULL);
+    upipe_release(avcenc);
+    printf("Everything good so far, cleaning\n");
 
-    // release managers
-    upump_mgr_release(upump_mgr);
+    /* clean managers and probes */
     ubuf_mgr_release(block_mgr);
     ubuf_mgr_release(pic_mgr);
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_log_free(log);
+    uprobe_log_free(logger);
     uprobe_stdio_free(uprobe_stdio);
     upipe_av_clean();
 
-    ev_default_destroy();
     return 0;
 }

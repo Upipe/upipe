@@ -1,0 +1,9 @@
+{
+   osx_posix_memalign_leak
+   Memcheck:Leak
+   fun:malloc_zone_malloc
+   fun:malloc_set_zone_name
+   fun:_malloc_initialize
+   fun:posix_memalign
+   obj:*
+}
