@@ -691,12 +691,12 @@ static void upipe_avcenc_free(struct upipe *upipe)
     }
 
     upipe_avcenc_abort_av_deal(upipe);
-    upipe_avcenc_clean_output(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
     upipe_avcenc_clean_uref_mgr(upipe);
     upipe_avcenc_clean_upump_mgr(upipe);
 
     upipe_throw_dead(upipe);
+    upipe_avcenc_clean_output(upipe);
 
     upipe_clean(upipe);
     free(upipe_avcenc);
