@@ -170,6 +170,7 @@ struct upipe *build_pipeline(const char *codec_def,
     struct upipe *null = upipe_alloc(upipe_null_mgr,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num));
     assert(null);
+    upipe_null_dump_dict(null, true);
     upipe_set_output(avcdec, null);
     upipe_release(null);
 

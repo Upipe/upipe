@@ -98,14 +98,14 @@ struct upipe_avcenc {
     /** incoming uref kept in memory because of pending open_codec */
     struct uref *saved_uref;
 
+    /** uref associated to frames currently in encoder */
+    struct uref **uref;
+    int uref_max;
+    /** last incoming pts */
+    uint64_t pts;
+
     /** frame counter */
     uint64_t counter;
-    /** rap offset */
-    uint8_t index_rap;
-    /** previous rap */
-    uint64_t prev_rap;
-    /** latest incoming uref */
-    struct uref *uref;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -171,6 +171,7 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     enum PixelFormat pix_fmt;
     AVCodec *codec = params->codec;
     assert(upipe);
+    int i;
 
     /* close previously opened context */
     if (unlikely(upipe_avcenc->context)) {
@@ -187,6 +188,18 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
         av_free(upipe_avcenc->context);
         upipe_avcenc->context = NULL;
         upipe_avcenc_store_flow_def(upipe, NULL);
+
+        /* free remaining urefs (should not be any) */
+        if (upipe_avcenc->uref) {
+            for (i=0; i < upipe_avcenc->uref_max; i++) {
+                if (unlikely(upipe_avcenc->uref[i])) {
+                    upipe_warn_va(upipe, "remaining uref %p freed",
+                                  upipe_avcenc->uref[i]);
+                    uref_free(upipe_avcenc->uref[i]);
+                    upipe_avcenc->uref[i] = NULL;
+                }
+            }
+        }
     }
 
     /* just closing, that's all */
@@ -249,6 +262,15 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     upipe_avcenc->counter = 0;
     upipe_notice_va(upipe, "codec %s (%s) %d opened (%dx%d)", codec->name,
             codec->long_name, codec->id, context->width, context->height);
+
+    /* allocate uref/avpkt mapping array */
+    upipe_avcenc->uref_max = context->delay + 1;
+    if (upipe_avcenc->uref_max < 1) {
+        upipe_avcenc->uref_max = 1;
+    }
+    upipe_avcenc->uref = realloc(upipe_avcenc->uref,
+                                 upipe_avcenc->uref_max * sizeof(void *));
+    memset(upipe_avcenc->uref, 0, upipe_avcenc->uref_max * sizeof(void *));
 
     upipe_avcenc_unblock_sink(upipe);
     upipe_release(upipe);
@@ -392,8 +414,9 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
     AVPacket avpkt;
     size_t stride, width, height;
     int i, gotframe, ret, size;
-    struct uref *uref_block;
+    struct ubuf *ubuf_block;
     uint8_t *buf;
+    uint64_t pts = 0;
 
     if (likely(uref)) {
         /* detect input format */
@@ -457,6 +480,32 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
                     NULL, NULL, NULL);
             frame->linesize[i] = stride;
         }
+
+        /* set pts (needed for uref/avpkt mapping) */
+        if (unlikely(!uref_clock_get_pts(uref, &pts) || pts == 0
+                                        || pts == AV_NOPTS_VALUE )) {
+            pts = upipe_avcenc->pts++;
+            uref_clock_set_pts(uref, pts);
+        } else {
+            upipe_avcenc->pts = pts;
+        }
+        frame->pts = pts;
+
+        /* store uref in mapping array */
+        for (i=0; i < upipe_avcenc->uref_max
+                  && upipe_avcenc->uref[i]; i++);
+        if (unlikely(i == upipe_avcenc->uref_max)) {
+            upipe_dbg_va(upipe, "mapping array too small (%d), resizing",
+                         upipe_avcenc->uref_max);
+            upipe_avcenc->uref = realloc(upipe_avcenc->uref,
+                                         2*upipe_avcenc->uref_max*sizeof(void*));
+            memset(upipe_avcenc->uref+upipe_avcenc->uref_max, 0,
+                   upipe_avcenc->uref_max * sizeof(void*));
+            upipe_avcenc->uref_max *= 2;
+        }
+        upipe_dbg_va(upipe, "uref %p stored at index %d", uref, i);
+        upipe_avcenc->uref[i] = uref;
+
     } else {
         /* uref == NULL, flushing encoder */
         upipe_dbg(upipe, "received null frame");
@@ -480,7 +529,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
             uref_pic_plane_unmap(uref, plane[i].chroma, 0, 0, -1, -1);
             frame->data[i] = NULL;
         }
-        uref_free(uref);
+        ubuf_free(uref_detach_ubuf(uref));
     }
 
     if (ret < 0) {
@@ -491,12 +540,31 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
     /* output encoded frame if available */
     if (gotframe && avpkt.data) {
         size = -1;
-        uref_block = uref_block_alloc(upipe_avcenc->uref_mgr,
-                                      upipe_avcenc->ubuf_mgr, avpkt.size);
-        uref_block_write(uref_block, 0, &size, &buf);
+        ubuf_block = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
+        ubuf_block_write(ubuf_block, 0, &size, &buf);
         memcpy(buf, avpkt.data, size);
-        uref_block_unmap(uref_block, 0);
+        ubuf_block_unmap(ubuf_block, 0);
         free(avpkt.data);
+
+        /* find uref corresponding to avpkt */
+        uref = NULL;
+        for (i=0; i < upipe_avcenc->uref_max; i++) {
+            if (upipe_avcenc->uref[i]) {
+                pts = 0;
+                if (uref_clock_get_pts(upipe_avcenc->uref[i], &pts)
+                                               && pts == avpkt.pts) {
+                    uref = upipe_avcenc->uref[i];
+                    upipe_avcenc->uref[i] = NULL;
+                    break;
+                }
+            }
+        }
+        if (unlikely(!uref)) {
+            upipe_warn_va(upipe, "could not find pts %d in current urefs",
+                                                               avpkt.pts);
+            uref = uref_alloc(upipe_avcenc->uref_mgr);
+        }
+        uref_attach_ubuf(uref, ubuf_block);
 
         /* flow definition */
         if (unlikely(!upipe_avcenc->output_flow)) {
@@ -509,7 +577,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
             upipe_avcenc_store_flow_def(upipe, outflow);
         }
 
-        upipe_avcenc_output(upipe, uref_block, upump);
+        upipe_avcenc_output(upipe, uref, upump);
         return true;
     }
     return false;
@@ -689,6 +757,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
         upump_mgr_sink_unblock(upipe_avcenc->saved_upump_mgr);
         upump_mgr_release(upipe_avcenc->saved_upump_mgr);
     }
+    free(upipe_avcenc->uref);
 
     upipe_avcenc_abort_av_deal(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
@@ -727,9 +796,9 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->saved_upump_mgr = NULL;
     upipe_avcenc->pixfmt = NULL;
     upipe_avcenc->frame = avcodec_alloc_frame();
-
-    upipe_avcenc->index_rap = 0;
-    upipe_avcenc->prev_rap = 0;
+    upipe_avcenc->uref = NULL;
+    upipe_avcenc->uref_max = 1;
+    upipe_avcenc->pts = 1;
 
     memset(&upipe_avcenc->open_params, 0, sizeof(struct upipe_avcodec_open_params));
 
