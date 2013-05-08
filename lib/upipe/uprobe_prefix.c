@@ -61,10 +61,10 @@ static bool uprobe_pfx_throw(struct uprobe *uprobe, struct upipe *upipe,
                 return true;
 
             const char *msg = va_arg(args, const char *);
-            char new_msg[strlen(msg) + strlen("[] ") + 1];
-            sprintf(new_msg, "[%s] %s",
-                    likely(uprobe_pfx->name != NULL) ?
-                        uprobe_pfx->name : "unknown", msg);
+            const char *name = likely(uprobe_pfx->name != NULL) ?
+                               uprobe_pfx->name : "unknown";
+            char new_msg[strlen(msg) + +strlen(name) + strlen("[] ") + 1];
+            sprintf(new_msg, "[%s] %s", name, msg);
             uprobe_throw(uprobe->next, upipe, event, level, new_msg);
             return true;
         }
