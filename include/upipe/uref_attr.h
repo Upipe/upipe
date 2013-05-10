@@ -640,7 +640,20 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                      uint8_t min, uint8_t max)             \
+{                                                                           \
+    uint8_t v;                                                              \
+    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
+    return ((v >= min) && (v <= max));                                      \
 }
+
 
 /* @This allows to define accessors for a shorthand small_unsigned attribute.
  *
@@ -680,7 +693,20 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                      uint8_t min, uint8_t max)             \
+{                                                                           \
+    uint8_t v;                                                              \
+    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
+    return ((v >= min) && (v <= max));                                      \
 }
+ 
 
 /* @This allows to define accessors for a small_unsigned attribute, with a name
  * depending on printf arguments.
@@ -728,8 +754,21 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_SMALL_UNSIGNED,             \
                                format, args);                               \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                  uint8_t min, uint8_t max, args_decl)      \
+{                                                                           \
+    uint8_t v;                                                              \
+    if (!uref_attr_get_small_unsigned_va(uref, &v,                          \
+                                         UDICT_TYPE_SMALL_UNSIGNED,         \
+                                         format, args)) return false;       \
+    return ((v >= min) && (v <= max));                                      \
 }
-
 
 /*
  * Unsigned attributes
@@ -773,6 +812,18 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                      uint64_t min, uint64_t max)           \
+{                                                                           \
+    uint64_t v;                                                             \
+    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
+    return ((v >= min) && (v <= max));                                      \
 }
 
 /* @This allows to define accessors for a shorthand unsigned attribute.
@@ -813,7 +864,20 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                      uint64_t min, uint64_t max)           \
+{                                                                           \
+    uint64_t v;                                                             \
+    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
+    return ((v >= min) && (v <= max));                                      \
 }
+
 
 /* @This allows to define accessors for an unsigned attribute, with a name
  * depending on printf arguments.
@@ -857,6 +921,19 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_UNSIGNED, format, args);    \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                 uint64_t min, uint64_t max, args_decl)     \
+{                                                                           \
+    uint64_t v;                                                             \
+    if (!uref_attr_get_unsigned_va(uref, &v, UDICT_TYPE_UNSIGNED,           \
+                                             format, args)) return false;   \
+    return ((v >= min) && (v <= max));                                      \
 }
 
 /* @This allows to define accessors for an unsigned attribute directly in the
@@ -904,7 +981,20 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->member = UINT64_MAX;                                              \
     return true;                                                            \
+}                                                                           \
+/** @This compares attribute to given values.                               \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                      uint64_t min, uint64_t max)           \
+{                                                                           \
+    uint64_t v;                                                             \
+    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
+    return ((v >= min) && (v <= max));                                      \
 }
+
 
 
 /*
