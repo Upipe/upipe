@@ -92,6 +92,8 @@ struct upipe_sws_thumbs {
     struct uref *gallery;
     /** thumb counter */
     int counter;
+    /** flush before next uref */
+    bool flush;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -125,6 +127,18 @@ static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
     }
 
     return true;
+}
+
+static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upump)
+{
+    struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
+    struct uref *gallery = upipe_sws_thumbs->gallery;
+    if (likely(gallery)) {
+        upipe_sws_thumbs->flush = false;
+        upipe_sws_thumbs->counter = 0;
+        upipe_sws_thumbs->gallery = NULL;
+        upipe_sws_thumbs_output(upipe, gallery, upump);
+    }
 }
 
 /** @internal @This receives incoming pictures.
@@ -271,8 +285,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     counter = counter % (thumbnum->hsize*thumbnum->vsize);
     upipe_sws_thumbs->counter = counter;
     if (unlikely(counter == 0)) {
-        upipe_sws_thumbs->gallery = NULL;
-        upipe_sws_thumbs_output(upipe, gallery, upump);
+        upipe_sws_thumbs_flush(upipe, upump);
     }
 }
 
@@ -305,6 +318,7 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
     /* flow end */
     if (unlikely(uref_flow_get_end(uref))) {
         uref_free(uref);
+        upipe_sws_thumbs_flush(upipe, upump);
         upipe_throw_need_input(upipe);
         return;
     }
@@ -345,6 +359,11 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_sws_thumbs->thumbsize ||
                  !upipe_sws_thumbs->thumbnum)) {
         upipe_warn(upipe, "need valid thumb size and thumbs per row/col");
+    }
+
+    /* process flush_next order */
+    if (unlikely(upipe_sws_thumbs->flush)) {
+        upipe_sws_thumbs_flush(upipe, upump);
     }
 
     upipe_sws_thumbs_input_pic(upipe, uref, upump);
@@ -490,6 +509,12 @@ static bool upipe_sws_thumbs_control(struct upipe *upipe, enum upipe_command com
             int rows = va_arg(args, int);
             return _upipe_sws_thumbs_set_size(upipe, hsize, vsize, cols, rows);
         }
+        case UPIPE_SWS_THUMBS_FLUSH_NEXT: {
+            int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_SWS_THUMBS_SIGNATURE);
+            upipe_sws_thumbs_from_upipe(upipe)->flush = true;
+            return true;
+        }
         default:
             return false;
     }
@@ -523,6 +548,7 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
 
     upipe_sws_thumbs->gallery = NULL;
     upipe_sws_thumbs->counter = 0;
+    upipe_sws_thumbs->flush = false;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -544,7 +570,7 @@ static void upipe_sws_thumbs_free(struct upipe *upipe)
     }
     free(upipe_sws_thumbs->thumbsize);
     if (upipe_sws_thumbs->gallery) {
-        uref_free(upipe_sws_thumbs->gallery);
+        upipe_sws_thumbs_flush(upipe, NULL);
     }
 
     upipe_throw_dead(upipe);

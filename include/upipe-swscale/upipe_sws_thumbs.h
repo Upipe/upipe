@@ -45,6 +45,8 @@ enum upipe_sws_thumbs_command {
     UPIPE_SWS_THUMBS_SET_SIZE,
     /** get size (int*, int*, int*, int*) */
     UPIPE_SWS_THUMBS_GET_SIZE,
+    /** flush before next uref */
+    UPIPE_SWS_THUMBS_FLUSH_NEXT
 };
 
 /** @This sets the thumbnail gallery dimensions.
@@ -71,6 +73,16 @@ static inline bool upipe_sws_thumbs_get_size(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_SWS_THUMBS_GET_SIZE, UPIPE_SWS_THUMBS_SIGNATURE,
                          hsize_p, vsize_p, cols_p, rows_p);
+}
+
+/** @This flushes the current gallery before next uref
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static inline bool upipe_sws_thumbs_flush_next(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_SWS_THUMBS_FLUSH_NEXT, UPIPE_SWS_THUMBS_SIGNATURE);
 }
 
 /** @This returns the management structure for sws thmub pipes.
