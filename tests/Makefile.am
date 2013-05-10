@@ -41,6 +41,7 @@ check_PROGRAMS = \
 	upipe_dup_test \
 	upipe_setattr_test \
 	upipe_setrap_test \
+	upipe_match_attr_test \
 	upipe_filter_blend_test \
 	upipe_mp2v_framer_test
 
@@ -65,6 +66,7 @@ TESTS = \
 	upipe_dup_test \
 	upipe_setattr_test \
 	upipe_setrap_test \
+	upipe_match_attr_test \
 	upipe_filter_blend_test \
 	upipe_mp2v_framer_test
 
@@ -164,6 +166,7 @@ upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_mo
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_skip_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la

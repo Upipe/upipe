@@ -15,6 +15,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_null.c \
 	upipe_skip.c \
 	upipe_setattr.c \
+	upipe_match_attr.c \
 	upipe_setrap.c
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_CFLAGS = -Wall
