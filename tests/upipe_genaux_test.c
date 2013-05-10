@@ -41,8 +41,6 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
 #include <upipe/uref_clock.h>
 #include <upipe-modules/upipe_genaux.h>
 
@@ -83,7 +81,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
 
 /** phony pipe to test upipe_genaux */
 struct genaux_test {
-    struct uref *flow;
     struct uref *entry;
     struct upipe upipe;
 };
@@ -98,7 +95,6 @@ static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
     struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
     assert(genaux_test != NULL);
     upipe_init(&genaux_test->upipe, mgr, uprobe);
-    genaux_test->flow = NULL;
     genaux_test->entry = NULL;
     return &genaux_test->upipe;
 }
@@ -115,11 +111,8 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(uref_flow_get_def(uref, &def))) {
         assert(def);
-        if (genaux_test->flow) {
-            uref_free(genaux_test->flow);
-        }
-        genaux_test->flow = uref;
         upipe_dbg_va(upipe, "flow def %s", def);
+        uref_free(uref);
         return;
     }
     if (genaux_test->entry) {
@@ -136,8 +129,6 @@ static void genaux_test_free(struct upipe *upipe)
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
     if (genaux_test->entry)
         uref_free(genaux_test->entry);
-    if (genaux_test->flow)
-        uref_free(genaux_test->flow);
     upipe_clean(upipe);
     free(genaux_test);
 }
@@ -160,7 +151,7 @@ int main(int argc, char **argv)
 
     struct ubuf_mgr *ubuf_mgr;
     struct uref *uref;
-    uint64_t systime, result;
+    uint64_t opaque = 0xcafebabedeadbeef, result;
     uint8_t buf[8];
 
     /* uref and mem management */
@@ -179,7 +170,6 @@ int main(int argc, char **argv)
                                                     UBUF_ALIGN_OFFSET);
     assert(ubuf_mgr);
 
-
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -188,12 +178,6 @@ int main(int argc, char **argv)
     assert(uprobe_stdio != NULL);
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
-
-    /* clock */
-    struct uclock *uclock = uclock_std_alloc(0);
-    assert(uclock != NULL);
-    systime = uclock_now(uclock);
-    uclock_release(uclock);
 
     /* build genaux pipe */
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
@@ -212,16 +196,29 @@ int main(int argc, char **argv)
     assert(uref);
     upipe_input(genaux, uref, NULL);
 
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
+    uref = uref_alloc(uref_mgr);
     assert(uref);
-    assert(uref_clock_set_systime(uref, systime));
+    assert(uref_clock_set_systime(uref, opaque));
     /* Now send uref */
+    upipe_input(genaux, uref, NULL);
+
+    assert(genaux_test_from_upipe(genaux_test)->entry);
+    uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);
+    result = upipe_genaux_ntoh64(buf);
+    uprobe_dbg_va(log, NULL, "original: %"PRIu64" \t result: %"PRIu64, opaque, result);
+    assert(opaque == result);
+
+    /* test arbitrary geattr */
+    assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts));
+    uref = uref_alloc(uref_mgr);
+    assert(uref);
+    assert(uref_clock_set_pts(uref, opaque));
     upipe_input(genaux, uref, NULL);
 
     uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);
     result = upipe_genaux_ntoh64(buf);
-    uprobe_dbg_va(log, NULL, "original: %"PRIu64" \t result: %"PRIu64, systime, result);
-    assert(systime == result);
+    uprobe_dbg_va(log, NULL, "original: %"PRIu64" \t result: %"PRIu64, opaque, result);
+    assert(opaque == result);
 
     upipe_release(genaux);
     genaux_test_free(genaux_test);

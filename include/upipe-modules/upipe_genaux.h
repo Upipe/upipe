@@ -41,6 +41,43 @@
 
 #define UPIPE_GENAUX_SIGNATURE UBASE_FOURCC('g','a','u','x')
 
+/** @This extends upipe_command with specific commands for genaux pipes. */
+enum upipe_genaux_command {
+    UPIPE_GENAUX_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set getter (bool (*)(struct uref*, uint64_t*)) */
+    UPIPE_GENAUX_SET_GETATTR,
+
+    /** get getter (bool (*)(struct uref*, uint64_t*)) */
+    UPIPE_GENAUX_GET_GETATTR,
+};
+
+/** @This sets the get callback to fetch the u64 opaque with.
+ *
+ * @param upipe description structure of the pipe
+ * @param get callback
+ * @return false in case of error
+ */
+static inline bool upipe_genaux_set_getattr(struct upipe *upipe,
+                            bool (*get)(struct uref*, uint64_t*))
+{
+    return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
+                         UPIPE_GENAUX_SIGNATURE, get);
+}
+
+/** @This gets the get callback to fetch the u64 opaque with.
+ *
+ * @param upipe description structure of the pipe
+ * @param get callback pointer
+ * @return false in case of error
+ */
+static inline bool upipe_genaux_get_getattr(struct upipe *upipe,
+                            bool (**get)(struct uref*, uint64_t*))
+{
+    return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
+                         UPIPE_GENAUX_SIGNATURE, get);
+}
+
 /** @This returns the management structure for genaux pipes.
  *
  * @return pointer to manager

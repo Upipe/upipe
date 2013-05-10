@@ -65,6 +65,9 @@ struct upipe_genaux {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
+    /** get attr */
+    bool (*getattr) (struct uref *, uint64_t *);
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -94,7 +97,7 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
             return;
     }
 
-    if (!uref_clock_get_systime(uref, &systime)) {
+    if (!upipe_genaux->getattr(uref, &systime)) {
         uref_free(uref);
         return;
     }
@@ -109,7 +112,9 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_write(dst, 0, &size, &aux);
     upipe_genaux_hton64(aux, systime);
     ubuf_block_unmap(dst, 0);
-    ubuf_free(uref_detach_ubuf(uref));
+    if (uref->ubuf) {
+        ubuf_free(uref_detach_ubuf(uref));
+    }
     uref_attach_ubuf(uref, dst);
     upipe_genaux_output(upipe, uref, upump);
 }
@@ -123,7 +128,6 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
 static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
-    // FIXME: check flow definition (only accept flows with planar y8)
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     const char *def;
 
@@ -147,12 +151,43 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
+    _upipe_genaux_input(upipe, uref, upump);
+}
+
+/** @This sets the get callback to fetch the u64 opaque with.
+ *
+ * @param upipe description structure of the pipe
+ * @param get callback
+ * @return false in case of error
+ */
+static inline bool _upipe_genaux_set_getattr(struct upipe *upipe,
+                            bool (*get)(struct uref*, uint64_t*))
+{
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    if (unlikely(!get)) {
+        return false;
     }
 
-    _upipe_genaux_input(upipe, uref, upump);
+    upipe_genaux->getattr = get;
+    return true;
+}
+
+/** @This gets the get callback to fetch the u64 opaque with.
+ *
+ * @param upipe description structure of the pipe
+ * @param get callback pointer
+ * @return false in case of error
+ */
+static inline bool _upipe_genaux_get_getattr(struct upipe *upipe,
+                            bool (**get)(struct uref*, uint64_t*))
+{
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    if (unlikely(!get)) {
+        return false;
+    }
+
+    *get = upipe_genaux->getattr;
+    return true;
 }
 
 /** @internal @This processes control commands on a genaux pipe.
@@ -182,6 +217,19 @@ static bool upipe_genaux_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_genaux_set_output(upipe, output);
         }
+
+        case UPIPE_GENAUX_SET_GETATTR: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_GENAUX_SIGNATURE);
+            return _upipe_genaux_set_getattr(upipe,
+                       va_arg(args, bool (*)(struct uref*, uint64_t*)));
+        }
+        case UPIPE_GENAUX_GET_GETATTR: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_GENAUX_SIGNATURE);
+            return _upipe_genaux_get_getattr(upipe,
+                       va_arg(args, bool (**)(struct uref*, uint64_t*)));
+        }
         default:
             return false;
     }
@@ -203,6 +251,7 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
+    upipe_genaux->getattr = uref_clock_get_systime;
 
     upipe_throw_ready(upipe);
     return upipe;
