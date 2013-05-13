@@ -5,6 +5,8 @@ myinclude_HEADERS = \
 	upipe_file_source.h \
 	upipe_genaux.h \
 	upipe_multicat_sink.h \
+	upipe_multicat_probe.h \
+	upipe_probe_uref.h \
 	upipe_null.h \
 	upipe_skip.h \
 	upipe_queue_sink.h \

@@ -12,6 +12,8 @@ libupipe_modules_la_SOURCES = \
     http-parser/http_parser.h \
 	upipe_genaux.c \
 	upipe_multicat_sink.c \
+	upipe_multicat_probe.c \
+	upipe_probe_uref.c \
 	upipe_null.c \
 	upipe_skip.c \
 	upipe_setattr.c \
