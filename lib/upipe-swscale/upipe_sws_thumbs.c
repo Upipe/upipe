@@ -37,7 +37,6 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-swscale/upipe_sws_thumbs.h>
 #include <upipe-av/upipe_av_pixfmt.h>
@@ -70,8 +69,6 @@ struct upipe_sws_thumbs {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
 
     /** swscale image conversion context */
     struct SwsContext *convert_ctx;
@@ -102,7 +99,6 @@ struct upipe_sws_thumbs {
 UPIPE_HELPER_UPIPE(upipe_sws_thumbs, upipe);
 UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr);
-UPIPE_HELPER_UREF_MGR(upipe_sws_thumbs, uref_mgr);
 
 /** @internal @This configures swscale context
  *
@@ -129,6 +125,11 @@ static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
     return true;
 }
 
+/** @internal @This flushes current thumbs gallery.
+ *
+ * @param upipe description structure of the pipe
+ * @param upump pump that generated the buffer
+ */
 static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
@@ -153,6 +154,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     const struct upipe_av_plane *planes;
     struct uref *gallery;
+    struct ubuf *ubuf;
     struct picsize inputsize, pos, surface, margins, *thumbsize, *thumbnum;
     size_t stride;
     int strides[4], dstrides[4];
@@ -220,19 +222,30 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     }
 
     /* allocate dest ubuf */
-    if (unlikely(!upipe_sws_thumbs->gallery)) {
-        upipe_sws_thumbs->gallery = uref_pic_alloc(upipe_sws_thumbs->uref_mgr,
-               upipe_sws_thumbs->ubuf_mgr, thumbsize->hsize * thumbnum->hsize,
-                                           thumbsize->vsize * thumbnum->vsize);
-        if (unlikely(!upipe_sws_thumbs->gallery)) {
+    gallery = upipe_sws_thumbs->gallery;
+    if (unlikely(!gallery)) {
+        upipe_sws_thumbs->gallery = uref_dup(uref);
+        gallery = upipe_sws_thumbs->gallery;
+        if (unlikely(!gallery)) {
             upipe_throw_aerror(upipe);
             uref_free(uref);
             return;
         }
-        upipe_av_pixfmt_clear_picture(upipe_sws_thumbs->gallery->ubuf,
-                                      0, 0, -1, -1, upipe_sws_thumbs->dstfmt);
+        ubuf = ubuf_pic_alloc(upipe_sws_thumbs->ubuf_mgr,
+                                           thumbsize->hsize * thumbnum->hsize,
+                                           thumbsize->vsize * thumbnum->vsize);
+        if (unlikely(!ubuf)) {
+            upipe_throw_aerror(upipe);
+            uref_free(gallery);
+            uref_free(uref);
+            return;
+        }
+        uref_attach_ubuf(gallery, ubuf);
+        sar.num = sar.den = 1;
+        uref_pic_set_aspect(gallery, sar);
+        upipe_av_pixfmt_clear_picture(ubuf, 0, 0, -1, -1,
+                                      upipe_sws_thumbs->dstfmt);
     }
-    gallery = upipe_sws_thumbs->gallery;
 
     /* map input */
     memset(slices, 0, sizeof(slices));
@@ -330,15 +343,7 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    /* check uref and ubuf manager */
-    if (unlikely(!upipe_sws_thumbs->uref_mgr)) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(!upipe_sws_thumbs->uref_mgr)) {
-            upipe_warn(upipe, "uref_mgr not set !");
-            uref_free(uref);
-            return;
-        }
-    }
+    /* check ubuf manager */
     if (unlikely(!upipe_sws_thumbs->ubuf_mgr)) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_sws_thumbs->output_flow);
         if (unlikely(!upipe_sws_thumbs->ubuf_mgr)) {
@@ -468,14 +473,6 @@ static bool upipe_sws_thumbs_control(struct upipe *upipe, enum upipe_command com
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return _upipe_sws_thumbs_set_ubuf_mgr(upipe, ubuf_mgr);
         }
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_sws_thumbs_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_sws_thumbs_set_uref_mgr(upipe, uref_mgr);
-        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_thumbs_get_output(upipe, p);
@@ -536,7 +533,6 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_sws_thumbs_init_ubuf_mgr(upipe);
-    upipe_sws_thumbs_init_uref_mgr(upipe);
     upipe_sws_thumbs_init_output(upipe);
 
     upipe_sws_thumbs->convert_ctx = NULL;
@@ -563,7 +559,6 @@ static void upipe_sws_thumbs_free(struct upipe *upipe)
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     upipe_sws_thumbs_clean_output(upipe);
     upipe_sws_thumbs_clean_ubuf_mgr(upipe);
-    upipe_sws_thumbs_clean_uref_mgr(upipe);
 
     if (likely(upipe_sws_thumbs->convert_ctx)) {
         sws_freeContext(upipe_sws_thumbs->convert_ctx);
