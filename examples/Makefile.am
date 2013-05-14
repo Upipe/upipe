@@ -14,10 +14,14 @@ UPIPEX264_LIBS = $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 noinst_PROGRAMS = 
 
 if HAVE_EV
-noinst_PROGRAMS += udpmulticat upipe_duration
+noinst_PROGRAMS += udpmulticat
+
+if HAVE_BITSTREAM
+noinst_PROGRAMS += upipe_duration
 
 if HAVE_GLX
 noinst_PROGRAMS += glxplay
+endif
 endif
 
 if HAVE_AVFORMAT

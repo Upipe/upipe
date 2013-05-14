@@ -42,8 +42,7 @@ check_PROGRAMS = \
 	upipe_setattr_test \
 	upipe_setrap_test \
 	upipe_match_attr_test \
-	upipe_filter_blend_test \
-	upipe_mp2v_framer_test
+	upipe_filter_blend_test
 
 TESTS = \
 	umem_alloc_test \
@@ -67,8 +66,7 @@ TESTS = \
 	upipe_setattr_test \
 	upipe_setrap_test \
 	upipe_match_attr_test \
-	upipe_filter_blend_test \
-	upipe_mp2v_framer_test
+	upipe_filter_blend_test
 
 if HAVE_EV
 check_PROGRAMS += \
@@ -127,7 +125,8 @@ check_PROGRAMS += \
 	upipe_ts_psi_split_test \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
-	upipe_ts_demux_test
+	upipe_ts_demux_test \
+	upipe_mp2v_framer_test
 TESTS += \
 	uprobe_ts_log_test.sh \
 	upipe_ts_sync_test \
@@ -139,7 +138,8 @@ TESTS += \
 	upipe_ts_psi_split_test \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
-	upipe_ts_demux_test
+	upipe_ts_demux_test \
+	upipe_mp2v_framer_test
 endif
 
 if HAVE_X264
