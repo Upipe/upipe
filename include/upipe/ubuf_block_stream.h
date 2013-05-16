@@ -102,6 +102,8 @@ static inline void ubuf_block_stream_clean(struct ubuf_block_stream *s)
 static inline bool ubuf_block_stream_get(struct ubuf_block_stream *s,
                                          uint8_t *octet_p)
 {
+    if (s->ubuf == NULL)
+        return false;
     if (unlikely(s->buffer >= s->end)) {
         ubuf_block_unmap(s->ubuf, s->offset);
         s->offset += s->size;

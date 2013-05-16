@@ -307,7 +307,7 @@ static void uprobe_selprog_check_auto(struct uprobe *uprobe)
     ulist_foreach (&uprobe_selprog->outputs, uchain) {
         struct uprobe_selprog_output *output =
             uprobe_selprog_output_from_uchain(uchain);
-        if (output->selected)
+        if (output->program_def && output->selected)
             return;
     }
 

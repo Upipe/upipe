@@ -213,6 +213,7 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr, struct up
     upipe_init(upipe, mgr, uprobe);
     upipe_multicat_probe_init_output(upipe);
     upipe_multicat_probe->rotate = UPIPE_MULTICAT_PROBE_DEF_ROTATE;
+    upipe_multicat_probe->idx = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }

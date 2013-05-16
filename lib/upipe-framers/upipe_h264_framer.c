@@ -422,7 +422,7 @@ static inline bool upipe_h264f_stream_get(struct ubuf_block_stream *s,
 static uint32_t upipe_h264f_stream_ue(struct ubuf_block_stream *s)
 {
     int i = 1;
-    for ( ; ; ) {
+    while (i < 32) {
         upipe_h264f_stream_fill_bits(s, 8);
         uint8_t octet = ubuf_block_stream_show_bits(s, 8);
         if (likely(octet))
@@ -430,7 +430,7 @@ static uint32_t upipe_h264f_stream_ue(struct ubuf_block_stream *s)
         i += 8;
         ubuf_block_stream_skip_bits(s, 8);
     }
-    while (!ubuf_block_stream_show_bits(s, 1)) {
+    while (i < 32 && !ubuf_block_stream_show_bits(s, 1)) {
         i++;
         ubuf_block_stream_skip_bits(s, 1);
     }
@@ -564,7 +564,10 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
     bool ret = ubuf_block_stream_init(s, ubuf,
                                       upipe_h264f->au_last_nal_start_size +
                                       H264SPS_HEADER_SIZE - 4);
-    assert(ret);
+    if (unlikely(!ret)) {
+        upipe_throw_aerror(upipe);
+        return;
+    }
     uint32_t sps_id = upipe_h264f_stream_ue(s);
     ubuf_block_stream_clean(s);
 
@@ -814,6 +817,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     if (upipe_h264f->log2_max_frame_num > 16) {
         upipe_err_va(upipe, "invalid log2_max_frame_num %"PRIu32,
                      upipe_h264f->log2_max_frame_num);
+        upipe_h264f->log2_max_frame_num = 0;
         ubuf_block_stream_clean(s);
         uref_free(flow_def);
         return false;
@@ -825,6 +829,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         if (upipe_h264f->log2_max_poc_lsb > 16) {
             upipe_err_va(upipe, "invalid log2_max_frame_num %"PRIu32,
                          upipe_h264f->log2_max_frame_num);
+            upipe_h264f->log2_max_poc_lsb = 0;
             ubuf_block_stream_clean(s);
             uref_free(flow_def);
             return false;
