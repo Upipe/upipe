@@ -134,8 +134,8 @@ static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upu
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     struct uref *gallery = upipe_sws_thumbs->gallery;
+    upipe_sws_thumbs->flush = false;
     if (likely(gallery)) {
-        upipe_sws_thumbs->flush = false;
         upipe_sws_thumbs->counter = 0;
         upipe_sws_thumbs->gallery = NULL;
         upipe_sws_thumbs_output(upipe, gallery, upump);
