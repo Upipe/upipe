@@ -1426,9 +1426,12 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
             uref_flow_set_error(upipe_h264f->next_uref);
         else
             upipe_h264f_parse_slice(upipe, upump);
-        if (last_nal_type == H264NAL_TYPE_IDR)
-            uref_clock_get_systime_rap(upipe_h264f->next_uref,
-                                       &upipe_h264f->systime_rap);
+        if (last_nal_type == H264NAL_TYPE_IDR) {
+            uint64_t systime_rap;
+            if (uref_clock_get_systime_rap(upipe_h264f->next_uref,
+                                           &systime_rap) && systime_rap)
+                upipe_h264f->systime_rap = systime_rap;
+        }
         return;
     }
 

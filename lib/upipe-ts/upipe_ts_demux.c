@@ -1403,6 +1403,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     if (delta <= MAX_PCR_INTERVAL && !discontinuity)
         upipe_ts_demux_program->last_pcr += delta;
     else {
+        upipe_warn(upipe, "PCR discontinuity");
         upipe_ts_demux_program->last_pcr = pcr_orig;
         upipe_ts_demux_program->timestamp_offset =
             upipe_ts_demux_program->timestamp_highest - pcr_orig;
@@ -1424,6 +1425,8 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
                 ret = ret && upipe_setrap_set_rap(output->setrap,
                                     upipe_ts_demux_program->systime_pcr);
         }
+        /* this is also valid for the packet we are processing */
+        uref_clock_set_systime_rap(uref, upipe_ts_demux_program->systime_pcr);
         if (!ret)
             upipe_throw_aerror(upipe);
     }
