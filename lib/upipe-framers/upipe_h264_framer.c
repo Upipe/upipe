@@ -1099,14 +1099,23 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
         return;
     }
 
-    upipe_h264f_stream_fill_bits(s,
-            upipe_h264f->initial_cpb_removal_delay_length + 1);
-    upipe_h264f->initial_cpb_removal_delay =
-        ubuf_block_stream_show_bits(s,
-                upipe_h264f->initial_cpb_removal_delay_length + 1) *
-        UCLOCK_FREQ / 90000;
-    ubuf_block_stream_skip_bits(s,
-                upipe_h264f->initial_cpb_removal_delay_length + 1);
+    size_t initial_cpb_removal_delay_length =
+        upipe_h264f->initial_cpb_removal_delay_length + 1;
+    upipe_h264f->initial_cpb_removal_delay = 0;
+    if (initial_cpb_removal_delay_length > 24) {
+        upipe_h264f_stream_fill_bits(s, 24);
+        upipe_h264f->initial_cpb_removal_delay =
+            ubuf_block_stream_show_bits(s, 24);
+        ubuf_block_stream_skip_bits(s, 24);
+        initial_cpb_removal_delay_length -= 24;
+        upipe_h264f->initial_cpb_removal_delay <<=
+            initial_cpb_removal_delay_length;
+    }
+    upipe_h264f_stream_fill_bits(s, initial_cpb_removal_delay_length);
+    upipe_h264f->initial_cpb_removal_delay |=
+        ubuf_block_stream_show_bits(s, initial_cpb_removal_delay_length);
+    ubuf_block_stream_skip_bits(s, initial_cpb_removal_delay_length);
+    upipe_h264f->initial_cpb_removal_delay *= UCLOCK_FREQ / 90000;
 
     if (upipe_h264f->pic_struct_present) {
         upipe_h264f_stream_fill_bits(s, 4);
