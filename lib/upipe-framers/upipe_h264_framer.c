@@ -1000,7 +1000,9 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             if (!!ubuf_block_stream_show_bits(s, 1))
                 ret = ret && uref_flow_set_lowdelay(flow_def);
             ubuf_block_stream_skip_bits(s, 1);
-        }
+            upipe_h264f->hrd = true;
+        } else
+            upipe_h264f->hrd = false;
 
         upipe_h264f_stream_fill_bits(s, 1);
         upipe_h264f->pic_struct_present = !!ubuf_block_stream_show_bits(s, 1);
@@ -1008,6 +1010,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     } else {
         upipe_h264f->duration = 0;
         upipe_h264f->pic_struct_present = false;
+        upipe_h264f->hrd = false;
     }
 
     upipe_h264f->active_sps = sps_id;
