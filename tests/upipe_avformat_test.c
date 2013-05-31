@@ -188,7 +188,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(output != NULL);
             uchain_init(&output->uchain);
             ulist_add(&upipe_avfsrc_outputs, &output->uchain);
-            output->upipe_avfsrc_output = upipe_alloc_output(upipe_avfsrc,
+            output->upipe_avfsrc_output = upipe_alloc_sub(upipe_avfsrc,
                     uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
                                               "output %"PRIu64, id));
             assert(output->upipe_avfsrc_output != NULL);

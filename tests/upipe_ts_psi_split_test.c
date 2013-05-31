@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_ts_psi_split_output68 =
-        upipe_alloc_output(upipe_ts_psi_split,
+        upipe_alloc_sub(upipe_ts_psi_split,
                 uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
                                        "ts psi split output 68"));
     assert(upipe_ts_psi_split_output68 != NULL);
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_ts_psi_split_output69 =
-        upipe_alloc_output(upipe_ts_psi_split,
+        upipe_alloc_sub(upipe_ts_psi_split,
                 uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
                                        "ts psi split output 69"));
     assert(upipe_ts_psi_split_output69 != NULL);

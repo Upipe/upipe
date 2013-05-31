@@ -204,9 +204,9 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"));
-    upipe_set_output(upipe_alloc_output(upipe_dup,
+    upipe_set_output(upipe_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata")), datasink);
-    upipe_set_output(upipe_alloc_output(upipe_dup,
+    upipe_set_output(upipe_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux")), genaux);
 
     // udp source

@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
 
     assert(uref_ts_flow_set_pid(uref, 68));
-    struct upipe *upipe_ts_split_output68 = upipe_alloc_output(upipe_ts_split,
+    struct upipe *upipe_ts_split_output68 = upipe_alloc_sub(upipe_ts_split,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                    "ts split output 68"));
     assert(upipe_ts_split_output68 != NULL);
@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
     assert(upipe_set_output(upipe_ts_split_output68, upipe_sink68));
 
     assert(uref_ts_flow_set_pid(uref, 69));
-    struct upipe *upipe_ts_split_output69 = upipe_alloc_output(upipe_ts_split,
+    struct upipe *upipe_ts_split_output69 = upipe_alloc_sub(upipe_ts_split,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                    "ts split output 69"));
     assert(upipe_ts_split_output69 != NULL);

@@ -377,6 +377,7 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
             context->release_buffer = upipe_avcdec_release_buffer;
             context->flags |= CODEC_FLAG_EMU_EDGE;
             context->lowres = upipe_avcdec->lowres;
+            context->skip_loop_filter = AVDISCARD_ALL;
 
             break;
         }

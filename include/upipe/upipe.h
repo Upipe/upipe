@@ -118,10 +118,8 @@ struct upipe {
     /** pointer to the manager for this pipe type */
     struct upipe_mgr *mgr;
 
-    /** pointer to manager used to allocate input subpipes of join pipes */
-    struct upipe_mgr *input_mgr;
-    /** pointer to manager used to allocate output subpipes of split pipes */
-    struct upipe_mgr *output_mgr;
+    /** pointer to manager used to allocate subpipes, or NULL */
+    struct upipe_mgr *sub_mgr;
 };
 
 /** @This stores common management parameters for a pipe type. */
@@ -184,32 +182,17 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @This allocates and initializes a subpipe that represents an input of a
- * join pipe.
+/** @This allocates and initializes a subpipe of a pipe.
  *
- * @param upipe pointer to the join pipe
+ * @param upipe pointer to the pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
-static inline struct upipe *upipe_alloc_input(struct upipe *upipe,
-                                              struct uprobe *uprobe)
+static inline struct upipe *upipe_alloc_sub(struct upipe *upipe,
+                                            struct uprobe *uprobe)
 {
-    return upipe_alloc(upipe->input_mgr, uprobe);
-}
-
-/** @This allocates and initializes a subpipe that represents an output of a
- * split pipe.
- *
- * @param upipe pointer to the split pipe
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @return pointer to allocated subpipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_alloc_output(struct upipe *upipe,
-                                               struct uprobe *uprobe)
-{
-    return upipe_alloc(upipe->output_mgr, uprobe);
+    return upipe_alloc(upipe->sub_mgr, uprobe);
 }
 
 /** @This initializes the public members of a pipe that is neither join nor
@@ -227,48 +210,26 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
-    upipe->input_mgr = NULL;
-    upipe->output_mgr = NULL;
+    upipe->sub_mgr = NULL;
 }
 
-/** @This initializes the public members of a join pipe.
+/** @This initializes the public members of a pipe that will have subpipes.
  *
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events
- * @param input_mgr manager used to allocate input subpipes
+ * @param sub_mgr manager used to allocate subpipes
  */
-static inline void upipe_join_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe,
-                                   struct upipe_mgr *input_mgr)
+static inline void upipe_sub_init(struct upipe *upipe, struct upipe_mgr *mgr,
+                                  struct uprobe *uprobe,
+                                  struct upipe_mgr *sub_mgr)
 {
     assert(upipe != NULL);
     urefcount_init(&upipe->refcount);
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
-    upipe->input_mgr = input_mgr;
-    upipe->output_mgr = NULL;
-}
-
-/** @This initializes the public members of a split pipe.
- *
- * @param upipe description structure of the pipe
- * @param mgr management structure for this pipe type
- * @param uprobe structure used to raise events
- * @param output_mgr manager used to allocate output subpipes
- */
-static inline void upipe_split_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe,
-                                    struct upipe_mgr *output_mgr)
-{
-    assert(upipe != NULL);
-    urefcount_init(&upipe->refcount);
-    upipe->uprobe = uprobe;
-    upipe->mgr = mgr;
-    upipe_mgr_use(mgr);
-    upipe->input_mgr = NULL;
-    upipe->output_mgr = output_mgr;
+    upipe->sub_mgr = sub_mgr;
 }
 
 /** @This increments the reference count of a upipe.

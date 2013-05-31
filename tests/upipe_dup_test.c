@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
 
-    struct upipe *upipe_dup_output0 = upipe_alloc_output(upipe_dup,
+    struct upipe *upipe_dup_output0 = upipe_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup output 0"));
     assert(upipe_dup_output0 != NULL);
     assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     assert(counter == 2);
     counter = 0;
 
-    struct upipe *upipe_dup_output1 = upipe_alloc_output(upipe_dup,
+    struct upipe *upipe_dup_output1 = upipe_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
                                    "dup output 1"));
     assert(upipe_dup_output1 != NULL);

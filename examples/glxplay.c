@@ -181,7 +181,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
             upipe_err_va(upipe, "add flow %"PRIu64" (%s)", flow_id, def);
             assert(output == NULL);
-            output = upipe_alloc_output(upipe,
+            output = upipe_alloc_sub(upipe,
                     uprobe_pfx_adhoc_alloc(uprobe, loglevel, "video"));
             assert(output != NULL);
 

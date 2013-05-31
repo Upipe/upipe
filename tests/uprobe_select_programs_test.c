@@ -150,7 +150,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
-    upipe_split_init(upipe, mgr, uprobe, &test_output_mgr);
+    upipe_sub_init(upipe, mgr, uprobe, &test_output_mgr);
     return upipe;
 }
 

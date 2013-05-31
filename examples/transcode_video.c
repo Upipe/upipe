@@ -155,7 +155,7 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
             }
             upipe_notice_va(upipe, "adding flow %s (%d)", def, flow_id);
 
-            struct upipe *output = upipe_alloc_output(upipe,
+            struct upipe *output = upipe_alloc_sub(upipe,
                     uprobe_pfx_adhoc_alloc_va(&uprobe_outputs, loglevel,
                                                       "output %"PRIu64, flow_id));
 

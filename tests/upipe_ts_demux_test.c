@@ -121,7 +121,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     printf("done\n");
                     upipe_ts_demux_output_video = NULL;
                 }
-                upipe_ts_demux_output_pmt = upipe_alloc_output(upipe_ts_demux,
+                upipe_ts_demux_output_pmt = upipe_alloc_sub(upipe_ts_demux,
                         uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                                "ts demux pmt"));
                 assert(upipe_ts_demux_output_pmt != NULL);
@@ -130,7 +130,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                 if (upipe_ts_demux_output_video != NULL)
                     upipe_release(upipe_ts_demux_output_video);
                 upipe_ts_demux_output_video =
-                    upipe_alloc_output(upipe_ts_demux_output_pmt,
+                    upipe_alloc_sub(upipe_ts_demux_output_pmt,
                         uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                                "ts demux video"));
                 assert(upipe_ts_demux_output_video != NULL);

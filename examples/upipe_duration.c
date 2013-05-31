@@ -127,7 +127,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
 
             assert(output == NULL);
-            output = upipe_alloc_output(upipe,
+            output = upipe_alloc_sub(upipe,
                      uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "video"));
             assert(output != NULL);
             upipe_set_flow_def(output, flow_def);

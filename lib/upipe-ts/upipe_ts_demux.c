@@ -400,7 +400,7 @@ static struct upipe_ts_demux_psi_pid *
 
     /* set PID filter on ts_split subpipe */
     psi_pid->split_output =
-        upipe_alloc_output(upipe_ts_demux->split,
+        upipe_alloc_sub(upipe_ts_demux->split,
                            uprobe_pfx_adhoc_alloc_va(
                                &upipe_ts_demux->psi_pid_plumber,
                                UPROBE_LOG_DEBUG, "split output %"PRIu16, pid));
@@ -911,7 +911,7 @@ static bool upipe_ts_demux_output_set_flow_def(struct upipe *upipe,
 
     /* set up a split_output subpipe */
     upipe_ts_demux_output->split_output =
-        upipe_alloc_output(demux->split,
+        upipe_alloc_sub(demux->split,
                            uprobe_pfx_adhoc_alloc_va(
                                 &upipe_ts_demux_output->probe,
                                 UPROBE_LOG_DEBUG, "split output %"PRIu64,
@@ -1469,7 +1469,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
         return;
 
     upipe_ts_demux_program->pcr_split_output =
-        upipe_alloc_output(demux->split,
+        upipe_alloc_sub(demux->split,
                            uprobe_pfx_adhoc_alloc_va(
                                 upipe_ts_demux_to_upipe(demux)->uprobe,
                                 UPROBE_LOG_DEBUG, "split output PCR %"PRIu64,
@@ -1529,8 +1529,8 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe *upipe =
         upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
-    upipe_split_init(upipe, mgr, uprobe,
-                     upipe_ts_demux_program_init_output_mgr(upipe));
+    upipe_sub_init(upipe, mgr, uprobe,
+                   upipe_ts_demux_program_init_output_mgr(upipe));
     upipe_ts_demux_program_init_sub_outputs(upipe);
     upipe_ts_demux_program->flow_def = NULL;
     upipe_ts_demux_program->program = 0;
@@ -1649,7 +1649,7 @@ static bool upipe_ts_demux_program_set_flow_def(struct upipe *upipe,
         return false;
     }
     upipe_ts_demux_program->psi_split_output =
-        upipe_alloc_output(upipe_ts_demux_program->psi_pid->psi_split,
+        upipe_alloc_sub(upipe_ts_demux_program->psi_pid->psi_split,
                            uprobe_pfx_adhoc_alloc(
                                 &upipe_ts_demux_program->plumber,
                                 UPROBE_LOG_DEBUG, "psi_split output"));
@@ -1732,17 +1732,17 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return pointer to output upipe manager
  */
-static struct upipe_mgr *upipe_ts_demux_init_output_mgr(struct upipe *upipe)
+static struct upipe_mgr *upipe_ts_demux_init_program_mgr(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    struct upipe_mgr *output_mgr = &upipe_ts_demux->program_mgr;
-    output_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
-    output_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
-    output_mgr->upipe_input = NULL;
-    output_mgr->upipe_control = upipe_ts_demux_program_control;
-    output_mgr->upipe_free = upipe_ts_demux_program_free;
-    output_mgr->upipe_mgr_free = NULL;
-    return output_mgr;
+    struct upipe_mgr *program_mgr = &upipe_ts_demux->program_mgr;
+    program_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
+    program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
+    program_mgr->upipe_input = NULL;
+    program_mgr->upipe_control = upipe_ts_demux_program_control;
+    program_mgr->upipe_free = upipe_ts_demux_program_free;
+    program_mgr->upipe_mgr_free = NULL;
+    return program_mgr;
 }
 
 
@@ -2130,8 +2130,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_ts_demux == NULL))
         return NULL;
     struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
-    upipe_split_init(upipe, mgr, uprobe,
-                     upipe_ts_demux_init_output_mgr(upipe));
+    upipe_sub_init(upipe, mgr, uprobe,
+                   upipe_ts_demux_init_program_mgr(upipe));
     upipe_ts_demux_init_sub_programs(upipe);
     upipe_ts_demux_init_sync(upipe);
     upipe_ts_demux_init_uref_mgr(upipe);
@@ -2219,7 +2219,7 @@ static void upipe_ts_demux_init(struct upipe *upipe)
     }
 
     upipe_ts_demux->psi_split_output_pat =
-        upipe_alloc_output(upipe_ts_demux->psi_pid_pat->psi_split,
+        upipe_alloc_sub(upipe_ts_demux->psi_pid_pat->psi_split,
                            uprobe_pfx_adhoc_alloc(upipe->uprobe,
                                 UPROBE_LOG_DEBUG, "psi_split output"));
     if (unlikely(upipe_ts_demux->psi_split_output_pat == NULL)) {
