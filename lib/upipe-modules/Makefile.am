@@ -19,6 +19,12 @@ libupipe_modules_la_SOURCES = \
 	upipe_setattr.c \
 	upipe_match_attr.c \
 	upipe_setrap.c
+
+if HAVE_BITSTREAM
+libupipe_modules_la_SOURCES += \
+    upipe_rtp_prepend.c
+endif
+
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_CFLAGS = -Wall
 

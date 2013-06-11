@@ -15,4 +15,5 @@ myinclude_HEADERS = \
 	upipe_match_attr.h \
 	upipe_setrap.h \
 	upipe_udp_source.h \
-	upipe_http_source.h
+	upipe_http_source.h \
+    upipe_rtp_prepend.h

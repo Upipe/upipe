@@ -25,6 +25,7 @@
 
 #undef NDEBUG
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -42,7 +43,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_clock.h>
-#include <upipe-modules/upipe_genaux.h>
+#include <upipe-modules/upipe_rtp_prepend.h>
 
 #include <upipe/upipe_helper_upipe.h>
 
@@ -51,6 +52,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <bitstream/ietf/rtp.h>
+
+#define DEFAULT_FREQ 90000 /* (90kHz, see rfc 2250 and 3551) */
 
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
@@ -60,6 +64,8 @@
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_OFFSET   0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+
+#define PACKET_NUM 42
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
@@ -75,32 +81,42 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
     return true;
 }
 
-/** phony pipe to test upipe_genaux */
-struct genaux_test {
+/** phony pipe to test upipe_rtp_prepend */
+struct rtp_prepend_test {
     struct uref *entry;
+    uint16_t seqnum;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_genaux */
-UPIPE_HELPER_UPIPE(genaux_test, upipe);
+/** helper phony pipe to test upipe_rtp_prepend */
+UPIPE_HELPER_UPIPE(rtp_prepend_test, upipe);
 
-/** helper phony pipe to test upipe_genaux */
-static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
+/** helper phony pipe to test upipe_rtp_prepend */
+static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe)
 {
-    struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
-    assert(genaux_test != NULL);
-    upipe_init(&genaux_test->upipe, mgr, uprobe);
-    genaux_test->entry = NULL;
-    return &genaux_test->upipe;
+    struct rtp_prepend_test *rtp_prepend_test = malloc(sizeof(struct rtp_prepend_test));
+    assert(rtp_prepend_test != NULL);
+    upipe_init(&rtp_prepend_test->upipe, mgr, uprobe);
+    rtp_prepend_test->entry = NULL;
+    rtp_prepend_test->seqnum = 0;
+    return &rtp_prepend_test->upipe;
 }
 
-/** helper phony pipe to test upipe_genaux */
-static void genaux_test_input(struct upipe *upipe, struct uref *uref,
+/** helper phony pipe to test upipe_rtp_prepend */
+static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
+    struct rtp_prepend_test *rtp_prepend_test = rtp_prepend_test_from_upipe(upipe);
+    uint16_t seqnum;
+    uint32_t result, expected;
+    uint64_t dts = 0;
+    int size;
+    const uint8_t *buf;
     const char *def;
+    lldiv_t div;
+    unsigned int freq = DEFAULT_FREQ;
+
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
     uref_dump(uref, upipe->uprobe);
@@ -111,35 +127,70 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    if (genaux_test->entry) {
-        uref_free(genaux_test->entry);
+
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        return;
     }
-    genaux_test->entry = uref;
-    // FIXME peek into buffer
+
+    /* compute expected timestamp */
+    if (unlikely(!uref_clock_get_dts(uref, &dts))) {
+        uref_clock_get_systime(uref, &dts);
+    }
+    div = lldiv(dts, UCLOCK_FREQ);
+    expected = div.quot * freq + ((uint64_t)div.rem * freq)/UCLOCK_FREQ;
+
+    /* map  header */
+    size = RTP_HEADER_SIZE;
+    uref_block_read(uref, 0, &size, &buf);
+    assert(size == RTP_HEADER_SIZE);
+
+    /* seqnum */
+    seqnum = rtp_get_seqnum(buf);
+    if (unlikely(!rtp_prepend_test->seqnum)) {
+        rtp_prepend_test->seqnum = seqnum;
+    }
+    upipe_dbg_va(upipe, "seqnum expected: %"PRIu16" \t result: %"PRIu16,
+                 rtp_prepend_test->seqnum, seqnum);
+    assert(rtp_prepend_test->seqnum == seqnum);
+
+    /* timestamp */
+    result = rtp_get_timestamp(buf);
+    upipe_dbg_va(upipe, "timestamp expected: %"PRIu64" \t result: %"PRIu64,
+                 expected, result);
+    assert(expected == result);
+
+    /* unmap */
+    uref_block_unmap(uref, 0);
+
+    /* keep uref */
+    if (rtp_prepend_test->entry) {
+        uref_free(rtp_prepend_test->entry);
+    }
+    rtp_prepend_test->entry = uref;
+    rtp_prepend_test->seqnum++;
 }
 
-/** helper phony pipe to test upipe_genaux */
-static void genaux_test_free(struct upipe *upipe)
+/** helper phony pipe to test upipe_rtp_prepend */
+static void rtp_prepend_test_free(struct upipe *upipe)
 {
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
-    struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
-    if (genaux_test->entry)
-        uref_free(genaux_test->entry);
+    struct rtp_prepend_test *rtp_prepend_test = rtp_prepend_test_from_upipe(upipe);
+    if (rtp_prepend_test->entry)
+        uref_free(rtp_prepend_test->entry);
     upipe_clean(upipe);
-    free(genaux_test);
+    free(rtp_prepend_test);
 }
 
 /** helper phony pipe to test upipe_dup */
-static struct upipe_mgr genaux_test_mgr = {
-    .upipe_alloc = genaux_test_alloc,
-    .upipe_input = genaux_test_input,
+static struct upipe_mgr rtp_prepend_test_mgr = {
+    .upipe_alloc = rtp_prepend_test_alloc,
+    .upipe_input = rtp_prepend_test_input,
     .upipe_control = NULL,
     .upipe_free = NULL,
 
     .upipe_mgr_free = NULL
 };
-
-
 
 int main(int argc, char **argv)
 {
@@ -147,8 +198,8 @@ int main(int argc, char **argv)
 
     struct ubuf_mgr *ubuf_mgr;
     struct uref *uref;
-    uint64_t opaque = 0xcafebabedeadbeef, result;
-    uint8_t buf[8];
+    uint64_t opaque = 0x00cafebabe;
+    int i;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -175,49 +226,35 @@ int main(int argc, char **argv)
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
 
-    /* build genaux pipe */
-    struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "genaux"));
-    assert(upipe_genaux_mgr);
-    assert(genaux);
-    assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
+    /* build rtp_prepend pipe */
+    struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
+    struct upipe *rtp_prepend = upipe_alloc(upipe_rtp_prepend_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "rtp"));
+    assert(upipe_rtp_prepend_mgr);
+    assert(rtp_prepend);
+    assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
 
-    struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, log);
-    assert(genaux_test != NULL);
-    assert(upipe_set_output(genaux, genaux_test));
+    struct upipe *rtp_prepend_test = upipe_alloc(&rtp_prepend_test_mgr, log);
+    assert(rtp_prepend_test != NULL);
+    assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
 
     /* Send first flow definition packet */
     uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
     assert(uref);
-    upipe_input(genaux, uref, NULL);
+    upipe_input(rtp_prepend, uref, NULL);
 
-    uref = uref_alloc(uref_mgr);
-    assert(uref);
-    assert(uref_clock_set_systime(uref, opaque));
     /* Now send uref */
-    upipe_input(genaux, uref, NULL);
+    for (i=0; i < PACKET_NUM; i++) {
+        opaque += i * UCLOCK_FREQ + rand();
+        uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
+        assert(uref);
+        assert(uref_clock_set_systime(uref, opaque));
+        upipe_input(rtp_prepend, uref, NULL);
+        assert(rtp_prepend_test_from_upipe(rtp_prepend_test)->entry);
+    }
 
-    assert(genaux_test_from_upipe(genaux_test)->entry);
-    uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);
-    result = upipe_genaux_ntoh64(buf);
-    uprobe_dbg_va(log, NULL, "original: %"PRIu64" \t result: %"PRIu64, opaque, result);
-    assert(opaque == result);
-
-    /* test arbitrary geattr */
-    assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts));
-    uref = uref_alloc(uref_mgr);
-    assert(uref);
-    assert(uref_clock_set_pts(uref, opaque));
-    upipe_input(genaux, uref, NULL);
-
-    uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);
-    result = upipe_genaux_ntoh64(buf);
-    uprobe_dbg_va(log, NULL, "original: %"PRIu64" \t result: %"PRIu64, opaque, result);
-    assert(opaque == result);
-
-    upipe_release(genaux);
-    genaux_test_free(genaux_test);
+    upipe_release(rtp_prepend);
+    rtp_prepend_test_free(rtp_prepend_test);
 
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);

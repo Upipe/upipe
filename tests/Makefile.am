@@ -130,7 +130,8 @@ check_PROGRAMS += \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
 	upipe_ts_demux_test \
-	upipe_mp2v_framer_test
+	upipe_mp2v_framer_test \
+    upipe_rtp_prepend_test
 TESTS += \
 	uprobe_ts_log_test.sh \
 	upipe_ts_sync_test \
@@ -143,7 +144,8 @@ TESTS += \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
 	upipe_ts_demux_test \
-	upipe_mp2v_framer_test
+	upipe_mp2v_framer_test \
+    upipe_rtp_prepend_test
 endif
 
 if HAVE_X264
@@ -174,6 +176,7 @@ upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupip
 upipe_probe_uref_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_multicat_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 
