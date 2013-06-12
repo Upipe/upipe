@@ -10,5 +10,6 @@ myinclude_HEADERS = \
 	upipe_ts_psi_merge.h \
 	upipe_ts_split.h \
 	upipe_ts_sync.h \
+	upipe_ts_aggregate.h \
 	uprobe_ts_log.h \
 	uref_ts_flow.h
