@@ -143,7 +143,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
     char port_buffer[6];
     char *string = strdup(_string);
     char *node, *port = NULL, *end;
-    struct addrinfo *res;
+    struct addrinfo *res = NULL;
     struct addrinfo hint;
     int ret;
 
@@ -260,6 +260,9 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     int family;
     socklen_t sockaddr_len;
 
+    memset(&bind_addr, 0, sizeof(union sockaddru));
+    memset(&connect_addr, 0, sizeof(union sockaddru));
+    
     bind_addr.ss.ss_family = AF_UNSPEC;
     connect_addr.ss.ss_family = AF_UNSPEC;
 
@@ -293,6 +296,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
                                         &connect_if_index, &connect_addr.ss)) {
             return -1;
         }
+        /* required on some architectures */
+        memset(&connect_addr.sin.sin_zero, 0, sizeof(connect_addr.sin.sin_zero));
     }
 
     if (token[0] == '@') {
@@ -301,6 +306,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
                                         &bind_if_index, &bind_addr.ss)) {
             return -1;
         }
+        /* required on some architectures */
+        memset(&bind_addr.sin.sin_zero, 0, sizeof(bind_addr.sin.sin_zero));
     }
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
