@@ -39,7 +39,13 @@
 #define UPIPE_AV_STRERROR_SIZE 64
 
 /** @hidden */
+enum AVCodecID;
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(54, 51, 100)
+/** @hidden */
 enum CodecID;
+/** @hidden */
+#define AVCodecID CodecID
+#endif
 
 /** structure to protect exclusive access to avcodec_open() */
 extern struct udeal upipe_av_deal;
@@ -115,11 +121,11 @@ static inline bool upipe_av_deal_abort(struct upump *upump)
  * @param id avcodec ID
  * @return flow definition, or NULL if not found
  */
-const char *upipe_av_to_flow_def(enum CodecID id);
+const char *upipe_av_to_flow_def(enum AVCodecID id);
 
 /** @This allows to convert to avcodec ID from flow definition.
  *
  * @param flow_def flow definition
  * @return avcodec ID, or 0 if not found
  */
-enum CodecID upipe_av_from_flow_def(const char *flow_def);
+enum AVCodecID upipe_av_from_flow_def(const char *flow_def);

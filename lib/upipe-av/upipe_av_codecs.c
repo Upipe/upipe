@@ -31,7 +31,7 @@
 #include "upipe_av_internal.h"
 #include <upipe_av_codecs.h> // auto-generated header
 
-const char *upipe_av_to_flow_def(enum CodecID id)
+const char *upipe_av_to_flow_def(enum AVCodecID id)
 {
     for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
         if (upipe_av_codecs[i].id == id)
@@ -39,7 +39,7 @@ const char *upipe_av_to_flow_def(enum CodecID id)
     return NULL;
 }
 
-enum CodecID upipe_av_from_flow_def(const char *flow_def)
+enum AVCodecID upipe_av_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
         if (!ubase_ncmp(flow_def, upipe_av_codecs[i].flow_def))

@@ -14,7 +14,7 @@ open(FILE, '-|', "$ENV{'CPP'} -E \"$file\"") or die "couldn't open $file";
 print <<EOF;
 /* Auto-generated file from libavcodec/avcodec.h */
 const struct {
-    enum CodecID id;
+    enum AVCodecID id;
     const char *flow_def;
 } upipe_av_codecs[] = {
 EOF
@@ -22,14 +22,16 @@ EOF
 my $suffix = ".pic.";
 
 while (<FILE>) {
-	if (/^\s*CODEC_ID_([A-Za-z0-9_]*).*$/) {
-		if ($1 eq "FIRST_AUDIO") {
+	if (/^\s*((AV_)?CODEC_ID_)([A-Za-z0-9_]*).*$/) {
+        my $enumprefix = $1;
+        my $codec = $3;
+		if ($codec eq "FIRST_AUDIO") {
 			$suffix = ".sound.";
-		} elsif ($1 eq "FIRST_SUBTITLE") {
+		} elsif ($codec eq "FIRST_SUBTITLE") {
 			$suffix = ".pic.sub.";
 		}
-		next if ($1 eq "NONE" || $1 eq "FIRST_AUDIO" || $1 eq "FIRST_SUBTITLE" || $1 eq "FIRST_UNKNOWN");
-		print "    { CODEC_ID_$1, \"".lc($1).$suffix."\" },\n";
+		next if ($codec eq "NONE" || $codec eq "FIRST_AUDIO" || $codec eq "FIRST_SUBTITLE" || $codec eq "FIRST_UNKNOWN");
+		print "    { $enumprefix$codec, \"".lc($codec).$suffix."\" },\n";
 	}
 }
 
