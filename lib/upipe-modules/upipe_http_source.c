@@ -309,7 +309,7 @@ static int upipe_http_src_open_url(struct upipe *upipe, const char *url)
     if (unlikely(ret != 0)) {
         return -1;
     }
-    if (unlikely(!parsed_url.field_set & (1 << UF_HOST))) {
+    if (unlikely(!(parsed_url.field_set & (1 << UF_HOST)))) {
         return -1;
     }
     host = strndup(url + parsed_url.field_data[UF_HOST].off,
