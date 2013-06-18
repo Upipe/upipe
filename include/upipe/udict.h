@@ -516,10 +516,13 @@ static inline bool udict_set_opaque(struct udict *udict,
                                     struct udict_opaque value,
                                     enum udict_type type, const char *name)
 {
+    /* copy the opaque it case in points to us */
+    uint8_t v[value.size];
+    memcpy(v, value.v, value.size);
     uint8_t *attr = udict_set(udict, name, type, value.size);
     if (unlikely(attr == NULL))
         return false;
-    memcpy(attr, value.v, value.size);
+    memcpy(attr, v, value.size);
     return true;
 }
 
@@ -535,10 +538,13 @@ static inline bool udict_set_string(struct udict *udict, const char *value,
                                     enum udict_type type, const char *name)
 {
     size_t attr_size = strlen(value) + 1;
+    /* copy the string it case in points to us */
+    uint8_t v[attr_size];
+    memcpy(v, value, attr_size);
     uint8_t *attr = udict_set(udict, name, type, attr_size);
     if (unlikely(attr == NULL))
         return false;
-    memcpy(attr, value, attr_size);
+    memcpy(attr, v, attr_size);
     return true;
 }
 
