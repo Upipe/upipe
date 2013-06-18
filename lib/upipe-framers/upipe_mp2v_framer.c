@@ -36,6 +36,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
@@ -53,9 +54,6 @@
 #include <assert.h>
 
 #include <bitstream/mpeg/mp2v.h>
-
-/** we only accept the ISO 13818-2 elementary stream */
-#define EXPECTED_FLOW_DEF "block.mpeg2video."
 
 /** @internal @This translates the MPEG frame_rate_code to urational. */
 static const struct urational frame_rate_from_code[] = {
@@ -170,6 +168,7 @@ struct upipe_mp2vf {
 static void upipe_mp2vf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mp2vf, upipe)
+UPIPE_HELPER_FLOW(upipe_mp2vf, UPIPE_MP2VF_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_mp2vf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mp2vf, next_uref, next_uref_size, urefs,
                          upipe_mp2vf_promote_uref)
@@ -220,20 +219,25 @@ static void upipe_mp2vf_increment_dts(struct upipe *upipe, uint64_t duration)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_mp2vf_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
-    struct upipe_mp2vf *upipe_mp2vf = malloc(sizeof(struct upipe_mp2vf));
-    if (unlikely(upipe_mp2vf == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_mp2vf_alloc_flow(mgr, uprobe, signature, args,
+                                                 &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_mp2vf_to_upipe(upipe_mp2vf);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     upipe_mp2vf_init_sync(upipe);
     upipe_mp2vf_init_uref_stream(upipe);
     upipe_mp2vf_init_output(upipe);
-    upipe_mp2vf->flow_def_input = NULL;
+    upipe_mp2vf->flow_def_input = flow_def;
     upipe_mp2vf->systime_rap = UINT64_MAX;
     upipe_mp2vf->systime_rap_ref = UINT64_MAX;
     upipe_mp2vf->last_picture_number = 0;
@@ -409,19 +413,19 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
             ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8");
             ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8");
             ret = ret && uref_flow_set_def(flow_def,
-                    EXPECTED_FLOW_DEF "pic.planar8_8_420.");
+                    UPIPE_MP2VF_EXPECTED_FLOW_DEF "pic.planar8_8_420.");
             break;
         case MP2VSEQX_CHROMA_422:
             ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8");
             ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8");
             ret = ret && uref_flow_set_def(flow_def,
-                    EXPECTED_FLOW_DEF "pic.planar8_8_422.");
+                    UPIPE_MP2VF_EXPECTED_FLOW_DEF "pic.planar8_8_422.");
             break;
         case MP2VSEQX_CHROMA_444:
             ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8");
             ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8");
             ret = ret && uref_flow_set_def(flow_def,
-                    EXPECTED_FLOW_DEF "pic.planar8_8_444.");
+                    UPIPE_MP2VF_EXPECTED_FLOW_DEF "pic.planar8_8_444.");
             break;
         default:
             upipe_err_va(upipe, "invalid chroma format %d", chroma);
@@ -1039,40 +1043,8 @@ static void upipe_mp2vf_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            uref_free(uref);
-            if (upipe_mp2vf->flow_def_input != NULL) {
-                uref_free(upipe_mp2vf->flow_def_input);
-                upipe_mp2vf->flow_def_input = NULL;
-            }
-            upipe_mp2vf_store_flow_def(upipe, NULL);
-            upipe_throw_flow_def_error(upipe, uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        upipe_mp2vf->flow_def_input = uref;
-        if (upipe_mp2vf->sequence_header != NULL)
-            upipe_mp2vf_parse_sequence(upipe);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_mp2vf->flow_def_input == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
+        upipe_mp2vf_output(upipe, uref, upump);
         return;
     }
 
@@ -1136,6 +1108,10 @@ static bool upipe_mp2vf_control(struct upipe *upipe,
                                 enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_mp2vf_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_mp2vf_get_output(upipe, p);

@@ -37,6 +37,7 @@
 #include <upipe/ubuf_block_stream.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
@@ -54,9 +55,6 @@
 #include <assert.h>
 
 #include <bitstream/mpeg/h264.h>
-
-/** we only accept the ISO 14496-10 annex B elementary stream */
-#define EXPECTED_FLOW_DEF "block.h264."
 
 /** @internal @This translates the h264 aspect_ratio_idc to urational */
 static const struct urational sar_from_idc[] = {
@@ -212,6 +210,7 @@ struct upipe_h264f {
 static void upipe_h264f_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_h264f, upipe)
+UPIPE_HELPER_FLOW(upipe_h264f, UPIPE_H264F_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_h264f, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
                          upipe_h264f_promote_uref)
@@ -283,20 +282,25 @@ static void upipe_h264f_promote_uref(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
-    struct upipe_h264f *upipe_h264f = malloc(sizeof(struct upipe_h264f));
-    if (unlikely(upipe_h264f == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_h264f_alloc_flow(mgr, uprobe, signature, args,
+                                                 &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_h264f_to_upipe(upipe_h264f);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     upipe_h264f_init_sync(upipe);
     upipe_h264f_init_uref_stream(upipe);
     upipe_h264f_init_output(upipe);
-    upipe_h264f->flow_def_input = NULL;
+    upipe_h264f->flow_def_input = flow_def;
     upipe_h264f->systime_rap = UINT64_MAX;
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
@@ -768,7 +772,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     }
     if (chroma_idc == H264SPS_CHROMA_MONO)
         ret = ret && uref_flow_set_def_va(flow_def,
-                EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_mono.", luma_depth);
+                UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_mono.",
+                luma_depth);
     else {
         uint8_t hsub, vsub;
         const char *chroma;
@@ -799,16 +804,16 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "u8");
             ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "v8");
             ret = ret && uref_flow_set_def_va(flow_def,
-                    EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_8_%s.", luma_depth,
-                    chroma);
+                    UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_8_%s.",
+                    luma_depth, chroma);
         } else {
             ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 2,
                                                  "u16");
             ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 2,
                                                  "v16");
             ret = ret && uref_flow_set_def_va(flow_def,
-                    EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_16_%s.", luma_depth,
-                    chroma);
+                    UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_16_%s.",
+                    luma_depth, chroma);
         }
     }
 
@@ -1562,7 +1567,6 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump *upump)
         if (!upipe_h264f_find(upipe, &start, &prev))
             return;
         size_t start_size = !prev ? 5 : 4;
-        //upipe_err_va(upipe, "pouet %x", start);
 
         upipe_h264f->au_size -= start_size;
         upipe_h264f_nal_end(upipe, upump);
@@ -1587,38 +1591,8 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            uref_free(uref);
-            if (upipe_h264f->flow_def_input != NULL) {
-                uref_free(upipe_h264f->flow_def_input);
-                upipe_h264f->flow_def_input = NULL;
-            }
-            upipe_h264f_store_flow_def(upipe, NULL);
-            upipe_throw_flow_def_error(upipe, uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        upipe_h264f->flow_def_input = uref;
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_h264f->flow_def_input == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
+        upipe_h264f_output(upipe, uref, upump);
         return;
     }
 
@@ -1640,6 +1614,10 @@ static bool upipe_h264f_control(struct upipe *upipe,
                                 enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_h264f_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_h264f_get_output(upipe, p);

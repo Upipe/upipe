@@ -78,6 +78,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_SYNC_ACQUIRED:
             assert(expect_acquired);
@@ -93,7 +94,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_ts_psim */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe)
+                                   struct uprobe *uprobe, uint32_t signature,
+                                   va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -106,12 +108,6 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     size_t size;
     assert(uref_block_size(uref, &size));
     assert(size == PSI_HEADER_SIZE + payload_size);
@@ -165,23 +161,23 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, log);
+    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, NULL);
     assert(upipe_sink != NULL);
+
+    struct uref *uref;
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
+    assert(uref != NULL);
 
     struct upipe_mgr *upipe_ts_psim_mgr = upipe_ts_psim_mgr_alloc();
     assert(upipe_ts_psim_mgr != NULL);
-    struct upipe *upipe_ts_psim = upipe_alloc(upipe_ts_psim_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts psim"));
+    struct upipe *upipe_ts_psim = upipe_flow_alloc(upipe_ts_psim_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts psim"), uref);
     assert(upipe_ts_psim != NULL);
     assert(upipe_set_output(upipe_ts_psim, upipe_sink));
+    uref_free(uref);
 
-    struct uref *uref;
     uint8_t *buffer;
     int size;
-    uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
-    assert(uref != NULL);
-    upipe_input(upipe_ts_psim, uref, NULL);
-
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + PSI_HEADER_SIZE + 12);
     assert(uref != NULL);
     size = -1;

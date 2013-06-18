@@ -68,6 +68,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         default:
             assert(0);
             break;
+        case UPROBE_NEW_FLOW_DEF:
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
@@ -86,7 +87,8 @@ UPIPE_HELPER_UPIPE(genaux_test, upipe);
 
 /** helper phony pipe to test upipe_genaux */
 static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
     struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
     assert(genaux_test != NULL);
@@ -100,17 +102,10 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
-    const char *def;
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
     uref_dump(uref, upipe->uprobe);
 
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        assert(def);
-        upipe_dbg_va(upipe, "flow def %s", def);
-        uref_free(uref);
-        return;
-    }
     if (genaux_test->entry) {
         uref_free(genaux_test->entry);
     }
@@ -175,22 +170,26 @@ int main(int argc, char **argv)
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
 
+    /* set up flow definition packet */
+    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
+    assert(uref);
+
     /* build genaux pipe */
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-    struct upipe *genaux = upipe_alloc(upipe_genaux_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "genaux"));
+    struct upipe *genaux = upipe_flow_alloc(upipe_genaux_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "genaux"), uref);
     assert(upipe_genaux_mgr);
     assert(genaux);
     assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
-    struct upipe *genaux_test = upipe_alloc(&genaux_test_mgr, log);
+    uref_free(uref);
+    assert(upipe_get_flow_def(genaux, &uref));
+    const char *def;
+    assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.aux."));
+
+    struct upipe *genaux_test = upipe_flow_alloc(&genaux_test_mgr, log, uref);
     assert(genaux_test != NULL);
     assert(upipe_set_output(genaux, genaux_test));
-
-    /* Send first flow definition packet */
-    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
-    assert(uref);
-    upipe_input(genaux, uref, NULL);
 
     uref = uref_alloc(uref_mgr);
     assert(uref);

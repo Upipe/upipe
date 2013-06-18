@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe helper functions for upipe output structures
+ * @short Upipe helper functions for upipe subpipes
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_OUTPUT_SUBPIPE_H_
+#ifndef _UPIPE_UPIPE_HELPER_SUBPIPE_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_OUTPUT_SUBPIPE_H_
+#define _UPIPE_UPIPE_HELPER_SUBPIPE_H_
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -194,6 +194,7 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_init(&s->ULIST);                                                  \
+    upipe->sub_mgr = &s->MGR;                                               \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \
  *                                                                          \
@@ -228,6 +229,6 @@ static void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,             \
  */                                                                         \
 static void STRUCTURE##_clean_sub_##SUB##s(struct upipe *upipe)             \
 {                                                                           \
-}                                                                           \
+}
 
 #endif

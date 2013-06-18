@@ -58,11 +58,11 @@ struct upipe_qsrc {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /** extra data for the queue structure */
-    void *uqueue_extra;
-
     /** structure exported to the sinks */
     struct upipe_queue upipe_queue;
+
+    /** extra data for the queue structure */
+    uint8_t uqueue_extra[];
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
@@ -75,21 +75,40 @@ UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
-    struct upipe_qsrc *upipe_qsrc = malloc(sizeof(struct upipe_qsrc));
+    if (signature != UPIPE_QSRC_SIGNATURE)
+        return NULL;
+    unsigned int length = va_arg(args, unsigned int);
+    if (!length || length > UINT8_MAX)
+        return NULL;
+
+    struct upipe_qsrc *upipe_qsrc = malloc(sizeof(struct upipe_qsrc) +
+                                           uqueue_sizeof(length));
     if (unlikely(upipe_qsrc == NULL))
         return NULL;
+
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
     upipe_init(upipe, mgr, uprobe);
+    if (unlikely(!uqueue_init(upipe_queue(upipe), length,
+                              upipe_qsrc->uqueue_extra))) {
+        free(upipe_qsrc);
+        return NULL;
+    }
+
     upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
-    upipe_qsrc->uqueue_extra = NULL;
-    upipe_qsrc->upipe_queue.max_length = 0;
+    upipe_qsrc->flow_def = NULL;
+    upipe_qsrc->upipe_queue.max_length = length;
     upipe_throw_ready(upipe);
+
+    upipe_throw_need_upump_mgr(upipe);
     return upipe;
 }
 
@@ -100,27 +119,19 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
 static void upipe_qsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
 
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
     if (likely(uchain != NULL)) {
         struct uref *uref = uref_from_uchain(uchain);
+        if (unlikely(uref_flow_get_end(uref))) {
+            uref_free(uref);
+            upipe_throw_source_end(upipe);
+            return;
+        }
+
         const char *def;
         if (unlikely(uref_flow_get_def(uref, &def))) {
             upipe_qsrc_store_flow_def(upipe, uref);
-            upipe_dbg_va(upipe, "flow definition %s", def);
-            return;
-        }
-
-        if (unlikely(uref_flow_get_end(uref))) {
-            uref_free(uref);
-            upipe_throw_need_input(upipe);
-            return;
-        }
-
-        if (unlikely(upipe_qsrc->flow_def == NULL)) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
             return;
         }
 
@@ -140,35 +151,6 @@ static bool _upipe_qsrc_get_max_length(struct upipe *upipe,
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     assert(length_p != NULL);
     *length_p = upipe_qsrc->upipe_queue.max_length;
-    return true;
-}
-
-/** @internal @This sets the maximum length of the queue. Note that the queue
- * won't accept sinks until it is initialized by this function with a non-zero
- * value. Also note that it may not be changed afterwards.
- *
- * @param upipe description structure of the pipe
- * @param length maximum length of the queue
- * @return false in case of error
- */
-static bool _upipe_qsrc_set_max_length(struct upipe *upipe, unsigned int length)
-{
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    if (unlikely(!length || length > UINT8_MAX ||
-                 upipe_queue_max_length(upipe)))
-        return false;
-
-    upipe_qsrc->uqueue_extra = malloc(uqueue_sizeof(length));
-    if (unlikely(upipe_qsrc->uqueue_extra == NULL))
-        return false;
-    if (unlikely(!uqueue_init(upipe_queue(upipe), length,
-                              upipe_qsrc->uqueue_extra)))
-        return false;
-    upipe_qsrc->upipe_queue.max_length = length;
-    upipe_notice_va(upipe, "queue source %p is ready with length %u",
-                    upipe, length);
-    if (unlikely(upipe_qsrc->upump_mgr == NULL))
-        upipe_throw_need_upump_mgr(upipe);
     return true;
 }
 
@@ -199,6 +181,10 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                 va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_qsrc_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **output_p = va_arg(args, struct upipe **);
             return upipe_qsrc_get_output(upipe, output_p);
@@ -225,12 +211,6 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
             assert(signature == UPIPE_QSRC_SIGNATURE);
             unsigned int *length_p = va_arg(args, unsigned int *);
             return _upipe_qsrc_get_max_length(upipe, length_p);
-        }
-        case UPIPE_QSRC_SET_MAX_LENGTH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSRC_SIGNATURE);
-            unsigned int length = va_arg(args, unsigned int);
-            return _upipe_qsrc_set_max_length(upipe, length);
         }
         case UPIPE_QSRC_GET_LENGTH: {
             unsigned int signature = va_arg(args, unsigned int);
@@ -295,7 +275,6 @@ static void upipe_qsrc_free(struct upipe *upipe)
         uref_free(uref);
     }
     uqueue_clean(uqueue);
-    free(upipe_qsrc->uqueue_extra);
 
     upipe_clean(upipe);
     free(upipe_qsrc);

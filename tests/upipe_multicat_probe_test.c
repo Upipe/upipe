@@ -71,6 +71,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_MULTICAT_PROBE_ROTATE:
             probe_counter++;
@@ -89,7 +90,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** helper phony pipe to test upipe_multicat_probe */
-static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -147,22 +149,22 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&test_mgr, log);
+    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, NULL);
     assert(upipe_sink != NULL);
-
-    struct upipe_mgr *upipe_multicat_probe_mgr = upipe_multicat_probe_mgr_alloc();
-    assert(upipe_multicat_probe_mgr != NULL);
-    struct upipe *upipe_multicat_probe = upipe_alloc(upipe_multicat_probe_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat_probe"));
-    assert(upipe_multicat_probe != NULL);
-    assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
-    assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
 
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "internal."));
-    upipe_input(upipe_multicat_probe, uref, NULL);
+
+    struct upipe_mgr *upipe_multicat_probe_mgr = upipe_multicat_probe_mgr_alloc();
+    assert(upipe_multicat_probe_mgr != NULL);
+    struct upipe *upipe_multicat_probe = upipe_flow_alloc(upipe_multicat_probe_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat_probe"), uref);
+    assert(upipe_multicat_probe != NULL);
+    assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
+    assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
+    uref_free(uref);
 
     int i;
     for (i=0; i < UREFNB; i++) {

@@ -80,8 +80,6 @@ enum upipe_qsrc_command {
 
     /** returns the maximum length of the queue (unsigned int *) */
     UPIPE_QSRC_GET_MAX_LENGTH,
-    /** sets the maximum length of the queue (unsigned int) */
-    UPIPE_QSRC_SET_MAX_LENGTH,
     /** returns the current length of the queue (unsigned int *) */
     UPIPE_QSRC_GET_LENGTH
 };
@@ -103,21 +101,6 @@ static inline bool upipe_qsrc_get_max_length(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_QSRC_GET_MAX_LENGTH,
                          UPIPE_QSRC_SIGNATURE, length_p);
-}
-
-/** @internal @This sets the maximum length of the queue. Note that the queue
- * won't accept sinks until it is initialized by this function with a non-zero
- * value. Also note that it may not be changed afterwards.
- *
- * @param upipe description structure of the pipe
- * @param length maximum length of the queue
- * @return false in case of error
- */
-static inline bool upipe_qsrc_set_max_length(struct upipe *upipe,
-                                             unsigned int length)
-{
-    return upipe_control(upipe, UPIPE_QSRC_SET_MAX_LENGTH,
-                         UPIPE_QSRC_SIGNATURE, length);
 }
 
 /** @This returns the current length of the queue. This function, like all
@@ -147,14 +130,7 @@ static inline struct upipe *upipe_qsrc_alloc(struct upipe_mgr *mgr,
                                              struct uprobe *uprobe,
                                              unsigned int length)
 {
-    struct upipe *upipe = upipe_alloc(mgr, uprobe);
-    if (unlikely(upipe == NULL))
-        return NULL;
-    if (unlikely(!upipe_qsrc_set_max_length(upipe, length))) {
-        upipe_release(upipe);
-        return NULL;
-    }
-    return upipe;
+    return upipe_alloc(mgr, uprobe, UPIPE_QSRC_SIGNATURE, length);
 }
 
 #endif

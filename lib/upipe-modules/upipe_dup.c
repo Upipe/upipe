@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe module allowing to duplicate to several subs
+ * @short Upipe module allowing to duplicate to several outputs
  */
 
 #include <upipe/ubase.h>
@@ -34,9 +34,11 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_dup.h>
+#include <upipe-modules/upipe_proxy.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -46,12 +48,12 @@
 
 /** @internal @This is the private context of a dup pipe. */
 struct upipe_dup {
-    /** list of subs */
-    struct ulist subs;
+    /** list of output subpipes */
+    struct ulist outputs;
     /** flow definition packet */
     struct uref *flow_def;
 
-    /** manager to create subs */
+    /** manager to create output subpipes */
     struct upipe_mgr sub_mgr;
 
     /** public upipe structure */
@@ -59,9 +61,10 @@ struct upipe_dup {
 };
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe)
+UPIPE_HELPER_FLOW(upipe_dup, NULL)
 
 /** @internal @This is the private context of an output of a dup pipe. */
-struct upipe_dup_sub {
+struct upipe_dup_output {
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -76,39 +79,46 @@ struct upipe_dup_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_dup_sub, upipe)
-UPIPE_HELPER_OUTPUT(upipe_dup_sub, output, flow_def, flow_def_sent)
+UPIPE_HELPER_UPIPE(upipe_dup_output, upipe)
+UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_sub, sub, sub_mgr, subs,
+UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_output, output, sub_mgr, outputs,
                      uchain)
 
 /** @internal @This allocates an output subpipe of a dup pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_dup_sub_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe)
+static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
 {
-    struct upipe_dup_sub *upipe_dup_sub =
-        malloc(sizeof(struct upipe_dup_sub));
-    if (unlikely(upipe_dup_sub == NULL))
+    if (signature != UPIPE_VOID_SIGNATURE ||
+        mgr->signature != UPIPE_DUP_OUTPUT_SIGNATURE)
         return NULL;
-    struct upipe *upipe = upipe_dup_sub_to_upipe(upipe_dup_sub);
-    upipe_init(upipe, mgr, uprobe);
-    upipe_dup_sub_init_output(upipe);
-    upipe_dup_sub_init_sub(upipe);
-
-    /* set flow definition if available */
     struct upipe_dup *upipe_dup = upipe_dup_from_sub_mgr(mgr);
-    if (upipe_dup->flow_def != NULL) {
-        struct uref *uref = uref_dup(upipe_dup->flow_def);
-        if (unlikely(uref == NULL))
-            upipe_throw_aerror(upipe);
-        else
-            upipe_dup_sub_store_flow_def(upipe, uref);
+    struct uref *flow_def_dup = NULL;
+    if (upipe_dup->flow_def != NULL &&
+        (flow_def_dup = uref_dup(upipe_dup->flow_def)) == NULL)
+        return NULL;
+
+    struct upipe_dup_output *upipe_dup_output =
+        malloc(sizeof(struct upipe_dup_output));
+    if (unlikely(upipe_dup_output == NULL)) {
+        if (flow_def_dup != NULL)
+            uref_free(flow_def_dup);
+        return NULL;
     }
+    struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
+    upipe_init(upipe, mgr, uprobe);
+    upipe_dup_output_init_output(upipe);
+    upipe_dup_output_init_sub(upipe);
+
+    upipe_dup_output_store_flow_def(upipe, flow_def_dup);
     upipe_use(upipe_dup_to_upipe(upipe_dup));
     upipe_throw_ready(upipe);
     return upipe;
@@ -122,17 +132,21 @@ static struct upipe *upipe_dup_sub_alloc(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_dup_sub_control(struct upipe *upipe,
+static bool upipe_dup_output_control(struct upipe *upipe,
                                      enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_dup_output_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dup_sub_get_output(upipe, p);
+            return upipe_dup_output_get_output(upipe, p);
         }
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_dup_sub_set_output(upipe, output);
+            return upipe_dup_output_set_output(upipe, output);
         }
 
         default:
@@ -144,56 +158,61 @@ static bool upipe_dup_sub_control(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_dup_sub_free(struct upipe *upipe)
+static void upipe_dup_output_free(struct upipe *upipe)
 {
-    struct upipe_dup_sub *upipe_dup_sub =
-        upipe_dup_sub_from_upipe(upipe);
-    struct upipe_dup *upipe_dup = upipe_dup_from_sub_mgr(upipe->mgr);
+    struct upipe_dup_output *upipe_dup_output =
+        upipe_dup_output_from_upipe(upipe);
+    struct upipe_dup *upipe_dup =
+        upipe_dup_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
-    upipe_dup_sub_clean_output(upipe);
-    upipe_dup_sub_clean_sub(upipe);
+    upipe_dup_output_clean_output(upipe);
+    upipe_dup_output_clean_sub(upipe);
 
     upipe_clean(upipe);
-    free(upipe_dup_sub);
+    free(upipe_dup_output);
 
     upipe_release(upipe_dup_to_upipe(upipe_dup));
 }
 
-/** @internal @This initializes the output manager for a dup pipe.
+/** @internal @This initializes the output manager for a dup set pipe.
  *
  * @param upipe description structure of the pipe
- * @return pointer to output upipe manager
  */
-static struct upipe_mgr *upipe_dup_init_sub_mgr(struct upipe *upipe)
+static void upipe_dup_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_dup->sub_mgr;
     sub_mgr->signature = UPIPE_DUP_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_dup_sub_alloc;
+    sub_mgr->upipe_alloc = upipe_dup_output_alloc;
     sub_mgr->upipe_input = NULL;
-    sub_mgr->upipe_control = upipe_dup_sub_control;
-    sub_mgr->upipe_free = upipe_dup_sub_free;
+    sub_mgr->upipe_control = upipe_dup_output_control;
+    sub_mgr->upipe_free = upipe_dup_output_free;
     sub_mgr->upipe_mgr_free = NULL;
-    return sub_mgr;
 }
 
 /** @internal @This allocates a dup pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe)
+                                     struct uprobe *uprobe,
+                                     uint32_t signature, va_list args)
 {
-    struct upipe_dup *upipe_dup = malloc(sizeof(struct upipe_dup));
-    if (unlikely(upipe_dup == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_dup_alloc_flow(mgr, uprobe, signature, args,
+                                               &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
-    upipe_sub_init(upipe, mgr, uprobe, upipe_dup_init_sub_mgr(upipe));
-    upipe_dup_init_sub_subs(upipe);
-    upipe_dup->flow_def = NULL;
+
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    upipe_dup_init_sub_mgr(upipe);
+    upipe_dup_init_sub_outputs(upipe);
+    upipe_dup->flow_def = flow_def;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -208,49 +227,13 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                             struct upump *upump)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_dup->flow_def != NULL)
-            uref_free(upipe_dup->flow_def);
-        upipe_dup->flow_def = uref;
-        upipe_dbg_va(upipe, "flow definition %s", def);
-
-        /* also set it for every output */
-        struct uchain *uchain;
-        ulist_foreach (&upipe_dup->subs, uchain) {
-            struct upipe_dup_sub *upipe_dup_sub =
-                upipe_dup_sub_from_uchain(uchain);
-            uref = uref_dup(upipe_dup->flow_def);
-            if (unlikely(uref == NULL)) {
-                upipe_throw_aerror(upipe);
-                return;
-            }
-            upipe_dup_sub_store_flow_def(
-                    upipe_dup_sub_to_upipe(upipe_dup_sub), uref);
-        }
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        upipe_dup_throw_sub_subs(upipe, UPROBE_NEED_INPUT);
-        return;
-    }
-
-    if (unlikely(upipe_dup->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     struct uchain *uchain;
-    ulist_foreach (&upipe_dup->subs, uchain) {
-        struct upipe_dup_sub *upipe_dup_sub =
-            upipe_dup_sub_from_uchain(uchain);
+    ulist_foreach (&upipe_dup->outputs, uchain) {
+        struct upipe_dup_output *upipe_dup_output =
+            upipe_dup_output_from_uchain(uchain);
         if (uchain->next == NULL) {
-            upipe_dup_sub_output(upipe_dup_sub_to_upipe(upipe_dup_sub),
-                                 uref, upump);
+            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
+                                    uref, upump);
             uref = NULL;
         } else {
             struct uref *new_uref = uref_dup(uref);
@@ -259,9 +242,64 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                 upipe_throw_aerror(upipe);
                 return;
             }
-            upipe_dup_sub_output(upipe_dup_sub_to_upipe(upipe_dup_sub),
+            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
                                     new_uref, upump);
         }
+    }
+}
+
+/** @internal @This changes the flow definition on all outputs.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def new flow definition
+ * @return false in case of error
+ */
+static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct uref *flow_def_dup = NULL;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    if (upipe_dup->flow_def != NULL)
+        uref_free(upipe_dup->flow_def);
+    upipe_dup->flow_def = flow_def_dup;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_dup->outputs, uchain) {
+        struct upipe_dup_output *upipe_dup_output =
+            upipe_dup_output_from_uchain(uchain);
+        flow_def_dup = uref_dup(flow_def);
+        if (unlikely(flow_def_dup == NULL)) {
+            upipe_throw_aerror(upipe);
+            return false;
+        }
+        upipe_dup_output_store_flow_def(
+                upipe_dup_output_to_upipe(upipe_dup_output), flow_def_dup);
+    }
+    return true;
+}
+
+/** @internal @This processes control commands on a dup pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_dup_control(struct upipe *upipe,
+                              enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *uref = va_arg(args, struct uref *);
+            return upipe_dup_set_flow_def(upipe, uref);
+        }
+
+        default:
+            return false;
     }
 }
 
@@ -273,24 +311,33 @@ static void upipe_dup_free(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     upipe_throw_dead(upipe);
-    upipe_dup_clean_sub_subs(upipe);
+    upipe_dup_clean_sub_outputs(upipe);
     if (upipe_dup->flow_def != NULL)
         uref_free(upipe_dup->flow_def);
     upipe_clean(upipe);
     free(upipe_dup);
 }
 
-/** module manager static descriptor */
+/** dup module manager static descriptor */
 static struct upipe_mgr upipe_dup_mgr = {
     .signature = UPIPE_DUP_SIGNATURE,
 
     .upipe_alloc = upipe_dup_alloc,
     .upipe_input = upipe_dup_input,
-    .upipe_control = NULL,
+    .upipe_control = upipe_dup_control,
     .upipe_free = upipe_dup_free,
 
     .upipe_mgr_free = NULL
 };
+
+/** @This is called when the proxy is released.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_dup_proxy_released(struct upipe *upipe)
+{
+    upipe_dup_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
+}
 
 /** @This returns the management structure for all dup pipes.
  *
@@ -298,5 +345,5 @@ static struct upipe_mgr upipe_dup_mgr = {
  */
 struct upipe_mgr *upipe_dup_mgr_alloc(void)
 {
-    return &upipe_dup_mgr;
+    return upipe_proxy_mgr_alloc(&upipe_dup_mgr, upipe_dup_proxy_released);
 }

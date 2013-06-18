@@ -13,22 +13,24 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
 /** @file
  * @short Upipe module building frames from chunks of an ISO 13818-2 stream
  */
 
-#ifndef _UPIPE_TS_UPIPE_MP2V_FRAMER_H_
+#ifndef _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_MP2V_FRAMER_H_
+#define _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
 
 #include <upipe/upipe.h>
 
 #define UPIPE_MP2VF_SIGNATURE UBASE_FOURCC('m','2','v','f')
+/** We only accept the ISO 13818-2 elementary stream. */
+#define UPIPE_MP2VF_EXPECTED_FLOW_DEF "block.mpeg2video."
 
 /** @This extends upipe_command with specific commands for mp2v framer. */
 enum upipe_mp2vf_command {

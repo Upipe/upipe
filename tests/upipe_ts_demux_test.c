@@ -76,7 +76,7 @@ static struct upipe *upipe_ts_demux_output_pmt = NULL;
 static struct upipe *upipe_ts_demux_output_video = NULL;
 static struct uprobe *uprobe_ts_log;
 static uint64_t wanted_flow_id, deleted_flow_id;
-static bool expect_need_output = false;
+static bool expect_new_flow_def = false;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -102,8 +102,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_PMTD_HEADER:
         case UPROBE_TS_PMTD_ADD_ES:
         case UPROBE_TS_PMTD_DEL_ES:
-        case UPROBE_READ_END:
-        case UPROBE_NEED_INPUT:
+        case UPROBE_SOURCE_END:
             break;
         case UPROBE_SPLIT_ADD_FLOW: {
             uint64_t flow_id = va_arg(args, uint64_t);
@@ -121,20 +120,21 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     printf("done\n");
                     upipe_ts_demux_output_video = NULL;
                 }
-                upipe_ts_demux_output_pmt = upipe_alloc_sub(upipe_ts_demux,
+                upipe_ts_demux_output_pmt =
+                    upipe_flow_alloc_sub(upipe_ts_demux,
                         uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                               "ts demux pmt"));
+                                               "ts demux pmt"),
+                        uref);
                 assert(upipe_ts_demux_output_pmt != NULL);
-                assert(upipe_set_flow_def(upipe_ts_demux_output_pmt, uref));
             } else if (!ubase_ncmp(def, "block.mpeg2video")) {
                 if (upipe_ts_demux_output_video != NULL)
                     upipe_release(upipe_ts_demux_output_video);
                 upipe_ts_demux_output_video =
-                    upipe_alloc_sub(upipe_ts_demux_output_pmt,
+                    upipe_flow_alloc_sub(upipe_ts_demux_output_pmt,
                         uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                               "ts demux video"));
+                                               "ts demux video"),
+                        uref);
                 assert(upipe_ts_demux_output_video != NULL);
-                assert(upipe_set_flow_def(upipe_ts_demux_output_video, uref));
             }
             break;
         }
@@ -143,9 +143,9 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             deleted_flow_id -= flow_id;
             break;
         }
-        case UPROBE_NEED_OUTPUT:
-            assert(expect_need_output);
-            expect_need_output = false;
+        case UPROBE_NEW_FLOW_DEF:
+            assert(expect_new_flow_def);
+            expect_new_flow_def = false;
             break;
     }
     return true;
@@ -183,18 +183,19 @@ int main(int argc, char *argv[])
     assert(upipe_ts_demux_mgr != NULL);
     assert(upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr,
                                             upipe_mp2vf_mgr));
-    upipe_ts_demux = upipe_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts demux"));
-    assert(upipe_ts_demux != NULL);
-    assert(upipe_set_uref_mgr(upipe_ts_demux, uref_mgr));
 
     struct uref *uref;
-    uint8_t *buffer, *payload, *pat_program, *pmt_es;
-    int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
-    upipe_input(upipe_ts_demux, uref, NULL);
+
+    upipe_ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                   "ts demux"), uref);
+    uref_free(uref);
+    assert(upipe_ts_demux != NULL);
+
+    uint8_t *buffer, *payload, *pat_program, *pmt_es;
+    int size;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
@@ -393,9 +394,9 @@ int main(int argc, char *argv[])
 
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
-    expect_need_output = true;
+    expect_new_flow_def = true;
     upipe_input(upipe_ts_demux, uref, NULL);
-    assert(!expect_need_output);
+    assert(!expect_new_flow_def);
 
     upipe_release(upipe_ts_demux_output_video);
     deleted_flow_id = 43;

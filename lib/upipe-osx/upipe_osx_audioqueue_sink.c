@@ -38,6 +38,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe-osx/upipe_osx_audioqueue_sink.h>
 
 #include <stdlib.h>
@@ -62,6 +63,7 @@ struct upipe_osx_audioqueue_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_osx_audioqueue_sink, upipe);
+UPIPE_HELPER_FLOW(upipe_osx_audioqueue_sink, "block.")
 
 /** @internal @This is called by AudioQueue after reading a buffer
  * @param _upipe description structure of the pipe (void)
@@ -201,28 +203,6 @@ static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
     struct upipe_osx_audioqueue_sink *osx_audioqueue =
                 upipe_osx_audioqueue_sink_from_upipe(upipe);
 
-    /* flow def */
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if(unlikely(ubase_ncmp(def, "block."))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        upipe_osx_audioqueue_sink_create(upipe, uref);
-        uref_free(uref);
-        return;
-
-    }
-    /* flow end */
-    if (unlikely(uref_flow_get_end(uref))) {
-        upipe_osx_audioqueue_sink_remove(upipe);
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
     /* empty uref */
     if (unlikely(!uref->ubuf)) {
         uref_free(uref);
@@ -260,22 +240,28 @@ static bool upipe_osx_audioqueue_sink_control(struct upipe *upipe,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_osx_audioqueue_sink_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_osx_audioqueue_sink *osx_audioqueue =
-                 malloc(sizeof(struct upipe_osx_audioqueue_sink));
-    if (unlikely(osx_audioqueue == NULL)) {
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_osx_audioqueue_sink_alloc_flow(mgr, uprobe,
+                                        signature, args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    }
-    struct upipe *upipe = upipe_osx_audioqueue_sink_to_upipe(osx_audioqueue);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_osx_audioqueue_sink *upipe_osx_audioqueue_sink =
+        upipe_osx_audioqueue_sink_from_upipe(upipe);
     osx_audioqueue->queue = NULL;
     osx_audioqueue->volume = 1.0;
 
     upipe_throw_ready(upipe);
+    upipe_osx_audioqueue_sink_create(upipe, flow_def);
+    uref_free(flow_def);
     return upipe;
 }
 

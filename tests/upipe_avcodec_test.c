@@ -102,11 +102,10 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEED_INPUT:
             break;
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
-        case UPROBE_WRITE_END:
+        case UPROBE_SINK_END:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
@@ -141,11 +140,13 @@ void fill_pic(struct ubuf *ubuf)
 
 /* build video pipeline */
 struct upipe *build_pipeline(const char *codec_def,
-                             struct upump_mgr *upump_mgr, int num)
+                             struct upump_mgr *upump_mgr, int num,
+                             struct uref *flow_def)
 {
     /* encoder */
-    struct upipe *avcenc = upipe_alloc(upipe_avcenc_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcenc %d", num));
+    struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcenc %d", num),
+        flow_def);
     assert(avcenc);
     assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
     assert(upipe_set_uref_mgr(avcenc, uref_mgr));
@@ -153,22 +154,26 @@ struct upipe *build_pipeline(const char *codec_def,
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcenc, upump_mgr));
     }
+    upipe_get_flow_def(avcenc, &flow_def);
+    assert(flow_def != NULL);
 
     /* decoder */
-    struct upipe *avcdec = upipe_alloc(upipe_avcdec_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcdec %d", num));
+    struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcdec %d", num),
+        flow_def);
     assert(avcdec);
     assert(upipe_set_ubuf_mgr(avcdec, pic_mgr));
-    assert(upipe_set_uref_mgr(avcdec, uref_mgr));
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcdec, upump_mgr));
     }
     assert(upipe_set_output(avcenc, avcdec));
     upipe_release(avcdec);
+    upipe_get_flow_def(avcdec, &flow_def);
 
     /* /dev/null */
-    struct upipe *null = upipe_alloc(upipe_null_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num));
+    struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num),
+        flow_def);
     assert(null);
     upipe_null_dump_dict(null, true);
     upipe_set_output(avcdec, null);
@@ -226,7 +231,10 @@ void *thread_start(void *_thread)
     struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
 
-    thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num);
+    struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+    thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num,
+                                    flow);
+    uref_free(flow);
     thread->limit = SETCODEC_LIMIT;
 
     thread->source = upump_alloc_idler(upump_mgr, source_idler, thread, true);
@@ -321,9 +329,9 @@ int main(int argc, char **argv)
     }
 
     /* mono-threaded test without upump_mgr */
-    struct upipe *avcenc = build_pipeline("mpeg2video.pic.", NULL, -1);
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
-    upipe_input(avcenc, flow, NULL);
+    struct upipe *avcenc = build_pipeline("mpeg2video.pic.", NULL, -1, flow);
+    uref_free(flow);
 
     for (i=0; i < FRAMES_LIMIT; i++) {
         pic = uref_pic_alloc(uref_mgr, pic_mgr, 120, 96);
@@ -331,9 +339,6 @@ int main(int argc, char **argv)
         upipe_input(avcenc, pic, NULL);
    }
 
-    flow = uref_alloc(uref_mgr);
-    uref_flow_set_end(flow);
-    upipe_input(avcenc, flow, NULL);
     upipe_release(avcenc);
     printf("Everything good so far, cleaning\n");
 

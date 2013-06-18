@@ -2,13 +2,12 @@ debug: probe caught ready event
 error: allocation error at
 debug: probe caught allocation error
 debug: probe caught upump error
-debug: probe caught read end on pouet
-debug: probe caught write end on pouet
+debug: probe caught source end
+debug: probe caught sink end
 debug: probe caught need uref manager
 debug: probe caught need upump manager
-debug: probe caught flow def error
 debug: probe caught need ubuf manager
-debug: probe caught need output for flow def "block.test."
+debug: probe caught new flow def "block.test."
 debug: probe caught add flow 0x42 def "block.test."
 debug: probe caught del flow 0x42
 debug: probe caught sync acquired

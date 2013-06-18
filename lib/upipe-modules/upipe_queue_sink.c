@@ -35,6 +35,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
@@ -69,25 +70,31 @@ struct upipe_qsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe)
+UPIPE_HELPER_FLOW(upipe_qsink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr, upump)
 
 /** @internal @This allocates a queue sink pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
-    struct upipe_qsink *upipe_qsink = malloc(sizeof(struct upipe_qsink));
-    if (unlikely(upipe_qsink == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_qsink_alloc_flow(mgr, uprobe, signature, args,
+                                                 &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_qsink_to_upipe(upipe_qsink);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     upipe_qsink_init_upump_mgr(upipe);
     upipe_qsink->qsrc = NULL;
-    upipe_qsink->flow_def = NULL;
+    upipe_qsink->flow_def = flow_def;
     upipe_qsink->blocked = false;
     ulist_init(&upipe_qsink->urefs);
     upipe_throw_ready(upipe);
@@ -164,25 +171,6 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (upipe_qsink->flow_def != NULL)
-            uref_free(upipe_qsink->flow_def);
-        upipe_qsink->flow_def = uref_dup(uref);
-        if (unlikely(upipe_qsink->flow_def == NULL)) {
-            uref_free(uref);
-            upipe_throw_aerror(upipe);
-            return;
-        }
-        upipe_dbg_va(upipe, "flow definition %s", def);
-    }
-
-    if (unlikely(upipe_qsink->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(upipe_qsink->qsrc == NULL)) {
         uref_free(uref);
         upipe_warn(upipe, "received a buffer before opening a queue");
@@ -190,6 +178,35 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_qsink_output(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref flow definition
+ * @return false in case of error
+ */
+static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    if (unlikely(uref == NULL))
+        return false;
+    struct uref *flow_def_dup = NULL;
+    if ((flow_def_dup = uref_dup(uref)) == NULL) {
+        upipe_throw_aerror(upipe);
+        return false;
+    }
+    if (upipe_qsink->flow_def != NULL)
+        uref_free(upipe_qsink->flow_def);
+    upipe_qsink->flow_def = flow_def_dup;
+    if (upipe_qsink->qsrc != NULL) {
+        if ((flow_def_dup = uref_dup(uref)) == NULL) {
+            upipe_throw_aerror(upipe);
+            return false;
+        }
+        upipe_qsink_output(upipe, flow_def_dup, NULL);
+    }
+    return true;
 }
 
 /** @internal @This returns a pointer to the current queue source.
@@ -218,6 +235,16 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
 
     if (unlikely(upipe_qsink->qsrc != NULL)) {
         upipe_notice_va(upipe, "releasing queue source %p", upipe_qsink->qsrc);
+        if (upipe_qsink->flow_def != NULL) {
+            /* play flow end */
+            struct uref *uref = uref_dup(upipe_qsink->flow_def);
+            if (unlikely(uref == NULL))
+                upipe_throw_aerror(upipe);
+            else {
+                uref_flow_set_end(uref);
+                upipe_qsink_output(upipe, uref, NULL);
+            }
+        }
         upipe_release(upipe_qsink->qsrc);
         upipe_qsink->qsrc = NULL;
     }
@@ -229,13 +256,6 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
         upipe_throw_need_upump_mgr(upipe);
         if (unlikely(upipe_qsink->upump_mgr == NULL))
             return false;
-    }
-
-    if (unlikely(!upipe_queue_max_length(qsrc))) {
-        upipe_err_va(upipe,
-                     "unable to use queue source %p as it is uninitialized",
-                     qsrc);
-        return false;
     }
 
     upipe_qsink->qsrc = qsrc;
@@ -268,6 +288,10 @@ static bool _upipe_qsink_control(struct upipe *upipe,
                                  va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *uref = va_arg(args, struct uref *);
+            return upipe_qsink_set_flow_def(upipe, uref);
+        }
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_qsink_get_upump_mgr(upipe, p);
@@ -338,11 +362,7 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
 static void upipe_qsink_free(struct upipe *upipe)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (likely(upipe_qsink->qsrc != NULL)) {
-        upipe_notice_va(upipe, "releasing queue source %p",
-                        upipe_qsink->qsrc);
-        upipe_release(upipe_qsink->qsrc);
-    }
+    _upipe_qsink_set_qsrc(upipe, NULL);
     upipe_throw_dead(upipe);
 
     if (upipe_qsink->flow_def != NULL)

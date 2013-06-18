@@ -80,6 +80,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -207,7 +208,8 @@ UPIPE_HELPER_UPIPE(sws_test, upipe);
 
 /** helper phony pipe to test upipe_sws */
 static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe)
+                                    struct uprobe *uprobe,
+                                    uint32_t signature, va_list args)
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     assert(sws_test != NULL);
@@ -383,26 +385,23 @@ int main(int argc, char **argv)
     assert(log != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
-    struct upipe *sws = upipe_alloc(upipe_sws_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws")); 
+
+    struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws"),
+            pic_flow); 
     assert(sws != NULL);
     assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_alloc(&sws_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
+    struct upipe *sws_test = upipe_flow_alloc(&sws_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"),
+            pic_flow);
     uprobe_dbg_va(log, NULL, "Pipe addr: sws:\t %p", sws);
     uprobe_dbg_va(log, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
     assert(upipe_set_output(sws, sws_test));
-
-    /* Send first flow definition packet */
-    struct uref *flowdef = uref_dup(pic_flow);
-    uref_dump(flowdef, log);
-    assert(flowdef);
-    upipe_input(sws, flowdef, NULL);
 
     /* Define outputflow */
     uref_pic_set_hsize(pic_flow, DSTSIZE);

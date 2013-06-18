@@ -106,14 +106,15 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_AERROR:
         case UPROBE_UPUMP_ERROR:
-        case UPROBE_WRITE_END:
+        case UPROBE_SINK_END:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
+        case UPROBE_READY:
         default:
             break;
-        case UPROBE_READY:
-        case UPROBE_READ_END:
+        case UPROBE_SOURCE_END:
+            upipe_release(upipe);
             break;
     }
     return true;
@@ -174,11 +175,28 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
 
+
+    /* udp source */
+    struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
+    struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udp source"));
+    upipe_set_upump_mgr(upipe_udpsrc, upump_mgr);
+    upipe_set_uref_mgr(upipe_udpsrc, uref_mgr);
+    upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
+    upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
+    upipe_set_uclock(upipe_udpsrc, uclock);
+    if (!upipe_udpsrc_set_uri(upipe_udpsrc, srcpath)) {
+        return EXIT_FAILURE;
+    }
+
+    struct uref *flow_def;
+    upipe_get_flow_def(upipe_udpsrc, &flow_def);
     if (udp) {
         /* send to udp */
         struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-        upipe_sink = upipe_alloc(upipe_udpsink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udpsink"));
+        upipe_sink = upipe_flow_alloc(upipe_udpsink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udpsink"),
+                flow_def);
         upipe_set_upump_mgr(upipe_sink, upump_mgr);
         if (!upipe_udpsink_set_uri(upipe_sink, dirpath, 0)) {
             return EXIT_FAILURE;
@@ -186,66 +204,61 @@ int main(int argc, char *argv[])
     }
     else 
     {
+        /* dup */
+        struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
+        struct upipe *upipe_dup = upipe_flow_alloc(upipe_dup_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"), flow_def);
+        upipe_sink = upipe_dup;
+
+        struct upipe *upipe_dup_data = upipe_void_alloc_sub(upipe_dup,
+                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata"));
+        struct upipe *upipe_dup_aux = upipe_void_alloc_sub(upipe_dup,
+                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux"));
+
         /* data files (multicat sink) */
-        struct upipe *datasink= upipe_alloc(upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"));
+        struct upipe *datasink= upipe_flow_alloc(upipe_multicat_sink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"),
+                flow_def);
         upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
         upipe_set_upump_mgr(datasink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(datasink, rotate);
         }
         upipe_multicat_sink_set_path(datasink, dirpath, suffix);
+        upipe_set_output(upipe_dup_data, datasink);
+        upipe_release(datasink);
+
+        /* aux block generation pipe */
+        struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
+        struct upipe *genaux = upipe_flow_alloc(upipe_genaux_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"),
+                flow_def);
+        assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
+        upipe_set_output(upipe_dup_aux, genaux);
+        upipe_get_flow_def(genaux, &flow_def);
 
         /* aux files (multicat sink) */
-        struct upipe *auxsink= upipe_alloc(upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"));
+        struct upipe *auxsink= upipe_flow_alloc(upipe_multicat_sink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"),
+                flow_def);
         upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
         upipe_set_upump_mgr(auxsink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(auxsink, rotate);
         }
         upipe_multicat_sink_set_path(auxsink, dirpath, ".aux");
-
-        /* aux block generation pipe */
-        struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-        struct upipe *genaux = upipe_alloc(upipe_genaux_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"));
-        assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
         upipe_set_output(genaux, auxsink);
-
-        /* dup */
-        struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
-        struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"));
-        upipe_set_output(upipe_alloc_sub(upipe_dup,
-                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata")), datasink);
-        upipe_set_output(upipe_alloc_sub(upipe_dup,
-                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux")), genaux);
-
-        upipe_sink = upipe_dup;
+        upipe_release(genaux);
+        upipe_release(auxsink);
     }
-
-    /* udp source */
-    struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
-    struct upipe *upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udp source"));
-    upipe_set_upump_mgr(upipe_udpsrc, upump_mgr);
-    upipe_set_uref_mgr(upipe_udpsrc, uref_mgr);
-    upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
     upipe_set_output(upipe_udpsrc, upipe_sink);
-    upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
-    upipe_set_uclock(upipe_udpsrc, uclock);
-    if (!upipe_udpsrc_set_uri(upipe_udpsrc, srcpath)) {
-        return EXIT_FAILURE;
-    }
+    upipe_release(upipe_sink);
 
     /* fire loop ! */
     ev_loop(loop, 0);
 
     /* should never be here for the moment. todo: sighandler.
-     * release everyhing */
-    upipe_release(upipe_udpsrc);
-
+     * release everything */
     uprobe_log_free(uprobe_log);
     uprobe_stdio_free(uprobe_stdio);
 

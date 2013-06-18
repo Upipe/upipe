@@ -88,42 +88,27 @@ struct test_output {
 
 /** helper phony pipe to test uprobe_select_programs */
 static struct upipe *test_output_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
+    assert(signature == UPIPE_FLOW_SIGNATURE);
+    struct uref *flow_def = va_arg(args, struct uref *);
+    const char *programs;
+    uint64_t program_number;
+    assert(uref_flow_get_program(flow_def, &programs));
+    assert(sscanf(programs, "%"PRIu64",", &program_number) == 1);
+    add_programs -= program_number;
+
     struct test_output *test_output =
         malloc(sizeof(struct test_output));
     assert(test_output != NULL);
     upipe_init(&test_output->upipe, mgr, uprobe);
-    test_output->program_number = UINT64_MAX;
+    test_output->program_number = program_number;
     upipe_throw_ready(&test_output->upipe);
     return &test_output->upipe;
 }
 
 /** helper phony pipe to test uprobe_select_programs */
-static bool test_output_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
-{
-    switch (command) {
-        case UPIPE_SET_FLOW_DEF: {
-            struct test_output *test_output =
-                container_of(upipe, struct test_output, upipe);
-            assert(test_output->program_number == UINT64_MAX);
-            struct uref *flow_def = va_arg(args, struct uref *);
-            const char *programs;
-            assert(uref_flow_get_program(flow_def, &programs));
-            assert(sscanf(programs, "%"PRIu64",",
-                          &test_output->program_number) == 1);
-            add_programs -= test_output->program_number;
-            return true;
-        }
-
-        default:
-            assert(0);
-            return false;
-    }
-}
-
-/** helper phony pipe to test upipe_avfsrc */
 static void test_output_free(struct upipe *upipe)
 {
     struct test_output *test_output =
@@ -139,7 +124,7 @@ static void test_output_free(struct upipe *upipe)
 static struct upipe_mgr test_output_mgr = {
     .upipe_alloc = test_output_alloc,
     .upipe_input = NULL,
-    .upipe_control = test_output_control,
+    .upipe_control = NULL,
     .upipe_free = test_output_free,
 
     .upipe_mgr_free = NULL
@@ -150,7 +135,8 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
-    upipe_sub_init(upipe, mgr, uprobe, &test_output_mgr);
+    upipe_init(upipe, mgr, uprobe);
+    upipe->sub_mgr = &test_output_mgr;
     return upipe;
 }
 

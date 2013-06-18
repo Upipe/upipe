@@ -38,6 +38,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_sink_delay.h>
@@ -63,8 +64,6 @@
 /** default delay to use compared to the theorical reception time of the
  * packet */
 #define SYSTIME_DELAY        (0.01 * UCLOCK_FREQ)
-/** expected flow definition on all flows */
-#define EXPECTED_FLOW_DEF    "block."
 
 static void upipe_fsink_watcher(struct upump *upump);
 
@@ -87,14 +86,13 @@ struct upipe_fsink {
     struct ulist urefs;
     /** true if the sink currently blocks the pipe */
     bool blocked;
-    /** true if we have received a compatible flow definition */
-    bool flow_def_ok;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_fsink, upipe)
+UPIPE_HELPER_FLOW(upipe_fsink, UPIPE_FSINK_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr, upump)
 UPIPE_HELPER_UCLOCK(upipe_fsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
@@ -103,23 +101,26 @@ UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
-    struct upipe_fsink *upipe_fsink = malloc(sizeof(struct upipe_fsink));
-    if (unlikely(upipe_fsink == NULL))
+    struct upipe *upipe = upipe_fsink_alloc_flow(mgr, uprobe, signature, args,
+                                                 NULL);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_fsink_to_upipe(upipe_fsink);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     upipe_fsink_init_upump_mgr(upipe);
     upipe_fsink_init_uclock(upipe);
     upipe_fsink_init_delay(upipe, SYSTIME_DELAY);
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
     upipe_fsink->blocked = false;
-    upipe_fsink->flow_def_ok = false;
     ulist_init(&upipe_fsink->urefs);
     upipe_throw_ready(upipe);
     return upipe;
@@ -241,7 +242,7 @@ write_buffer:
             uref_free(uref);
             upipe_warn_va(upipe, "write error to %s (%m)", upipe_fsink->path);
             upipe_fsink_set_upump(upipe, NULL);
-            upipe_throw_write_end(upipe, upipe_fsink->path);
+            upipe_throw_sink_end(upipe);
             return;
         }
 
@@ -283,34 +284,6 @@ static void upipe_fsink_watcher(struct upump *upump)
 static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            upipe_fsink->flow_def_ok = false;
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_fsink->flow_def_ok = true;
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(!upipe_fsink->flow_def_ok)) {
-        uref_free(uref);
-        upipe_throw_flow_def_error(upipe, uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
         return;

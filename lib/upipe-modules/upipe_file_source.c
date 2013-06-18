@@ -38,6 +38,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -99,6 +100,7 @@ struct upipe_fsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_fsrc, upipe)
+UPIPE_HELPER_VOID(upipe_fsrc)
 UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr)
 
 UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr)
@@ -112,16 +114,16 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe)
+                                      struct uprobe *uprobe, uint32_t signature,
+                                      va_list args)
 {
-    struct upipe_fsrc *upipe_fsrc = malloc(sizeof(struct upipe_fsrc));
-    if (unlikely(upipe_fsrc == NULL))
-        return NULL;
-    struct upipe *upipe = upipe_fsrc_to_upipe(upipe_fsrc);
-    upipe_init(upipe, mgr, uprobe);
+    struct upipe *upipe = upipe_fsrc_alloc_void(mgr, uprobe, signature, args);
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     upipe_fsrc_init_uref_mgr(upipe);
     upipe_fsrc_init_ubuf_mgr(upipe);
     upipe_fsrc_init_output(upipe);
@@ -186,7 +188,7 @@ static void upipe_fsrc_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%m)", upipe_fsrc->path);
         upipe_fsrc_set_upump(upipe, NULL);
-        upipe_throw_read_end(upipe, upipe_fsrc->path);
+        upipe_throw_source_end(upipe);
         return;
     }
     if (unlikely(ret == 0)) {
@@ -194,7 +196,7 @@ static void upipe_fsrc_worker(struct upump *upump)
         if (likely(upipe_fsrc->uclock == NULL)) {
             upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
             upipe_fsrc_set_upump(upipe, NULL);
-            upipe_throw_read_end(upipe, upipe_fsrc->path);
+            upipe_throw_source_end(upipe);
         }
         return;
     }
@@ -358,6 +360,10 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_fsrc_set_ubuf_mgr(upipe, ubuf_mgr);
+        }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_fsrc_get_flow_def(upipe, p);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);

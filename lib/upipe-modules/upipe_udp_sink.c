@@ -39,6 +39,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_sink_delay.h>
@@ -96,6 +97,7 @@ struct upipe_udpsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe)
+UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr, upump)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
@@ -104,16 +106,20 @@ UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                         struct uprobe *uprobe,
+                                         uint32_t signature, va_list args)
 {
-    struct upipe_udpsink *upipe_udpsink = malloc(sizeof(struct upipe_udpsink));
-    if (unlikely(upipe_udpsink == NULL))
+    struct upipe *upipe = upipe_udpsink_alloc_flow(mgr, uprobe, signature, args,
+                                                   NULL);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_udpsink_to_upipe(upipe_udpsink);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink_init_delay(upipe, SYSTIME_DELAY);
@@ -242,7 +248,7 @@ write_buffer:
             uref_free(uref);
             upipe_warn_va(upipe, "write error to %s (%m)", upipe_udpsink->uri);
             upipe_udpsink_set_upump(upipe, NULL);
-            upipe_throw_write_end(upipe, upipe_udpsink->uri);
+            upipe_throw_sink_end(upipe);
             return;
         }
 
@@ -284,35 +290,6 @@ static void upipe_udpsink_watcher(struct upump *upump)
 static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            upipe_udpsink->flow_def_ok = false;
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_udpsink->flow_def_ok = true;
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        upipe_udpsink->flow_def_ok = false;
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(!upipe_udpsink->flow_def_ok)) {
-        uref_free(uref);
-        upipe_throw_flow_def_error(upipe, uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
         return;

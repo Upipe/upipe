@@ -13,22 +13,24 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
 /** @file
  * @short Upipe module building frames from chunks of an ISO 13818-10-B stream
  */
 
-#ifndef _UPIPE_TS_UPIPE_H264_FRAMER_H_
+#ifndef _UPIPE_FRAMERS_UPIPE_H264_FRAMER_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_H264_FRAMER_H_
+#define _UPIPE_FRAMERS_UPIPE_H264_FRAMER_H_
 
 #include <upipe/upipe.h>
 
 #define UPIPE_H264F_SIGNATURE UBASE_FOURCC('2','6','4','f')
+/** We only accept the ISO 14496-10 annex B elementary stream. */
+#define UPIPE_H264F_EXPECTED_FLOW_DEF "block.h264."
 
 /** @This returns the management structure for all h264f pipes.
  *

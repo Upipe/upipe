@@ -77,6 +77,10 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_NEW_FLOW_DEF:
+            break;
+        case UPROBE_SOURCE_END:
+            upipe_release(upipe);
             break;
     }
     return true;
@@ -84,7 +88,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_qsrc */
 static struct upipe *queue_test_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe)
+                                      struct uprobe *uprobe, uint32_t signature,
+                                      va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -100,17 +105,11 @@ static void queue_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     upipe_notice_va(upipe, "loop %"PRIu8, counter);
     if (counter == 0) {
-        const char *def;
-        assert(uref_flow_get_def(uref, &def));
-    } else if (counter == 1) {
         uint8_t uref_counter;
         assert(uref_test_get_test(uref, &uref_counter));
         assert(uref_counter == counter);
-    } else if (counter == 2) {
+    } else
         upipe_release(upipe_qsink);
-    } else {
-        assert(uref_flow_get_end(uref));
-    }
     counter++;
     uref_free(uref);
 }
@@ -155,8 +154,11 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&queue_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sink"));
+    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
+    assert(uref != NULL);
+
+    struct upipe *upipe_sink = upipe_flow_alloc(&queue_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sink"), uref);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
@@ -170,25 +172,21 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
-    upipe_qsink = upipe_alloc(upipe_qsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "queue sink"));
+    upipe_qsink = upipe_flow_alloc(upipe_qsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "queue sink"), uref);
     assert(upipe_qsink != NULL);
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
     assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
-    upipe_release(upipe_qsrc);
+    uref_free(uref);
 
-    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
+    uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    assert(uref_test_set_test(uref, 0));
     upipe_input(upipe_qsink, uref, NULL);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_test_set_test(uref, 1));
-    upipe_input(upipe_qsink, uref, NULL);
-
-    uref = uref_alloc(uref_mgr);
-    assert(uref != NULL);
-    assert(uref_test_set_test(uref, 2));
     upipe_input(upipe_qsink, uref, NULL);
 
     unsigned int length;
@@ -198,7 +196,7 @@ int main(int argc, char *argv[])
 
     ev_loop(loop, 0);
 
-    assert(counter == 4);
+    assert(counter == 2);
 
     upipe_mgr_release(upipe_qsink_mgr); // nop
     upipe_mgr_release(upipe_qsrc_mgr); // nop

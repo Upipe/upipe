@@ -35,6 +35,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_match_attr.h>
 
@@ -74,6 +75,7 @@ struct upipe_match_attr {
 };
 
 UPIPE_HELPER_UPIPE(upipe_match_attr, upipe)
+UPIPE_HELPER_FLOW(upipe_match_attr, NULL)
 UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
 
 /** @internal @This receives data.
@@ -83,23 +85,12 @@ UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
  * @param upump pump that generated the buffer
  */
 static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                   struct upump *upump)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
-    const char *def;
     bool forward = true;
     uint64_t min = upipe_match_attr->min;
     uint64_t max = upipe_match_attr->max;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_match_attr_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
 
     /* check uref */
     switch (upipe_match_attr->mode) {
@@ -139,6 +130,10 @@ static bool upipe_match_attr_control(struct upipe *upipe,
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_match_attr_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_match_attr_get_output(upipe, p);
@@ -180,20 +175,27 @@ static bool upipe_match_attr_control(struct upipe *upipe,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_match_attr_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe)
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
 {
-    struct upipe_match_attr *upipe_match_attr = malloc(sizeof(struct upipe_match_attr));
-    if (unlikely(upipe_match_attr == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_match_attr_alloc_flow(mgr, uprobe, signature,
+                                                      args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_match_attr_to_upipe(upipe_match_attr);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_match_attr *upipe_match_attr =
+        upipe_match_attr_from_upipe(upipe);
     upipe_match_attr_init_output(upipe);
     upipe_match_attr->match_uint8_t = NULL;
     upipe_match_attr->match_uint64_t = NULL;
     upipe_match_attr->mode = UPIPE_MATCH_ATTR_NONE;
+    upipe_match_attr_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }

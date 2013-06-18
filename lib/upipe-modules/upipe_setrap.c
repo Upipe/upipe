@@ -34,6 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_setrap.h>
 
@@ -59,24 +60,31 @@ struct upipe_setrap {
 };
 
 UPIPE_HELPER_UPIPE(upipe_setrap, upipe)
+UPIPE_HELPER_FLOW(upipe_setrap, NULL)
 UPIPE_HELPER_OUTPUT(upipe_setrap, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a setrap pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_setrap *upipe_setrap = malloc(sizeof(struct upipe_setrap));
-    if (unlikely(upipe_setrap == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_setrap_alloc_flow(mgr, uprobe, signature,
+                                                  args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_setrap_to_upipe(upipe_setrap);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
     upipe_setrap_init_output(upipe);
     upipe_setrap->systime_rap = UINT64_MAX;
+    upipe_setrap_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -91,17 +99,6 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_setrap_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
 
     if (likely(upipe_setrap->systime_rap != UINT64_MAX))
         uref->systime_rap = upipe_setrap->systime_rap;
@@ -145,6 +142,10 @@ static bool upipe_setrap_control(struct upipe *upipe,
                                 enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_setrap_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_setrap_get_output(upipe, p);

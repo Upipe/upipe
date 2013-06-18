@@ -37,6 +37,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_skip.h>
 
@@ -51,7 +52,7 @@
 #include <math.h>
 #include <assert.h>
 
-#define EXPECTED_FLOW "block."
+#define EXPECTED_FLOW_DEF "block."
 
 /** upipe_skip structure */ 
 struct upipe_skip {
@@ -70,6 +71,7 @@ struct upipe_skip {
 };
 
 UPIPE_HELPER_UPIPE(upipe_skip, upipe);
+UPIPE_HELPER_FLOW(upipe_skip, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_OUTPUT(upipe_skip, output, flow_def, flow_def_sent);
 
 /** @internal @This handles data.
@@ -96,39 +98,10 @@ static inline void upipe_skip_input_block(struct upipe *upipe, struct uref *uref
  * @param upump pump that generated the buffer
  */
 static void upipe_skip_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                             struct upump *upump)
 {
-    struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
-    const char *def;
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        if (unlikely(!uref_flow_set_def(uref, "block.")))
-            upipe_throw_aerror(upipe);
-        upipe_skip_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_skip->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
+        upipe_skip_output(upipe, uref, upump);
         return;
     }
 
@@ -143,9 +116,13 @@ static void upipe_skip_input(struct upipe *upipe, struct uref *uref,
  * @return false in case of error
  */
 static bool upipe_skip_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+                               enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_skip_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_skip_get_output(upipe, p);
@@ -181,19 +158,25 @@ static bool upipe_skip_control(struct upipe *upipe,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_skip_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                      struct uprobe *uprobe,
+                                      uint32_t signature, va_list args)
 {
-    struct upipe_skip *upipe_skip = malloc(sizeof(struct upipe_skip));
-    if (unlikely(upipe_skip == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_skip_alloc_flow(mgr, uprobe, signature, args,
+                                                &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_skip_to_upipe(upipe_skip);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
     upipe_skip_init_output(upipe);
 
     upipe_skip->offset = 0;
+    upipe_skip_store_flow_def(upipe, flow_def);
 
     upipe_throw_ready(upipe);
     return upipe;

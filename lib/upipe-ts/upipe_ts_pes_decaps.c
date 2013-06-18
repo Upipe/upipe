@@ -34,6 +34,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pes_decaps.h>
@@ -69,6 +70,7 @@ struct upipe_ts_pesd {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pesd, upipe)
+UPIPE_HELPER_FLOW(upipe_ts_pesd, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_pesd, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_pesd, output, flow_def, flow_def_sent)
@@ -77,20 +79,32 @@ UPIPE_HELPER_OUTPUT(upipe_ts_pesd, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe)
+                                         struct uprobe *uprobe,
+                                         uint32_t signature, va_list args)
 {
-    struct upipe_ts_pesd *upipe_ts_pesd = malloc(sizeof(struct upipe_ts_pesd));
-    if (unlikely(upipe_ts_pesd == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_ts_pesd_alloc_flow(mgr, uprobe, signature,
+                                                   args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_ts_pesd_to_upipe(upipe_ts_pesd);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     upipe_ts_pesd_init_sync(upipe);
     upipe_ts_pesd_init_output(upipe);
     upipe_ts_pesd->next_uref = NULL;
     upipe_throw_ready(upipe);
+
+    const char *def;
+    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
+                 !uref_flow_set_def_va(flow_def, "block.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF))))
+        upipe_throw_aerror(upipe);
+    upipe_ts_pesd_store_flow_def(upipe, flow_def);
     return upipe;
 }
 
@@ -308,38 +322,8 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
 static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
-    struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_ts_pesd_flush(upipe);
-
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            upipe_ts_pesd_store_flow_def(upipe, NULL);
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        uref_flow_set_def_va(uref, "block.%s", def + strlen(EXPECTED_FLOW_DEF));
-        upipe_ts_pesd_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_ts_pesd->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
+        upipe_ts_pesd_output(upipe, uref, upump);
         return;
     }
 
@@ -357,6 +341,10 @@ static bool upipe_ts_pesd_control(struct upipe *upipe,
                                   enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_pesd_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_pesd_get_output(upipe, p);

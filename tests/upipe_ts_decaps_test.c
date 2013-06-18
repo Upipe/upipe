@@ -80,6 +80,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_CLOCK_REF: {
             struct uref *uref = va_arg(args, struct uref *);
@@ -95,7 +96,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_ts_decaps */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe)
+                                   struct uprobe *uprobe, uint32_t signature,
+                                   va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -108,12 +110,6 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     size_t size;
     assert(uref_block_size(uref, &size));
     assert(size == payload_size);
@@ -166,21 +162,21 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, log);
+    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, NULL);
     assert(upipe_sink != NULL);
-
-    struct upipe_mgr *upipe_ts_decaps_mgr = upipe_ts_decaps_mgr_alloc();
-    assert(upipe_ts_decaps_mgr != NULL);
-    struct upipe *upipe_ts_decaps = upipe_alloc(upipe_ts_decaps_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts decaps"));
-    assert(upipe_ts_decaps != NULL);
-    assert(upipe_set_output(upipe_ts_decaps, upipe_sink));
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
-    upipe_input(upipe_ts_decaps, uref, NULL);
+
+    struct upipe_mgr *upipe_ts_decaps_mgr = upipe_ts_decaps_mgr_alloc();
+    assert(upipe_ts_decaps_mgr != NULL);
+    struct upipe *upipe_ts_decaps = upipe_flow_alloc(upipe_ts_decaps_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                   "ts decaps"), uref);
+    assert(upipe_ts_decaps != NULL);
+    assert(upipe_set_output(upipe_ts_decaps, upipe_sink));
+    uref_free(uref);
 
     uint8_t *buffer;
     int size;

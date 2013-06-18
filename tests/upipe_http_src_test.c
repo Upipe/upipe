@@ -75,8 +75,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_READ_END:
-        case UPROBE_NEED_INPUT:
+        case UPROBE_SOURCE_END:
             break;
     }
     return true;
@@ -119,12 +118,12 @@ int main(int argc, char *argv[])
     assert(log != NULL);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
-    struct upipe *upipe_null = upipe_alloc(upipe_null_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "null"));
+    struct upipe *upipe_null = upipe_flow_alloc(upipe_null_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "null"), NULL);
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
     assert(upipe_http_src_mgr != NULL);
-    struct upipe *upipe_http_src = upipe_alloc(upipe_http_src_mgr,
+    struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "http"));
     assert(upipe_http_src != NULL);
     assert(upipe_set_upump_mgr(upipe_http_src, upump_mgr));

@@ -56,27 +56,22 @@ enum uprobe_event {
     /** an allocation error occurred, data may be lost (void); from now on the
      * behaviour of the pipe is undefined, except @ref upipe_release */
     UPROBE_AERROR,
-    /** the last flow definition sent is not compatible with this pipe
-     * (struct uref *) */
-    UPROBE_FLOW_DEF_ERROR,
     /** a upump error occurred, a watcher couldn't be created, the
      * application will not run properly (void); from now on the behaviour of
      * the pipe is undefined, except @ref upipe_release */
     UPROBE_UPUMP_ERROR,
-    /** unable to read from an input because the end of file was reached, or
-     * the component disappeared, or because of an error (const char *) */
-    UPROBE_READ_END,
+    /** unable to read from a source because the end of file was reached, or
+     * the component disappeared, or because of an error (void) */
+    UPROBE_SOURCE_END,
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
-    UPROBE_WRITE_END,
+    UPROBE_SINK_END,
     /** a uref manager is necessary to operate (void) */
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (void) */
     UPROBE_NEED_UPUMP_MGR,
-    /** an input pipe is necessary to operate (void) */
-    UPROBE_NEED_INPUT,
-    /** an output pipe is necessary to operate (struct uref *) */
-    UPROBE_NEED_OUTPUT,
+    /** a new flow definition is available on the output (struct uref *) */
+    UPROBE_NEW_FLOW_DEF,
     /** a ubuf manager is necessary to operate (struct uref *) */
     UPROBE_NEED_UBUF_MGR,
     /** a split pipe declares a new possible output flow (uint64_t,
@@ -311,7 +306,7 @@ static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
     } while (0)
 
 /** @This implements the common parts of a plumber probe (catching the
- * need_output event).
+ * new_flow_def event).
  *
  * @param uprobe pointer to the probe
  * @param upipe pointer to the pipe
@@ -326,7 +321,7 @@ static inline bool uprobe_plumber(struct uprobe *uprobe, struct upipe *upipe,
                                   enum uprobe_event event, va_list args,
                                   struct uref **flow_def_p, const char **def_p)
 {
-    if (event != UPROBE_NEED_OUTPUT)
+    if (event != UPROBE_NEW_FLOW_DEF)
         return false;
 
     va_list args_copy;

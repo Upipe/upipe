@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 
 #define UPIPE_FSINK_SIGNATURE UBASE_FOURCC('f','s','n','k')
+#define UPIPE_FSINK_EXPECTED_FLOW_DEF "block."
 
 /** @This defines file opening modes. */
 enum upipe_fsink_mode {

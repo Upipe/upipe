@@ -55,6 +55,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         default:
             assert(0);
@@ -88,8 +89,9 @@ int main(int argc, char **argv)
     /* build null pipe */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr);
-    struct upipe *nullpipe = upipe_alloc(upipe_null_mgr,
-                       uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"));
+    struct upipe *nullpipe = upipe_flow_alloc(upipe_null_mgr,
+                   uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"),
+                   NULL);
     assert(nullpipe);
 
     /* Now send uref */

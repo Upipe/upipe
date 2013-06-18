@@ -271,14 +271,13 @@ uprobe_selprog_set_internal_retry:
                 upipe_release(void_pipe);
                 goto uprobe_selprog_set_internal_retry;
             } else if (!was_selected && output->selected) {
-                output->void_pipe = upipe_alloc_sub(output->split_pipe,
+                output->void_pipe = upipe_flow_alloc_sub(output->split_pipe,
                     uprobe_pfx_adhoc_alloc_va(uprobe, UPROBE_LOG_DEBUG,
                                               "program %"PRIu64,
-                                              output->program_number));
-                if (output->void_pipe == NULL ||
-                    !upipe_set_flow_def(output->void_pipe, output->flow_def)) {
+                                              output->program_number),
+                    output->flow_def);
+                if (unlikely(output->void_pipe == NULL))
                     uprobe_throw_aerror(uprobe, NULL);
-                }
             }
         }
     }
@@ -440,14 +439,13 @@ static bool uprobe_selprog_add_flow(struct uprobe *uprobe, struct upipe *upipe,
         }
 
         if (output->void_pipe == NULL) {
-            output->void_pipe = upipe_alloc_sub(upipe,
+            output->void_pipe = upipe_flow_alloc_sub(upipe,
                 uprobe_pfx_adhoc_alloc_va(uprobe, UPROBE_LOG_DEBUG,
                                           "program %"PRIu64,
-                                          program_number));
-            if (output->void_pipe == NULL ||
-                !upipe_set_flow_def(output->void_pipe, output->flow_def)) {
+                                          program_number),
+                output->flow_def);
+            if (unlikely(output->void_pipe == NULL))
                 uprobe_throw_aerror(uprobe, upipe);
-            }
         }
     } else if (was_selected) {
         upipe_release(output->void_pipe);

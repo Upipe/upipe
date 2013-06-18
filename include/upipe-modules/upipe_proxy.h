@@ -24,40 +24,35 @@
  */
 
 /** @file
- * @short unit tests for uprobe prefix implementation
+ * @short Upipe module - acts as a proxy to another module
+ * This is particularly helpful for split pipe, where you would need a proxy
+ * as an input pipe, to detect end of streams.
  */
 
-#undef NDEBUG
+#ifndef _UPIPE_MODULES_UPIPE_PROXY_H_
+/** @hidden */
+#define _UPIPE_MODULES_UPIPE_PROXY_H_
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
+#include <upipe/upipe.h>
 
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
+#define UPIPE_PROXY_SIGNATURE UBASE_FOURCC('p','r','x','y')
 
-int main(int argc, char **argv)
-{
-    struct uprobe *uprobe2 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_DEBUG);
-    assert(uprobe2 != NULL);
+/** @This defines a function called when the proxy is released. */
+typedef void (*upipe_proxy_released)(struct upipe *);
 
-    struct uprobe *uprobe1 = uprobe_pfx_alloc(uprobe2, UPROBE_LOG_DEBUG, "pfx");
-    assert(uprobe1 != NULL);
+/** @This returns the management structure for proxy pipes. Please note that
+ * the refcount for super_mgr is not incremented, so super_mgr belongs to the
+ * callee.
+ *
+ * @return pointer to manager
+ */
+struct upipe_mgr *upipe_proxy_mgr_alloc(struct upipe_mgr *super_mgr,
+                                        upipe_proxy_released proxy_released);
 
-    uprobe_err(uprobe1, NULL, "This is an error");
-    uprobe_warn_va(uprobe1, NULL, "This is a %s warning with %d", "composite",
-                   0x42);
-    uprobe_notice(uprobe1, NULL, "This is a notice");
-    uprobe_dbg(uprobe1, NULL, "This is a debug");
-    uprobe_pfx_free(uprobe1);
+/** @This returns the superpipe manager.
+ *
+ * @return pointer to superpipe manager
+ */
+struct upipe_mgr *upipe_proxy_mgr_get_super_mgr(struct upipe_mgr *mgr);
 
-    uprobe1 = uprobe_pfx_alloc_va(uprobe2, UPROBE_LOG_ERROR, "pfx[%d]", 2);
-    assert(uprobe1 != NULL);
-    uprobe_err_va(uprobe1, NULL, "This is another error with %d", 0x43);
-    uprobe_warn(uprobe1, NULL, "This is a warning that you shouldn't see");
-    uprobe_pfx_free(uprobe1);
-
-    uprobe_stdio_free(uprobe2);
-    return 0;
-}
+#endif

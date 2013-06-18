@@ -39,6 +39,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_genaux.h>
@@ -73,6 +74,7 @@ struct upipe_genaux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe);
+UPIPE_HELPER_FLOW(upipe_genaux, NULL);
 UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
 
@@ -82,8 +84,8 @@ UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
  * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
+                               struct upump *upump)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     uint64_t systime = 0;
@@ -117,41 +119,6 @@ static void _upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     }
     uref_attach_ubuf(uref, dst);
     upipe_genaux_output(upipe, uref, upump);
-}
-
-/** @internal @This handles data.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
- */
-static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
-{
-    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    const char *def;
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        if (unlikely(!uref_flow_set_def(uref, "block.aux.")))
-            upipe_throw_aerror(upipe);
-        upipe_genaux_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_genaux->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
-    _upipe_genaux_input(upipe, uref, upump);
 }
 
 /** @This sets the get callback to fetch the u64 opaque with.
@@ -209,6 +176,10 @@ static bool upipe_genaux_control(struct upipe *upipe,
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_genaux_set_ubuf_mgr(upipe, ubuf_mgr);
         }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_genaux_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_genaux_get_output(upipe, p);
@@ -239,21 +210,29 @@ static bool upipe_genaux_control(struct upipe *upipe,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_genaux *upipe_genaux = malloc(sizeof(struct upipe_genaux));
-    if (unlikely(upipe_genaux == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_genaux_alloc_flow(mgr, uprobe, signature, args,
+                                                  &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_genaux_to_upipe(upipe_genaux);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
     upipe_genaux->getattr = uref_clock_get_systime;
-
     upipe_throw_ready(upipe);
+
+    if (unlikely(!uref_flow_set_def(flow_def, "block.aux.")))
+        upipe_throw_aerror(upipe);
+    upipe_genaux_store_flow_def(upipe, flow_def);
     return upipe;
 }
 

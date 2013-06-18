@@ -73,7 +73,8 @@ static uint64_t duration = 0;
 struct upipe *output = NULL;
 
 /** helper phony pipe to count pictures */
-static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                 uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -85,12 +86,6 @@ static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 static void count_input(struct upipe *upipe, struct uref *uref,
                         struct upump *upump)
 {
-    const char *def;
-    if (uref_flow_get_def(uref, &def) && uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     uint64_t uref_duration;
     if (uref_clock_get_duration(uref, &uref_duration))
         duration += uref_duration;
@@ -119,7 +114,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_READ_END:
+        case UPROBE_SOURCE_END:
             return true;
 
         case UPROBE_SPLIT_ADD_FLOW: {
@@ -127,12 +122,12 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
 
             assert(output == NULL);
-            output = upipe_alloc_sub(upipe,
-                     uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "video"));
+            output = upipe_flow_alloc_sub(upipe,
+                     uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "video"),
+                     flow_def);
             assert(output != NULL);
-            upipe_set_flow_def(output, flow_def);
 
-            struct upipe *sink = upipe_alloc(&count_mgr, NULL);
+            struct upipe *sink = upipe_flow_alloc(&count_mgr, NULL, flow_def);
             assert(sink != NULL);
             upipe_set_output(output, sink);
             upipe_release(sink);
@@ -186,7 +181,7 @@ int main(int argc, char **argv)
 
     /* pipes */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
-    struct upipe *upipe_src = upipe_alloc(upipe_fsrc_mgr,
+    struct upipe *upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
                    uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
     upipe_set_ubuf_mgr(upipe_src, block_mgr);
@@ -196,6 +191,9 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    struct uref *flow_def;
+    upipe_get_flow_def(upipe_src, &flow_def);
+
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
     upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr, upipe_mp2vf_mgr);
@@ -203,10 +201,12 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
     upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
-    struct upipe *ts_demux = upipe_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_split, UPROBE_LOG_DEBUG, "ts demux"));
+    struct upipe *ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_split, UPROBE_LOG_DEBUG, "ts demux"),
+            flow_def);
     upipe_set_output(upipe_src, ts_demux);
     upipe_release(ts_demux);
+    upipe_mgr_release(upipe_ts_demux_mgr);
 
     /* main loop */
     ev_loop(loop, 0);

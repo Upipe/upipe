@@ -34,6 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_probe_uref.h>
 
@@ -63,6 +64,7 @@ struct upipe_probe_uref {
 };
 
 UPIPE_HELPER_UPIPE(upipe_probe_uref, upipe);
+UPIPE_HELPER_FLOW(upipe_probe_uref, NULL)
 UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
 
 /** @internal @This handles urefs (data & flows).
@@ -72,29 +74,8 @@ UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
  * @param upump pump that generated the buffer
  */
 static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
-                                      struct upump *upump)
+                                   struct upump *upump)
 {
-    struct upipe_probe_uref *upipe_probe_uref = upipe_probe_uref_from_upipe(upipe);
-    const char *def;
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        upipe_probe_uref_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_probe_uref->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref);
     upipe_probe_uref_output(upipe, uref, upump);
 }
@@ -111,6 +92,10 @@ static bool upipe_probe_uref_control(struct upipe *upipe, enum upipe_command com
                                va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_probe_uref_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_probe_uref_get_output(upipe, p);
@@ -129,16 +114,22 @@ static bool upipe_probe_uref_control(struct upipe *upipe, enum upipe_command com
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_probe_uref_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *upipe_probe_uref_alloc(struct upipe_mgr *mgr,
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
 {
-    struct upipe_probe_uref *upipe_probe_uref = malloc(sizeof(struct upipe_probe_uref));
-    if (unlikely(upipe_probe_uref == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_probe_uref_alloc_flow(mgr, uprobe, signature,
+                                                      args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_probe_uref_to_upipe(upipe_probe_uref);
-    upipe_init(upipe, mgr, uprobe);
+
     upipe_probe_uref_init_output(upipe);
+    upipe_probe_uref_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }

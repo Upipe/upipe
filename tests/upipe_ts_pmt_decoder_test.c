@@ -170,19 +170,20 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe_mgr *upipe_ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
-    assert(upipe_ts_pmtd_mgr != NULL);
-    struct upipe *upipe_ts_pmtd = upipe_alloc(upipe_ts_pmtd_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts pmtd"));
-    assert(upipe_ts_pmtd != NULL);
-
     struct uref *uref;
-    uint8_t *buffer, *pmt_es, *desc;
-    int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtspmt.");
     assert(uref != NULL);
-    upipe_input(upipe_ts_pmtd, uref, NULL);
 
+    struct upipe_mgr *upipe_ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
+    assert(upipe_ts_pmtd_mgr != NULL);
+    struct upipe *upipe_ts_pmtd = upipe_flow_alloc(upipe_ts_pmtd_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts pmtd"),
+            uref);
+    assert(upipe_ts_pmtd != NULL);
+    uref_free(uref);
+
+    uint8_t *buffer, *pmt_es, *desc;
+    int size;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);

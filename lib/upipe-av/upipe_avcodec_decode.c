@@ -41,7 +41,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -75,6 +75,8 @@ struct upipe_avcodec_open_params {
 
 /** upipe_avcdec structure with avcdec parameters */ 
 struct upipe_avcdec {
+    /** input flow */
+    struct uref *input_flow;
     /** output flow */
     struct uref *output_flow;
     /** true if the flow definition has already been sent */
@@ -84,8 +86,6 @@ struct upipe_avcdec {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** upump mgr */
     struct upump_mgr *upump_mgr;
 
@@ -123,7 +123,7 @@ struct upipe_avcdec {
 
 
 UPIPE_HELPER_UPIPE(upipe_avcdec, upipe);
-UPIPE_HELPER_UREF_MGR(upipe_avcdec, uref_mgr);
+UPIPE_HELPER_FLOW(upipe_avcdec, EXPECTED_FLOW)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr, upump_av_deal)
@@ -379,10 +379,41 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
             context->lowres = upipe_avcdec->lowres;
             context->skip_loop_filter = AVDISCARD_ALL;
 
+
+            if (!upipe_avcdec->output_flow) {
+                struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
+                uref_flow_set_def(outflow, "pic.");
+                uref_pic_flow_set_macropixel(outflow, 1);
+                uref_pic_flow_set_planes(outflow, 0);
+                upipe_avcdec_store_flow_def(upipe, outflow);
+            }
+
             break;
         }
         case AVMEDIA_TYPE_AUDIO: {
             context->get_buffer = upipe_avcdec_get_buffer_audio;
+            /* TODO: set attributes/need a real ubuf_audio structure (?) */
+            if (!upipe_avcdec->output_flow) {
+                #if 0
+                struct uref *outflow = uref_sound_flow_alloc_def(upipe_avcdec->uref_mgr,
+                            context->channels,
+                            av_get_bytes_per_sample(context->sample_fmt));
+                #else
+
+                struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
+                uref_flow_set_def(outflow, "sound.");
+
+                #endif
+#if 0
+                uref_sound_flow_set_channels(outflow, context->channels);
+                uref_sound_flow_set_sample_size(outflow,
+                                         av_get_bytes_per_sample(context->sample_fmt));
+                uref_sound_flow_set_rate(outflow, context->sample_rate);
+#endif
+
+                upipe_avcdec_store_flow_def(upipe, outflow);
+            }
+
             break;
         }
         default: {
@@ -648,11 +679,6 @@ static void upipe_avcdec_output_frame(struct upipe *upipe, AVFrame *frame,
         uref_pic_set_aspect(uref, aspect);
     }
 
-    if (!upipe_avcdec->output_flow) {
-        struct uref *outflow = uref_pic_flow_alloc_def(upipe_avcdec->uref_mgr, 1);
-        upipe_avcdec_store_flow_def(upipe, outflow);
-    }
-
     /* index rap attribute */
     upipe_avcdec_set_index_rap(upipe, uref);
 
@@ -699,26 +725,6 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
     uref_block_size(uref, &size);
     if (unlikely(size != avbufsize)) {
         uref_block_resize(uref, 0, avbufsize);
-    }
-
-    /* TODO: set attributes/need a real ubuf_audio structure (?) */
-    if (!upipe_avcdec->output_flow) {
-        #if 0
-        struct uref *outflow = uref_sound_flow_alloc_def(upipe_avcdec->uref_mgr,
-                    context->channels,
-                    av_get_bytes_per_sample(context->sample_fmt));
-        #else
-
-        struct uref *outflow = uref_block_flow_alloc_def(upipe_avcdec->uref_mgr,
-                                                        "sound.");
-
-        #endif
-        uref_sound_flow_set_channels(outflow, context->channels);
-        uref_sound_flow_set_sample_size(outflow,
-                                 av_get_bytes_per_sample(context->sample_fmt));
-        uref_sound_flow_set_rate(outflow, context->sample_rate);
-
-        upipe_avcdec_store_flow_def(upipe, outflow);
     }
 
     /* samples in uref */
@@ -887,40 +893,8 @@ static void upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
 static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (upipe_avcdec->uref_mgr == NULL) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(upipe_avcdec->uref_mgr == NULL)) {
-            uref_free(uref);
-            return;
-        }
-    }
-
-    const char *def = NULL;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            _upipe_avcdec_set_codec(upipe, NULL, NULL, 0);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        def += strlen(EXPECTED_FLOW);
-        _upipe_avcdec_set_codec(upipe, def, NULL, 0);
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
     if (unlikely(!uref->ubuf)) {
-        upipe_warn(upipe, "uref has no ubuf, dropping");
-        uref_free(uref);
+        upipe_avcdec_output(upipe, uref, upump);
         return;
     }
 
@@ -1005,14 +979,6 @@ static bool upipe_avcdec_control(struct upipe *upipe, enum upipe_command command
 {
     switch (command) {
         /* generic linear stuff */
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_avcdec_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_avcdec_set_uref_mgr(upipe, uref_mgr);
-        }
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_avcdec_get_ubuf_mgr(upipe, p);
@@ -1020,6 +986,10 @@ static bool upipe_avcdec_control(struct upipe *upipe, enum upipe_command command
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_avcdec_set_ubuf_mgr(upipe, ubuf_mgr);
+        }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_avcdec_get_flow_def(upipe, p);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -1085,6 +1055,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    uref_free(upipe_avcdec->input_flow);
     if (upipe_avcdec->frame) {
         av_free(upipe_avcdec->frame);
     }
@@ -1100,7 +1071,6 @@ static void upipe_avcdec_free(struct upipe *upipe)
     upipe_avcdec_abort_av_deal(upipe);
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
-    upipe_avcdec_clean_uref_mgr(upipe);
     upipe_avcdec_clean_upump_mgr(upipe);
 
     upipe_clean(upipe);
@@ -1111,21 +1081,25 @@ static void upipe_avcdec_free(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_avcdec *upipe_avcdec = malloc(sizeof(struct upipe_avcdec));
-    if (unlikely(upipe_avcdec == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_avcdec_alloc_flow(mgr, uprobe, signature,
+                                                  args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_avcdec_to_upipe(upipe_avcdec);
-    upipe_init(upipe, mgr, uprobe);
 
-    upipe_avcdec_init_uref_mgr(upipe);
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec_init_ubuf_mgr(upipe);
     upipe_avcdec_init_upump_mgr(upipe);
     upipe_avcdec_init_output(upipe);
+    upipe_avcdec->input_flow = flow_def;
     upipe_avcdec->context = NULL;
     upipe_avcdec->upump_av_deal = NULL;
     upipe_avcdec->saved_uref = NULL;
@@ -1138,6 +1112,12 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->prev_rap = 0;
 
     upipe_throw_ready(upipe);
+
+    const char *def = NULL;
+    if (likely(uref_flow_get_def(flow_def, &def)))
+        def += strlen(EXPECTED_FLOW);
+    _upipe_avcdec_set_codec(upipe, def, NULL, 0);
+
     return upipe;
 }
 

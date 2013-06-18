@@ -110,7 +110,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_READ_END:
+        case UPROBE_SOURCE_END:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -127,7 +128,7 @@ struct udpsrc_test {
 UPIPE_HELPER_UPIPE(udpsrc_test, upipe);
 
 /** helper phony pipe to test upipe_udpsrc */
-static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, uint32_t signature, va_list args)
 {
     struct udpsrc_test *udpsrc_test = malloc(sizeof(struct udpsrc_test));
     assert(udpsrc_test != NULL);
@@ -142,21 +143,10 @@ static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *upr
 static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-	const char *def;
 	uint8_t buf[BUF_SIZE], str[BUF_SIZE];
 	const uint8_t *rbuf;
 	struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
     assert(uref != NULL);
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        assert(def);
-        if (udpsrc_test->flow) {
-            uref_free(udpsrc_test->flow);
-        }
-        udpsrc_test->flow = uref;
-        upipe_dbg_va(upipe, "flow def: %s", def);
-        return;
-    }
 
     if ((rbuf = uref_block_peek(uref, 0, -1, buf))) {
         upipe_dbg_va(upipe, "Received string: %s", rbuf);
@@ -269,14 +259,14 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *udpsrc_test = upipe_alloc(&udpsrc_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"));
+    struct upipe *udpsrc_test = upipe_flow_alloc(&udpsrc_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"), NULL);
 
 
 	/* udpsrc */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
-    upipe_udpsrc = upipe_alloc(upipe_udpsrc_mgr,
+    upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp source"));
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
@@ -326,14 +316,15 @@ int main(int argc, char *argv[])
 	upump_free(write_pump);
 
     /* now test upipe_udp_sink */
+    struct uref *flow_def = uref_block_flow_alloc_def(uref_mgr, "bar");
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr != NULL);
-    upipe_udpsink = upipe_alloc(upipe_udpsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp sink"));
+    upipe_udpsink = upipe_flow_alloc(upipe_udpsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp sink"),
+            flow_def);
     assert(upipe_udpsink != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
-    upipe_input(upipe_udpsink,
-        uref_block_flow_alloc_def(uref_mgr, "bar"), NULL);
+    uref_free(flow_def);
 
     /* reset source uri */
 	for (i=0; i < 10; i++) {

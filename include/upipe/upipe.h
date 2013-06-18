@@ -38,6 +38,9 @@
 #include <stdarg.h>
 #include <assert.h>
 
+#define UPIPE_VOID_SIGNATURE UBASE_FOURCC('v','o','i','d')
+#define UPIPE_FLOW_SIGNATURE UBASE_FOURCC('f','l','o','w')
+
 /** @hidden */
 struct uref;
 /** @hidden */
@@ -130,7 +133,8 @@ struct upipe_mgr {
     unsigned int signature;
 
     /** function to create a pipe */
-    struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *);
+    struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *,
+                                 uint32_t, va_list);
     /** function to send a uref to an input - the uref then belongs to the
      * callee */
     void (*upipe_input)(struct upipe *, struct uref *, struct upump *);
@@ -164,17 +168,20 @@ static inline void upipe_mgr_release(struct upipe_mgr *mgr)
         mgr->upipe_mgr_free(mgr);
 }
 
-/** @This allocates and initializes a pipe.
+/** @internal @This allocates and initializes a pipe.
  *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to allocated pipe, or NULL in case of failure
  */
-static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+static inline struct upipe *upipe_alloc_va(struct upipe_mgr *mgr,
+                                           struct uprobe *uprobe,
+                                           uint32_t signature, va_list args)
 {
-    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe);
+    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         /* notify ad-hoc probes that something went wrong so they can
          * deallocate */
@@ -182,21 +189,88 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @This allocates and initializes a subpipe of a pipe.
+/** @internal @This allocates and initializes a pipe with a variable list of
+ * arguments.
  *
- * @param upipe pointer to the pipe
+ * @param mgr management structure for this pipe type
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param signature signature of the pipe allocator, followed by optional
+ * arguments
+ * @return pointer to allocated pipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, ...)
+{
+    va_list args;
+    va_start(args, signature);
+    struct upipe *upipe = upipe_alloc_va(mgr, uprobe, signature, args);
+    va_end(args);
+    return upipe;
+}
+
+/** @This allocates and initializes a pipe which is designed to accept no
+ * argument.
+ *
+ * @param mgr management structure for this pipe type
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @return pointer to allocated pipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_void_alloc(struct upipe_mgr *mgr,
+                                             struct uprobe *uprobe)
+{
+    return upipe_alloc(mgr, uprobe, UPIPE_VOID_SIGNATURE);
+}
+
+/** @This allocates and initializes a pipe which is designed to accept a
+ * flow definition.
+ *
+ * @param mgr management structure for this pipe type
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param flow_def flow definition of the input
+ * @return pointer to allocated pipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_flow_alloc(struct upipe_mgr *mgr,
+                                             struct uprobe *uprobe,
+                                             struct uref *flow_def)
+{
+    return upipe_alloc(mgr, uprobe, UPIPE_FLOW_SIGNATURE, flow_def);
+}
+
+/** @This allocates and initializes a subpipe which is designed to accept no
+ * argument.
+ *
+ * @param upipe structure of the super-pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
-static inline struct upipe *upipe_alloc_sub(struct upipe *upipe,
-                                            struct uprobe *uprobe)
+static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
+                                                 struct uprobe *uprobe)
 {
-    return upipe_alloc(upipe->sub_mgr, uprobe);
+    return upipe_void_alloc(upipe->sub_mgr, uprobe);
 }
 
-/** @This initializes the public members of a pipe that is neither join nor
- * split.
+/** @This allocates and initializes a subpipe which is designed to accept a
+ * flow definition.
+ *
+ * @param upipe structure of the super-pipe
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param flow_def flow definition of the input
+ * @return pointer to allocated subpipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
+                                                 struct uprobe *uprobe,
+                                                 struct uref *flow_def)
+{
+    return upipe_flow_alloc(upipe->sub_mgr, uprobe, flow_def);
+}
+
+/** @This initializes the public members of a pipe.
  *
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
@@ -211,25 +285,6 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
     upipe->sub_mgr = NULL;
-}
-
-/** @This initializes the public members of a pipe that will have subpipes.
- *
- * @param upipe description structure of the pipe
- * @param mgr management structure for this pipe type
- * @param uprobe structure used to raise events
- * @param sub_mgr manager used to allocate subpipes
- */
-static inline void upipe_sub_init(struct upipe *upipe, struct upipe_mgr *mgr,
-                                  struct uprobe *uprobe,
-                                  struct upipe_mgr *sub_mgr)
-{
-    assert(upipe != NULL);
-    urefcount_init(&upipe->refcount);
-    upipe->uprobe = uprobe;
-    upipe->mgr = mgr;
-    upipe_mgr_use(mgr);
-    upipe->sub_mgr = sub_mgr;
 }
 
 /** @This increments the reference count of a upipe.
@@ -276,6 +331,29 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
  * caller.
  *
  * @param upipe description structure of the pipe
+ * @param command control command to send
+ * @param optional read or write parameters
+ * @return false in case of error
+ */
+static inline bool upipe_control_va(struct upipe *upipe,
+                                    enum upipe_command command, va_list args)
+{
+    if (upipe->mgr->upipe_control == NULL)
+        return false;
+
+    bool ret;
+    upipe_use(upipe);
+    ret = upipe->mgr->upipe_control(upipe, command, args);
+    upipe_release(upipe);
+    return ret;
+}
+
+/** @internal @This sends a control command to the pipe. Note that all control
+ * commands must be executed from the same thread - no reentrancy or locking
+ * is required from the pipe. Also note that all arguments are owned by the
+ * caller.
+ *
+ * @param upipe description structure of the pipe
  * @param command control command to send, followed by optional read or write
  * parameters
  * @return false in case of error
@@ -283,15 +361,10 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
 static inline bool upipe_control(struct upipe *upipe,
                                  enum upipe_command command, ...)
 {
-    if (upipe->mgr->upipe_control == NULL)
-        return false;
-
     bool ret;
     va_list args;
     va_start(args, command);
-    upipe_use(upipe);
-    ret = upipe->mgr->upipe_control(upipe, command, args);
-    upipe_release(upipe);
+    ret = upipe_control_va(upipe, command, args);
     va_end(args);
     return ret;
 }
@@ -510,18 +583,6 @@ static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
  */
 #define upipe_throw_aerror(upipe) uprobe_throw_aerror((upipe)->uprobe, upipe)
 
-/** @This throws a flow definition error event. This event is thrown whenever
- * a flow definition packet is sent to @ref upipe_input, that is not
- * compatible with the pipe's type.
- *
- * @param upipe description structure of the pipe
- */
-static inline void upipe_throw_flow_def_error(struct upipe *upipe,
-                                              struct uref *uref)
-{
-    upipe_throw(upipe, UPROBE_FLOW_DEF_ERROR, uref);
-}
-
 /** @This throws a upump error event. This event is thrown whenever a pipe
  * is unable to allocate a watcher. After this event, the behaviour of a
  * pipe is undefined, except for calls to @ref upipe_release.
@@ -533,29 +594,25 @@ static inline void upipe_throw_upump_error(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_UPUMP_ERROR);
 }
 
-/** @This throws a read end event. This event is thrown when a pipe is unable
+/** @This throws a source end event. This event is thrown when a pipe is unable
  * to read from an input because the end of file was reached, or because an
  * error occurred.
  *
  * @param upipe description structure of the pipe
- * @param location string describing the location of the input (like file path)
  */
-static inline void upipe_throw_read_end(struct upipe *upipe,
-                                        const char *location)
+static inline void upipe_throw_source_end(struct upipe *upipe)
 {
-    upipe_throw(upipe, UPROBE_READ_END, location);
+    upipe_throw(upipe, UPROBE_SOURCE_END);
 }
 
-/** @This throws a write end event. This event is thrown when a pipe is unable
+/** @This throws a sink end event. This event is thrown when a pipe is unable
  * to write to an output because the disk is full, or another error occurred.
  *
  * @param upipe description structure of the pipe
- * @param location string describing the location of the output (like file path)
  */
-static inline void upipe_throw_write_end(struct upipe *upipe,
-                                         const char *location)
+static inline void upipe_throw_sink_end(struct upipe *upipe)
 {
-    upipe_throw(upipe, UPROBE_WRITE_END, location);
+    upipe_throw(upipe, UPROBE_SINK_END);
 }
 
 /** @This throws an event asking for a uref manager.
@@ -576,24 +633,15 @@ static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
 }
 
-/** @This throws an event asking for an input.
- *
- * @param upipe description structure of the pipe
- */
-static inline void upipe_throw_need_input(struct upipe *upipe)
-{
-    upipe_throw(upipe, UPROBE_NEED_INPUT);
-}
-
-/** @This throws an event asking for an output.
+/** @This throws an event declaring a new flow definition on the output.
  *
  * @param upipe description structure of the pipe
  * @param flow_def definition for this flow
  */
-static inline void upipe_throw_need_output(struct upipe *upipe,
-                                           struct uref *flow_def)
+static inline void upipe_throw_new_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
 {
-    upipe_throw(upipe, UPROBE_NEED_OUTPUT, flow_def);
+    upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
 }
 
 /** @This throws an event asking for a ubuf manager.

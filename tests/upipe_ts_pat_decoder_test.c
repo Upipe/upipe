@@ -149,18 +149,20 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe_mgr *upipe_ts_patd_mgr = upipe_ts_patd_mgr_alloc();
-    assert(upipe_ts_patd_mgr != NULL);
-    struct upipe *upipe_ts_patd = upipe_alloc(upipe_ts_patd_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts patd"));
-    assert(upipe_ts_patd != NULL);
-
     struct uref *uref;
-    uint8_t *buffer, *pat_program;
-    int size;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtspat.");
     assert(uref != NULL);
-    upipe_input(upipe_ts_patd, uref, NULL);
+
+    struct upipe_mgr *upipe_ts_patd_mgr = upipe_ts_patd_mgr_alloc();
+    assert(upipe_ts_patd_mgr != NULL);
+    struct upipe *upipe_ts_patd = upipe_flow_alloc(upipe_ts_patd_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts patd"),
+            uref);
+    assert(upipe_ts_patd != NULL);
+    uref_free(uref);
+
+    uint8_t *buffer, *pat_program;
+    int size;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);

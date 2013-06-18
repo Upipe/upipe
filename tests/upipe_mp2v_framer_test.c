@@ -78,13 +78,15 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
 }
 
 /** helper phony pipe to test upipe_mp2vf */
-static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -181,22 +183,24 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&test_mgr, log);
+    struct uref *uref;
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.");
+    assert(uref != NULL);
+
+    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
     assert(upipe_mp2vf_mgr != NULL);
-    struct upipe *upipe_mp2vf = upipe_alloc(upipe_mp2vf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mp2vf"));
+    struct upipe *upipe_mp2vf = upipe_flow_alloc(upipe_mp2vf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mp2vf"),
+            uref);
     assert(upipe_mp2vf != NULL);
     assert(upipe_set_output(upipe_mp2vf, upipe_sink));
+    uref_free(uref);
 
-    struct uref *uref;
     uint8_t *buffer;
     int size;
-    uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.");
-    assert(uref != NULL);
-    upipe_input(upipe_mp2vf, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 +
             MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +

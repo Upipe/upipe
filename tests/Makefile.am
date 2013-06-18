@@ -35,12 +35,12 @@ check_PROGRAMS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	uclock_std_test \
+	upipe_dup_test \
 	upipe_genaux_test \
 	upipe_null_test \
-	upipe_skip_test \
-	upipe_dup_test \
-	upipe_setattr_test \
 	upipe_setrap_test \
+	upipe_skip_test \
+	upipe_setattr_test \
 	upipe_match_attr_test \
 	upipe_probe_uref_test \
 	upipe_multicat_probe_test \
@@ -61,12 +61,12 @@ TESTS = \
 	uprobe_dejitter_test \
 	uprobe_uref_mgr_test \
 	uclock_std_test \
+	upipe_dup_test \
 	upipe_genaux_test \
 	upipe_null_test \
-	upipe_skip_test \
-	upipe_dup_test \
-	upipe_setattr_test \
 	upipe_setrap_test \
+	upipe_skip_test \
+	upipe_setattr_test \
 	upipe_match_attr_test \
 	upipe_probe_uref_test \
 	upipe_multicat_probe_test \
@@ -100,8 +100,8 @@ check_PROGRAMS += \
 	upipe_avformat_test \
 	upipe_avcodec_decode_test \
 	upipe_avcodec_test
-TESTS += \
-    upipe_avcodec_test
+#TESTS += \
+#	upipe_avcodec_test
 endif
 
 if HAVE_GLX
@@ -112,9 +112,9 @@ endif
 
 if HAVE_SWSCALE
 check_PROGRAMS += \
-    upipe_sws_test
+	upipe_sws_test
 TESTS += \
-    upipe_sws_test
+	upipe_sws_test
 endif
 
 if HAVE_BITSTREAM
@@ -132,7 +132,7 @@ check_PROGRAMS += \
 	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
 	upipe_mp2v_framer_test \
-    upipe_rtp_prepend_test
+	upipe_rtp_prepend_test
 TESTS += \
 	uprobe_ts_log_test.sh \
 	upipe_ts_sync_test \
@@ -147,12 +147,12 @@ TESTS += \
 	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
 	upipe_mp2v_framer_test \
-    upipe_rtp_prepend_test
+	upipe_rtp_prepend_test
 endif
 
 if HAVE_X264
 check_PROGRAMS += upipe_x264_test
-TESTS += upipe_x264_test
+#TESTS += upipe_x264_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

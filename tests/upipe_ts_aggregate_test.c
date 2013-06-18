@@ -77,7 +77,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEED_INPUT:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -85,7 +85,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_ts_aggregate */
 static struct upipe *aggregate_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe)
+                                          struct uprobe *uprobe,
+                                          uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -98,19 +99,8 @@ static void aggregate_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
-    {
-        size_t size;
-        assert(uref_block_size(uref, &size));
-    }
-
     const uint8_t *buffer;
-    size_t size = 0 ;
+    size_t size = 0;
     int pos = 0, len = -1;
     assert(uref_block_size(uref, &size));
     upipe_dbg_va(upipe, "received packet of size %zu", size);
@@ -167,24 +157,25 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&aggregate_test_mgr, log);
+    /* flow def */
+    struct uref *uref;
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
+    assert(uref != NULL);
+
+    struct upipe *upipe_sink = upipe_flow_alloc(&aggregate_test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_ts_aggregate_mgr = upipe_ts_aggregate_mgr_alloc();
     assert(upipe_ts_aggregate_mgr != NULL);
-    struct upipe *upipe_ts_aggregate = upipe_alloc(upipe_ts_aggregate_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "aggregate"));
+    struct upipe *upipe_ts_aggregate = upipe_flow_alloc(upipe_ts_aggregate_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "aggregate"),
+            uref);
     assert(upipe_ts_aggregate != NULL);
     assert(upipe_set_output(upipe_ts_aggregate, upipe_sink));
+    uref_free(uref);
 
-    struct uref *uref;
     uint8_t *buffer;
     int size, i;
-
-    /* flow def */
-    uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
-    assert(uref != NULL);
-    upipe_input(upipe_ts_aggregate, uref, NULL);
 
     /* valid TS packets */
     nb_packets = (PACKETS_NUM + TS_PER_PACKET - 1) / TS_PER_PACKET;
@@ -198,15 +189,13 @@ int main(int argc, char *argv[])
         upipe_input(upipe_ts_aggregate, uref, NULL);
     }
 
-    /* end flow */
-    uref = uref_alloc(uref_mgr);
-    uref_flow_set_end(uref);
-    upipe_input(upipe_ts_aggregate, uref, NULL);
+    /* flush */
+    upipe_release(upipe_ts_aggregate);
+
     printf("nb_packets: %u\n", nb_packets);
     assert(!nb_packets);
 
     /* release everything */
-    upipe_release(upipe_ts_aggregate);
     upipe_mgr_release(upipe_ts_aggregate_mgr); // nop
 
     aggregate_test_free(upipe_sink);

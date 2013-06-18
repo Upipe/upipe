@@ -39,6 +39,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -101,6 +102,7 @@ struct upipe_udpsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsrc, upipe)
+UPIPE_HELPER_VOID(upipe_udpsrc)
 UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr)
 
 UPIPE_HELPER_UBUF_MGR(upipe_udpsrc, ubuf_mgr)
@@ -114,16 +116,16 @@ UPIPE_HELPER_SOURCE_READ_SIZE(upipe_udpsrc, read_size)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_udpsrc *upipe_udpsrc = malloc(sizeof(struct upipe_udpsrc));
-    if (unlikely(upipe_udpsrc == NULL))
-        return NULL;
-    struct upipe *upipe = upipe_udpsrc_to_upipe(upipe_udpsrc);
-    upipe_init(upipe, mgr, uprobe);
+    struct upipe *upipe = upipe_udpsrc_alloc_void(mgr, uprobe, signature, args);
+    struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     upipe_udpsrc_init_uref_mgr(upipe);
     upipe_udpsrc_init_ubuf_mgr(upipe);
     upipe_udpsrc_init_output(upipe);
@@ -188,7 +190,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%m)", upipe_udpsrc->uri);
         upipe_udpsrc_set_upump(upipe, NULL);
-        upipe_throw_read_end(upipe, upipe_udpsrc->uri);
+        upipe_throw_source_end(upipe);
         return;
     }
     if (unlikely(ret == 0)) {
@@ -196,7 +198,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
         if (likely(upipe_udpsrc->uclock == NULL)) {
             upipe_notice_va(upipe, "end of udp socket %s", upipe_udpsrc->uri);
             upipe_udpsrc_set_upump(upipe, NULL);
-            upipe_throw_read_end(upipe, upipe_udpsrc->uri);
+            upipe_throw_source_end(upipe);
         }
         return;
     }
@@ -316,6 +318,10 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_udpsrc_set_ubuf_mgr(upipe, ubuf_mgr);
+        }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_udpsrc_get_flow_def(upipe, p);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);

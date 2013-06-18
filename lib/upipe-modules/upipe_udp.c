@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

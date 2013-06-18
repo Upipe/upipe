@@ -3,6 +3,7 @@ lib_LTLIBRARIES = libupipe_modules.la
 libupipe_modules_la_SOURCES = \
 	upipe_file_source.c \
 	upipe_file_sink.c \
+	upipe_proxy.c \
 	upipe_dup.c \
 	upipe_queue_source.c \
 	upipe_queue_sink.c \
@@ -11,8 +12,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_udp.c \
 	upipe_udp.h \
 	upipe_http_source.c \
-    http-parser/http_parser.c \
-    http-parser/http_parser.h \
+	http-parser/http_parser.c \
+	http-parser/http_parser.h \
 	upipe_genaux.c \
 	upipe_multicat_sink.c \
 	upipe_multicat_probe.c \
@@ -25,7 +26,7 @@ libupipe_modules_la_SOURCES = \
 
 if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \
-    upipe_rtp_prepend.c
+	upipe_rtp_prepend.c
 endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

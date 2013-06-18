@@ -36,6 +36,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -86,6 +87,7 @@ struct upipe_sws {
 };
 
 UPIPE_HELPER_UPIPE(upipe_sws, upipe);
+UPIPE_HELPER_FLOW(upipe_sws, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);
 
@@ -222,33 +224,10 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    const char *def;
-
-    /* flow def */
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if(unlikely(ubase_ncmp(def, "pic."))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        /* reset input format */
-        upipe_sws->srcfmt = NULL;
-        upipe_sws_store_flow_def(upipe, uref);
-        return;
-    }
-
-    /* flow end */
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
 
     /* empty uref */
-    if (unlikely(!uref->ubuf)) { 
-        upipe_warn(upipe, "dropping empty uref");
-        uref_free(uref);
+    if (unlikely(!uref->ubuf)) {
+        upipe_sws_output(upipe, uref, upump);
         return;
     }
 
@@ -414,17 +393,21 @@ static bool upipe_sws_control(struct upipe *upipe, enum upipe_command command,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe)
+                                     struct uprobe *uprobe,
+                                     uint32_t signature, va_list args)
 {
-    struct upipe_sws *upipe_sws = malloc(sizeof(struct upipe_sws));
-    if (unlikely(upipe_sws == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_sws_alloc_flow(mgr, uprobe, signature,
+                                               args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_sws_to_upipe(upipe_sws);
-    upipe_init(upipe, mgr, uprobe);
 
+    struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
 
@@ -432,6 +415,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws->srcfmt = NULL;
     upipe_sws->dstfmt = NULL;
     upipe_sws->dstsize = NULL;
+    upipe_sws_store_flow_def(upipe, flow_def);
 
     upipe_throw_ready(upipe);
     return upipe;

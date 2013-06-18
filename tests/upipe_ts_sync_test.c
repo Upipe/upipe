@@ -76,6 +76,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_SYNC_LOST:
             assert(expect_loss == nb_packets);
@@ -86,7 +87,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_ts_sync */
 static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe)
+                                   struct uprobe *uprobe, uint32_t signature,
+                                   va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -99,22 +101,14 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
-    {
-        size_t size;
-        assert(uref_block_size(uref, &size));
-        assert(size == TS_SIZE);
-    }
+    size_t size;
+    assert(uref_block_size(uref, &size));
+    assert(size == TS_SIZE);
 
     const uint8_t *buffer;
-    int size = 1;
-    assert(uref_block_read(uref, 0, &size, &buffer));
-    assert(size == 1);
+    int rsize = 1;
+    assert(uref_block_read(uref, 0, &rsize, &buffer));
+    assert(rsize == 1);
     assert(ts_validate(buffer));
     uref_block_unmap(uref, 0);
     uref_free(uref);
@@ -161,22 +155,23 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&ts_test_mgr, log);
+    struct uref *uref;
+    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
+    assert(uref != NULL);
+
+    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_ts_sync_mgr = upipe_ts_sync_mgr_alloc();
     assert(upipe_ts_sync_mgr != NULL);
-    struct upipe *upipe_ts_sync = upipe_alloc(upipe_ts_sync_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts sync"));
+    struct upipe *upipe_ts_sync = upipe_flow_alloc(upipe_ts_sync_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts sync"), uref);
     assert(upipe_ts_sync != NULL);
     assert(upipe_set_output(upipe_ts_sync, upipe_sink));
+    uref_free(uref);
 
-    struct uref *uref;
     uint8_t *buffer;
     int size;
-    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
-    assert(uref != NULL);
-    upipe_input(upipe_ts_sync, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2 * TS_SIZE);
     assert(uref != NULL);

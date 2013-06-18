@@ -99,7 +99,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_READ_END:
+        case UPROBE_SOURCE_END:
             break;
     }
     return true;
@@ -184,13 +184,18 @@ int main(int argc, char *argv[])
 	write(fd, filepath, MAXPATHLEN);
 	close(fd);
 
+	// send flow definition
+	flow = uref_block_flow_alloc_def(uref_mgr, "");
+    assert(flow);
+
 	// multicat_sink
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    multicat_sink = upipe_alloc(upipe_multicat_sink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat sink"));
+    multicat_sink = upipe_flow_alloc(upipe_multicat_sink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat sink"), flow);
     assert(multicat_sink != NULL);
+    uref_free(flow);
     assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
     assert(upipe_set_upump_mgr(multicat_sink, upump_mgr));
     if (rotate) {
@@ -200,14 +205,10 @@ int main(int argc, char *argv[])
 	}
 	assert(upipe_multicat_sink_set_mode(multicat_sink, UPIPE_FSINK_OVERWRITE));
     assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
-	// send flow definition
-	flow = uref_block_flow_alloc_def(uref_mgr, "");
-	upipe_input(multicat_sink, flow, NULL);
 
 	// idler - packet generator
 	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL, true);	
 	assert(idler);
-
 
 	// fire !
 	assert(upump_start(idler));

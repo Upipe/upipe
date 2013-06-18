@@ -85,7 +85,8 @@ UPIPE_HELPER_UPIPE(x264_test, upipe);
 
 /** helper phony pipe to test upipe_x264 */
 static struct upipe *x264_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                     struct uprobe *uprobe,
+                                     uint32_t signature, va_list args)
 {
     struct x264_test *x264_test = malloc(sizeof(struct x264_test));
     assert(x264_test != NULL);
@@ -182,6 +183,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -229,16 +231,23 @@ int main(int argc, char **argv)
     /* x264 manager */
     struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
 
+    /* send flow definition */
+    struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
+    assert(flow_def);
+
     /* x264 pipe */
-    struct upipe *x264 = upipe_alloc(upipe_x264_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264"));
+    struct upipe *x264 = upipe_flow_alloc(upipe_x264_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264"),
+                    flow_def);
+    uref_free(flow_def);
     assert(x264);
     assert(upipe_set_uref_mgr(x264, uref_mgr));
     assert(upipe_set_ubuf_mgr(x264, block_mgr));
 
     /* x264_test */
-    struct upipe *x264_test = upipe_alloc(&x264_test_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"));
+    struct upipe *x264_test = upipe_flow_alloc(&x264_test_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"),
+                    NULL);
     upipe_set_output(x264, x264_test);
     upipe_release(x264_test);
 
@@ -249,9 +258,6 @@ int main(int argc, char **argv)
     assert(upipe_x264_set_profile(x264, "high"));
     assert(upipe_x264_set_default(x264));
     
-    /* send flow definition */
-    upipe_input(x264, uref_pic_flow_alloc_def(uref_mgr, 1), NULL);
-
     /* encoding test */
     for (counter = 0; counter < LIMIT; counter ++) {
         printf("Sending pic %d\n", counter);

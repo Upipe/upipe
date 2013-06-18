@@ -76,15 +76,14 @@ int main(int argc, char **argv)
     upipe_throw_ready(&test_pipe);
     upipe_throw_aerror(&test_pipe);
     upipe_throw_upump_error(&test_pipe);
-    upipe_throw_read_end(&test_pipe, "pouet");
-    upipe_throw_write_end(&test_pipe, "pouet");
+    upipe_throw_source_end(&test_pipe);
+    upipe_throw_sink_end(&test_pipe);
     upipe_throw_need_uref_mgr(&test_pipe);
     upipe_throw_need_upump_mgr(&test_pipe);
 
     struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
-    upipe_throw_flow_def_error(&test_pipe, uref);
     upipe_throw_need_ubuf_mgr(&test_pipe, uref);
-    upipe_throw_need_output(&test_pipe, uref);
+    upipe_throw_new_flow_def(&test_pipe, uref);
     upipe_split_throw_add_flow(&test_pipe, 0x42, uref);
     uref_free(uref);
     upipe_split_throw_del_flow(&test_pipe, 0x42);

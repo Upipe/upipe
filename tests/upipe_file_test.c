@@ -82,8 +82,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_READ_END:
-        case UPROBE_NEED_INPUT:
+        case UPROBE_SOURCE_END:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -141,27 +141,14 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
 
-    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
-    assert(upipe_fsink_mgr != NULL);
-    struct upipe *upipe_fsink = upipe_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
-    assert(upipe_fsink != NULL);
-    assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
-    if (delay) {
-        assert(upipe_set_uclock(upipe_fsink, uclock));
-        assert(upipe_sink_set_delay(upipe_fsink, delay));
-    }
-    assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
-
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
-    struct upipe *upipe_fsrc = upipe_alloc(upipe_fsrc_mgr,
+    struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
     assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
-    assert(upipe_set_output(upipe_fsrc, upipe_fsink));
     assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     if (delay)
         assert(upipe_set_uclock(upipe_fsrc, uclock));
@@ -171,6 +158,24 @@ int main(int argc, char *argv[])
         fprintf(stdout, "source file has size %"PRIu64"\n", size);
     else
         fprintf(stdout, "source path is not a regular file\n");
+
+    struct uref *uref;
+    assert(upipe_get_flow_def(upipe_fsrc, &uref));
+    assert(uref != NULL);
+
+    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+    assert(upipe_fsink_mgr != NULL);
+    struct upipe *upipe_fsink = upipe_flow_alloc(upipe_fsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"), uref);
+    assert(upipe_fsink != NULL);
+    assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
+    if (delay) {
+        assert(upipe_set_uclock(upipe_fsink, uclock));
+        assert(upipe_sink_set_delay(upipe_fsink, delay));
+    }
+    assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
+
+    assert(upipe_set_output(upipe_fsrc, upipe_fsink));
 
     ev_loop(loop, 0);
 

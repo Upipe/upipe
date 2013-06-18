@@ -31,6 +31,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psi_decoder.h"
@@ -50,32 +51,33 @@
 struct upipe_ts_pmtd {
     /** currently in effect PMT table */
     struct uref *pmt;
-    /** true if we received a compatible flow definition */
-    bool flow_def_ok;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe)
+UPIPE_HELPER_FLOW(upipe_ts_pmtd, EXPECTED_FLOW_DEF)
 
 /** @internal @This allocates a ts_pmtd pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe)
+                                         struct uprobe *uprobe,
+                                         uint32_t signature, va_list args)
 {
-    struct upipe_ts_pmtd *upipe_ts_pmtd =
-        malloc(sizeof(struct upipe_ts_pmtd));
-    if (unlikely(upipe_ts_pmtd == NULL))
+    struct upipe *upipe = upipe_ts_pmtd_alloc_flow(mgr, uprobe, signature,
+                                                   args, NULL);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_ts_pmtd_to_upipe(upipe_ts_pmtd);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     upipe_ts_pmtd->pmt = NULL;
-    upipe_ts_pmtd->flow_def_ok = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -491,34 +493,6 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
 static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
-    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            upipe_ts_pmtd->flow_def_ok = false;
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        upipe_ts_pmtd->flow_def_ok = true;
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(!upipe_ts_pmtd->flow_def_ok)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
         return;

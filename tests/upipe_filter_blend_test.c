@@ -75,7 +75,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEED_INPUT:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -114,19 +114,21 @@ int main(int argc, char **argv)
 
     /* nullpipe */
     struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
-    struct upipe *nullpipe = upipe_alloc(null_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
+    struct upipe *nullpipe = upipe_flow_alloc(null_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"), NULL);
     assert(nullpipe);
     assert(upipe_null_dump_dict(nullpipe, true));
 
+    struct uref *uref = uref_pic_flow_alloc_def(uref_mgr, 3);
+    assert(uref);
+
     /* blend */
     struct upipe_mgr *blend_mgr = upipe_filter_blend_mgr_alloc();
-    struct upipe *filter_blend = upipe_alloc(blend_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "blend"));
+    struct upipe *filter_blend = upipe_flow_alloc(blend_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "blend"), uref);
     assert(filter_blend);
     assert(upipe_set_ubuf_mgr(filter_blend, ubuf_mgr));
     assert(upipe_set_output(filter_blend, nullpipe));
     upipe_release(nullpipe);
-
-    upipe_input(filter_blend, uref_pic_flow_alloc_def(uref_mgr, 3), NULL);
+    uref_free(uref);
 
     for (counter=0; counter < 10; counter++) {
         printf("Sending pic %d\n", counter);

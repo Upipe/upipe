@@ -38,6 +38,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe-gl/upipe_glx_sink.h>
 
@@ -84,6 +85,7 @@ struct upipe_glx_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe);
+UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr, upump_watcher)
 
 static inline void upipe_glx_sink_flush(struct upipe *upipe)
@@ -309,17 +311,20 @@ static void upipe_glx_sink_clean_glx(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                          struct uprobe *uprobe,
+                                          uint32_t signature, va_list args)
 {
-    struct upipe_glx_sink *upipe_glx_sink = malloc(sizeof(struct upipe_glx_sink));
-    if (unlikely(upipe_glx_sink == NULL)) {
+    struct upipe *upipe = upipe_glx_sink_alloc_flow(mgr, uprobe, signature,
+                                                    args, NULL);
+    if (unlikely(upipe == NULL))
         return NULL;
-    }
-    struct upipe *upipe = upipe_glx_sink_to_upipe(upipe_glx_sink);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
     upipe_glx_sink_init_upump_mgr(upipe);
 
     upipe_glx_sink->display = NULL;
@@ -373,12 +378,6 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
 
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_dbg_va(upipe, "ignoring flow def (%s)", def);
-        uref_free(uref);
-        return;
-    }
     if (unlikely(!uref->ubuf)) { // no ubuf in uref
         uref_free(uref);
         return;

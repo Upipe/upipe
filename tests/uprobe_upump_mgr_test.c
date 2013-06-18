@@ -45,7 +45,8 @@ static bool got_upump_mgr = false;
 
 /** helper phony pipe to test uprobe_upump_mgr */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -99,7 +100,7 @@ int main(int argc, char **argv)
     struct uprobe *uprobe = uprobe_upump_mgr_alloc(NULL, upump_mgr);
     assert(uprobe != NULL);
 
-    struct upipe *upipe = uprobe_test_alloc(&uprobe_test_mgr, uprobe);
+    struct upipe *upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
     uprobe_upump_mgr_free(uprobe);

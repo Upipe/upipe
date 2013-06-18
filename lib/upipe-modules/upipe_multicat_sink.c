@@ -40,6 +40,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe-modules/upipe_multicat_sink.h>
 #include <upipe-modules/upipe_file_sink.h>
 
@@ -54,6 +55,8 @@
 #include <math.h>
 #include <assert.h>
 #include <sys/param.h>
+
+#define EXPECTED_FLOW_DEF "block."
 
 /** upipe_multicat_sink structure */ 
 struct upipe_multicat_sink {
@@ -84,6 +87,7 @@ struct upipe_multicat_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_multicat_sink, upipe);
+UPIPE_HELPER_FLOW(upipe_multicat_sink, EXPECTED_FLOW_DEF)
 
 /** @internal @This generates a path from idx and send set_path to the internal
  * (fsink) output
@@ -144,41 +148,6 @@ static void _upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
 static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
                                       struct upump *upump)
 {
-    struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
-    const char *def;
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        if (upipe_multicat_sink->flow_def != NULL) {
-            uref_free(upipe_multicat_sink->flow_def);
-            upipe_multicat_sink->flow_def = NULL;
-        }
-        if (unlikely(ubase_ncmp(def, "block."))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-        upipe_multicat_sink->flow_def = uref_dup(uref);
-        if (unlikely(upipe_multicat_sink->flow_def == NULL)) {
-            upipe_throw_aerror(upipe);
-            return;
-        }
-        upipe_input(upipe_multicat_sink->fsink, uref, upump);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_multicat_sink->flow_def == NULL)) {
-        uref_free(uref);
-        upipe_throw_flow_def_error(upipe, uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
         uref_free(uref);
         return;
@@ -200,20 +169,13 @@ static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
         upipe_err(upipe, "fsink manager required");
         return false;
     }
-    fsink = upipe_alloc(upipe_multicat_sink->fsink_mgr,
-                        uprobe_pfx_adhoc_alloc_va(upipe->uprobe, UPROBE_LOG_NOTICE, "fsink"));
+    fsink = upipe_flow_alloc(upipe_multicat_sink->fsink_mgr,
+                             uprobe_pfx_adhoc_alloc_va(upipe->uprobe,
+                                               UPROBE_LOG_NOTICE, "fsink"),
+                             upipe_multicat_sink->flow_def);
     if (unlikely(!fsink)) {
         upipe_throw_aerror(upipe);
         return false;
-    }
-    if (upipe_multicat_sink->flow_def != NULL) {
-        struct uref *uref = uref_dup(upipe_multicat_sink->flow_def);
-        if (unlikely(uref == NULL)) {
-            upipe_release(fsink);
-            upipe_throw_aerror(upipe);
-            return false;
-        }
-        upipe_input(fsink, uref, NULL);
     }
     upipe_multicat_sink->fsink = fsink;
 	return true;
@@ -433,14 +395,22 @@ static bool upipe_multicat_sink_control(struct upipe *upipe, enum upipe_command 
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr,
+                                               struct uprobe *uprobe,
+                                               uint32_t signature, va_list args)
 {
-    struct upipe_multicat_sink *upipe_multicat_sink = malloc(sizeof(struct upipe_multicat_sink));
-    if (unlikely(upipe_multicat_sink == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_multicat_sink_alloc_flow(mgr, uprobe, signature,
+                                                         args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_multicat_sink_to_upipe(upipe_multicat_sink);
+
+    struct upipe_multicat_sink *upipe_multicat_sink =
+        upipe_multicat_sink_from_upipe(upipe);
     upipe_init(upipe, mgr, uprobe);
     upipe_multicat_sink->flow_def = NULL;
     upipe_multicat_sink->fsink = NULL;
@@ -450,6 +420,7 @@ static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr, struct upr
     upipe_multicat_sink->fileidx = -1;
     upipe_multicat_sink->rotate = UPIPE_MULTICAT_SINK_DEF_ROTATE;
     upipe_multicat_sink->mode = UPIPE_FSINK_APPEND;
+    upipe_multicat_sink->flow_def = flow_def;
     upipe_throw_ready(upipe);
     return upipe;
 }

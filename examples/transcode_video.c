@@ -58,6 +58,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
@@ -102,8 +103,9 @@ struct uprobe uprobe_outputs;
 struct uref_mgr *uref_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *block_mgr;
+struct upump_mgr *upump_mgr;
 
-struct upipe *qsink;
+struct upipe *qsrc;
 const char *sink_path = NULL;
 const char *profile = NULL;
 const char *preset = NULL;
@@ -117,8 +119,9 @@ static bool catch_outputs(struct uprobe *uprobe, struct upipe *upipe,
                          enum uprobe_event event, va_list args)
 {
     switch(event) {
-        case UPROBE_NEED_INPUT:
-        case UPROBE_READ_END:
+        case UPROBE_NEW_FLOW_DEF:
+            return true;
+        case UPROBE_SOURCE_END:
             upipe_release(upipe);
             return true;
         default:
@@ -132,7 +135,6 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         default:
             break;
-        case UPROBE_NEED_INPUT:
         case UPROBE_DEAD:
         case UPROBE_READY:
         case UPROBE_SPLIT_DEL_FLOW:
@@ -140,7 +142,7 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
-        case UPROBE_READ_END:
+        case UPROBE_SOURCE_END:
             return true;
 
         case UPROBE_SPLIT_ADD_FLOW: {
@@ -155,22 +157,32 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
             }
             upipe_notice_va(upipe, "adding flow %s (%d)", def, flow_id);
 
-            struct upipe *output = upipe_alloc_sub(upipe,
+            struct upipe *output = upipe_flow_alloc_sub(upipe,
                     uprobe_pfx_adhoc_alloc_va(&uprobe_outputs, loglevel,
-                                                      "output %"PRIu64, flow_id));
+                                              "output %"PRIu64, flow_id),
+                    flow_def);
 
-            upipe_set_flow_def(output, flow_def);
             upipe_set_ubuf_mgr(output, block_mgr);
 
             struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-            struct upipe *avcdec = upipe_alloc(upipe_avcdec_mgr,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdec"));
-            upipe_set_uref_mgr(avcdec, uref_mgr);
+            struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
+                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdec"),
+                    flow_def);
             upipe_set_ubuf_mgr(avcdec, yuv_mgr);
             upipe_set_output(output, avcdec);
+            upipe_get_flow_def(avcdec, &flow_def);
+
+            /* queue sink */
+            struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
+            struct upipe *qsink = upipe_flow_alloc(upipe_qsink_mgr,
+                            uprobe_pfx_adhoc_alloc(logger, loglevel, "qsink"),
+                            flow_def);
+            upipe_mgr_release(upipe_qsink_mgr);
+            upipe_set_upump_mgr(qsink, upump_mgr);
+            upipe_set_output(avcdec, qsink);
             upipe_release(avcdec);
 
-            upipe_set_output(avcdec, qsink);
+            upipe_qsink_set_qsrc(qsink, qsrc);
             upipe_release(qsink);
             return true;
         }
@@ -180,7 +192,6 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
 
 static void *encoding_thread(void *_qsrc)
 {
-    struct upipe *qsrc = _qsrc;
     struct upipe *encoder;
 
     printf("Starting encoding thread\n");
@@ -189,10 +200,15 @@ static void *encoding_thread(void *_qsrc)
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
     upipe_set_upump_mgr(qsrc, upump_mgr);
 
+    struct uref *outflow = uref_alloc(uref_mgr);
+    uref_flow_set_def(outflow, "pic.");
+    uref_pic_flow_set_macropixel(outflow, 1);
+    uref_pic_flow_set_planes(outflow, 0);
+
     if (use_x264) {
         struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
-        encoder = upipe_alloc(upipe_x264_mgr,
-                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"));
+        encoder = upipe_flow_alloc(upipe_x264_mgr,
+                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "x264"), outflow);
         if (preset || tuning) {
             upipe_x264_set_default_preset(encoder, preset, tuning);
         }
@@ -202,14 +218,16 @@ static void *encoding_thread(void *_qsrc)
     } else {
         char *codec_def = NULL;
         struct upipe_mgr *upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
-        encoder = upipe_alloc(upipe_avcenc_mgr,
-                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcenc"));
+        encoder = upipe_flow_alloc(upipe_avcenc_mgr,
+                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcenc"), outflow);
         asprintf(&codec_def, "%s.pic.", codec);
         if (!upipe_avcenc_set_codec(encoder, codec_def)) {
             exit(1);
         }
         free(codec_def);
     }
+    uref_free(outflow);
+    upipe_get_flow_def(encoder, &outflow);
 
     upipe_set_ubuf_mgr(encoder, block_mgr);
     upipe_set_uref_mgr(encoder, uref_mgr);
@@ -217,8 +235,8 @@ static void *encoding_thread(void *_qsrc)
     upipe_release(encoder);
 
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
-    struct upipe *sinkpipe = upipe_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(logger, loglevel, "fsink"));
+    struct upipe *sinkpipe = upipe_flow_alloc(upipe_fsink_mgr,
+            uprobe_pfx_adhoc_alloc(logger, loglevel, "fsink"), outflow);
     upipe_set_upump_mgr(sinkpipe, upump_mgr);
     upipe_fsink_set_path(sinkpipe, sink_path, mode);
 
@@ -277,7 +295,7 @@ int main(int argc, char **argv)
 
     /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    upump_mgr = upump_ev_mgr_alloc(loop);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
@@ -310,17 +328,10 @@ int main(int argc, char **argv)
     /* uclock */
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
 
-    /* queue sink */
-    struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
-    qsink = upipe_alloc(upipe_qsink_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, loglevel, "qsink"));
-    upipe_set_upump_mgr(qsink, upump_mgr);
-
     /* queue source */
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
-    struct upipe *qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
+    qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
         uprobe_pfx_adhoc_alloc(&uprobe_outputs, loglevel, "qsrc"), QUEUE_LENGTH);
-    upipe_qsink_set_qsrc(qsink, qsrc);
 
     /* upipe-av */
     upipe_av_init(false);
@@ -332,7 +343,7 @@ int main(int argc, char **argv)
 
     /* avformat source */
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
-    struct upipe *upipe_avfsrc = upipe_alloc(upipe_avfsrc_mgr,
+    struct upipe *upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "avfsrc"));
     upipe_set_upump_mgr(upipe_avfsrc, upump_mgr);
     upipe_set_uref_mgr(upipe_avfsrc, uref_mgr);

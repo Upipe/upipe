@@ -24,6 +24,8 @@ pkginclude_HEADERS = \
 	umem_alloc.h \
 	umem_pool.h \
 	upipe.h \
+	upipe_helper_bin.h \
+	upipe_helper_flow.h \
 	upipe_helper_output.h \
 	upipe_helper_sink_delay.h \
 	upipe_helper_source_read_size.h \
@@ -35,6 +37,7 @@ pkginclude_HEADERS = \
 	upipe_helper_upump_mgr.h \
 	upipe_helper_uref_mgr.h \
 	upipe_helper_uref_stream.h \
+	upipe_helper_void.h \
 	uprobe.h \
 	uprobe_dejitter.h \
 	uprobe_helper_adhoc.h \

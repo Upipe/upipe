@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -64,6 +64,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_SOURCE_END:
             break;
     }
     return true;
@@ -71,7 +73,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe)
+                                    struct uprobe *uprobe,
+                                    uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -124,35 +127,34 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink0 = upipe_alloc(&dup_test_mgr, log);
+    struct upipe *upipe_sink0 = upipe_flow_alloc(&dup_test_mgr, log, NULL);
     assert(upipe_sink0 != NULL);
 
-    struct upipe *upipe_sink1 = upipe_alloc(&dup_test_mgr, log);
+    struct upipe *upipe_sink1 = upipe_flow_alloc(&dup_test_mgr, log, NULL);
     assert(upipe_sink1 != NULL);
+
+    uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
+    assert(uref != NULL);
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
-    struct upipe *upipe_dup = upipe_alloc(upipe_dup_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup"));
+    struct upipe *upipe_dup = upipe_flow_alloc(upipe_dup_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup"), uref);
     assert(upipe_dup != NULL);
+    uref_free(uref);
 
-    struct upipe *upipe_dup_output0 = upipe_alloc_sub(upipe_dup,
+    struct upipe *upipe_dup_output0 = upipe_void_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup output 0"));
     assert(upipe_dup_output0 != NULL);
     assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
 
-    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
-    assert(uref != NULL);
-    upipe_input(upipe_dup, uref, NULL);
-    assert(counter == 0);
-
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     upipe_input(upipe_dup, uref, NULL);
-    assert(counter == 2);
+    assert(counter == 1);
     counter = 0;
 
-    struct upipe *upipe_dup_output1 = upipe_alloc_sub(upipe_dup,
+    struct upipe *upipe_dup_output1 = upipe_void_alloc_sub(upipe_dup,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
                                    "dup output 1"));
     assert(upipe_dup_output1 != NULL);
@@ -162,11 +164,11 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     upipe_input(upipe_dup, uref, NULL);
-    assert(counter == 3);
+    assert(counter == 2);
 
+    upipe_release(upipe_dup);
     upipe_release(upipe_dup_output0);
     upipe_release(upipe_dup_output1);
-    upipe_release(upipe_dup);
     upipe_mgr_release(upipe_dup_mgr); // nop
 
     dup_test_free(upipe_sink0);

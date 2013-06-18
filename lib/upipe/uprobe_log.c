@@ -98,30 +98,15 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             upipe_log(upipe, log->level,
                       "probe caught allocation error");
             break;
-        case UPROBE_FLOW_DEF_ERROR:
-            upipe_log(upipe, log->level, "probe caught flow def error");
-            break;
         case UPROBE_UPUMP_ERROR:
             upipe_log(upipe, log->level, "probe caught upump error");
             break;
-        case UPROBE_READ_END: {
-            const char *location = va_arg(args_copy, const char *);
-            if (location != NULL)
-                upipe_log_va(upipe, log->level,
-                             "probe caught read end on %s", location);
-            else
-                upipe_log(upipe, log->level, "probe caught read end");
+        case UPROBE_SOURCE_END:
+            upipe_log_va(upipe, log->level, "probe caught source end");
             break;
-        }
-        case UPROBE_WRITE_END: {
-            const char *location = va_arg(args_copy, const char *);
-            if (location != NULL)
-                upipe_log_va(upipe, log->level,
-                             "probe caught write end on %s", location);
-            else
-                upipe_log(upipe, log->level, "probe caught write end");
+        case UPROBE_SINK_END:
+            upipe_log_va(upipe, log->level, "probe caught sink end");
             break;
-        }
         case UPROBE_NEED_UREF_MGR:
             upipe_log(upipe, log->level,
                       "probe caught need uref manager");
@@ -134,12 +119,13 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             upipe_log(upipe, log->level,
                       "probe caught need ubuf manager");
             break;
-        case UPROBE_NEED_OUTPUT: {
+        case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
             const char *def = "[invalid]";
-            uref_flow_get_def(flow_def, &def);
+            if (flow_def != NULL)
+                uref_flow_get_def(flow_def, &def);
             upipe_log_va(upipe, log->level,
-                         "probe caught need output for flow def \"%s\"", def);
+                         "probe caught new flow def \"%s\"", def);
             break;
         }
         case UPROBE_SPLIT_ADD_FLOW: {

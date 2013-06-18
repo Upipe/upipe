@@ -44,6 +44,8 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -52,6 +54,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
+#include <upipe-modules/upipe_proxy.h>
 
 #include "upipe_av_internal.h"
 
@@ -111,6 +114,7 @@ struct upipe_avfsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe)
+UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upump)
@@ -138,6 +142,7 @@ struct upipe_avfsrc_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe)
+UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr)
 
@@ -148,17 +153,21 @@ UPIPE_HELPER_SUBPIPE(upipe_avfsrc, upipe_avfsrc_sub, sub, sub_mgr,
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
-                                               struct uprobe *uprobe)
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
 {
-    struct upipe_avfsrc_sub *upipe_avfsrc_sub =
-        malloc(sizeof(struct upipe_avfsrc_sub));
-    if (unlikely(upipe_avfsrc_sub == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_avfsrc_sub_alloc_flow(mgr, uprobe, signature,
+                                                      args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_avfsrc_sub_to_upipe(upipe_avfsrc_sub);
-    upipe_init(upipe, mgr, uprobe);
+    struct upipe_avfsrc_sub *upipe_avfsrc_sub =
+        upipe_avfsrc_sub_from_upipe(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub_init_output(upipe);
     upipe_avfsrc_sub_init_ubuf_mgr(upipe);
@@ -169,52 +178,29 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
         upipe_avfsrc_from_sub_mgr(upipe->mgr);
     upipe_use(upipe_avfsrc_to_upipe(upipe_avfsrc));
     upipe_throw_ready(upipe);
-    return upipe;
-}
-
-/** @internal @This sets the flow definition on an output.
- *
- * The attribute a.id must be set on the flow definition packet.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return false in case of error
- */
-static bool upipe_avfsrc_sub_set_flow_def(struct upipe *upipe,
-                                             struct uref *flow_def)
-{
-    struct upipe_avfsrc_sub *upipe_avfsrc_sub =
-        upipe_avfsrc_sub_from_upipe(upipe);
-    if (upipe_avfsrc_sub->flow_def != NULL) {
-        upipe_avfsrc_sub_store_flow_def(upipe, NULL);
-        upipe_avfsrc_sub->id = UINT64_MAX;
-    }
 
     uint64_t id;
-    if (unlikely(!uref_av_flow_get_id(flow_def, &id)))
-        return false;
+    if (unlikely(!uref_av_flow_get_id(flow_def, &id))) {
+        uref_free(flow_def);
+        upipe_throw_aerror(upipe);
+        return upipe;
+    }
 
     /* check that the ID is not already in use */
-    struct upipe_avfsrc *upipe_avfsrc =
-        upipe_avfsrc_from_sub_mgr(upipe->mgr);
     struct uchain *uchain;
     ulist_foreach(&upipe_avfsrc->subs, uchain) {
         struct upipe_avfsrc_sub *output =
             upipe_avfsrc_sub_from_uchain(uchain);
         if (output != upipe_avfsrc_sub && output->id == id) {
             upipe_warn_va(upipe, "ID %"PRIu64" is already in use", id);
-            return false;
+            uref_free(flow_def);
+            return upipe;
         }
     }
 
-    struct uref *uref = uref_dup(flow_def);
-    if (unlikely(uref == NULL)) {
-        upipe_throw_aerror(upipe);
-        return false;
-    }
     upipe_avfsrc_sub->id = id;
-    upipe_avfsrc_sub_store_flow_def(upipe, uref);
-    return true;
+    upipe_avfsrc_sub_store_flow_def(upipe, flow_def);
+    return upipe;
 }
 
 /** @internal @This processes control commands on an output subpipe of an avfsrc
@@ -226,8 +212,8 @@ static bool upipe_avfsrc_sub_set_flow_def(struct upipe *upipe,
  * @return false in case of error
  */
 static bool upipe_avfsrc_sub_control(struct upipe *upipe,
-                                        enum upipe_command command,
-                                        va_list args)
+                                     enum upipe_command command,
+                                     va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -238,6 +224,10 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_avfsrc_sub_set_ubuf_mgr(upipe, ubuf_mgr);
         }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_avfsrc_sub_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_avfsrc_sub_get_output(upipe, p);
@@ -245,14 +235,6 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_avfsrc_sub_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_avfsrc_sub_get_flow_def(upipe, p);
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_avfsrc_sub_set_flow_def(upipe, flow_def);
         }
 
         default:
@@ -285,9 +267,8 @@ static void upipe_avfsrc_sub_free(struct upipe *upipe)
 /** @internal @This initializes the output manager for an avfsrc pipe.
  *
  * @param upipe description structure of the pipe
- * @return pointer to output upipe manager
  */
-static struct upipe_mgr *upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
+static void upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_avfsrc->sub_mgr;
@@ -297,23 +278,26 @@ static struct upipe_mgr *upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_control = upipe_avfsrc_sub_control;
     sub_mgr->upipe_free = upipe_avfsrc_sub_free;
     sub_mgr->upipe_mgr_free = NULL;
-    return sub_mgr;
 }
 
 /** @internal @This allocates an avfsrc pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_avfsrc *upipe_avfsrc = malloc(sizeof(struct upipe_avfsrc));
-    if (unlikely(upipe_avfsrc == NULL))
+    struct upipe *upipe = upipe_avfsrc_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
-    upipe_sub_init(upipe, mgr, uprobe, upipe_avfsrc_init_sub_mgr(upipe));
+
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    upipe_avfsrc_init_sub_mgr(upipe);
     upipe_avfsrc_init_sub_subs(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
@@ -382,9 +366,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "read error from %s (%s)", upipe_avfsrc->url, buf);
         upipe_avfsrc_set_upump(upipe, NULL);
-        upipe_throw_read_end(upipe, upipe_avfsrc->url);
-        upipe_avfsrc_throw_sub_subs(upipe, UPROBE_READ_END,
-                                       upipe_avfsrc->url);
+        upipe_throw_source_end(upipe);
         return;
     }
 
@@ -1033,11 +1015,21 @@ static struct upipe_mgr upipe_avfsrc_mgr = {
     .upipe_mgr_free = NULL
 };
 
+/** @This is called when the proxy is released.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_proxy_released(struct upipe *upipe)
+{
+    upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+}
+
 /** @This returns the management structure for all avformat source pipes.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_avfsrc_mgr_alloc(void)
 {
-    return &upipe_avfsrc_mgr;
+    return upipe_proxy_mgr_alloc(&upipe_avfsrc_mgr,
+                                 upipe_avfsrc_proxy_released);
 }

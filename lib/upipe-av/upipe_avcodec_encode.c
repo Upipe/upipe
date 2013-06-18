@@ -39,6 +39,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -74,6 +75,8 @@ struct upipe_avcodec_open_params {
 
 /** upipe_avcenc structure with avcenc parameters */ 
 struct upipe_avcenc {
+    /** input flow */
+    struct uref *input_flow;
     /** output flow */
     struct uref *output_flow;
     /** true if the flow definition has already been sent */
@@ -120,6 +123,7 @@ struct upipe_avcenc {
 
 
 UPIPE_HELPER_UPIPE(upipe_avcenc, upipe);
+UPIPE_HELPER_FLOW(upipe_avcenc, EXPECTED_FLOW)
 UPIPE_HELPER_UREF_MGR(upipe_avcenc, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
@@ -394,6 +398,17 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def)
         return upipe_avcenc_open_codec_wrap(upipe);
     }
 
+    /* flow definition */
+    if (unlikely(!upipe_avcenc->output_flow)) {
+        char *def = NULL;
+        asprintf(&def, "block.%s",
+                 upipe_av_to_flow_def(codec->id));
+        struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
+        uref_flow_set_def(outflow, def);
+        free(def);
+        upipe_avcenc_store_flow_def(upipe, outflow);
+    }
+
     upipe_dbg_va(upipe, "codec %s (%d) set", codec_def, codec_id);
     return true;
 }
@@ -566,17 +581,6 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
         }
         uref_attach_ubuf(uref, ubuf_block);
 
-        /* flow definition */
-        if (unlikely(!upipe_avcenc->output_flow)) {
-            char *def = NULL;
-            asprintf(&def, "block.%s",
-                     upipe_av_to_flow_def(upipe_avcenc->context->codec->id));
-            struct uref *outflow = uref_block_flow_alloc_def(upipe_avcenc->uref_mgr, def);
-            uref_flow_set_def(outflow, def);
-            free(def);
-            upipe_avcenc_store_flow_def(upipe, outflow);
-        }
-
         upipe_avcenc_output(upipe, uref, upump);
         return true;
     }
@@ -602,30 +606,8 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
     }
 
     assert(uref);
-    const char *def = NULL;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW))) {
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition %s", def);
-        upipe_avcenc->pixfmt = NULL;
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        _upipe_avcenc_set_codec(upipe, NULL);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
     if (unlikely(!uref->ubuf)) {
-        upipe_warn(upipe, "uref has no ubuf, dropping");
-        uref_free(uref);
+        upipe_avcenc_output(upipe, uref, upump);
         return;
     }
 
@@ -698,6 +680,10 @@ static bool upipe_avcenc_control(struct upipe *upipe, enum upipe_command command
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_avcenc_set_ubuf_mgr(upipe, ubuf_mgr);
         }
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_avcenc_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_avcenc_get_output(upipe, p);
@@ -746,6 +732,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
         return; /* _set_codec() calls _use()/_release() */
     }
 
+    uref_free(upipe_avcenc->input_flow);
     if (upipe_avcenc->frame) {
         av_free(upipe_avcenc->frame);
     }
@@ -775,21 +762,26 @@ static void upipe_avcenc_free(struct upipe *upipe)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe)
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
 {
-    struct upipe_avcenc *upipe_avcenc = malloc(sizeof(struct upipe_avcenc));
-    if (unlikely(upipe_avcenc == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_avcenc_alloc_flow(mgr, uprobe, signature,
+                                                  args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_avcenc_to_upipe(upipe_avcenc);
-    upipe_init(upipe, mgr, uprobe);
 
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     upipe_avcenc_init_uref_mgr(upipe);
     upipe_avcenc_init_ubuf_mgr(upipe);
     upipe_avcenc_init_upump_mgr(upipe);
     upipe_avcenc_init_output(upipe);
+    upipe_avcenc->input_flow = flow_def;
     upipe_avcenc->context = NULL;
     upipe_avcenc->upump_av_deal = NULL;
     upipe_avcenc->saved_uref = NULL;
@@ -803,6 +795,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     memset(&upipe_avcenc->open_params, 0, sizeof(struct upipe_avcodec_open_params));
 
     upipe_throw_ready(upipe);
+
     return upipe;
 }
 

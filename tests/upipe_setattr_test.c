@@ -69,13 +69,15 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
 }
 
 /** helper phony pipe to test upipe_setattr */
-static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -139,21 +141,21 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_alloc(&test_mgr, log);
+    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, NULL);
     assert(upipe_sink != NULL);
-
-    struct upipe_mgr *upipe_setattr_mgr = upipe_setattr_mgr_alloc();
-    assert(upipe_setattr_mgr != NULL);
-    struct upipe *upipe_setattr = upipe_alloc(upipe_setattr_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "setattr"));
-    assert(upipe_setattr != NULL);
-    assert(upipe_set_output(upipe_setattr, upipe_sink));
 
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "internal."));
-    upipe_input(upipe_setattr, uref, NULL);
+
+    struct upipe_mgr *upipe_setattr_mgr = upipe_setattr_mgr_alloc();
+    assert(upipe_setattr_mgr != NULL);
+    struct upipe *upipe_setattr = upipe_flow_alloc(upipe_setattr_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "setattr"), uref);
+    assert(upipe_setattr != NULL);
+    assert(upipe_set_output(upipe_setattr, upipe_sink));
+    uref_free(uref);
 
     struct uref *dict = uref_alloc(uref_mgr);
     assert(uref_test_set_1(dict, "test"));

@@ -94,9 +94,9 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
     if (likely(name != NULL)) {
         uprobe_pfx->name = strdup(name);
         if (unlikely(uprobe_pfx->name == NULL)) {
-            uprobe_throw(uprobe->next, NULL, UPROBE_LOG, UPROBE_LOG_ERROR,
+            uprobe_throw(next, NULL, UPROBE_LOG, UPROBE_LOG_ERROR,
                          "allocation error in uprobe_pfx_init");
-            uprobe_throw(uprobe->next, NULL, UPROBE_AERROR);
+            uprobe_throw(next, NULL, UPROBE_AERROR);
         }
     } else
         uprobe_pfx->name = NULL;

@@ -186,8 +186,9 @@ int main(int argc, char **argv)
     /* glx sink */
     struct upipe_mgr *glx_mgr = upipe_glx_sink_mgr_alloc();
     for (i=0; i < SINK_NUM; i++) {
-        glx_sink[i] = upipe_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
-                uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "glx %d", i)));
+        glx_sink[i] = upipe_flow_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
+                uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "glx %d", i)),
+                NULL);
         assert(glx_sink[i]);
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
         upipe_set_upump_mgr(glx_sink[i], upump_mgr);

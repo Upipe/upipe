@@ -74,7 +74,8 @@ UPIPE_HELPER_UPIPE(skip_test, upipe);
 
 /** helper phony pipe to test upipe_skip */
 static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                     struct uprobe *uprobe,
+                                     uint32_t signature, va_list args)
 {
     struct skip_test *skip_test = malloc(sizeof(struct skip_test));
     assert(skip_test != NULL);
@@ -86,24 +87,19 @@ static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_skip */
 static void skip_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                            struct upump *upump)
 {
     struct skip_test *skip_test = skip_test_from_upipe(upipe);
-    const char *def;
     const uint8_t *buf;
     int size;
 
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_notice_va(upipe, "flow definition for %s", def);
-        goto end;
-    }
     if (unlikely(!uref->ubuf)) {
         upipe_dbg(upipe, "dropping empty uref ref");
         goto end;
     }
     
     size = -1;
-    uref_block_read(uref, 0, &size, &buf);
+    assert(uref_block_read(uref, 0, &size, &buf));
     assert(!memcmp(buf, TESTSTRSUB, sizeof(TESTSTRSUB)));
     printf("%d \"%s\"\n", skip_test->counter, buf);
     uref_block_unmap(uref, 0);
@@ -181,20 +177,29 @@ int main(int argc, char **argv)
     struct uprobe *uprobe_log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(uprobe_log != NULL);
 
-    /* skip_test */
-    struct upipe *skip_test = upipe_alloc(&skip_test_mgr,
-                        uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skiptest"));
+    uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
+    assert(uref);
 
     /* build skip pipe */
     struct upipe_mgr *upipe_skip_mgr = upipe_skip_mgr_alloc();
     assert(upipe_skip_mgr);
-    struct upipe *skip = upipe_alloc(upipe_skip_mgr,
-                        uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skip"));
+    struct upipe *skip = upipe_flow_alloc(upipe_skip_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skip"),
+                uref);
     assert(skip);
+
+    uref_free(uref);
+    assert(upipe_get_flow_def(skip, &uref));
+    const char *def;
+    assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.foo."));
+
+    /* skip_test */
+    struct upipe *skip_test = upipe_flow_alloc(&skip_test_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skiptest"),
+            uref);
     upipe_set_output(skip, skip_test);
     upipe_release(skip_test);
     upipe_skip_set_offset(skip, OFFSET);
-    upipe_input(skip, uref_block_flow_alloc_def(uref_mgr, "foo"), NULL);
 
     /* Now send uref */
     for (i=0; i < ITERATIONS; i++) {

@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_psi_merge.h>
@@ -66,6 +67,7 @@ struct upipe_ts_psim {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe)
+UPIPE_HELPER_FLOW(upipe_ts_psim, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_psim, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
@@ -74,19 +76,25 @@ UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe)
+                                         struct uprobe *uprobe,
+                                         uint32_t signature, va_list args)
 {
-    struct upipe_ts_psim *upipe_ts_psim = malloc(sizeof(struct upipe_ts_psim));
-    if (unlikely(upipe_ts_psim == NULL))
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_ts_psim_alloc_flow(mgr, uprobe, signature,
+                                                   args, &flow_def);
+    if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe *upipe = upipe_ts_psim_to_upipe(upipe_ts_psim);
-    upipe_init(upipe, mgr, uprobe);
+
+    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     upipe_ts_psim_init_sync(upipe);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
+    upipe_ts_psim_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -238,37 +246,8 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref,
 static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
-    struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_ts_psim_flush(upipe);
-
-        if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF))) {
-            upipe_ts_psim_store_flow_def(upipe, NULL);
-            upipe_throw_flow_def_error(upipe, uref);
-            uref_free(uref);
-            return;
-        }
-
-        upipe_dbg_va(upipe, "flow definition: %s", def);
-        upipe_ts_psim_store_flow_def(upipe, uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        upipe_throw_need_input(upipe);
-        return;
-    }
-
-    if (unlikely(upipe_ts_psim->flow_def == NULL)) {
-        upipe_throw_flow_def_error(upipe, uref);
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
+        upipe_ts_psim_output(upipe, uref, upump);
         return;
     }
 
@@ -286,6 +265,10 @@ static bool upipe_ts_psim_control(struct upipe *upipe,
                                   enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_psim_get_flow_def(upipe, p);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psim_get_output(upipe, p);

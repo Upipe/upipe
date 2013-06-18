@@ -76,6 +76,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return true;
@@ -93,7 +94,8 @@ UPIPE_HELPER_UPIPE(rtp_prepend_test, upipe);
 
 /** helper phony pipe to test upipe_rtp_prepend */
 static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
 {
     struct rtp_prepend_test *rtp_prepend_test = malloc(sizeof(struct rtp_prepend_test));
     assert(rtp_prepend_test != NULL);
@@ -113,25 +115,12 @@ static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
     uint64_t dts = 0;
     int size;
     const uint8_t *buf;
-    const char *def;
     lldiv_t div;
     unsigned int freq = DEFAULT_FREQ;
 
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
     uref_dump(uref, upipe->uprobe);
-
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        assert(def);
-        upipe_dbg_va(upipe, "flow def %s", def);
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        return;
-    }
 
     /* compute expected timestamp */
     if (unlikely(!uref_clock_get_dts(uref, &dts))) {
@@ -226,22 +215,24 @@ int main(int argc, char **argv)
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
 
+    /* Send first flow definition packet */
+    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
+    assert(uref);
+
     /* build rtp_prepend pipe */
     struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
-    struct upipe *rtp_prepend = upipe_alloc(upipe_rtp_prepend_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "rtp"));
+    struct upipe *rtp_prepend = upipe_flow_alloc(upipe_rtp_prepend_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "rtp"),
+            uref);
     assert(upipe_rtp_prepend_mgr);
     assert(rtp_prepend);
     assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
 
-    struct upipe *rtp_prepend_test = upipe_alloc(&rtp_prepend_test_mgr, log);
+    struct upipe *rtp_prepend_test = upipe_flow_alloc(&rtp_prepend_test_mgr,
+                                                      log, uref);
     assert(rtp_prepend_test != NULL);
     assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
-
-    /* Send first flow definition packet */
-    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
-    assert(uref);
-    upipe_input(rtp_prepend, uref, NULL);
+    uref_free(uref);
 
     /* Now send uref */
     for (i=0; i < PACKET_NUM; i++) {

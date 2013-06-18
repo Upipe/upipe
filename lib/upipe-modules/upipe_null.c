@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe-modules/upipe_null.h>
 
 #include <stdlib.h>
@@ -57,20 +58,28 @@ struct upipe_null {
     /** public upipe structure */
     struct upipe upipe;
 };
+
 UPIPE_HELPER_UPIPE(upipe_null, upipe);
+UPIPE_HELPER_FLOW(upipe_null, NULL)
 
 /** @internal @This allocates a null pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe)
+                                      struct uprobe *uprobe,
+                                      uint32_t signature, va_list args)
 {
-    struct upipe_null *upipe_null = malloc(sizeof(struct upipe_null));
-    if (unlikely(!upipe_null)) return NULL;
-    upipe_init(&upipe_null->upipe, mgr, uprobe);
+    struct upipe *upipe = upipe_null_alloc_flow(mgr, uprobe, signature,
+                                                args, NULL);
+    if (unlikely(upipe == NULL))
+        return NULL;
+
+    struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_null->dump = false;
     upipe_null->counter = 0;
     upipe_throw_ready(&upipe_null->upipe);
@@ -90,8 +99,6 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
     upipe_null->counter++;
     if (upipe_null->dump)
         uref_dump(uref, upipe->uprobe);
-    if (unlikely(uref_flow_get_end(uref)))
-        upipe_throw_need_input(upipe);
     uref_free(uref);
 }
 
