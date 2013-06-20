@@ -254,7 +254,7 @@ static struct upipe *upipe_osx_audioqueue_sink_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_osx_audioqueue_sink *upipe_osx_audioqueue_sink =
+    struct upipe_osx_audioqueue_sink *osx_audioqueue =
         upipe_osx_audioqueue_sink_from_upipe(upipe);
     osx_audioqueue->queue = NULL;
     osx_audioqueue->volume = 1.0;
