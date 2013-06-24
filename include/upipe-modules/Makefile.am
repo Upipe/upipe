@@ -10,6 +10,7 @@ myinclude_HEADERS = \
 	upipe_probe_uref.h \
 	upipe_null.h \
 	upipe_skip.h \
+	upipe_chunk_stream.h \
 	upipe_queue_sink.h \
 	upipe_queue_source.h \
 	upipe_setattr.h \
