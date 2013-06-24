@@ -27,6 +27,7 @@ pkginclude_HEADERS = \
 	upipe_helper_bin.h \
 	upipe_helper_flow.h \
 	upipe_helper_output.h \
+	upipe_helper_sink.h \
 	upipe_helper_sink_delay.h \
 	upipe_helper_source_read_size.h \
 	upipe_helper_subpipe.h \
@@ -49,6 +50,7 @@ pkginclude_HEADERS = \
 	uprobe_stdio.h \
 	uprobe_upump_mgr.h \
 	uprobe_uref_mgr.h \
+	upump_blocker.h \
 	upump_common.h \
 	upump.h \
 	uqueue.h \

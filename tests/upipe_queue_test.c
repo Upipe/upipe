@@ -55,6 +55,8 @@
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 1
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define QUEUE_LENGTH 6
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
@@ -135,7 +137,7 @@ static struct upipe_mgr queue_test_mgr = {
 int main(int argc, char *argv[])
 {
     loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop);
+    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -192,7 +194,6 @@ int main(int argc, char *argv[])
     unsigned int length;
     assert(upipe_qsrc_get_length(upipe_qsrc, &length));
     assert(length == 3);
-    assert(upump_mgr->nb_blocked_sinks == 0);
 
     ev_loop(loop, 0);
 

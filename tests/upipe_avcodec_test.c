@@ -66,6 +66,9 @@
 #include <ev.h>
 #include <pthread.h>
 
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
+
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
@@ -229,7 +232,8 @@ void *thread_start(void *_thread)
     printf("Thread %d launched.\n", thread->num);
 
     struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
 
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num,
@@ -237,9 +241,9 @@ void *thread_start(void *_thread)
     uref_free(flow);
     thread->limit = SETCODEC_LIMIT;
 
-    thread->source = upump_alloc_idler(upump_mgr, source_idler, thread, true);
+    thread->source = upump_alloc_idler(upump_mgr, source_idler, thread);
     struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler,
-                                                    thread, false);
+                                                    thread);
     upump_start(setcodec_pump);
 
     ev_loop(loop, 0);

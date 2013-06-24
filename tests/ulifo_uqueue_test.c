@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,6 +34,7 @@
 #include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/upump.h>
+#include <upipe/upump_blocker.h>
 #include <upump-ev/upump_ev.h>
 
 #include <stdio.h>
@@ -50,6 +51,8 @@
 
 #define ULIFO_MAX_DEPTH 10
 #define UQUEUE_MAX_DEPTH 6
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define NB_LOOPS 1000
 
 struct elem {
@@ -64,6 +67,7 @@ struct thread {
     unsigned int thread;
     struct upump_mgr *upump_mgr;
     struct upump *upump;
+    struct upump_blocker *blocker;
     unsigned int loop;
 };
 
@@ -77,7 +81,7 @@ static unsigned int loop[2] = {0, 0};
 static void push_ready(struct upump *upump)
 {
     struct thread *thread = upump_get_opaque(upump, struct thread *);
-    upump_mgr_sink_unblock(thread->upump_mgr);
+    upump_blocker_free(thread->blocker);
     upump_stop(thread->upump);
 }
 
@@ -96,7 +100,7 @@ static void push(struct upump *upump)
     if (unlikely(!uqueue_push(&uqueue, uchain))) {
         ulifo_push(&ulifo, uchain);
         thread->loop--;
-        upump_mgr_sink_block(thread->upump_mgr);
+        thread->blocker = upump_blocker_alloc(upump, NULL, NULL);
         upump_start(thread->upump);
     } else if (unlikely(thread->loop >= nb_loops)) {
         /* make it stop */
@@ -111,17 +115,18 @@ static void *push_thread(void *_thread)
     thread->loop = 0;
 
     struct ev_loop *loop = ev_loop_new(0);
-    thread->upump_mgr = upump_ev_mgr_alloc(loop);
+    thread->upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                           UPUMP_BLOCKER_POOL);
     assert(thread->upump_mgr != NULL);
 
     thread->upump = uqueue_upump_alloc_push(&uqueue, thread->upump_mgr,
                                             push_ready, thread);
     assert(thread->upump != NULL);
+    thread->blocker = NULL;
 
-    struct upump *upump = upump_alloc_idler(thread->upump_mgr, push, thread,
-                                            true);
+    struct upump *upump = upump_alloc_idler(thread->upump_mgr, push, thread);
     assert(upump != NULL);
-    assert(upump_start(upump));
+    upump_start(upump);
 
     ev_loop(loop, 0);
 
@@ -159,7 +164,8 @@ int main(int argc, char **argv)
         nb_loops = atoi(argv[1]);
 
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     urefcount_init(&refcount);
@@ -183,7 +189,7 @@ int main(int argc, char **argv)
     urefcount_use(&refcount);
     assert(pthread_create(&threads[1].id, NULL, push_thread, &threads[1]) == 0);
 
-    assert(upump_start(upump));
+    upump_start(upump);
     ev_loop(loop, 0);
 
     upump_free(upump);

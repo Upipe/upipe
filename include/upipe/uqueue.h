@@ -98,8 +98,7 @@ static inline struct upump *uqueue_upump_alloc_push(struct uqueue *uqueue,
                                                     struct upump_mgr *upump_mgr,
                                                     upump_cb cb, void *opaque)
 {
-    return ueventfd_upump_alloc(&uqueue->event_push, upump_mgr, cb, opaque,
-                                false);
+    return ueventfd_upump_alloc(&uqueue->event_push, upump_mgr, cb, opaque);
 }
 
 /** @This allocates a watcher triggering when data is ready to be popped.
@@ -114,8 +113,7 @@ static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
                                                    struct upump_mgr *upump_mgr,
                                                    upump_cb cb, void *opaque)
 {
-    return ueventfd_upump_alloc(&uqueue->event_pop, upump_mgr, cb, opaque,
-                                true);
+    return ueventfd_upump_alloc(&uqueue->event_pop, upump_mgr, cb, opaque);
 }
 
 /** @This pushes an element into the queue.

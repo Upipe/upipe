@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,6 +46,8 @@
 
 #include <ev.h>
 
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define NB_LOOPS 1000
 #define NB_TIMEOUTS 10
 
@@ -104,14 +106,15 @@ static void *test_thread(void *_thread)
     thread->loop = thread->thread;
 
     struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct upump *upump = udeal_upump_alloc(&udeal, upump_mgr, test_grab,
                                               thread);
     assert(upump != NULL);
 
-    assert(udeal_start(&udeal, upump));
+    udeal_start(&udeal, upump);
 
     ev_loop(loop, 0);
 

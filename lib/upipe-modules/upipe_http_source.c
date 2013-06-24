@@ -576,7 +576,7 @@ static bool upipe_http_src_control(struct upipe *upipe, enum upipe_command comma
 
         struct upump *upump = upump_alloc_fd_read(upipe_http_src->upump_mgr,
                                                   upipe_http_src_worker, upipe,
-                                                  true, upipe_http_src->fd);
+                                                  upipe_http_src->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_upump_error(upipe);
             return false;

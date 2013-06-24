@@ -53,6 +53,8 @@
 #include <ev.h>
 #include <assert.h>
 
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
@@ -180,7 +182,8 @@ int main(int argc, char **argv)
 
     /* ev loop */
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     /* glx sink */
@@ -195,7 +198,7 @@ int main(int argc, char **argv)
     }
 
     /* idler */
-    struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL, true);
+    struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL);
     upump_start(idlerpump);
 
     /* sigint handler */

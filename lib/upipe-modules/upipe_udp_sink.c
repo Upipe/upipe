@@ -41,6 +41,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_sink.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_sink_delay.h>
 #include <upipe-modules/upipe_udp_sink.h>
@@ -69,6 +70,8 @@
 #define UDP_DEFAULT_PORT 1234
 
 static void upipe_udpsink_watcher(struct upump *upump);
+static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
+                                 struct upump *upump);
 
 /** @internal @This is the private context of a file sink pipe. */
 struct upipe_udpsink {
@@ -87,10 +90,8 @@ struct upipe_udpsink {
     char *uri;
     /** temporary uref storage */
     struct ulist urefs;
-    /** true if the sink currently blocks the pipe */
-    bool blocked;
-    /** true if we have received a compatible flow definition */
-    bool flow_def_ok;
+    /** list of blockers */
+    struct ulist blockers;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -99,6 +100,7 @@ struct upipe_udpsink {
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe)
 UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr, upump)
+UPIPE_HELPER_SINK(upipe_udpsink, urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
 
@@ -121,18 +123,16 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
+    upipe_udpsink_init_sink(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink_init_delay(upipe, SYSTIME_DELAY);
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
-    upipe_udpsink->blocked = false;
-    upipe_udpsink->flow_def_ok = false;
-    ulist_init(&upipe_udpsink->urefs);
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-/** @This marks the sink as blocked and starts the watcher.
+/** @This starts the watcher waiting for the sink to unblock.
  *
  * @param upipe description structure of the pipe
  * @param timeout time to wait before waking; if 0, wait for the
@@ -141,26 +141,23 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 static void upipe_udpsink_wait(struct upipe *upipe, uint64_t timeout)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    struct upump *upump;
+    struct upump *watcher;
     if (unlikely(timeout != 0))
-        upump = upump_alloc_timer(upipe_udpsink->upump_mgr, upipe_udpsink_watcher,
-                                  upipe, false, timeout, 0);
+        watcher = upump_alloc_timer(upipe_udpsink->upump_mgr,
+                                    upipe_udpsink_watcher,
+                                    upipe, timeout, 0);
     else
-        upump = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
-                                     upipe_udpsink_watcher, upipe, false,
-                                     upipe_udpsink->fd);
-    if (unlikely(upump == NULL)) {
+        watcher = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
+                                       upipe_udpsink_watcher, upipe,
+                                       upipe_udpsink->fd);
+    if (unlikely(watcher == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_upump_error(upipe);
         return;
     }
 
-    upipe_udpsink_set_upump(upipe, upump);
-    upump_start(upump);
-    if (!upipe_udpsink->blocked) {
-        upump_mgr_sink_block(upipe_udpsink->upump_mgr);
-        upipe_udpsink->blocked = true;
-    }
+    upipe_udpsink_set_upump(upipe, watcher);
+    upump_start(watcher);
 }
 
 /** @internal @This outputs data to the file sink.
@@ -168,21 +165,17 @@ static void upipe_udpsink_wait(struct upipe *upipe, uint64_t timeout)
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump pump that generated the buffer
+ * @return true if the uref was processed
  */
-static void upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
+                                 struct upump *upump)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         uref_free(uref);
         upipe_warn(upipe, "received a buffer before opening a file");
-        return;
-    }
-
-    if (unlikely(!ulist_empty(&upipe_udpsink->urefs))) {
-        ulist_add(&upipe_udpsink->urefs, uref_to_uchain(uref));
-        return;
+        return true;
     }
 
     if (likely(upipe_udpsink->uclock == NULL))
@@ -197,9 +190,8 @@ static void upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     uint64_t now = uclock_now(upipe_udpsink->uclock);
     systime += upipe_udpsink->delay;
     if (unlikely(now < systime)) {
-        ulist_add(&upipe_udpsink->urefs, uref_to_uchain(uref));
         upipe_udpsink_wait(upipe, systime - now);
-        return;
+        return false;
     }
 
 write_buffer:
@@ -233,9 +225,8 @@ write_buffer:
 #if EAGAIN != EWOULDBLOCK
                 case EWOULDBLOCK:
 #endif
-                    ulist_add(&upipe_udpsink->urefs, uref_to_uchain(uref));
                     upipe_udpsink_wait(upipe, 0);
-                    return;
+                    return false;
                 case EBADF:
                 case EFBIG:
                 case EINVAL:
@@ -249,12 +240,13 @@ write_buffer:
             upipe_warn_va(upipe, "write error to %s (%m)", upipe_udpsink->uri);
             upipe_udpsink_set_upump(upipe, NULL);
             upipe_throw_sink_end(upipe);
-            return;
+            return true;
         }
 
         uref_free(uref);
         break;
     }
+    return true;
 }
 
 /** @internal @This is called when the file descriptor can be written again.
@@ -264,21 +256,10 @@ write_buffer:
  */
 static void upipe_udpsink_watcher(struct upump *upump)
 {
-    struct upump_mgr *mgr = upump->mgr;
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    struct ulist urefs = upipe_udpsink->urefs;
-
-    ulist_init(&upipe_udpsink->urefs);
     upipe_udpsink_set_upump(upipe, NULL);
-    upump_mgr_sink_unblock(mgr);
-    upipe_udpsink->blocked = false;
-
-    struct uchain *uchain;
-    ulist_delete_foreach (&urefs, uchain) {
-        ulist_delete(&urefs, uchain);
-        upipe_udpsink_output(upipe, uref_from_uchain(uchain), NULL);
-    }
+    if (upipe_udpsink_output_sink(upipe))
+        upipe_udpsink_unblock_sink(upipe);
 }
 
 /** @internal @This receives data.
@@ -295,7 +276,12 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_udpsink_output(upipe, uref, upump);
+    if (unlikely(!upipe_udpsink_check_sink(upipe)))
+        upipe_udpsink_hold_sink(upipe, uref);
+    else if (!upipe_udpsink_output(upipe, uref, upump)) {
+        upipe_udpsink_hold_sink(upipe, uref);
+        upipe_udpsink_block_sink(upipe, upump);
+    }
 }
 
 /** @internal @This returns the uri of the currently opened file.
@@ -333,10 +319,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     free(upipe_udpsink->uri);
     upipe_udpsink->uri = NULL;
     upipe_udpsink_set_upump(upipe, NULL);
-    if (upipe_udpsink->blocked) {
-        upump_mgr_sink_unblock(upipe_udpsink->upump_mgr);
-        upipe_udpsink->blocked = false;
-    }
+    upipe_udpsink_unblock_sink(upipe);
 
     if (unlikely(uri == NULL))
         return true;
@@ -447,8 +430,7 @@ static bool upipe_udpsink_control(struct upipe *upipe, enum upipe_command comman
     if (unlikely(!_upipe_udpsink_control(upipe, command, args)))
         return false;
 
-    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    if (unlikely(!ulist_empty(&upipe_udpsink->urefs)))
+    if (unlikely(!upipe_udpsink_check_sink(upipe)))
         upipe_udpsink_wait(upipe, 0);
 
     return true;
@@ -472,12 +454,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     upipe_udpsink_clean_delay(upipe);
     upipe_udpsink_clean_uclock(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
-
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_udpsink->urefs, uchain) {
-        ulist_delete(&upipe_udpsink->urefs, uchain);
-        uref_free(uref_from_uchain(uchain));
-    }
+    upipe_udpsink_clean_sink(upipe);
 
     upipe_clean(upipe);
     free(upipe_udpsink);

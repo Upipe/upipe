@@ -44,6 +44,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_sink.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
 #include <stdlib.h>
@@ -62,6 +63,11 @@
 #include "upipe_av_internal.h"
 
 #define EXPECTED_FLOW "pic."
+
+/** @internal @This handles incoming frames */
+static bool upipe_avcenc_input_frame(struct upipe *upipe,
+                                     struct uref *uref, struct upump *upump);
+
 
 /** @internal @This are the parameters passed to avcodec_open2 by
  * upipe_avcodec_open_cb()
@@ -96,10 +102,10 @@ struct upipe_avcenc {
 
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
-    /** incoming upump_mgr  kept in memory because of pending open_codec */
-    struct upump_mgr *saved_upump_mgr;
-    /** incoming uref kept in memory because of pending open_codec */
-    struct uref *saved_uref;
+    /** temporary uref storage (used during udeal) */
+    struct ulist urefs;
+    /** list of blockers (used during udeal) */
+    struct ulist blockers;
 
     /** uref associated to frames currently in encoder */
     struct uref **uref;
@@ -128,10 +134,7 @@ UPIPE_HELPER_UREF_MGR(upipe_avcenc, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr, upump_av_deal)
-
-/** @internal @This handles incoming frames */
-static bool upipe_avcenc_input_frame(struct upipe *upipe,
-                                     struct uref *uref, struct upump *upump);
+UPIPE_HELPER_SINK(upipe_avcenc, urefs, blockers, upipe_avcenc_input_frame)
 
 /** @This aborts and frees an existing upump watching for exclusive access to
  * avcodec_open().
@@ -145,20 +148,6 @@ static void upipe_avcenc_abort_av_deal(struct upipe *upipe)
         upipe_av_deal_abort(upipe_avcenc->upump_av_deal);
         upump_free(upipe_avcenc->upump_av_deal);
         upipe_avcenc->upump_av_deal = NULL;
-    }
-}
-
-/** @internal @This unblock sinks/saved upump_mgr
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_unblock_sink(struct upipe *upipe)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    if (upipe_avcenc->saved_upump_mgr) {
-        upipe_dbg(upipe, "unblocking saved upump_mgr");
-        upump_mgr_sink_unblock(upipe_avcenc->saved_upump_mgr);
-        upump_mgr_release(upipe_avcenc->saved_upump_mgr);
-        upipe_avcenc->saved_upump_mgr = NULL;
     }
 }
 
@@ -208,7 +197,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
 
     /* just closing, that's all */
     if (!codec) {
-        upipe_avcenc_unblock_sink(upipe);
         upipe_release(upipe);
         return true;
     }
@@ -217,7 +205,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     context = avcodec_alloc_context3(codec);
     if (unlikely(!context)) {
         upipe_throw_aerror(upipe);
-        upipe_avcenc_unblock_sink(upipe);
         upipe_release(upipe);
         return false;
     }
@@ -246,7 +233,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
         default: {
             av_free(context);
             upipe_err_va(upipe, "Unsupported media type (%d)", codec->type);
-            upipe_avcenc_unblock_sink(upipe);
             upipe_release(upipe);
             return false;
             break;
@@ -257,7 +243,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     if (unlikely(avcodec_open2(context, codec, NULL) < 0)) {
         upipe_warn(upipe, "could not open codec");
         av_free(context);
-        upipe_avcenc_unblock_sink(upipe);
         upipe_release(upipe);
         return false;
     }
@@ -276,7 +261,6 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
                                  upipe_avcenc->uref_max * sizeof(void *));
     memset(upipe_avcenc->uref, 0, upipe_avcenc->uref_max * sizeof(void *));
 
-    upipe_avcenc_unblock_sink(upipe);
     upipe_release(upipe);
     return true;
 }
@@ -306,19 +290,11 @@ static void upipe_avcenc_open_codec_cb(struct upump *upump)
     upipe_avcenc_open_codec(upipe);
 
     /* clean dealer */
-    if (unlikely(!upipe_av_deal_yield(upump_av_deal))) {
-        upump_free(upump_av_deal);
-        upump_av_deal = NULL;
-        upipe_err(upipe, "can't stop dealer");
-        upipe_throw_upump_error(upipe);
-        if (upipe_avcenc->context) {
-            avcodec_close(upipe_avcenc->context);
-            av_free(upipe_avcenc->context);
-            upipe_avcenc->context = NULL;
-        }
-        return;
-    }
+    upipe_av_deal_yield(upump_av_deal);
     upump_free(upump_av_deal);
+
+    upipe_avcenc_unblock_sink(upipe);
+    upipe_avcenc_output_sink(upipe);
 }
 
 /** @internal @This wraps open_codec calls (upump/no-upump)
@@ -463,26 +439,10 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
 
             /* if open_codec still pending, save uref and return */
             if (!upipe_avcenc->context) {
-                if (upump) {
-                    upipe_dbg(upipe, "blocking upump_mgr");
-                    upump_mgr_sink_block(upump->mgr);
-                    upump_mgr_use(upump->mgr);
-                    upipe_avcenc->saved_upump_mgr = upump->mgr;
-                }
-                if (upipe_avcenc->saved_uref) {
-                    upipe_warn(upipe, "dropping previously saved packet !");
-                    uref_free(upipe_avcenc->saved_uref);
-                }
-                upipe_avcenc->saved_uref = uref;
+                upipe_avcenc_block_sink(upipe, upump);
+                upipe_avcenc_hold_sink(upipe, uref);
                 return false;
             }
-        }
-        else if (unlikely(upipe_avcenc->saved_uref)) {
-            upipe_dbg(upipe, "processing previously saved packet");
-            struct uref *prev_uref = upipe_avcenc->saved_uref;
-            upipe_avcenc->saved_uref = NULL;
-            /* Not a typo, using the current upump here */
-            upipe_avcenc_input_frame(upipe, prev_uref, upump); 
         }
 
         /* map input */
@@ -737,16 +697,10 @@ static void upipe_avcenc_free(struct upipe *upipe)
         av_free(upipe_avcenc->frame);
     }
 
-    if (upipe_avcenc->saved_uref) {
-        uref_free(upipe_avcenc->saved_uref);
-    }
-    if (upipe_avcenc->saved_upump_mgr) {
-        upump_mgr_sink_unblock(upipe_avcenc->saved_upump_mgr);
-        upump_mgr_release(upipe_avcenc->saved_upump_mgr);
-    }
     free(upipe_avcenc->uref);
 
     upipe_avcenc_abort_av_deal(upipe);
+    upipe_avcenc_clean_sink(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
     upipe_avcenc_clean_uref_mgr(upipe);
     upipe_avcenc_clean_upump_mgr(upipe);
@@ -781,11 +735,10 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_ubuf_mgr(upipe);
     upipe_avcenc_init_upump_mgr(upipe);
     upipe_avcenc_init_output(upipe);
+    upipe_avcenc_init_sink(upipe);
     upipe_avcenc->input_flow = flow_def;
     upipe_avcenc->context = NULL;
     upipe_avcenc->upump_av_deal = NULL;
-    upipe_avcenc->saved_uref = NULL;
-    upipe_avcenc->saved_upump_mgr = NULL;
     upipe_avcenc->pixfmt = NULL;
     upipe_avcenc->frame = avcodec_alloc_frame();
     upipe_avcenc->uref = NULL;

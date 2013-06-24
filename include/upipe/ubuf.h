@@ -219,7 +219,7 @@ static inline struct ubuf *ubuf_from_uchain(struct uchain *uchain)
 
 /** @This returns the uchain structure used for FIFO, LIFO and lists.
  *
- * @param ubuf struct ubuf structure
+ * @param ubuf ubuf structure
  * @return pointer to the uchain structure
  */
 static inline struct uchain *ubuf_to_uchain(struct ubuf *ubuf)

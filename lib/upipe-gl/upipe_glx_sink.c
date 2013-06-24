@@ -181,7 +181,7 @@ static bool upipe_glx_sink_init_watcher(struct upipe *upipe)
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
     if (upipe_glx_sink->upump_mgr && upipe_glx_sink->display) {
         struct upump *upump = upump_alloc_timer(upipe_glx_sink->upump_mgr,
-                                upipe_glx_sink_watcher_cb, upipe, false,
+                                upipe_glx_sink_watcher_cb, upipe,
                                 27000000/1000, 27000000/1000);
         if (unlikely(!upump)) {
             return false;

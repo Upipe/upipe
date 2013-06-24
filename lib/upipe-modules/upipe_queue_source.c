@@ -119,7 +119,6 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
 static void upipe_qsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
     if (likely(uchain != NULL)) {
         struct uref *uref = uref_from_uchain(uchain);

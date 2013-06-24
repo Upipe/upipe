@@ -103,10 +103,23 @@ static inline void ulist_add_list(struct ulist *ulist, struct uchain *element)
     ulist->last_p = &element->next;
 }
 
+/** @This adds a new element at the beginning.
+ *
+ * @param ulist pointer to a ulist structure
+ * @param element pointer to the first element to add
+ */
+static inline void ulist_unshift(struct ulist *ulist, struct uchain *element)
+{
+    element->next = ulist->first;
+    ulist->first = element;
+    if (element->next == NULL)
+        ulist->last_p = &element->next;
+}
+
 /** @This returns a pointer to the first element of the list (without
  * removing it).
  *
- * @param ulist pointer to a struct ulist structure
+ * @param ulist pointer to a ulist structure
  * @return pointer to the first element
  */
 static inline struct uchain *ulist_peek(struct ulist *ulist)
@@ -117,7 +130,7 @@ static inline struct uchain *ulist_peek(struct ulist *ulist)
 /** @This returns a pointer to the first element of the list and removes
  * it.
  *
- * @param ulist pointer to a struct ulist structure
+ * @param ulist pointer to a ulist structure
  * @return pointer to the first element
  */
 static inline struct uchain *ulist_pop(struct ulist *ulist)
@@ -163,9 +176,29 @@ static inline struct uchain *ulist_pop(struct ulist *ulist)
  * @param uchain iterator
  */
 #define ulist_delete(ulist, uchain)                                         \
-    *uchain_delete_p = (uchain)->next;                                      \
-    uchain_delete_next_p = uchain_delete_p;                                 \
-    if (unlikely(*uchain_delete_p == NULL))                                 \
-        (ulist)->last_p = uchain_delete_p;
+    do {                                                                    \
+        *uchain_delete_p = (uchain)->next;                                  \
+        uchain_delete_next_p = uchain_delete_p;                             \
+        if (unlikely(*uchain_delete_p == NULL))                             \
+            (ulist)->last_p = uchain_delete_p;                              \
+    } while (0);
+
+/** @This finds a given element and removes it from the list.
+ *
+ * @param ulist pointer to a ulist structure
+ * @param remove pointer to element to remove
+ * @return true if the element was found and removed
+ */
+static inline bool ulist_remove(struct ulist *ulist, struct uchain *remove)
+{
+    struct uchain *uchain;
+    ulist_delete_foreach (ulist, uchain) {
+        if (uchain == remove) {
+            ulist_delete(ulist, uchain);
+            return true;
+        }
+    }
+    return false;
+}
 
 #endif

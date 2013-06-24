@@ -68,6 +68,8 @@
 #define UREF_POOL_DEPTH 500
 #define UBUF_POOL_DEPTH 3000
 #define UBUF_SHARED_POOL_DEPTH 50
+#define UPUMP_POOL 10
+#define UPUMP_BLOCKER_POOL 10
 
 static uint64_t duration = 0;
 struct upipe *output = NULL;
@@ -149,7 +151,8 @@ int main(int argc, char **argv)
 
     /* structures managers */
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,

@@ -162,7 +162,7 @@
 
       It is expected that more event types get added in the future, especially for Microsoft Windows(tm)-specific objects. Some core objects, which require being able to wait on a condition, propose their own API to allocate an adequate upump (@ref uqueue_upump_alloc_pop or @ref udeal_upump_alloc). In turn, they rely on the @ref ueventfd object provided by Upipe.
 
-      When creating a pump, the pipe must specify whether it would operate as a source, ie. whether the call-back would output packets to outgoing modules. A sink pipe which can no longer write to its output may block the whole pipeline, and in that case pumps marked as sources will be temporarily disabled.
+      A sink pipe which can no longer write to its output may block the source pump (passed to @ref upipe_input) using @ref upump_blocker_alloc. A call-back must be provided, which will be called upon the destruction of the source pump.
 
       Upipe currently provides abstraction layers for these event loops:
 

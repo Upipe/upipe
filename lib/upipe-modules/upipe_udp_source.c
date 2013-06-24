@@ -396,7 +396,7 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
         upipe_udpsrc->upump == NULL) {
         struct upump *upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
                                                   upipe_udpsrc_worker, upipe,
-                                                  true, upipe_udpsrc->fd);
+                                                  upipe_udpsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_upump_error(upipe);
             return false;

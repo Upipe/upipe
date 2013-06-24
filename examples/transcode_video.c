@@ -90,6 +90,8 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
+#define UPUMP_POOL 10
+#define UPUMP_BLOCKER_POOL 10
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
@@ -197,7 +199,8 @@ static void *encoding_thread(void *_qsrc)
     printf("Starting encoding thread\n");
 
     struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     upipe_set_upump_mgr(qsrc, upump_mgr);
 
     struct uref *outflow = uref_alloc(uref_mgr);
@@ -295,7 +298,7 @@ int main(int argc, char **argv)
 
     /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop);
+    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);

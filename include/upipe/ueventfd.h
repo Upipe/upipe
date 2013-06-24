@@ -1,9 +1,7 @@
-/*****************************************************************************
- * ueventfd.h: upipe replacement for eventfd calls
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe replacement for eventfd calls
+ */
 
 #ifndef _UPIPE_UEVENTFD_H_
 /** @hidden */
@@ -80,22 +82,19 @@ struct ueventfd {
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *ueventfd_upump_alloc(struct ueventfd *fd,
                                                  struct upump_mgr *upump_mgr,
-                                                 upump_cb cb, void *opaque,
-                                                 bool source)
+                                                 upump_cb cb, void *opaque)
 {
 #ifdef HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, source, fd->event_fd);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, fd->event_fd);
     } else
 #endif
     if (likely(fd->mode == UEVENTFD_MODE_PIPE)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, source, (fd->pipe_fds)[0]);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, (fd->pipe_fds)[0]);
     } else {
         return NULL; // shouldn't happen
     }

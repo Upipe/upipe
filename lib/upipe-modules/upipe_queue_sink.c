@@ -33,10 +33,12 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/upump.h>
+#include <upipe/upump_blocker.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_sink.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
 
@@ -48,6 +50,8 @@
 #include <assert.h>
 
 static void upipe_qsink_watcher(struct upump *upump);
+static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
+                               struct upump *upump);
 
 /** @This is the private context of a queue sink pipe. */
 struct upipe_qsink {
@@ -62,8 +66,8 @@ struct upipe_qsink {
     struct upipe *qsrc;
     /** temporary uref storage */
     struct ulist urefs;
-    /** true if the sink currently blocks the pipe */
-    bool blocked;
+    /** list of blockers */
+    struct ulist blockers;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -72,6 +76,7 @@ struct upipe_qsink {
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe)
 UPIPE_HELPER_FLOW(upipe_qsink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr, upump)
+UPIPE_HELPER_SINK(upipe_qsink, urefs, blockers, upipe_qsink_output)
 
 /** @internal @This allocates a queue sink pipe.
  *
@@ -93,10 +98,9 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     upipe_qsink_init_upump_mgr(upipe);
+    upipe_qsink_init_sink(upipe);
     upipe_qsink->qsrc = NULL;
     upipe_qsink->flow_def = flow_def;
-    upipe_qsink->blocked = false;
-    ulist_init(&upipe_qsink->urefs);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -104,15 +108,14 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
 /** @This marks the sink as blocked and starts the watcher.
  *
  * @param upipe description structure of the pipe
+ * @param upump pump that generated the buffer
  */
-static void upipe_qsink_wait(struct upipe *upipe)
+static void upipe_qsink_wait(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (!upipe_qsink->blocked) {
-        upump_mgr_sink_block(upipe_qsink->upump_mgr);
-        upipe_qsink->blocked = true;
-        upump_start(upipe_qsink->upump);
-    }
+    upump_start(upipe_qsink->upump);
+
+    upipe_qsink_block_sink(upipe, upump);
 }
 
 /** @internal @This outputs data to the queue.
@@ -120,21 +123,13 @@ static void upipe_qsink_wait(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump pump that generated the buffer
+ * @return true if the output could be written
  */
-static void upipe_qsink_output(struct upipe *upipe, struct uref *uref,
+static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (unlikely(!ulist_empty(&upipe_qsink->urefs))) {
-        ulist_add(&upipe_qsink->urefs, uref_to_uchain(uref));
-        return;
-    }
-
-    if (unlikely(!uqueue_push(upipe_queue(upipe_qsink->qsrc),
-                              uref_to_uchain(uref)))) {
-        ulist_add(&upipe_qsink->urefs, uref_to_uchain(uref));
-        upipe_qsink_wait(upipe);
-    }
+    return uqueue_push(upipe_queue(upipe_qsink->qsrc), uref_to_uchain(uref));
 }
 
 /** @internal @This is called when the queue can be written again.
@@ -144,20 +139,10 @@ static void upipe_qsink_output(struct upipe *upipe, struct uref *uref,
  */
 static void upipe_qsink_watcher(struct upump *upump)
 {
-    struct upump_mgr *mgr = upump->mgr;
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    struct ulist urefs = upipe_qsink->urefs;
-
-    ulist_init(&upipe_qsink->urefs);
-    upump_mgr_sink_unblock(mgr);
-    upipe_qsink->blocked = false;
-    upump_stop(upump);
-
-    struct uchain *uchain;
-    ulist_delete_foreach (&urefs, uchain) {
-        ulist_delete(&urefs, uchain);
-        upipe_qsink_output(upipe, uref_from_uchain(uchain), NULL);
+    if (upipe_qsink_output_sink(upipe)) {
+        upipe_qsink_unblock_sink(upipe);
+        upump_stop(upump);
     }
 }
 
@@ -177,7 +162,12 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_qsink_output(upipe, uref, upump);
+    if (unlikely(!upipe_qsink_check_sink(upipe)))
+        upipe_qsink_hold_sink(upipe, uref);
+    else if (!upipe_qsink_output(upipe, uref, upump)) {
+        upipe_qsink_hold_sink(upipe, uref);
+        upipe_qsink_wait(upipe, upump);
+    }
 }
 
 /** @internal @This sets the input flow definition.
@@ -204,7 +194,7 @@ static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
             upipe_throw_aerror(upipe);
             return false;
         }
-        upipe_qsink_output(upipe, flow_def_dup, NULL);
+        upipe_qsink_input(upipe, flow_def_dup, NULL);
     }
     return true;
 }
@@ -242,7 +232,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
                 upipe_throw_aerror(upipe);
             else {
                 uref_flow_set_end(uref);
-                upipe_qsink_output(upipe, uref, NULL);
+                upipe_qsink_input(upipe, uref, NULL);
             }
         }
         upipe_release(upipe_qsink->qsrc);
@@ -260,10 +250,8 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
 
     upipe_qsink->qsrc = qsrc;
     upipe_use(qsrc);
-    if (upipe_qsink->blocked) {
-        upump_mgr_sink_unblock(upipe_qsink->upump_mgr);
-        upipe_qsink->blocked = false;
-    }
+    upipe_qsink_unblock_sink(upipe);
+
     upipe_notice_va(upipe, "using queue source %p", qsrc);
     if (upipe_qsink->flow_def != NULL) {
         /* replay flow definition */
@@ -271,7 +259,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
         if (unlikely(uref == NULL))
             upipe_throw_aerror(upipe);
         else
-            upipe_qsink_output(upipe, uref, NULL);
+            upipe_qsink_input(upipe, uref, NULL);
     }
     return true;
 }
@@ -349,8 +337,8 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
         }
         upipe_qsink_set_upump(upipe, upump);
     }
-    if (unlikely(!ulist_empty(&upipe_qsink->urefs)))
-        upipe_qsink_wait(upipe);
+    if (unlikely(!upipe_qsink_check_sink(upipe)))
+        upipe_qsink_wait(upipe, NULL);
 
     return true;
 }
@@ -368,12 +356,7 @@ static void upipe_qsink_free(struct upipe *upipe)
     if (upipe_qsink->flow_def != NULL)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink_clean_upump_mgr(upipe);
-
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_qsink->urefs, uchain) {
-        ulist_delete(&upipe_qsink->urefs, uchain);
-        uref_free(uref_from_uchain(uchain));
-    }
+    upipe_qsink_clean_sink(upipe);
 
     upipe_clean(upipe);
     free(upipe_qsink);

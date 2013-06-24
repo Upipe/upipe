@@ -40,6 +40,9 @@
 #include <string.h>
 #include <assert.h>
 
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
+
 static struct upump_mgr *upump_mgr;
 static bool got_upump_mgr = false;
 
@@ -94,7 +97,7 @@ static struct upipe_mgr uprobe_test_mgr = {
 int main(int argc, char **argv)
 {
     struct ev_loop *loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop);
+    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uprobe *uprobe = uprobe_upump_mgr_alloc(NULL, upump_mgr);

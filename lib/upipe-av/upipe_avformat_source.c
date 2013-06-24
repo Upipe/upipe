@@ -454,7 +454,7 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
-                                            upipe_avfsrc_worker, upipe, true);
+                                            upipe_avfsrc_worker, upipe);
     if (unlikely(upump == NULL)) {
         upipe_throw_upump_error(upipe);
         return false;
@@ -618,13 +618,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
     }
     int error = avformat_find_stream_info(context, options);
 
-    if (unlikely(!upipe_av_deal_yield(upump))) {
-        upump_free(upipe_avfsrc->upump_av_deal);
-        upipe_avfsrc->upump_av_deal = NULL;
-        upipe_err(upipe, "can't stop dealer");
-        upipe_throw_upump_error(upipe);
-        return;
-    }
+    upipe_av_deal_yield(upump);
     upump_free(upipe_avfsrc->upump_av_deal);
     upipe_avfsrc->upump_av_deal = NULL;
     upipe_avfsrc->probed = true;

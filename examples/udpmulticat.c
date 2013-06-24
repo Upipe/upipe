@@ -88,6 +88,8 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
+#define UPUMP_POOL 10
+#define UPUMP_BLOCKER_POOL 10
 #define READ_SIZE 4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_WARNING
 
@@ -164,7 +166,8 @@ int main(int argc, char *argv[])
                                                          UBUF_POOL_DEPTH,
                                                          umem_mgr, -1, -1,
                                                          -1, 0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);

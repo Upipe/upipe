@@ -457,11 +457,10 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
 #if 1
         struct upump *upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
                                                   upipe_fsrc_worker, upipe,
-                                                  true, upipe_fsrc->fd);
+                                                  upipe_fsrc->fd);
 #else
         struct upump *upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
-                                                  upipe_fsrc_worker, upipe,
-                                                  true);
+                                                upipe_fsrc_worker, upipe);
 #endif
         if (unlikely(upump == NULL)) {
             upipe_throw_upump_error(upipe);

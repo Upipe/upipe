@@ -67,16 +67,13 @@ static inline struct upump *upipe_av_deal_upump_alloc(
 /** @This starts the watcher on exclusive access to avcodec_open().
  *
  * @param upump watcher allocated by @ref udeal_upump_alloc
- * @return false in case of upump error
  */
-static inline bool upipe_av_deal_start(struct upump *upump)
+static inline void upipe_av_deal_start(struct upump *upump)
 {
-    return udeal_start(&upipe_av_deal, upump);
+    udeal_start(&upipe_av_deal, upump);
 }
 
 /** @This tries to grab the exclusive access to avcodec_open().
- *
- * @return true if the resource may be exclusively used
  */
 static inline bool upipe_av_deal_grab(void)
 {
@@ -87,11 +84,10 @@ static inline bool upipe_av_deal_grab(void)
  * @ref upipe_av_deal_grab.
  *
  * @param upump watcher allocated by @ref udeal_upump_alloc
- * @return false in case of upump error
  */
-static inline bool upipe_av_deal_yield(struct upump *upump)
+static inline void upipe_av_deal_yield(struct upump *upump)
 {
-    return udeal_yield(&upipe_av_deal, upump);
+    udeal_yield(&upipe_av_deal, upump);
 }
 
 /** @This aborts the watcher before it has had a chance to run. It must only
@@ -99,11 +95,10 @@ static inline bool upipe_av_deal_yield(struct upump *upump)
  * same job.
  *
  * @param upump watcher allocated by @ref udeal_upump_alloc
- * @return false in case of upump error
  */
-static inline bool upipe_av_deal_abort(struct upump *upump)
+static inline void upipe_av_deal_abort(struct upump *upump)
 {
-    return udeal_abort(&upipe_av_deal, upump);
+    udeal_abort(&upipe_av_deal, upump);
 }
 
 /** @This wraps around av_strerror() using ulog storage.

@@ -68,6 +68,8 @@
 
 #define ALIVE(a) { printf("# ALIVE[%d]: %s %s - %d\n", (a), __FILE__, __func__, __LINE__); fflush(stdout); }
 
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
@@ -330,17 +332,18 @@ static void *test_thread(void *_thread)
 
     printf("Thread %d launched.\n", thread->num);
     struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert (upump_mgr != NULL);
 
     assert(upipe_set_upump_mgr(avcdec, upump_mgr));
 
-    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler, thread, false);
+    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler, thread);
     assert(setcodec_pump);
-    assert(upump_start(setcodec_pump));
+    upump_start(setcodec_pump);
 
     thread->limit = THREAD_FRAMES_LIMIT;
-    thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread, true);
+    thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread);
     assert(thread->fetchav_pump);
 
     // Fire !
@@ -422,12 +425,13 @@ int main (int argc, char **argv)
 
     /* ev / pumps */
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct thread mainthread;
-    struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread, false);
+    struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread);
     assert(write_pump);
-    assert(upump_start(write_pump));
+    upump_start(write_pump);
 
     // main thread description
     memset(&mainthread, 0, sizeof(struct thread));

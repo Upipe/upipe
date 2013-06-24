@@ -67,6 +67,8 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH  10
 #define UBUF_POOL_DEPTH  10
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define READ_SIZE  4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define UREF_PER_SLICE 10
@@ -167,7 +169,8 @@ int main(int argc, char *argv[])
                                                          umem_mgr, -1, -1,
                                                          -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -207,11 +210,11 @@ int main(int argc, char *argv[])
     assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
 
 	// idler - packet generator
-	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL, true);	
+	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL);	
 	assert(idler);
 
 	// fire !
-	assert(upump_start(idler));
+	upump_start(idler);
     ev_loop(loop, 0);
 
 	// release everything

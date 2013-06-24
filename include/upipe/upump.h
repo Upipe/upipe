@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
+#include <upipe/ulist.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -42,26 +43,29 @@
 struct upump_mgr;
 /** @hidden */
 struct upump;
+/** @hidden */
+struct upump_blocker;
 
-/** types of upump watchers */
-enum upump_watcher {
+/** types of pumps */
+enum upump_type {
     /** event continuously triggers (no argument) */
-    UPUMP_WATCHER_IDLER,
-    /** event triggers after a given timeout (arguments = uint64_t, uint64_t) */
-    UPUMP_WATCHER_TIMER,
+    UPUMP_TYPE_IDLER,
+    /** event triggers once after a given timeout (arguments = uint64_t,
+     * uint64_t) */
+    UPUMP_TYPE_TIMER,
     /** event triggers on available data from file descriptor
      * (argument = int) */
-    UPUMP_WATCHER_FD_READ,
+    UPUMP_TYPE_FD_READ,
     /** event triggers on available writing space to file descriptor
      * (argument = int) */
-    UPUMP_WATCHER_FD_WRITE
+    UPUMP_TYPE_FD_WRITE
     /* TODO: Windows objects */
 };
 
-/** function called when a watcher is triggered */
+/** function called when a pump is triggered */
 typedef void (*upump_cb)(struct upump *);
 
-/** @This stores an event watcher of a given event loop.
+/** @This stores a pump of a given event loop.
  *
  * The structure is not refcounted and shouldn't be used by more than one
  * thread at once.
@@ -72,193 +76,186 @@ struct upump {
     /** pointer to the event loop manager */
     struct upump_mgr *mgr;
 
+    /** true if upump_start() was called on the pump */
+    bool started;
+    /** blockers registered on this pump */
+    struct ulist blockers;
+
     /** function to call back when triggered */
     upump_cb cb;
     /** opaque pointer for the callback */
     void *opaque;
 };
 
+/** @This returns the high-level upump structure.
+ *
+ * @param uchain pointer to the uchain structure wrapped into the upump
+ * @return pointer to the upump structure
+ */
+static inline struct upump *upump_from_uchain(struct uchain *uchain)
+{
+    return container_of(uchain, struct upump, uchain);
+}
+
+/** @This returns the uchain structure used for FIFO, LIFO and lists.
+ *
+ * @param upump upump structure
+ * @return pointer to the uchain structure
+ */
+static inline struct uchain *upump_to_uchain(struct upump *upump)
+{
+    return &upump->uchain;
+}
+
 /** @This stores common management parameters for a given event loop. */
 struct upump_mgr {
     /** refcount management structure */
     urefcount refcount;
-    /** number of blocked sinks */
-    unsigned int nb_blocked_sinks;
 
-    /** function to create a watcher */
-    struct upump *(*upump_alloc)(struct upump_mgr *, bool,
-                                 enum upump_watcher, va_list);
-    /** function to start a watcher */
-    bool (*upump_start)(struct upump *, bool);
-    /** function to stop a watcher */
-    bool (*upump_stop)(struct upump *, bool);
-    /** function to free the watcher */
+    /** function to create a pump */
+    struct upump *(*upump_alloc)(struct upump_mgr *,
+                                 enum upump_type, va_list);
+    /** function to start a pump */
+    void (*upump_start)(struct upump *);
+    /** function to stop a pump */
+    void (*upump_stop)(struct upump *);
+    /** function to free the pump */
     void (*upump_free)(struct upump *);
 
+    /** function to create a blocker */
+    struct upump_blocker *(*upump_blocker_alloc)(struct upump *);
+    /** function to free the blocker */
+    void (*upump_blocker_free)(struct upump_blocker *);
+
+    /** function to release all buffers kept in pools */
+    void (*upump_mgr_vacuum)(struct upump_mgr *);
     /** function to free upump manager */
     void (*upump_mgr_free)(struct upump_mgr *);
 };
 
-/** @internal @This allocates and initializes a watcher.
+/** @internal @This allocates and initializes a pump.
  *
  * @param mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @param event type of event to watch for, followed by optional parameters
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @return pointer to allocated pump, or NULL in case of failure
  */
-static inline struct upump *upump_alloc(struct upump_mgr *mgr, upump_cb cb,
-                                        void *opaque, bool source,
-                                        enum upump_watcher event, ...)
+static inline struct upump *upump_alloc(struct upump_mgr *mgr,
+                                        upump_cb cb, void *opaque,
+                                        enum upump_type event, ...)
 {
     struct upump *upump;
     va_list args;
     va_start(args, event);
-    upump = mgr->upump_alloc(mgr, source, event, args);
+    upump = mgr->upump_alloc(mgr, event, args);
     va_end(args);
-    if (unlikely(upump == NULL)) return NULL;
+    if (unlikely(upump == NULL))
+        return NULL;
 
     uchain_init(&upump->uchain);
-    upump->mgr = mgr;
     upump->cb = cb;
     upump->opaque = opaque;
     return upump;
 }
 
-/** @This allocates and initializes an idler watcher.
+/** @This allocates and initializes an idler pump.
  *
  * @param mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_idler(struct upump_mgr *mgr,
-                                              upump_cb cb, void *opaque,
-                                              bool source)
+                                              upump_cb cb, void *opaque)
 {
-    return upump_alloc(mgr, cb, opaque, source, UPUMP_WATCHER_IDLER);
+    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_IDLER);
 }
 
-/** @This allocates and initializes a watcher for a timer.
+/** @This allocates and initializes a pump for a timer.
  *
  * @param mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @param after time after which it triggers, in ticks of a 27 MHz monotonic
  * clock
- * @param repeat watcher will trigger again each repeat occurrence, in ticks
- * of a 27 MHz monotonic clock
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @param repeat pump will trigger again each repeat occurrence, in ticks
+ * of a 27 MHz monotonic clock (0 to disable)
+ * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_timer(struct upump_mgr *mgr,
                                               upump_cb cb, void *opaque,
-                                              bool source,
                                               uint64_t after, uint64_t repeat)
 {
-    return upump_alloc(mgr, cb, opaque, source, UPUMP_WATCHER_TIMER,
-                       after, repeat);
+    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_TIMER, after, repeat);
 }
 
-/** @This allocates and initializes a watcher for a readable file descriptor.
+/** @This allocates and initializes a pump for a readable file descriptor.
  *
  * @param mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @param fd file descriptor to watch
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_fd_read(struct upump_mgr *mgr,
                                                 upump_cb cb, void *opaque,
-                                                bool source, int fd)
+                                                int fd)
 {
-    return upump_alloc(mgr, cb, opaque, source, UPUMP_WATCHER_FD_READ, fd);
+    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_FD_READ, fd);
 }
 
-/** @This allocates and initializes a watcher for a writable file descriptor.
+/** @This allocates and initializes a pump for a writable file descriptor.
  *
  * @param mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @param fd file descriptor to watch
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_fd_write(struct upump_mgr *mgr,
                                                  upump_cb cb, void *opaque,
-                                                 bool source, int fd)
+                                                 int fd)
 {
-    return upump_alloc(mgr, cb, opaque, source, UPUMP_WATCHER_FD_WRITE, fd);
+    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_FD_WRITE, fd);
 }
 
-/** @This asks the event loop to start monitoring a watcher.
+/** @This asks the event loop to start monitoring a pump.
  *
- * @param watcher description structure of the watcher
- * @return false in case of failure
+ * @param pump description structure of the pump
  */
-static inline bool upump_start(struct upump *upump)
+static inline void upump_start(struct upump *upump)
 {
-    return upump->mgr->upump_start(upump, false);
+    upump->mgr->upump_start(upump);
 }
 
-/** @internal @This forces starting a watcher.
- * It is used internally to enable sources after an iteration of the loop.
+/** @This asks the event loop to stop monitoring a pump.
  *
- * @param watcher description structure of the watcher
- * @return false in case of failure
+ * @param pump description structure of the pump
  */
-static inline bool upump_start_source(struct upump *upump)
+static inline void upump_stop(struct upump *upump)
 {
-    return upump->mgr->upump_start(upump, true);
-}
-
-/** @This asks the event loop to stop monitoring a watcher.
- *
- * @param watcher description structure of the watcher
- * @return false in case of failure
- */
-static inline bool upump_stop(struct upump *upump)
-{
-    return upump->mgr->upump_stop(upump, false);
+    upump->mgr->upump_stop(upump);
 }
 
 /** @This frees a struct upump structure.
- * Please note that the watcher must be stopped before.
+ * Please note that the pump must be stopped before.
  *
- * @param upump description structure of the watcher
+ * @param upump description structure of the pump
  */
 static inline void upump_free(struct upump *upump)
 {
     upump->mgr->upump_free(upump);
 }
 
-/** @internal @This forces stopping a watcher.
- * It is used internally to disable sources after an iteration of the loop.
- *
- * @param watcher description structure of the watcher
- * @return false in case of failure
- */
-static inline bool upump_stop_source(struct upump *upump)
-{
-    return upump->mgr->upump_stop(upump, true);
-}
-
 /** @This gets the opaque structure with a cast.
  */
 #define upump_get_opaque(upump, type) (type)(upump)->opaque
 
-/** @This sets the callback parameters of an existing watcher.
+/** @This sets the callback parameters of an existing pump.
  *
- * @param upump description structure of the watcher
- * @param cb function to call when the watcher triggers
+ * @param upump description structure of the pump
+ * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
  */
 static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
@@ -282,26 +279,9 @@ static inline void upump_mgr_use(struct upump_mgr *mgr)
  */
 static inline void upump_mgr_release(struct upump_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
+    if (unlikely(mgr->upump_mgr_free != NULL &&
+                 urefcount_release(&mgr->refcount)))
         mgr->upump_mgr_free(mgr);
-}
-
-/** @This increments the number of blocked sinks.
- *
- * @param mgr pointer to upump_mgr
- */
-static inline void upump_mgr_sink_block(struct upump_mgr *mgr)
-{
-    mgr->nb_blocked_sinks++;
-}
-
-/** @This decrements the number of blocked sinks.
- *
- * @param mgr pointer to upump_mgr
- */
-static inline void upump_mgr_sink_unblock(struct upump_mgr *mgr)
-{
-    mgr->nb_blocked_sinks--;
 }
 
 #endif

@@ -433,7 +433,7 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
     ubuf_mgr_release(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
 }
 
-/** @This instructs an existing ubuf block_mem mem manager to release all structures
+/** @This instructs an existing ubuf_block_mem manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a ubuf manager

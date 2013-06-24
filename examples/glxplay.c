@@ -121,12 +121,14 @@ graph {flow: east}
 
 #define ALIVE() { printf("ALIVE %s %d\n", __func__, __LINE__); fflush(stdout);}
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
-#define QUEUE_LENGTH 50
+#define QUEUE_LENGTH 5
 #define UMEM_POOL 512
 #define UDICT_POOL_DEPTH 500
 #define UREF_POOL_DEPTH 500
 #define UBUF_POOL_DEPTH 3000
 #define UBUF_SHARED_POOL_DEPTH 50
+#define UPUMP_POOL 10
+#define UPUMP_BLOCKER_POOL 10
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
@@ -229,7 +231,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
             upipe_qsink_set_qsrc(qsink, qsrc);
             upipe_release(qsink);
-
 #else
             struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
             struct upipe *null = upipe_flow_alloc(upipe_null_mgr, uprobe,
@@ -256,6 +257,7 @@ static void keyhandler(struct upipe *upipe, unsigned long key)
             exit(0);
         }
         case ' ': {
+#if 0
             struct upump_mgr *upump_mgr = NULL;
             upipe_get_upump_mgr(upipe, &upump_mgr);
             if ( (paused = !paused) ) {
@@ -265,6 +267,8 @@ static void keyhandler(struct upipe *upipe, unsigned long key)
                 upipe_notice(upipe, "Playback resumed");
                 upump_mgr_sink_unblock(upump_mgr);
             }
+#endif
+            /* Should be done as a command to the glx pipe */
             break;
         }
         default:
@@ -333,13 +337,13 @@ static void *glx_thread (void *_thread)
     struct thread *thread = _thread;
 
     struct ev_loop *loop = ev_loop_new(0);
-    upump_mgr_thread = upump_ev_mgr_alloc(loop);
+    upump_mgr_thread = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     upipe_set_upump_mgr(qsrc, upump_mgr_thread);
 
     uprobe_init(&uprobe_glx, thread_catch, logger);
 
     struct upump *idlepump = upump_alloc_timer(upump_mgr_thread, thread_idler, thread,
-                                               false, 0, 27000000/1000);
+                                               0, 27000000/1000);
     upump_start(idlepump);
 
     // Fire
@@ -374,7 +378,8 @@ int main(int argc, char** argv)
 
     // upipe env
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,

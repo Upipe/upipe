@@ -80,22 +80,19 @@ static inline struct upump *udeal_upump_alloc(struct udeal *udeal,
                                               struct upump_mgr *upump_mgr,
                                               upump_cb cb, void *opaque)
 {
-    return ueventfd_upump_alloc(&udeal->event, upump_mgr, cb, opaque, false);
+    return ueventfd_upump_alloc(&udeal->event, upump_mgr, cb, opaque);
 }
 
 /** @This starts the watcher and tries to immediately run the call-back.
  *
  * @param udeal pointer to a udeal structure
  * @param upump watcher allocated by @ref udeal_upump_alloc
- * @return false in case of upump error
  */
-static inline bool udeal_start(struct udeal *udeal, struct upump *upump)
+static inline void udeal_start(struct udeal *udeal, struct upump *upump)
 {
-    if (unlikely(!upump_start(upump)))
-        return false;
+    upump_start(upump);
     if (likely(uatomic_fetch_add(&udeal->waiters, 1) == 0))
         upump->cb(upump);
-    return true;
 }
 
 /** @This tries to grab the resource.
@@ -124,14 +121,13 @@ static inline bool udeal_grab(struct udeal *udeal)
  *
  * @param udeal pointer to a udeal structure
  * @param upump watcher allocated by @ref udeal_upump_alloc
- * @return false in case of upump error
  */
-static inline bool udeal_yield(struct udeal *udeal, struct upump *upump)
+static inline void udeal_yield(struct udeal *udeal, struct upump *upump)
 {
     uatomic_fetch_sub(&udeal->access, 1);
     if (uatomic_fetch_sub(&udeal->waiters, 1) > 1)
         ueventfd_write(&udeal->event);
-    return upump_stop(upump);
+    upump_stop(upump);
 }
 
 /** @This aborts the watcher before it has had a chance to run. It must only
@@ -141,10 +137,10 @@ static inline bool udeal_yield(struct udeal *udeal, struct upump *upump)
  * @param upump watcher allocated by @ref udeal_upump_alloc
  * @return false in case of upump error
  */
-static inline bool udeal_abort(struct udeal *udeal, struct upump *upump)
+static inline void udeal_abort(struct udeal *udeal, struct upump *upump)
 {
     uatomic_fetch_sub(&udeal->waiters, 1);
-    return upump_stop(upump);
+    upump_stop(upump);
 }
 
 /** @This cleans up the udeal structure.

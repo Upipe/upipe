@@ -73,6 +73,8 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 #define READ_SIZE 4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define BUF_SIZE 256
@@ -247,7 +249,8 @@ int main(int argc, char *argv[])
                                                          umem_mgr, -1, -1,
                                                          -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uclock *uclock = uclock_std_alloc(0);
     assert(uclock != NULL);
@@ -304,9 +307,9 @@ int main(int argc, char *argv[])
 	}
 	assert(p);
 
-    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL, false);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL);
 	assert(write_pump);
-	assert(upump_start(write_pump));
+	upump_start(write_pump);
 
 	/* fire */
     ev_loop(loop, 0);
@@ -339,9 +342,9 @@ int main(int argc, char *argv[])
     assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
 
     /* redefine write pump */
-    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, true);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL);
     assert(write_pump);
-    assert(upump_start(write_pump));
+    upump_start(write_pump);
 
     /* fire again */
     ev_loop(loop, 0);
