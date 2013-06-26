@@ -57,11 +57,12 @@
 #include <assert.h>
 
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/ietf/rtp3551.h>
 
 #define EXPECTED_FLOW "block."
 #define OUT_FLOW "block.rtp."
 
-#define DEFAULT_FREQ 90000 /* (90kHz, see rfc 2250 and 3551) */
+#define DEFAULT_RATE 90000 /* (90kHz, see rfc 2250 and 3551) */
 
 /** upipe_rtp_prepend structure */ 
 struct upipe_rtp_prepend {
@@ -74,10 +75,11 @@ struct upipe_rtp_prepend {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /* rtp sequence number */
+    /** rtp sequence number */
     uint16_t seqnum;
-    /* timestamp freq */
-    unsigned int freq;
+    /** timestamp clockrate */
+    uint32_t clockrate;
+    /** rtp type */ 
     uint8_t type;
 
     /** public upipe structure */
@@ -111,8 +113,8 @@ static void _upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
         uref_clock_get_systime(uref, &dts);
     }
     div = lldiv(dts, UCLOCK_FREQ);
-    ts = div.quot * upipe_rtp_prepend->freq
-         + ((uint64_t)div.rem * upipe_rtp_prepend->freq)/UCLOCK_FREQ;
+    ts = div.quot * upipe_rtp_prepend->clockrate
+         + ((uint64_t)div.rem * upipe_rtp_prepend->clockrate)/UCLOCK_FREQ;
     
     /* alloc header */
     header = ubuf_block_alloc(upipe_rtp_prepend->ubuf_mgr, RTP_HEADER_SIZE);
@@ -175,6 +177,52 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     _upipe_rtp_prepend_input(upipe, uref, upump);
 }
 
+/** @internal @This sets the rtp type and clock rate
+ *
+ * @param upipe description structure of the pipe
+ * @param type rtp payload type
+ * @param clockrate rtp timestamp and clock rate (optional, set
+ * according to rfc 3551 if null)
+ * @return false in case of error
+ */
+static bool _upipe_rtp_prepend_set_type(struct upipe *upipe,
+                                        uint8_t type, uint32_t clockrate)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
+    type = 0x7f & type;
+    if (!clockrate) {
+        clockrate = rtp_3551_get_clock_rate(type);
+    }
+    if (unlikely(!clockrate)) {
+        /* fallback to default rate in case of unspecified and unknown rate */
+        clockrate = DEFAULT_RATE;
+    }
+    upipe_rtp_prepend->clockrate = clockrate;
+    upipe_rtp_prepend->type = type;
+    return true;
+}
+
+/** @internal @This returns the configured RTP type.
+ *
+ * @param upipe description structure of the pipe
+ * @param type_p rtp type
+ * @param rate_p rtp timestamp clock rate
+ * @return false in case of error
+ */
+static bool _upipe_rtp_prepend_get_type(struct upipe *upipe,
+                                        uint8_t *type, uint32_t *clockrate)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+                       upipe_rtp_prepend_from_upipe(upipe);
+    if (type) {
+        *type = upipe_rtp_prepend->type;
+    }
+    if (clockrate) {
+        *clockrate = upipe_rtp_prepend->clockrate;
+    }
+    return true;
+}
+
 /** @internal @This processes control commands on a rtp_prepend pipe.
  *
  * @param upipe description structure of the pipe
@@ -207,6 +255,21 @@ static bool upipe_rtp_prepend_control(struct upipe *upipe,
             return upipe_rtp_prepend_set_output(upipe, output);
         }
 
+        case UPIPE_RTP_PREPEND_GET_TYPE: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_RTP_PREPEND_SIGNATURE);
+            uint8_t *type_p = va_arg(args, uint8_t *);
+            uint32_t *rate_p = va_arg(args, uint32_t *);
+            return _upipe_rtp_prepend_get_type(upipe, type_p, rate_p);
+        }
+        case UPIPE_RTP_PREPEND_SET_TYPE: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_RTP_PREPEND_SIGNATURE);
+            uint8_t type = (uint8_t) va_arg(args, int);
+            uint32_t rate = va_arg(args, uint32_t);
+            return _upipe_rtp_prepend_set_type(upipe, type, rate);
+        }
+
         default:
             return false;
     }
@@ -236,8 +299,9 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend_init_output(upipe);
 
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
-    upipe_rtp_prepend->type = RTP_TYPE_TS; /* transport TS by default */
-    upipe_rtp_prepend->freq = DEFAULT_FREQ;
+
+    /* transport TS by default (FIXME) */
+    _upipe_rtp_prepend_set_type(upipe, RTP_TYPE_TS, 0);
 
     upipe_throw_ready(upipe);
 
@@ -264,7 +328,6 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
 static void upipe_rtp_prepend_free(struct upipe *upipe)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
-    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
     upipe_rtp_prepend_clean_ubuf_mgr(upipe);

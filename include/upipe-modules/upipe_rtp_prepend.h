@@ -40,7 +40,41 @@
 /** @This extends upipe_command with specific commands for rtp_prepend pipes. */
 enum upipe_rtp_prepend_command {
     UPIPE_RTP_PREPEND_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set rtp type/clockrate (uint8_t, uint32_t) */
+    UPIPE_RTP_PREPEND_SET_TYPE,
+    /** set rtp type/clockrate (uint8_t*, uint32_t*) */
+    UPIPE_RTP_PREPEND_GET_TYPE,
 };
+
+/** @This returns the configured RTP type.
+ *
+ * @param upipe description structure of the pipe
+ * @param type_p rtp type
+ * @param clockrate_p rtp timestamp clock rate
+ * @return false in case of error
+ */
+static inline bool upipe_rtp_prepend_get_type(struct upipe *upipe,
+                               uint8_t *type_p, uint32_t *clockrate_p)
+{
+    return upipe_control(upipe, UPIPE_RTP_PREPEND_GET_TYPE,
+                         UPIPE_RTP_PREPEND_SIGNATURE, type_p, clockrate_p);
+}
+
+/** @This sets the RTP type.
+ *
+ * @param upipe description structure of the pipe
+ * @param type rtp payload type
+ * @param clockrate rtp timestamp and clock rate (optional, set
+ * according to rfc 3551 if null)
+ * @return false in case of error
+ */
+static inline bool upipe_rtp_prepend_set_type(struct upipe *upipe,
+                               uint8_t type, uint32_t clockrate)
+{
+    return upipe_control(upipe, UPIPE_RTP_PREPEND_SET_TYPE,
+                         UPIPE_RTP_PREPEND_SIGNATURE, type, clockrate);
+}
 
 /** @This returns the management structure for rtp_prepend pipes.
  *
