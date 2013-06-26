@@ -20,6 +20,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_probe_uref.c \
 	upipe_null.c \
 	upipe_skip.c \
+	upipe_htons.c \
 	upipe_chunk_stream.c \
 	upipe_setattr.c \
 	upipe_match_attr.c \

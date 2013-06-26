@@ -45,6 +45,7 @@ check_PROGRAMS = \
 	upipe_probe_uref_test \
 	upipe_multicat_probe_test \
 	upipe_chunk_stream_test \
+	upipe_htons_test \
 	upipe_filter_blend_test
 
 TESTS = \
@@ -72,6 +73,7 @@ TESTS = \
 	upipe_probe_uref_test \
 	upipe_multicat_probe_test \
 	upipe_chunk_stream_test \
+	upipe_htons_test \
 	upipe_filter_blend_test
 
 if HAVE_EV
@@ -182,6 +184,7 @@ upipe_multicat_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/lib
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 
