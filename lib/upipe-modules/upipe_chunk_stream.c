@@ -280,17 +280,13 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_chunk_stream_free(struct upipe *upipe)
 {
-    struct upipe_chunk_stream *upipe_chunk_stream =
-                   upipe_chunk_stream_from_upipe(upipe);
-
     upipe_chunk_stream_flush(upipe, NULL);
     upipe_chunk_stream_clean_uref_stream(upipe);
     upipe_chunk_stream_clean_output(upipe);
 
     upipe_throw_dead(upipe);
 
-    upipe_clean(upipe);
-    free(upipe_chunk_stream);
+    upipe_chunk_stream_free_flow(upipe);
 }
 
 /** module manager static descriptor */

@@ -271,13 +271,9 @@ static struct upipe *upipe_osx_audioqueue_sink_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_osx_audioqueue_sink_free(struct upipe *upipe)
 {
-    struct upipe_osx_audioqueue_sink *osx_audioqueue =
-                 upipe_osx_audioqueue_sink_from_upipe(upipe);
-
     upipe_osx_audioqueue_sink_remove(upipe);
     upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(osx_audioqueue);
+    upipe_osx_audioqueue_sink_free_flow(upipe);
 }
 
 /** module manager static descriptor */

@@ -296,9 +296,7 @@ static void upipe_ts_psim_free(struct upipe *upipe)
 
     if (upipe_ts_psim->next_uref != NULL)
         uref_free(upipe_ts_psim->next_uref);
-
-    upipe_clean(upipe);
-    free(upipe_ts_psim);
+    upipe_ts_psim_free_flow(upipe);
 }
 
 /** module manager static descriptor */

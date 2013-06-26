@@ -263,13 +263,10 @@ static bool upipe_ts_decaps_control(struct upipe *upipe,
  */
 static void upipe_ts_decaps_free(struct upipe *upipe)
 {
-    struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_ts_decaps_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_decaps);
+    upipe_ts_decaps_free_flow(upipe);
 }
 
 /** module manager static descriptor */

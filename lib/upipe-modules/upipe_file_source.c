@@ -494,9 +494,7 @@ static void upipe_fsrc_free(struct upipe *upipe)
     upipe_fsrc_clean_output(upipe);
     upipe_fsrc_clean_ubuf_mgr(upipe);
     upipe_fsrc_clean_uref_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_fsrc);
+    upipe_fsrc_free_void(upipe);
 }
 
 /** module manager static descriptor */

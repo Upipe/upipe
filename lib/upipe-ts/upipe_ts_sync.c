@@ -371,16 +371,13 @@ static bool upipe_ts_sync_control(struct upipe *upipe,
  */
 static void upipe_ts_sync_free(struct upipe *upipe)
 {
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     upipe_ts_sync_flush(upipe, NULL);
     upipe_throw_dead(upipe);
 
     upipe_ts_sync_clean_uref_stream(upipe);
     upipe_ts_sync_clean_output(upipe);
     upipe_ts_sync_clean_sync(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_sync);
+    upipe_ts_sync_free_flow(upipe);
 }
 
 /** module manager static descriptor */

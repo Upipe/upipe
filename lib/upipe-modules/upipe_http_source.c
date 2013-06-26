@@ -609,9 +609,7 @@ static void upipe_http_src_free(struct upipe *upipe)
     upipe_http_src_clean_output(upipe);
     upipe_http_src_clean_ubuf_mgr(upipe);
     upipe_http_src_clean_uref_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_http_src);
+    upipe_http_src_free_void(upipe);
 }
 
 /** module manager static descriptor */

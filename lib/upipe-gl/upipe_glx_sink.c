@@ -475,6 +475,7 @@ static void upipe_glx_sink_free(struct upipe *upipe)
     if (upipe_glx_sink->display) {
         upipe_glx_sink_clean_glx(upipe);
     }
+    upipe_glx_sink_free_flow(upipe);
     upipe_clean(upipe);
     free(upipe_glx_sink);
 }

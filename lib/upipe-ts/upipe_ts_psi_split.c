@@ -157,17 +157,13 @@ static bool upipe_ts_psi_split_sub_control(struct upipe *upipe,
  */
 static void upipe_ts_psi_split_sub_free(struct upipe *upipe)
 {
-    struct upipe_ts_psi_split_sub *upipe_ts_psi_split_sub =
-        upipe_ts_psi_split_sub_from_upipe(upipe);
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_ts_psi_split_sub_clean_output(upipe);
     upipe_ts_psi_split_sub_clean_sub(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_psi_split_sub);
+    upipe_ts_psi_split_sub_free_flow(upipe);
 
     upipe_release(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
 }
@@ -277,12 +273,9 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
  */
 static void upipe_ts_psi_split_free(struct upipe *upipe)
 {
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_ts_psi_split_clean_sub_subs(upipe);
-    upipe_clean(upipe);
-    free(upipe_ts_psi_split);
+    upipe_ts_psi_split_free_flow(upipe);
 }
 
 /** module manager static descriptor */

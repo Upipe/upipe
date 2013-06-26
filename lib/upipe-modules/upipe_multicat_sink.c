@@ -442,8 +442,7 @@ static void upipe_multicat_sink_free(struct upipe *upipe)
 
     free(upipe_multicat_sink->dirpath);
     free(upipe_multicat_sink->suffix);
-    upipe_clean(upipe);
-    free(upipe_multicat_sink);
+    upipe_multicat_sink_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_multicat_sink_mgr = {

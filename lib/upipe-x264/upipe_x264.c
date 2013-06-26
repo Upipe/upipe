@@ -1,6 +1,4 @@
-/*****************************************************************************
- * upipe_x264.c: application interface for x264 module
- *****************************************************************************
+/*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
@@ -23,7 +21,7 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
 
 /** @file
  * @short Upipe x264 module
@@ -503,16 +501,13 @@ static bool upipe_x264_control(struct upipe *upipe,
  */
 static void upipe_x264_free(struct upipe *upipe)
 {
-    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
-
     upipe_x264_close(upipe);
 
     upipe_throw_dead(upipe);
     upipe_x264_clean_ubuf_mgr(upipe);
     upipe_x264_clean_uref_mgr(upipe);
     upipe_x264_clean_output(upipe);
-    upipe_clean(upipe);
-    free(upipe_x264);
+    upipe_x264_free_flow(upipe);
 }
 
 /** module manager static descriptor */

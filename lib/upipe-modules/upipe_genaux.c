@@ -242,15 +242,13 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_genaux_free(struct upipe *upipe)
 {
-    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
     upipe_genaux_clean_ubuf_mgr(upipe);
     upipe_genaux_clean_output(upipe);
 
-    upipe_clean(upipe);
-    free(upipe_genaux);
+    upipe_genaux_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_genaux_mgr = {

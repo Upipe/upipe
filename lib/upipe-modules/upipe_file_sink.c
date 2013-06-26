@@ -478,8 +478,7 @@ static void upipe_fsink_free(struct upipe *upipe)
     upipe_fsink_clean_upump_mgr(upipe);
     upipe_fsink_clean_sink(upipe);
 
-    upipe_clean(upipe);
-    free(upipe_fsink);
+    upipe_fsink_free_flow(upipe);
 }
 
 /** module manager static descriptor */

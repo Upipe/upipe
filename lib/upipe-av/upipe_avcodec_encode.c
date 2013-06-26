@@ -707,9 +707,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
     upipe_avcenc_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_avcenc);
+    upipe_avcenc_free_flow(upipe);
 }
 
 /** @internal @This allocates a avcenc pipe.

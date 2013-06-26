@@ -357,9 +357,7 @@ static void upipe_qsink_free(struct upipe *upipe)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink_clean_upump_mgr(upipe);
     upipe_qsink_clean_sink(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_qsink);
+    upipe_qsink_free_flow(upipe);
 }
 
 /** module manager static descriptor */

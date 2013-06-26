@@ -178,13 +178,10 @@ static bool upipe_setrap_control(struct upipe *upipe,
  */
 static void upipe_setrap_free(struct upipe *upipe)
 {
-    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_setrap_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_setrap);
+    upipe_setrap_free_flow(upipe);
 }
 
 /** module manager static descriptor */

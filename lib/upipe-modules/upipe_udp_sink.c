@@ -455,9 +455,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     upipe_udpsink_clean_uclock(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
     upipe_udpsink_clean_sink(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_udpsink);
+    upipe_udpsink_free_flow(upipe);
 }
 
 /** module manager static descriptor */

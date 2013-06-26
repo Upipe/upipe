@@ -202,14 +202,11 @@ static struct upipe *upipe_htons_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_htons_free(struct upipe *upipe)
 {
-    struct upipe_htons *upipe_htons = upipe_htons_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_htons_clean_output(upipe);
     upipe_htons_clean_ubuf_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_htons);
+    upipe_htons_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_htons_mgr = {

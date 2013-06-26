@@ -140,11 +140,9 @@ static struct upipe *upipe_probe_uref_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_probe_uref_free(struct upipe *upipe)
 {
-    struct upipe_probe_uref *upipe_probe_uref = upipe_probe_uref_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_probe_uref_clean_output(upipe);
-    upipe_clean(upipe);
-    free(upipe_probe_uref);
+    upipe_probe_uref_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_probe_uref_mgr = {

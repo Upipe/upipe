@@ -431,9 +431,7 @@ static void upipe_udpsrc_free(struct upipe *upipe)
     upipe_udpsrc_clean_output(upipe);
     upipe_udpsrc_clean_ubuf_mgr(upipe);
     upipe_udpsrc_clean_uref_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_udpsrc);
+    upipe_udpsrc_free_void(upipe);
 }
 
 /** module manager static descriptor */

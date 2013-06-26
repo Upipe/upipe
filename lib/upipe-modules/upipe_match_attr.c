@@ -206,13 +206,10 @@ static struct upipe *upipe_match_attr_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_match_attr_free(struct upipe *upipe)
 {
-    struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_match_attr_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_match_attr);
+    upipe_match_attr_free_flow(upipe);
 }
 
 /** module manager static descriptor */

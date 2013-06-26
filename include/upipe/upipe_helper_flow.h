@@ -36,7 +36,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 
-/** @This declares one function dealing with the allocation of a pipe accepting
+/** @This declares two functions dealing with the allocation of a pipe accepting
  * a flow definition.
  *
  * You must declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
@@ -51,6 +51,11 @@
  * @end code
  * Allocates and initializes the private structure upipe_foo, checks the flow
  * definition, and duplicates it to flow_def_p if not NULL.
+ *
+ * @item @code
+ *  void upipe_foo_free_flow(struct upipe *upipe)
+ * @end code
+ * Frees the private structure upipe_foo.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
@@ -99,6 +104,16 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
     upipe_init(upipe, mgr, uprobe);                                         \
     return upipe;                                                           \
+}                                                                           \
+/** @internal @This frees the private structure.                            \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static void STRUCTURE##_free_flow(struct upipe *upipe)                      \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    upipe_clean(upipe);                                                     \
+    free(s);                                                                \
 }
 
 #endif

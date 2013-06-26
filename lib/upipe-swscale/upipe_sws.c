@@ -437,8 +437,7 @@ static void upipe_sws_free(struct upipe *upipe)
     free(upipe_sws->dstsize);
 
     upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(upipe_sws);
+    upipe_sws_free_flow(upipe);
 }
 
 /** module manager static descriptor */

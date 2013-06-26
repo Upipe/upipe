@@ -238,8 +238,7 @@ static void upipe_setattr_free(struct upipe *upipe)
     if (upipe_setattr->dict != NULL)
         uref_free(upipe_setattr->dict);
 
-    upipe_clean(upipe);
-    free(upipe_setattr);
+    upipe_setattr_free_flow(upipe);
 }
 
 /** module manager static descriptor */

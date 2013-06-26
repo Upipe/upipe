@@ -34,7 +34,7 @@
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
 
-/** @This declares one function dealing with a pipe that has no argument.
+/** @This declares two functions dealing with a pipe that has no argument.
  *
  * You must declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
  *
@@ -47,6 +47,11 @@
  *                                     struct uref **flow_def_p)
  * @end code
  * Allocates and initializes the private structure upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_free_void(struct upipe *upipe)
+ * @end code
+ * Frees the private structure upipe_foo.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
@@ -73,6 +78,16 @@ static struct upipe *STRUCTURE##_alloc_void(struct upipe_mgr *mgr,          \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
     upipe_init(upipe, mgr, uprobe);                                         \
     return upipe;                                                           \
+}                                                                           \
+/** @internal @This frees the private structure.                            \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static void STRUCTURE##_free_void(struct upipe *upipe)                      \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    upipe_clean(upipe);                                                     \
+    free(s);                                                                \
 }
 
 #endif

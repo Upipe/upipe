@@ -262,13 +262,11 @@ static bool upipe_filter_blend_control(struct upipe *upipe,
  */
 static void upipe_filter_blend_free(struct upipe *upipe)
 {
-    struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_filter_blend_clean_ubuf_mgr(upipe);
     upipe_filter_blend_clean_output(upipe);
-    upipe_clean(upipe);
-    free(upipe_filter_blend);
+    upipe_filter_blend_free_flow(upipe);
 }
 
 /** module manager static descriptor */

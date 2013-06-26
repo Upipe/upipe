@@ -372,9 +372,7 @@ static void upipe_ts_pesd_free(struct upipe *upipe)
 
     if (upipe_ts_pesd->next_uref != NULL)
         uref_free(upipe_ts_pesd->next_uref);
-
-    upipe_clean(upipe);
-    free(upipe_ts_pesd);
+    upipe_ts_pesd_free_flow(upipe);
 }
 
 /** module manager static descriptor */

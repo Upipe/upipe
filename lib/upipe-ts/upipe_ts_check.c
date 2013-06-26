@@ -269,13 +269,10 @@ static bool upipe_ts_check_control(struct upipe *upipe,
  */
 static void upipe_ts_check_free(struct upipe *upipe)
 {
-    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_ts_check_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_check);
+    upipe_ts_check_free_flow(upipe);
 }
 
 /** module manager static descriptor */

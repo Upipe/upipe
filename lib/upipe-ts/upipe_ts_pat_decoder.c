@@ -441,9 +441,7 @@ static void upipe_ts_patd_free(struct upipe *upipe)
 
     upipe_ts_psid_table_clean(upipe_ts_patd->pat);
     upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
-
-    upipe_clean(upipe);
-    free(upipe_ts_patd);
+    upipe_ts_patd_free_flow(upipe);
 }
 
 /** module manager static descriptor */

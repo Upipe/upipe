@@ -314,8 +314,7 @@ static void upipe_dup_free(struct upipe *upipe)
     upipe_dup_clean_sub_outputs(upipe);
     if (upipe_dup->flow_def != NULL)
         uref_free(upipe_dup->flow_def);
-    upipe_clean(upipe);
-    free(upipe_dup);
+    upipe_dup_free_flow(upipe);
 }
 
 /** dup module manager static descriptor */

@@ -552,8 +552,7 @@ static void upipe_sws_thumbs_free(struct upipe *upipe)
     }
 
     upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(upipe_sws_thumbs);
+    upipe_sws_thumbs_free_flow(upipe);
 }
 
 /** module manager static descriptor */

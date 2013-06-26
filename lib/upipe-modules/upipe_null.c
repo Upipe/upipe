@@ -134,8 +134,7 @@ static void upipe_null_free(struct upipe *upipe)
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_warn_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
     upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(upipe_null);
+    upipe_null_free_flow(upipe);
 }
 
 /** upipe_null (/dev/null) */

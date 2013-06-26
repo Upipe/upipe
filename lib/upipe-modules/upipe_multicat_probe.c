@@ -210,8 +210,7 @@ static void upipe_multicat_probe_free(struct upipe *upipe)
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_multicat_probe_clean_output(upipe);
-    upipe_clean(upipe);
-    free(upipe_multicat_probe);
+    upipe_multicat_probe_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_multicat_probe_mgr = {

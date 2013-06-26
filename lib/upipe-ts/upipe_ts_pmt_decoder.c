@@ -531,9 +531,7 @@ static void upipe_ts_pmtd_free(struct upipe *upipe)
         uref_free(upipe_ts_pmtd->pmt);
     }
     upipe_throw_dead(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_pmtd);
+    upipe_ts_pmtd_free_flow(upipe);
 }
 
 /** module manager static descriptor */

@@ -254,9 +254,7 @@ static void upipe_ts_aggregate_free(struct upipe *upipe)
     }
     upipe_throw_dead(upipe);
     upipe_ts_aggregate_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_aggregate);
+    upipe_ts_aggregate_free_flow(upipe);
 }
 
 /** module manager static descriptor */

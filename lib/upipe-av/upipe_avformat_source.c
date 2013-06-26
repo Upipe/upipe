@@ -248,8 +248,6 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
  */
 static void upipe_avfsrc_sub_free(struct upipe *upipe)
 {
-    struct upipe_avfsrc_sub *upipe_avfsrc_sub =
-        upipe_avfsrc_sub_from_upipe(upipe);
     struct upipe_avfsrc *upipe_avfsrc =
         upipe_avfsrc_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
@@ -257,9 +255,7 @@ static void upipe_avfsrc_sub_free(struct upipe *upipe)
     upipe_avfsrc_sub_clean_ubuf_mgr(upipe);
     upipe_avfsrc_sub_clean_output(upipe);
     upipe_avfsrc_sub_clean_sub(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_avfsrc_sub);
+    upipe_avfsrc_sub_free_flow(upipe);
 
     upipe_release(upipe_avfsrc_to_upipe(upipe_avfsrc));
 }
@@ -992,9 +988,7 @@ static void upipe_avfsrc_free(struct upipe *upipe)
     upipe_avfsrc_clean_uclock(upipe);
     upipe_avfsrc_clean_upump_mgr(upipe);
     upipe_avfsrc_clean_uref_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_avfsrc);
+    upipe_avfsrc_free_void(upipe);
 }
 
 /** module manager static descriptor */

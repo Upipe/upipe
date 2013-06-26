@@ -188,14 +188,11 @@ static struct upipe *upipe_skip_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_skip_free(struct upipe *upipe)
 {
-    struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
     upipe_skip_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_skip);
+    upipe_skip_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_skip_mgr = {

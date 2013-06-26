@@ -1047,9 +1047,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
     upipe_avcdec_clean_upump_mgr(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_avcdec);
+    upipe_avcdec_free_flow(upipe);
 }
 
 /** @internal @This allocates a avcdec pipe.

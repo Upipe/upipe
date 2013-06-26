@@ -222,9 +222,7 @@ static void upipe_ts_split_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_ts_split_sub_clean_output(upipe);
     upipe_ts_split_sub_clean_sub(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_split_sub);
+    upipe_ts_split_sub_free_flow(upipe);
 
     upipe_release(upipe_ts_split_to_upipe(upipe_ts_split));
 }
@@ -406,11 +404,9 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
  */
 static void upipe_ts_split_free(struct upipe *upipe)
 {
-    struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_ts_split_clean_sub_subs(upipe);
-    upipe_clean(upipe);
-    free(upipe_ts_split);
+    upipe_ts_split_free_flow(upipe);
 }
 
 /** module manager static descriptor */

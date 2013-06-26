@@ -1659,8 +1659,7 @@ static void upipe_h264f_free(struct upipe *upipe)
         if (upipe_h264f->pps[i] != NULL)
             ubuf_free(upipe_h264f->pps[i]);
 
-    upipe_clean(upipe);
-    free(upipe_h264f);
+    upipe_h264f_free_flow(upipe);
 }
 
 /** module manager static descriptor */

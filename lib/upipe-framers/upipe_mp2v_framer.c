@@ -1160,8 +1160,7 @@ static void upipe_mp2vf_free(struct upipe *upipe)
     if (upipe_mp2vf->sequence_display != NULL)
         ubuf_free(upipe_mp2vf->sequence_display);
 
-    upipe_clean(upipe);
-    free(upipe_mp2vf);
+    upipe_mp2vf_free_flow(upipe);
 }
 
 /** module manager static descriptor */

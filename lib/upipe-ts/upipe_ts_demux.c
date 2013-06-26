@@ -810,9 +810,7 @@ static void upipe_ts_demux_output_free(struct upipe *upipe)
 
     upipe_ts_demux_output_clean_bin(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_demux_output);
+    upipe_ts_demux_output_free_flow(upipe);
 
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
     upipe_release(upipe_ts_demux_program_to_upipe(program));
@@ -1403,9 +1401,7 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
     uref_free(upipe_ts_demux_program->flow_def_input);
     upipe_ts_demux_program_clean_sub_outputs(upipe);
     upipe_ts_demux_program_clean_sub(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_demux_program);
+    upipe_ts_demux_program_free_flow(upipe);
 
     upipe_release(upipe_ts_demux_to_upipe(demux));
 }
@@ -2096,9 +2092,7 @@ static void upipe_ts_demux_free(struct upipe *upipe)
     uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux_clean_sub_programs(upipe);
     upipe_ts_demux_clean_sync(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_ts_demux);
+    upipe_ts_demux_free_flow(upipe);
 }
 
 /** @This is called when the proxy is released.

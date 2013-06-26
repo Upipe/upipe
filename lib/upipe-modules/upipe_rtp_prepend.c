@@ -327,14 +327,11 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_rtp_prepend_free(struct upipe *upipe)
 {
-    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_rtp_prepend_clean_ubuf_mgr(upipe);
     upipe_rtp_prepend_clean_output(upipe);
-
-    upipe_clean(upipe);
-    free(upipe_rtp_prepend);
+    upipe_rtp_prepend_free_flow(upipe);
 }
 
 static struct upipe_mgr upipe_rtp_prepend_mgr = {
