@@ -172,6 +172,11 @@ static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
 static bool uprobe_dejitter_throw(struct uprobe *uprobe, struct upipe *upipe,
                                   enum uprobe_event event, va_list args)
 {
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    if (!uprobe_dejitter->divider)
+        return false;
+
     switch (event) {
         case UPROBE_CLOCK_REF:
             return uprobe_dejitter_clock_ref(uprobe, upipe, event, args);
@@ -180,6 +185,25 @@ static bool uprobe_dejitter_throw(struct uprobe *uprobe, struct upipe *upipe,
         default:
             return false;
     }
+}
+
+/** @This sets a different divider. If set to 0, dejittering is disabled.
+ *
+ * @param uprobe pointer to probe
+ * @param divider number of reference clocks to keep for dejittering
+ * @return pointer to uprobe, or NULL in case of error
+ */
+void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->divider = divider;
+    uprobe_dejitter->offset_count = 0;
+    uprobe_dejitter->offset = 0;
+    uprobe_dejitter->offset_residue = 0;
+    uprobe_dejitter->deviation_count = 0;
+    uprobe_dejitter->deviation = 0;
+    uprobe_dejitter->deviation_residue = 0;
 }
 
 /** @This allocates a new uprobe_dejitter structure.
@@ -191,19 +215,12 @@ static bool uprobe_dejitter_throw(struct uprobe *uprobe, struct upipe *upipe,
 struct uprobe *uprobe_dejitter_alloc(struct uprobe *next,
                                      unsigned int divider)
 {
-    assert(divider);
     struct uprobe_dejitter *uprobe_dejitter =
         malloc(sizeof(struct uprobe_dejitter));
     if (unlikely(uprobe_dejitter == NULL))
         return NULL;
     struct uprobe *uprobe = uprobe_dejitter_to_uprobe(uprobe_dejitter);
-    uprobe_dejitter->divider = divider;
-    uprobe_dejitter->offset_count = 0;
-    uprobe_dejitter->offset = 0;
-    uprobe_dejitter->offset_residue = 0;
-    uprobe_dejitter->deviation_count = 0;
-    uprobe_dejitter->deviation = 0;
-    uprobe_dejitter->deviation_residue = 0;
+    uprobe_dejitter_set(uprobe, divider);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
 }

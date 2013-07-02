@@ -33,6 +33,14 @@
 
 #include <upipe/uprobe.h>
 
+/** @This sets a different divider. If set to 0, dejittering is disabled.
+ *
+ * @param uprobe pointer to probe
+ * @param divider number of reference clocks to keep for dejittering
+ * @return pointer to uprobe, or NULL in case of error
+ */
+void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider);
+
 /** @This allocates a new uprobe_dejitter structure.
  *
  * @param next next probe to test if this one doesn't catch the event
