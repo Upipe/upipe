@@ -199,22 +199,6 @@ static void upipe_mp2vf_flush_dts(struct upipe *upipe)
     upipe_mp2vf->next_frame_dts_sys = UINT64_MAX;
 }
 
-/** @internal @This increments all DTS timestamps by the duration of the frame.
- *
- * @param upipe description structure of the pipe
- * @param duration duration of the frame
- */
-static void upipe_mp2vf_increment_dts(struct upipe *upipe, uint64_t duration)
-{
-    struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    if (upipe_mp2vf->next_frame_dts_orig != UINT64_MAX)
-        upipe_mp2vf->next_frame_dts_orig += duration;
-    if (upipe_mp2vf->next_frame_dts != UINT64_MAX)
-        upipe_mp2vf->next_frame_dts += duration;
-    if (upipe_mp2vf->next_frame_dts_sys != UINT64_MAX)
-        upipe_mp2vf->next_frame_dts_sys += duration;
-}
-
 /** @internal @This allocates an mp2vf pipe.
  *
  * @param mgr common management structure
@@ -639,9 +623,11 @@ static bool upipe_mp2vf_handle_sequence(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing a frame
+ * @param duration_p filled with duration
  * @return false in case of error
  */
-static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
+static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
+                                      uint64_t *duration_p)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
     upipe_mp2vf->closed_gop = false;
@@ -711,8 +697,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
     }
 
     bool ret = true;
-    uint64_t duration = UCLOCK_FREQ * upipe_mp2vf->fps.den /
-                                      upipe_mp2vf->fps.num;
+    *duration_p = UCLOCK_FREQ * upipe_mp2vf->fps.den / upipe_mp2vf->fps.num;
     if (upipe_mp2vf->next_frame_ext_offset != -1) {
         uint8_t ext_buffer[MP2VPICX_HEADER_SIZE];
         const uint8_t *ext;
@@ -741,13 +726,13 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
 
         if (upipe_mp2vf->progressive_sequence) {
             if (rff)
-                duration *= 1 + tff;
+                *duration_p *= 1 + tff;
         } else {
             if (structure == MP2VPICX_FRAME_PICTURE) {
                 if (rff)
-                    duration += duration / 2;
+                    *duration_p += *duration_p / 2;
             } else
-                duration /= 2;
+                *duration_p /= 2;
         }
 
         if (structure & MP2VPICX_TOP_FIELD)
@@ -764,27 +749,10 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
         ret = ret && uref_pic_set_progressive(uref);
     }
 
-    ret = ret && uref_clock_set_duration(uref, duration);
-#define SET_TIMESTAMP(name)                                                 \
-    if (upipe_mp2vf->next_frame_##name != UINT64_MAX)                       \
-        ret = ret &&                                                        \
-              uref_clock_set_##name(uref, upipe_mp2vf->next_frame_##name);  \
-    else                                                                    \
-        uref_clock_delete_##name(uref);
-    SET_TIMESTAMP(pts_orig)
-    SET_TIMESTAMP(pts)
-    SET_TIMESTAMP(pts_sys)
-    SET_TIMESTAMP(dts_orig)
-    SET_TIMESTAMP(dts)
-    SET_TIMESTAMP(dts_sys)
-#undef SET_TIMESTAMP
-    upipe_mp2vf_flush_pts(upipe);
-    upipe_mp2vf_increment_dts(upipe, duration);
-
+    ret = ret && uref_clock_set_duration(uref, *duration_p);
     if (unlikely(!ret)) {
-        uref_free(uref);
         upipe_throw_aerror(upipe);
-        return true;
+        return false;
     }
 
     return true;
@@ -794,12 +762,14 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing a frame
+ * @param duration_p filled with the duration
  * @return false in case of error
  */
-static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
+static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref,
+                                       uint64_t *duration_p)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    if (unlikely(!upipe_mp2vf_parse_picture(upipe, uref)))
+    if (unlikely(!upipe_mp2vf_parse_picture(upipe, uref, duration_p)))
         return false;
 
     uint8_t type;
@@ -870,12 +840,44 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref)
 static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_mp2vf *upipe_mp2vf = upipe_mp2vf_from_upipe(upipe);
-    struct uref *uref = upipe_mp2vf_extract_uref_stream(upipe,
-            upipe_mp2vf->next_frame_size);
-    if (unlikely(uref == NULL)) {
+    struct uref *uref = NULL;
+
+    /* The PTS can be updated up to the first octet of the picture start code,
+     * so any preceding structure must be extracted before, so that the PTS
+     * can be properly promoted and taken into account. */
+    if (upipe_mp2vf->next_frame_offset) {
+        uref = upipe_mp2vf_extract_uref_stream(upipe,
+                upipe_mp2vf->next_frame_offset);
+        if (unlikely(uref == NULL)) {
+            upipe_throw_aerror(upipe);
+            return true;
+        }
+    }
+
+#define KEEP_TIMESTAMP(name)                                                \
+    uint64_t name = upipe_mp2vf->next_frame_##name;
+    KEEP_TIMESTAMP(pts_orig)
+    KEEP_TIMESTAMP(pts)
+    KEEP_TIMESTAMP(pts_sys)
+    KEEP_TIMESTAMP(dts_orig)
+    KEEP_TIMESTAMP(dts)
+    KEEP_TIMESTAMP(dts_sys)
+#undef KEEP_TIMESTAMP
+    /* From now on, PTS declaration only impacts the next frame. */
+    upipe_mp2vf_flush_pts(upipe);
+    upipe_mp2vf_flush_dts(upipe);
+
+    struct uref *uref2 = upipe_mp2vf_extract_uref_stream(upipe,
+            upipe_mp2vf->next_frame_size - upipe_mp2vf->next_frame_offset);
+    if (unlikely(uref2 == NULL)) {
         upipe_throw_aerror(upipe);
         return true;
     }
+    if (uref != NULL) {
+        uref_block_append(uref, uref_detach_ubuf(uref2));
+        uref_free(uref2);
+    } else
+        uref = uref2;
 
     if (upipe_mp2vf->next_frame_sequence) {
         if (unlikely(!upipe_mp2vf_handle_sequence(upipe, uref))) {
@@ -884,10 +886,39 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         }
     }
 
-    if (unlikely(!upipe_mp2vf_handle_picture(upipe, uref))) {
+    uint64_t duration;
+    if (unlikely(!upipe_mp2vf_handle_picture(upipe, uref, &duration))) {
         uref_free(uref);
         return false;
     }
+
+    bool ret = true;
+#define SET_TIMESTAMP(name)                                                 \
+    if (name != UINT64_MAX)                                                 \
+        ret = ret && uref_clock_set_##name(uref, name);                     \
+    else                                                                    \
+        uref_clock_delete_##name(uref);
+    SET_TIMESTAMP(pts_orig)
+    SET_TIMESTAMP(pts)
+    SET_TIMESTAMP(pts_sys)
+    SET_TIMESTAMP(dts_orig)
+    SET_TIMESTAMP(dts)
+    SET_TIMESTAMP(dts_sys)
+#undef SET_TIMESTAMP
+
+    if (unlikely(!ret)) {
+        uref_free(uref);
+        upipe_throw_aerror(upipe);
+        return false;
+    }
+
+#define INCREMENT_DTS(name)                                                 \
+    if (upipe_mp2vf->next_frame_##name == UINT64_MAX && name != UINT64_MAX) \
+        upipe_mp2vf->next_frame_##name = name + duration;
+    INCREMENT_DTS(dts_orig)
+    INCREMENT_DTS(dts)
+    INCREMENT_DTS(dts_sys)
+#undef INCREMENT_DTS
 
     upipe_mp2vf_output(upipe, uref, upump);
     return true;
@@ -942,11 +973,10 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
         uint8_t start, next;
         if (!upipe_mp2vf_find(upipe, &start, &next))
             return;
-        //upipe_err_va(upipe, "pouet %x", start);
 
         if (unlikely(!upipe_mp2vf->acquired)) {
             upipe_mp2vf_consume_uref_stream(upipe,
-                                             upipe_mp2vf->next_frame_size - 4);
+                                            upipe_mp2vf->next_frame_size - 4);
             upipe_mp2vf->next_frame_size = 4;
 
             switch (start) {
@@ -966,10 +996,10 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
 
         if (unlikely(upipe_mp2vf->next_frame_offset == -1)) {
             if (start == MP2VX_START_CODE) {
-                if (next == MP2VX_ID_SEQX)
+                if (mp2vxst_get_id(next) == MP2VX_ID_SEQX)
                     upipe_mp2vf->next_frame_sequence_ext_offset =
                         upipe_mp2vf->next_frame_size - 4;
-                else if (next == MP2VX_ID_SEQDX)
+                else if (mp2vxst_get_id(next) == MP2VX_ID_SEQDX)
                     upipe_mp2vf->next_frame_sequence_display_offset =
                         upipe_mp2vf->next_frame_size - 4;
             } else if (start == MP2VGOP_START_CODE)
@@ -982,7 +1012,7 @@ static void upipe_mp2vf_work(struct upipe *upipe, struct upump *upump)
         }
 
         if (start == MP2VX_START_CODE) {
-            if (next == MP2VX_ID_PICX)
+            if (mp2vxst_get_id(next) == MP2VX_ID_PICX)
                 upipe_mp2vf->next_frame_ext_offset =
                     upipe_mp2vf->next_frame_size - 4;
             continue;

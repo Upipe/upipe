@@ -99,19 +99,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def)) {
-        upipe_dbg_va(upipe, "flow def: %s", def);
-        uref_dump(uref, upipe->uprobe);
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(uref_flow_get_end(uref))) {
-        uref_free(uref);
-        return;
-    }
-
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
     size_t size;
