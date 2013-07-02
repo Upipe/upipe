@@ -128,6 +128,10 @@ struct upipe_h264f {
     bool hrd;
     /** length of the field */
     uint8_t initial_cpb_removal_delay_length;
+    /** length of the field */
+    uint8_t cpb_removal_delay_length;
+    /** length of the field */
+    uint8_t dpb_output_delay_length;
     /** octet rate */
     uint64_t octet_rate;
     /** CPB length in clock units */
@@ -239,22 +243,6 @@ static void upipe_h264f_flush_dts(struct upipe *upipe)
     upipe_h264f->au_dts_orig = UINT64_MAX;
     upipe_h264f->au_dts = UINT64_MAX;
     upipe_h264f->au_dts_sys = UINT64_MAX;
-}
-
-/** @internal @This increments all DTS timestamps by the duration of the frame.
- *
- * @param upipe description structure of the pipe
- * @param duration duration of the frame
- */
-static void upipe_h264f_increment_dts(struct upipe *upipe, uint64_t duration)
-{
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    if (upipe_h264f->au_dts_orig != UINT64_MAX)
-        upipe_h264f->au_dts_orig += duration;
-    if (upipe_h264f->au_dts != UINT64_MAX)
-        upipe_h264f->au_dts += duration;
-    if (upipe_h264f->au_dts_sys != UINT64_MAX)
-        upipe_h264f->au_dts_sys += duration;
 }
 
 /** @internal @This is called back by @ref upipe_h264f_append_uref_stream
@@ -538,8 +526,14 @@ static bool upipe_h264f_stream_parse_hrd(struct upipe *upipe,
 
     upipe_h264f_stream_fill_bits(s, 20);
     upipe_h264f->initial_cpb_removal_delay_length =
-        ubuf_block_stream_show_bits(s, 5);
-    ubuf_block_stream_skip_bits(s, 20);
+        ubuf_block_stream_show_bits(s, 5) + 1;
+    ubuf_block_stream_skip_bits(s, 5);
+    upipe_h264f->cpb_removal_delay_length =
+        ubuf_block_stream_show_bits(s, 5) + 1;
+    ubuf_block_stream_skip_bits(s, 5);
+    upipe_h264f->dpb_output_delay_length =
+        ubuf_block_stream_show_bits(s, 5) + 1;
+    ubuf_block_stream_skip_bits(s, 10);
     return ret;
 }
 
@@ -1061,6 +1055,87 @@ static bool upipe_h264f_activate_pps(struct upipe *upipe, uint32_t pps_id)
     return true;
 }
 
+/** @internal @This handles the supplemental enhancement information called
+ * buffering period.
+ *
+ * @param upipe description structure of the pipe
+ * @param s block stream parsing structure
+ */
+static void upipe_h264f_handle_sei_buffering_period(struct upipe *upipe,
+                                                    struct ubuf_block_stream *s)
+{
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    uint32_t sps_id = upipe_h264f_stream_ue(s);
+    if (unlikely(sps_id >= H264SPS_ID_MAX)) {
+        upipe_warn_va(upipe, "invalid SPS %"PRIu32" in SEI", sps_id);
+        ubuf_block_stream_clean(s);
+        return;
+    }
+
+    if (!upipe_h264f_activate_sps(upipe, sps_id)) {
+        ubuf_block_stream_clean(s);
+        return;
+    }
+
+    if (upipe_h264f->hrd) {
+        size_t initial_cpb_removal_delay_length =
+            upipe_h264f->initial_cpb_removal_delay_length;
+        upipe_h264f->initial_cpb_removal_delay = 0;
+        if (initial_cpb_removal_delay_length > 24) {
+            upipe_h264f_stream_fill_bits(s, 24);
+            upipe_h264f->initial_cpb_removal_delay =
+                ubuf_block_stream_show_bits(s, 24);
+            ubuf_block_stream_skip_bits(s, 24);
+            initial_cpb_removal_delay_length -= 24;
+            upipe_h264f->initial_cpb_removal_delay <<=
+                initial_cpb_removal_delay_length;
+        }
+        upipe_h264f_stream_fill_bits(s, initial_cpb_removal_delay_length);
+        upipe_h264f->initial_cpb_removal_delay |=
+            ubuf_block_stream_show_bits(s, initial_cpb_removal_delay_length);
+        ubuf_block_stream_skip_bits(s, initial_cpb_removal_delay_length);
+        upipe_h264f->initial_cpb_removal_delay *= UCLOCK_FREQ / 90000;
+    }
+}
+
+/** @internal @This handles the supplemental enhancement information called
+ * picture timing.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
+                                              struct ubuf_block_stream *s)
+{
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    if (upipe_h264f->hrd) {
+        size_t cpb_removal_delay_length =
+            upipe_h264f->cpb_removal_delay_length;
+        if (cpb_removal_delay_length > 24) {
+            upipe_h264f_stream_fill_bits(s, 24);
+            ubuf_block_stream_skip_bits(s, 24);
+            cpb_removal_delay_length -= 24;
+        }
+        upipe_h264f_stream_fill_bits(s, cpb_removal_delay_length);
+        ubuf_block_stream_skip_bits(s, cpb_removal_delay_length);
+
+        size_t dpb_output_delay_length =
+            upipe_h264f->dpb_output_delay_length;
+        if (dpb_output_delay_length > 24) {
+            upipe_h264f_stream_fill_bits(s, 24);
+            ubuf_block_stream_skip_bits(s, 24);
+            dpb_output_delay_length -= 24;
+        }
+        upipe_h264f_stream_fill_bits(s, dpb_output_delay_length);
+        ubuf_block_stream_skip_bits(s, dpb_output_delay_length);
+    }
+
+    if (upipe_h264f->pic_struct_present) {
+        upipe_h264f_stream_fill_bits(s, 4);
+        upipe_h264f->pic_struct = ubuf_block_stream_show_bits(s, 4);
+        ubuf_block_stream_skip_bits(s, 4);
+    }
+}
+
 /** @internal @This handles a supplemental enhancement information.
  *
  * @param upipe description structure of the pipe
@@ -1069,13 +1144,12 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     uint8_t type;
-    /* ISO/IEC 14496-10 7.4.1.2.1: a buffering period SEI must be the first
-     * SEI */
     if (unlikely(!uref_block_extract(upipe_h264f->next_uref,
                                      upipe_h264f->au_last_nal_offset +
                                      upipe_h264f->au_last_nal_start_size, 1,
-                                     &type) ||
-                 type != H264SEI_BUFFERING_PERIOD))
+                                     &type)))
+        return;
+    if (type != H264SEI_BUFFERING_PERIOD && type != H264SEI_PIC_TIMING)
         return;
 
     struct upipe_h264f_stream f;
@@ -1085,50 +1159,24 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
                                       upipe_h264f->au_last_nal_offset +
                                       upipe_h264f->au_last_nal_start_size + 1);
     assert(ret);
-    uint32_t size = 0;
+
+    /* size field */
     uint8_t octet;
     do {
         upipe_h264f_stream_fill_bits(s, 8);
         octet = ubuf_block_stream_show_bits(s, 8);
-        size += octet;
         ubuf_block_stream_skip_bits(s, 8);
     } while (octet == UINT8_MAX);
 
-    uint32_t sps_id = upipe_h264f_stream_ue(s);
-    if (unlikely(sps_id >= H264SPS_ID_MAX)) {
-        upipe_warn_va(upipe, "invalid SPS %"PRIu32" in SEI", sps_id);
-        ubuf_block_stream_clean(s);
-        return;
-    }
-
-    if (!upipe_h264f_activate_sps(upipe, sps_id) ||
-        !upipe_h264f->hrd) {
-        ubuf_block_stream_clean(s);
-        return;
-    }
-
-    size_t initial_cpb_removal_delay_length =
-        upipe_h264f->initial_cpb_removal_delay_length + 1;
-    upipe_h264f->initial_cpb_removal_delay = 0;
-    if (initial_cpb_removal_delay_length > 24) {
-        upipe_h264f_stream_fill_bits(s, 24);
-        upipe_h264f->initial_cpb_removal_delay =
-            ubuf_block_stream_show_bits(s, 24);
-        ubuf_block_stream_skip_bits(s, 24);
-        initial_cpb_removal_delay_length -= 24;
-        upipe_h264f->initial_cpb_removal_delay <<=
-            initial_cpb_removal_delay_length;
-    }
-    upipe_h264f_stream_fill_bits(s, initial_cpb_removal_delay_length);
-    upipe_h264f->initial_cpb_removal_delay |=
-        ubuf_block_stream_show_bits(s, initial_cpb_removal_delay_length);
-    ubuf_block_stream_skip_bits(s, initial_cpb_removal_delay_length);
-    upipe_h264f->initial_cpb_removal_delay *= UCLOCK_FREQ / 90000;
-
-    if (upipe_h264f->pic_struct_present) {
-        upipe_h264f_stream_fill_bits(s, 4);
-        upipe_h264f->pic_struct = ubuf_block_stream_show_bits(s, 4);
-        ubuf_block_stream_skip_bits(s, 4);
+    switch (type) {
+        case H264SEI_BUFFERING_PERIOD:
+            upipe_h264f_handle_sei_buffering_period(upipe, s);
+            break;
+        case H264SEI_PIC_TIMING:
+            upipe_h264f_handle_sei_pic_timing(upipe, s);
+            break;
+        default:
+            break;
     }
 
     ubuf_block_stream_clean(s);
@@ -1144,6 +1192,19 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (!upipe_h264f->au_size || upipe_h264f->au_slice_nal == UINT8_MAX)
         return;
+
+#define KEEP_TIMESTAMP(name)                                                \
+    uint64_t name = upipe_h264f->au_##name;
+    KEEP_TIMESTAMP(pts_orig)
+    KEEP_TIMESTAMP(pts)
+    KEEP_TIMESTAMP(pts_sys)
+    KEEP_TIMESTAMP(dts_orig)
+    KEEP_TIMESTAMP(dts)
+    KEEP_TIMESTAMP(dts_sys)
+#undef KEEP_TIMESTAMP
+    /* From now on, PTS declaration only impacts the next frame. */
+    upipe_h264f_flush_pts(upipe);
+    upipe_h264f_flush_dts(upipe);
 
     struct uref *uref = upipe_h264f_extract_uref_stream(upipe,
                                                         upipe_h264f->au_size);
@@ -1174,10 +1235,9 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
                      !upipe_h264f->delta_poc_always_zero)
                 delta_poc_bottom = upipe_h264f->delta_poc1 -
                                    upipe_h264f->delta_poc0;
-            if (delta_poc_bottom == 0) {
+            if (delta_poc_bottom == 0)
                 upipe_h264f->pic_struct = H264SEI_STRUCT_FRAME;
-                duration *= 2;
-            } else if (delta_poc_bottom < 0)
+            else if (delta_poc_bottom < 0)
                 upipe_h264f->pic_struct = H264SEI_STRUCT_TOP_BOT;
             else
                 upipe_h264f->pic_struct = H264SEI_STRUCT_BOT_TOP;
@@ -1187,6 +1247,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     switch (upipe_h264f->pic_struct) {
         case H264SEI_STRUCT_FRAME:
             ret = ret && uref_pic_set_progressive(uref);
+            duration *= 2;
             break;
         case H264SEI_STRUCT_TOP:
             ret = ret && uref_pic_set_tf(uref);
@@ -1231,8 +1292,8 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
         ret = ret && uref_clock_set_duration(uref, duration);
 
 #define SET_TIMESTAMP(name)                                                 \
-    if (upipe_h264f->au_##name != UINT64_MAX)                               \
-        ret = ret && uref_clock_set_##name(uref, upipe_h264f->au_##name);   \
+    if (name != UINT64_MAX)                                                 \
+        ret = ret && uref_clock_set_##name(uref, name);                     \
     else                                                                    \
         uref_clock_delete_##name(uref);
     SET_TIMESTAMP(pts_orig)
@@ -1242,11 +1303,14 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     SET_TIMESTAMP(dts)
     SET_TIMESTAMP(dts_sys)
 #undef SET_TIMESTAMP
-    upipe_h264f_flush_pts(upipe);
-    if (duration)
-        upipe_h264f_increment_dts(upipe, duration);
-    else
-        upipe_h264f_flush_dts(upipe);
+
+#define INCREMENT_DTS(name)                                                 \
+    if (upipe_h264f->au_##name == UINT64_MAX && name != UINT64_MAX)         \
+        upipe_h264f->au_##name = name + duration;
+    INCREMENT_DTS(dts_orig)
+    INCREMENT_DTS(dts)
+    INCREMENT_DTS(dts_sys)
+#undef INCREMENT_DTS
 
     if (upipe_h264f->systime_rap != UINT64_MAX)
         ret = ret && uref_clock_set_systime_rap(uref, upipe_h264f->systime_rap);
@@ -1347,6 +1411,7 @@ upipe_h264f_parse_slice_retry:
     }
     uint32_t frame_num = ubuf_block_stream_show_bits(s,
             upipe_h264f->log2_max_frame_num);
+    ubuf_block_stream_skip_bits(s, upipe_h264f->log2_max_frame_num);
     bool field_pic = false;
     bool bf = false;
     if (!upipe_h264f->frame_mbs_only) {
