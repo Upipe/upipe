@@ -157,14 +157,14 @@ static void STRUCTURE##_consume_uref_stream(struct upipe *upipe,            \
         uref_block_resize(STRUCTURE->NEXT_UREF, STRUCTURE->NEXT_UREF_SIZE,  \
                           -1);                                              \
         consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
-        uint64_t size;                                                      \
-        bool ret = uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);         \
-        assert(ret);                                                        \
+        uint64_t size = 0;                                                  \
+        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
         STRUCTURE->NEXT_UREF_SIZE = size;                                   \
         void (*cb)(struct upipe *) = APPEND_CB;                             \
         if (cb != NULL)                                                     \
             cb(upipe);                                                      \
     }                                                                       \
+    STRUCTURE->NEXT_UREF_SIZE -= consumed;                                  \
     uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);                  \
 }                                                                           \
 /** @internal @This extracts the given number of octets from the uref       \
