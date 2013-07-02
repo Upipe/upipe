@@ -4,7 +4,7 @@
 AC_PREREQ([2.61])
 AC_INIT([upipe], [0.1], [cmassiot@openheadend.tv])
 AC_CONFIG_SRCDIR([lib/upipe/uprobe_stdio.c])
-AC_CONFIG_HEADERS([include/upipe/config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([nostdinc parallel-tests color-tests])
@@ -140,3 +140,5 @@ AC_CONFIG_FILES([Makefile
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
+
+grep "^#define HAVE_" config.h | sed -e 's/HAVE_/UPIPE_HAVE_/' > include/upipe/config.h

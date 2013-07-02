@@ -16,10 +16,11 @@ Makefile.in
 /config.log
 /config.status
 /configure
+/config.h
+/config.h.in
+/stamp-h1
 Makefile
 /include/upipe/config.h
-/include/upipe/config.h.in
-/include/upipe/stamp-h1
 
 # mkdoc
 

@@ -40,7 +40,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef HAVE_ATOMIC_OPS
+#ifdef UPIPE_HAVE_ATOMIC_OPS
 
 /*
  * Preferred method: gcc atomic operations
@@ -137,7 +137,7 @@ static inline void uatomic_clean(uatomic_uint32_t *obj)
 }
 
 
-#elif defined(HAVE_SEMAPHORE_H) /* mkdoc:skip */
+#elif defined(UPIPE_HAVE_SEMAPHORE_H) /* mkdoc:skip */
 
 /*
  * On POSIX platforms use semaphores (slower)

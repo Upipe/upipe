@@ -33,7 +33,7 @@
 
 #include <upipe/config.h>
 
-#ifdef HAVE_FEATURES_H
+#ifdef UPIPE_HAVE_FEATURES_H
 #include <features.h>
 #endif
 #include <stdio.h>

@@ -1,5 +1,7 @@
+nodist_pkginclude_HEADERS = config.h
+CLEANFILES = config.h
+
 pkginclude_HEADERS = \
-	config.h \
 	uatomic.h \
 	ubase.h \
 	ubuf.h \

@@ -38,7 +38,7 @@
 #include <assert.h>
 #include <errno.h>
 
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
 #include <unistd.h>
 #include <sys/eventfd.h>
 #endif
@@ -48,7 +48,7 @@
 #include <errno.h>
 
 /* Test whether ueventfd can be implemented */
-#if !(defined(HAVE_EVENTFD) || defined(HAVE_PIPE))
+#if !(defined(UPIPE_HAVE_EVENTFD) || defined(UPIPE_HAVE_PIPE))
     #error no ueventfd implementation 
 #endif
 
@@ -88,7 +88,7 @@ static inline struct upump *ueventfd_upump_alloc(struct ueventfd *fd,
                                                  struct upump_mgr *upump_mgr,
                                                  upump_cb cb, void *opaque)
 {
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
         return upump_alloc_fd_read(upump_mgr, cb, opaque, fd->event_fd);
     } else
@@ -107,7 +107,7 @@ static inline struct upump *ueventfd_upump_alloc(struct ueventfd *fd,
  */
 static inline bool ueventfd_read(struct ueventfd *fd)
 {
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
         for ( ; ; ) {
             eventfd_t event;
@@ -159,7 +159,7 @@ static inline bool ueventfd_read(struct ueventfd *fd)
  */
 static inline bool ueventfd_write(struct ueventfd *fd)
 {
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
         for ( ; ; ) {
             int ret = eventfd_write(fd->event_fd, 1);
@@ -212,7 +212,7 @@ static inline bool ueventfd_write(struct ueventfd *fd)
  */
 static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 {
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
     fd->mode = UEVENTFD_MODE_EVENTFD;
     fd->event_fd = eventfd(readable ? 1 : 0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (unlikely(fd->event_fd == -1)) { // try to eventfd() with no flags (ie. linux < 2.6.27)
@@ -223,7 +223,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
         if (unlikely(fd->event_fd == -1)) { // eventfd() fails, fallback to pipe()
 #endif
             fd->mode = UEVENTFD_MODE_PIPE;
-#ifdef HAVE_PIPE
+#ifdef UPIPE_HAVE_PIPE
             if (unlikely(pipe(fd->pipe_fds) == -1))
 #endif
                 return false;
@@ -237,7 +237,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
             if (likely(readable))
                 ueventfd_write(fd);
             return true;
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
         }
     }
     return (fd->event_fd != -1);
@@ -250,7 +250,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
  */
 static inline void ueventfd_clean(struct ueventfd *fd)
 {
-#ifdef HAVE_EVENTFD
+#ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
         close(fd->event_fd);
     } else
