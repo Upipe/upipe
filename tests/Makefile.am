@@ -35,6 +35,7 @@ check_PROGRAMS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	uclock_std_test \
+	upipe_trickplay_test \
 	upipe_dup_test \
 	upipe_genaux_test \
 	upipe_null_test \
@@ -63,6 +64,7 @@ TESTS = \
 	uprobe_dejitter_test \
 	uprobe_uref_mgr_test \
 	uclock_std_test \
+	upipe_trickplay_test \
 	upipe_dup_test \
 	upipe_genaux_test \
 	upipe_null_test \
@@ -173,6 +175,7 @@ upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.l
 upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

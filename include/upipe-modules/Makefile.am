@@ -17,6 +17,7 @@ myinclude_HEADERS = \
 	upipe_setattr.h \
 	upipe_match_attr.h \
 	upipe_setrap.h \
+	upipe_trickplay.h \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
 	upipe_http_source.h \
