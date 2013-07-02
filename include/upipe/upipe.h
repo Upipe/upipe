@@ -633,6 +633,15 @@ static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
 }
 
+/** @This throws an event asking for a uclock.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_need_uclock(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_NEED_UCLOCK);
+}
+
 /** @This throws an event declaring a new flow definition on the output.
  *
  * @param upipe description structure of the pipe

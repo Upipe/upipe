@@ -70,6 +70,8 @@ enum uprobe_event {
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (void) */
     UPROBE_NEED_UPUMP_MGR,
+    /** a uclock is necessary to operate (void) */
+    UPROBE_NEED_UCLOCK,
     /** a new flow definition is available on the output (struct uref *) */
     UPROBE_NEW_FLOW_DEF,
     /** a ubuf manager is necessary to operate (struct uref *) */

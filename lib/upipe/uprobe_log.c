@@ -115,6 +115,9 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             upipe_log(upipe, log->level,
                       "probe caught need upump manager");
             break;
+        case UPROBE_NEED_UCLOCK:
+            upipe_log(upipe, log->level, "probe caught need uclock");
+            break;
         case UPROBE_NEED_UBUF_MGR:
             upipe_log(upipe, log->level,
                       "probe caught need ubuf manager");
