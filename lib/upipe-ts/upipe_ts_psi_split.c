@@ -50,9 +50,6 @@
 
 /** @internal @This is the private context of a ts_psi_split pipe. */
 struct upipe_ts_psi_split {
-    /** true if we received a compatible flow definition */
-    bool flow_def_ok;
-
     /** list of subs */
     struct ulist subs;
 

@@ -217,7 +217,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     if (gathered_size < PES_HEADER_SIZE_NOPTS + headerlength)
         return;
 
-    if (has_dts || has_pts) {
+    if (has_pts) {
         uint8_t buffer3[PES_HEADER_TS_SIZE * 2];
         uint64_t pts, dts;
         const uint8_t *ts_fields = uref_block_peek(upipe_ts_pesd->next_uref,
@@ -235,8 +235,10 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             validate = validate &&
                        pes_validate_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
             dts = pes_get_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
-            if (dts > pts)
+            if (dts > pts) {
+                upipe_warn(upipe, "invalid DTS");
                 dts = pts;
+            }
         } else
             dts = pts;
         ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref,
