@@ -43,6 +43,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_source_read_size.h>
 #include <upipe-modules/upipe_http_source.h>
@@ -73,6 +74,11 @@ static const char get_request_format[] =
     "GET %s HTTP/1.0\n"
     "User-Agent: %s\n"
     "\n";
+
+/** @hidden */
+static void upipe_http_src_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
+static void upipe_http_src_reset_uclock(struct upipe *upipe);
 
 /** @internal @This is the private context of a http source pipe. */
 struct upipe_http_src {
@@ -121,8 +127,9 @@ UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_http_src, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr, upump_read)
-UPIPE_HELPER_UCLOCK(upipe_http_src, uclock)
+UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr, upipe_http_src_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_http_src, upump_read, upump_mgr)
+UPIPE_HELPER_UCLOCK(upipe_http_src, uclock, upipe_http_src_reset_uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_http_src, read_size)
 
 /** @internal @This allocates a http source pipe.
@@ -144,6 +151,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src_init_ubuf_mgr(upipe);
     upipe_http_src_init_output(upipe);
     upipe_http_src_init_upump_mgr(upipe);
+    upipe_http_src_init_upump_read(upipe);
     upipe_http_src_init_uclock(upipe);
     upipe_http_src_init_read_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_http_src->fd = -1;
@@ -238,14 +246,14 @@ static void upipe_http_src_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
                                                               strerror(errno));
-        upipe_http_src_set_upump(upipe, NULL);
+        upipe_http_src_set_upump_read(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
     }
     if (unlikely(len == 0)) {
         free(buffer);
         upipe_notice_va(upipe, "end of %s", upipe_http_src->url);
-        upipe_http_src_set_upump(upipe, NULL);
+        upipe_http_src_set_upump_read(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
     }
@@ -254,6 +262,24 @@ static void upipe_http_src_worker(struct upump *upump)
     http_parser_execute(&upipe_http_src->parser,
                         &upipe_http_src->parser_settings, buffer, len);
     free(buffer);
+}
+
+/** @internal @This resets upump_mgr-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_http_src_reset_upump_mgr(struct upipe *upipe)
+{
+    upipe_http_src_set_upump_read(upipe, NULL);
+}
+
+/** @internal @This resets uclock-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_http_src_reset_uclock(struct upipe *upipe)
+{
+    upipe_http_src_set_upump_read(upipe, NULL);
 }
 
 /** @internal @This returns the url of the currently opened http.
@@ -417,7 +443,7 @@ static bool _upipe_http_src_set_url(struct upipe *upipe, const char *url)
     }
     free(upipe_http_src->url);
     upipe_http_src->url = NULL;
-    upipe_http_src_set_upump(upipe, NULL);
+    upipe_http_src_set_upump_read(upipe, NULL);
 
     if (unlikely(url == NULL))
         return true;
@@ -581,7 +607,7 @@ static bool upipe_http_src_control(struct upipe *upipe, enum upipe_command comma
             upipe_throw_upump_error(upipe);
             return false;
         }
-        upipe_http_src_set_upump(upipe, upump);
+        upipe_http_src_set_upump_read(upipe, upump);
         upump_start(upump);
     }
 
@@ -605,6 +631,7 @@ static void upipe_http_src_free(struct upipe *upipe)
     free(upipe_http_src->url);
     upipe_http_src_clean_read_size(upipe);
     upipe_http_src_clean_uclock(upipe);
+    upipe_http_src_clean_upump_read(upipe);
     upipe_http_src_clean_upump_mgr(upipe);
     upipe_http_src_clean_output(upipe);
     upipe_http_src_clean_ubuf_mgr(upipe);

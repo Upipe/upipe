@@ -35,6 +35,7 @@ pkginclude_HEADERS = \
 	upipe_helper_ubuf_mgr.h \
 	upipe_helper_uclock.h \
 	upipe_helper_upipe.h \
+	upipe_helper_upump.h \
 	upipe_helper_upump_mgr.h \
 	upipe_helper_uref_mgr.h \
 	upipe_helper_uref_stream.h \

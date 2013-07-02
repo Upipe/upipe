@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_upump_mgr.h: upipe helper functions for upump manager
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for upump manager
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_UPUMP_MGR_H_
 /** @hidden */
@@ -35,13 +37,11 @@
 
 #include <stdbool.h>
 
-/** @This declares five functions dealing with the upump manager, and an
- * associated upump which we suppose serves as a worker task for the pipe.
+/** @This declares four functions dealing with the upump manager.
  *
- * You must add two pointers to your private upipe structure, for instance:
+ * You must add one pointer to your private upipe structure, for instance:
  * @code
  *  struct upump_mgr *upump_mgr;
- *  struct upump *upump;
  * @end code
  *
  * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
@@ -52,11 +52,6 @@
  *  void upipe_foo_init_upump_mgr(struct upipe *upipe)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
- *
- * @item @code
- *  void upipe_foo_set_upump(struct upipe *upipe, struct upump *upump)
- * @end code
- * Called whenever you allocate or free a worker.
  *
  * @item @code
  *  bool upipe_foo_get_upump_mgr(struct upipe *upipe, struct upump_mgr **p)
@@ -89,10 +84,10 @@
  * @param STRUCTURE name of your private upipe structure 
  * @param UPUMP_MGR name of the @tt {struct upump_mgr *} field of
  * your private upipe structure
- * @param UPUMP name of the @tt{struct upump *} field of
- * your private upipe structure
+ * @param RESET function called when all upump_mgr-related objects must be
+ * reset (struct upipe *)
  */
-#define UPIPE_HELPER_UPUMP_MGR(STRUCTURE, UPUMP_MGR, UPUMP)                 \
+#define UPIPE_HELPER_UPUMP_MGR(STRUCTURE, UPUMP_MGR, RESET)                 \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -101,21 +96,6 @@ static void STRUCTURE##_init_upump_mgr(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->UPUMP_MGR = NULL;                                            \
-    STRUCTURE->UPUMP = NULL;                                                \
-}                                                                           \
-/** @internal @This sets the upump to use.                                  \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- * @param upump upump structure to use                                      \
- */                                                                         \
-static void STRUCTURE##_set_upump(struct upipe *upipe, struct upump *upump) \
-{                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UPUMP != NULL)) {                               \
-        upump_stop(STRUCTURE->UPUMP);                                       \
-        upump_free(STRUCTURE->UPUMP);                                       \
-    }                                                                       \
-    STRUCTURE->UPUMP = upump;                                               \
 }                                                                           \
 /** @internal @This gets the current upump_mgr.                             \
  *                                                                          \
@@ -141,13 +121,13 @@ static bool STRUCTURE##_set_upump_mgr(struct upipe *upipe,                  \
                                       struct upump_mgr *upump_mgr)          \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE##_set_upump(upipe, NULL);                                     \
     if (unlikely(STRUCTURE->UPUMP_MGR != NULL))                             \
         upump_mgr_release(STRUCTURE->UPUMP_MGR);                            \
                                                                             \
     STRUCTURE->UPUMP_MGR = upump_mgr;                                       \
     if (likely(upump_mgr != NULL))                                          \
         upump_mgr_use(STRUCTURE->UPUMP_MGR);                                \
+    RESET(upipe);                                                           \
     return true;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -157,7 +137,6 @@ static bool STRUCTURE##_set_upump_mgr(struct upipe *upipe,                  \
 static void STRUCTURE##_clean_upump_mgr(struct upipe *upipe)                \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE##_set_upump(upipe, NULL);                                     \
     if (likely(STRUCTURE->UPUMP_MGR != NULL))                               \
         upump_mgr_release(STRUCTURE->UPUMP_MGR);                            \
 }

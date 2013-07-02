@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_uclock.h: upipe helper functions for uclock
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for uclock
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_UCLOCK_H_
 /** @hidden */
@@ -41,9 +43,6 @@
  * @code
  *  struct uclock *uclock;
  * @end code
- *
- * You must also declare @ref #UPIPE_HELPER_UPUMP_MGR prior to using this
- * macro.
  *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
@@ -83,8 +82,10 @@
  * @param STRUCTURE name of your private upipe structure 
  * @param UCLOCK name of the @tt {struct uclock *} field of
  * your private upipe structure
+ * @param RESET function called when all uclock-related objects must be
+ * reset (struct upipe *)
  */
-#define UPIPE_HELPER_UCLOCK(STRUCTURE, UCLOCK)                              \
+#define UPIPE_HELPER_UCLOCK(STRUCTURE, UCLOCK, RESET)                       \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -122,7 +123,7 @@ static bool STRUCTURE##_set_uclock(struct upipe *upipe,                     \
     STRUCTURE->UCLOCK = uclock;                                             \
     if (likely(uclock != NULL))                                             \
         uclock_use(STRUCTURE->UCLOCK);                                      \
-    STRUCTURE##_set_upump(upipe, NULL);                                     \
+    RESET(upipe);                                                           \
     return true;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \

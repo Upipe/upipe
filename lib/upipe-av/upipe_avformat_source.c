@@ -48,6 +48,7 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -76,6 +77,11 @@
 
 /** lowest possible timestamp (just an arbitrarily high time) */
 #define AV_CLOCK_MIN UINT32_MAX
+
+/** @hidden */
+static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
+static void upipe_avfsrc_reset_uclock(struct upipe *upipe);
 
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
@@ -117,8 +123,9 @@ UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe)
 UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upump)
-UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
+UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upipe_avfsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
+UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock, upipe_avfsrc_reset_uclock)
 
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
@@ -297,6 +304,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_sub_subs(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
+    upipe_avfsrc_init_upump(upipe);
     upipe_avfsrc_init_uclock(upipe);
     upipe_avfsrc->systime_rap = UINT64_MAX;
 
@@ -689,20 +697,24 @@ static void upipe_avfsrc_probe(struct upump *upump)
     upipe_avfsrc_start(upipe);
 }
 
-/** @internal @This sets the upump_mgr and deals with the upump_av_deal.
+
+/** @internal @This resets upump_mgr-related fields.
  *
  * @param upipe description structure of the pipe
- * @param upump_mgr new upump_mgr
- * @return false in case of error
  */
-static inline bool _upipe_avfsrc_set_upump_mgr(struct upipe *upipe,
-                                               struct upump_mgr *upump_mgr)
+static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe)
 {
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (upipe_avfsrc->upump != NULL)
-        upipe_avfsrc_set_upump(upipe, NULL);
+    upipe_avfsrc_set_upump(upipe, NULL);
     upipe_avfsrc_abort_av_deal(upipe);
-    return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
+}
+
+/** @internal @This resets uclock-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_reset_uclock(struct upipe *upipe)
+{
+    upipe_avfsrc_set_upump(upipe, NULL);
 }
 
 /** @internal @This returns the content of an avformat option.
@@ -822,8 +834,13 @@ static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
  */
 static bool _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
 {
-    //struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(time_p != NULL);
+    if (upipe_avfsrc->context != NULL && upipe_avfsrc->context->pb != NULL &&
+        upipe_avfsrc->context->pb->seekable & AVIO_SEEKABLE_NORMAL) {
+        *time_p = 0; /* TODO */
+        return true;
+    }
     return false;
 }
 
@@ -865,7 +882,7 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
+            return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
             struct uclock **p = va_arg(args, struct uclock **);
@@ -971,7 +988,7 @@ static void upipe_avfsrc_free(struct upipe *upipe)
         if (likely(upipe_avfsrc->url != NULL))
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         
-        // Throw del_flow for non-discarded streams
+        /* Throw del_flow for non-discarded streams. */
         for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++) {
             if (upipe_avfsrc->context->streams[i]->discard != AVDISCARD_ALL) {
                 upipe_split_throw_del_flow(upipe, i);
@@ -986,6 +1003,7 @@ static void upipe_avfsrc_free(struct upipe *upipe)
     free(upipe_avfsrc->url);
 
     upipe_avfsrc_clean_uclock(upipe);
+    upipe_avfsrc_clean_upump(upipe);
     upipe_avfsrc_clean_upump_mgr(upipe);
     upipe_avfsrc_clean_uref_mgr(upipe);
     upipe_avfsrc_free_void(upipe);

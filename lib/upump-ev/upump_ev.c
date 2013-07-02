@@ -122,9 +122,6 @@ static void upump_ev_dispatch_io(struct ev_loop *ev_loop,
 {
     struct upump_ev *upump_ev = container_of(ev_io, struct upump_ev, ev_io);
     struct upump *upump = upump_ev_to_upump(upump_ev);
-    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
-    /* FIXME: I don't know why this is necessary */
-    ev_io_start(ev_mgr->ev_loop, &upump_ev->ev_io);
     upump_common_dispatch(upump);
 }
 
@@ -248,8 +245,7 @@ static void upump_ev_real_start(struct upump *upump)
 static void upump_ev_real_stop(struct upump *upump)
 {
     struct upump_ev *upump_ev = upump_ev_from_upump(upump);
-    struct upump_ev_mgr *ev_mgr =
-        upump_ev_mgr_from_upump_mgr(upump->mgr);
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
 
     switch (upump_ev->event) {
         case UPUMP_TYPE_IDLER:

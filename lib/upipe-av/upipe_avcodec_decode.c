@@ -28,23 +28,25 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 
@@ -65,6 +67,9 @@
 
 #define EXPECTED_FLOW "block."
 
+/** @hidden */
+static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
 static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
                                       struct upump *upump);
 
@@ -111,6 +116,8 @@ struct upipe_avcdec {
     uint64_t prev_rap;
     /** latest incoming uref */
     struct uref *uref;
+    /** next PTS */
+    uint64_t next_pts;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -130,7 +137,8 @@ UPIPE_HELPER_UPIPE(upipe_avcdec, upipe);
 UPIPE_HELPER_FLOW(upipe_avcdec, EXPECTED_FLOW)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr, upump_av_deal)
+UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr, upipe_avcdec_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcdec, urefs, blockers, upipe_avcdec_input_packet)
 
 /** @internal */
@@ -382,8 +390,7 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
             context->release_buffer = upipe_avcdec_release_buffer;
             context->flags |= CODEC_FLAG_EMU_EDGE;
             context->lowres = upipe_avcdec->lowres;
-            context->skip_loop_filter = AVDISCARD_ALL;
-
+            //context->skip_loop_filter = AVDISCARD_ALL;
 
             if (!upipe_avcdec->output_flow) {
                 struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
@@ -615,7 +622,7 @@ static void upipe_avcdec_set_index_rap(struct upipe *upipe, struct uref *uref)
  * @param upump upump structure
  */
 static void upipe_avcdec_output_frame(struct upipe *upipe, AVFrame *frame,
-                                     struct upump *upump)
+                                      struct upump *upump)
 {
     struct ubuf *ubuf;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
@@ -671,6 +678,22 @@ static void upipe_avcdec_output_frame(struct upipe *upipe, AVFrame *frame,
     /* index rap attribute */
     upipe_avcdec_set_index_rap(upipe, uref);
 
+    /* DTS has no meaning from now on */
+    uref_clock_delete_dts(uref);
+
+    uint64_t pts;
+    if (!uref_clock_get_pts(uref, &pts)) {
+        pts = upipe_avcdec->next_pts;
+        if (pts != UINT64_MAX)
+            uref_clock_set_pts(uref, pts);
+    }
+
+    uint64_t duration;
+    if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration))
+        upipe_avcdec->next_pts = pts + duration;
+    else
+        upipe_warn(upipe, "couldn't determine next_pts");
+
     upipe_avcdec_output(upipe, uref, upump);
 }
 
@@ -685,7 +708,7 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
 {
     struct ubuf *ubuf;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    struct uref *uref = frame->opaque;
+    struct uref *uref = uref_dup(frame->opaque);
     int bufsize = -1, avbufsize;
     size_t size = 0;
     uint8_t *buf;
@@ -733,7 +756,7 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
  * @param upump upump structure
  */
 static bool upipe_avcdec_process_buf(struct upipe *upipe, uint8_t *buf,
-                                    size_t size, struct upump *upump)
+                                     size_t size, struct upump *upump)
 {
     int gotframe = 0, len;
     AVPacket avpkt;
@@ -804,7 +827,7 @@ static bool upipe_avcdec_process_buf(struct upipe *upipe, uint8_t *buf,
  * @return true if the output could be written
  */
 static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                                      struct upump *upump)
 {
     uint8_t *inbuf;
     size_t insize = 0;
@@ -874,24 +897,21 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_avcdec_check_sink(upipe)))
-        upipe_avcdec_hold_sink(upipe, uref);
-    else if (!upipe_avcdec_input_packet(upipe, uref, upump)) {
+    if (unlikely(!upipe_avcdec_check_sink(upipe) ||
+                 !upipe_avcdec_input_packet(upipe, uref, upump))) {
         upipe_avcdec_block_sink(upipe, upump);
         upipe_avcdec_hold_sink(upipe, uref);
     }
 }
 
-/* @internal @This defines a new upump_mgr after aborting av_deal
+/** @internal @This resets upump_mgr-related fields.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
  */
-static bool _upipe_avcdec_set_upump_mgr(struct upipe *upipe,
-                                       struct upump_mgr *upump_mgr)
+static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe)
 {
+    upipe_avcdec_set_upump_av_deal(upipe, NULL);
     upipe_avcdec_abort_av_deal(upipe);
-    return upipe_avcdec_set_upump_mgr(upipe, upump_mgr);
 }
 
 /** @internal @This returns the current codec definition string
@@ -931,8 +951,9 @@ static bool _upipe_avcdec_set_lowres(struct upipe *upipe, int lowres)
 
     if (upipe_avcdec->context && upipe_avcdec->context->codec) {
         codec_def = upipe_av_to_flow_def(upipe_avcdec->context->codec->id);
-        ret = _upipe_avcdec_set_codec(upipe, codec_def, upipe_avcdec->context->extradata,
-                                upipe_avcdec->context->extradata_size);
+        ret = _upipe_avcdec_set_codec(upipe, codec_def,
+                                      upipe_avcdec->context->extradata,
+                                      upipe_avcdec->context->extradata_size);
     }
     return ret;
 }
@@ -955,8 +976,8 @@ static bool _upipe_avcdec_get_lowres(struct upipe *upipe, int *lowres_p)
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_avcdec_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static bool upipe_avcdec_control(struct upipe *upipe,
+                                 enum upipe_command command, va_list args)
 {
     switch (command) {
         /* generic linear stuff */
@@ -986,7 +1007,7 @@ static bool upipe_avcdec_control(struct upipe *upipe, enum upipe_command command
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_avcdec_set_upump_mgr(upipe, upump_mgr);
+            return upipe_avcdec_set_upump_mgr(upipe, upump_mgr);
         }
 
 
@@ -1004,17 +1025,17 @@ static bool upipe_avcdec_control(struct upipe *upipe, enum upipe_command command
             int size = va_arg(args, int);
             return _upipe_avcdec_set_codec(upipe, codec, extradata, size);
         }
-        case UPIPE_AVCDEC_SET_LOWRES: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVCDEC_SIGNATURE);
-            unsigned int lowres = va_arg(args, int);
-            return _upipe_avcdec_set_lowres(upipe, lowres);
-        }
         case UPIPE_AVCDEC_GET_LOWRES: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_AVCDEC_SIGNATURE);
             int *lowres_p = va_arg(args, int *);
             return _upipe_avcdec_get_lowres(upipe, lowres_p);
+        }
+        case UPIPE_AVCDEC_SET_LOWRES: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_AVCDEC_SIGNATURE);
+            unsigned int lowres = va_arg(args, int);
+            return _upipe_avcdec_set_lowres(upipe, lowres);
         }
 
         default:
@@ -1046,6 +1067,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
+    upipe_avcdec_clean_upump_av_deal(upipe);
     upipe_avcdec_clean_upump_mgr(upipe);
     upipe_avcdec_free_flow(upipe);
 }
@@ -1071,17 +1093,18 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec_init_ubuf_mgr(upipe);
     upipe_avcdec_init_upump_mgr(upipe);
+    upipe_avcdec_init_upump_av_deal(upipe);
     upipe_avcdec_init_output(upipe);
     upipe_avcdec_init_sink(upipe);
     upipe_avcdec->input_flow = flow_def;
     upipe_avcdec->context = NULL;
-    upipe_avcdec->upump_av_deal = NULL;
     upipe_avcdec->pixfmt = NULL;
     upipe_avcdec->frame = avcodec_alloc_frame();
     upipe_avcdec->lowres = 0;
 
     upipe_avcdec->index_rap = 0;
     upipe_avcdec->prev_rap = 0;
+    upipe_avcdec->next_pts = UINT64_MAX;
 
     upipe_throw_ready(upipe);
 

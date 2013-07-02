@@ -41,6 +41,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_sink_delay.h>
@@ -69,7 +70,13 @@
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
+/** @hidden */
+static void upipe_udpsink_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
+static void upipe_udpsink_reset_uclock(struct upipe *upipe);
+/** @hidden */
 static void upipe_udpsink_watcher(struct upump *upump);
+/** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump *upump);
 
@@ -99,9 +106,10 @@ struct upipe_udpsink {
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe)
 UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
-UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr, upump)
+UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr, upipe_udpsink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_udpsink, urefs, blockers, upipe_udpsink_output)
-UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
+UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, upipe_udpsink_reset_uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
 
 /** @internal @This allocates a file sink pipe.
@@ -123,6 +131,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
+    upipe_udpsink_init_upump(upipe);
     upipe_udpsink_init_sink(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink_init_delay(upipe, SYSTIME_DELAY);
@@ -135,29 +144,20 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 /** @This starts the watcher waiting for the sink to unblock.
  *
  * @param upipe description structure of the pipe
- * @param timeout time to wait before waking; if 0, wait for the
- * file descriptor to unblock
  */
-static void upipe_udpsink_wait(struct upipe *upipe, uint64_t timeout)
+static void upipe_udpsink_poll(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    struct upump *watcher;
-    if (unlikely(timeout != 0))
-        watcher = upump_alloc_timer(upipe_udpsink->upump_mgr,
-                                    upipe_udpsink_watcher,
-                                    upipe, timeout, 0);
-    else
-        watcher = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
-                                       upipe_udpsink_watcher, upipe,
-                                       upipe_udpsink->fd);
+    struct upump *watcher = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
+                                                 upipe_udpsink_watcher, upipe,
+                                                 upipe_udpsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_upump_error(upipe);
-        return;
+    } else {
+        upipe_udpsink_set_upump(upipe, watcher);
+        upump_start(watcher);
     }
-
-    upipe_udpsink_set_upump(upipe, watcher);
-    upump_start(watcher);
 }
 
 /** @internal @This outputs data to the file sink.
@@ -190,7 +190,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     uint64_t now = uclock_now(upipe_udpsink->uclock);
     systime += upipe_udpsink->delay;
     if (unlikely(now < systime)) {
-        upipe_udpsink_wait(upipe, systime - now);
+        upipe_udpsink_wait_upump(upipe, systime - now, upipe_udpsink_watcher);
         return false;
     }
 
@@ -225,7 +225,7 @@ write_buffer:
 #if EAGAIN != EWOULDBLOCK
                 case EWOULDBLOCK:
 #endif
-                    upipe_udpsink_wait(upipe, 0);
+                    upipe_udpsink_poll(upipe);
                     return false;
                 case EBADF:
                 case EFBIG:
@@ -276,12 +276,29 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_udpsink_check_sink(upipe)))
-        upipe_udpsink_hold_sink(upipe, uref);
-    else if (!upipe_udpsink_output(upipe, uref, upump)) {
+    if (unlikely(!upipe_udpsink_check_sink(upipe) ||
+                 !upipe_udpsink_output(upipe, uref, upump))) {
         upipe_udpsink_hold_sink(upipe, uref);
         upipe_udpsink_block_sink(upipe, upump);
     }
+}
+
+/** @internal @This resets upump_mgr-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_udpsink_reset_upump_mgr(struct upipe *upipe)
+{
+    upipe_udpsink_set_upump(upipe, NULL);
+}
+
+/** @internal @This resets uclock-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_udpsink_reset_uclock(struct upipe *upipe)
+{
+    upipe_udpsink_set_upump(upipe, NULL);
 }
 
 /** @internal @This returns the uri of the currently opened file.
@@ -375,9 +392,6 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-            if (upipe_udpsink->upump != NULL)
-                upipe_udpsink_set_upump(upipe, NULL);
             return upipe_udpsink_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -431,7 +445,7 @@ static bool upipe_udpsink_control(struct upipe *upipe, enum upipe_command comman
         return false;
 
     if (unlikely(!upipe_udpsink_check_sink(upipe)))
-        upipe_udpsink_wait(upipe, 0);
+        upipe_udpsink_poll(upipe);
 
     return true;
 }
@@ -453,6 +467,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     free(upipe_udpsink->uri);
     upipe_udpsink_clean_delay(upipe);
     upipe_udpsink_clean_uclock(upipe);
+    upipe_udpsink_clean_upump(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
     upipe_udpsink_clean_sink(upipe);
     upipe_udpsink_free_flow(upipe);

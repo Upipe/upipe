@@ -38,6 +38,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
@@ -49,7 +50,11 @@
 #include <string.h>
 #include <assert.h>
 
+/** @hidden */
+static void upipe_qsink_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
 static void upipe_qsink_watcher(struct upump *upump);
+/** @hidden */
 static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
                                struct upump *upump);
 
@@ -75,7 +80,8 @@ struct upipe_qsink {
 
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe)
 UPIPE_HELPER_FLOW(upipe_qsink, NULL)
-UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr, upump)
+UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr, upipe_qsink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_qsink, urefs, blockers, upipe_qsink_output)
 
 /** @internal @This allocates a queue sink pipe.
@@ -98,6 +104,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     upipe_qsink_init_upump_mgr(upipe);
+    upipe_qsink_init_upump(upipe);
     upipe_qsink_init_sink(upipe);
     upipe_qsink->qsrc = NULL;
     upipe_qsink->flow_def = flow_def;
@@ -162,12 +169,20 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_qsink_check_sink(upipe)))
-        upipe_qsink_hold_sink(upipe, uref);
-    else if (!upipe_qsink_output(upipe, uref, upump)) {
+    if (unlikely(!upipe_qsink_check_sink(upipe) ||
+                 !upipe_qsink_output(upipe, uref, upump))) {
         upipe_qsink_hold_sink(upipe, uref);
         upipe_qsink_wait(upipe, upump);
     }
+}
+
+/** @internal @This resets upump_mgr-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsink_reset_upump_mgr(struct upipe *upipe)
+{
+    upipe_qsink_set_upump(upipe, NULL);
 }
 
 /** @internal @This sets the input flow definition.
@@ -286,9 +301,6 @@ static bool _upipe_qsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-            if (upipe_qsink->upump != NULL)
-                upipe_qsink_set_upump(upipe, NULL);
             return upipe_qsink_set_upump_mgr(upipe, upump_mgr);
         }
 
@@ -355,6 +367,7 @@ static void upipe_qsink_free(struct upipe *upipe)
 
     if (upipe_qsink->flow_def != NULL)
         uref_free(upipe_qsink->flow_def);
+    upipe_qsink_clean_upump(upipe);
     upipe_qsink_clean_upump_mgr(upipe);
     upipe_qsink_clean_sink(upipe);
     upipe_qsink_free_flow(upipe);

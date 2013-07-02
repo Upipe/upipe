@@ -44,6 +44,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
@@ -64,6 +65,8 @@
 
 #define EXPECTED_FLOW "pic."
 
+/** @hidden */
+static void upipe_avcenc_reset_upump_mgr(struct upipe *upipe);
 /** @internal @This handles incoming frames */
 static bool upipe_avcenc_input_frame(struct upipe *upipe,
                                      struct uref *uref, struct upump *upump);
@@ -133,7 +136,8 @@ UPIPE_HELPER_FLOW(upipe_avcenc, EXPECTED_FLOW)
 UPIPE_HELPER_UREF_MGR(upipe_avcenc, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr, upump_av_deal)
+UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr, upipe_avcenc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcenc, urefs, blockers, upipe_avcenc_input_frame)
 
 /** @This aborts and frees an existing upump watching for exclusive access to
@@ -584,16 +588,14 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
     upipe_avcenc_input_frame(upipe, uref, upump);
 }
 
-/* @internal @This defines a new upump_mgr after aborting av_deal
+/** @internal @This resets upump_mgr-related fields.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
  */
-static bool _upipe_avcenc_set_upump_mgr(struct upipe *upipe,
-                                       struct upump_mgr *upump_mgr)
+static void upipe_avcenc_reset_upump_mgr(struct upipe *upipe)
 {
+    upipe_avcenc_set_upump_av_deal(upipe, NULL);
     upipe_avcenc_abort_av_deal(upipe);
-    return upipe_avcenc_set_upump_mgr(upipe, upump_mgr);
 }
 
 /** @internal @This returns the current codec definition string
@@ -658,7 +660,7 @@ static bool upipe_avcenc_control(struct upipe *upipe, enum upipe_command command
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_avcenc_set_upump_mgr(upipe, upump_mgr);
+            return upipe_avcenc_set_upump_mgr(upipe, upump_mgr);
         }
 
 
@@ -703,6 +705,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
     upipe_avcenc_clean_sink(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
     upipe_avcenc_clean_uref_mgr(upipe);
+    upipe_avcenc_clean_upump_av_deal(upipe);
     upipe_avcenc_clean_upump_mgr(upipe);
 
     upipe_throw_dead(upipe);
@@ -732,6 +735,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_uref_mgr(upipe);
     upipe_avcenc_init_ubuf_mgr(upipe);
     upipe_avcenc_init_upump_mgr(upipe);
+    upipe_avcenc_init_upump_av_deal(upipe);
     upipe_avcenc_init_output(upipe);
     upipe_avcenc_init_sink(upipe);
     upipe_avcenc->input_flow = flow_def;

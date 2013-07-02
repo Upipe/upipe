@@ -35,6 +35,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_queue_source.h>
 
 #include <stdlib.h>
@@ -43,6 +44,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+
+/** @hidden */
+static void upipe_qsrc_reset_upump_mgr(struct upipe *upipe);
 
 /** @internal @This is the private context of a queue source pipe. */
 struct upipe_qsrc {
@@ -69,7 +73,8 @@ UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
 
 UPIPE_HELPER_OUTPUT(upipe_qsrc, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upump)
+UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upipe_qsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_qsrc, upump, upump_mgr)
 
 /** @internal @This allocates a queue source pipe.
  *
@@ -104,6 +109,7 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
 
     upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
+    upipe_qsrc_init_upump(upipe);
     upipe_qsrc->flow_def = NULL;
     upipe_qsrc->upipe_queue.max_length = length;
     upipe_throw_ready(upipe);
@@ -136,6 +142,15 @@ static void upipe_qsrc_worker(struct upump *upump)
 
         upipe_qsrc_output(upipe, uref, upump);
     }
+}
+
+/** @internal @This resets upump_mgr-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsrc_reset_upump_mgr(struct upipe *upipe)
+{
+    upipe_qsrc_set_upump(upipe, NULL);
 }
 
 /** @internal @This returns the maximum length of the queue.
@@ -199,9 +214,6 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-            if (upipe_qsrc->upump != NULL)
-                upipe_qsrc_set_upump(upipe, NULL);
             return upipe_qsrc_set_upump_mgr(upipe, upump_mgr);
         }
 
@@ -264,6 +276,7 @@ static void upipe_qsrc_free(struct upipe *upipe)
     upipe_notice_va(upipe, "freeing queue %p", upipe);
     upipe_throw_dead(upipe);
 
+    upipe_qsrc_clean_upump(upipe);
     upipe_qsrc_clean_upump_mgr(upipe);
     upipe_qsrc_clean_output(upipe);
 

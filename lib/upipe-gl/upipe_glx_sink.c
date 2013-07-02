@@ -28,10 +28,13 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
@@ -40,6 +43,9 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe-gl/upipe_glx_sink.h>
 
 #include <stdlib.h>
@@ -55,7 +61,24 @@
 #include <GL/glu.h>
 #include <GL/glx.h>
 
+/** @hidden */
+static void upipe_glx_sink_reset_upump_mgr(struct upipe *upipe);
+/** @hidden */
+static void upipe_glx_sink_reset_uclock(struct upipe *upipe);
+/** @hidden */
+static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
+                                     struct upump *upump);
+/** @hidden */
+static void upipe_glx_sink_write_watcher(struct upump *upump);
+
 struct upipe_glx_sink {
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** temporary uref storage */
+    struct ulist urefs;
+    /** list of blockers */
+    struct ulist blockers;
+
     /** X display */
     Display *display;
     /** X visual information */
@@ -78,15 +101,21 @@ struct upipe_glx_sink {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** event loop watcher */
+    /** event watcher */
     struct upump *upump_watcher;
+    /** write watcher */
+    struct upump *upump;
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe);
 UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
-UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr, upump_watcher)
+UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr, upipe_glx_sink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_glx_sink, upump_watcher, upump_mgr)
+UPIPE_HELPER_SINK(upipe_glx_sink, urefs, blockers, upipe_glx_sink_input_pic)
+UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock, upipe_glx_sink_reset_uclock)
 
 static inline void upipe_glx_sink_flush(struct upipe *upipe)
 {
@@ -186,7 +215,7 @@ static bool upipe_glx_sink_init_watcher(struct upipe *upipe)
         if (unlikely(!upump)) {
             return false;
         } else {
-            upipe_glx_sink_set_upump(upipe, upump);
+            upipe_glx_sink_set_upump_watcher(upipe, upump);
             upump_start(upump);
         }
     }
@@ -326,6 +355,10 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
     upipe_glx_sink_init_upump_mgr(upipe);
+    upipe_glx_sink_init_upump(upipe);
+    upipe_glx_sink_init_upump_watcher(upipe);
+    upipe_glx_sink_init_sink(upipe);
+    upipe_glx_sink_init_uclock(upipe);
 
     upipe_glx_sink->display = NULL;
     upipe_glx_sink->visual = NULL;
@@ -342,17 +375,36 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump upump structure
  */
-static void upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
+static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
                                      struct upump *upump)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
+
+    if (likely(upipe_glx_sink->uclock != NULL)) {
+        uint64_t pts = 0;
+        if (likely(uref_clock_get_pts_sys(uref, &pts))) {
+            uint64_t now = uclock_now(upipe_glx_sink->uclock);
+            if (now < pts) {
+                upipe_glx_sink_wait_upump(upipe, pts - now,
+                                          upipe_glx_sink_write_watcher);
+                return false;
+            } else if (now > pts + UCLOCK_FREQ / 10) {
+                upipe_warn_va(upipe, "late picture dropped (%"PRId64")",
+                              (now - pts) * 1000 / UCLOCK_FREQ);
+                uref_free(uref);
+                return true;
+            }
+        } else
+            upipe_warn(upipe, "received non-dated buffer");
+    }
 
     const uint8_t *data = NULL;
     size_t width, height;
     uref_pic_size(uref, &width, &height, NULL);
     if(!uref_pic_plane_read(uref, "rgb24", 0, 0, -1, -1, &data)) {
         upipe_err(upipe, "Could not map picture plane");
-        return;
+        uref_free(uref);
+        return true;
     }
     glBindTexture(GL_TEXTURE_2D, upipe_glx_sink->texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, 
@@ -365,6 +417,20 @@ static void upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
     upipe_throw(upipe, UPROBE_GL_SINK_RENDER,
                 UPIPE_GL_SINK_SIGNATURE, uref);
     upipe_glx_sink_flush(upipe);
+    uref_free(uref);
+    return true;
+}
+
+/** @internal @This is called when the picture should be displayed.
+ *
+ * @param upump description structure of the watcher
+ */
+static void upipe_glx_sink_write_watcher(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    upipe_glx_sink_set_upump(upipe, NULL);
+    if (upipe_glx_sink_output_sink(upipe))
+        upipe_glx_sink_unblock_sink(upipe);
 }
 
 /** @internal @This handles input.
@@ -383,28 +449,37 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (upipe_glx_sink->display) {
-        upipe_glx_sink_input_pic(upipe, uref, upump);
-    } else {
+    if (!upipe_glx_sink->display) {
         upipe_warn(upipe, "glx context not ready");
+        uref_free(uref);
+        return;
     }
-    uref_free(uref);
+
+    if (!upipe_glx_sink_check_sink(upipe) ||
+        !upipe_glx_sink_input_pic(upipe, uref, upump)) {
+        upipe_glx_sink_hold_sink(upipe, uref);
+        upipe_glx_sink_block_sink(upipe, upump);
+    }
 }
 
-/** @internal @This initialize the upump watcher
+/** @internal @This resets upump_mgr-related fields.
  *
  * @param upipe description structure of the pipe
- * @param upump_mgr upump manager structure
- * @return false in case of errur
  */
-static bool _upipe_glx_sink_set_upump_mgr(struct upipe *upipe,
-                                          struct upump_mgr *upump_mgr)
+static void upipe_glx_sink_reset_upump_mgr(struct upipe *upipe)
 {
-    if (unlikely(!upipe_glx_sink_set_upump_mgr(upipe, upump_mgr))) {
-        upipe_err(upipe, "Could not set upump manager");
-        return false;
-    }
-    return upipe_glx_sink_init_watcher(upipe);
+    upipe_glx_sink_set_upump(upipe, NULL);
+    upipe_glx_sink_set_upump_watcher(upipe, NULL);
+    upipe_glx_sink_init_watcher(upipe);
+}
+
+/** @internal @This resets uclock-related fields.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_glx_sink_reset_uclock(struct upipe *upipe)
+{
+    upipe_glx_sink_set_upump(upipe, NULL);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -426,8 +501,17 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
+            return upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
         }
+        case UPIPE_GET_UCLOCK: {
+            struct uclock **p = va_arg(args, struct uclock **);
+            return upipe_glx_sink_get_uclock(upipe, p);
+        }
+        case UPIPE_SET_UCLOCK: {
+            struct uclock *uclock = va_arg(args, struct uclock *);
+            return upipe_glx_sink_set_uclock(upipe, uclock);
+        }
+
         case UPIPE_GLX_SINK_INIT: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GLX_SINK_SIGNATURE);
@@ -471,13 +555,15 @@ static void upipe_glx_sink_free(struct upipe *upipe)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
+    upipe_glx_sink_clean_upump(upipe);
+    upipe_glx_sink_clean_upump_watcher(upipe);
     upipe_glx_sink_clean_upump_mgr(upipe);
     if (upipe_glx_sink->display) {
         upipe_glx_sink_clean_glx(upipe);
     }
+    upipe_glx_sink_clean_uclock(upipe);
+    upipe_glx_sink_clean_sink(upipe);
     upipe_glx_sink_free_flow(upipe);
-    upipe_clean(upipe);
-    free(upipe_glx_sink);
 }
 
 /** module manager static descriptor */
