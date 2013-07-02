@@ -2,6 +2,7 @@
  * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -75,6 +76,7 @@ graph {flow: east}
 #include <upipe/uprobe_select_programs.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_dejitter.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -100,6 +102,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_trickplay.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mp2v_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
@@ -121,7 +124,8 @@ graph {flow: east}
 
 #define ALIVE() { printf("ALIVE %s %d\n", __func__, __LINE__); fflush(stdout);}
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
-#define QUEUE_LENGTH 5
+#define SINK_QUEUE_LENGTH 2
+#define DEC_QUEUE_LENGTH 50
 #define UMEM_POOL 512
 #define UDICT_POOL_DEPTH 500
 #define UREF_POOL_DEPTH 500
@@ -133,6 +137,7 @@ graph {flow: east}
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
+#define DEJITTER_DIVIDER    100
 #define READ_SIZE 4096
 
 #undef BENCH_TS
@@ -146,19 +151,27 @@ struct thread {
     pthread_t id;
 };
 
+struct uclock *uclock;
 const char *url = NULL;
+bool upipe_ts = false;
+bool trickp = false;
 struct upipe *qsrc;
 struct upipe_mgr *glx_mgr;
+struct upipe_mgr *trickp_mgr;
 struct upipe_mgr *avcdec_mgr;
 struct upipe_mgr *upipe_filter_blend_mgr;
 struct upipe_mgr *upipe_sws_mgr;
 struct upipe_mgr *upipe_qsink_mgr;
+struct upipe_mgr *upipe_qsrc_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *rgb_mgr = NULL;
 struct ubuf_mgr *block_mgr;
 struct upipe *output = NULL;
+struct upipe *upipe_trickp = NULL;
 struct uprobe *logger;
+struct uprobe *uprobe_dejitter;
 struct uprobe uprobe_glx;
+struct upump_mgr *upump_mgr;
 struct upump_mgr *upump_mgr_thread;
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 bool paused = false;
@@ -170,7 +183,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_SOURCE_END:
 #ifndef BENCH_TS
-            upipe_avfsrc_set_url(upipe, url);
+            if (!upipe_ts)
+                upipe_avfsrc_set_url(upipe, url);
 #endif
             return true;
 
@@ -188,18 +202,32 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             upipe_err_va(upipe, "add flow %"PRIu64" (%s)", flow_id, def);
             assert(output == NULL);
             output = upipe_flow_alloc_sub(upipe,
-                        uprobe_pfx_adhoc_alloc(uprobe, loglevel, "video"),
-                        flow_def);
+                    uprobe_pfx_adhoc_alloc(uprobe_dejitter, loglevel, "video"),
+                    flow_def);
             assert(output != NULL);
             upipe_set_ubuf_mgr(output, block_mgr);
 
 #ifndef BENCH_TS
+            struct upipe *dec_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
+                    uprobe_pfx_adhoc_alloc_va(uprobe, loglevel, "dec_src"),
+                    DEC_QUEUE_LENGTH);
+            assert(dec_qsrc != NULL);
+            upipe_set_upump_mgr(dec_qsrc, upump_mgr);
+            struct upipe *dec_qsink = upipe_flow_alloc(upipe_qsink_mgr,
+                    uprobe_pfx_adhoc_alloc_va(uprobe, loglevel, "dec_qsink"),
+                    flow_def);
+            upipe_set_upump_mgr(dec_qsink, upump_mgr);
+            upipe_qsink_set_qsrc(dec_qsink, dec_qsrc);
+            upipe_set_output(output, dec_qsink);
+            upipe_release(dec_qsink);
+
             struct upipe *avcdec = upipe_flow_alloc(avcdec_mgr,
                     uprobe_pfx_adhoc_alloc_va(uprobe, loglevel, "avcdec"),
                     flow_def);
             assert(avcdec != NULL);
             upipe_set_ubuf_mgr(avcdec, yuv_mgr);
-            upipe_set_output(output, avcdec);
+            upipe_set_output(dec_qsrc, avcdec);
+            upipe_release(dec_qsrc);
             /* avcdec doesn't need upump if there is only one avcodec pipe
              * calling avcodec_open/_close at the same time */
 
@@ -257,18 +285,17 @@ static void keyhandler(struct upipe *upipe, unsigned long key)
             exit(0);
         }
         case ' ': {
-#if 0
-            struct upump_mgr *upump_mgr = NULL;
-            upipe_get_upump_mgr(upipe, &upump_mgr);
-            if ( (paused = !paused) ) {
-                upipe_notice(upipe, "Playback paused");
-                upump_mgr_sink_block(upump_mgr);
-            } else {
-                upipe_notice(upipe, "Playback resumed");
-                upump_mgr_sink_unblock(upump_mgr);
+            if (trickp) {
+                if ( (paused = !paused) ) {
+                    upipe_notice(upipe, "Playback paused");
+                    struct urational rate = { .num = 0, .den = 0 };
+                    upipe_trickp_set_rate(upipe_trickp, rate);
+                } else {
+                    upipe_notice(upipe, "Playback resumed");
+                    struct urational rate = { .num = 1, .den = 1 };
+                    upipe_trickp_set_rate(upipe_trickp, rate);
+                }
             }
-#endif
-            /* Should be done as a command to the glx pipe */
             break;
         }
         default:
@@ -304,6 +331,18 @@ static bool qsrc_catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
+            struct upipe *trickp_pic;
+            if (trickp) {
+                upipe_trickp = upipe_void_alloc(trickp_mgr,
+                         uprobe_pfx_adhoc_alloc(logger, loglevel, "trickp"));
+                assert(upipe_trickp);
+                upipe_set_uclock(upipe_trickp, uclock);
+                trickp_pic = upipe_flow_alloc_sub(upipe_trickp,
+                         uprobe_pfx_adhoc_alloc(logger, loglevel, "trickp pic"),
+                         flow_def);
+                assert(trickp_pic);
+                upipe_set_output(upipe, trickp_pic);
+            }
             /* glx sink */
             struct upipe *glx_sink = upipe_flow_alloc(glx_mgr,
                     uprobe_gl_sink_cube_alloc(
@@ -312,7 +351,11 @@ static bool qsrc_catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(glx_sink);
             upipe_set_upump_mgr(glx_sink, upump_mgr_thread);
             upipe_glx_sink_init(glx_sink, 0, 0, 800, 480);
-            upipe_set_output(upipe, glx_sink);
+            upipe_set_uclock(glx_sink, uclock);
+            if (trickp)
+                upipe_set_output(trickp_pic, glx_sink);
+            else
+                upipe_set_output(upipe, glx_sink);
             upipe_release(glx_sink);
             return true;
         }
@@ -354,7 +397,6 @@ static void *glx_thread (void *_thread)
 
 int main(int argc, char** argv)
 {
-    bool upipe_ts = false;
     int opt;
     // parse options
     while ((opt = getopt(argc, argv, "dt")) != -1) {
@@ -378,8 +420,7 @@ int main(int argc, char** argv)
 
     // upipe env
     struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -421,6 +462,7 @@ int main(int argc, char** argv)
     struct uprobe uprobe_split_s;
     uprobe_init(&uprobe_split_s, catch, uprobe);
     struct uprobe *uprobe_split = &uprobe_split_s;
+    uprobe_dejitter = uprobe_split = uprobe_dejitter_alloc(uprobe_split, 0);
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_PIC, "auto");
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SOUND, "");
     uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SUBPIC, "");
@@ -434,10 +476,10 @@ int main(int argc, char** argv)
     // queue source
     struct uprobe uprobe_qsrc_s;
     uprobe_init(&uprobe_qsrc_s, qsrc_catch, logger);
-    struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
+    upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
                     uprobe_pfx_adhoc_alloc(&uprobe_qsrc_s, loglevel, "qsrc"),
-                    QUEUE_LENGTH);
+                    SINK_QUEUE_LENGTH);
 
 #ifndef BENCH_TS
     // Fire display engine
@@ -448,9 +490,10 @@ int main(int argc, char** argv)
 #endif
 
     // uclock
-    struct uclock *uclock = uclock_std_alloc(0);
+    uclock = uclock_std_alloc(0);
 
     glx_mgr = upipe_glx_sink_mgr_alloc();
+    trickp_mgr = upipe_trickp_mgr_alloc();
 
     // upipe-av
     upipe_av_init(false);
@@ -465,6 +508,8 @@ int main(int argc, char** argv)
         upipe_avfsrc_set_url(upipe_src, url);
         upipe_set_uclock(upipe_src, uclock);
         upipe_mgr_release(upipe_avfsrc_mgr);
+        uint64_t time;
+        trickp = upipe_avfsrc_get_time(upipe_src, &time);
     } else {
         /* try file source */
         struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
@@ -493,8 +538,10 @@ int main(int argc, char** argv)
                     printf("invalid URL\n");
                     exit(EXIT_FAILURE);
                 }
-            }
-        }
+            } else
+                upipe_set_uclock(upipe_src, uclock);
+        } else
+            trickp = true;
 
         struct uref *flow_def;
         upipe_get_flow_def(upipe_src, &flow_def);
@@ -514,6 +561,9 @@ int main(int argc, char** argv)
         upipe_release(ts_demux);
     }
 
+    if (!trickp)
+        uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
+
     // Fire decode engine
     printf("Starting main thread ev_loop\n");
     ev_loop(loop, 0);
@@ -531,6 +581,7 @@ int main(int argc, char** argv)
     uprobe_split = uprobe_selflow_free(uprobe_split);
     uprobe_split = uprobe_selflow_free(uprobe_split);
     uprobe_split = uprobe_selflow_free(uprobe_split);
+    uprobe_dejitter_free(uprobe_dejitter);
     uprobe = uprobe_upump_mgr_free(uprobe);
     uprobe = uprobe_uref_mgr_free(uprobe);
     uprobe = uprobe_log_free(logger);
