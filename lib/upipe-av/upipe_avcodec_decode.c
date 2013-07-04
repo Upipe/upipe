@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
@@ -595,16 +594,17 @@ static bool _upipe_avcdec_set_codec(struct upipe *upipe, const char *codec_def,
     }
 }
 
-/** @internal @This sets the index_rap attribute.
+/** @internal @This sets the various time attributes.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
  */
-static void upipe_avcdec_set_index_rap(struct upipe *upipe, struct uref *uref)
+static void upipe_avcdec_set_time_attributes(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    uint64_t rap = 0;
+    uint64_t rap = 0, duration, pts;
 
+    /* rap */
     uref_clock_get_systime_rap(uref, &rap);
     if (unlikely(rap != upipe_avcdec->prev_rap)) {
         upipe_avcdec->prev_rap = rap;
@@ -613,6 +613,23 @@ static void upipe_avcdec_set_index_rap(struct upipe *upipe, struct uref *uref)
     uref_clock_set_index_rap(uref, upipe_avcdec->index_rap);
     upipe_avcdec->index_rap++;
 
+    /* DTS has no meaning from now on */
+    uref_clock_delete_dts(uref);
+
+    /* pts */
+    if (!uref_clock_get_pts(uref, &pts)) {
+        pts = upipe_avcdec->next_pts;
+        if (pts != UINT64_MAX) {
+            uref_clock_set_pts(uref, pts);
+        }
+    }
+
+    /* compute next pts based on current frame duration */
+    if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration)) {
+        upipe_avcdec->next_pts = pts + duration;
+    } else {
+        upipe_warn(upipe, "couldn't determine next_pts");
+    }
 }
 
 /** @internal @This outputs video frames
@@ -675,24 +692,8 @@ static void upipe_avcdec_output_frame(struct upipe *upipe, AVFrame *frame,
         uref_pic_set_aspect(uref, aspect);
     }
 
-    /* index rap attribute */
-    upipe_avcdec_set_index_rap(upipe, uref);
-
-    /* DTS has no meaning from now on */
-    uref_clock_delete_dts(uref);
-
-    uint64_t pts;
-    if (!uref_clock_get_pts(uref, &pts)) {
-        pts = upipe_avcdec->next_pts;
-        if (pts != UINT64_MAX)
-            uref_clock_set_pts(uref, pts);
-    }
-
-    uint64_t duration;
-    if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration))
-        upipe_avcdec->next_pts = pts + duration;
-    else
-        upipe_warn(upipe, "couldn't determine next_pts");
+    /* various time-related attribute */
+    upipe_avcdec_set_time_attributes(upipe, uref);
 
     upipe_avcdec_output(upipe, uref, upump);
 }
@@ -707,12 +708,16 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
                                      struct upump *upump)
 {
     struct ubuf *ubuf;
+    struct uref *uref;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    struct uref *uref = uref_dup(frame->opaque);
     int bufsize = -1, avbufsize;
     size_t size = 0;
     uint8_t *buf;
     AVCodecContext *context = upipe_avcdec->context;
+    
+    /* do NOT duplicate uref since release_buffer() is not called
+     * with audio codecs (and uref would not be released) */
+    uref = frame->opaque;
 
     /* fetch audio sample size (in case it has been reduced) */
     avbufsize = av_samples_get_buffer_size(NULL, context->channels,
@@ -742,8 +747,8 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
     /* samples in uref */
     uref_sound_flow_set_samples(uref, frame->nb_samples);
 
-    /* index rap attribute */
-    upipe_avcdec_set_index_rap(upipe, uref);
+    /* various time-related attribute */
+    upipe_avcdec_set_time_attributes(upipe, uref);
 
     upipe_avcdec_output(upipe, uref, upump);
 }
