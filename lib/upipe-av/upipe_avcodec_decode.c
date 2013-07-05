@@ -67,8 +67,6 @@
 #define EXPECTED_FLOW "block."
 
 /** @hidden */
-static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
 static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
                                       struct upump *upump);
 
@@ -136,7 +134,7 @@ UPIPE_HELPER_UPIPE(upipe_avcdec, upipe);
 UPIPE_HELPER_FLOW(upipe_avcdec, EXPECTED_FLOW)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr, upipe_avcdec_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcdec, urefs, blockers, upipe_avcdec_input_packet)
 
@@ -909,16 +907,6 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_avcdec_set_upump_av_deal(upipe, NULL);
-    upipe_avcdec_abort_av_deal(upipe);
-}
-
 /** @internal @This returns the current codec definition string
  */
 static bool _upipe_avcdec_get_codec(struct upipe *upipe, const char **codec_p)
@@ -1012,9 +1000,10 @@ static bool upipe_avcdec_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_avcdec_set_upump_av_deal(upipe, NULL);
+            upipe_avcdec_abort_av_deal(upipe);
             return upipe_avcdec_set_upump_mgr(upipe, upump_mgr);
         }
-
 
         case UPIPE_AVCDEC_GET_CODEC: {
             unsigned int signature = va_arg(args, unsigned int);

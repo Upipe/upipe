@@ -65,8 +65,6 @@
 
 #define EXPECTED_FLOW "pic."
 
-/** @hidden */
-static void upipe_avcenc_reset_upump_mgr(struct upipe *upipe);
 /** @internal @This handles incoming frames */
 static bool upipe_avcenc_input_frame(struct upipe *upipe,
                                      struct uref *uref, struct upump *upump);
@@ -136,7 +134,7 @@ UPIPE_HELPER_FLOW(upipe_avcenc, EXPECTED_FLOW)
 UPIPE_HELPER_UREF_MGR(upipe_avcenc, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr, upipe_avcenc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcenc, urefs, blockers, upipe_avcenc_input_frame)
 
@@ -588,16 +586,6 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
     upipe_avcenc_input_frame(upipe, uref, upump);
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_avcenc_set_upump_av_deal(upipe, NULL);
-    upipe_avcenc_abort_av_deal(upipe);
-}
-
 /** @internal @This returns the current codec definition string
  */
 static bool _upipe_avcenc_get_codec(struct upipe *upipe, const char **codec_p)
@@ -660,9 +648,10 @@ static bool upipe_avcenc_control(struct upipe *upipe, enum upipe_command command
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_avcenc_set_upump_av_deal(upipe, NULL);
+            upipe_avcenc_abort_av_deal(upipe);
             return upipe_avcenc_set_upump_mgr(upipe, upump_mgr);
         }
-
 
         case UPIPE_AVCENC_GET_CODEC: {
             unsigned int signature = va_arg(args, unsigned int);

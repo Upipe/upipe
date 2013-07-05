@@ -70,11 +70,6 @@
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
-/** @hidden */
-static void upipe_udpsrc_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_udpsrc_reset_uclock(struct upipe *upipe);
-
 /** @internal @This is the private context of a udp socket source pipe. */
 struct upipe_udpsrc {
     /** uref manager */
@@ -114,9 +109,9 @@ UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_udpsrc, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_udpsrc, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_udpsrc, upump_mgr, upipe_udpsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_udpsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_udpsrc, uclock, upipe_udpsrc_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_udpsrc, uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_udpsrc, read_size)
 
 /** @internal @This allocates a udp socket source pipe.
@@ -215,24 +210,6 @@ static void upipe_udpsrc_worker(struct upump *upump)
     if (unlikely(ret != upipe_udpsrc->read_size))
         uref_block_resize(uref, 0, ret);
     upipe_udpsrc_output(upipe, uref, upump);
-}
-
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_udpsrc_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_udpsrc_set_upump(upipe, NULL);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_udpsrc_reset_uclock(struct upipe *upipe)
-{
-    upipe_udpsrc_set_upump(upipe, NULL);
 }
 
 /** @internal @This returns the uri of the currently opened udp socket.
@@ -364,6 +341,7 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_udpsrc_set_upump(upipe, NULL);
             return upipe_udpsrc_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -372,6 +350,7 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_udpsrc_set_upump(upipe, NULL);
             return upipe_udpsrc_set_uclock(upipe, uclock);
         }
         case UPIPE_SOURCE_GET_READ_SIZE: {

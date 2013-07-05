@@ -75,11 +75,6 @@ static const char get_request_format[] =
     "User-Agent: %s\n"
     "\n";
 
-/** @hidden */
-static void upipe_http_src_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_http_src_reset_uclock(struct upipe *upipe);
-
 /** @internal @This is the private context of a http source pipe. */
 struct upipe_http_src {
     /** uref manager */
@@ -127,9 +122,9 @@ UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_http_src, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr, upipe_http_src_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump_read, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_http_src, uclock, upipe_http_src_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_http_src, uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_http_src, read_size)
 
 /** @internal @This allocates a http source pipe.
@@ -262,24 +257,6 @@ static void upipe_http_src_worker(struct upump *upump)
     http_parser_execute(&upipe_http_src->parser,
                         &upipe_http_src->parser_settings, buffer, len);
     free(buffer);
-}
-
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_http_src_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_http_src_set_upump_read(upipe, NULL);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_http_src_reset_uclock(struct upipe *upipe)
-{
-    upipe_http_src_set_upump_read(upipe, NULL);
 }
 
 /** @internal @This returns the url of the currently opened http.
@@ -546,6 +523,7 @@ static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command comm
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_http_src_set_upump_read(upipe, NULL);
             return upipe_http_src_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -554,6 +532,7 @@ static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command comm
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_http_src_set_upump_read(upipe, NULL);
             return upipe_http_src_set_uclock(upipe, uclock);
         }
         case UPIPE_SOURCE_GET_READ_SIZE: {

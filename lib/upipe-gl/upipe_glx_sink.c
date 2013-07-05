@@ -62,10 +62,6 @@
 #include <GL/glx.h>
 
 /** @hidden */
-static void upipe_glx_sink_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_glx_sink_reset_uclock(struct upipe *upipe);
-/** @hidden */
 static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
                                      struct upump *upump);
 /** @hidden */
@@ -111,11 +107,11 @@ struct upipe_glx_sink {
 
 UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe);
 UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
-UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr, upipe_glx_sink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump_watcher, upump_mgr)
 UPIPE_HELPER_SINK(upipe_glx_sink, urefs, blockers, upipe_glx_sink_input_pic)
-UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock, upipe_glx_sink_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock)
 
 static inline void upipe_glx_sink_flush(struct upipe *upipe)
 {
@@ -462,26 +458,6 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_glx_sink_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_glx_sink_set_upump(upipe, NULL);
-    upipe_glx_sink_set_upump_watcher(upipe, NULL);
-    upipe_glx_sink_init_watcher(upipe);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_glx_sink_reset_uclock(struct upipe *upipe)
-{
-    upipe_glx_sink_set_upump(upipe, NULL);
-}
-
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -501,7 +477,11 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
+            upipe_glx_sink_set_upump(upipe, NULL);
+            upipe_glx_sink_set_upump_watcher(upipe, NULL);
+            bool ret = upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
+            upipe_glx_sink_init_watcher(upipe);
+            return ret;
         }
         case UPIPE_GET_UCLOCK: {
             struct uclock **p = va_arg(args, struct uclock **);
@@ -509,6 +489,7 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_glx_sink_set_upump(upipe, NULL);
             return upipe_glx_sink_set_uclock(upipe, uclock);
         }
 

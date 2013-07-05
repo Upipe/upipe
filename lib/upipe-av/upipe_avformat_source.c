@@ -80,11 +80,6 @@
 /** offset between DTS and (artificial) clock references */
 #define PCR_OFFSET UCLOCK_FREQ
 
-/** @hidden */
-static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_avfsrc_reset_uclock(struct upipe *upipe);
-
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
     /** uref manager */
@@ -129,9 +124,9 @@ UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe)
 UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upipe_avfsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock, upipe_avfsrc_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
 
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
@@ -723,25 +718,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
 }
 
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_avfsrc_set_upump(upipe, NULL);
-    upipe_avfsrc_abort_av_deal(upipe);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_reset_uclock(struct upipe *upipe)
-{
-    upipe_avfsrc_set_upump(upipe, NULL);
-}
-
 /** @internal @This returns the content of an avformat option.
  *
  * @param upipe description structure of the pipe
@@ -908,6 +884,8 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_avfsrc_set_upump(upipe, NULL);
+            upipe_avfsrc_abort_av_deal(upipe);
             return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -916,6 +894,7 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_avfsrc_set_upump(upipe, NULL);
             return upipe_avfsrc_set_uclock(upipe, uclock);
         }
 

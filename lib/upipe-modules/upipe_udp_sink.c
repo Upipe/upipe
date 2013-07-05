@@ -71,10 +71,6 @@
 #define UDP_DEFAULT_PORT 1234
 
 /** @hidden */
-static void upipe_udpsink_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_udpsink_reset_uclock(struct upipe *upipe);
-/** @hidden */
 static void upipe_udpsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
@@ -106,10 +102,10 @@ struct upipe_udpsink {
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe)
 UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
-UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr, upipe_udpsink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_udpsink, urefs, blockers, upipe_udpsink_output)
-UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, upipe_udpsink_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
 
 /** @internal @This allocates a file sink pipe.
@@ -283,24 +279,6 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_udpsink_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_udpsink_set_upump(upipe, NULL);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_udpsink_reset_uclock(struct upipe *upipe)
-{
-    upipe_udpsink_set_upump(upipe, NULL);
-}
-
 /** @internal @This returns the uri of the currently opened file.
  *
  * @param upipe description structure of the pipe
@@ -392,6 +370,7 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_udpsink_set_upump(upipe, NULL);
             return upipe_udpsink_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -400,6 +379,7 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_udpsink_set_upump(upipe, NULL);
             return upipe_udpsink_set_uclock(upipe, uclock);
         }
 
