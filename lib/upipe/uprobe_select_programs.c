@@ -168,7 +168,7 @@ static void uprobe_selprog_update_list(struct uprobe *uprobe)
             size += sprintf(program, "%"PRIu64",", output->program_number);
             all_programs = realloc(all_programs, size);
             if (unlikely(all_programs == NULL)) {
-                uprobe_throw_aerror(uprobe, NULL);
+                uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
                 return;
             }
             strcat(all_programs, program);
@@ -243,7 +243,7 @@ static void uprobe_selprog_set_internal(struct uprobe *uprobe,
     free(uprobe_selprog->programs);
     uprobe_selprog->programs = strdup(programs);
     if (unlikely(uprobe_selprog->programs == NULL)) {
-        uprobe_throw_aerror(uprobe, NULL);
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -277,7 +277,7 @@ uprobe_selprog_set_internal_retry:
                                               output->program_number),
                     output->flow_def);
                 if (unlikely(output->void_pipe == NULL))
-                    uprobe_throw_aerror(uprobe, NULL);
+                    uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
             }
         }
     }
@@ -393,7 +393,7 @@ static bool uprobe_selprog_add_flow(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_selprog_output *output =
         uprobe_selprog_output_by_id(uprobe, upipe, flow_id);
     if (unlikely(output == NULL)) {
-        uprobe_throw_aerror(uprobe, upipe);
+        uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -401,7 +401,7 @@ static bool uprobe_selprog_add_flow(struct uprobe *uprobe, struct upipe *upipe,
         uref_free(output->flow_def);
     output->flow_def = uref_dup(uref);
     if (unlikely(output->flow_def == NULL)) {
-        uprobe_throw_aerror(uprobe, upipe);
+        uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -445,7 +445,7 @@ static bool uprobe_selprog_add_flow(struct uprobe *uprobe, struct upipe *upipe,
                                           program_number),
                 output->flow_def);
             if (unlikely(output->void_pipe == NULL))
-                uprobe_throw_aerror(uprobe, upipe);
+                uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         }
     } else if (was_selected) {
         upipe_release(output->void_pipe);
@@ -470,7 +470,7 @@ static bool uprobe_selprog_del_flow(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_selprog_output *output =
         uprobe_selprog_output_by_id(uprobe, upipe, flow_id);
     if (unlikely(output == NULL)) {
-        uprobe_throw_aerror(uprobe, upipe);
+        uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 

@@ -174,7 +174,7 @@ static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
                                                UPROBE_LOG_NOTICE, "fsink"),
                              upipe_multicat_sink->flow_def);
     if (unlikely(!fsink)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_multicat_sink->fsink = fsink;

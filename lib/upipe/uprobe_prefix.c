@@ -96,7 +96,7 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
         if (unlikely(uprobe_pfx->name == NULL)) {
             uprobe_throw(next, NULL, UPROBE_LOG, UPROBE_LOG_ERROR,
                          "allocation error in uprobe_pfx_init");
-            uprobe_throw(next, NULL, UPROBE_AERROR);
+            uprobe_throw(next, NULL, UPROBE_FATAL, UPROBE_ERR_ALLOC);
         }
     } else
         uprobe_pfx->name = NULL;
@@ -164,7 +164,7 @@ struct uprobe *uprobe_pfx_adhoc_alloc(struct uprobe *next,
 {
     struct uprobe *uprobe = uprobe_pfx_alloc(next, min_level, name);
     if (unlikely(uprobe == NULL)) {
-        uprobe_throw_aerror(next, NULL);
+        uprobe_throw_fatal(next, NULL, UPROBE_ERR_ALLOC);
         /* we still return the next probe so that the pipe still has a
          * probe hierarchy */
         return next;

@@ -299,7 +299,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     if (unlikely((sequence = ubuf_block_peek(upipe_mp2vf->sequence_header,
                                              0, MP2VSEQ_HEADER_SIZE,
                                              sequence_buffer)) == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     uint16_t horizontal = mp2vseq_get_horizontal(sequence);
@@ -310,7 +310,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     uint32_t vbvbuffer = mp2vseq_get_vbvbuffer(sequence);
     if (unlikely(!ubuf_block_peek_unmap(upipe_mp2vf->sequence_header, 0,
                                         sequence_buffer, sequence))) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -322,7 +322,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
 
     struct uref *flow_def = uref_dup(upipe_mp2vf->flow_def_input);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     bool ret = true;
@@ -337,7 +337,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
                                             0, MP2VSEQX_HEADER_SIZE,
                                             ext_buffer)) == NULL)) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
 
@@ -356,7 +356,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
         if (unlikely(!ubuf_block_peek_unmap(upipe_mp2vf->sequence_ext, 0,
                                             ext_buffer, ext))) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
 
@@ -460,7 +460,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
                                                 0, size,
                                                 display_buffer)) == NULL)) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
 
@@ -470,7 +470,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
         if (unlikely(!ubuf_block_peek_unmap(upipe_mp2vf->sequence_display, 0,
                                             display_buffer, display))) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
 
@@ -479,7 +479,7 @@ static bool upipe_mp2vf_parse_sequence(struct upipe *upipe)
     }
 
     if (unlikely(!ret)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_mp2vf_store_flow_def(upipe, flow_def);
@@ -639,7 +639,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
                                             upipe_mp2vf->next_frame_gop_offset,
                                             MP2VGOP_HEADER_SIZE,
                                             gop_buffer)) == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_mp2vf->closed_gop = mp2vgop_get_closedgop(gop);
@@ -647,7 +647,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
         if (unlikely(!uref_block_peek_unmap(uref,
                                             upipe_mp2vf->next_frame_gop_offset,
                                             gop_buffer, gop))) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_mp2vf->last_temporal_reference = -1;
@@ -660,7 +660,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
     if ((brokenlink ||
         (!upipe_mp2vf->closed_gop && upipe_mp2vf->got_discontinuity)) &&
         !uref_flow_set_discontinuity(uref)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -670,7 +670,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
                                             upipe_mp2vf->next_frame_offset,
                                             MP2VPIC_HEADER_SIZE,
                                             picture_buffer)) == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     uint16_t temporalreference = mp2vpic_get_temporalreference(picture);
@@ -678,7 +678,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
     uint16_t vbvdelay = mp2vpic_get_vbvdelay(picture);
     if (unlikely(!uref_block_peek_unmap(uref, upipe_mp2vf->next_frame_offset,
                                         picture_buffer, picture))) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -692,7 +692,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
                  !uref_mp2v_set_type(uref, codingtype) ||
                  (vbvdelay != UINT16_MAX && !uref_clock_set_vbv_delay(uref,
                       (uint64_t)vbvdelay * UCLOCK_FREQ / 90000)))) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -705,7 +705,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
                                             upipe_mp2vf->next_frame_ext_offset,
                                             MP2VPICX_HEADER_SIZE,
                                             ext_buffer)) == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         uint8_t intradc = mp2vpicx_get_intradc(ext);
@@ -716,7 +716,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
         if (unlikely(!uref_block_peek_unmap(uref,
                                             upipe_mp2vf->next_frame_ext_offset,
                                             ext_buffer, ext))) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
 
@@ -751,7 +751,7 @@ static bool upipe_mp2vf_parse_picture(struct upipe *upipe, struct uref *uref,
 
     ret = ret && uref_clock_set_duration(uref, *duration_p);
     if (unlikely(!ret)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -785,7 +785,7 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref,
                 if (upipe_mp2vf->sequence_display != NULL) {
                     ubuf = ubuf_dup(upipe_mp2vf->sequence_display);
                     if (unlikely(ubuf == NULL)) {
-                        upipe_throw_aerror(upipe);
+                        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                         return false;
                     }
                     uref_block_insert(uref, 0, ubuf);
@@ -793,14 +793,14 @@ static bool upipe_mp2vf_handle_picture(struct upipe *upipe, struct uref *uref,
                 if (upipe_mp2vf->sequence_ext != NULL) {
                     ubuf = ubuf_dup(upipe_mp2vf->sequence_ext);
                     if (unlikely(ubuf == NULL)) {
-                        upipe_throw_aerror(upipe);
+                        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                         return false;
                     }
                     uref_block_insert(uref, 0, ubuf);
                 }
                 ubuf = ubuf_dup(upipe_mp2vf->sequence_header);
                 if (unlikely(ubuf == NULL)) {
-                    upipe_throw_aerror(upipe);
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                     return false;
                 }
                 uref_block_insert(uref, 0, ubuf);
@@ -849,7 +849,7 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
         uref = upipe_mp2vf_extract_uref_stream(upipe,
                 upipe_mp2vf->next_frame_offset);
         if (unlikely(uref == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return true;
         }
     }
@@ -870,7 +870,7 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
     struct uref *uref2 = upipe_mp2vf_extract_uref_stream(upipe,
             upipe_mp2vf->next_frame_size - upipe_mp2vf->next_frame_offset);
     if (unlikely(uref2 == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return true;
     }
     if (uref != NULL) {
@@ -908,7 +908,7 @@ static bool upipe_mp2vf_output_frame(struct upipe *upipe, struct upump *upump)
 
     if (unlikely(!ret)) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 

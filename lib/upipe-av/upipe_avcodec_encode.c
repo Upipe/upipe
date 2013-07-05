@@ -208,8 +208,8 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     /* allocate and configure codec context */
     context = avcodec_alloc_context3(codec);
     if (unlikely(!context)) {
-        upipe_throw_aerror(upipe);
         upipe_release(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     context->opaque = upipe;
@@ -326,7 +326,7 @@ static bool upipe_avcenc_open_codec_wrap(struct upipe *upipe)
                                                      upipe_avcenc_open_codec_cb, upipe);
         if (unlikely(!upump_av_deal)) {
             upipe_err(upipe, "can't create dealer");
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_avcenc->upump_av_deal = upump_av_deal;

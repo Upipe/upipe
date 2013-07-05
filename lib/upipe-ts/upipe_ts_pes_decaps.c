@@ -103,7 +103,7 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
     if (unlikely(!uref_flow_get_def(flow_def, &def) ||
                  !uref_flow_set_def_va(flow_def, "block.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_ts_pesd_store_flow_def(upipe, flow_def);
     return upipe;
 }
@@ -210,8 +210,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
 
     size_t gathered_size;
     if (unlikely(!uref_block_size(upipe_ts_pesd->next_uref, &gathered_size))) {
-        upipe_throw_aerror(upipe);
         upipe_ts_pesd_flush(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     if (gathered_size < PES_HEADER_SIZE_NOPTS + headerlength)
@@ -224,8 +224,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
                 PES_HEADER_SIZE_NOPTS, PES_HEADER_TS_SIZE * (has_dts ? 2 : 1),
                 buffer3);
         if (unlikely(ts_fields == NULL)) {
-            upipe_throw_aerror(upipe);
             upipe_ts_pesd_flush(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -256,7 +256,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         if (unlikely(!uref_clock_set_pts_orig(upipe_ts_pesd->next_uref, pts) ||
                      !uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts))) {
             upipe_ts_pesd_flush(upipe);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
         upipe_throw_clock_ts(upipe, upipe_ts_pesd->next_uref);
@@ -267,7 +267,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
                  (!alignment &&
                   !uref_block_delete_start(upipe_ts_pesd->next_uref)))) {
         upipe_ts_pesd_flush(upipe);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -305,7 +305,7 @@ static void upipe_ts_pesd_work(struct upipe *upipe, struct uref *uref,
         if (unlikely(!uref_block_append(upipe_ts_pesd->next_uref, ubuf))) {
             ubuf_free(ubuf);
             upipe_ts_pesd_flush(upipe);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
         upipe_ts_pesd_decaps(upipe, upump);

@@ -151,7 +151,7 @@ static void upipe_fsink_poll(struct upipe *upipe)
                                                  upipe_fsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err(upipe, "can't create watcher");
-        upipe_throw_upump_error(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
     } else {
         upipe_fsink_set_upump(upipe, watcher);
         upump_start(watcher);
@@ -390,7 +390,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->path == NULL)) {
         close(upipe_fsink->fd);
         upipe_fsink->fd = -1;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening file %s in %s mode",

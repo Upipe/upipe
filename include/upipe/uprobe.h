@@ -53,13 +53,13 @@ enum uprobe_event {
     /** something occurred, and the pipe send a textual message
      * (enum uprobe_log_level, const char *) */
     UPROBE_LOG,
-    /** an allocation error occurred, data may be lost (void); from now on the
-     * behaviour of the pipe is undefined, except @ref upipe_release */
-    UPROBE_AERROR,
-    /** a upump error occurred, a watcher couldn't be created, the
-     * application will not run properly (void); from now on the behaviour of
-     * the pipe is undefined, except @ref upipe_release */
-    UPROBE_UPUMP_ERROR,
+    /** a fatal error occurred, data may be lost (enum uprobe_error_code);
+     * from now on the behaviour of the pipe is undefined, except
+     * @ref upipe_release */
+    UPROBE_FATAL,
+    /** an error occurred, data may be lost (enum uprobe_error_code); the
+     * module probably needs to be reinitialized */
+    UPROBE_ERROR,
     /** unable to read from a source because the end of file was reached, or
      * the component disappeared, or because of an error (void) */
     UPROBE_SOURCE_END,
@@ -109,6 +109,20 @@ enum uprobe_log_level {
     UPROBE_LOG_WARNING,
     /** error messages, the processing cannot continue */
     UPROBE_LOG_ERROR
+};
+
+/** @This defines the standard error codes. */
+enum uprobe_error_code {
+    /** allocation error */
+    UPROBE_ERR_ALLOC,
+    /** unable to allocate a upump */
+    UPROBE_ERR_UPUMP,
+    /** invalid argument */
+    UPROBE_ERR_INVALID,
+
+    /** non-standard error codes implemented by a module type can start from
+     * there (first arg = signature) */
+    UPROBE_ERR_LOCAL = 0x8000
 };
 
 /** @This is the call-back type for uprobe events; it returns true if the
@@ -293,18 +307,31 @@ static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
     UBASE_VARARG(uprobe_dbg(uprobe, upipe, string))
 }
 
-/** @This throws an allocation error event. This event is thrown whenever a
- * pipe is unable to allocate required data. After this event, the behaviour
+/** @This throws a fatal error event. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
  *
  * @param uprobe pointer to probe hierarchy
  * @param upipe description structure of the pipe
+ * @param errcode error code
  */
-#define uprobe_throw_aerror(uprobe, upipe)                                  \
+#define uprobe_throw_fatal(uprobe, upipe, errcode)                          \
     do {                                                                    \
-        uprobe_err_va(uprobe, upipe, "allocation error at %s:%d",           \
-                     __FILE__, __LINE__);                                   \
-        uprobe_throw(uprobe, upipe, UPROBE_AERROR);                         \
+        uprobe_err_va(uprobe, upipe, "fatal error at %s:%d (0x%x)",         \
+                     __FILE__, __LINE__, errcode);                          \
+        uprobe_throw(uprobe, upipe, UPROBE_FATAL, errcode);                 \
+    } while (0)
+
+/** @This throws an error event.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param errcode error code
+ */
+#define uprobe_throw_error(uprobe, upipe, errcode)                          \
+    do {                                                                    \
+        uprobe_err_va(uprobe, upipe, "error at %s:%d (0x%x)",               \
+                     __FILE__, __LINE__, errcode);                          \
+        uprobe_throw(uprobe, upipe, UPROBE_ERROR, errcode);                 \
     } while (0)
 
 /** @This implements the common parts of a plumber probe (catching the

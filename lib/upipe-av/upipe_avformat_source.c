@@ -189,7 +189,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     uint64_t id;
     if (unlikely(!uref_av_flow_get_id(flow_def, &id))) {
         uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -392,7 +392,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
                                          output->ubuf_mgr, pkt.size);
     if (unlikely(uref == NULL)) {
         av_free_packet(&pkt);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -404,7 +404,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
         av_free_packet(&pkt);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     assert(read_size == pkt.size);
@@ -460,7 +460,7 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
     struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
                                             upipe_avfsrc_worker, upipe);
     if (unlikely(upump == NULL)) {
-        upipe_throw_upump_error(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
         return false;
     }
     upipe_avfsrc_set_upump(upipe, upump);
@@ -685,7 +685,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         if (unlikely(!ret)) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -964,7 +964,7 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
                                       upipe_avfsrc_probe, upipe);
         if (unlikely(upump_av_deal == NULL)) {
             upipe_err(upipe, "can't create dealer");
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_avfsrc->upump_av_deal = upump_av_deal;

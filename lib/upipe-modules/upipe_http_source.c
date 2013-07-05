@@ -195,7 +195,7 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
     uref = uref_block_alloc(upipe_http_src->uref_mgr,
                             upipe_http_src->ubuf_mgr, len);
     if (unlikely(!uref)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return 0;
     }
     size = -1;
@@ -457,7 +457,7 @@ static bool _upipe_http_src_set_url(struct upipe *upipe, const char *url)
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_http_src->uref_mgr,
                                                           NULL);
         if (unlikely(flow_def == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_http_src_store_flow_def(upipe, flow_def);
@@ -485,7 +485,7 @@ static bool _upipe_http_src_set_url(struct upipe *upipe, const char *url)
     if (unlikely(upipe_http_src->url == NULL)) {
         close(upipe_http_src->fd);
         upipe_http_src->fd = -1;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening url %s", upipe_http_src->url);
@@ -604,7 +604,7 @@ static bool upipe_http_src_control(struct upipe *upipe, enum upipe_command comma
                                                   upipe_http_src_worker, upipe,
                                                   upipe_http_src->fd);
         if (unlikely(upump == NULL)) {
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_http_src_set_upump_read(upipe, upump);

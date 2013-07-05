@@ -156,7 +156,7 @@ static void uprobe_selflow_update_list(struct uprobe *uprobe)
             size += sprintf(flow, "%"PRIu64",", output->flow_id);
             all_flows = realloc(all_flows, size);
             if (unlikely(all_flows == NULL)) {
-                uprobe_throw_aerror(uprobe, NULL);
+                uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
                 return;
             }
             strcat(all_flows, flow);
@@ -245,7 +245,7 @@ static void uprobe_selflow_set_internal(struct uprobe *uprobe,
     free(uprobe_selflow->flows);
     uprobe_selflow->flows = strdup(flows);
     if (unlikely(uprobe_selflow->flows == NULL)) {
-        uprobe_throw_aerror(uprobe, NULL);
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -371,7 +371,7 @@ static bool uprobe_selflow_add_flow(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_selflow_output *output =
         uprobe_selflow_output_by_id(uprobe, upipe, flow_id, true);
     if (unlikely(output == NULL)) {
-        uprobe_throw_aerror(uprobe, upipe);
+        uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -379,7 +379,7 @@ static bool uprobe_selflow_add_flow(struct uprobe *uprobe, struct upipe *upipe,
         uref_free(output->flow_def);
     output->flow_def = uref_dup(uref);
     if (unlikely(output->flow_def == NULL)) {
-        uprobe_throw_aerror(uprobe, upipe);
+        uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 

@@ -153,7 +153,7 @@ static void upipe_udpsink_poll(struct upipe *upipe)
                                                  upipe_udpsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
-        upipe_throw_upump_error(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
     } else {
         upipe_udpsink_set_upump(upipe, watcher);
         upump_start(watcher);
@@ -367,7 +367,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     if (unlikely(upipe_udpsink->uri == NULL)) {
         close(upipe_udpsink->fd);
         upipe_udpsink->fd = -1;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening uri %s in %s mode",

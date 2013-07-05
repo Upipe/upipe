@@ -229,7 +229,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
         upipe_sws_thumbs->gallery = uref_dup(uref);
         gallery = upipe_sws_thumbs->gallery;
         if (unlikely(!gallery)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             uref_free(uref);
             return;
         }
@@ -237,9 +237,9 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
                                            thumbsize->hsize * thumbnum->hsize,
                                            thumbsize->vsize * thumbnum->vsize);
         if (unlikely(!ubuf)) {
-            upipe_throw_aerror(upipe);
             uref_free(gallery);
             uref_free(uref);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
         uref_attach_ubuf(gallery, ubuf);
@@ -370,7 +370,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
     upipe_sws_thumbs->thumbnum = realloc(upipe_sws_thumbs->thumbnum,
                                  sizeof(struct picsize));
     if (unlikely(!upipe_sws_thumbs->thumbsize || !upipe_sws_thumbs->thumbnum)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_sws_thumbs->thumbsize->hsize = hsize;

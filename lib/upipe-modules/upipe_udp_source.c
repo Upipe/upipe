@@ -164,7 +164,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
                                          upipe_udpsrc->ubuf_mgr,
                                          upipe_udpsrc->read_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -172,7 +172,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     assert(read_size == upipe_udpsrc->read_size);
@@ -283,7 +283,7 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         struct uref *flow_def =
             uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
         if (unlikely(flow_def == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_udpsrc_store_flow_def(upipe, flow_def);
@@ -310,7 +310,7 @@ static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(upipe_udpsrc->uri == NULL)) {
         close(upipe_udpsrc->fd);
         upipe_udpsrc->fd = -1;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening udp socket %s", upipe_udpsrc->uri);
@@ -421,7 +421,7 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
                                                   upipe_udpsrc_worker, upipe,
                                                   upipe_udpsrc->fd);
         if (unlikely(upump == NULL)) {
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_udpsrc_set_upump(upipe, upump);

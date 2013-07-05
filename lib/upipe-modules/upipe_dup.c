@@ -239,7 +239,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
             struct uref *new_uref = uref_dup(uref);
             if (unlikely(new_uref == NULL)) {
                 uref_free(uref);
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 return;
             }
             upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
@@ -273,7 +273,7 @@ static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             upipe_dup_output_from_uchain(uchain);
         flow_def_dup = uref_dup(flow_def);
         if (unlikely(flow_def_dup == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_dup_output_store_flow_def(

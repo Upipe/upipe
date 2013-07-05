@@ -248,7 +248,7 @@ static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
 #define UPIPE_TS_PMTD_PEEK_END(upipe, pmt, offset)                          \
     }                                                                       \
     if (unlikely(offset + PMT_ES_SIZE <= size - PSI_CRC_SIZE)) {            \
-        upipe_throw_aerror(upipe);                                          \
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);                         \
     }                                                                       \
 
 /** @internal @This validates the next PMT.

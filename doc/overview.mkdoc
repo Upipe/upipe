@@ -128,7 +128,8 @@
         @item @ref #UPIPE_HELPER_VOID @item helper for pipes which require no argument to their allocation function
         @item @ref #UPIPE_HELPER_FLOW @item helper for pipes which require a flow definition packet to be passed as argument to their allocation function
         @item @ref #UPIPE_HELPER_UREF_MGR @item helper for pipes which require a uref manager
-        @item @ref #UPIPE_HELPER_UPUMP_MGR @item helper for pipes which require a upump manager and rely on external events
+        @item @ref #UPIPE_HELPER_UPUMP_MGR @item helper for pipes which require a upump manager
+        @item @ref #UPIPE_HELPER_UPUMP @item helper for pipes which rely on external events
         @item @ref #UPIPE_HELPER_UCLOCK @item helper for pipes which requires a uclock
         @item @ref #UPIPE_HELPER_OUTPUT @item helper for the management of the output
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output

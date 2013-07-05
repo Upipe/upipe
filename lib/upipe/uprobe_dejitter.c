@@ -144,7 +144,7 @@ static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
         if (unlikely(!uref_clock_set_pts_sys(uref,
                             clock_pts + uprobe_dejitter->offset +
                             uprobe_dejitter->deviation))) {
-            uprobe_throw_aerror(uprobe, upipe);
+            uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
             return true;
         }
     }
@@ -154,7 +154,7 @@ static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
         if (unlikely(!uref_clock_set_dts_sys(uref,
                             clock_dts + uprobe_dejitter->offset +
                             uprobe_dejitter->deviation))) {
-            uprobe_throw_aerror(uprobe, upipe);
+            uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
             return true;
         }
     }

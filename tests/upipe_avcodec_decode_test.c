@@ -137,8 +137,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
-        case UPROBE_AERROR:
-        case UPROBE_UPUMP_ERROR:
         case UPROBE_SOURCE_END:
         case UPROBE_NEED_UREF_MGR:
         case UPROBE_NEED_UPUMP_MGR:

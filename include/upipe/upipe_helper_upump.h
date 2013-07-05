@@ -111,7 +111,7 @@ static void STRUCTURE##_wait_##UPUMP(struct upipe *upipe, uint64_t timeout, \
                                               timeout, 0);                  \
     if (unlikely(watcher == NULL)) {                                        \
         upipe_err(upipe, "can't create watcher");                           \
-        upipe_throw_upump_error(upipe);                                     \
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);                         \
     } else {                                                                \
         STRUCTURE##_set_##UPUMP(upipe, watcher);                            \
         upump_start(watcher);                                               \

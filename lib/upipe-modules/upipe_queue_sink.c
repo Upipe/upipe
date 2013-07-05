@@ -198,7 +198,7 @@ static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
         return false;
     struct uref *flow_def_dup = NULL;
     if ((flow_def_dup = uref_dup(uref)) == NULL) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     if (upipe_qsink->flow_def != NULL)
@@ -206,7 +206,7 @@ static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
     upipe_qsink->flow_def = flow_def_dup;
     if (upipe_qsink->qsrc != NULL) {
         if ((flow_def_dup = uref_dup(uref)) == NULL) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
         upipe_qsink_input(upipe, flow_def_dup, NULL);
@@ -244,7 +244,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
             /* play flow end */
             struct uref *uref = uref_dup(upipe_qsink->flow_def);
             if (unlikely(uref == NULL))
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             else {
                 uref_flow_set_end(uref);
                 upipe_qsink_input(upipe, uref, NULL);
@@ -272,7 +272,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
         /* replay flow definition */
         struct uref *uref = uref_dup(upipe_qsink->flow_def);
         if (unlikely(uref == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else
             upipe_qsink_input(upipe, uref, NULL);
     }
@@ -344,7 +344,7 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
                                     upipe_qsink_watcher, upipe);
         if (unlikely(upump == NULL)) {
             upipe_err_va(upipe, "can't create watcher");
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_qsink_set_upump(upipe, upump);

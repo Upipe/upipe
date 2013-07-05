@@ -117,7 +117,7 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
 
     /* FIXME make it dependant on the output size */
     if (unlikely(!uref_flow_set_def(flow_def, OUTPUT_FLOW_DEF)))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_ts_sync_store_flow_def(upipe, flow_def);
     return upipe;
 }
@@ -187,7 +187,7 @@ static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
         struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
                                                     upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             continue;
         }
         upipe_ts_sync_output(upipe, output, upump);
@@ -212,7 +212,7 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
             struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
                                                         upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 continue;
             }
             upipe_ts_sync_output(upipe, output, upump);
