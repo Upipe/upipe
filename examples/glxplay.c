@@ -508,8 +508,7 @@ int main(int argc, char** argv)
         upipe_avfsrc_set_url(upipe_src, url);
         upipe_set_uclock(upipe_src, uclock);
         upipe_mgr_release(upipe_avfsrc_mgr);
-        uint64_t time;
-        trickp = upipe_avfsrc_get_time(upipe_src, &time);
+        trickp = true;
     } else {
         /* try file source */
         struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
@@ -561,8 +560,11 @@ int main(int argc, char** argv)
         upipe_release(ts_demux);
     }
 
-    if (!trickp)
+    if (!trickp) {
         uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
+        printf("starting with dejitter\n");
+    } else
+        printf("starting with trickplay\n");
 
     // Fire decode engine
     printf("Starting main thread ev_loop\n");
