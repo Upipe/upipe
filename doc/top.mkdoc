@@ -23,7 +23,7 @@
 @end section
 
 @include intro.mkdoc
-@include install.mkdoc
+@include ../INSTALL
 @include overview.mkdoc
 @include rules.mkdoc
 @include reference.mkdoc
