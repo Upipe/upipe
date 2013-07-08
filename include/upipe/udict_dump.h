@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UDICT_DUMP_H_
 /** @hidden */
 #define _UPIPE_UDICT_DUMP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/udict.h>
@@ -130,4 +133,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
     uprobe_dbg_va(uprobe, NULL, "end of attributes for udict %p", udict);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

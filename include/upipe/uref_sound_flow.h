@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_SOUND_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_SOUND_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -76,4 +79,7 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
 
 #undef UREF_SOUND_FLOW_DEF
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_PMT_DECODER_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_PMT_DECODER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_demux.h>
@@ -54,4 +57,7 @@ enum uprobe_ts_pmtd_event {
  */
 struct upipe_mgr *upipe_ts_pmtd_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

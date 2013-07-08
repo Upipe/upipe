@@ -28,6 +28,9 @@
 #ifndef _UPIPE_AV_UPIPE_AV_H_
 /** @hidden */
 #define _UPIPE_AV_UPIPE_AV_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 
@@ -45,4 +48,7 @@ bool upipe_av_init(bool init_avcodec_only);
  */
 void upipe_av_clean(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

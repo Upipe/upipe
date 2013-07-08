@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UEVENTFD_H_
 /** @hidden */
 #define _UPIPE_UEVENTFD_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/config.h>
 #include <upipe/ubase.h>
@@ -261,4 +264,7 @@ static inline void ueventfd_clean(struct ueventfd *fd)
     }
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

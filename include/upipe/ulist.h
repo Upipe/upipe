@@ -30,6 +30,9 @@
 #ifndef _UPIPE_ULIST_H_
 /** @hidden */
 #define _UPIPE_ULIST_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 
@@ -201,4 +204,7 @@ static inline bool ulist_remove(struct ulist *ulist, struct uchain *remove)
     return false;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

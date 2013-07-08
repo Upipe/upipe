@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_VOID_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_VOID_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
@@ -90,4 +93,7 @@ static void STRUCTURE##_free_void(struct upipe *upipe)                      \
     free(s);                                                                \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -32,6 +32,9 @@
 #ifndef _UPIPE_UMEM_ALLOC_H_
 /** @hidden */
 #define _UPIPE_UMEM_ALLOC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/umem.h>
 
@@ -42,4 +45,7 @@
  */
 struct umem_mgr *umem_alloc_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

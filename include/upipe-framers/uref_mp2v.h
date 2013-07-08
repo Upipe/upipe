@@ -30,10 +30,16 @@
 #ifndef _UPIPE_UREF_MP2V_H_
 /** @hidden */
 #define _UPIPE_UREF_MP2V_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
 UREF_ATTR_SMALL_UNSIGNED(mp2v, type, "mp2v.type", picture coding type)
 
+#ifdef __cplusplus
+}
+#endif
 #endif

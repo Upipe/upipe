@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_OUTPUT_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_OUTPUT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -224,4 +227,7 @@ static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
         uref_free(STRUCTURE->FLOW_DEF);                                     \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

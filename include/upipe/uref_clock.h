@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_CLOCK_H_
 /** @hidden */
 #define _UPIPE_UREF_CLOCK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -57,4 +60,7 @@ UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
 UREF_ATTR_RATIONAL(clock, rate, "k.rate", playing rate)
 
 
+#ifdef __cplusplus
+}
+#endif
 #endif

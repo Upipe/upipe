@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_PREFIX_H_
 /** @hidden */
 #define _UPIPE_UPROBE_PREFIX_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
@@ -130,4 +133,7 @@ struct uprobe *uprobe_pfx_adhoc_alloc_va(struct uprobe *next,
  */
 struct uprobe *uprobe_pfx_free(struct uprobe *uprobe);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

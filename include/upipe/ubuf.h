@@ -31,6 +31,9 @@
 #ifndef _UPIPE_UBUF_H_
 /** @hidden */
 #define _UPIPE_UBUF_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -256,4 +259,7 @@ static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
         mgr->ubuf_mgr_free(mgr);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

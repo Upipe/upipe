@@ -28,6 +28,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_SOURCE_READ_SIZE_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_SOURCE_READ_SIZE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
@@ -129,4 +132,7 @@ static void STRUCTURE##_clean_read_size(struct upipe *upipe)                \
 {                                                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

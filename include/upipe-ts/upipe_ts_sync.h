@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_SYNC_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_SYNC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -106,4 +109,7 @@ static inline bool upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
                          sync);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

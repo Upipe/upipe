@@ -30,6 +30,9 @@
 #ifndef _UPIPE_AV_UPIPE_AVFORMAT_SOURCE_H_
 /** @hidden */
 #define _UPIPE_AV_UPIPE_AVFORMAT_SOURCE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -113,4 +116,7 @@ static inline bool upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
                          time);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

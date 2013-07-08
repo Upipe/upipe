@@ -28,6 +28,9 @@
 #ifndef _UPIPE_UCLOCK_STD_H_
 /** @hidden */
 #define _UPIPE_UCLOCK_STD_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uclock.h>
 
@@ -44,4 +47,7 @@ enum uclock_std_flags {
  */
 struct uclock *uclock_std_alloc(enum uclock_std_flags flags);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

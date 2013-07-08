@@ -33,6 +33,9 @@
 #ifndef _UPIPE_UDEAL_H_
 /** @hidden */
 #define _UPIPE_UDEAL_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/config.h>
 #include <upipe/ubase.h>
@@ -154,4 +157,7 @@ static inline void udeal_clean(struct udeal *udeal)
     ueventfd_clean(&udeal->event);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

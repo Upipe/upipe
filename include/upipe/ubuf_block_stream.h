@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBUF_BLOCK_STREAM_H_
 /** @hidden */
 #define _UPIPE_UBUF_BLOCK_STREAM_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -167,4 +170,7 @@ static inline bool ubuf_block_stream_get(struct ubuf_block_stream *s,
         (s)->available -= (nb);                                             \
     } while (0)
 
+#ifdef __cplusplus
+}
+#endif
 #endif

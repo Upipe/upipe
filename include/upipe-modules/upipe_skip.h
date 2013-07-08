@@ -31,6 +31,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_SKIP_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_SKIP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <upipe/upipe.h>
@@ -77,4 +80,7 @@ static inline bool upipe_skip_set_offset(struct upipe *upipe, size_t offset)
  */
 struct upipe_mgr *upipe_skip_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

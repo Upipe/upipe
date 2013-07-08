@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_TS_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_TS_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -94,4 +97,7 @@ static inline bool uref_ts_flow_delete_psi_filter(struct uref *uref)
     return uref_ts_flow_delete_psi_filter_internal(uref);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

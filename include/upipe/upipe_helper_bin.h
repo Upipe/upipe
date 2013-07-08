@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_BIN_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_BIN_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -194,4 +197,7 @@ static void STRUCTURE##_clean_bin(struct upipe *upipe)                      \
         upipe_release(s->OUTPUT);                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

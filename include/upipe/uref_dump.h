@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_DUMP_H_
 /** @hidden */
 #define _UPIPE_UREF_DUMP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -78,4 +81,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
         udict_dump(uref->udict, uprobe);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

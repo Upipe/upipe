@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uqueue.h>
@@ -133,4 +136,7 @@ static inline struct upipe *upipe_qsrc_alloc(struct upipe_mgr *mgr,
     return upipe_alloc(mgr, uprobe, UPIPE_QSRC_SIGNATURE, length);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -33,6 +33,9 @@
 #ifndef _UPIPE_UATOMIC_H_
 /** @hidden */
 #define _UPIPE_UATOMIC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/config.h>
@@ -225,4 +228,7 @@ static inline void uatomic_clean(uatomic_uint32_t *obj)
 
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 #endif

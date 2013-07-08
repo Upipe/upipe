@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_STD_H_
 /** @hidden */
 #define _UPIPE_UREF_STD_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 
@@ -44,4 +47,7 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
                                     struct udict_mgr *udict_mgr,
                                     int control_attr_size);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

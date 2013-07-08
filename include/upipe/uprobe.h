@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_H_
 /** @hidden */
 #define _UPIPE_UPROBE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref_flow.h>
@@ -364,4 +367,7 @@ static inline bool uprobe_plumber(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

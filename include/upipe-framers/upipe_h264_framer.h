@@ -25,6 +25,9 @@
 #ifndef _UPIPE_FRAMERS_UPIPE_H264_FRAMER_H_
 /** @hidden */
 #define _UPIPE_FRAMERS_UPIPE_H264_FRAMER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -38,4 +41,7 @@
  */
 struct upipe_mgr *upipe_h264f_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

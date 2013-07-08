@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_MP2V_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_MP2V_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -37,4 +40,7 @@
 UREF_ATTR_SMALL_UNSIGNED(mp2v_flow, profilelevel, "mp2v.profilelevel",
         profile and level)
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_AGGREGATE_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_AGGREGATE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -69,4 +72,7 @@ static inline bool upipe_ts_aggregate_set_mtu(struct upipe *upipe, int mtu)
                          UPIPE_TS_AGGREGATE_SIGNATURE, mtu);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -31,6 +31,9 @@
 #ifndef _UPIPE_UBUF_BLOCK_H_
 /** @hidden */
 #define _UPIPE_UBUF_BLOCK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -1058,4 +1061,7 @@ static inline bool ubuf_block_find(struct ubuf *ubuf, size_t *offset_p,
     return ret;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

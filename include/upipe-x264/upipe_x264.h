@@ -32,6 +32,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_X264_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_X264_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -106,4 +109,7 @@ static inline bool upipe_x264_set_profile(struct upipe *upipe, const char *profi
  */
 struct upipe_mgr *upipe_x264_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

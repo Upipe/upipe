@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_ATTR_H_
 /** @hidden */
 #define _UPIPE_UREF_ATTR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/udict.h>
@@ -1256,4 +1259,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 
 UREF_ATTR_UNSIGNED_UREF(attr, priv, priv, private (internal pipe use))
 
+#ifdef __cplusplus
+}
+#endif
 #endif

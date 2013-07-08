@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -113,4 +116,7 @@ static inline bool uref_flow_set_program_va(struct uref *uref,
     UBASE_VARARG(uref_flow_set_program(uref, string))
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

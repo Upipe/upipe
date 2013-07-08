@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_LOG_H_
 /** @hidden */
 #define _UPIPE_UPROBE_LOG_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -75,4 +78,7 @@ void uprobe_log_mask_unknown_events(struct uprobe *uprobe);
  */
 void uprobe_log_unmask_unknown_events(struct uprobe *uprobe);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

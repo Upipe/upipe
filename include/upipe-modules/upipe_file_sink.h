@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_FILE_SINK_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_FILE_SINK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -91,4 +94,7 @@ static inline bool upipe_fsink_set_path(struct upipe *upipe, const char *path,
                          path, mode);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

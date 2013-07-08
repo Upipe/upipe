@@ -30,6 +30,9 @@
 #ifndef _UPIPE_GL_UPIPE_GL_SINK_COMMON_H_
 /** @hidden */
 #define _UPIPE_GL_UPIPE_GL_SINK_COMMON_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -87,4 +90,7 @@ static inline bool upipe_gl_sink_set_texture(struct upipe *upipe, unsigned int t
                          texture);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

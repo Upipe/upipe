@@ -30,6 +30,9 @@
 #ifndef _UPIPE_GL_UPIPE_GL_SINK_CUBE_H_
 /** @hidden */
 #define _UPIPE_GL_UPIPE_GL_SINK_CUBE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe-gl/upipe_gl_sink_common.h>
@@ -41,4 +44,7 @@
  */
 struct uprobe *uprobe_gl_sink_cube_alloc(struct uprobe *next);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

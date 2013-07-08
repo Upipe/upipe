@@ -31,6 +31,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_TRANSFER_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_TRANSFER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -92,4 +95,7 @@ static inline struct upipe *upipe_xfer_alloc(struct upipe_mgr *mgr,
     return upipe_alloc(mgr, uprobe, UPIPE_XFER_SIGNATURE, upipe_remote);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

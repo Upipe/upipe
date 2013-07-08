@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBUF_BLOCK_MEM_H_
 /** @hidden */
 #define _UPIPE_UBUF_BLOCK_MEM_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -61,4 +64,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           int prepend, int append,
                                           int align, int align_offset);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

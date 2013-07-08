@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_H264_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_H264_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -37,4 +40,7 @@
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile, "h264.profile", profile)
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, level, "h264.level", level)
 
+#ifdef __cplusplus
+}
+#endif
 #endif

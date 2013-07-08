@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPUMP_COMMON_H_
 /** @hidden */
 #define _UPIPE_UPUMP_COMMON_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -203,4 +206,7 @@ void upump_common_mgr_init(struct upump_mgr *mgr,
                            void (*upump_real_start)(struct upump *),
                            void (*upump_real_stop)(struct upump *));
 
+#ifdef __cplusplus
+}
+#endif
 #endif

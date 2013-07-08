@@ -33,6 +33,9 @@
 #ifndef _UPIPE_UDICT_INLINE_H_
 /** @hidden */
 #define _UPIPE_UDICT_INLINE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/udict.h>
 
@@ -50,4 +53,7 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
                                          struct umem_mgr *umem_mgr,
                                          int min_size, int extra_size);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

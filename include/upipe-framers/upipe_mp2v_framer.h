@@ -25,6 +25,9 @@
 #ifndef _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
 /** @hidden */
 #define _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -79,4 +82,7 @@ static inline bool upipe_mp2vf_set_sequence_insertion(struct upipe *upipe,
                          UPIPE_MP2VF_SIGNATURE, val ? 1 : 0);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_RTP_PREPEND_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_RTP_PREPEND_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <upipe/upipe.h>
@@ -82,4 +85,7 @@ static inline bool upipe_rtp_prepend_set_type(struct upipe *upipe,
  */
 struct upipe_mgr *upipe_rtp_prepend_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

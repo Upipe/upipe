@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_DEMUX_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_DEMUX_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -195,4 +198,7 @@ UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(mp2vf, MP2VF)
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(h264f, H264F)
 #undef UPIPE_TS_DEMUX_MGR_GET_SET_MGR2
 
+#ifdef __cplusplus
+}
+#endif
 #endif

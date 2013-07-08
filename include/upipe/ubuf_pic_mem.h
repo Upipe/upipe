@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBUF_PIC_MEM_H_
 /** @hidden */
 #define _UPIPE_UBUF_PIC_MEM_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -111,4 +114,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                                int vprepend, int vappend,
                                                int align, int align_hmoffset);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

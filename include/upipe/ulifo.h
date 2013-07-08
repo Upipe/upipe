@@ -30,6 +30,9 @@
 #ifndef _UPIPE_ULIFO_H_
 /** @hidden */
 #define _UPIPE_ULIFO_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uring.h>
@@ -120,4 +123,7 @@ static inline void ulifo_clean(struct ulifo *ulifo)
     uring_lifo_clean(&ulifo->uring, &ulifo->lifo_carrier);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

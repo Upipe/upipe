@@ -31,12 +31,15 @@
 #ifndef _UPIPE_MODULES_UPIPE_MULTICAT_PROBE_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_MULTICAT_PROBE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <upipe/upipe.h>
 
 #define UPIPE_MULTICAT_PROBE_SIGNATURE UBASE_FOURCC('m','p','r','b')
-#define UPIPE_MULTICAT_PROBE_DEF_ROTATE UINT64_C(97200000000) // FIXME
+#define UPIPE_MULTICAT_PROBE_DEF_ROTATE UINT64_C(97200000000)
 
 /** @This extends upipe_command with specific commands for multicat sink. */
 enum upipe_multicat_probe_command {
@@ -69,20 +72,28 @@ struct upipe_mgr *upipe_multicat_probe_mgr_alloc(void);
  * @param interval_p filled in with the rotate interval in 27Mhz
  * @return false in case of error
  */
-static inline bool upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *interval_p)
+static inline bool upipe_multicat_probe_get_rotate(struct upipe *upipe,
+                                                   uint64_t *interval_p)
 {
-    return upipe_control(upipe, UPIPE_MULTICAT_PROBE_GET_ROTATE, UPIPE_MULTICAT_PROBE_SIGNATURE, interval_p);
+    return upipe_control(upipe, UPIPE_MULTICAT_PROBE_GET_ROTATE,
+                                UPIPE_MULTICAT_PROBE_SIGNATURE, interval_p);
 }
 
-/** @This changes the rotate interval (in 27Mhz unit) (default: UPIPE_MULTICAT_PROBE_DEF_ROTATE).
+/** @This changes the rotate interval (in 27Mhz unit)
+ * (default: UPIPE_MULTICAT_PROBE_DEF_ROTATE).
  *
  * @param upipe description structure of the pipe
  * @param interval rotate interval in 27Mhz
  * @return false in case of error
  */
-static inline bool upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t interval)
+static inline bool upipe_multicat_probe_set_rotate(struct upipe *upipe,
+                                                   uint64_t interval)
 {
-    return upipe_control(upipe, UPIPE_MULTICAT_PROBE_SET_ROTATE, UPIPE_MULTICAT_PROBE_SIGNATURE, interval);
+    return upipe_control(upipe, UPIPE_MULTICAT_PROBE_SET_ROTATE,
+                                UPIPE_MULTICAT_PROBE_SIGNATURE, interval);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

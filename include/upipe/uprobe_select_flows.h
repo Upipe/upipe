@@ -37,6 +37,9 @@
 #ifndef _UPIPE_UPROBE_SELECT_FLOWS_H_
 /** @hidden */
 #define _UPIPE_UPROBE_SELECT_FLOWS_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -104,4 +107,7 @@ void uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
  */
 void uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

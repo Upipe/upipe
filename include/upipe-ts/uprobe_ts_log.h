@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_TS_LOG_H_
 /** @hidden */
 #define _UPIPE_UPROBE_TS_LOG_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -48,4 +51,7 @@ struct uprobe *uprobe_ts_log_alloc(struct uprobe *next,
  */
 void uprobe_ts_log_free(struct uprobe *uprobe);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

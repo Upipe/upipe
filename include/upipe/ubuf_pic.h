@@ -31,6 +31,9 @@
 #ifndef _UPIPE_UBUF_PIC_H_
 /** @hidden */
 #define _UPIPE_UBUF_PIC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
@@ -474,4 +477,7 @@ static inline bool ubuf_pic_replace(struct ubuf_mgr *mgr,
     return true;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

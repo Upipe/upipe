@@ -31,6 +31,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_MATCH_ATTR_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_MATCH_ATTR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe/uref.h>
@@ -95,4 +98,7 @@ static inline bool upipe_match_attr_set_boundaries(struct upipe *upipe,
  */
 struct upipe_mgr *upipe_match_attr_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

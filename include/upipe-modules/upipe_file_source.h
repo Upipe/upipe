@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_FILE_SOURCE_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_FILE_SOURCE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -92,4 +95,7 @@ static inline bool upipe_fsrc_set_position(struct upipe *upipe,
                          position);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

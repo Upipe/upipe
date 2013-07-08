@@ -28,6 +28,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_SINK_DELAY_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_SINK_DELAY_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
@@ -132,4 +135,7 @@ static void STRUCTURE##_clean_delay(struct upipe *upipe)                    \
 {                                                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

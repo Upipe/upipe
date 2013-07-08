@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UMEM_H_
 /** @hidden */
 #define _UPIPE_UMEM_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -166,4 +169,7 @@ static inline void umem_mgr_release(struct umem_mgr *mgr)
         mgr->umem_mgr_free(mgr);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

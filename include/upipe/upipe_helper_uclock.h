@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_UCLOCK_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_UCLOCK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uclock.h>
@@ -134,4 +137,7 @@ static void STRUCTURE##_clean_uclock(struct upipe *upipe)                   \
         uclock_release(STRUCTURE->UCLOCK);                                  \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

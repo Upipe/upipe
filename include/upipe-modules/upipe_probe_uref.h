@@ -31,6 +31,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_PROBE_UREF_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_PROBE_UREF_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <upipe/upipe.h>
@@ -51,4 +54,7 @@ enum uprobe_probe_uref_event {
  */
 struct upipe_mgr *upipe_probe_uref_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

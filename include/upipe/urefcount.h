@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREFCOUNT_H_
 /** @hidden */
 #define _UPIPE_UREFCOUNT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
@@ -96,4 +99,7 @@ static inline void urefcount_clean(urefcount *refcount)
     uatomic_clean(refcount);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

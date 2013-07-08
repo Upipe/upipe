@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_TRICKP_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_TRICKP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -78,4 +81,7 @@ static inline bool upipe_trickp_set_rate(struct upipe *upipe,
                          UPIPE_TRICKP_SIGNATURE, rate);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

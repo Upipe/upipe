@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_UPUMP_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_UPUMP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upump.h>
@@ -126,4 +129,7 @@ static void STRUCTURE##_clean_##UPUMP(struct upipe *upipe)                  \
     STRUCTURE##_set_##UPUMP(upipe, NULL);                                   \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

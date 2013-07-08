@@ -35,6 +35,9 @@
 #ifndef _UPIPE_UPROBE_HELPER_ADHOC_H_
 /** @hidden */
 #define _UPIPE_UPROBE_HELPER_ADHOC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -131,4 +134,7 @@ static void STRUCTURE##_clean_adhoc(struct uprobe *uprobe)                  \
 {                                                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

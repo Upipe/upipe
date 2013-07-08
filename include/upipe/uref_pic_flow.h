@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_PIC_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_PIC_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -149,4 +152,7 @@ static inline bool uref_pic_flow_find_chroma(struct uref *uref,
 
 #undef UREF_PIC_FLOW_DEF
 
+#ifdef __cplusplus
+}
+#endif
 #endif

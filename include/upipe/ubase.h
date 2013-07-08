@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBASE_H_
 /** @hidden */
 #define _UPIPE_UBASE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/config.h>
 
@@ -162,4 +165,7 @@ static inline int ubase_ncmp(const char *string, const char *prefix)
     return strncmp(string, prefix, strlen(prefix));
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

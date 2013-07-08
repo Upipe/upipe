@@ -32,6 +32,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_PROXY_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_PROXY_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -58,4 +61,7 @@ struct upipe_mgr *upipe_proxy_mgr_alloc(struct upipe_mgr *super_mgr,
  */
 struct upipe_mgr *upipe_proxy_mgr_get_super_mgr(struct upipe_mgr *mgr);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

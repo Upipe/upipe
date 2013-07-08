@@ -28,6 +28,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_UREF_MGR_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_UREF_MGR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -135,4 +138,7 @@ static void STRUCTURE##_clean_uref_mgr(struct upipe *upipe)                 \
         uref_mgr_release(STRUCTURE->UREF_MGR);                              \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -31,6 +31,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_UDP_SINK_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_UDP_SINK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -85,4 +88,7 @@ static inline bool upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
                          uri, mode);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

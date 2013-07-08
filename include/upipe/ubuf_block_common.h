@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBUF_BLOCK_COMMON_H_
 /** @hidden */
 #define _UPIPE_UBUF_BLOCK_COMMON_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
@@ -159,4 +162,7 @@ static inline void ubuf_block_common_clean(struct ubuf *ubuf)
         ubuf_free(block->next_ubuf);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

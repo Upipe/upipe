@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_BLOCK_H_
 /** @hidden */
 #define _UPIPE_UREF_BLOCK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
@@ -315,4 +318,7 @@ static inline bool uref_block_find(struct uref *uref, size_t *offset_p,
     return ret;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

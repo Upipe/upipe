@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_PSI_SPLIT_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_PSI_SPLIT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -37,4 +40,7 @@
  */
 struct upipe_mgr *upipe_ts_psi_split_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,6 +30,9 @@
 #ifndef _UPIPE_AV_UPIPE_AV_ENCODE_H_
 /** @hidden */
 #define _UPIPE_AV_UPIPE_AV_ENCODE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -75,4 +78,7 @@ static inline bool upipe_avcenc_set_codec(struct upipe *upipe, const char *codec
  */
 struct upipe_mgr *upipe_avcenc_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

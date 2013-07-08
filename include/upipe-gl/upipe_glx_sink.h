@@ -39,6 +39,9 @@
 #ifndef _UPIPE_GL_UPIPE_GLX_SINK_H_
 /** @hidden */
 #define _UPIPE_GL_UPIPE_GLX_SINK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe-gl/upipe_gl_sink_common.h>
@@ -89,4 +92,7 @@ static inline bool upipe_glx_sink_init(struct upipe *upipe, int x, int y,
  */
 struct upipe_mgr *upipe_glx_sink_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

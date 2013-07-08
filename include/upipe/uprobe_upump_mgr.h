@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_UPUMP_MGR_H_
 /** @hidden */
 #define _UPIPE_UPROBE_UPUMP_MGR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -59,4 +62,7 @@ struct uprobe *uprobe_upump_mgr_free(struct uprobe *uprobe);
  */
 void uprobe_upump_mgr_set(struct uprobe *uprobe, struct upump_mgr *upump_mgr);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

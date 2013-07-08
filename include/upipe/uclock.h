@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UCLOCK_H_
 /** @hidden */
 #define _UPIPE_UCLOCK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -78,4 +81,7 @@ static inline void uclock_release(struct uclock *uclock)
         uclock->uclock_free(uclock);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

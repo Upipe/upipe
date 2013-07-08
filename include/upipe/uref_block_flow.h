@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_BLOCK_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_BLOCK_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -95,4 +98,7 @@ static inline struct uref *uref_block_flow_alloc_def_va(struct uref_mgr *mgr,
 
 #undef UREF_BLOCK_FLOW_DEF
 
+#ifdef __cplusplus
+}
+#endif
 #endif

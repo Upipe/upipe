@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UBUF_PIC_COMMON_H_
 /** @hidden */
 #define _UPIPE_UBUF_PIC_COMMON_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -387,4 +390,7 @@ bool ubuf_pic_common_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
                                    uint8_t hsub, uint8_t vsub,
                                    uint8_t macropixel_size);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

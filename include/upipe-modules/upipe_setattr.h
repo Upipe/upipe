@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_SETATTR_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_SETATTR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe/uref.h>
@@ -78,4 +81,7 @@ static inline bool upipe_setattr_set_dict(struct upipe *upipe,
                          UPIPE_SETATTR_SIGNATURE, dict);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

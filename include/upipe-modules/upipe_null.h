@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_NULL_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_NULL_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -60,4 +63,7 @@ static inline bool upipe_null_dump_dict(struct upipe *upipe, bool enable)
  */
 struct upipe_mgr *upipe_null_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,10 +30,16 @@
 #ifndef _UPIPE_UREF_AV_FLOW_H_
 /** @hidden */
 #define _UPIPE_UREF_AV_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
 UREF_ATTR_UNSIGNED(av_flow, id, "a.id", libavformat ID)
 
+#ifdef __cplusplus
+}
+#endif
 #endif

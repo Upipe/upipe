@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_H_
 /** @hidden */
 #define _UPIPE_UPIPE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
@@ -741,4 +744,7 @@ static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
     upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

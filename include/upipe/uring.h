@@ -31,6 +31,9 @@
 #ifndef _UPIPE_URING_H_
 /** @hidden */
 #define _UPIPE_URING_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
@@ -462,4 +465,7 @@ static inline uring_lifo_val uring_init(struct uring *uring, uint16_t length,
     return uring_lifo_from_index(uring, 1);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

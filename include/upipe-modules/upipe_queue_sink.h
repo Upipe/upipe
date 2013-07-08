@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SINK_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_QUEUE_SINK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -77,4 +80,7 @@ static inline bool upipe_qsink_set_qsrc(struct upipe *upipe,
                          qsrc);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

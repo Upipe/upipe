@@ -30,6 +30,9 @@
 #ifndef _UPROBE_UPROBE_HELPER_UPROBE_H_
 /** @hidden */
 #define _UPROBE_UPROBE_HELPER_UPROBE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
@@ -80,4 +83,7 @@ static inline struct STRUCTURE *                                            \
     return container_of(uprobe, struct STRUCTURE, UPROBE);                  \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

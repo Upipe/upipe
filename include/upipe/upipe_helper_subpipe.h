@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_SUBPIPE_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_SUBPIPE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -231,4 +234,7 @@ static void STRUCTURE##_clean_sub_##SUB##s(struct upipe *upipe)             \
 {                                                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

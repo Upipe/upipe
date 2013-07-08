@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_UPIPE_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_UPIPE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
@@ -79,4 +82,7 @@ static inline struct STRUCTURE *STRUCTURE##_from_upipe(struct upipe *upipe) \
     return container_of(upipe, struct STRUCTURE, UPIPE);                    \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

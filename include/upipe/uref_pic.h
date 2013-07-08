@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UREF_PIC_H_
 /** @hidden */
 #define _UPIPE_UREF_PIC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
@@ -188,4 +191,7 @@ static inline bool uref_pic_replace(struct uref *uref,
                             new_hsize, new_vsize);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

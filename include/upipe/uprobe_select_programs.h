@@ -41,6 +41,9 @@
 #ifndef _UPIPE_UPROBE_SELECT_PROGRAMS_H_
 /** @hidden */
 #define _UPIPE_UPROBE_SELECT_PROGRAMS_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -95,4 +98,7 @@ void uprobe_selprog_set(struct uprobe *uprobe, const char *programs);
  */
 void uprobe_selprog_set_va(struct uprobe *uprobe, const char *format, ...);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_SETRAP_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_SETRAP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -75,4 +78,7 @@ static inline bool upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
                          UPIPE_SETRAP_SIGNATURE, rap);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

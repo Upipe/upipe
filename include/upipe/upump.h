@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPUMP_H_
 /** @hidden */
 #define _UPIPE_UPUMP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -284,4 +287,7 @@ static inline void upump_mgr_release(struct upump_mgr *mgr)
         mgr->upump_mgr_free(mgr);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

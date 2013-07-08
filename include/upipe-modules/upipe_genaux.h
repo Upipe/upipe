@@ -34,6 +34,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_GENAUX_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_GENAUX_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <upipe/upipe.h>
@@ -118,4 +121,7 @@ static inline uint64_t upipe_genaux_ntoh64(const uint8_t *buf)
          | ((uint64_t)buf[7] << 0);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_UBUF_MGR_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_UBUF_MGR_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -138,4 +141,7 @@ static void STRUCTURE##_clean_ubuf_mgr(struct upipe *upipe)                 \
         ubuf_mgr_release(STRUCTURE->UBUF_MGR);                              \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

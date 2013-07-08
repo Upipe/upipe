@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPROBE_STDIO_H_
 /** @hidden */
 #define _UPIPE_UPROBE_STDIO_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/uprobe.h>
 
@@ -49,4 +52,7 @@ struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
  */
 struct uprobe *uprobe_stdio_free(struct uprobe *uprobe);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -25,6 +25,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_SPLIT_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_SPLIT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_demux.h>
@@ -48,4 +51,7 @@ enum uprobe_ts_split_event {
  */
 struct upipe_mgr *upipe_ts_split_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

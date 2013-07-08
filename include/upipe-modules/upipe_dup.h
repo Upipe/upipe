@@ -30,6 +30,9 @@
 #ifndef _UPIPE_MODULES_UPIPE_DUP_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_DUP_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -42,4 +45,7 @@
  */
 struct upipe_mgr *upipe_dup_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

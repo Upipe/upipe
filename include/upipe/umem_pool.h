@@ -33,6 +33,9 @@
 #ifndef _UPIPE_UMEM_POOL_H_
 /** @hidden */
 #define _UPIPE_UMEM_POOL_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/umem.h>
 
@@ -59,4 +62,7 @@ struct umem_mgr *umem_pool_mgr_alloc(size_t pool0_size, size_t nb_pools, ...);
  */
 struct umem_mgr *umem_pool_mgr_alloc_simple(uint16_t base_pools_depth);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPUMP_BLOCKER_H_
 /** @hidden */
 #define _UPIPE_UPUMP_BLOCKER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -141,4 +144,7 @@ static inline struct upump_blocker *upump_blocker_find(struct ulist *ulist,
     return NULL;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

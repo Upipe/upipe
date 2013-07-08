@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UQUEUE_H_
 /** @hidden */
 #define _UPIPE_UQUEUE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/config.h>
 #include <upipe/ubase.h>
@@ -189,4 +192,7 @@ static inline void uqueue_clean(struct uqueue *uqueue)
     ueventfd_clean(&uqueue->event_pop);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

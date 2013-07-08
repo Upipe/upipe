@@ -30,6 +30,9 @@
 #ifndef _UPIPE_AV_UPIPE_AV_DECODE_H_
 /** @hidden */
 #define _UPIPE_AV_UPIPE_AV_DECODE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -112,4 +115,7 @@ static inline bool upipe_avcdec_get_lowres(struct upipe *upipe, int *lowres_p)
  */
 struct upipe_mgr *upipe_avcdec_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

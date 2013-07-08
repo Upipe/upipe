@@ -26,6 +26,9 @@
 #ifndef _UPIPE_TS_UPIPE_TS_CHECK_H_
 /** @hidden */
 #define _UPIPE_TS_UPIPE_TS_CHECK_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 
@@ -77,4 +80,7 @@ static inline bool upipe_ts_check_set_size(struct upipe *upipe, int size)
                          UPIPE_TS_CHECK_SIGNATURE, size);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

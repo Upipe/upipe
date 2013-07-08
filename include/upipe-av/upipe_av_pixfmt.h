@@ -30,6 +30,9 @@
 #ifndef _UPIPE_AV_UPIPE_AV_PIXFMT_H_
 /** @hidden */
 #define _UPIPE_AV_UPIPE_AV_PIXFMT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubuf_pic.h>
 #include <libavutil/avutil.h>
@@ -217,4 +220,7 @@ static inline void upipe_av_pixfmt_clear_picture(struct ubuf *ubuf,
     }
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

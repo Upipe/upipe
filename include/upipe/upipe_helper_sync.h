@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_SYNC_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_SYNC_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
@@ -115,4 +118,7 @@ static void STRUCTURE##_clean_sync(struct upipe *upipe)                     \
 {                                                                           \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

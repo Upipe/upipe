@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UDICT_H_
 /** @hidden */
 #define _UPIPE_UDICT_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
@@ -837,4 +840,7 @@ static inline void udict_mgr_release(struct udict_mgr *mgr)
         mgr->udict_mgr_free(mgr);
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

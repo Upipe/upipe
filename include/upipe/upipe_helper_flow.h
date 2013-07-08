@@ -30,6 +30,9 @@
 #ifndef _UPIPE_UPIPE_HELPER_FLOW_H_
 /** @hidden */
 #define _UPIPE_UPIPE_HELPER_FLOW_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
@@ -116,4 +119,7 @@ static void STRUCTURE##_free_flow(struct upipe *upipe)                      \
     free(s);                                                                \
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif
