@@ -77,11 +77,8 @@
 
 /** lowest possible timestamp (just an arbitrarily high time) */
 #define AV_CLOCK_MIN UINT32_MAX
-
-/** @hidden */
-static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_avfsrc_reset_uclock(struct upipe *upipe);
+/** offset between DTS and (artificial) clock references */
+#define PCR_OFFSET UCLOCK_FREQ
 
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
@@ -94,6 +91,10 @@ struct upipe_avfsrc {
     struct upump *upump;
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
+    /** offset between libavformat timestamps and Upipe timestamps */
+    int64_t timestamp_offset;
+    /** highest Upipe timestamp given to a frame */
+    uint64_t timestamp_highest;
     /** last random access point */
     uint64_t systime_rap;
 
@@ -123,9 +124,9 @@ UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe)
 UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr, upipe_avfsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock, upipe_avfsrc_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
 
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
@@ -189,7 +190,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     uint64_t id;
     if (unlikely(!uref_av_flow_get_id(flow_def, &id))) {
         uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -306,6 +307,8 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_upump(upipe);
     upipe_avfsrc_init_uclock(upipe);
+    upipe_avfsrc->timestamp_offset = 0;
+    upipe_avfsrc->timestamp_highest = AV_CLOCK_MIN;
     upipe_avfsrc->systime_rap = UINT64_MAX;
 
     upipe_avfsrc->url = NULL;
@@ -392,7 +395,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
                                          output->ubuf_mgr, pkt.size);
     if (unlikely(uref == NULL)) {
         av_free_packet(&pkt);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -404,7 +407,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
         av_free_packet(&pkt);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     assert(read_size == pkt.size);
@@ -416,30 +419,47 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (upipe_avfsrc->uclock != NULL)
         ret = ret && uref_clock_set_systime(uref, systime);
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        uint64_t dts = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
-                       stream->time_base.den;
-        ret = ret && uref_clock_set_dts_orig(uref, dts);
-        ret = ret && uref_clock_set_dts(uref, dts + AV_CLOCK_MIN);
+        uint64_t dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
+                            stream->time_base.den;
+        ret = ret && uref_clock_set_dts_orig(uref, dts_orig);
+
+        if (!upipe_avfsrc->timestamp_offset)
+            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
+                                             dts_orig + PCR_OFFSET;
+        uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
+        ret = ret && uref_clock_set_dts(uref, dts);
+        if (upipe_avfsrc->timestamp_highest < dts)
+            upipe_avfsrc->timestamp_highest = dts;
         ts = true;
 
         if (upipe_avfsrc->uclock != NULL && stream->reference_dts == pkt.dts)
             upipe_avfsrc->systime_rap = systime;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref, dts + AV_CLOCK_MIN, 0);
+        upipe_throw_clock_ref(upipe, uref,
+                              dts + upipe_avfsrc->timestamp_offset - PCR_OFFSET,
+                              0);
     }
     if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
-        uint64_t pts = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
-                       stream->time_base.den;
-        ret = ret && uref_clock_set_pts_orig(uref, pts);
-        ret = ret && uref_clock_set_pts(uref, pts + AV_CLOCK_MIN);
+        uint64_t pts_orig = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
+                            stream->time_base.den;
+        ret = ret && uref_clock_set_pts_orig(uref, pts_orig);
+
+        if (!upipe_avfsrc->timestamp_offset)
+            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
+                                             pts_orig + PCR_OFFSET;
+        uint64_t pts = pts_orig + upipe_avfsrc->timestamp_offset;
+        ret = ret && uref_clock_set_pts(uref, pts);
+        if (upipe_avfsrc->timestamp_highest < pts)
+            upipe_avfsrc->timestamp_highest = pts;
         ts = true;
     }
     if (pkt.duration > 0) {
         uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
                             stream->time_base.den;
         ret = ret && uref_clock_set_duration(uref, duration);
-    }
+    } else
+        upipe_warn(upipe, "packet without duration");
     if (upipe_avfsrc->systime_rap != UINT64_MAX)
         ret = ret && uref_clock_set_systime_rap(uref,
                                                 upipe_avfsrc->systime_rap);
@@ -460,7 +480,7 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
     struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
                                             upipe_avfsrc_worker, upipe);
     if (unlikely(upump == NULL)) {
-        upipe_throw_upump_error(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
         return false;
     }
     upipe_avfsrc_set_upump(upipe, upump);
@@ -685,7 +705,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         if (unlikely(!ret)) {
             uref_free(flow_def);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -697,25 +717,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
     upipe_avfsrc_start(upipe);
 }
 
-
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_avfsrc_set_upump(upipe, NULL);
-    upipe_avfsrc_abort_av_deal(upipe);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_reset_uclock(struct upipe *upipe)
-{
-    upipe_avfsrc_set_upump(upipe, NULL);
-}
 
 /** @internal @This returns the content of an avformat option.
  *
@@ -821,6 +822,7 @@ static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
         return false;
     }
 
+    upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->url = strdup(url);
     upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
     return true;
@@ -882,6 +884,8 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_avfsrc_set_upump(upipe, NULL);
+            upipe_avfsrc_abort_av_deal(upipe);
             return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -890,6 +894,7 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_avfsrc_set_upump(upipe, NULL);
             return upipe_avfsrc_set_uclock(upipe, uclock);
         }
 
@@ -964,7 +969,7 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
                                       upipe_avfsrc_probe, upipe);
         if (unlikely(upump_av_deal == NULL)) {
             upipe_err(upipe, "can't create dealer");
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_avfsrc->upump_av_deal = upump_av_deal;

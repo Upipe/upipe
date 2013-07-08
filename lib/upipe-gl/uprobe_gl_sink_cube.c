@@ -256,7 +256,7 @@ struct uprobe *uprobe_gl_sink_cube_alloc(struct uprobe *next)
 {
     struct uprobe_gl_sink_cube *cube = malloc(sizeof(struct uprobe_gl_sink_cube));
     if (unlikely(cube == NULL)) {
-        uprobe_throw_aerror(next, NULL);
+        uprobe_throw_fatal(next, NULL, UPROBE_ERR_ALLOC);
         return next;
     }
     struct uprobe *uprobe = &cube->uprobe;

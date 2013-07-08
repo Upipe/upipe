@@ -61,6 +61,21 @@ struct uprobe_log {
 
 UPROBE_HELPER_UPROBE(uprobe_log, uprobe)
 
+/** @internal @This converts an error code into a description string.
+ *
+ * @param errcode error code
+ * @return a description string
+ */
+static const char *uprobe_log_errcode(enum uprobe_error_code errcode)
+{
+    switch (errcode) {
+        case UPROBE_ERR_ALLOC: return "allocation error";
+        case UPROBE_ERR_UPUMP: return "upump error";
+        case UPROBE_ERR_INVALID: return "invalid argument";
+        default: return "unknown error";
+    }
+}
+
 /** @internal @This catches events thrown by pipes.
  *
  * @param uprobe pointer to probe
@@ -94,13 +109,20 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_LOG:
             break;
-        case UPROBE_AERROR:
-            upipe_log(upipe, log->level,
-                      "probe caught allocation error");
+        case UPROBE_FATAL: {
+            enum uprobe_error_code errcode =
+                va_arg(args, enum uprobe_error_code);
+            upipe_log_va(upipe, log->level, "probe caught fatal error: %s (%x)",
+                         uprobe_log_errcode(errcode), errcode);
             break;
-        case UPROBE_UPUMP_ERROR:
-            upipe_log(upipe, log->level, "probe caught upump error");
+        }
+        case UPROBE_ERROR: {
+            enum uprobe_error_code errcode =
+                va_arg(args, enum uprobe_error_code);
+            upipe_log_va(upipe, log->level, "probe caught error: %s (%x)",
+                         uprobe_log_errcode(errcode), errcode);
             break;
+        }
         case UPROBE_SOURCE_END:
             upipe_log_va(upipe, log->level, "probe caught source end");
             break;

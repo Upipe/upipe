@@ -95,7 +95,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     if (unlikely(!uref_flow_get_def(flow_def, &def) ||
                  !uref_flow_set_def_va(flow_def, "block.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_ts_decaps_store_flow_def(upipe, flow_def);
     return upipe;
 }
@@ -116,7 +116,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     bool transporterror = ts_get_transporterror(ts_header);
@@ -133,8 +133,8 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
     if (unlikely(has_adaptation)) {
         uint8_t af_length;
         if (unlikely(!uref_block_extract(uref, 0, 1, &af_length))) {
-            upipe_throw_aerror(upipe);
             uref_free(uref);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -148,8 +148,8 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
         if (af_length) {
             uint8_t af_header;
             if (unlikely(!uref_block_extract(uref, 1, 1, &af_header))) {
-                upipe_throw_aerror(upipe);
                 uref_free(uref);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 return;
             }
 
@@ -165,7 +165,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                         TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2);
                 if (unlikely(pcr == NULL)) {
                     uref_free(uref);
-                    upipe_throw_aerror(upipe);
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                     return;
                 }
                 uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
@@ -205,7 +205,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                  (discontinuity && !uref_flow_set_discontinuity(uref)) ||
                  (unitstart && !uref_block_set_start(uref))) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 

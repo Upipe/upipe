@@ -45,9 +45,6 @@
 #include <string.h>
 #include <assert.h>
 
-/** @hidden */
-static void upipe_qsrc_reset_upump_mgr(struct upipe *upipe);
-
 /** @internal @This is the private context of a queue source pipe. */
 struct upipe_qsrc {
     /** upump manager */
@@ -73,7 +70,7 @@ UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
 
 UPIPE_HELPER_OUTPUT(upipe_qsrc, output, flow_def, flow_def_sent)
 
-UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr, upipe_qsrc_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_qsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsrc, upump, upump_mgr)
 
 /** @internal @This allocates a queue source pipe.
@@ -144,15 +141,6 @@ static void upipe_qsrc_worker(struct upump *upump)
     }
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_qsrc_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_qsrc_set_upump(upipe, NULL);
-}
-
 /** @internal @This returns the maximum length of the queue.
  *
  * @param upipe description structure of the pipe
@@ -214,6 +202,7 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_qsrc_set_upump(upipe, NULL);
             return upipe_qsrc_set_upump_mgr(upipe, upump_mgr);
         }
 
@@ -256,7 +245,7 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                    upipe_qsrc->upump_mgr,
                                    upipe_qsrc_worker, upipe);
         if (unlikely(upump == NULL)) {
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         } 
         upipe_qsrc_set_upump(upipe, upump);

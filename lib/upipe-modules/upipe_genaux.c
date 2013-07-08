@@ -108,7 +108,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
     if (unlikely(dst == NULL)) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     ubuf_block_write(dst, 0, &size, &aux);
@@ -231,7 +231,7 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     if (unlikely(!uref_flow_set_def(flow_def, "block.aux.")))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_genaux_store_flow_def(upipe, flow_def);
     return upipe;
 }

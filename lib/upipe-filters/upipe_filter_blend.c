@@ -177,7 +177,7 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     assert(upipe_filter_blend->ubuf_mgr);
     ubuf_deint = ubuf_pic_alloc(upipe_filter_blend->ubuf_mgr, width, height);
     if (unlikely(!ubuf_deint)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         goto error;
     }
 

@@ -552,7 +552,7 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -563,7 +563,7 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
                                       upipe_h264f->au_last_nal_start_size +
                                       H264SPS_HEADER_SIZE - 4);
     if (unlikely(!ret)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     uint32_t sps_id = upipe_h264f_stream_ue(s);
@@ -599,7 +599,7 @@ static void upipe_h264f_handle_sps_ext(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -641,7 +641,7 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -685,7 +685,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
 
     struct uref *flow_def = uref_dup(upipe_h264f->flow_def_input);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
@@ -1209,7 +1209,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     struct uref *uref = upipe_h264f_extract_uref_stream(upipe,
                                                         upipe_h264f->au_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -1344,7 +1344,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
 
     if (unlikely(!ret)) {
         uref_free(uref);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 

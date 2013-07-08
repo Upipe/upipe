@@ -1,5 +1,5 @@
 nodist_pkginclude_HEADERS = config.h
-CLEANFILES = config.h
+DISTCLEANFILES = config.h
 
 pkginclude_HEADERS = \
 	uatomic.h \

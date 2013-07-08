@@ -108,7 +108,7 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
         if (uref->udict == NULL) {
             uref->udict = udict_alloc(uref->mgr->udict_mgr, 0);
             if (unlikely(uref->udict == NULL)) {
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 uref_free(uref);
                 return;
             }
@@ -123,7 +123,7 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
             uint8_t *v2 = udict_set(uref->udict, name, type, size);
             if (unlikely(v1 == NULL || v2 == NULL)) {
                 uref_free(uref);
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 return;
             }
             memcpy(v2, v1, size);
@@ -175,7 +175,7 @@ static bool _upipe_setattr_set_dict(struct upipe *upipe, struct uref *dict)
     if (dict != NULL) {
         upipe_setattr->dict = uref_dup(dict);
         if (upipe_setattr->dict == NULL) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
     } else

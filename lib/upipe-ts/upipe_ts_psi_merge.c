@@ -131,7 +131,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
             upipe_ts_psim_flush(upipe);
             if (ubuf != NULL)
                 ubuf_free(ubuf);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
     } else {
@@ -144,7 +144,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
 
         upipe_ts_psim->next_uref = uref_dup(uref);
         if (unlikely(upipe_ts_psim->next_uref == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
     }

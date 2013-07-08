@@ -207,7 +207,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     if (unlikely(!uref_flow_set_def(flow_def, OUT_FLOW)))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_x264_store_flow_def(upipe, flow_def);
     return upipe;
 }
@@ -378,7 +378,7 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     // alloc ubuf, map, copy, unmap
     uref_block = uref_block_alloc(upipe_x264->uref_mgr, upipe_x264->ubuf_mgr, size);
     if (unlikely(uref_block == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     uref_block_write(uref_block, 0, &size, &buf);

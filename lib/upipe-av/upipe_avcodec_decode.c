@@ -67,8 +67,6 @@
 #define EXPECTED_FLOW "block."
 
 /** @hidden */
-static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
 static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
                                       struct upump *upump);
 
@@ -136,7 +134,7 @@ UPIPE_HELPER_UPIPE(upipe_avcdec, upipe);
 UPIPE_HELPER_FLOW(upipe_avcdec, EXPECTED_FLOW)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr, upipe_avcdec_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcdec, urefs, blockers, upipe_avcdec_input_packet)
 
@@ -369,8 +367,8 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
     /* allocate and configure codec context */
     context = avcodec_alloc_context3(codec);
     if (unlikely(!context)) {
-        upipe_throw_aerror(upipe);
         upipe_release(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     context->opaque = upipe;
@@ -509,7 +507,7 @@ static uint8_t *upipe_avcdec_copy_extradata(struct upipe *upipe,
 
     buf = malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
     if (!buf) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return NULL;
     }
 
@@ -573,7 +571,7 @@ static bool _upipe_avcdec_set_codec(struct upipe *upipe, const char *codec_def,
                                                      upipe_avcdec_open_codec_cb, upipe);
         if (unlikely(!upump_av_deal)) {
             upipe_err(upipe, "can't create dealer");
-            upipe_throw_upump_error(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;
         }
         upipe_avcdec->upump_av_deal = upump_av_deal;
@@ -656,7 +654,7 @@ static void upipe_avcdec_output_frame(struct upipe *upipe, AVFrame *frame,
     if (unlikely(!uref->ubuf)) {
         ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, frame->width, frame->height);
         if (!ubuf) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -727,7 +725,7 @@ static void upipe_avcdec_output_audio(struct upipe *upipe, AVFrame *frame,
     if (unlikely(!uref->ubuf)) {
         ubuf = ubuf_block_alloc(upipe_avcdec->ubuf_mgr, avbufsize);
         if (unlikely(!ubuf)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
@@ -867,7 +865,7 @@ static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "Received packet %u - size : %u", upipe_avcdec->counter, insize);
     inbuf = malloc(insize + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(!inbuf)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return true;
     }
     memset(inbuf, 0, insize + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -907,16 +905,6 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
         upipe_avcdec_block_sink(upipe, upump);
         upipe_avcdec_hold_sink(upipe, uref);
     }
-}
-
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_avcdec_set_upump_av_deal(upipe, NULL);
-    upipe_avcdec_abort_av_deal(upipe);
 }
 
 /** @internal @This returns the current codec definition string
@@ -1012,9 +1000,10 @@ static bool upipe_avcdec_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_avcdec_set_upump_av_deal(upipe, NULL);
+            upipe_avcdec_abort_av_deal(upipe);
             return upipe_avcdec_set_upump_mgr(upipe, upump_mgr);
         }
-
 
         case UPIPE_AVCDEC_GET_CODEC: {
             unsigned int signature = va_arg(args, unsigned int);

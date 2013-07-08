@@ -82,10 +82,8 @@
  * @param STRUCTURE name of your private upipe structure 
  * @param UCLOCK name of the @tt {struct uclock *} field of
  * your private upipe structure
- * @param RESET function called when all uclock-related objects must be
- * reset (struct upipe *)
  */
-#define UPIPE_HELPER_UCLOCK(STRUCTURE, UCLOCK, RESET)                       \
+#define UPIPE_HELPER_UCLOCK(STRUCTURE, UCLOCK)                              \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -123,7 +121,6 @@ static bool STRUCTURE##_set_uclock(struct upipe *upipe,                     \
     STRUCTURE->UCLOCK = uclock;                                             \
     if (likely(uclock != NULL))                                             \
         uclock_use(STRUCTURE->UCLOCK);                                      \
-    RESET(upipe);                                                           \
     return true;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \

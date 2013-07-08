@@ -185,7 +185,7 @@ static inline struct upipe *upipe_alloc_va(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         /* notify ad-hoc probes that something went wrong so they can
          * deallocate */
-        uprobe_throw_aerror(uprobe, NULL);
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
     return upipe;
 }
 
@@ -575,24 +575,22 @@ static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
     UBASE_VARARG(upipe_dbg(upipe, string))
 }
 
-/** @This throws an allocation error event. This event is thrown whenever a
- * pipe is unable to allocate required data. After this event, the behaviour
+/** @This throws a fatal error event. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
  *
  * @param upipe description structure of the pipe
+ * @param errcode error code
  */
-#define upipe_throw_aerror(upipe) uprobe_throw_aerror((upipe)->uprobe, upipe)
+#define upipe_throw_fatal(upipe, errcode)                                   \
+    uprobe_throw_fatal((upipe)->uprobe, upipe, errcode)
 
-/** @This throws a upump error event. This event is thrown whenever a pipe
- * is unable to allocate a watcher. After this event, the behaviour of a
- * pipe is undefined, except for calls to @ref upipe_release.
+/** @This throws an error event.
  *
  * @param upipe description structure of the pipe
+ * @param errcode error code
  */
-static inline void upipe_throw_upump_error(struct upipe *upipe)
-{
-    upipe_throw(upipe, UPROBE_UPUMP_ERROR);
-}
+#define upipe_throw_error(upipe, errcode)                                   \
+    uprobe_throw_error((upipe)->uprobe, upipe, errcode)
 
 /** @This throws a source end event. This event is thrown when a pipe is unable
  * to read from an input because the end of file was reached, or because an

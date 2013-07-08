@@ -74,8 +74,8 @@ int main(int argc, char **argv)
     uprobe_log_unmask_unknown_events(uprobe);
 
     upipe_throw_ready(&test_pipe);
-    upipe_throw_aerror(&test_pipe);
-    upipe_throw_upump_error(&test_pipe);
+    upipe_throw_fatal(&test_pipe, UPROBE_ERR_ALLOC);
+    upipe_throw_error(&test_pipe, UPROBE_ERR_INVALID);
     upipe_throw_source_end(&test_pipe);
     upipe_throw_sink_end(&test_pipe);
     upipe_throw_need_uref_mgr(&test_pipe);

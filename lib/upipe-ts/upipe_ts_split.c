@@ -348,8 +348,8 @@ static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref,
     const uint8_t *ts_header = uref_block_peek(uref, 0, TS_HEADER_SIZE,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
-        upipe_throw_aerror(upipe);
         uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     uint16_t pid = ts_get_pid(ts_header);
@@ -372,7 +372,7 @@ static void upipe_ts_split_work(struct upipe *upipe, struct uref *uref,
                         new_uref, upump);
             else {
                 uref_free(uref);
-                upipe_throw_aerror(upipe);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
                 return;
             }
         }

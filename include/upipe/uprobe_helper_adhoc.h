@@ -110,7 +110,7 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
                 return true;                                                \
             }                                                               \
             break;                                                          \
-        case UPROBE_AERROR:                                                 \
+        case UPROBE_FATAL:                                                  \
             if (STRUCTURE->UPIPE == NULL && upipe == NULL) {                \
                 /* The pipe couldn't be created, let's deallocate. */       \
                 uprobe_throw(uprobe->next, upipe, event, args);             \

@@ -84,10 +84,8 @@
  * @param STRUCTURE name of your private upipe structure 
  * @param UPUMP_MGR name of the @tt {struct upump_mgr *} field of
  * your private upipe structure
- * @param RESET function called when all upump_mgr-related objects must be
- * reset (struct upipe *)
  */
-#define UPIPE_HELPER_UPUMP_MGR(STRUCTURE, UPUMP_MGR, RESET)                 \
+#define UPIPE_HELPER_UPUMP_MGR(STRUCTURE, UPUMP_MGR)                        \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -127,7 +125,6 @@ static bool STRUCTURE##_set_upump_mgr(struct upipe *upipe,                  \
     STRUCTURE->UPUMP_MGR = upump_mgr;                                       \
     if (likely(upump_mgr != NULL))                                          \
         upump_mgr_use(STRUCTURE->UPUMP_MGR);                                \
-    RESET(upipe);                                                           \
     return true;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \

@@ -163,7 +163,7 @@ static void upipe_sws_input_pic(struct upipe *upipe, struct uref *uref,
     /* allocate dest ubuf */
     dstpic = ubuf_pic_alloc(upipe_sws->ubuf_mgr, dstsize->hsize, dstsize->vsize);
     if (unlikely(!dstpic)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         uref_free(uref);
         return;
     }
@@ -263,7 +263,7 @@ static bool _upipe_sws_set_size(struct upipe *upipe, int hsize, int vsize)
     upipe_sws->dstsize = realloc(upipe_sws->dstsize,
                                  sizeof(struct picsize));
     if (unlikely(!upipe_sws->dstsize)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_sws->dstsize->hsize = hsize;

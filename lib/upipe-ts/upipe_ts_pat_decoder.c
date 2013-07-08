@@ -190,7 +190,7 @@ static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
 #define UPIPE_TS_PATD_TABLE_PEEK_END(upipe, sections, pat_program)          \
         }                                                                   \
         if (unlikely(offset + PAT_PROGRAM_SIZE <= size - PSI_CRC_SIZE)) {   \
-            upipe_throw_aerror(upipe);                                      \
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);                     \
             break;                                                          \
         }                                                                   \
     }

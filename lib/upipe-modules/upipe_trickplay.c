@@ -55,8 +55,6 @@ static void upipe_trickp_check_start(struct upipe *upipe);
 /** @hidden */
 static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
                                      struct upump *upump);
-/** @hidden */
-static void upipe_trickp_reset_uclock(struct upipe *upipe);
 
 /** @internal @This is the private context of a trickp pipe. */
 struct upipe_trickp {
@@ -82,7 +80,7 @@ struct upipe_trickp {
 
 UPIPE_HELPER_UPIPE(upipe_trickp, upipe)
 UPIPE_HELPER_VOID(upipe_trickp)
-UPIPE_HELPER_UCLOCK(upipe_trickp, uclock, upipe_trickp_reset_uclock);
+UPIPE_HELPER_UCLOCK(upipe_trickp, uclock)
 
 /** @internal @This is the type of the flow (different behaviours). */
 enum upipe_trickp_sub_type {
@@ -443,6 +441,7 @@ static bool upipe_trickp_control(struct upipe *upipe,
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_trickp_reset_uclock(upipe);
             return upipe_trickp_set_uclock(upipe, uclock);
         }
 

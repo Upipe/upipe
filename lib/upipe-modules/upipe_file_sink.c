@@ -69,10 +69,6 @@
 #define SYSTIME_DELAY        (0.01 * UCLOCK_FREQ)
 
 /** @hidden */
-static void upipe_fsink_reset_upump_mgr(struct upipe *upipe);
-/** @hidden */
-static void upipe_fsink_reset_uclock(struct upipe *upipe);
-/** @hidden */
 static void upipe_fsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
@@ -104,10 +100,10 @@ struct upipe_fsink {
 
 UPIPE_HELPER_UPIPE(upipe_fsink, upipe)
 UPIPE_HELPER_FLOW(upipe_fsink, UPIPE_FSINK_EXPECTED_FLOW_DEF)
-UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr, upipe_fsink_reset_upump_mgr)
+UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_fsink, urefs, blockers, upipe_fsink_output)
-UPIPE_HELPER_UCLOCK(upipe_fsink, uclock, upipe_fsink_reset_uclock)
+UPIPE_HELPER_UCLOCK(upipe_fsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
 
 /** @internal @This allocates a file sink pipe.
@@ -151,7 +147,7 @@ static void upipe_fsink_poll(struct upipe *upipe)
                                                  upipe_fsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err(upipe, "can't create watcher");
-        upipe_throw_upump_error(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
     } else {
         upipe_fsink_set_upump(upipe, watcher);
         upump_start(watcher);
@@ -281,24 +277,6 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** @internal @This resets upump_mgr-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_fsink_reset_upump_mgr(struct upipe *upipe)
-{
-    upipe_fsink_set_upump(upipe, NULL);
-}
-
-/** @internal @This resets uclock-related fields.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_fsink_reset_uclock(struct upipe *upipe)
-{
-    upipe_fsink_set_upump(upipe, NULL);
-}
-
 /** @internal @This returns the path of the currently opened file.
  *
  * @param upipe description structure of the pipe
@@ -390,7 +368,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->path == NULL)) {
         close(upipe_fsink->fd);
         upipe_fsink->fd = -1;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening file %s in %s mode",
@@ -415,6 +393,7 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            upipe_fsink_set_upump(upipe, NULL);
             return upipe_fsink_set_upump_mgr(upipe, upump_mgr);
         }
         case UPIPE_GET_UCLOCK: {
@@ -423,6 +402,7 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_UCLOCK: {
             struct uclock *uclock = va_arg(args, struct uclock *);
+            upipe_fsink_set_upump(upipe, NULL);
             return upipe_fsink_set_uclock(upipe, uclock);
         }
 

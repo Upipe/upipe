@@ -617,7 +617,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
                 upipe_release(upipe_ts_demux_output->setrap);
                 upipe_ts_demux_output->setrap = NULL;
             }
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return true;
         }
         struct upipe *output =
@@ -627,7 +627,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
                              flow_def2);
         if (unlikely(output == NULL)) {
             upipe_release(upipe_ts_demux_output->setrap);
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         } else {
             upipe_set_output(upipe_ts_demux_output->setrap, output);
             upipe_set_output(subpipe, upipe_ts_demux_output->setrap);
@@ -644,7 +644,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
                                                     UPROBE_LOG_DEBUG, "pesd"),
                              flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_release(output);
@@ -662,7 +662,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
                     UPROBE_LOG_DEBUG, "mp2vf"),
                 flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_ts_demux_output_store_last_subpipe(upipe, output);
@@ -680,7 +680,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
                     UPROBE_LOG_DEBUG, "h264f"),
                 flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_ts_demux_output_store_last_subpipe(upipe, output);
@@ -767,7 +767,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                  !uref_flow_set_def(flow_def, def) ||
                  !uref_flow_delete_raw_def(flow_def))) {
         uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -783,7 +783,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                              flow_def);
     uref_free(flow_def);
     if (unlikely(upipe_ts_demux_output->split_output == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -874,7 +874,7 @@ static bool upipe_ts_demux_program_plumber(struct uprobe *uprobe,
                                  UPROBE_LOG_DEBUG, "pmtd"),
                              flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_release(output);
@@ -1198,7 +1198,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
         /* this is also valid for the packet we are processing */
         uref_clock_set_systime_rap(uref, upipe_ts_demux_program->systime_pcr);
         if (!ret)
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     }
 }
 
@@ -1247,7 +1247,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                                            upipe_ts_demux_program->program))) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     upipe_ts_demux_program->pcr_split_output =
@@ -1261,7 +1261,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL ||
                  !upipe_get_flow_def(upipe_ts_demux_program->pcr_split_output,
                                      &flow_def))) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
@@ -1281,7 +1281,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
             upipe_release(decaps);
         upipe_release(upipe_ts_demux_program->pcr_split_output);
         upipe_ts_demux_program->pcr_split_output = NULL;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     upipe_release(decaps);
@@ -1356,7 +1356,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                                                  pid)) == NULL)) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1371,7 +1371,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
                                        upipe_ts_demux_program->psi_pid);
         upipe_ts_demux_program->psi_pid = NULL;
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1472,7 +1472,7 @@ static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
                                                     UPROBE_LOG_DEBUG, "decaps"),
                              flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_release(output);
@@ -1488,7 +1488,7 @@ static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
                                                     UPROBE_LOG_DEBUG, "psim"),
                              flow_def);
         if (unlikely(output == NULL))
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         else {
             upipe_set_output(subpipe, output);
             upipe_release(output);
@@ -1610,7 +1610,7 @@ static bool upipe_ts_demux_patd_systime(struct uprobe *uprobe,
     assert(signature == UPIPE_TS_PATD_SIGNATURE);
 
     if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap, systime)))
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
 
     upipe_throw(upipe, event, signature, uref, systime);
     return true;
@@ -1880,7 +1880,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                                                         "sync"),
                                  flow_def);
         if (unlikely(upipe_ts_demux->input == NULL)) {
-            upipe_throw_aerror(upipe);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return upipe;
         }
         upipe_get_flow_def(upipe_ts_demux->input, &flow_def);
@@ -1892,7 +1892,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                                                 UPROBE_LOG_DEBUG, "setrap"),
                          flow_def);
     if (unlikely(upipe_ts_demux->setrap == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1910,7 +1910,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                                                 UPROBE_LOG_DEBUG, "split"),
                          flow_def);
     if (unlikely(upipe_ts_demux->split == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
     upipe_set_output(upipe_ts_demux->setrap, upipe_ts_demux->split);
@@ -1921,14 +1921,14 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                                                 UPROBE_LOG_NOTICE, "null"),
                          NULL);
     if (unlikely(upipe_ts_demux->null == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
     /* get psi_split subpipe */
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, 0);
     if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1957,7 +1957,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                           flow_def)) == NULL)) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
     uref_free(flow_def);
@@ -1970,7 +1970,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                                                 UPROBE_LOG_DEBUG, "patd"),
                          flow_def);
     if (unlikely(patd == NULL)) {
-        upipe_throw_aerror(upipe);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
     upipe_set_output(upipe_ts_demux->psi_split_output_pat, patd);

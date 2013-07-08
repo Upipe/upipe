@@ -1,7 +1,8 @@
 debug: probe caught ready event
-error: allocation error at
-debug: probe caught allocation error
-debug: probe caught upump error
+error: fatal error at
+debug: probe caught fatal error: allocation error (0)
+error: error at
+debug: probe caught error: invalid argument (2)
 debug: probe caught source end
 debug: probe caught sink end
 debug: probe caught need uref manager

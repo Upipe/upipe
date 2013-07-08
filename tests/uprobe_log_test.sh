@@ -9,7 +9,7 @@ if test $RET -ne 0; then
 	exit $RET
 fi
 
-sed -e "s/^\(error: allocation error at\) .*$/\1/" < "$DIR"/logs > "$DIR"/logs2
+sed -e "s/\(error at\) .*$/\1/" < "$DIR"/logs > "$DIR"/logs2
 diff -q "$DIR"/logs2 "$srcdir"/uprobe_log_test.txt
 RET=$?
 rm -rf "$DIR"
