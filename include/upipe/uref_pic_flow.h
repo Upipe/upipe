@@ -150,8 +150,6 @@ static inline bool uref_pic_flow_find_chroma(struct uref *uref,
     return false;
 }
 
-#undef UREF_PIC_FLOW_DEF
-
 #ifdef __cplusplus
 }
 #endif

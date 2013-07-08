@@ -77,8 +77,6 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
     return uref;
 }
 
-#undef UREF_SOUND_FLOW_DEF
-
 #ifdef __cplusplus
 }
 #endif
