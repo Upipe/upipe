@@ -5,9 +5,219 @@
 
   @section T {Attributes reference}
 
+    Attributes may stored in three manners:
+
+    @list
+
+      @item Directly in the uref structure: It is the case for very frequently accessed attributes where performance is critical, such as pts, dts or systime.
+      @item In the udict, as a shorthand: A code has been allocated to the attribute, which allows it to be retrieved without any string comparison (sometimes accessed).
+      @item In the udict, as a normal key/value pair: String comparisons are used to find the appropriate attribute (adequate for rarely accessed attributes).
+
+    @end list
+
+    However Upipe exposes the same API for all three types. The difference lies in the declaration of the attribute in the corresponding header file, where different macros are used for each case, for instance for an unsigned attribute named foo, in the category bar:
+
+    @list
+
+      @item UREF_ATTR_UNSIGNED_UREF(bar, foo, foo, attribute storing the value of foo)
+      @item UREF_ATTR_UNSIGNED_SH(bar, foo, UDICT_TYPE_BAR_FOO, attribute storing the value of foo)
+      @item UREF_ATTR_UNSIGNED(bar, foo, "bar.foo", attribute storing the value of foo)
+
+    @end list
+
+    In the third case, an attribute name in the udict structure must be determined, so that it doesn't conflict with an already existing attribute. By convention, a short name of the attribute is prefixed by a letter indicating its category, and a dot. Attributes which are only used internally may be prefixed by "x.", which is reserved for this purpose.
+
+   Any of these macros declares the following inline functions:
+
+    @list
+
+      @item bool uref_bar_get_foo(struct uref *, uint64_t *)
+      @item bool uref_bar_set_foo(struct uref *, uint64_t)
+      @item bool uref_bar_delete_foo(struct uref *)
+      @item bool uref_bar_match_foo(struct uref *, uint64_t min, uint64_t max)
+
+    @end list
+
+    By conventions, attributes are classified in a category. The following paragraphs list the existing attributes, by category.
+
+    @section {Clock}
+
+      @table 3
+
+        @item name @item type @item description
+        @item systime @item unsigned @item reception or emission time of the uref in system clock
+        @item systime_rap @item unsigned @item reception time in system clock of the last random access point, allowing to decode the current uref
+        @item pts @item unsigned @item presentation timestamp in Upipe clock
+        @item pts_orig @item unsigned @item presentation timestamp in stream clock
+        @item pts_sys @item unsigned @item presentation timestamp in system clock
+        @item dts @item unsigned @item decoding timestamp in Upipe clock
+        @item dts_orig @item unsigned @item decoding timestamp in stream clock
+        @item dts_sys @item unsigned @item decoding timestamp in system clock
+        @item vbv_delay @item unsigned @item delay before the reception or the write of an access unit, and its decoding timestamp (in 27 MHz units)
+        @item duration @item unsigned @item duration of the presentation of an access unit
+        @item index_rap @item small_unsigned @item offset in number of access units since the last random access point
+        @item rate @item rational @item playing rate (1 being normal play, < 1 slow motion, > 1 fast forward)
+
+      @end table
+
+    @end section
+
+    @section {Flow}
+
+      @table 3
+
+        @item name @item type @item description
+        @item end @item void @item flag only used internally in some core modules to indicate that the source was disconnected
+        @item discontinuity @item void @item flag indicating a discontinuity in the data flow occurring just before this uref
+        @item random @item void @item flag indicating that this uref is a random access point
+        @item error @item void @item flag indicating that this uref carries an unrecoverable error
+        @item def @item string @item definition of the flow (see next chapter)
+        @item raw_def @item string @item real definition of the flow, used internally by some modules
+        @item program @item string @item list of program numbers carrying this flow, separated by commas
+        @item lang @item string @item ISO-639 language
+        @item lowdelay @item void @item flag indicating that the flow definition can be decoded with low latency
+
+      @end table
+
+    @end section
+
+    @section {Block}
+
+      @table 3
+
+        @item name @item type @item description
+        @item start @item void @item flag indicating that the uref starts an access unit
+        @item header_size @item unsigned @item size of the (optional) headers that are at the beginning of the ubuf
+
+      @end table
+
+    @end section
+
+    @section {Block_flow}
+
+      @table 3
+
+        @item name @item type @item description
+        @item octetrate @item unsigned @item flag for CBR flows, number of octets per second
+        @item max_octetrate @item unsigned @item maximum number of octets per second admitted by the profile/level of the codec
+        @item cpb_buffer @item unsigned @item size of the coded picture buffer in octets
+        @item prepend @item unsigned @item number of extra octets added before buffer allocation
+        @item append @item unsigned @item number of extra octets added after buffer allocation
+        @item align @item unsigned @item alignment of the buffer in octets
+        @item align_offset @item int @item offset of the aligned octet in the buffer
+        @item size @item unsigned @item for constant-size frames, size of a block
+
+      @end table
+
+    @end section
+
+    @section {Pic}
+
+      @table 3
+
+        @item name @item type @item description
+        @item number @item unsigned @item picture number from the beginning of the flow
+        @item hsize @item unsigned @item horizontal size
+        @item vsize @item unsigned @item vertical size
+        @item hsize_visible @item unsigned @item horizontal visible size
+        @item vsize_visible @item unsigned @item vertical visible size
+        @item hposition @item unsigned @item horizontal position of a subpicture
+        @item vposition @item unsigned @item vertical position of a subpicture
+        @item aspect @item rational @item sample aspect ratio
+        @item overscan @item void @item flag present in case of overscan
+        @item progressive @item void @item flag present for progressive pictures
+        @item tf @item void @item top field present
+        @item bf @item void @item bottom field present
+        @item tff @item void @item top field displayed first
+
+      @end table
+
+    @end section
+
+    @section {Pic_flow}
+
+      @table 3
+
+        @item name @item type @item description
+        @item macropixel @item small_unsigned @item number of pixels in a macropixel
+        @item planes @item small_unsigned @item number of planes
+        @item hsubsampling @item small_unsigned @item horizontal subsampling (per plane)
+        @item vsubsampling @item small_unsigned @item vertical subsampling (per plane)
+        @item macropixel_size @item small_unsigned @item size of a macropixel in octets (per plane)
+        @item chroma @item string @item string identifying the chroma (per plane)
+        @item fps @item rational @item number of frames per second
+        @item hmprepend @item small_unsigned @item extra macropixels added before each line
+        @item hmappend @item small_unsigned @item extra macropixels added after each line
+        @item vprepend @item small_unsigned @item extra lines added before buffer
+        @item vappend @item small_unsigned @item extra lines added after buffer
+        @item align @item unsigned @item alignment in octets
+        @item align_hmoffset @item int @item horizontal offset of the aligned macropixel
+
+      @end table
+
+    @end section
+
+    @section {Sound_flow}
+
+      @table 3
+
+        @item name @item type @item description
+        @item channels @item small_unsigned @item number of audio channels
+        @item sample_size @item small_unsigned @item size in octets of a sample of an audio channel
+        @item rate @item unsigned @item number of samples per second
+        @item prepend @item small_unsigned @item extra samples added before each channel
+        @item align @item unsigned @item alignment in octets
+        @item align_offset @item int @item horizontal offset of the aligned sample
+        @item samples @item unsigned @item number of samples per frame
+
+      @end table
+
+    @end section
+
+    @section {Program_flow}
+
+      @table 3
+
+        @item name @item type @item description
+        @item name @item string @item name of the program
+
+      @end table
+
+    @end section
+
   @end section
 
   @section T {Flow definition reference}
+
+    Flow definitions are strings made up of parts separated by dots, terminated by a dot. The first part of the flow definition points to the type of allocator for the ubuf:
+
+    @list
+
+      @item "block.": allocated by a block allocator, responds to ubuf_block_* semantics
+      @item "pic.": allocated by a pic allocator, responds to ubuf_pic_* semantics
+
+    @end list
+
+    The other parts describe the content of the flow, from the outermost container to the innermost. For instance, "block.mpegts.mpegtspes.mpeg2video." defines a flow using the block allocator, containing TS packets, containing PES packets, containing an MPEG-2 video elementary stream. An mpeg_ts_decaps module would typically remove the "mpegts." part, and send "block.mpegtspes.mpeg2video." downstream. And so on.
+
+    It is very important to keep the last dot, because flow definition matching works with a string comparison, and "block.mpegtspes." should not be matched by a module requiring "block.mpegts.".
+
+    Apart from the allocators, the following parts are currently in use:
+
+    @table 2
+
+      @item part @item description
+      @item mpegts @item 188-octet MPEG TS packets (ISO/IEC 13818-1)
+      @item mpegtspsi @item MPEG PSI sections (ISO/IEC 13818-1)
+      @item mpegtspat @item MPEG PSI sections containing PAT (ISO/IEC 13818-1)
+      @item mpegtspmt @item MPEG PSI sections containing PMT (ISO/IEC 13818-1)
+      @item mpegtspes @item MPEG PES packets (ISO/IEC 13818-1)
+      @item mpeg2video @item MPEG-2 video elementary stream (ISO/IEC 13818-2)
+      @item h264 @item MPEG-4 AVC video elementary stream (ISO/IEC 14496-10)
+      @item pic @item indicates that the content is raw video (can also be after a video codec)
+      @item sound @item indicates that the content is raw, packed audio (can also be after an audio codec)
+
+    @end table
 
   @end section
 

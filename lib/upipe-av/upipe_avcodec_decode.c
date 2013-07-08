@@ -387,11 +387,10 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
             context->release_buffer = upipe_avcdec_release_buffer;
             context->flags |= CODEC_FLAG_EMU_EDGE;
             context->lowres = upipe_avcdec->lowres;
-            //context->skip_loop_filter = AVDISCARD_ALL;
 
             if (!upipe_avcdec->output_flow) {
                 struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
-                uref_flow_set_def(outflow, "pic.");
+                uref_flow_set_def(outflow, UREF_PIC_FLOW_DEF);
                 uref_pic_flow_set_macropixel(outflow, 1);
                 uref_pic_flow_set_planes(outflow, 0);
                 upipe_avcdec_store_flow_def(upipe, outflow);
@@ -403,16 +402,8 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
             context->get_buffer = upipe_avcdec_get_buffer_audio;
             /* TODO: set attributes/need a real ubuf_audio structure (?) */
             if (!upipe_avcdec->output_flow) {
-                #if 0
-                struct uref *outflow = uref_sound_flow_alloc_def(upipe_avcdec->uref_mgr,
-                            context->channels,
-                            av_get_bytes_per_sample(context->sample_fmt));
-                #else
-
                 struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
-                uref_flow_set_def(outflow, "sound.");
-
-                #endif
+                uref_flow_set_def(outflow, UREF_SOUND_FLOW_DEF);
 #if 0
                 uref_sound_flow_set_channels(outflow, context->channels);
                 uref_sound_flow_set_sample_size(outflow,

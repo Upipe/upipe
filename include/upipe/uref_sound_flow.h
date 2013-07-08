@@ -41,8 +41,8 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-/** @internal flow definition prefix for sound allocator */
-#define UREF_SOUND_FLOW_DEF "sound."
+/** @internal flow definition prefix for packed sound allocator */
+#define UREF_SOUND_FLOW_DEF "block.sound."
 
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",

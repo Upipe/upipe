@@ -46,7 +46,22 @@
 
       Pipes and applications however do not manipulate @ref ubuf directly, but @ref uref, which is composed of a pointer to @ref ubuf and a pointer to @ref udict. The dictionary allows to associate arbitrary attributes to the @ref ubuf.
 
-      An attribute is defined by a name (string), a type and a value. Attribute names start by convention with a letter indicating the category of the attribute, and a dot. Categories are for instance b for block allocator, p for picture allocator, c for clocks, f for flow information, or x for custom attributes. The standard inline udict manager includes a list of common attribute names defined as "shorthands", which are stored and retrieved more efficiently.
+      An attribute is defined by a category, a name, a type and a value. Available types are:
+
+      @list
+
+        @item opaque: stores a buffer of an arbitrary length
+        @item string: stores a string terminated by \0
+        @item void: doesn't store anything but the presence or absence of the attribute (flag)
+        @item bool: stores a true or false value
+        @item small_unsigned: stores a uint8_t
+        @item small_int: stores an int8_t
+        @item unsigned: stores a uint64_t
+        @item int: stores an int64_t
+        @item rational: stores a @ref urational
+        @item float: stores a double
+
+      @end list
 
       The standard Upipe distribution provides managers for block and picture formats, relying on application memory allocation (malloc). They in turn use the @ref umem_mgr facility to allocate buffer spaces.
 

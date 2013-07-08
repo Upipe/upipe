@@ -15,7 +15,7 @@
 
       @item A @ref upipe shall throw @ref upipe_throw_dead when it does no longer wish to receive inputs and control commands; it shall not send any other probe afterwards, including log messages.
 
-      @item A @ref upipe throwing @ref #upipe_throw_fatal shall not longer receive any input nor control command; it can only be released.
+      @item A @ref upipe throwing @ref #upipe_throw_fatal shall no longer receive any input nor control command; it may only be released.
 
       @item Only one pipe at time may call @ref upipe_input on a given @ref upipe. Pipes are not required to support multiple inputs. If multiple inputs are needed, they should be created using @ref upipe_void_alloc_sub or @ref upipe_flow_alloc_sub.
 
@@ -25,7 +25,7 @@
 
       @item Managers for various control structures (@ref uref_mgr, @ref ubuf_mgr, @ref upump_mgr, etc.) passed to a pipe shouldn't be set to NULL after having been set to a vlue different from NULL.
 
-      @item The @ref upump passed to @ref upipe_input is only valid for the time of execution of @ref upipe_input, and mustn't be kept by any downstream pipe.
+      @item The @ref upump passed to @ref upipe_input is only valid for the time of execution of @ref upipe_input, and mustn't be kept by any downstream pipe. If blocking is desired, @ref upump_blocker_alloc should be used.
 
       @item The @ref uref passed to @ref upipe_input belongs to the callee, and must be freed at some point.
 
