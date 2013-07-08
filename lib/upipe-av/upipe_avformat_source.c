@@ -768,7 +768,7 @@ static bool _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
  * @param url_p filled in with the URL
  * @return false in case of error
  */
-static bool _upipe_avfsrc_get_url(struct upipe *upipe, const char **url_p)
+static bool upipe_avfsrc_get_uri(struct upipe *upipe, const char **url_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(url_p != NULL);
@@ -782,7 +782,7 @@ static bool _upipe_avfsrc_get_url(struct upipe *upipe, const char **url_p)
  * @param url URL to open
  * @return false in case of error
  */
-static bool _upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
+static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
 
@@ -912,17 +912,13 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
             const char *content = va_arg(args, const char *);
             return _upipe_avfsrc_set_option(upipe, option, content);
         }
-        case UPIPE_AVFSRC_GET_URL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
-            const char **url_p = va_arg(args, const char **);
-            return _upipe_avfsrc_get_url(upipe, url_p);
+        case UPIPE_GET_URI: {
+            const char **uri_p = va_arg(args, const char **);
+            return upipe_avfsrc_get_uri(upipe, uri_p);
         }
-        case UPIPE_AVFSRC_SET_URL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
-            const char *url = va_arg(args, const char *);
-            return _upipe_avfsrc_set_url(upipe, url);
+        case UPIPE_SET_URI: {
+            const char *uri = va_arg(args, const char *);
+            return upipe_avfsrc_set_uri(upipe, uri);
         }
         case UPIPE_AVFSRC_GET_TIME: {
             unsigned int signature = va_arg(args, unsigned int);

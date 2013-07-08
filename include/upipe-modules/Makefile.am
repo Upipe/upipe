@@ -1,6 +1,7 @@
 myincludedir = $(includedir)/upipe-modules
 myinclude_HEADERS = \
 	upipe_proxy.h \
+	upipe_transfer.h \
 	upipe_dup.h \
 	upipe_file_sink.h \
 	upipe_file_source.h \
@@ -21,4 +22,4 @@ myinclude_HEADERS = \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
 	upipe_http_source.h \
-    upipe_rtp_prepend.h
+	upipe_rtp_prepend.h

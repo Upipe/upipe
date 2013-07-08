@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe module splitting tables of the PSI of a transport stream
+ * @short Upipe module facilitating trick play operations
  */
 
 #include <upipe/ubase.h>

@@ -39,7 +39,7 @@
 
       @list
 
-        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref ubuf_block_alloc ; the API supports windowing and resizing blocks, as well as merging and cutting out with zero-copy and copy-on-write semantics.
+        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref ubuf_block_alloc ; the API supports windowing and resizing blocks, as well as merging and cutting out with zero-copy and copy-on-write semantics. Packed sound is currently considered as blocks.
         @item pictures, defined by their chromatic planes, pixel sizes and subsampling, with arbitrary width and height: @ref ubuf_pic_alloc.
 
       @end list
@@ -56,7 +56,7 @@
 
       Pipes are provided by specialized modules, possibly delivered by third-parties. A @ref upipe may expose input and control methods (with standard and custom commands), and would typically take data from its input, process it and output it, possibly using a different buffer, to its output. Functions from a pipe may only be called from a single thread, so locking and reentrancy isn't required.
 
-      When created, pipes are passed with one structure for logging and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.), and optional arguments, in particular, for pipes that aren't sources, a flow definition packet of type @ref uref describing the input. Pipe allocation is performed with @ref upipe_void_alloc or @ref upipe_flow_alloc, depending whether the pipe requests a flow definition packet. A few pipes may also provide their own specific allocator.
+      When created, pipes are passed one structure for logging and sending exceptions (@ref uprobe) to the parent code upon certain events (end of file, fatal error, new flow, etc.), and optional arguments, in particular, for pipes that aren't sources, a flow definition packet of type @ref uref describing the input. Pipe allocation is performed with @ref upipe_void_alloc or @ref upipe_flow_alloc, depending whether the pipe requests a flow definition packet. A few pipes may also provide their own specific allocator.
 
       The standard Upipe distribution currently contains the following pipe types (though third-party modules may also be used):
 
@@ -67,25 +67,36 @@
         @item @ref upipe_fsrc_mgr_alloc @item source pipe opening for reading a file or special file characterized by its path @item @tt -lupipe-modules
         @item @ref upipe_fsink_mgr_alloc @item sink pipe opening for writing a file or special file characterized by its path @item @tt -lupipe-modules
         @item @ref upipe_udpsrc_mgr_alloc @item source pipe opening for reading a UDP socket @item @tt -lupipe-modules
+        @item @ref upipe_udpsink_mgr_alloc @item sink pipe opening for writing a UDP socket @item @tt -lupipe-modules
         @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe opening for writing a directory in a manner compatible with multicat @item @tt -lupipe-modules
         @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item @tt -lupipe-modules
         @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
         @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
         @item @ref upipe_proxy_mgr_alloc @item pipe acting as a proxy in front of a split pipe @item @tt -lupipe-modules
+        @item @ref upipe_xfer_mgr_alloc (also note @ref upipe_xfer_alloc) @item pipe manager allowing to attach another pipe to a given upump_mgr running in a different thread @item @tt -lupipe-modules
+        @item @ref upipe_trickp_mgr_alloc @item pipe facilitating trick play operations @item @tt -lupipe-modules
         @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
+        @item @ref upipe_setrap_mgr_alloc @item pipe setting attribute k.systime_rap on all incoming buffers @item @tt -lupipe-modules
         @item @ref upipe_genaux_mgr_alloc @item pipe generating multicat-style auxiliary blocks @item @tt -lupipe-modules
         @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe generating multicat-style directories @item @tt -lupipe-modules
         @item @ref upipe_avfsrc_mgr_alloc @item source pipe opening for reading a URL and using libavformat @item @tt -lupipe-av
+        @item @ref upipe_avcdec_mgr_alloc @item linear pipe decoding a video or audio flow using libavcodec @item @tt -lupipe-av
+        @item @ref upipe_avcenc_mgr_alloc @item linear pipe encoding a video or audio flow using libavcodec @item @tt -lupipe-av
         @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
+        @item @ref upipe_sws_thumbs_mgr_alloc @item linear pipe building a mosaic of thumbnails out of a picture flow @item @tt -lupipe-sws
         @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
-        @item @ref upipe_mp2vf_mgr_alloc @item pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_mp2vf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_h264f_mgr_alloc @item linear pipe gathering MPEG-4 AVC video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_filter_blend_mgr_alloc @item linear pipe deinterlacing pictures using a blending algorithm @item @tt -lupipe-filters
+        @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
+        @item @ref upipe_glx_sink_mgr_alloc @item sink pipe displaying picture on a GLX output @item @tt -lupipe-gl
 
       @end table
 
       Data is fed into a pipe using @ref upipe_input. The @ref uref argument then belongs to the callee and shouldn't be used any longer. There is an additional @ref upump argument that points to the pump that generated the buffer (or NULL if unavailable).
 
-      The generic @ref upipe_control call provides to the application an interface to modify the pipe's property. The counterpart of this function is provided by @ref uprobe, which allows the pipe to send messages to the application. It is possible to build upon this messaging system to dynamically take actions on the pipe or the pipeline. All parameters to @ref upipe_control belong to the caller. All parameters to sent by subpipes via probes also belong to the subpipe. The standard Upipe distribution currently contains the following catchers:
+      The generic @ref upipe_control call provides the application with an interface to modify the pipe's property. The counterpart of this function is provided by @ref uprobe, which allows the pipe to send messages to the application. It is possible to build upon this messaging system to dynamically take actions on the pipe or the pipeline. All parameters to @ref upipe_control belong to the caller. All parameters sent by subpipes via probes also belong to the subpipe. The standard Upipe distribution currently contains the following catchers:
 
       @table 3
 
@@ -98,6 +109,7 @@
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
         @item @ref uprobe_selprog_alloc @item select programs according to criteria @item @tt -lupipe
+        @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
 
       @end table
@@ -134,9 +146,11 @@
         @item @ref #UPIPE_HELPER_OUTPUT @item helper for the management of the output
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
         @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
+        @item @ref #UPIPE_HELPER_SINK @item helper for sink pipes outputting data at a certain rate, to block pumps and buffer urefs
         @item @ref #UPIPE_HELPER_SINK_DELAY @item helper for sink pipes outputting data at the given system time of packets, plus a configurable delay
         @item @ref #UPIPE_HELPER_UREF_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
+        @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
         @item @ref #UPIPE_HELPER_BIN @item helper for bin pipes (that incorporate a sub-pipeline of several pipes)
         @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
         @item @ref #UPROBE_HELPER_ADHOC @item helper for automatic allocation and deallocation of probes bound to a single pipe
@@ -199,9 +213,33 @@
 
     @list
 
-      @item sysdate timestamps are expressed using the monotonic or real-time clock of the system; they are typically used for bridging flows from different sources with different clocks, or for sinks
+      @item systime timestamps are expressed using the monotonic or real-time clock of the system; they typically express the reception or emission time of a block
+      @item pts_sys timestamps are expressed using the monotonic or real-time clock of the system; they typically express the presentation time of a picture or a sound
       @item pts timestamps are expressed using a fictional monotonic clock retrieved from the input stream; they must not contain gaps and do not loop; they must start at a "high-enough" value so that all values are positive (by convention 2^33)
       @item pts_orig timestamps are directly retrieved from the input source; they are typically used when one wants to remux a stream with the exact same timestamps
+
+    @end list
+
+    There are the equivalent dts_sys, dts and dts_orig attributes to express the decoding time of a picture or a sound. By definition, at least dts must be set at the output of a framer, and an encoder. By definition, at least pts must be set at the output of a decoder, and at the input of an encoder. If a decoder does not set the _sys timestamps, a trickplay pipe may be inserted at the end of the pipeline to set them.
+
+  @end section
+
+  @section T {Threads}
+
+    Upipe objects do not natively deal with threads. Multithreading is supposed to be the prerogative of the application, or at least of very high level bin pipes (an exception being the libraries which themselves take advantage of multithreading, such as FFmpeg/libav and x264). However there is some minimum support to allow running a part of a pipeline in a different "worker" thread.
+
+    The first kind of support is the @ref upipe_qsrc_mgr_alloc and @ref upipe_qsink_mgr_alloc managers, which allow to bridge @ref uref from one thread to another. In that case, each thread runs its own upump manager, which is passed to the pipes running in it.
+
+    Upipe also provides facilities to transfer pipes to another thread (ie. upump manager), and control them remotely from a "main" thread: @ref upipe_xfer_mgr_alloc. It works the following way:
+
+    @list
+
+      @item An xfer_mgr is created, in general from the main thread, using @ref upipe_xfer_mgr_alloc.
+      @item A new thread is created (for instance with pthread_create). The pointer to the xfer_mgr is passed as the opaque argument to pthread_create, and retrieved in the worker thread.
+      @item The worker thread initializes a new event loop and a new upump manager, and calls @ref upipe_xfer_mgr_attach on the xfer_mgr passed by the main thread. It can then enter the event loop.
+      @item The main thread creates a pipe that is supposed to run on the worker thread via @ref upipe_flow_alloc or @ref upipe_void_alloc, and initializes it. The pipe is supposed to work with a upump_mgr, either directly, or through the use of @ref upipe_qsrc_mgr_alloc and/or @ref upipe_qsink_mgr_alloc. If a group of pipes has to be moved (for instance with queue source and queue sink), the group can be built normally with @ref upipe_set_output, and then all members requiring a upump manager have to be transferred.
+      @item Pipes that need a upump manager are transferred to the worked thread by calling @ref upipe_xfer_alloc on them. In case there are several pipes, they must be transferred in the sink to source order. After @ref upipe_xfer_alloc, the original upipe pointer shall no longer be used in the main thread; however this function returns a pointer to a pipe handle, that allows to do basic operations on the remote pipe, such as releasing it.
+      @item At the end of the processing, all pipe handles are released, which in turn releases the remote pipes in the worker thread. The main thread calls @ref upipe_xfer_mgr_detach to stop the event loop in the worker thread, and @ref upipe_mgr_release to release the xfer_mgr.
 
     @end list
 

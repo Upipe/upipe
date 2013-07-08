@@ -218,7 +218,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
  * @param uri_p filled in with the uri of the udp socket
  * @return false in case of error
  */
-static bool _upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
+static bool upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -232,7 +232,7 @@ static bool _upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
  * @param uri relative or absolute uri of the udp socket
  * @return false in case of error
  */
-static bool _upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
+static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 {
     bool use_tcp = 0;
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
@@ -362,17 +362,13 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
             return upipe_udpsrc_set_read_size(upipe, read_size);
         }
 
-        case UPIPE_UDPSRC_GET_URI: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_UDPSRC_SIGNATURE);
+        case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
-            return _upipe_udpsrc_get_uri(upipe, uri_p);
+            return upipe_udpsrc_get_uri(upipe, uri_p);
         }
-        case UPIPE_UDPSRC_SET_URI: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_UDPSRC_SIGNATURE);
+        case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
-            return _upipe_udpsrc_set_uri(upipe, uri);
+            return upipe_udpsrc_set_uri(upipe, uri);
         }
         default:
             return false;

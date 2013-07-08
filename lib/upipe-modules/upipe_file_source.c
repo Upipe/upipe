@@ -218,7 +218,7 @@ static void upipe_fsrc_worker(struct upump *upump)
  * @param path_p filled in with the path of the file
  * @return false in case of error
  */
-static bool _upipe_fsrc_get_path(struct upipe *upipe, const char **path_p)
+static bool upipe_fsrc_get_uri(struct upipe *upipe, const char **path_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(path_p != NULL);
@@ -232,7 +232,7 @@ static bool _upipe_fsrc_get_path(struct upipe *upipe, const char **path_p)
  * @param path relative or absolute path of the file
  * @return false in case of error
  */
-static bool _upipe_fsrc_set_path(struct upipe *upipe, const char *path)
+static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
 
@@ -412,19 +412,15 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
             unsigned int read_size = va_arg(args, unsigned int);
             return upipe_fsrc_set_read_size(upipe, read_size);
         }
+        case UPIPE_GET_URI: {
+            const char **uri_p = va_arg(args, const char **);
+            return upipe_fsrc_get_uri(upipe, uri_p);
+        }
+        case UPIPE_SET_URI: {
+            const char *uri = va_arg(args, const char *);
+            return upipe_fsrc_set_uri(upipe, uri);
+        }
 
-        case UPIPE_FSRC_GET_PATH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
-            const char **path_p = va_arg(args, const char **);
-            return _upipe_fsrc_get_path(upipe, path_p);
-        }
-        case UPIPE_FSRC_SET_PATH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
-            const char *path = va_arg(args, const char *);
-            return _upipe_fsrc_set_path(upipe, path);
-        }
         case UPIPE_FSRC_GET_SIZE: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_FSRC_SIGNATURE);

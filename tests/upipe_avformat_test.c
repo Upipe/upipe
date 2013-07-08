@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
     if (delay)
         assert(upipe_set_uclock(upipe_avfsrc, uclock));
 #endif
-    assert(upipe_avfsrc_set_url(upipe_avfsrc, src_url));
+    assert(upipe_set_uri(upipe_avfsrc, src_url));
 
     ev_loop(loop, 0);
 

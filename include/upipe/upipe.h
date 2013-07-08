@@ -73,6 +73,10 @@ enum upipe_command {
     UPIPE_GET_UPUMP_MGR,
     /** sets upump manager (struct upump_mgr *) */
     UPIPE_SET_UPUMP_MGR,
+    /** gets uniform resource identifier (const char **) */
+    UPIPE_GET_URI,
+    /** sets uniform resource identifier (const char *) */
+    UPIPE_SET_URI,
 
     /*
      * Output-related commands
@@ -418,6 +422,8 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uref_mgr, UREF_MGR, struct uref_mgr *,
                        uref manager)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, upump_mgr, UPUMP_MGR, struct upump_mgr *,
                        upump manager)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
+                       const char *, uniform resource identifier)
 
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
                        pipe acting as output)

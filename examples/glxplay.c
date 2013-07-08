@@ -96,6 +96,7 @@ graph {flow: east}
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+#include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_queue_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_file_source.h>
@@ -138,24 +139,16 @@ graph {flow: east}
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
 #define DEJITTER_DIVIDER    100
+#define XFER_QUEUE          255
+#define XFER_POOL           20
 #define READ_SIZE 4096
 
 #undef BENCH_TS
 
-struct test_output {
-    struct uchain uchain;
-    struct upipe *upipe_avfsrc_output;
-};
-
-struct thread {
-    pthread_t id;
-};
-
 struct uclock *uclock;
-const char *url = NULL;
+const char *uri = NULL;
 bool upipe_ts = false;
 bool trickp = false;
-struct upipe *qsrc;
 struct upipe_mgr *glx_mgr;
 struct upipe_mgr *trickp_mgr;
 struct upipe_mgr *avcdec_mgr;
@@ -166,6 +159,7 @@ struct upipe_mgr *upipe_qsrc_mgr;
 struct ubuf_mgr *yuv_mgr;
 struct ubuf_mgr *rgb_mgr = NULL;
 struct ubuf_mgr *block_mgr;
+struct upipe *qsrc;
 struct upipe *output = NULL;
 struct upipe *upipe_trickp = NULL;
 struct uprobe *logger;
@@ -183,8 +177,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_SOURCE_END:
 #ifndef BENCH_TS
-            if (!upipe_ts)
-                upipe_avfsrc_set_url(upipe, url);
+            upipe_set_uri(upipe, uri);
 #endif
             return true;
 
@@ -375,22 +368,25 @@ static void thread_idler (struct upump *upump)
 }
 
 /** gui thread entrypoint */
-static void *glx_thread (void *_thread)
+static void *glx_thread (void *_xfer_glx)
 {
-    struct thread *thread = _thread;
+    struct upipe_mgr *xfer_glx = _xfer_glx;
 
     struct ev_loop *loop = ev_loop_new(0);
     upump_mgr_thread = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
-    upipe_set_upump_mgr(qsrc, upump_mgr_thread);
+    upipe_xfer_mgr_attach(xfer_glx, upump_mgr_thread);
 
     uprobe_init(&uprobe_glx, thread_catch, logger);
 
-    struct upump *idlepump = upump_alloc_timer(upump_mgr_thread, thread_idler, thread,
+    struct upump *idlepump = upump_alloc_timer(upump_mgr_thread, thread_idler, NULL,
                                                0, 27000000/1000);
     upump_start(idlepump);
 
     // Fire
     ev_loop(loop, 0);
+
+    upump_mgr_release(upump_mgr_thread);
+    ev_loop_destroy(loop);
 
     return NULL;
 }
@@ -416,7 +412,7 @@ int main(int argc, char** argv)
         exit(-1);
     }
 
-    url = argv[optind++];
+    uri = argv[optind++];
 
     // upipe env
     struct ev_loop *loop = ev_default_loop(0);
@@ -472,27 +468,30 @@ int main(int argc, char** argv)
     upipe_filter_blend_mgr = upipe_filter_blend_mgr_alloc();
     upipe_sws_mgr = upipe_sws_mgr_alloc();
     upipe_qsink_mgr = upipe_qsink_mgr_alloc();
+    upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
+    glx_mgr = upipe_glx_sink_mgr_alloc();
 
+#ifndef BENCH_TS
     // queue source
     struct uprobe uprobe_qsrc_s;
     uprobe_init(&uprobe_qsrc_s, qsrc_catch, logger);
-    upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
                     uprobe_pfx_adhoc_alloc(&uprobe_qsrc_s, loglevel, "qsrc"),
                     SINK_QUEUE_LENGTH);
 
-#ifndef BENCH_TS
     // Fire display engine
     printf("Starting glx thread\n");
-    struct thread thread;
-    memset(&thread, 0, sizeof(struct thread));
-    pthread_create(&thread.id, NULL, glx_thread, &thread);
+    struct upipe_mgr *glx_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    assert(glx_xfer != NULL);
+    pthread_t id;
+    pthread_create(&id, NULL, glx_thread, glx_xfer);
+    struct upipe *qsrc_handle = upipe_xfer_alloc(glx_xfer, logger, qsrc);
+    assert(qsrc_handle != NULL);
 #endif
 
     // uclock
     uclock = uclock_std_alloc(0);
 
-    glx_mgr = upipe_glx_sink_mgr_alloc();
     trickp_mgr = upipe_trickp_mgr_alloc();
 
     // upipe-av
@@ -505,7 +504,7 @@ int main(int argc, char** argv)
         struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
         upipe_src = upipe_void_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "avfsrc"));
-        upipe_avfsrc_set_url(upipe_src, url);
+        upipe_set_uri(upipe_src, uri);
         upipe_set_uclock(upipe_src, uclock);
         upipe_mgr_release(upipe_avfsrc_mgr);
         trickp = true;
@@ -516,7 +515,7 @@ int main(int argc, char** argv)
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "fsrc"));
         upipe_mgr_release(upipe_fsrc_mgr);
         upipe_set_ubuf_mgr(upipe_src, block_mgr);
-        if (!upipe_fsrc_set_path(upipe_src, url)) {
+        if (!upipe_set_uri(upipe_src, uri)) {
             /* try udp source */
             upipe_release(upipe_src);
             struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
@@ -524,7 +523,7 @@ int main(int argc, char** argv)
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "udpsrc"));
             upipe_mgr_release(upipe_udpsrc_mgr);
             upipe_set_ubuf_mgr(upipe_src, block_mgr);
-            if (!upipe_udpsrc_set_uri(upipe_src, url)) {
+            if (!upipe_set_uri(upipe_src, uri)) {
                 /* try http source */
                 upipe_release(upipe_src);
                 struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
@@ -532,7 +531,7 @@ int main(int argc, char** argv)
                     uprobe_pfx_adhoc_alloc(uprobe_split, loglevel, "http"));
                 upipe_mgr_release(upipe_http_src_mgr);
                 upipe_set_ubuf_mgr(upipe_src, block_mgr);
-                if (!upipe_http_src_set_url(upipe_src, url)) {
+                if (!upipe_set_uri(upipe_src, uri)) {
                     upipe_release(upipe_src);
                     printf("invalid URL\n");
                     exit(EXIT_FAILURE);
@@ -570,9 +569,15 @@ int main(int argc, char** argv)
     printf("Starting main thread ev_loop\n");
     ev_loop(loop, 0);
 
+    upipe_release(upipe_src);
     if (output != NULL)
         upipe_release(output);
-    upipe_release(upipe_src);
+#ifndef BENCH_TS
+    upipe_release(qsrc_handle);
+    upipe_xfer_mgr_detach(glx_xfer);
+    upipe_mgr_release(glx_xfer);
+#endif
+
     upipe_av_clean();
     uclock_release(uclock);
 
@@ -597,7 +602,7 @@ int main(int argc, char** argv)
 
     ev_default_destroy();
 
-//    pthread_join(thread.id, NULL);
+    pthread_join(id, NULL);
     return 0; 
 }
 

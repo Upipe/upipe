@@ -39,10 +39,6 @@
 enum upipe_fsrc_command {
     UPIPE_FSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the path of the currently opened file (const char **) */
-    UPIPE_FSRC_GET_PATH,
-    /** asks to open the given path (const char *) */
-    UPIPE_FSRC_SET_PATH,
     /** returns the size of the currently opened file, in octets (uint64_t *) */
     UPIPE_FSRC_GET_SIZE,
     /** returns the reading position of the currently opened file, in octets
@@ -57,30 +53,6 @@ enum upipe_fsrc_command {
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_fsrc_mgr_alloc(void);
-
-/** @This returns the path of the currently opened file.
- *
- * @param upipe description structure of the pipe
- * @param path_p filled in with the path of the file
- * @return false in case of error
- */
-static inline bool upipe_fsrc_get_path(struct upipe *upipe, const char **path_p)
-{
-    return upipe_control(upipe, UPIPE_FSRC_GET_PATH, UPIPE_FSRC_SIGNATURE,
-                         path_p);
-}
-
-/** @This asks to open the given file.
- *
- * @param upipe description structure of the pipe
- * @param path relative or absolute path of the file
- * @return false in case of error
- */
-static inline bool upipe_fsrc_set_path(struct upipe *upipe, const char *path)
-{
-    return upipe_control(upipe, UPIPE_FSRC_SET_PATH, UPIPE_FSRC_SIGNATURE,
-                         path);
-}
 
 /** @This returns the size of the currently opened file.
  *

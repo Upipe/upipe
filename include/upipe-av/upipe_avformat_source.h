@@ -45,10 +45,6 @@ enum upipe_avfsrc_command {
     UPIPE_AVFSRC_GET_OPTION,
     /** sets the content of an avformat option (const char *, const char *) */
     UPIPE_AVFSRC_SET_OPTION,
-    /** returns the currently opened URL (const char **) */
-    UPIPE_AVFSRC_GET_URL,
-    /** asks to open the given URL (const char *) */
-    UPIPE_AVFSRC_SET_URL,
     /** returns the reading time of the currently opened file, in clock units
      * (uint64_t *) */
     UPIPE_AVFSRC_GET_TIME,
@@ -91,30 +87,6 @@ static inline bool upipe_avfsrc_set_option(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSRC_SET_OPTION, UPIPE_AVFSRC_SIGNATURE,
                          option, content);
-}
-
-/** @This returns the currently opened URL.
- *
- * @param upipe description structure of the pipe
- * @param url_p filled in with the URL
- * @return false in case of error
- */
-static inline bool upipe_avfsrc_get_url(struct upipe *upipe, const char **url_p)
-{
-    return upipe_control(upipe, UPIPE_AVFSRC_GET_URL, UPIPE_AVFSRC_SIGNATURE,
-                         url_p);
-}
-
-/** @This asks to open the given URL.
- *
- * @param upipe description structure of the pipe
- * @param url URL to open
- * @return false in case of error
- */
-static inline bool upipe_avfsrc_set_url(struct upipe *upipe, const char *url)
-{
-    return upipe_control(upipe, UPIPE_AVFSRC_SET_URL, UPIPE_AVFSRC_SIGNATURE,
-                         url);
 }
 
 /** @This returns the reading time of the currently opened URL.

@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     if (delay)
         assert(upipe_set_uclock(upipe_fsrc, uclock));
-    assert(upipe_fsrc_set_path(upipe_fsrc, src_file));
+    assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
     if (upipe_fsrc_get_size(upipe_fsrc, &size))
         fprintf(stdout, "source file has size %"PRIu64"\n", size);

@@ -36,44 +36,10 @@
 
 #define UPIPE_UDPSRC_SIGNATURE UBASE_FOURCC('u','s','r','c')
 
-/** @This extends upipe_command with specific commands for udp socket source. */
-enum upipe_udpsrc_command {
-    UPIPE_UDPSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the path of the currently opened udp socket (const char **) */
-    UPIPE_UDPSRC_GET_URI,
-    /** asks to open the given path (const char *) */
-    UPIPE_UDPSRC_SET_URI,
-};
-
 /** @This returns the management structure for all udp socket sources.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_udpsrc_mgr_alloc(void);
-
-/** @This returns the path of the currently opened udp socket.
- *
- * @param upipe description structure of the pipe
- * @param path_p filled in with the path of the udp socket
- * @return false in case of error
- */
-static inline bool upipe_udpsrc_get_uri(struct upipe *upipe, const char **path_p)
-{
-    return upipe_control(upipe, UPIPE_UDPSRC_GET_URI, UPIPE_UDPSRC_SIGNATURE,
-                         path_p);
-}
-
-/** @This asks to open the given udp socket.
- *
- * @param upipe description structure of the pipe
- * @param path relative or absolute path of the udp socket
- * @return false in case of error
- */
-static inline bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *path)
-{
-    return upipe_control(upipe, UPIPE_UDPSRC_SET_URI, UPIPE_UDPSRC_SIGNATURE,
-                         path);
-}
 
 #endif

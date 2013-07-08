@@ -41,8 +41,7 @@ taking. "Pipes" are not supposed to make any decision (such as selecting this
 elementary stream or decoding to 720x576), and whenever an action is necessary,
 an event is sent to "probes" provided by the application, which would typically
 send a control command to the pipe. Upipe's standard distribution will
-include standard probes for the simpler cases (this part of the framework is
-not ready at the time of writing), but an application is always free to
-override their behaviour and take different decisions.
+include standard probes for the simpler cases, but an application is always
+free to override their behaviour and take different decisions.
 
 @end section

@@ -88,7 +88,8 @@ check_PROGRAMS += \
 	upipe_queue_test \
 	upipe_multicat_test \
 	upipe_http_src_test \
-	upipe_udp_test
+	upipe_udp_test \
+	upipe_transfer_test
 
 TESTS += \
 	upump_ev_test \
@@ -98,7 +99,8 @@ TESTS += \
 	upipe_file_test.sh \
 	upipe_queue_test \
 	upipe_multicat_test.sh \
-	upipe_udp_test
+	upipe_udp_test \
+	upipe_transfer_test
 
 # avcodec/avformat tests currently depend on ev
 if HAVE_AVFORMAT
@@ -173,6 +175,7 @@ udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 uprobe_upump_mgr_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_transfer_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

@@ -35,44 +35,10 @@
 
 #define UPIPE_HTTP_SRC_SIGNATURE UBASE_FOURCC('h','t','t','p')
 
-/** @This extends upipe_command with specific commands for http source. */
-enum upipe_http_src_command {
-    UPIPE_HTTP_SRC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the url of the currently opened http (const char **) */
-    UPIPE_HTTP_SRC_GET_URL,
-    /** asks to open the given url (const char *) */
-    UPIPE_HTTP_SRC_SET_URL,
-};
-
 /** @This returns the management structure for all http sources.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_http_src_mgr_alloc(void);
-
-/** @This returns the url of the currently opened http.
- *
- * @param upipe description structure of the pipe
- * @param url_p filled in with the url of the http
- * @return false in case of error
- */
-static inline bool upipe_http_src_get_url(struct upipe *upipe, const char **url_p)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_GET_URL, UPIPE_HTTP_SRC_SIGNATURE,
-                         url_p);
-}
-
-/** @This asks to open the given http.
- *
- * @param upipe description structure of the pipe
- * @param url relative or absolute url of the http
- * @return false in case of error
- */
-static inline bool upipe_http_src_set_url(struct upipe *upipe, const char *url)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_URL, UPIPE_HTTP_SRC_SIGNATURE,
-                         url);
-}
 
 #endif

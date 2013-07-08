@@ -265,7 +265,7 @@ static void upipe_http_src_worker(struct upump *upump)
  * @param url_p filled in with the url of the http
  * @return false in case of error
  */
-static bool _upipe_http_src_get_url(struct upipe *upipe, const char **url_p)
+static bool upipe_http_src_get_uri(struct upipe *upipe, const char **url_p)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     assert(url_p != NULL);
@@ -408,7 +408,7 @@ static bool upipe_http_src_send_request(struct upipe *upipe)
  * @param url relative or absolute url of the http
  * @return false in case of error
  */
-static bool _upipe_http_src_set_url(struct upipe *upipe, const char *url)
+static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
@@ -544,17 +544,13 @@ static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command comm
             return upipe_http_src_set_read_size(upipe, read_size);
         }
 
-        case UPIPE_HTTP_SRC_GET_URL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_HTTP_SRC_SIGNATURE);
-            const char **url_p = va_arg(args, const char **);
-            return _upipe_http_src_get_url(upipe, url_p);
+        case UPIPE_GET_URI: {
+            const char **uri_p = va_arg(args, const char **);
+            return upipe_http_src_get_uri(upipe, uri_p);
         }
-        case UPIPE_HTTP_SRC_SET_URL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_HTTP_SRC_SIGNATURE);
-            const char *url = va_arg(args, const char *);
-            return _upipe_http_src_set_url(upipe, url);
+        case UPIPE_SET_URI: {
+            const char *uri = va_arg(args, const char *);
+            return upipe_http_src_set_uri(upipe, uri);
         }
         default:
             return false;

@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
     upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
     upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
     upipe_set_uclock(upipe_udpsrc, uclock);
-    if (!upipe_udpsrc_set_uri(upipe_udpsrc, srcpath)) {
+    if (!upipe_set_uri(upipe_udpsrc, srcpath)) {
         return EXIT_FAILURE;
     }
 

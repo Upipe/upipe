@@ -150,7 +150,7 @@ static bool upipe_proxy_control(struct upipe *upipe,
     return upipe_control_va(upipe_proxy->upipe_super, command, args);
 }
 
-/** @This decrements the reference count of a upipe or frees it.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -186,6 +186,8 @@ static void upipe_proxy_mgr_free(struct upipe_mgr *mgr)
  * the refcount for super_mgr is not incremented, so super_mgr belongs to the
  * callee.
  *
+ * @param super_mgr management structures for pipes we're proxying for
+ * @param proxy_released function called when a proxy pipe is released
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_proxy_mgr_alloc(struct upipe_mgr *super_mgr,
@@ -215,6 +217,7 @@ struct upipe_mgr *upipe_proxy_mgr_alloc(struct upipe_mgr *super_mgr,
 
 /** @This returns the superpipe manager.
  *
+ * @param mgr proxy_mgr structure
  * @return pointer to superpipe manager
  */
 struct upipe_mgr *upipe_proxy_mgr_get_super_mgr(struct upipe_mgr *mgr)

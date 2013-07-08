@@ -351,7 +351,7 @@ int main(int argc, char **argv)
     upipe_set_upump_mgr(upipe_avfsrc, upump_mgr);
     upipe_set_uref_mgr(upipe_avfsrc, uref_mgr);
     upipe_set_uclock(upipe_avfsrc, uclock);
-    upipe_avfsrc_set_url(upipe_avfsrc, url); /* run this last */
+    upipe_set_uri(upipe_avfsrc, url); /* run this last */
 
     /* fire decode engine and main loop */
     printf("Starting main thread ev_loop\n");

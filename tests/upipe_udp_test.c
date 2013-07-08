@@ -192,7 +192,7 @@ static void genpackets(struct upump *unused)
 	printf("Counter: %d\n", counter);
 	if (counter > 100) {
 		upump_stop(write_pump);
-		upipe_udpsrc_set_uri(upipe_udpsrc, NULL);
+		upipe_set_uri(upipe_udpsrc, NULL);
 		return;
 	}
 	for (i=0; i < 10; i++) {
@@ -212,7 +212,7 @@ static void genpackets2(struct upump *upump)
 	printf("Counter: %d\n", counter);
 	if (counter > 200) {
 		upump_stop(write_pump);
-		upipe_udpsrc_set_uri(upipe_udpsrc, NULL);
+		upipe_set_uri(upipe_udpsrc, NULL);
 		return;
 	}
 
@@ -280,14 +280,14 @@ int main(int argc, char *argv[])
     assert(upipe_set_uclock(upipe_udpsrc, uclock));
 	srand(42);
 
-    upipe_udpsrc_set_uri(upipe_udpsrc, "@127.0.0.1:42125");
-    upipe_udpsrc_set_uri(upipe_udpsrc, NULL);
+    upipe_set_uri(upipe_udpsrc, "@127.0.0.1:42125");
+    upipe_set_uri(upipe_udpsrc, NULL);
 
 	for (i=0; i < 10; i++) {
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = upipe_udpsrc_set_uri(upipe_udpsrc, udp_uri) )) {
+		if (( ret = upipe_set_uri(upipe_udpsrc, udp_uri) )) {
 			break;
 		}
 	}
@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = upipe_udpsrc_set_uri(upipe_udpsrc, udp_uri) )) {
+		if (( ret = upipe_set_uri(upipe_udpsrc, udp_uri) )) {
 			break;
 		}
 	}

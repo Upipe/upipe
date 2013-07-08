@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
     assert(upipe_set_ubuf_mgr(upipe_http_src, ubuf_mgr));
     assert(upipe_source_set_read_size(upipe_http_src, READ_SIZE));
     assert(upipe_set_uclock(upipe_http_src, uclock));
-    assert(upipe_http_src_set_url(upipe_http_src, url));
+    assert(upipe_set_uri(upipe_http_src, url));
     assert(upipe_set_output(upipe_http_src, upipe_null));
     upipe_release(upipe_null);
 
