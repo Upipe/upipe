@@ -370,16 +370,13 @@ static bool upipe_http_src_send_request(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     const char *url = upipe_http_src->url;
-    char *req = NULL;
     int len, ret;
+    char req[strlen(get_request_format)+strlen(url)+strlen(USER_AGENT)+1];
 
     /* build get request */
-    len = asprintf(&req, get_request_format, url, USER_AGENT); 
+    len = snprintf(req, sizeof(req), get_request_format, url, USER_AGENT); 
 
     ret = send(upipe_http_src->fd, req, len, 0);
-
-    /* FIXME: compare len */
-    free(req);
 
     if (ret < 0) {
         switch(errno) {

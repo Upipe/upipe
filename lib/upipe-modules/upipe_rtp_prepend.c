@@ -307,15 +307,10 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
 
     const char *def;
     if (likely(uref_flow_get_def(flow_def, &def))) {
-        char *out_def = NULL;
-        asprintf(&out_def, OUT_FLOW"%s", def+strlen(EXPECTED_FLOW));
-        if (unlikely(!out_def)) {
-            uref_free(flow_def);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            return upipe;
-        }
+        char out_def[strlen(OUT_FLOW)+strlen(def)+1];
+        snprintf(out_def, sizeof(out_def), OUT_FLOW"%s",
+                 def+strlen(EXPECTED_FLOW));
         uref_flow_set_def(flow_def, out_def);
-        free(out_def);
         upipe_rtp_prepend_store_flow_def(upipe, flow_def);
     }
     return upipe;

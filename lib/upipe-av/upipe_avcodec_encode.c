@@ -64,6 +64,7 @@
 #include "upipe_av_internal.h"
 
 #define EXPECTED_FLOW "pic."
+#define PREFIX_FLOW "block."
 
 /** @internal @This handles incoming frames */
 static bool upipe_avcenc_input_frame(struct upipe *upipe,
@@ -378,12 +379,10 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def)
 
     /* flow definition */
     if (unlikely(!upipe_avcenc->output_flow)) {
-        char *def = NULL;
-        asprintf(&def, "block.%s",
-                 upipe_av_to_flow_def(codec->id));
+        char def[strlen(PREFIX_FLOW) + strlen(codec_def) + 1];
+        snprintf(def, sizeof(def), PREFIX_FLOW "%s", codec_def);
         struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
         uref_flow_set_def(outflow, def);
-        free(def);
         upipe_avcenc_store_flow_def(upipe, outflow);
     }
 

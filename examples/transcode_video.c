@@ -219,15 +219,14 @@ static void *encoding_thread(void *_qsrc)
             upipe_x264_set_profile(encoder, profile);
         }
     } else {
-        char *codec_def = NULL;
+        char codec_def[strlen(codec)+strlen(".pic.")+1];
         struct upipe_mgr *upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
         encoder = upipe_flow_alloc(upipe_avcenc_mgr,
                 uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcenc"), outflow);
-        asprintf(&codec_def, "%s.pic.", codec);
+        snprintf(codec_def, sizeof(codec_def), "%s.pic.", codec);
         if (!upipe_avcenc_set_codec(encoder, codec_def)) {
             exit(1);
         }
-        free(codec_def);
     }
     uref_free(outflow);
     upipe_get_flow_def(encoder, &outflow);
