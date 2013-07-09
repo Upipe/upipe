@@ -38,7 +38,6 @@ extern "C" {
 #include <upipe/uref_attr.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
-#include <upipe/uref_pic_flow.h>
 
 #include <stdint.h>
 #include <stdbool.h>

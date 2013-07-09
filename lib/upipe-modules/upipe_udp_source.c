@@ -265,11 +265,8 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         }
         upipe_udpsrc_store_flow_def(upipe, flow_def);
     }
-    if (upipe_udpsrc->upump_mgr == NULL) {
+    if (upipe_udpsrc->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_udpsrc->upump_mgr == NULL))
-            return false;
-    }
     if (upipe_udpsrc->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_udpsrc->flow_def);
         if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))

@@ -1412,7 +1412,18 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
  */
 static void upipe_ts_demux_program_proxy_released(struct upipe *upipe)
 {
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    struct upipe_ts_demux *demux =
+        upipe_ts_demux_from_program_mgr(upipe->mgr);
     upipe_ts_demux_program_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
+    /* close PMT to release ESs */
+    if (upipe_ts_demux_program->psi_split_output != NULL) {
+        upipe_release(upipe_ts_demux_program->psi_split_output);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                       upipe_ts_demux_program->psi_pid);
+        upipe_ts_demux_program->psi_split_output = NULL;
+    }
 }
 
 /** @internal @This initializes the output manager for a ts_demux pipe.
@@ -2085,8 +2096,6 @@ static void upipe_ts_demux_free(struct upipe *upipe)
         upipe_release(upipe_ts_demux->psi_split_output_pat);
     if (upipe_ts_demux->psi_pid_pat != NULL)
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-    struct upipe_mgr *meuh;
-    meuh = upipe_proxy_mgr_get_super_mgr(upipe->sub_mgr);
     upipe_throw_dead(upipe);
     upipe_mgr_release(upipe->sub_mgr);
     uref_free(upipe_ts_demux->flow_def_input);
@@ -2101,7 +2110,17 @@ static void upipe_ts_demux_free(struct upipe *upipe)
  */
 static void upipe_ts_demux_proxy_released(struct upipe *upipe)
 {
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     upipe_ts_demux_throw_sub_programs(upipe, UPROBE_SOURCE_END);
+    /* close PAT to release programs */
+    if (upipe_ts_demux->psi_split_output_pat != NULL) {
+        upipe_release(upipe_ts_demux->psi_split_output_pat);
+        upipe_ts_demux->psi_split_output_pat = NULL;
+    }
+    if (upipe_ts_demux->psi_pid_pat != NULL) {
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
+        upipe_ts_demux->psi_pid_pat = NULL;
+    }
 }
 
 /** @This frees a upipe manager.

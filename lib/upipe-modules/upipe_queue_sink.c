@@ -246,11 +246,8 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
 
     if (unlikely(qsrc == NULL))
         return true;
-    if (upipe_qsink->upump_mgr == NULL) {
+    if (upipe_qsink->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_qsink->upump_mgr == NULL))
-            return false;
-    }
 
     upipe_qsink->qsrc = qsrc;
     upipe_use(qsrc);

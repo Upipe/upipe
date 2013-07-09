@@ -156,6 +156,7 @@ static void upipe_glx_sink_event_process(struct upipe *upipe)
     XWindowAttributes winAttr;
     XEvent evt;
     struct upipe_glx_sink *glx = upipe_glx_sink_from_upipe(upipe);
+    upipe_use(upipe);
 
     while(XCheckWindowEvent(glx->display, glx->window,
                             glx->eventmask, &evt)) {
@@ -180,6 +181,7 @@ static void upipe_glx_sink_event_process(struct upipe *upipe)
                 break;
         }
     }
+    upipe_release(upipe);
 }
 
 /** @internal @This is our upump watcher callback.

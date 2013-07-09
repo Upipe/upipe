@@ -45,6 +45,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_dump.h>

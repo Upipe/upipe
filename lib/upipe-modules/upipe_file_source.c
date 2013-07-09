@@ -263,11 +263,8 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
         }
         upipe_fsrc_store_flow_def(upipe, flow_def);
     }
-    if (upipe_fsrc->upump_mgr == NULL) {
+    if (upipe_fsrc->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_fsrc->upump_mgr == NULL))
-            return false;
-    }
     if (upipe_fsrc->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_fsrc->flow_def);
         if (unlikely(upipe_fsrc->ubuf_mgr == NULL))

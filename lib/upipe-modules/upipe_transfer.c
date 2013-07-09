@@ -240,9 +240,12 @@ static bool upipe_xfer_control(struct upipe *upipe,
         case UPIPE_SET_URI: {
             struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
             const char *uri = va_arg(args, const char *);
-            char *uri_dup = strdup(uri);
-            if (unlikely(uri_dup == NULL))
-                return false;
+            char *uri_dup = NULL;
+            if (uri != NULL) {
+                uri_dup = strdup(uri);
+                if (unlikely(uri_dup == NULL))
+                    return false;
+            }
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_SET_URI,
                                        upipe_xfer->upipe_remote, uri_dup);
         }

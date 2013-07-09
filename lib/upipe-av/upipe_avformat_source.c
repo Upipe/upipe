@@ -804,11 +804,8 @@ static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         if (unlikely(upipe_avfsrc->uref_mgr == NULL))
             return false;
     }
-    if (upipe_avfsrc->upump_mgr == NULL) {
+    if (upipe_avfsrc->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_avfsrc->upump_mgr == NULL))
-            return false;
-    }
 
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsrc->options, 0);

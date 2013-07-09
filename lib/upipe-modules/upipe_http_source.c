@@ -436,11 +436,8 @@ static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
         }
         upipe_http_src_store_flow_def(upipe, flow_def);
     }
-    if (upipe_http_src->upump_mgr == NULL) {
+    if (upipe_http_src->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_http_src->upump_mgr == NULL))
-            return false;
-    }
     if (upipe_http_src->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_http_src->flow_def);
         if (unlikely(upipe_http_src->ubuf_mgr == NULL))
