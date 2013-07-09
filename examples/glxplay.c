@@ -27,33 +27,40 @@
 
 /*
 graph {flow: east}
-( [qsrc] [glx]) {border-style: dashed;}
-[] -- stream --> [avfsrc]{rank: 0} -- encoded --> [avcdec] -- yuv --> [deint]
--- progressive --> {flow: south; end: east} [yuvrgb]
--- rgb --> {flow: west} [qsink] --> [qsrc] --> [glx]
+( [demux] [dec_qsink] ) {border-style:dashed;}
+( [dec_qsrc] [avcdec] [deint] [yuvrgb] [glx_qsink] ) {border-style:dashed;}
+[] -- stream --> [demux]{rank: 0} -- encoded --> [dec_qsink] --> {flow: south; end:east} [dec_qsrc] --> {flow: west} [avcdec] -- yuv --> [deint] -- progressive --> [yuvrgb] -- rgb --> [glx_qsink] --> {flow: south; end: east} [glx_qsrc] --> {flow: west} [trickp] --> {flow: west} [glx]
 
-  |
-  | stream
-  v
-+---------+  encoded     +-------+  yuv   +--------+
-| avfsrc  | --------->   | avcdec | -----> | deint  |   -+
-+---------+              +-------+        +--------+    |
-                                                        |
-                                                        | progressive
-                                                        |
-                         +-------+  rgb   +--------+    |
-                         | qsink | <----- | yuvrgb |   <+
-                         +-------+        +--------+
-                           |
-                           |
-                           v
-                       +- - - - - - - - - - - - - - -+
-                       '                             '
-                       ' +-------+        +--------+ '
-                       ' | qsrc  | -----> |  glx   | '
-                       ' +-------+        +--------+ '
-                       '                             '
-                       +- - - - - - - - - - - - - - -+
+
+    |
+    | stream
+    v
++ - - - - - - - - - - - - - - - - - - - - -+
+'                                          '
+' +---------+  encoded       +-----------+ '
+' |  demux  | -------------> | dec_qsink | ' -+
+' +---------+                +-----------+ '  |
+'                                          '  |
++ - - - - - - - - - - - - - - - - - - - - -+  |
++ - - - - - - - - - - - - - - - - - - - - -+  |
+'                                          '  |
+' +---------+                +-----------+ '  |
+' | avcdec  | <------------- | dec_qsrc  | ' <+
+' +---------+                +-----------+ '
+'   |                                      '
+'   | yuv                                  '
+'   |                                      '
+'   |                                       - - - - - - - - - - - +
+'   v                                                             '
+' +---------+  progressive   +-----------+   rgb    +-----------+ '
+' |  deint  | -------------> |  yuvrgb   | -------> | glx_qsink | ' -+
+' +---------+                +-----------+          +-----------+ '  |
+'                                                                 '  |
+'                                                                 '  |
++ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +  |
+  +---------+                +-----------+          +-----------+    |
+  |   glx   | <------------- |  trickp   |   <----- | glx_qsrc  |   <+
+  +---------+                +-----------+          +-----------+
  */
 
 #include <stdlib.h>
@@ -570,7 +577,8 @@ static bool upipe_glxplayer_catch_glx(struct uprobe *uprobe,
                     upipe_mgr_release(glxplayer->src_xfer);
                     pthread_join(glxplayer->src_thread_id, NULL);
                     upipe_release(glxplayer->upipe_glx_qsrc);
-                    upipe_release(glxplayer->upipe_trickp);
+                    if (glxplayer->trickp)
+                        upipe_release(glxplayer->upipe_trickp);
                     free(glxplayer->uri);
                     upump_mgr_release(glxplayer->upump_mgr_main);
                     break;
@@ -731,7 +739,7 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 
     /* probe specific to the output of the demux pipe */
     uprobe_init(&glxplayer->uprobe_demux_output_s,
-                upipe_glxplayer_catch_demux_output, glxplayer->uprobe_logger);
+                upipe_glxplayer_catch_demux_output, glxplayer->uprobe_dejitter);
 
     /* probe specific to the glx queue source */
     uprobe_init(&glxplayer->uprobe_glx_qsrc_s,
