@@ -97,6 +97,8 @@ enum upipe_xfer_command {
     UPIPE_XFER_SET_UPUMP_MGR,
     /** set URI on a pipe */
     UPIPE_XFER_SET_URI,
+    /** set output of a pipe */
+    UPIPE_XFER_SET_OUTPUT,
     /** release pipe */
     UPIPE_XFER_RELEASE,
     /** detach from remote upump_mgr */
@@ -106,7 +108,7 @@ enum upipe_xfer_command {
 /** @hidden */
 static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
                                 enum upipe_xfer_command type,
-                                struct upipe *upipe_remote, char *uri);
+                                struct upipe *upipe_remote, void *arg);
 
 /** @This stores a message to send.
  */
@@ -119,7 +121,7 @@ struct upipe_xfer_msg {
     /** remote pipe */
     struct upipe *upipe_remote;
     /** optional URI argument */
-    char *uri;
+    void *arg;
 };
 
 /** @This returns the high-level upipe_xfer_msg structure.
@@ -249,6 +251,13 @@ static bool upipe_xfer_control(struct upipe *upipe,
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_SET_URI,
                                        upipe_xfer->upipe_remote, uri_dup);
         }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
+            struct upipe *output = va_arg(args, struct upipe *);
+            upipe_use(output);
+            return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_SET_OUTPUT,
+                                       upipe_xfer->upipe_remote, output);
+        }
         default:
             return false;
     }
@@ -318,8 +327,12 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
             upipe_set_upump_mgr(msg->upipe_remote, xfer_mgr->upump_mgr);
             break;
         case UPIPE_XFER_SET_URI:
-            upipe_set_uri(msg->upipe_remote, msg->uri);
-            free(msg->uri);
+            upipe_set_uri(msg->upipe_remote, (char *)msg->arg);
+            free(msg->arg);
+            break;
+        case UPIPE_XFER_SET_OUTPUT:
+            upipe_set_output(msg->upipe_remote, (struct upipe *)msg->arg);
+            upipe_release((struct upipe *)msg->arg);
             break;
         case UPIPE_XFER_RELEASE:
             upipe_release(msg->upipe_remote);
@@ -342,12 +355,12 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
  * @param mgr xfer_mgr structure
  * @param type type of message
  * @param upipe_remote optional remote pipe
- * @paral uri optional URI
+ * @paral arg optional argument
  * @return false in case of error
  */
 static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
                                 enum upipe_xfer_command type,
-                                struct upipe *upipe_remote, char *uri)
+                                struct upipe *upipe_remote, void *arg)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     struct upipe_xfer_msg *msg = upipe_xfer_msg_alloc(mgr);
@@ -356,7 +369,7 @@ static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
 
     msg->type = type;
     msg->upipe_remote = upipe_remote;
-    msg->uri = uri;
+    msg->arg = arg;
 
     if (unlikely(!uqueue_push(&xfer_mgr->uqueue,
                               upipe_xfer_msg_to_uchain(msg)))) {
