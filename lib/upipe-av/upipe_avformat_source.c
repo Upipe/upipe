@@ -792,6 +792,7 @@ static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         upipe_avfsrc->context = NULL;
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_avfsrc_abort_av_deal(upipe);
+        upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
     }
     free(upipe_avfsrc->url);
     upipe_avfsrc->url = NULL;
