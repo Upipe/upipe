@@ -185,7 +185,7 @@ struct upipe_glxplayer {
     struct uprobe uprobe_glx_s;
 
     /* main thread state */
-    struct upipe *upipe_src;
+    struct upipe *upipe_src_xfer;
     struct upipe *upipe_glx_qsrc;
     bool trickp;
     struct upipe_mgr *src_xfer;
@@ -403,8 +403,10 @@ static bool upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
                     uprobe_pfx_adhoc_alloc(glxplayer->uprobe_logger,
                                            glxplayer->loglevel, "dec qsrc null"),
                     NULL);
-            if (likely(null != NULL))
+            if (likely(null != NULL)) {
                 upipe_set_output(glxplayer->upipe_dec_qsrc_handle, null);
+                upipe_release(null);
+            }
             upipe_release(glxplayer->upipe_dec_qsrc_handle);
             return true;
         }
@@ -600,7 +602,7 @@ static bool upipe_glxplayer_catch_glx(struct uprobe *uprobe,
                 case 'q': {
                     upipe_notice_va(upipe, "exit key pressed (%d), exiting",
                                     key);
-                    upipe_release(glxplayer->upipe_src);
+                    upipe_release(glxplayer->upipe_src_xfer);
                     upipe_xfer_mgr_detach(glxplayer->src_xfer);
                     upipe_mgr_release(glxplayer->src_xfer);
                     break;
@@ -978,11 +980,11 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         return false;
     }
 
-    glxplayer->upipe_src = upipe_xfer_alloc(glxplayer->src_xfer,
+    glxplayer->upipe_src_xfer = upipe_xfer_alloc(glxplayer->src_xfer,
                 uprobe_pfx_adhoc_alloc(glxplayer->uprobe_logger,
                                        glxplayer->loglevel, "source xfer"),
                 upipe_src);
-    if (unlikely(glxplayer->upipe_src == NULL)) {
+    if (unlikely(glxplayer->upipe_src_xfer == NULL)) {
         upipe_xfer_mgr_detach(glxplayer->src_xfer);
         upipe_mgr_release(glxplayer->src_xfer);
         upipe_release(upipe_src);
