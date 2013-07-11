@@ -137,7 +137,7 @@ static void upipe_qsink_watcher(struct upump *upump)
         upipe_qsink_unblock_sink(upipe);
         upump_stop(upump);
         /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_qsink_wait. */
+         * used in @ref upipe_qsink_input. */
         upipe_release(upipe);
     }
 }
@@ -259,17 +259,15 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
  * @param upipe description structure of the pipe
  * @return false in case of error
  */
-static bool _upipe_qsink_flush(struct upipe *upipe)
+static bool upipe_qsink_flush(struct upipe *upipe)
 {
-    if (upipe_qsink_check_sink(upipe))
-        return true;
-
-    upipe_qsink_clean_sink(upipe);
-    upipe_qsink_init_sink(upipe);
-    upipe_qsink_set_upump(upipe, NULL);
-    /* All packets have been output, release again the pipe that has been
-     * used in @ref upipe_qsink_wait. */
-    upipe_release(upipe);
+    if (upipe_qsink_flush_sink(upipe)) {
+        struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+        upump_stop(upipe_qsink->upump);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_qsink_input. */
+        upipe_release(upipe);
+    }
     return true;
 }
 
@@ -311,11 +309,8 @@ static bool _upipe_qsink_control(struct upipe *upipe,
             struct upipe *qsrc = va_arg(args, struct upipe *);
             return _upipe_qsink_set_qsrc(upipe, qsrc);
         }
-        case UPIPE_QSINK_FLUSH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSINK_SIGNATURE);
-            return _upipe_qsink_flush(upipe);
-        }
+        case UPIPE_SINK_FLUSH:
+            return upipe_qsink_flush(upipe);
         default:
             return false;
     }

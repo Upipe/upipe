@@ -45,9 +45,7 @@ enum upipe_qsink_command {
     /** returns a pointer to the current queue source (struct upipe **) */
     UPIPE_QSINK_GET_QSRC,
     /** sets the pointer to the current queue source (struct upipe *) */
-    UPIPE_QSINK_SET_QSRC,
-    /** flushes all currently held buffers and unblock the sources (void) */
-    UPIPE_QSINK_FLUSH
+    UPIPE_QSINK_SET_QSRC
 };
 
 /** @This returns the management structure for all queue sinks.
@@ -82,16 +80,6 @@ static inline bool upipe_qsink_set_qsrc(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_QSINK_SET_QSRC, UPIPE_QSINK_SIGNATURE,
                          qsrc);
-}
-
-/** @This flushes all currently held buffers, and unblocks the sources.
- *
- * @param upipe description structure of the pipe
- * @return false in case of error
- */
-static inline bool upipe_qsink_flush(struct upipe *upipe)
-{
-    return upipe_control(upipe, UPIPE_QSINK_FLUSH, UPIPE_QSINK_SIGNATURE);
 }
 
 #ifdef __cplusplus

@@ -108,6 +108,8 @@ enum upipe_command {
     /*
      * Sink elements commands
      */
+    /** flushes all currently held buffers and unblock the sources (void) */
+    UPIPE_SINK_FLUSH,
     /** gets delay applied to systime attribute (uint64_t *) */
     UPIPE_SINK_GET_DELAY,
     /** sets delay applied to systime attribute (uint64_t) */
@@ -441,6 +443,16 @@ UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
                        delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
+
+/** @This flushes all currently held buffers, and unblocks the sources.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static inline bool upipe_sink_flush(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_SINK_FLUSH);
+}
 
 /** @internal @This throws generic events with optional arguments.
  *

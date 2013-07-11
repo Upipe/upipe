@@ -97,6 +97,12 @@ extern "C" {
  *  void upipe_foo_clean_sink(struct upipe *upipe)
  * @end code
  * Free all urefs that have been held, and unblocks all pumps.
+ *
+ * @item @code
+ *  bool upipe_foo_flush_sink(struct upipe *upipe)
+ * @end code
+ * Free all urefs that have been held, unblocks all pumps, and reinitializes
+ * the sink. Returns true if the sink was previsouly blocked.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
@@ -210,6 +216,20 @@ static void STRUCTURE##_clean_sink(struct upipe *upipe)                     \
         ulist_delete(&s->UREFS, uchain);                                    \
         uref_free(uref_from_uchain(uchain));                                \
     }                                                                       \
+}                                                                           \
+/** @internal @This flushes all currently held buffers, and unblocks the    \
+ * sources.                                                                 \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @return false if the sink was previously blocked                         \
+ */                                                                         \
+static bool STRUCTURE##_flush_sink(struct upipe *upipe)                     \
+{                                                                           \
+    if (STRUCTURE##_check_sink(upipe))                                      \
+        return false;                                                       \
+    STRUCTURE##_clean_sink(upipe);                                          \
+    STRUCTURE##_init_sink(upipe);                                           \
+    return true;                                                            \
 }
 
 #ifdef __cplusplus

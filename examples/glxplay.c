@@ -395,7 +395,7 @@ static bool upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
                 container_of(uprobe, struct upipe_glxplayer,
                              uprobe_demux_output_s);
             upipe_release(upipe);
-            upipe_qsink_flush(glxplayer->upipe_dec_qsink);
+            upipe_sink_flush(glxplayer->upipe_dec_qsink);
             upipe_release(glxplayer->upipe_dec_qsink);
 
             /* set dec_qsrc output to null */
@@ -433,7 +433,7 @@ static bool upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
             struct upipe_glxplayer *glxplayer =
                 container_of(uprobe, struct upipe_glxplayer, uprobe_dec_qsrc_s);
             upipe_release(upipe);
-            upipe_qsink_flush(glxplayer->upipe_glx_qsink);
+            upipe_sink_flush(glxplayer->upipe_glx_qsink);
             upipe_release(glxplayer->upipe_glx_qsink);
             return true;
         }

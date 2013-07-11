@@ -252,8 +252,12 @@ static void upipe_fsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_fsink_set_upump(upipe, NULL);
-    if (upipe_fsink_output_sink(upipe))
+    if (upipe_fsink_output_sink(upipe)) {
         upipe_fsink_unblock_sink(upipe);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
+    }
 }
 
 /** @internal @This receives data.
@@ -270,10 +274,15 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_fsink_check_sink(upipe) ||
-                 !upipe_fsink_output(upipe, uref, upump))) {
+    if (!upipe_fsink_check_sink(upipe)) {
         upipe_fsink_hold_sink(upipe, uref);
         upipe_fsink_block_sink(upipe, upump);
+    } else if (!upipe_fsink_output(upipe, uref, upump)) {
+        upipe_fsink_hold_sink(upipe, uref);
+        upipe_fsink_block_sink(upipe, upump);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
     }
 }
 
@@ -312,6 +321,9 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     upipe_fsink->path = NULL;
     upipe_fsink_set_upump(upipe, NULL);
     upipe_fsink_unblock_sink(upipe);
+    if (!upipe_fsink_check_sink(upipe))
+        /* Release the pipe used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
 
     if (unlikely(path == NULL))
         return true;
@@ -371,8 +383,28 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
+    if (!upipe_fsink_check_sink(upipe))
+        /* Use again the pipe that we previously released. */
+        upipe_use(upipe);
     upipe_notice_va(upipe, "opening file %s in %s mode",
                     upipe_fsink->path, mode_desc);
+    return true;
+}
+
+/** @internal @This flushes all currently held buffers, and unblocks the
+ * sources.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_fsink_flush(struct upipe *upipe)
+{
+    if (upipe_fsink_flush_sink(upipe)) {
+        upipe_fsink_set_upump(upipe, NULL);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
+    }
     return true;
 }
 
@@ -428,6 +460,8 @@ static bool _upipe_fsink_control(struct upipe *upipe,
             enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
             return _upipe_fsink_set_path(upipe, path, mode);
         }
+        case UPIPE_SINK_FLUSH:
+            return upipe_fsink_flush(upipe);
         default:
             return false;
     }
