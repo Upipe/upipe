@@ -1050,7 +1050,6 @@ static void upipe_avcdec_free(struct upipe *upipe)
     upipe_avcdec_abort_av_deal(upipe);
     upipe_avcdec_clean_sink(upipe);
     upipe_avcdec_clean_output(upipe);
-    upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
     upipe_avcdec_clean_upump_av_deal(upipe);
     upipe_avcdec_clean_upump_mgr(upipe);
