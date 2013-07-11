@@ -602,9 +602,6 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe, struct uref *u
     uref_clock_set_index_rap(uref, upipe_avcdec->index_rap);
     upipe_avcdec->index_rap++;
 
-    /* DTS has no meaning from now on */
-    uref_clock_delete_dts(uref);
-
     /* pts */
     if (!uref_clock_get_pts(uref, &pts)) {
         pts = upipe_avcdec->next_pts;
@@ -612,6 +609,10 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe, struct uref *u
             uref_clock_set_pts(uref, pts);
         }
     }
+
+    /* DTS has no meaning from now on and is identical to PTS. */
+    if (pts != UINT64_MAX)
+        uref_clock_set_dts(uref, pts);
 
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration)) {
@@ -1049,7 +1050,6 @@ static void upipe_avcdec_free(struct upipe *upipe)
 
     upipe_avcdec_abort_av_deal(upipe);
     upipe_avcdec_clean_sink(upipe);
-    upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
     upipe_avcdec_clean_upump_av_deal(upipe);
