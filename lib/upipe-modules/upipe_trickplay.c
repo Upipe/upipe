@@ -144,19 +144,22 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
         upipe_trickp_sub_from_upipe(upipe);
     ulist_init(&upipe_trickp_sub->urefs);
     upipe_trickp_sub->type = UPIPE_TRICKP_SUBPIC;
-    const char *def;
-    if (likely(uref_flow_get_def(flow_def, &def))) {
-        if (!ubase_ncmp(def, "pic."))
-            upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
-        else if (!ubase_ncmp(def, "sound."))
-            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
-    }
     upipe_trickp_sub_store_flow_def(upipe, flow_def);
 
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(mgr);
     upipe_use(upipe_trickp_to_upipe(upipe_trickp));
 
     upipe_throw_ready(upipe);
+    const char *def;
+    if (likely(uref_flow_get_def(flow_def, &def)) &&
+               ubase_ncmp(def, "pic.sub.")) {
+        if (!ubase_ncmp(def, "pic."))
+            upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
+        else if (!ubase_ncmp(def, "sound.") || !ubase_ncmp(def, "block.sound."))
+            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
+        else
+            upipe_warn_va(upipe, "unhandled flow definition %s", def);
+    }
     return upipe;
 }
 
