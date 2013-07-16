@@ -112,7 +112,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-framers/upipe_mp2v_framer.h>
+#include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -926,11 +926,11 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             upipe_release(upipe_src);
             return false;
         }
-        struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
-        if (upipe_mp2vf_mgr != NULL) {
-            upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr,
-                                             upipe_mp2vf_mgr);
-            upipe_mgr_release(upipe_mp2vf_mgr);
+        struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
+        if (upipe_mpgvf_mgr != NULL) {
+            upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
+                                             upipe_mpgvf_mgr);
+            upipe_mgr_release(upipe_mpgvf_mgr);
         }
         struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
         if (upipe_h264f_mgr != NULL) {

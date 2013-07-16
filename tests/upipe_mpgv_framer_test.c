@@ -48,7 +48,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
-#include <upipe-framers/upipe_mp2v_framer.h>
+#include <upipe-framers/upipe_mpgv_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -84,7 +84,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
-/** helper phony pipe to test upipe_mp2vf */
+/** helper phony pipe to test upipe_mpgvf */
 static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
                                 uint32_t signature, va_list args)
 {
@@ -94,7 +94,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_mp2vf */
+/** helper phony pipe to test upipe_mpgvf */
 static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
@@ -130,14 +130,14 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     nb_packets++;
 }
 
-/** helper phony pipe to test upipe_mp2vf */
+/** helper phony pipe to test upipe_mpgvf */
 static void test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_mp2vf */
+/** helper phony pipe to test upipe_mpgvf */
 static struct upipe_mgr test_mgr = {
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
@@ -177,13 +177,13 @@ int main(int argc, char *argv[])
     struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
-    struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
-    assert(upipe_mp2vf_mgr != NULL);
-    struct upipe *upipe_mp2vf = upipe_flow_alloc(upipe_mp2vf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mp2vf"),
+    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
+    assert(upipe_mpgvf_mgr != NULL);
+    struct upipe *upipe_mpgvf = upipe_flow_alloc(upipe_mpgvf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgvf"),
             uref);
-    assert(upipe_mp2vf != NULL);
-    assert(upipe_set_output(upipe_mp2vf, upipe_sink));
+    assert(upipe_mpgvf != NULL);
+    assert(upipe_set_output(upipe_mpgvf, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;
@@ -265,11 +265,11 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_orig(uref, 27000000);
     uref_clock_set_systime(uref, 84);
     uref_clock_set_systime_rap(uref, 42);
-    upipe_input(upipe_mp2vf, uref, NULL);
+    upipe_input(upipe_mpgvf, uref, NULL);
     assert(nb_packets == 2);
 
-    upipe_release(upipe_mp2vf);
-    upipe_mgr_release(upipe_mp2vf_mgr);
+    upipe_release(upipe_mpgvf);
+    upipe_mgr_release(upipe_mpgvf_mgr);
 
     test_free(upipe_sink);
 

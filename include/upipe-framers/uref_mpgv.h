@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe mp2v attributes for uref
+ * @short Upipe mpgv attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MP2V_H_
+#ifndef _UPIPE_UREF_MPGV_H_
 /** @hidden */
-#define _UPIPE_UREF_MP2V_H_
+#define _UPIPE_UREF_MPGV_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,7 +37,7 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_SMALL_UNSIGNED(mp2v, type, "mp2v.type", picture coding type)
+UREF_ATTR_SMALL_UNSIGNED(mpgv, type, "mpgv.type", picture coding type)
 
 #ifdef __cplusplus
 }

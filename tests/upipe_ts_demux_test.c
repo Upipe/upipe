@@ -52,7 +52,7 @@
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
-#include <upipe-framers/upipe_mp2v_framer.h>
+#include <upipe-framers/upipe_mpgv_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -176,13 +176,13 @@ int main(int argc, char *argv[])
     uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe_mgr *upipe_mp2vf_mgr = upipe_mp2vf_mgr_alloc();
-    assert(upipe_mp2vf_mgr != NULL);
+    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
+    assert(upipe_mpgvf_mgr != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    assert(upipe_ts_demux_mgr_set_mp2vf_mgr(upipe_ts_demux_mgr,
-                                            upipe_mp2vf_mgr));
+    assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
+                                            upipe_mpgvf_mgr));
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
     assert(!deleted_flow_id);
 
     upipe_mgr_release(upipe_ts_demux_mgr);
-    upipe_mgr_release(upipe_mp2vf_mgr);
+    upipe_mgr_release(upipe_mpgvf_mgr);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

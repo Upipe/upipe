@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe mp2v flow definition attributes for uref
+ * @short Upipe mpgv flow definition attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MP2V_FLOW_H_
+#ifndef _UPIPE_UREF_MPGV_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_MP2V_FLOW_H_
+#define _UPIPE_UREF_MPGV_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,7 +37,7 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_SMALL_UNSIGNED(mp2v_flow, profilelevel, "mp2v.profilelevel",
+UREF_ATTR_SMALL_UNSIGNED(mpgv_flow, profilelevel, "mpgv.profilelevel",
         profile and level)
 
 #ifdef __cplusplus

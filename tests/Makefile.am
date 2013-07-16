@@ -139,7 +139,7 @@ check_PROGRAMS += \
 	upipe_ts_pmt_decoder_test \
 	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
-	upipe_mp2v_framer_test \
+	upipe_mpgv_framer_test \
 	upipe_rtp_prepend_test
 TESTS += \
 	uprobe_ts_log_test.sh \
@@ -154,7 +154,7 @@ TESTS += \
 	upipe_ts_pmt_decoder_test \
 	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
-	upipe_mp2v_framer_test \
+	upipe_mpgv_framer_test \
 	upipe_rtp_prepend_test
 endif
 
@@ -192,7 +192,7 @@ upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-upipe_mp2v_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
+upipe_mpgv_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@

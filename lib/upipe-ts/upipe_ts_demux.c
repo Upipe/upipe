@@ -128,8 +128,8 @@ struct upipe_ts_demux_mgr {
     /* ES */
     /** pointer to ts_pesd manager */
     struct upipe_mgr *ts_pesd_mgr;
-    /** pointer to mp2vf manager */
-    struct upipe_mgr *mp2vf_mgr;
+    /** pointer to mpgvf manager */
+    struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
     struct upipe_mgr *h264f_mgr;
 
@@ -652,14 +652,15 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
         return true;
     }
 
-    if (!ubase_ncmp(def, "block.mpeg2video.") &&
-        ts_demux_mgr->mp2vf_mgr != NULL) {
-        /* allocate mp2vf subpipe */
+    if ((!ubase_ncmp(def, "block.mpeg2video.") ||
+         !ubase_ncmp(def, "block.mpeg1video.")) &&
+        ts_demux_mgr->mpgvf_mgr != NULL) {
+        /* allocate mpgvf subpipe */
         struct upipe *output =
-            upipe_flow_alloc(ts_demux_mgr->mp2vf_mgr,
+            upipe_flow_alloc(ts_demux_mgr->mpgvf_mgr,
                 uprobe_pfx_adhoc_alloc(
                     &upipe_ts_demux_output->last_subpipe_probe,
-                    UPROBE_LOG_DEBUG, "mp2vf"),
+                    UPROBE_LOG_DEBUG, "mpgvf"),
                 flow_def);
         if (unlikely(output == NULL))
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -672,7 +673,7 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
 
     if (!ubase_ncmp(def, "block.h264.") &&
         ts_demux_mgr->h264f_mgr != NULL) {
-        /* allocate mp2vf subpipe */
+        /* allocate mpgvf subpipe */
         struct upipe *output =
             upipe_flow_alloc(ts_demux_mgr->h264f_mgr,
                 uprobe_pfx_adhoc_alloc(
@@ -987,6 +988,23 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
     unsigned int pmtd_desc_size = va_arg(args, unsigned int);
 
     switch (streamtype) {
+        case 0x1: {
+            struct uref *flow_def =
+                uref_dup(upipe_ts_demux_program->flow_def_input);
+            if (likely(flow_def != NULL &&
+                       uref_flow_set_def(flow_def, "block.mpeg1video.pic.") &&
+                       uref_flow_set_raw_def(flow_def,
+                           "block.mpegts.mpegtspes.mpeg1video.pic.") &&
+                       uref_ts_flow_set_pid(flow_def, pid) &&
+                       uref_flow_set_program_va(flow_def, "%u,",
+                           upipe_ts_demux_program->program) &&
+                       uref_ts_flow_set_max_delay(flow_def, MAX_DELAY_STILL)))
+                upipe_split_throw_add_flow(upipe, pid, flow_def);
+
+            if (flow_def != NULL)
+                uref_free(flow_def);
+            break;
+        }
         case 0x2: {
             struct uref *flow_def =
                 uref_dup(upipe_ts_demux_program->flow_def_input);
@@ -998,6 +1016,41 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
                        uref_flow_set_program_va(flow_def, "%u,",
                            upipe_ts_demux_program->program) &&
                        uref_ts_flow_set_max_delay(flow_def, MAX_DELAY_STILL)))
+                upipe_split_throw_add_flow(upipe, pid, flow_def);
+
+            if (flow_def != NULL)
+                uref_free(flow_def);
+            break;
+        }
+        case 0x3:
+        case 0x4: {
+            struct uref *flow_def =
+                uref_dup(upipe_ts_demux_program->flow_def_input);
+            if (likely(flow_def != NULL &&
+                       uref_flow_set_def(flow_def, "block.mp2.sound.") &&
+                       uref_flow_set_raw_def(flow_def,
+                           "block.mpegts.mpegtspes.mp2.sound.") &&
+                       uref_ts_flow_set_pid(flow_def, pid) &&
+                       uref_flow_set_program_va(flow_def, "%u,",
+                           upipe_ts_demux_program->program) &&
+                       uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
+                upipe_split_throw_add_flow(upipe, pid, flow_def);
+
+            if (flow_def != NULL)
+                uref_free(flow_def);
+            break;
+        }
+        case 0xf: {
+            struct uref *flow_def =
+                uref_dup(upipe_ts_demux_program->flow_def_input);
+            if (likely(flow_def != NULL &&
+                       uref_flow_set_def(flow_def, "block.aac.sound.") &&
+                       uref_flow_set_raw_def(flow_def,
+                           "block.mpegts.mpegtspes.aac.sound.") &&
+                       uref_ts_flow_set_pid(flow_def, pid) &&
+                       uref_flow_set_program_va(flow_def, "%u,",
+                           upipe_ts_demux_program->program) &&
+                       uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
                 upipe_split_throw_add_flow(upipe, pid, flow_def);
 
             if (flow_def != NULL)
@@ -2153,8 +2206,8 @@ static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
         upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
     if (ts_demux_mgr->ts_pesd_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
-    if (ts_demux_mgr->mp2vf_mgr != NULL)
-        upipe_mgr_release(ts_demux_mgr->mp2vf_mgr);
+    if (ts_demux_mgr->mpgvf_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     if (ts_demux_mgr->h264f_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->h264f_mgr);
 
@@ -2186,7 +2239,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
 
-    ts_demux_mgr->mp2vf_mgr = NULL;
+    ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
 
     ts_demux_mgr->mgr.signature = UPIPE_TS_DEMUX_SIGNATURE;
@@ -2243,7 +2296,7 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_pmtd, TS_PMTD)
         GET_SET_MGR(ts_pesd, TS_PESD)
 
-        GET_SET_MGR(mp2vf, MP2VF)
+        GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
 #undef GET_SET_MGR
 

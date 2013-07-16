@@ -22,34 +22,34 @@
  * @short Upipe module building frames from chunks of an ISO 13818-2 stream
  */
 
-#ifndef _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
+#ifndef _UPIPE_FRAMERS_UPIPE_MPGV_FRAMER_H_
 /** @hidden */
-#define _UPIPE_FRAMERS_UPIPE_MP2V_FRAMER_H_
+#define _UPIPE_FRAMERS_UPIPE_MPGV_FRAMER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
 
-#define UPIPE_MP2VF_SIGNATURE UBASE_FOURCC('m','2','v','f')
+#define UPIPE_MPGVF_SIGNATURE UBASE_FOURCC('m','p','v','f')
 /** We only accept the ISO 13818-2 elementary stream. */
-#define UPIPE_MP2VF_EXPECTED_FLOW_DEF "block.mpeg2video."
+#define UPIPE_MPGVF_EXPECTED_FLOW_DEF "block.mpeg2video."
 
-/** @This extends upipe_command with specific commands for mp2v framer. */
-enum upipe_mp2vf_command {
-    UPIPE_MP2VF_SENTINEL = UPIPE_CONTROL_LOCAL,
+/** @This extends upipe_command with specific commands for mpgv framer. */
+enum upipe_mpgvf_command {
+    UPIPE_MPGVF_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the current setting for sequence header insertion (int *) */
-    UPIPE_MP2VF_GET_SEQUENCE_INSERTION,
+    UPIPE_MPGVF_GET_SEQUENCE_INSERTION,
     /** sets or unsets the sequence header insertion (int) */
-    UPIPE_MP2VF_SET_SEQUENCE_INSERTION
+    UPIPE_MPGVF_SET_SEQUENCE_INSERTION
 };
 
-/** @This returns the management structure for all mp2vf pipes.
+/** @This returns the management structure for all mpgvf pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_mp2vf_mgr_alloc(void);
+struct upipe_mgr *upipe_mpgvf_mgr_alloc(void);
 
 /** @This returns the current setting for sequence header insertion.
  *
@@ -57,12 +57,12 @@ struct upipe_mgr *upipe_mp2vf_mgr_alloc(void);
  * @param val_p filled with the current setting
  * @return false in case of error
  */
-static inline bool upipe_mp2vf_get_sequence_insertion(struct upipe *upipe,
+static inline bool upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
                                                       bool *val_p)
 {
     int val;
-    bool ret = upipe_control(upipe, UPIPE_MP2VF_GET_SEQUENCE_INSERTION,
-                             UPIPE_MP2VF_SIGNATURE, &val);
+    bool ret = upipe_control(upipe, UPIPE_MPGVF_GET_SEQUENCE_INSERTION,
+                             UPIPE_MPGVF_SIGNATURE, &val);
     *val_p = !!val;
     return ret;
 }
@@ -75,11 +75,11 @@ static inline bool upipe_mp2vf_get_sequence_insertion(struct upipe *upipe,
  * @param val true for sequence header insertion
  * @return false in case of error
  */
-static inline bool upipe_mp2vf_set_sequence_insertion(struct upipe *upipe,
+static inline bool upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
                                                       bool val)
 {
-    return upipe_control(upipe, UPIPE_MP2VF_SET_SEQUENCE_INSERTION,
-                         UPIPE_MP2VF_SIGNATURE, val ? 1 : 0);
+    return upipe_control(upipe, UPIPE_MPGVF_SET_SEQUENCE_INSERTION,
+                         UPIPE_MPGVF_SIGNATURE, val ? 1 : 0);
 }
 
 #ifdef __cplusplus
