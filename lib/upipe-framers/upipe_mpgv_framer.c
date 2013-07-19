@@ -241,7 +241,6 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_flush_dts(upipe);
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
-    upipe_mpgvf->acquired = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -479,6 +478,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     }
 
     if (unlikely(!ret)) {
+        uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }

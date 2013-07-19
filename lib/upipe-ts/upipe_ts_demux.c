@@ -128,6 +128,8 @@ struct upipe_ts_demux_mgr {
     /* ES */
     /** pointer to ts_pesd manager */
     struct upipe_mgr *ts_pesd_mgr;
+    /** pointer to mpgaf manager */
+    struct upipe_mgr *mpgaf_mgr;
     /** pointer to mpgvf manager */
     struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
@@ -648,6 +650,25 @@ static bool upipe_ts_demux_output_plumber(struct uprobe *uprobe,
         else {
             upipe_set_output(subpipe, output);
             upipe_release(output);
+        }
+        return true;
+    }
+
+    if ((!ubase_ncmp(def, "block.mp2.") ||
+         !ubase_ncmp(def, "block.aac.")) &&
+        ts_demux_mgr->mpgaf_mgr != NULL) {
+        /* allocate mpgaf subpipe */
+        struct upipe *output =
+            upipe_flow_alloc(ts_demux_mgr->mpgaf_mgr,
+                uprobe_pfx_adhoc_alloc(
+                    &upipe_ts_demux_output->last_subpipe_probe,
+                    UPROBE_LOG_DEBUG, "mpgaf"),
+                flow_def);
+        if (unlikely(output == NULL))
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        else {
+            upipe_set_output(subpipe, output);
+            upipe_ts_demux_output_store_last_subpipe(upipe, output);
         }
         return true;
     }
@@ -2206,6 +2227,8 @@ static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
         upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
     if (ts_demux_mgr->ts_pesd_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
+    if (ts_demux_mgr->mpgaf_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->mpgaf_mgr);
     if (ts_demux_mgr->mpgvf_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     if (ts_demux_mgr->h264f_mgr != NULL)
@@ -2239,6 +2262,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
 
+    ts_demux_mgr->mpgaf_mgr = NULL;
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
 
@@ -2296,6 +2320,7 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_pmtd, TS_PMTD)
         GET_SET_MGR(ts_pesd, TS_PESD)
 
+        GET_SET_MGR(mpgaf, MPGAF)
         GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
 #undef GET_SET_MGR

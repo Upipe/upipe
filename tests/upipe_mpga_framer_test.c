@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short unit tests for MPEG-2 video framer module
+ * @short unit tests for MPEG-1 layers 1, 2 or 3 audio framer module
  */
 
 #undef NDEBUG
@@ -48,7 +48,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
+#include <upipe-framers/upipe_mpga_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -57,7 +57,8 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#include <bitstream/mpeg/mp2v.h>
+#include <bitstream/mpeg/mpga.h>
+#include <bitstream/mpeg/aac.h>
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
@@ -78,13 +79,17 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
-        case UPROBE_NEW_FLOW_DEF:
             break;
+        case UPROBE_NEW_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            uref_dump(flow_def, upipe->uprobe);
+            break;
+        }
     }
     return true;
 }
 
-/** helper phony pipe to test upipe_mpgvf */
+/** helper phony pipe to test upipe_mpgaf */
 static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
                                 uint32_t signature, va_list args)
 {
@@ -94,7 +99,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_mpgvf */
+/** helper phony pipe to test upipe_mpgaf */
 static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
@@ -108,36 +113,22 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     uref_clock_get_systime_rap(uref, &systime_rap);
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_dts_orig(uref, &dts_orig);
-    switch (nb_packets) {
-        case 0:
-            assert(size == MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
-                    MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4);
-            assert(systime_rap == 42);
-            assert(pts_orig == 27000000);
-            assert(dts_orig == 27000000);
-            break;
-        case 1:
-            assert(size == MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
-                    MP2VEND_HEADER_SIZE);
-            assert(systime_rap == 42);
-            assert(pts_orig == UINT64_MAX);
-            assert(dts_orig == 27000000 + 40 * 27000);
-            break;
-        default:
-            assert(0);
-    }
+    assert(size == 768);
+    assert(systime_rap == 42);
+    assert(pts_orig == 27000000);
+    assert(dts_orig == 27000000);
     uref_free(uref);
     nb_packets++;
 }
 
-/** helper phony pipe to test upipe_mpgvf */
+/** helper phony pipe to test upipe_mpgaf */
 static void test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_mpgvf */
+/** helper phony pipe to test upipe_mpgaf */
 static struct upipe_mgr test_mgr = {
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
@@ -171,105 +162,96 @@ int main(int argc, char *argv[])
     assert(log != NULL);
 
     struct uref *uref;
-    uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
+    uref = uref_block_flow_alloc_def(uref_mgr, "mp2.sound.");
     assert(uref != NULL);
 
     struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
-    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-    assert(upipe_mpgvf_mgr != NULL);
-    struct upipe *upipe_mpgvf = upipe_flow_alloc(upipe_mpgvf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgvf"),
+    struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
+    assert(upipe_mpgaf_mgr != NULL);
+    struct upipe *upipe_mpgaf = upipe_flow_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"),
             uref);
-    assert(upipe_mpgvf != NULL);
-    assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    assert(upipe_mpgaf != NULL);
+    assert(upipe_set_output(upipe_mpgaf, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;
     int size;
 
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 +
-            MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
-            (MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4) * 2 +
-            MP2VEND_HEADER_SIZE);
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 + 768 + MPGA_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
     assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == 42 + MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
-            (MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4) * 2 +
-            MP2VEND_HEADER_SIZE);
-    memset(buffer, 0, 42);
+    assert(size == 42 + 768 + MPGA_HEADER_SIZE);
+    memset(buffer, 0, 42 + 768 + MPGA_HEADER_SIZE);
 
     buffer += 42;
-    mp2vseq_init(buffer);
-    mp2vseq_set_horizontal(buffer, 720);
-    mp2vseq_set_vertical(buffer, 576);
-    mp2vseq_set_aspect(buffer, MP2VSEQ_ASPECT_16_9);
-    mp2vseq_set_framerate(buffer, MP2VSEQ_FRAMERATE_25);
-    mp2vseq_set_bitrate(buffer, 2000000/400);
-    mp2vseq_set_vbvbuffer(buffer, 1835008/16/1024);
-    buffer += MP2VSEQ_HEADER_SIZE;
+    mpga_set_sync(buffer);
+    mpga_set_layer(buffer, MPGA_LAYER_2);
+    mpga_set_bitrate_index(buffer, 0xc); /* 256 kbits/s */
+    mpga_set_sampling_freq(buffer, 0x1); /* 48 kHz */
+    mpga_set_mode(buffer, MPGA_MODE_STEREO);
 
-    mp2vseqx_init(buffer);
-    mp2vseqx_set_profilelevel(buffer,
-                              MP2VSEQX_PROFILE_MAIN | MP2VSEQX_LEVEL_MAIN);
-    mp2vseqx_set_chroma(buffer, MP2VSEQX_CHROMA_420);
-    mp2vseqx_set_horizontal(buffer, 0);
-    mp2vseqx_set_vertical(buffer, 0);
-    mp2vseqx_set_bitrate(buffer, 0);
-    mp2vseqx_set_vbvbuffer(buffer, 0);
-    buffer += MP2VSEQX_HEADER_SIZE;
+    buffer += 768;
+    mpga_set_sync(buffer);
+    mpga_set_layer(buffer, MPGA_LAYER_2);
+    mpga_set_bitrate_index(buffer, 0xc); /* 256 kbits/s */
+    mpga_set_sampling_freq(buffer, 0x1); /* 48 kHz */
+    mpga_set_mode(buffer, MPGA_MODE_STEREO);
 
-    mp2vpic_init(buffer);
-    mp2vpic_set_temporalreference(buffer, 0);
-    mp2vpic_set_codingtype(buffer, MP2VPIC_TYPE_I);
-    mp2vpic_set_vbvdelay(buffer, UINT16_MAX);
-    buffer += MP2VPIC_HEADER_SIZE;
-
-    mp2vpicx_init(buffer);
-    mp2vpicx_set_fcode00(buffer, 0);
-    mp2vpicx_set_fcode01(buffer, 0);
-    mp2vpicx_set_fcode10(buffer, 0);
-    mp2vpicx_set_fcode11(buffer, 0);
-    mp2vpicx_set_intradc(buffer, 0);
-    mp2vpicx_set_structure(buffer, MP2VPICX_FRAME_PICTURE);
-    mp2vpicx_set_tff(buffer);
-    buffer += MP2VPICX_HEADER_SIZE;
-
-    mp2vstart_init(buffer, 1);
-    buffer += 4;
-
-    mp2vpic_init(buffer);
-    mp2vpic_set_temporalreference(buffer, 2);
-    mp2vpic_set_codingtype(buffer, MP2VPIC_TYPE_P);
-    mp2vpic_set_vbvdelay(buffer, UINT16_MAX);
-    buffer += MP2VPIC_HEADER_SIZE;
-
-    mp2vpicx_init(buffer);
-    mp2vpicx_set_fcode00(buffer, 0);
-    mp2vpicx_set_fcode01(buffer, 0);
-    mp2vpicx_set_fcode10(buffer, 0);
-    mp2vpicx_set_fcode11(buffer, 0);
-    mp2vpicx_set_intradc(buffer, 0);
-    mp2vpicx_set_structure(buffer, MP2VPICX_FRAME_PICTURE);
-    mp2vpicx_set_tff(buffer);
-    buffer += MP2VPICX_HEADER_SIZE;
-
-    mp2vstart_init(buffer, 1);
-    buffer += 4;
-
-    mp2vend_init(buffer);
     uref_block_unmap(uref, 0);
     uref_clock_set_pts_orig(uref, 27000000);
     uref_clock_set_dts_orig(uref, 27000000);
     uref_clock_set_systime(uref, 84);
     uref_clock_set_systime_rap(uref, 42);
-    upipe_input(upipe_mpgvf, uref, NULL);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 1);
+
+    upipe_release(upipe_mpgaf);
+
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
+    assert(uref != NULL);
+
+    upipe_mpgaf = upipe_flow_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"),
+            uref);
+    assert(upipe_mpgaf != NULL);
+    assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 + 768 + ADTS_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 42 + 768 + ADTS_HEADER_SIZE);
+    memset(buffer, 0, 42 + 768 + ADTS_HEADER_SIZE);
+
+    buffer += 42;
+    adts_set_sync(buffer);
+    adts_set_sampling_freq(buffer, 0x3); /* 48 kHz */
+    adts_set_channels(buffer, 2);
+    adts_set_length(buffer, 768);
+    adts_set_num_blocks(buffer, 0);
+
+    buffer += 768;
+    adts_set_sync(buffer);
+    adts_set_sampling_freq(buffer, 0x3); /* 48 kHz */
+    adts_set_channels(buffer, 2);
+    adts_set_length(buffer, 768);
+    adts_set_num_blocks(buffer, 0);
+
+    uref_block_unmap(uref, 0);
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_systime(uref, 84);
+    uref_clock_set_systime_rap(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
     assert(nb_packets == 2);
 
-    upipe_release(upipe_mpgvf);
-    upipe_mgr_release(upipe_mpgvf_mgr);
+    upipe_release(upipe_mpgaf);
+    upipe_mgr_release(upipe_mpgaf_mgr);
 
     test_free(upipe_sink);
 
