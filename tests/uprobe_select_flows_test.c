@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 
     struct uref *flow_def;
     const char *flows;
-    flow_def = uref_sound_flow_alloc_def(uref_mgr, 1, 1);
+    flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
     assert(flow_def != NULL);
     add_flows = 42;
     del_flows = 0;

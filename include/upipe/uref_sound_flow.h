@@ -42,7 +42,7 @@ extern "C" {
 #include <stdbool.h>
 
 /** @internal flow definition prefix for packed sound allocator */
-#define UREF_SOUND_FLOW_DEF "block.sound."
+#define UREF_SOUND_FLOW_DEF "block."
 
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",
@@ -58,17 +58,20 @@ UREF_ATTR_UNSIGNED(sound_flow, samples, "s.samples", number of samples)
 /** @This allocates a control packet to define a new sound flow.
  *
  * @param mgr uref management structure
+ * @param format format string
  * @param channels number of channels
  * @param sample_size size in octets of a sample of an audio channel
  * @return pointer to uref control packet, or NULL in case of error
  */
 static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
+                                                     const char *format,
                                                      uint8_t channels,
                                                      uint8_t sample_size)
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_def(uref, UREF_SOUND_FLOW_DEF) &&
+    if (unlikely(!(uref_flow_set_def_va(uref, UREF_SOUND_FLOW_DEF "%s" "sound.",
+                                        format) &&
                    uref_sound_flow_set_channels(uref, channels) &&
                    uref_sound_flow_set_sample_size(uref, sample_size)))) {
         uref_free(uref);

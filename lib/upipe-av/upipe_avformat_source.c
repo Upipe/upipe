@@ -504,8 +504,12 @@ static struct uref *alloc_raw_audio_def(struct uref_mgr *uref_mgr,
     if (unlikely(codec->bits_per_coded_sample % 8))
         return NULL;
 
+    const char *def = upipe_av_to_flow_def(codec->codec_id);
+    if (unlikely(def == NULL))
+        return NULL;
+
     struct uref *flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, codec->channels,
+        uref_sound_flow_alloc_def(uref_mgr, def, codec->channels,
                                   codec->bits_per_coded_sample / 8);
     if (unlikely(flow_def == NULL))
         return NULL;

@@ -400,10 +400,11 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
         }
         case AVMEDIA_TYPE_AUDIO: {
             context->get_buffer = upipe_avcdec_get_buffer_audio;
+            context->sample_fmt = AV_SAMPLE_FMT_S16;
             /* TODO: set attributes/need a real ubuf_audio structure (?) */
             if (!upipe_avcdec->output_flow) {
                 struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
-                uref_flow_set_def(outflow, UREF_SOUND_FLOW_DEF);
+                uref_flow_set_def(outflow, "block.pcm_s16le.sound.");
 #if 0
                 uref_sound_flow_set_channels(outflow, context->channels);
                 uref_sound_flow_set_sample_size(outflow,
