@@ -86,7 +86,7 @@ static inline bool upipe_glx_sink_init(struct upipe *upipe, int x, int y,
                          x, y, width, height);
 }
 
-/** @This returns the management structure for all avformat sources.
+/** @This returns the management structure for all glx sinks.
  *
  * @return pointer to manager
  */

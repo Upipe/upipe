@@ -27,9 +27,9 @@
  * @short Upipe MacOSX AudioQueue sink module.
  */
 
-#ifndef _UPIPE_GL_UPIPE_OSX_AUDIOQUEUE_SINK_H_
+#ifndef _UPIPE_OSX_UPIPE_OSX_AUDIOQUEUE_SINK_H_
 /** @hidden */
-#define _UPIPE_GL_UPIPE_OSX_AUDIOQUEUE_SINK_H_
+#define _UPIPE_OSX_UPIPE_OSX_AUDIOQUEUE_SINK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,7 +38,7 @@ extern "C" {
 
 #define UPIPE_OSX_AUDIOQUEUE_SINK_SIGNATURE UBASE_FOURCC('o', 's', 'x', 'a')
 
-/** @This returns the management structure for all avformat sources.
+/** @This returns the management structure for all osx_audioqueue sinks.
  *
  * @return pointer to manager
  */
