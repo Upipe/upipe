@@ -55,6 +55,8 @@
 
       @item @ref ubuf_block_alloc shall not return a segmented block, ie. subsequent calls to @ref ubuf_block_read or @ref ubuf_block_write shall return the entire memory area.
 
+      @item Block ubufs containing raw sound samples must contain an integral number of frames (ie. group of interleaved channels). The block ubuf may be segmented, but segmentations must happen on frame boundaries.
+
     @end list
 
   @end section

@@ -115,6 +115,10 @@ endif
 if HAVE_GLX
 check_PROGRAMS += upipe_glx_sink_test
 endif
+
+if HAVE_ALSA
+check_PROGRAMS += upipe_alsa_sink_test
+endif
 endif
 
 
@@ -226,3 +230,5 @@ upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libup
 
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 upipe_x264_test_CFLAGS = $(X264_CFLAGS) -Wall
+
+upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la

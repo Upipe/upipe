@@ -47,6 +47,8 @@ AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
 AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, true) AM_CONDITIONAL(HAVE_OSX_DARWIN, true)], AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, false))
 
+AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
+
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])
@@ -114,6 +116,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-filters/Makefile
                  include/upipe-x264/Makefile
                  include/upipe-osx/Makefile
+                 include/upipe-alsa/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -137,6 +140,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-x264/libupipe_x264.pc
                  lib/upipe-osx/Makefile
                  lib/upipe-osx/libupipe_osx.pc
+                 lib/upipe-alsa/Makefile
+                 lib/upipe-alsa/libupipe_alsa.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
