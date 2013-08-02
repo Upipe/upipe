@@ -48,6 +48,9 @@
 #include <stdarg.h>
 #include <assert.h>
 
+/** @This is the minimum amount of time before presenting a flow. */
+#define UPIPE_TRICKP_PTS_DELAY (UCLOCK_FREQ / 10)
+
 /** @hidden */
 static uint64_t upipe_trickp_get_systime(struct upipe *upipe, uint64_t ts);
 /** @hidden */
@@ -155,10 +158,8 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
                ubase_ncmp(def, "pic.sub.")) {
         if (!ubase_ncmp(def, "pic."))
             upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
-        else if (!ubase_ncmp(def, "sound.") || !ubase_ncmp(def, "block.sound."))
-            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
         else
-            upipe_warn_va(upipe, "unhandled flow definition %s", def);
+            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
     }
     return upipe;
 }
@@ -356,7 +357,8 @@ static void upipe_trickp_check_start(struct upipe *upipe)
     }
 
     upipe_trickp->ts_origin = earliest_ts;
-    upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock);
+    upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock) +
+                                   UPIPE_TRICKP_PTS_DELAY;
 
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =
