@@ -20,7 +20,7 @@
 
 /** @file
  * @short Upipe module building frames from an ISO 13818-3 or 7 stream
- * This frame supports levels 1, 2, 3 of ISO/IEC 11179-3 and ISO/IEC 13818-3,
+ * This framer supports levels 1, 2, 3 of ISO/IEC 11179-3 and ISO/IEC 13818-3,
  * and ISO/IEC 13818-7 (ADTS AAC) streams
  */
 
@@ -101,6 +101,8 @@ struct upipe_mpgaf {
     /* sync parsing stuff */
     /** number of octets in a frame */
     size_t frame_size;
+    /** number of octets in a frame with padding enabled */
+    size_t frame_size_padding;
     /** number of samples in a frame */
     size_t samples;
     /** number of samples per second */
@@ -111,8 +113,8 @@ struct upipe_mpgaf {
     uint64_t duration_residue;
     /** true we have had a discontinuity recently */
     bool got_discontinuity;
-    /** pointer to a sync header */
-    struct ubuf *sync_header;
+    /** sync header */
+    uint8_t sync_header[MPGA_HEADER_SIZE + ADTS_HEADER_SIZE]; // to be sure
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -182,8 +184,8 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
 
     const char *def;
     if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 (ubase_ncmp(def, "block.mp2.sound") &&
-                  ubase_ncmp(def, "block.aac.sound")))) {
+                 (ubase_ncmp(def, "block.mp2.sound.") &&
+                  ubase_ncmp(def, "block.aac.sound.")))) {
         uref_free(flow_def);
         upipe_mpgaf_free_flow(upipe);
         return NULL;
@@ -197,7 +199,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
     upipe_mpgaf_flush_pts(upipe);
-    upipe_mpgaf->sync_header = NULL;
+    upipe_mpgaf->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -263,40 +265,29 @@ static bool upipe_mpgaf_check_frame(struct upipe *upipe, bool *ready_p)
 static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    struct ubuf *ubuf = ubuf_block_splice(upipe_mpgaf->next_uref->ubuf, 0,
-                                          MPGA_HEADER_SIZE);
-    if (unlikely(ubuf == NULL))
-        return true; /* not enough data */
+    uint8_t header[MPGA_HEADER_SIZE];
+    uref_block_extract(upipe_mpgaf->next_uref, 0, MPGA_HEADER_SIZE, header);
 
-    if (likely(upipe_mpgaf->sync_header != NULL &&
-               ubuf_block_equal(ubuf, upipe_mpgaf->sync_header))) {
-        /* identical sync, but we rotate the buffer to free the older one */
-        ubuf_free(upipe_mpgaf->sync_header);
-        upipe_mpgaf->sync_header = ubuf;
-        upipe_mpgaf->next_frame_size = upipe_mpgaf->frame_size;
+    if (likely(mpga_sync_compare(header, upipe_mpgaf->sync_header))) {
+        /* identical sync */
+        upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
+                                       upipe_mpgaf->frame_size_padding :
+                                       upipe_mpgaf->frame_size;
         return true;
     }
 
-    uint8_t header[MPGA_HEADER_SIZE];
-    ubuf_block_extract(ubuf, 0, MPGA_HEADER_SIZE, header);
-
     if (mpga_get_bitrate_index(header) == MPGA_BITRATE_INVALID ||
         mpga_get_sampling_freq(header) == MPGA_SAMPLERATE_INVALID ||
-        mpga_get_emphasis(header) == MPGA_EMPHASIS_INVALID) {
-        ubuf_free(ubuf);
+        mpga_get_emphasis(header) == MPGA_EMPHASIS_INVALID)
         return false;
-    }
 
     struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def_input);
     if (unlikely(flow_def == NULL)) {
-        ubuf_free(ubuf);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
 
-    if (upipe_mpgaf->sync_header != NULL)
-        ubuf_free(upipe_mpgaf->sync_header);
-    upipe_mpgaf->sync_header = ubuf;
+    memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
 
     bool ret = true;
     bool mpeg25 = mpga_get_mpeg25(header);
@@ -317,24 +308,35 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     switch (layer) {
         case 1:
             upipe_mpgaf->frame_size =
-                (96000 * octetrate / upipe_mpgaf->samplerate + padding) * 4;
+                (96000 * octetrate / upipe_mpgaf->samplerate) * 4;
+            upipe_mpgaf->frame_size_padding =
+                (96000 * octetrate / upipe_mpgaf->samplerate + 1) * 4;
             upipe_mpgaf->samples = 384;
+            ret = ret && uref_flow_set_def(flow_def, "block.mp2.sound.");
             break;
         case 2:
             upipe_mpgaf->frame_size =
-                1152000 * octetrate / upipe_mpgaf->samplerate + padding;
+                1152000 * octetrate / upipe_mpgaf->samplerate;
+            upipe_mpgaf->frame_size_padding =
+                1152000 * octetrate / upipe_mpgaf->samplerate + 1;
             upipe_mpgaf->samples = 1152;
+            ret = ret && uref_flow_set_def(flow_def, "block.mp2.sound.");
             break;
         case 3:
             if (id || mpeg25) {
                 upipe_mpgaf->frame_size =
-                    576000 * octetrate / upipe_mpgaf->samplerate + padding;
+                    576000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    576000 * octetrate / upipe_mpgaf->samplerate + 1;
                 upipe_mpgaf->samples = 576;
             } else {
                 upipe_mpgaf->frame_size =
-                    1152000 * octetrate / upipe_mpgaf->samplerate + padding;
+                    1152000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    1152000 * octetrate / upipe_mpgaf->samplerate + 1;
                 upipe_mpgaf->samples = 1152;
             }
+            ret = ret && uref_flow_set_def(flow_def, "block.mp3.sound.");
             break;
     }
 
@@ -346,9 +348,6 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate * 1000);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def,
                                                    max_octetrate * 1000);
-    if (upipe_mpgaf->frame_size)
-        ret = ret && uref_block_flow_set_size(flow_def,
-                                              upipe_mpgaf->frame_size);
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
@@ -356,7 +355,9 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         return false;
     }
     upipe_mpgaf_store_flow_def(upipe, flow_def);
-    upipe_mpgaf->next_frame_size = upipe_mpgaf->frame_size;
+    upipe_mpgaf->next_frame_size = padding ?
+                                   upipe_mpgaf->frame_size_padding :
+                                   upipe_mpgaf->frame_size;
     return true;
 }
 
@@ -373,29 +374,19 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
                             header))
         return true; /* not enough data */
 
-    /* We do not compare the whole of the fixed header, because it is shared
-     * with the variable header. */
-    struct ubuf *ubuf = ubuf_block_splice(upipe_mpgaf->next_uref->ubuf, 0, 4);
-    if (unlikely(ubuf == NULL))
-        return true; /* not enough data */
-
-    if (likely(upipe_mpgaf->sync_header != NULL &&
-               ubuf_block_equal(ubuf, upipe_mpgaf->sync_header) &&
-               upipe_mpgaf->channels == adts_get_channels(header))) {
-        /* identical sync, but we rotate the buffer to free the older one */
-        ubuf_free(upipe_mpgaf->sync_header);
-        upipe_mpgaf->sync_header = ubuf;
+    if (likely(adts_sync_compare(header, upipe_mpgaf->sync_header))) {
+        /* identical sync */
         upipe_mpgaf->next_frame_size = adts_get_length(header);
         return true;
     }
 
-    if (upipe_mpgaf->sync_header != NULL)
-        ubuf_free(upipe_mpgaf->sync_header);
-    upipe_mpgaf->sync_header = ubuf;
+    if (!adts_samplerate_table[adts_get_sampling_freq(header)])
+        return false;
+
+    memcpy(upipe_mpgaf->sync_header, header, ADTS_HEADER_SIZE);
 
     struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def_input);
     if (unlikely(flow_def == NULL)) {
-        ubuf_free(ubuf);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -407,8 +398,15 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
                            (1 + adts_get_num_blocks(header));
     upipe_mpgaf->channels = adts_get_channels(header);
 
+    ret = ret && uref_flow_set_def(flow_def, "block.aac.sound.");
     ret = ret && uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels);
-    ret = ret && uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate);
+    if (upipe_mpgaf->samplerate <= 24000)
+        /* assume SBR on low frequency streams */
+        ret = ret && uref_sound_flow_set_rate(flow_def,
+                                              upipe_mpgaf->samplerate * 2);
+    else
+        ret = ret && uref_sound_flow_set_rate(flow_def,
+                                              upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
 
     if (unlikely(!ret)) {
@@ -472,7 +470,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
     lldiv_t div = lldiv((uint64_t)upipe_mpgaf->samples * UCLOCK_FREQ +
                         upipe_mpgaf->duration_residue,
                         upipe_mpgaf->samplerate);
-    uint8_t duration = div.quot;
+    uint64_t duration = div.quot;
     upipe_mpgaf->duration_residue = div.rem;
 
     bool ret = true;
@@ -648,8 +646,6 @@ static void upipe_mpgaf_free(struct upipe *upipe)
 
     if (upipe_mpgaf->flow_def_input != NULL)
         uref_free(upipe_mpgaf->flow_def_input);
-    if (upipe_mpgaf->sync_header != NULL)
-        ubuf_free(upipe_mpgaf->sync_header);
 
     upipe_mpgaf_free_flow(upipe);
 }
