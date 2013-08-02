@@ -53,6 +53,7 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPIPE_TRICKP_PTS_DELAY (UCLOCK_FREQ / 10)
 
 static unsigned int count_pic = 0;
 static unsigned int count_sound = 0;
@@ -94,7 +95,7 @@ static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
     assert(uref_flow_get_def(flow_def, &def));
     if (!strcmp(def, "pic."))
         test_pipe->count_p = &count_pic;
-    else if (!strcmp(def, "sound."))
+    else if (!strcmp(def, "block.pcm_s16le.sound."))
         test_pipe->count_p = &count_sound;
     else
         test_pipe->count_p = &count_subpic;
@@ -109,9 +110,9 @@ static void trickp_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     uint64_t systime;
     if (uref_clock_get_pts_sys(uref, &systime))
-        *test_pipe->count_p += systime;
+        *test_pipe->count_p += systime - UPIPE_TRICKP_PTS_DELAY;
     if (uref_clock_get_dts_sys(uref, &systime))
-        *test_pipe->count_p += systime;
+        *test_pipe->count_p += systime - UPIPE_TRICKP_PTS_DELAY;
     uref_free(uref);
 }
 
@@ -186,7 +187,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "sound."));
+    assert(uref_flow_set_def(uref, "block.pcm_s16le.sound."));
 
     struct upipe *upipe_sink_sound = upipe_flow_alloc(&trickp_test_mgr, log,
                                                       uref);
@@ -200,7 +201,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "subpic."));
+    assert(uref_flow_set_def(uref, "pic.sub."));
 
     struct upipe *upipe_sink_subpic = upipe_flow_alloc(&trickp_test_mgr, log,
                                                     uref);
