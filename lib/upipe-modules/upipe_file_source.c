@@ -97,6 +97,8 @@ struct upipe_fsrc {
     int fd;
     /** file path */
     char *path;
+    /** true for the first packet output */
+    bool first;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -137,6 +139,7 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc_init_read_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_fsrc->fd = -1;
     upipe_fsrc->path = NULL;
+    upipe_fsrc->first = true;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -198,15 +201,21 @@ static void upipe_fsrc_worker(struct upump *upump)
     }
     if (unlikely(ret == 0)) {
         uref_free(uref);
-        if (likely(upipe_fsrc->uclock == NULL)) {
+        if (upipe_fsrc->regular_file) {
             upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
             upipe_fsrc_set_upump(upipe, NULL);
             upipe_throw_source_end(upipe);
         }
         return;
     }
-    if (unlikely(upipe_fsrc->uclock != NULL))
+    if (unlikely(upipe_fsrc->uclock != NULL)) {
+        if (upipe_fsrc->first) {
+            uref_clock_set_pts_sys(uref, systime);
+            uref_clock_set_pts(uref, systime);
+        }
+        upipe_fsrc->first = false;
         uref_clock_set_systime(uref, systime);
+    }
     if (unlikely(ret != upipe_fsrc->read_size))
         uref_block_resize(uref, 0, ret);
     upipe_fsrc_output(upipe, uref, upump);
