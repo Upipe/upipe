@@ -26,7 +26,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_chunk_stream.c \
 	upipe_setattr.c \
 	upipe_match_attr.c \
-	upipe_setrap.c
+	upipe_setrap.c \
+	upipe_sine_wave_source.c
 
 if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \
@@ -35,6 +36,7 @@ endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_CFLAGS = -Wall
+libupipe_modules_la_LIBADD = -lm
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_modules.pc
