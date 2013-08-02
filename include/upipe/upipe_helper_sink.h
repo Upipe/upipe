@@ -195,7 +195,10 @@ static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->UREFS)) != NULL) {                       \
-        if (!OUTPUT(upipe, uref_from_uchain(uchain), NULL)) {               \
+        bool (*output)(struct upipe *, struct uref *, struct upump *) =     \
+            OUTPUT;                                                         \
+        if (output != NULL &&                                               \
+            !output(upipe, uref_from_uchain(uchain), NULL)) {               \
             ulist_unshift(&s->UREFS, uchain);                               \
             return false;                                                   \
         }                                                                   \
