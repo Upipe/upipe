@@ -4,11 +4,9 @@ use strict;
 use warnings;
 use Getopt::Std;
 
-my %opts;
-getopt('I', \%opts);
-my $file = $opts{'I'}."/libavcodec/avcodec.h";
+my $file = "$ARGV[0]";
 
-(-f "$file") or die "couldn't find libavcodec/avcodec.h!";
+(-f "$file") or die "couldn't find $file !";
 open(FILE, '-|', "$ENV{'CPP'} -E \"$file\"") or die "couldn't open $file";
 
 print <<EOF;

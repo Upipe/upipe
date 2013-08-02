@@ -184,7 +184,7 @@ static int upipe_avcdec_get_buffer(struct AVCodecContext *context, AVFrame *fram
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
 
-    upipe_dbg_va(upipe, "Allocating frame for %u (%p) - %ux%u",
+    upipe_dbg_va(upipe, "Allocating frame for %"PRIu64" (%p) - %dx%d",
                  framenum, frame->opaque, frame->width, frame->height);
 
     if (unlikely(!upipe_avcdec->pixfmt)) {
@@ -292,7 +292,7 @@ static void upipe_avcdec_release_buffer(struct AVCodecContext *context, AVFrame 
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
 
-    upipe_dbg_va(upipe, "Releasing frame %u (%p)", (uint64_t) framenum, uref);
+    upipe_dbg_va(upipe, "Releasing frame %"PRIu64" (%p)", (uint64_t) framenum, uref);
 
     if (likely(uref->ubuf)) {
         planes = upipe_avcdec_from_upipe(upipe)->pixfmt->planes;
@@ -347,7 +347,7 @@ static bool upipe_avcdec_open_codec(struct upipe *upipe, AVCodec *codec,
         while (upipe_avcdec_process_buf(upipe, NULL, 0, NULL));
 
         /* now close codec and free extradata if any */
-        upipe_notice_va(upipe, "avcodec context (%s) closed (%d)",
+        upipe_notice_va(upipe, "avcodec context (%s) closed (%"PRIu64")",
                     upipe_avcdec->context->codec->name, upipe_avcdec->counter);
         avcodec_close(upipe_avcdec->context);
         if (upipe_avcdec->context->extradata_size > 0) {
@@ -780,7 +780,7 @@ static bool upipe_avcdec_process_buf(struct upipe *upipe, uint8_t *buf,
             if (gotframe) {
                 uref_pic_get_number(frame->opaque, &framenum);
 
-                upipe_dbg_va(upipe, "%u\t - Picture decoded ! %dx%d - %u",
+                upipe_dbg_va(upipe, "%"PRIu64"\t - Picture decoded ! %dx%d - %"PRIu64,
                         upipe_avcdec->counter, frame->width, frame->height, (uint64_t) framenum);
 
                 upipe_avcdec_output_frame(upipe, frame, upump);
@@ -854,7 +854,8 @@ static bool upipe_avcdec_input_packet(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    upipe_dbg_va(upipe, "Received packet %u - size : %u", upipe_avcdec->counter, insize);
+    upipe_dbg_va(upipe, "Received packet %"PRIu64" - size : %zu",
+                 upipe_avcdec->counter, insize);
     inbuf = malloc(insize + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(!inbuf)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);

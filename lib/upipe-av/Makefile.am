@@ -5,7 +5,7 @@ endif
 
 nodist_libupipe_av_la_SOURCES = upipe_av_codecs.h
 CLEANFILES = upipe_av_codecs.h
-libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_avformat_source.c upipe_avcodec_decode.c upipe_avcodec_encode.c upipe_av_codecs.pl
+libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_avformat_source.c upipe_avcodec_decode.c upipe_avcodec_encode.c upipe_av_codecs.pl avcodec_include.h
 libupipe_av_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(builddir)
 libupipe_av_la_CFLAGS = -Wall @AVFORMAT_CFLAGS@
 libupipe_av_la_LIBADD = @AVFORMAT_LIBS@ $(top_builddir)/lib/upipe-modules/libupipe_modules.la
@@ -13,7 +13,7 @@ libupipe_av_la_LIBADD = @AVFORMAT_LIBS@ $(top_builddir)/lib/upipe-modules/libupi
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc
 
-upipe_av_codecs.h: upipe_av_codecs.pl 
-	CPP="$(CPP)" $(PERL) $(srcdir)/upipe_av_codecs.pl @AVFORMAT_CFLAGS@ > $@
+upipe_av_codecs.h: upipe_av_codecs.pl avcodec_include.h
+	CPP="$(CPP)" CFLAGS="@AVFORMAT_CFLAGS@ $(CFLAGS)" $(PERL) $(srcdir)/upipe_av_codecs.pl $(srcdir)/avcodec_include.h > $@
 
 FORCE:
