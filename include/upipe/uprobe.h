@@ -122,6 +122,8 @@ enum uprobe_error_code {
     UPROBE_ERR_UPUMP,
     /** invalid argument */
     UPROBE_ERR_INVALID,
+    /** error in external library */
+    UPROBE_ERR_EXTERNAL,
 
     /** non-standard error codes implemented by a module type can start from
      * there (first arg = signature) */

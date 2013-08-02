@@ -72,6 +72,7 @@ static const char *uprobe_log_errcode(enum uprobe_error_code errcode)
         case UPROBE_ERR_ALLOC: return "allocation error";
         case UPROBE_ERR_UPUMP: return "upump error";
         case UPROBE_ERR_INVALID: return "invalid argument";
+        case UPROBE_ERR_EXTERNAL: return "external error";
         default: return "unknown error";
     }
 }
