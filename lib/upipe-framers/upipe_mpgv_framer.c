@@ -116,6 +116,8 @@ struct upipe_mpgvf {
     struct urational fps;
     /** closed GOP */
     bool closed_gop;
+    /** sample aspect ratio */
+    struct urational sar;
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -386,8 +388,6 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
 
     ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
     upipe_mpgvf->progressive_sequence = progressive;
-    if (progressive)
-        ret = ret && uref_pic_set_progressive(flow_def);
     ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
     ret = ret && uref_pic_flow_set_planes(flow_def, 0);
     ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
@@ -418,32 +418,30 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
 
     ret = ret && uref_pic_set_hsize(flow_def, horizontal);
     ret = ret && uref_pic_set_vsize(flow_def, vertical);
-    struct urational sar;
     switch (aspect) {
         case MP2VSEQ_ASPECT_SQUARE:
-            sar.num = sar.den = 1;
+            upipe_mpgvf->sar.num = upipe_mpgvf->sar.den = 1;
             break;
         case MP2VSEQ_ASPECT_4_3:
-            sar.num = vertical * 4;
-            sar.den = horizontal * 3;
-            urational_simplify(&sar);
+            upipe_mpgvf->sar.num = vertical * 4;
+            upipe_mpgvf->sar.den = horizontal * 3;
+            urational_simplify(&upipe_mpgvf->sar);
             break;
         case MP2VSEQ_ASPECT_16_9:
-            sar.num = vertical * 16;
-            sar.den = horizontal * 9;
-            urational_simplify(&sar);
+            upipe_mpgvf->sar.num = vertical * 16;
+            upipe_mpgvf->sar.den = horizontal * 9;
+            urational_simplify(&upipe_mpgvf->sar);
             break;
         case MP2VSEQ_ASPECT_2_21:
-            sar.num = vertical * 221;
-            sar.den = horizontal * 100;
-            urational_simplify(&sar);
+            upipe_mpgvf->sar.num = vertical * 221;
+            upipe_mpgvf->sar.den = horizontal * 100;
+            urational_simplify(&upipe_mpgvf->sar);
             break;
         default:
             upipe_err_va(upipe, "invalid aspect ratio %d", aspect);
             uref_free(flow_def);
             return false;
     }
-    ret = ret && uref_pic_set_aspect(flow_def, sar);
     ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
     upipe_mpgvf->fps = frame_rate;
     ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
@@ -749,6 +747,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         ret = ret && uref_pic_set_progressive(uref);
     }
 
+    ret = ret && uref_pic_set_aspect(uref, upipe_mpgvf->sar);
     ret = ret && uref_clock_set_duration(uref, *duration_p);
     if (unlikely(!ret)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);

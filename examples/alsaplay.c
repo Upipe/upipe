@@ -72,7 +72,7 @@
 const char *device = "default";
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uprobe *logger;
-struct uprobe uprobe_outputs;
+struct uprobe uprobe_avcdec;
 
 struct ubuf_mgr *block_mgr;
 struct upump_mgr *upump_mgr;
@@ -82,7 +82,7 @@ bool inited = false;
 static bool catch_src(struct uprobe *uprobe, struct upipe *upipe,
                       enum uprobe_event event, va_list args)
 {
-    switch(event) {
+    switch (event) {
         case UPROBE_SOURCE_END:
             upipe_release(upipe);
             return true;
@@ -94,62 +94,66 @@ static bool catch_src(struct uprobe *uprobe, struct upipe *upipe,
 static bool catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
                         enum uprobe_event event, va_list args)
 {
-    switch (event) {
-        default:
-            return false;
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(uprobe, upipe, event, args, &flow_def, &def))
+        return false;
 
-        case UPROBE_NEW_FLOW_DEF: {
-            if (inited)
-                return true;
-            inited = true;
-            struct uref *flow_def = va_arg(args, struct uref *);
-            const char *def = NULL;
-            uref_flow_get_def(flow_def, &def);
-            if (ubase_ncmp(def, "block.mp2.sound.") &&
-                ubase_ncmp(def, "block.mp3.sound.") &&
-                ubase_ncmp(def, "block.aac.sound.")) {
-                upipe_warn_va(upipe, "flow def %s is not supported", def);
-                return false;
-            }
-
-            /* avcdec */
-            struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-            struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdec"),
-                    flow_def);
-            upipe_set_ubuf_mgr(avcdec, block_mgr);
-            upipe_set_output(upipe, avcdec);
-            upipe_get_flow_def(avcdec, &flow_def);
-
-            /* trick play */
-            struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
-            struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp"));
-            upipe_mgr_release(upipe_trickp_mgr);
-            upipe_set_uclock(trickp, uclock);
-            struct upipe *trickp_audio = upipe_flow_alloc_sub(trickp,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp audio"),
-                    flow_def);
-            upipe_release(trickp);
-            upipe_set_output(avcdec, trickp_audio);
-            upipe_release(avcdec);
-
-            /* alsa sink */
-            struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
-            struct upipe *alsink = upipe_flow_alloc(upipe_alsink_mgr,
-                            uprobe_pfx_adhoc_alloc(logger, loglevel, "alsink"),
-                            flow_def);
-            upipe_mgr_release(upipe_alsink_mgr);
-            upipe_set_upump_mgr(alsink, upump_mgr);
-            upipe_set_uclock(alsink, uclock);
-            if (!upipe_set_uri(alsink, device))
-                exit(1);
-            upipe_set_output(trickp_audio, alsink);
-            upipe_release(trickp_audio);
-            upipe_release(alsink);
-            return true;
-        }
+    if (inited)
+        return true;
+    inited = true;
+    if (ubase_ncmp(def, "block.mp2.sound.") &&
+        ubase_ncmp(def, "block.mp3.sound.") &&
+        ubase_ncmp(def, "block.aac.sound.")) {
+        upipe_warn_va(upipe, "flow def %s is not supported", def);
+        return false;
     }
+
+    /* avcdec */
+    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
+            uprobe_pfx_adhoc_alloc_va(&uprobe_avcdec, loglevel, "avcdec"),
+            flow_def);
+    upipe_set_ubuf_mgr(avcdec, block_mgr);
+    upipe_set_output(upipe, avcdec);
+    upipe_release(avcdec);
+    return true;
+}
+
+static bool catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
+                         enum uprobe_event event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(uprobe, upipe, event, args, &flow_def, &def))
+        return false;
+
+    /* trick play */
+    struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
+    struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,
+            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp"));
+    upipe_mgr_release(upipe_trickp_mgr);
+    upipe_set_uclock(trickp, uclock);
+    struct upipe *trickp_audio = upipe_flow_alloc_sub(trickp,
+            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp audio"),
+            flow_def);
+    upipe_release(trickp);
+    upipe_set_output(upipe, trickp_audio);
+
+    /* alsa sink */
+    struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
+    struct upipe *alsink = upipe_flow_alloc(upipe_alsink_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, loglevel, "alsink"),
+                    flow_def);
+    upipe_mgr_release(upipe_alsink_mgr);
+    upipe_set_upump_mgr(alsink, upump_mgr);
+    upipe_set_uclock(alsink, uclock);
+    if (!upipe_set_uri(alsink, device))
+        exit(1);
+    upipe_set_output(trickp_audio, alsink);
+    upipe_release(trickp_audio);
+    upipe_release(alsink);
+    return true;
 }
 
 void usage(const char *argv0)
@@ -201,6 +205,9 @@ int main(int argc, char **argv)
     /* framer probe */
     struct uprobe uprobe_mpgaf;
     uprobe_init(&uprobe_mpgaf, catch_mpgaf, logger);
+
+    /* avcdec probe */
+    uprobe_init(&uprobe_avcdec, catch_avcdec, logger);
 
     /* uclock */
     uclock = uclock_std_alloc(0);

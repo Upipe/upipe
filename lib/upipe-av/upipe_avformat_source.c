@@ -825,6 +825,7 @@ static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->url = strdup(url);
+    upipe_avfsrc->probed = false;
     upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
     return true;
 }

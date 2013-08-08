@@ -23,13 +23,15 @@
 
       @item A @ref upipe shall not use a blocking system call. It should register a file descriptor or a timer with @ref upump_alloc_fd_read, @ref upump_alloc_fd_write, or @ref upump_alloc_timer.
 
-      @item Managers for various control structures (@ref uref_mgr, @ref ubuf_mgr, @ref upump_mgr, etc.) passed to a pipe shouldn't be set to NULL after having been set to a vlue different from NULL.
+      @item Managers for various control structures (@ref uref_mgr, @ref ubuf_mgr, @ref upump_mgr, etc.) passed to a pipe shouldn't be set to NULL after having been set to a value different from NULL.
 
       @item The @ref upump passed to @ref upipe_input is only valid for the time of execution of @ref upipe_input, and mustn't be kept by any downstream pipe. If blocking is desired, @ref upump_blocker_alloc should be used.
 
       @item The @ref uref passed to @ref upipe_input belongs to the callee, and must be freed at some point.
 
       @item All parameters to @ref upipe_control belong to the caller. The @ref upipe must either duplicate or use (increment the refcount) structures it wants to keep. However if the control command is supposed to return information (such as control structures) from the @ref upipe, the structure belongs to the callee and should be duplicated or used, if required, by the caller.
+
+      @item A pipe may send an empty uref (pointing to a NULL ubuf) to indicate minor flow definition changes (such as change of language). However it may not be the first packet output by the pipe. Reversely, a pipe is not required to deal with an empty uref if it is the first packet it receives.
 
     @end list
 

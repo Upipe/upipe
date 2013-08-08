@@ -171,7 +171,8 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
     } else if (!upipe_qsink_output(upipe, uref, upump)) {
         upipe_qsink_hold_sink(upipe, uref);
         upipe_qsink_block_sink(upipe, upump);
-        upump_start(upipe_qsink->upump);
+        if (upipe_qsink->upump != NULL)
+            upump_start(upipe_qsink->upump);
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);

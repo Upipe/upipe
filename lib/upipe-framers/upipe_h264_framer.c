@@ -142,6 +142,8 @@ struct upipe_h264f {
     bool pic_struct_present;
     /** true if bottom_field_pic_order_in_frame is present */
     bool bf_poc;
+    /** sample aspect ratio */
+    struct urational sar;
 
     /* parsing results - slice */
     /** field */
@@ -885,6 +887,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     upipe_h264f_stream_fill_bits(s, 1);
     bool vui = !!ubuf_block_stream_show_bits(s, 1);
     ubuf_block_stream_skip_bits(s, 1);
+    upipe_h264f->sar.den = 0;
     if (vui) {
         upipe_h264f_stream_fill_bits(s, 1);
         bool ar_present = !!ubuf_block_stream_show_bits(s, 1);
@@ -895,17 +898,14 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             ubuf_block_stream_skip_bits(s, 8);
             if (ar_idc > 0 &&
                 ar_idc < sizeof(sar_from_idc) / sizeof(struct urational)) {
-                struct urational sar = sar_from_idc[ar_idc];
-                ret = ret && uref_pic_set_aspect(flow_def, sar);
+                upipe_h264f->sar = sar_from_idc[ar_idc];
             } else if (ar_idc == H264VUI_AR_EXTENDED) {
-                struct urational sar;
                 upipe_h264f_stream_fill_bits(s, 16);
-                sar.num = ubuf_block_stream_show_bits(s, 16);
+                upipe_h264f->sar.num = ubuf_block_stream_show_bits(s, 16);
                 ubuf_block_stream_skip_bits(s, 16);
                 upipe_h264f_stream_fill_bits(s, 16);
-                sar.den = ubuf_block_stream_show_bits(s, 16);
+                upipe_h264f->sar.den = ubuf_block_stream_show_bits(s, 16);
                 ubuf_block_stream_skip_bits(s, 16);
-                ret = ret && uref_pic_set_aspect(flow_def, sar);
             } else
                 upipe_warn_va(upipe, "unknown aspect ratio idc %"PRIu8, ar_idc);
         }
@@ -1290,6 +1290,8 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     }
     if (duration)
         ret = ret && uref_clock_set_duration(uref, duration);
+    if (upipe_h264f->sar.den)
+        ret = ret && uref_pic_set_aspect(uref, upipe_h264f->sar);
 
 #define SET_TIMESTAMP(name)                                                 \
     if (name != UINT64_MAX)                                                 \

@@ -25,6 +25,7 @@
 
 /** @file
  * @short upipe/avutil pixelformat conversion
+ * This is also used in swscale.
  */
 
 #ifndef _UPIPE_AV_UPIPE_AV_PIXFMT_H_

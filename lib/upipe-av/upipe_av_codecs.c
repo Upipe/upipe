@@ -31,6 +31,11 @@
 #include "upipe_av_internal.h"
 #include <upipe_av_codecs.h> // auto-generated header
 
+/** @This allows to convert from avcodec ID to flow definition.
+ *
+ * @param id avcodec ID
+ * @return flow definition, or NULL if not found
+ */
 const char *upipe_av_to_flow_def(enum AVCodecID id)
 {
     for (unsigned int i = 0; upipe_av_codecs[i].id; i++)
@@ -39,6 +44,11 @@ const char *upipe_av_to_flow_def(enum AVCodecID id)
     return NULL;
 }
 
+/** @This allows to convert to avcodec ID from flow definition.
+ *
+ * @param flow_def flow definition
+ * @return avcodec ID, or 0 if not found
+ */
 enum AVCodecID upipe_av_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_codecs[i].id; i++)

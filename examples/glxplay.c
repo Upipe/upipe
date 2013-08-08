@@ -181,6 +181,7 @@ struct upipe_glxplayer {
     struct uprobe uprobe_demux_s;
     struct uprobe uprobe_demux_output_s;
     struct uprobe uprobe_dec_qsrc_s;
+    struct uprobe uprobe_avcdec_s;
     struct uprobe uprobe_glx_qsrc_s;
     struct uprobe uprobe_glx_s;
 
@@ -270,7 +271,8 @@ static bool upipe_glxplayer_catch_source(struct uprobe *uprobe,
         case UPROBE_SOURCE_END: {
             struct upipe_glxplayer *glxplayer =
                 container_of(uprobe, struct upipe_glxplayer, uprobe_source_s);
-            upipe_set_uri(upipe, glxplayer->uri);
+            if (glxplayer->upipe_ts)
+                upipe_set_uri(upipe, glxplayer->uri);
             return true;
         }
         default:
@@ -442,16 +444,41 @@ static bool upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
                 container_of(uprobe, struct upipe_glxplayer, uprobe_dec_qsrc_s);
             struct uref *flow_def = va_arg(args, struct uref *);
             struct upipe *avcdec = upipe_flow_alloc(glxplayer->upipe_avcdec_mgr,
-                    uprobe_pfx_adhoc_alloc_va(glxplayer->uprobe_logger,
+                    uprobe_pfx_adhoc_alloc_va(&glxplayer->uprobe_avcdec_s,
                                               glxplayer->loglevel, "avcdec"),
                     flow_def);
-            if (unlikely(avcdec == NULL) ||
-                         !upipe_get_flow_def(avcdec, &flow_def)) {
+            if (unlikely(avcdec == NULL))
                 return true;
-            }
             upipe_set_ubuf_mgr(avcdec, glxplayer->yuv_mgr);
+            upipe_set_upump_mgr(avcdec, glxplayer->upump_mgr_dec);
+            upipe_avcdec_set_option(avcdec, "threads", "2");
             upipe_set_output(upipe, avcdec);
+            upipe_release(avcdec);
+            return true;
+        }
+        default:
+            return false;
+    }
+}
 
+/** @internal @This catches events of the avcdec.
+ *
+ * @param uprobe pointer to probe
+ * @param upipe pointer to pipe throwing the event
+ * @param event event thrown
+ * @param args optional event-specific parameters
+ * @return true if the event was caught
+ */
+static bool upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
+                                         struct upipe *upipe,
+                                         enum uprobe_event event,
+                                         va_list args)
+{
+    switch (event) {
+        case UPROBE_NEW_FLOW_DEF: {
+            struct upipe_glxplayer *glxplayer =
+                container_of(uprobe, struct upipe_glxplayer, uprobe_avcdec_s);
+            struct uref *flow_def = va_arg(args, struct uref *);
             struct upipe *deint =
                 upipe_flow_alloc(glxplayer->upipe_filter_blend_mgr,
                     uprobe_pfx_adhoc_alloc(glxplayer->uprobe_logger,
@@ -459,12 +486,10 @@ static bool upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
                     flow_def);
             if (unlikely(deint == NULL ||
                          !upipe_get_flow_def(deint, &flow_def))) {
-                upipe_release(avcdec);
                 return true;
             }
             upipe_set_ubuf_mgr(deint, glxplayer->yuv_mgr);
-            upipe_set_output(avcdec, deint);
-            upipe_release(avcdec);
+            upipe_set_output(upipe, deint);
 
             struct upipe *yuvrgb = upipe_flow_alloc(glxplayer->upipe_sws_mgr,
                     uprobe_pfx_adhoc_alloc_va(glxplayer->uprobe_logger,
@@ -770,6 +795,10 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     /* probe specific to the dec queue source */
     uprobe_init(&glxplayer->uprobe_dec_qsrc_s,
                 upipe_glxplayer_catch_dec_qsrc, glxplayer->uprobe_logger);
+
+    /* probe specific to the avcdec */
+    uprobe_init(&glxplayer->uprobe_avcdec_s,
+                upipe_glxplayer_catch_avcdec, glxplayer->uprobe_logger);
 
     /* probe specific to the glx queue source */
     uprobe_init(&glxplayer->uprobe_glx_qsrc_s,

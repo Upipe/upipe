@@ -30,6 +30,7 @@ Upipe has the following optional dependencies:
       Tested with libav v9.7 (should work with libav from v0.8.7), and
       ffmpeg 0.11.1 up to 1.2.1 (although our code seems leaky with v1.2+,
       work in progress).
+      FFmpeg/libav needs to be configured with --enable-pic --enable-shared.
 @item perl is needed in the build process of upipe-av 
 @item @url http://www.videolan.org/developers/bitstream.html headers to build
       upipe-ts, upipe-framers, and a few upipe-modules components.
