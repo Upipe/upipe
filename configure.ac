@@ -147,3 +147,4 @@ AC_CONFIG_FILES([Makefile
 AC_OUTPUT
 
 grep "^#define HAVE_" config.h | sed -e 's/HAVE_/UPIPE_HAVE_/' > include/upipe/config.h
+grep "^#define WORDS_BIGENDIAN" config.h | sed -e 's/WORDS_BIGENDIAN/UPIPE_WORDS_BIGENDIAN/' >> include/upipe/config.h
