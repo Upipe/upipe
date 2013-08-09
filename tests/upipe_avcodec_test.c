@@ -106,6 +106,7 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_SINK_END:
         case UPROBE_NEED_UREF_MGR:
@@ -170,12 +171,11 @@ struct upipe *build_pipeline(const char *codec_def,
     }
     assert(upipe_set_output(avcenc, avcdec));
     upipe_release(avcdec);
-    upipe_get_flow_def(avcdec, &flow_def);
 
     /* /dev/null */
     struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num),
-        flow_def);
+        NULL);
     assert(null);
     upipe_null_dump_dict(null, true);
     upipe_set_output(avcdec, null);
@@ -213,8 +213,6 @@ void setcodec_idler(struct upump *upump)
         /* enough played with set_codec(), start source */
         thread->iteration = 0;
         upump_stop(upump);
-        struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
-        upipe_input(thread->avcenc, flow, thread->source);
         upump_start(thread->source);
         return;
     }
@@ -346,6 +344,9 @@ int main(int argc, char **argv)
     printf("Everything good so far, cleaning\n");
 
     /* clean managers and probes */
+    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(upipe_avcenc_mgr);
+    upipe_mgr_release(upipe_null_mgr);
     ubuf_mgr_release(block_mgr);
     ubuf_mgr_release(pic_mgr);
     uref_mgr_release(uref_mgr);

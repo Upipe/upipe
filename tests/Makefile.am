@@ -108,8 +108,8 @@ check_PROGRAMS += \
 	upipe_avformat_test \
 	upipe_avcodec_decode_test \
 	upipe_avcodec_test
-#TESTS += \
-#	upipe_avcodec_test
+TESTS += \
+	upipe_avcodec_test
 endif
 
 if HAVE_GLX

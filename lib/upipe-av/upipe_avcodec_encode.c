@@ -66,6 +66,9 @@
 #define EXPECTED_FLOW "pic."
 #define PREFIX_FLOW "block."
 
+static bool upipe_avcenc_encode_frame(struct upipe *upipe,
+                                      struct AVFrame *frame,
+                                      struct upump *upump);
 /** @internal @This handles incoming frames */
 static bool upipe_avcenc_input_frame(struct upipe *upipe,
                                      struct uref *uref, struct upump *upump);
@@ -174,7 +177,7 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
         /* first send empty packet to flush retained frames */
         upipe_dbg(upipe, "flushing frames in encoder");
         if (upipe_avcenc->context->codec->capabilities & CODEC_CAP_DELAY) {
-            while (upipe_avcenc_input_frame(upipe, NULL, NULL));
+            while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
         }
 
         /* now close codec */
@@ -289,6 +292,7 @@ static void upipe_avcenc_open_codec_cb(struct upump *upump)
         upipe_avcenc->upump_av_deal = NULL;
     }
 
+    upipe_use(upipe);
     /* real open_codec function */
     upipe_avcenc_open_codec(upipe);
 
@@ -296,8 +300,11 @@ static void upipe_avcenc_open_codec_cb(struct upump *upump)
     upipe_av_deal_yield(upump_av_deal);
     upump_free(upump_av_deal);
 
-    upipe_avcenc_unblock_sink(upipe);
-    upipe_avcenc_output_sink(upipe);
+    if (upipe_avcenc->context) {
+        upipe_avcenc_unblock_sink(upipe);
+        upipe_avcenc_output_sink(upipe);
+    }
+    upipe_release(upipe);
 }
 
 /** @internal @This wraps open_codec calls (upump/no-upump)
@@ -390,102 +397,28 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def)
     return true;
 }
 
-/** @internal @This handles incoming frames.
+/** @internal @This encodes incoming frames.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
+ * @param frame frame
  * @param upump upump structure
+ * @return true when a packet has been output
  */
-static bool upipe_avcenc_input_frame(struct upipe *upipe,
-                                     struct uref *uref, struct upump *upump)
+static bool upipe_avcenc_encode_frame(struct upipe *upipe,
+                                      struct AVFrame *frame,
+                                      struct upump *upump)
 {
-    const struct upipe_av_plane *plane = NULL;
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    struct upipe_avcodec_open_params *params = &upipe_avcenc->open_params;
-    AVFrame *frame;
+    const struct upipe_av_plane *plane = upipe_avcenc->pixfmt->planes;
     AVPacket avpkt;
-    size_t stride, width, height;
     int i, gotframe, ret, size;
     struct ubuf *ubuf_block;
     uint8_t *buf;
     uint64_t pts = 0;
 
-    if (likely(uref)) {
-        /* detect input format */
-        if (unlikely(!upipe_avcenc->pixfmt)) {
-            upipe_avcenc->pixfmt = upipe_av_pixfmt_from_ubuf(uref->ubuf);
-            if (unlikely(!upipe_avcenc->pixfmt)) {
-                upipe_warn(upipe, "unrecognized input format");
-                uref_free(uref);
-                return false;
-            }
-        }
-
-        uref_pic_size(uref, &width, &height, NULL);
-
-        /* open context */
-        if (unlikely(!upipe_avcenc->context)) {
-            if (!params->codec) {
-                uref_free(uref);
-                upipe_warn(upipe, "received frame but encoder is not set");
-                return false;
-            }
-
-            upipe_dbg_va(upipe, "received frame (%dx%d), opening codec",
-                                                            width, height);
-
-            params->width  = width;
-            params->height = height;
-            upipe_avcenc_open_codec_wrap(upipe);
-
-            /* if open_codec still pending, save uref and return */
-            if (!upipe_avcenc->context) {
-                upipe_avcenc_block_sink(upipe, upump);
-                upipe_avcenc_hold_sink(upipe, uref);
-                return false;
-            }
-        }
-
-        /* map input */
-        frame  = upipe_avcenc->frame;
-        plane = upipe_avcenc->pixfmt->planes;
-        for (i=0; i < 4 && plane[i].chroma; i++) {
-            uref_pic_plane_read(uref, plane[i].chroma,
-                    0, 0, -1, -1, (const uint8_t **)&frame->data[i]);
-            uref_pic_plane_size(uref, plane[i].chroma, &stride,
-                    NULL, NULL, NULL);
-            frame->linesize[i] = stride;
-        }
-
-        /* set pts (needed for uref/avpkt mapping) */
-        if (unlikely(!uref_clock_get_pts(uref, &pts) || pts == 0
-                                        || pts == AV_NOPTS_VALUE )) {
-            pts = upipe_avcenc->pts++;
-            uref_clock_set_pts(uref, pts);
-        } else {
-            upipe_avcenc->pts = pts;
-        }
-        frame->pts = pts;
-
-        /* store uref in mapping array */
-        for (i=0; i < upipe_avcenc->uref_max
-                  && upipe_avcenc->uref[i]; i++);
-        if (unlikely(i == upipe_avcenc->uref_max)) {
-            upipe_dbg_va(upipe, "mapping array too small (%d), resizing",
-                         upipe_avcenc->uref_max);
-            upipe_avcenc->uref = realloc(upipe_avcenc->uref,
-                                         2*upipe_avcenc->uref_max*sizeof(void*));
-            memset(upipe_avcenc->uref+upipe_avcenc->uref_max, 0,
-                   upipe_avcenc->uref_max * sizeof(void*));
-            upipe_avcenc->uref_max *= 2;
-        }
-        upipe_dbg_va(upipe, "uref %p stored at index %d", uref, i);
-        upipe_avcenc->uref[i] = uref;
-
-    } else {
+    if (unlikely(frame == NULL)) {
         /* uref == NULL, flushing encoder */
         upipe_dbg(upipe, "received null frame");
-        frame = NULL;
         if (unlikely(!upipe_avcenc->context ||
             !(upipe_avcenc->context->codec->capabilities & CODEC_CAP_DELAY))) {
                 return false;
@@ -498,15 +431,6 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
     avpkt.size = 0;
     gotframe = 0;
     ret = avcodec_encode_video2(upipe_avcenc->context, &avpkt, frame, &gotframe);
-
-    /* unmap input and clean */
-    if (likely(uref)) {
-        for (i=0; i < 4 && plane[i].chroma; i++) {
-            uref_pic_plane_unmap(uref, plane[i].chroma, 0, 0, -1, -1);
-            frame->data[i] = NULL;
-        }
-        ubuf_free(uref_detach_ubuf(uref));
-    }
 
     if (ret < 0) {
         upipe_warn(upipe, "error while encoding frame");
@@ -523,7 +447,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
         free(avpkt.data);
 
         /* find uref corresponding to avpkt */
-        uref = NULL;
+        struct uref *uref = NULL;
         for (i=0; i < upipe_avcenc->uref_max; i++) {
             if (upipe_avcenc->uref[i]) {
                 pts = 0;
@@ -540,12 +464,110 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
                                                                avpkt.pts);
             uref = uref_alloc(upipe_avcenc->uref_mgr);
         }
+        /* unmap input and clean */
+        for (i=0; i < 4 && plane[i].chroma; i++)
+            uref_pic_plane_unmap(uref, plane[i].chroma, 0, 0, -1, -1);
+        ubuf_free(uref_detach_ubuf(uref));
+
         uref_attach_ubuf(uref, ubuf_block);
 
         upipe_avcenc_output(upipe, uref, upump);
         return true;
     }
     return false;
+}
+
+/** @internal @This handles incoming frames.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump upump structure
+ * @return false if the frame couldn't be encoded yet
+ */
+static bool upipe_avcenc_input_frame(struct upipe *upipe,
+                                     struct uref *uref, struct upump *upump)
+{
+    const struct upipe_av_plane *plane = NULL;
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    struct upipe_avcodec_open_params *params = &upipe_avcenc->open_params;
+    AVFrame *frame;
+    size_t stride, width, height;
+    int i;
+    uint64_t pts = 0;
+
+    /* detect input format */
+    if (unlikely(!upipe_avcenc->pixfmt)) {
+        upipe_avcenc->pixfmt = upipe_av_pixfmt_from_ubuf(uref->ubuf);
+        if (unlikely(!upipe_avcenc->pixfmt)) {
+            upipe_warn(upipe, "unrecognized input format");
+            uref_free(uref);
+            return true;
+        }
+    }
+
+    uref_pic_size(uref, &width, &height, NULL);
+
+    /* open context */
+    if (unlikely(!upipe_avcenc->context)) {
+        if (!params->codec) {
+            uref_free(uref);
+            upipe_warn(upipe, "received frame but encoder is not set");
+            return true;
+        }
+
+        upipe_dbg_va(upipe, "received frame (%dx%d), opening codec",
+                                                        width, height);
+
+        params->width  = width;
+        params->height = height;
+        upipe_avcenc_open_codec_wrap(upipe);
+
+        /* if open_codec still pending, save uref and return */
+        if (!upipe_avcenc->context) {
+            upipe_avcenc_block_sink(upipe, upump);
+            upipe_avcenc_hold_sink(upipe, uref);
+            return false;
+        }
+    }
+
+    /* map input */
+    frame  = upipe_avcenc->frame;
+    plane = upipe_avcenc->pixfmt->planes;
+    for (i=0; i < 4 && plane[i].chroma; i++) {
+        uref_pic_plane_read(uref, plane[i].chroma,
+                0, 0, -1, -1, (const uint8_t **)&frame->data[i]);
+        uref_pic_plane_size(uref, plane[i].chroma, &stride,
+                NULL, NULL, NULL);
+        frame->linesize[i] = stride;
+    }
+
+    /* set pts (needed for uref/avpkt mapping) */
+    if (unlikely(!uref_clock_get_pts(uref, &pts) || pts == 0
+                                    || pts == AV_NOPTS_VALUE )) {
+        pts = upipe_avcenc->pts++;
+        uref_clock_set_pts(uref, pts);
+    } else {
+        upipe_avcenc->pts = pts;
+    }
+    frame->pts = pts;
+
+    /* store uref in mapping array */
+    for (i=0; i < upipe_avcenc->uref_max
+              && upipe_avcenc->uref[i]; i++);
+    if (unlikely(i == upipe_avcenc->uref_max)) {
+        upipe_dbg_va(upipe, "mapping array too small (%d), resizing",
+                     upipe_avcenc->uref_max);
+        upipe_avcenc->uref = realloc(upipe_avcenc->uref,
+                                     2*upipe_avcenc->uref_max*sizeof(void*));
+        memset(upipe_avcenc->uref+upipe_avcenc->uref_max, 0,
+               upipe_avcenc->uref_max * sizeof(void*));
+        upipe_avcenc->uref_max *= 2;
+    }
+    upipe_dbg_va(upipe, "uref %p stored at index %d", uref, i);
+    upipe_avcenc->uref[i] = uref;
+
+    upipe_avcenc_encode_frame(upipe, frame, upump);
+    return true;
 }
 
 /** @internal @This handles input uref.
