@@ -94,8 +94,11 @@ static inline struct upump *udeal_upump_alloc(struct udeal *udeal,
 static inline void udeal_start(struct udeal *udeal, struct upump *upump)
 {
     upump_start(upump);
-    if (likely(uatomic_fetch_add(&udeal->waiters, 1) == 0))
+    uint32_t waiters_before = uatomic_fetch_add(&udeal->waiters, 1);
+#ifndef UDEAL_DEBUG
+    if (likely(waiters_before == 0))
         upump->cb(upump);
+#endif
 }
 
 /** @This tries to grab the resource.
