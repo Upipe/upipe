@@ -580,11 +580,6 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
     if (frame->sample_aspect_ratio.num) {
         aspect.num = frame->sample_aspect_ratio.num;
         aspect.den = frame->sample_aspect_ratio.den;
-    } else if (context->sample_aspect_ratio.num) {
-        aspect.num = context->sample_aspect_ratio.num;
-        aspect.den = context->sample_aspect_ratio.den;
-    }
-    if (aspect.den) {
         urational_simplify(&aspect);
         ret = ret && uref_pic_set_aspect(uref, aspect);
     }
@@ -631,6 +626,14 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
             };
             urational_simplify(&fps);
             ret = ret && uref_pic_flow_set_fps(outflow, fps);
+        }
+        if (context->sample_aspect_ratio.num) {
+            struct urational sar = {
+                .num = context->sample_aspect_ratio.num,
+                .den = context->sample_aspect_ratio.den
+            };
+            urational_simplify(&sar);
+            ret = ret && uref_pic_set_aspect(outflow, aspect);
         }
         if (!ret) {
             uref_free(outflow);
@@ -779,6 +782,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVPacket avpkt;
+    memset(&avpkt, 0, sizeof(AVPacket));
     av_init_packet(&avpkt);
 
     /* avcodec input buffer needs to be at least 4-byte aligned and
@@ -1036,7 +1040,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     }
 
     const char *def;
-    int codec_id;
+    enum AVCodecID codec_id;
     AVCodec *codec;
     if (unlikely(!uref_flow_get_def(flow_def, &def) ||
                  !(codec_id =

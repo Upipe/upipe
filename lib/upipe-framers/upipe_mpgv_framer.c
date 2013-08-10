@@ -386,6 +386,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     } else
         upipe_mpgvf->progressive_sequence = true;
 
+    ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
     upipe_mpgvf->progressive_sequence = progressive;
     ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
@@ -442,7 +443,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             uref_free(flow_def);
             return false;
     }
-    ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
+    ret = ret && uref_pic_set_aspect(flow_def, upipe_mpgvf->sar);
     upipe_mpgvf->fps = frame_rate;
     ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
     ret = ret && uref_block_flow_set_cpb_buffer(flow_def,
@@ -747,7 +748,6 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         ret = ret && uref_pic_set_progressive(uref);
     }
 
-    ret = ret && uref_pic_set_aspect(uref, upipe_mpgvf->sar);
     ret = ret && uref_clock_set_duration(uref, *duration_p);
     if (unlikely(!ret)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
