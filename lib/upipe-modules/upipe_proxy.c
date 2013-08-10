@@ -85,12 +85,46 @@ static inline struct upipe_proxy_mgr *
 struct upipe_proxy {
     /** pointer to the superpipe */
     struct upipe *upipe_super;
+    /** probe to reroute events */
+    struct uprobe uprobe;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_proxy, upipe);
+
+/** @internal @This catches event from the super pipe to reroute them to us.
+ *
+ * @param uprobe pointer to probe
+ * @param upipe_super pointer to pipe throwing the event
+ * @param event event thrown
+ * @param args optional event-specific parameters
+ * @return true if the event was caught and handled
+ */
+static bool upipe_proxy_probe(struct uprobe *uprobe, struct upipe *upipe_super,
+                              enum uprobe_event event, va_list args)
+{
+    struct upipe_proxy *upipe_proxy = container_of(uprobe, struct upipe_proxy,
+                                                   uprobe);
+    struct upipe *upipe = upipe_proxy_to_upipe(upipe_proxy);
+
+    if (event == UPROBE_READY && upipe_proxy->upipe_super == NULL) {
+        upipe_proxy->upipe_super = upipe_super;
+        upipe->sub_mgr = upipe_super->sub_mgr;
+    }
+    if (upipe_super != upipe_proxy->upipe_super) {
+        uprobe_throw_va(upipe->uprobe, upipe_super, event, args);
+        return true;
+    }
+
+    upipe_throw_va(upipe, event, args);
+    if (event == UPROBE_DEAD && upipe_super == upipe_proxy->upipe_super) {
+        upipe_clean(upipe);
+        free(upipe_proxy);
+    }
+    return true;
+}
 
 /** @internal @This allocates a proxy input pipe.
  *
@@ -104,22 +138,25 @@ static struct upipe *upipe_proxy_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
-    struct upipe_proxy_mgr *proxy_mgr = upipe_proxy_mgr_from_upipe_mgr(mgr);
-    struct upipe *upipe_super = upipe_alloc_va(proxy_mgr->super_mgr, uprobe,
-                                               signature, args);
-    if (unlikely(upipe_super == NULL))
-        return NULL;
-
     struct upipe_proxy *upipe_proxy = malloc(sizeof(struct upipe_proxy));
-    if (unlikely(upipe_proxy == NULL)) {
-        upipe_release(upipe_super);
+    if (unlikely(upipe_proxy == NULL))
+        return NULL;
+    struct upipe *upipe = upipe_proxy_to_upipe(upipe_proxy);
+    upipe_init(upipe, mgr, uprobe);
+    uprobe_init(&upipe_proxy->uprobe, upipe_proxy_probe, NULL);
+    upipe_proxy->upipe_super = NULL;
+
+    struct upipe_proxy_mgr *proxy_mgr = upipe_proxy_mgr_from_upipe_mgr(mgr);
+    struct upipe *upipe_super = upipe_alloc_va(proxy_mgr->super_mgr,
+                                               &upipe_proxy->uprobe,
+                                               signature, args);
+    if (unlikely(upipe_super == NULL)) {
+        upipe_clean(upipe);
+        free(upipe_proxy);
         return NULL;
     }
-    struct upipe *upipe = upipe_proxy_to_upipe(upipe_proxy);
-    upipe_init(upipe, mgr, NULL);
-    upipe_proxy->upipe_super = upipe_super;
-    upipe->sub_mgr = upipe_super->sub_mgr;
-    upipe_throw_ready(upipe);
+    /* Defer initialization to catching ready event */
+
     return upipe;
 }
 
@@ -159,13 +196,9 @@ static void upipe_proxy_free(struct upipe *upipe)
     struct upipe_proxy_mgr *proxy_mgr =
         upipe_proxy_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_proxy *upipe_proxy = upipe_proxy_from_upipe(upipe);
-    struct upipe *upipe_super = upipe_proxy->upipe_super;
-    upipe_throw_dead(upipe);
     proxy_mgr->proxy_released(upipe_proxy->upipe_super);
-    upipe_clean(upipe);
-    free(upipe_proxy);
-
-    upipe_release(upipe_super);
+    upipe_release(upipe_proxy->upipe_super);
+    /* Defer deletion to catching dead event */
 }
 
 /** @This frees a upipe manager.
