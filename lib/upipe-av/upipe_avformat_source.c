@@ -335,27 +335,26 @@ static void upipe_avfsrc_abort_av_deal(struct upipe *upipe)
     }
 }
 
-/** @internal @This reads data from the source and subs it.
- * It is called either when the idler triggers (permanent storage mode) or
- * when data is available on the file descriptor (live stream mode).
+/** @internal @This finds the given id in the list of output subpipes.
  *
- * @param upump description structure of the read watcher
+ * @param upipe description structure of the pipe
+ * @param id ID of the stream
+ * @return a pointer to the sub pipe, or NULL if not found
  */
 static struct upipe_avfsrc_sub *upipe_avfsrc_find_output(struct upipe *upipe,
-                                                            uint64_t id)
+                                                         uint64_t id)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     struct uchain *uchain;
-    ulist_foreach(&upipe_avfsrc->subs, uchain) {
-        struct upipe_avfsrc_sub *output =
-            upipe_avfsrc_sub_from_uchain(uchain);
+    ulist_foreach (&upipe_avfsrc->subs, uchain) {
+        struct upipe_avfsrc_sub *output = upipe_avfsrc_sub_from_uchain(uchain);
         if (output->id == id)
             return output;
     }
     return NULL;
 }
 
-/** @internal @This reads data from the source and subs it.
+/** @internal @This reads data from the source and outputs it.
  * It is called either when the idler triggers (permanent storage mode) or
  * when data is available on the file descriptor (live stream mode).
  *
@@ -417,6 +416,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
     bool ret = true, ts = false;;
     if (upipe_avfsrc->uclock != NULL)
         ret = ret && uref_clock_set_systime(uref, systime);
+    if (pkt.flags & AV_PKT_FLAG_KEY)
+        ret = ret && uref_flow_set_random(uref);
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
         uint64_t dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
                             stream->time_base.den;
@@ -546,8 +547,8 @@ static struct uref *alloc_audio_def(struct uref_mgr *uref_mgr,
 
     CHK(uref_sound_flow_set_channels(flow_def, codec->channels))
     CHK(uref_sound_flow_set_rate(flow_def, codec->sample_rate))
-    if (codec->block_align)
-        CHK(uref_block_flow_set_size(flow_def, codec->block_align))
+    if (codec->frame_size)
+        CHK(uref_sound_flow_set_samples(flow_def, codec->frame_size))
     return flow_def;
 }
 
@@ -592,6 +593,12 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
                                  .den = codec->time_base.den };
         urational_simplify(&fps);
         CHK(uref_pic_flow_set_fps(flow_def, fps))
+    }
+    if (codec->sample_aspect_ratio.den) {
+        struct urational sar = { .num = codec->sample_aspect_ratio.num,
+                                 .den = codec->sample_aspect_ratio.den };
+        urational_simplify(&sar);
+        CHK(uref_pic_set_aspect(flow_def, sar));
     }
     return flow_def;
 }
@@ -743,7 +750,7 @@ static bool _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
 }
 
 /** @internal @This sets the content of an avformat option. It only take effect
- * after the next call to @ref upipe_avfsrc_set_url.
+ * after the next call to @ref upipe_set_uri.
  *
  * @param upipe description structure of the pipe
  * @param option name of the option
@@ -1033,7 +1040,7 @@ static void upipe_avfsrc_proxy_released(struct upipe *upipe)
     upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
 }
 
-/** @This returns the management structure for all avformat source pipes.
+/** @This returns the management structure for all avformat sources.
  *
  * @return pointer to manager
  */

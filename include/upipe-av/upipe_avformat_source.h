@@ -77,7 +77,7 @@ static inline bool upipe_avfsrc_get_option(struct upipe *upipe,
 }
 
 /** @This sets the content of an avformat option. It only takes effect after
- * the next call to @ref upipe_avfsrc_set_url.
+ * the next call to @ref upipe_set_uri.
  *
  * @param upipe description structure of the pipe
  * @param option name of the option

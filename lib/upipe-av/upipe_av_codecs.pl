@@ -21,8 +21,8 @@ my $suffix = ".pic.";
 
 while (<FILE>) {
 	if (/^\s*((AV_)?CODEC_ID_)([A-Za-z0-9_]*).*$/) {
-        my $enumprefix = $1;
-        my $codec = $3;
+		my $enumprefix = $1;
+		my $codec = $3;
 		if ($codec eq "FIRST_AUDIO") {
 			$suffix = ".sound.";
 		} elsif ($codec eq "FIRST_SUBTITLE") {
