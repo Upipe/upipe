@@ -53,7 +53,7 @@
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avformat_source.h>
-//#include <upipe-av/upipe_avformat_sink.h>
+#include <upipe-av/upipe_avformat_sink.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -75,76 +75,12 @@
 struct ubuf_mgr *ubuf_mgr;
 static struct uprobe *log;
 static struct upipe *upipe_avfsrc;
-static struct ulist upipe_avfsrc_outputs;
-
-struct test_output {
-    struct uchain uchain;
-    struct upipe *upipe_avfsrc_output;
-};
+static struct upipe *upipe_avfsink;
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d <delay>] [-a|-o] <source file> <sink file>\n", argv0);
-    fprintf(stdout, "-a : append\n");
-    fprintf(stdout, "-o : overwrite\n");
+    fprintf(stdout, "Usage: %s <source file> <sink file>\n", argv0);
     exit(EXIT_FAILURE);
 }
-
-/** helper phony pipe to test upipe_avformat */
-struct avformat_test {
-    unsigned int nb_packets;
-    size_t octets;
-    struct upipe upipe;
-};
-
-/** helper phony pipe to test upipe_avfsrc */
-static struct upipe *avformat_test_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         uint32_t signature, va_list args)
-{
-    struct avformat_test *avformat_test = malloc(sizeof(struct avformat_test));
-    assert(avformat_test != NULL);
-    upipe_init(&avformat_test->upipe, mgr, uprobe);
-    avformat_test->nb_packets = 0;
-    avformat_test->octets = 0;
-    upipe_throw_ready(&avformat_test->upipe);
-    return &avformat_test->upipe;
-}
-
-/** helper phony pipe to test upipe_avfsrc */
-static void avformat_test_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
-{
-    struct avformat_test *avformat_test =
-        container_of(upipe, struct avformat_test, upipe);
-    assert(uref != NULL);
-    size_t size;
-    assert(uref_block_size(uref, &size));
-    uref_free(uref);
-    avformat_test->nb_packets++;
-    avformat_test->octets += size;
-}
-
-/** helper phony pipe to test upipe_avfsrc */
-static void avformat_test_free(struct upipe *upipe)
-{
-    struct avformat_test *avformat_test =
-        container_of(upipe, struct avformat_test, upipe);
-    upipe_dbg_va(upipe, "got %u packets totalizing %zu octets",
-                 avformat_test->nb_packets, avformat_test->octets);
-    upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(avformat_test);
-}
-
-/** helper phony pipe to test upipe_avfsrc */
-static struct upipe_mgr avformat_test_mgr = {
-    .upipe_alloc = avformat_test_alloc,
-    .upipe_input = avformat_test_input,
-    .upipe_control = NULL,
-    .upipe_free = avformat_test_free,
-
-    .upipe_mgr_free = NULL
-};
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -156,7 +92,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_SOURCE_END:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
         case UPROBE_SPLIT_DEL_FLOW:
@@ -175,52 +110,34 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             uint64_t id;
             assert(uref_av_flow_get_id(flow_def, &id));
 
-            struct test_output *output = malloc(sizeof(struct test_output));
-            assert(output != NULL);
-            uchain_init(&output->uchain);
-            ulist_add(&upipe_avfsrc_outputs, &output->uchain);
-            output->upipe_avfsrc_output = upipe_flow_alloc_sub(upipe_avfsrc,
+            struct upipe *upipe_avfsrc_output =
+                upipe_flow_alloc_sub(upipe_avfsrc,
                     uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
-                                              "output %"PRIu64, id), flow_def);
-            assert(output->upipe_avfsrc_output != NULL);
-            upipe_get_flow_def(output->upipe_avfsrc_output, &flow_def);
-            struct upipe *upipe_sink = upipe_flow_alloc(&avformat_test_mgr,
+                                              "src %"PRIu64, id), flow_def);
+            assert(upipe_avfsrc_output != NULL);
+            assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
+            assert(upipe_get_flow_def(upipe_avfsrc_output, &flow_def));
+
+            struct upipe *upipe_sink = upipe_flow_alloc_sub(upipe_avfsink,
                     uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
                                               "sink %"PRIu64, id),
                     flow_def);
             assert(upipe_sink != NULL);
-            assert(upipe_set_ubuf_mgr(output->upipe_avfsrc_output, ubuf_mgr));
-            assert(upipe_set_output(output->upipe_avfsrc_output, upipe_sink));
+            assert(upipe_set_output(upipe_avfsrc_output, upipe_sink));
             upipe_release(upipe_sink);
-            break;
+            return true;
         }
+        case UPROBE_SOURCE_END:
+            upipe_release(upipe);
+            return true;
     }
-    return true;
+    return false;
 }
 
 int main(int argc, char *argv[])
 {
     const char *src_url, *sink_url;
-    ulist_init(&upipe_avfsrc_outputs);
-#if 0
-    uint64_t delay = 0;
-    int opt;
-    while ((opt = getopt(argc, argv, "d:ao")) != -1) {
-        switch (opt) {
-            case 'd':
-                delay = atoi(optarg);
-                break;
-            case 'a':
-                mode = UPIPE_FSINK_APPEND;
-                break;
-            case 'o':
-                mode = UPIPE_FSINK_OVERWRITE;
-                break;
-            default:
-                usage(argv[0]);
-        }
-    }
-#endif
+
     if (optind >= argc -1)
         usage(argv[0]);
     src_url = argv[optind++];
@@ -256,25 +173,23 @@ int main(int argc, char *argv[])
 
     assert(upipe_av_init(false));
 
-#if 0
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);
-    struct upipe *upipe_avfsink = upipe_alloc(upipe_avfsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
+    upipe_avfsink = upipe_void_alloc(upipe_avfsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avfsink"));
     assert(upipe_avfsink != NULL);
-    assert(upipe_set_upump_mgr(upipe_avfsink, upump_mgr));
+#if 0
     if (delay) {
         assert(upipe_set_uclock(upipe_avfsink, uclock));
         assert(upipe_sink_set_delay(upipe_avfsink, delay));
     }
-    assert(upipe_avfsink_set_path(upipe_avfsink, sink_file, mode));
 #endif
+    assert(upipe_set_uri(upipe_avfsink, sink_url));
 
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
     upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL,
-                                   "avformat source"));
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avfsrc"));
     assert(upipe_avfsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
@@ -286,22 +201,10 @@ int main(int argc, char *argv[])
 
     ev_loop(loop, 0);
 
-    struct uchain *uchain;
-    ulist_delete_foreach(&upipe_avfsrc_outputs, uchain) {
-        struct test_output *output = container_of(uchain, struct test_output,
-                                                  uchain);
-        ulist_delete(&upipe_avfsrc_outputs, uchain);
-        upipe_release(output->upipe_avfsrc_output);
-        free(output);
-    }
-
-    upipe_release(upipe_avfsrc);
     upipe_mgr_release(upipe_avfsrc_mgr); // nop
 
-#if 0
     upipe_release(upipe_avfsink);
     upipe_mgr_release(upipe_avfsink_mgr); // nop
-#endif
 
     upipe_av_clean();
 

@@ -1,24 +1,15 @@
-Unstable APIs:
- - flows
+Shitty APIs:
+ - ulist
+ - flow defs
  - uprobe
 
 Plans for core:
- - ubuf_control
- - uref_block_merge
- - upump pool
- - upump_alloc_blocker
- - upump_alloc_worker
  - thread pool support in upump-ev
- - build on uprobe to implement exceptions such as need_uref_mgr or need_ubuf_mgr or need_output
+ - rewrite ubuf_mem
  - fast memcpy/memset ?
- - bitstream parsing helpers (startcode lookup)
 
 Other plans:
- - avformat
- - avcodec
- - swscale
  - avresample
- - x264
 
 Bugs documentation:
  - doubly declared functions (due to __attribute__((format)))

@@ -5,5 +5,6 @@ myinclude_HEADERS = \
 	upipe_av_samplefmt.h \
 	upipe_avcodec_decode.h \
 	upipe_avcodec_encode.h \
+	upipe_avformat_sink.h \
 	upipe_avformat_source.h \
 	uref_av_flow.h
