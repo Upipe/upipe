@@ -101,6 +101,8 @@ struct upipe_avfsink_sub {
 
     /** buffered urefs */
     struct ulist urefs;
+    /** next DTS that is supposed to be dequeued */
+    uint64_t next_dts;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -193,6 +195,7 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
 
     upipe_avfsink_sub_init_sub(upipe);
     ulist_init(&upipe_avfsink_sub->urefs);
+    upipe_avfsink_sub->next_dts = UINT64_MAX;
 
     upipe_use(upipe_avfsink_to_upipe(upipe_avfsink));
     upipe_throw_ready(upipe);
@@ -263,15 +266,17 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
 
     bool was_empty = ulist_empty(&upipe_avfsink_sub->urefs);
     ulist_add(&upipe_avfsink_sub->urefs, uref_to_uchain(uref));
-    if (was_empty)
+    if (was_empty) {
         upipe_use(upipe);
+        upipe_avfsink_sub->next_dts = dts;
+    }
 
     struct upipe_avfsink *upipe_avfsink =
         upipe_avfsink_from_sub_mgr(upipe->mgr);
     upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump);
 }
 
-/** @This decrements the reference count of a upipe or frees it.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -347,17 +352,17 @@ static struct upipe_avfsink_sub *upipe_avfsink_find_input(struct upipe *upipe)
     struct upipe_avfsink_sub *earliest_input = NULL;
     ulist_foreach (&upipe_avfsink->subs, uchain) {
         struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_uchain(uchain);
-        struct uchain *uref_chain = ulist_peek(&input->urefs);
-        if (uref_chain == NULL)
+        if (input->next_dts == UINT64_MAX)
             return NULL;
-
-        struct uref *uref = uref_from_uchain(uref_chain);
-        uint64_t dts;
-        uref_clock_get_dts(uref, &dts);
-        if (dts < earliest_dts) {
-            earliest_dts = dts;
+        if (input->next_dts < earliest_dts) {
+            earliest_dts = input->next_dts;
             earliest_input = input;
         }
+    }
+    if (earliest_input != NULL) {
+        uchain = ulist_peek(&earliest_input->urefs);
+        if (uchain == NULL)
+            return NULL; /* wait for the incoming packet */
     }
     return earliest_input;
 }
@@ -365,7 +370,7 @@ static struct upipe_avfsink_sub *upipe_avfsink_find_input(struct upipe *upipe)
 /** @internal @This asks avformat to multiplex some data.
  *
  * @param upipe description structure of the pipe
- * @param upump description structure of the read watcher
+ * @param upump pump that generated the last buffer
  */
 static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
 {
@@ -408,8 +413,18 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
         struct uchain *uchain = ulist_pop(&input->urefs);
         struct uref *uref = uref_from_uchain(uchain);
 
-        if (ulist_empty(&input->urefs))
+        if (ulist_empty(&input->urefs)) {
+            uint64_t duration;
+            if (uref_clock_get_duration(uref, &duration))
+                input->next_dts += duration;
+            else
+                input->next_dts = UINT64_MAX;
             upipe_release(upipe_avfsink_sub_to_upipe(input));
+        } else {
+            uchain = ulist_peek(&input->urefs);
+            struct uref *next_uref = uref_from_uchain(uchain);
+            uref_clock_get_dts(next_uref, &input->next_dts);
+        }
 
         AVPacket avpkt;
         memset(&avpkt, 0, sizeof(AVPacket));

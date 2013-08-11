@@ -249,7 +249,7 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
     }
 }
 
-/** @This decrements the reference count of a upipe or frees it.
+/** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */

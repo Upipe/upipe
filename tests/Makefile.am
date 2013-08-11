@@ -135,6 +135,7 @@ check_PROGRAMS += \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
+	upipe_ts_join_test \
 	upipe_ts_decaps_test \
 	upipe_ts_pes_decaps_test \
 	upipe_ts_psi_merge_test \
@@ -151,6 +152,7 @@ TESTS += \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
+	upipe_ts_join_test \
 	upipe_ts_decaps_test \
 	upipe_ts_pes_decaps_test \
 	upipe_ts_psi_merge_test \
@@ -215,6 +217,7 @@ uprobe_ts_log_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_join_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pes_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_merge_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

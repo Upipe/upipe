@@ -151,7 +151,7 @@ static struct upipe *upipe_ts_split_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_split_sub *upipe_ts_split_sub =
         upipe_ts_split_sub_from_upipe(upipe);
-    uchain_init(&upipe_ts_split_sub->uchain);
+    uchain_init(&upipe_ts_split_sub->uchain_pid);
     upipe_ts_split_sub_init_output(upipe);
     upipe_ts_split_sub_init_sub(upipe);
     upipe_ts_split_sub_store_flow_def(upipe, flow_def);

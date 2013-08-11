@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -19,37 +19,26 @@
  */
 
 /** @file
- * @short Upipe module splitting PIDs of a transport stream
+ * @short Upipe module joining PIDs into a transport stream
  */
 
-#ifndef _UPIPE_TS_UPIPE_TS_SPLIT_H_
+#ifndef _UPIPE_TS_UPIPE_TS_JOIN_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_TS_SPLIT_H_
+#define _UPIPE_TS_UPIPE_TS_JOIN_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_demux.h>
 
-#define UPIPE_TS_SPLIT_SIGNATURE UBASE_FOURCC('t','s','<',' ')
-#define UPIPE_TS_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','<','o')
+#define UPIPE_TS_JOIN_SIGNATURE UBASE_FOURCC('t','s','>',' ')
+#define UPIPE_TS_JOIN_INPUT_SIGNATURE UBASE_FOURCC('t','s','>','i')
 
-/** @This extends uprobe_event with specific events for ts split. */
-enum uprobe_ts_split_event {
-    UPROBE_TS_SPLIT_SENTINEL = UPROBE_TS_DEMUX_SPLIT,
-
-    /** the given PID is needed for correct operation (unsigned int) */
-    UPROBE_TS_SPLIT_ADD_PID,
-    /** the given PID is no longer needed (unsigned int) */
-    UPROBE_TS_SPLIT_DEL_PID
-};
-
-/** @This returns the management structure for all ts_split pipes.
+/** @This returns the management structure for all ts_join pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_ts_split_mgr_alloc(void);
+struct upipe_mgr *upipe_ts_join_mgr_alloc(void);
 
 #ifdef __cplusplus
 }
