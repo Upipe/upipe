@@ -75,6 +75,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
     UREF_DUMP_UNSIGNED("k.dts", dts)
     UREF_DUMP_UNSIGNED("k.dts.orig", dts_orig)
     UREF_DUMP_UNSIGNED("k.dts.sys", dts_sys)
+    UREF_DUMP_UNSIGNED("k.vbv_delay", vbv_delay)
 #undef UREF_DUMP_UNSIGNED
 
     if (uref->udict != NULL)

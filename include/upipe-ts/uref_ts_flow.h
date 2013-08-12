@@ -41,6 +41,7 @@ extern "C" {
 #include <stdint.h>
 
 UREF_ATTR_UNSIGNED(ts_flow, pid, "t.pid", PID)
+UREF_ATTR_UNSIGNED(ts_flow, ts_delay, "t.ts_delay", T-STD TS delay (TB buffer))
 UREF_ATTR_UNSIGNED(ts_flow, max_delay, "t.maxdelay", maximum retention time)
 UREF_ATTR_OPAQUE(ts_flow, psi_filter_internal, "t.psi.filter", PSI filter)
 

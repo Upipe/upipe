@@ -158,8 +158,10 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
     bool was_empty = ulist_empty(&upipe_ts_join_sub->urefs);
     ulist_add(&upipe_ts_join_sub->urefs, uref_to_uchain(uref));
     if (was_empty) {
+        uint64_t delay = 0;
+        uref_clock_get_vbv_delay(uref, &delay);
+        upipe_ts_join_sub->next_dts = dts - delay;
         upipe_use(upipe);
-        upipe_ts_join_sub->next_dts = dts;
     }
 
     struct upipe_ts_join *upipe_ts_join =
@@ -285,6 +287,9 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
             uchain = ulist_peek(&input->urefs);
             struct uref *next_uref = uref_from_uchain(uchain);
             uref_clock_get_dts(next_uref, &input->next_dts);
+            uint64_t delay = 0;
+            uref_clock_get_vbv_delay(next_uref, &delay);
+            input->next_dts -= delay;
         }
 
         upipe_ts_join_output(upipe, uref, upump);

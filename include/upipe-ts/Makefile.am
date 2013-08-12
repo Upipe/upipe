@@ -4,6 +4,7 @@ myinclude_HEADERS = \
 	upipe_ts_check.h \
 	upipe_ts_decaps.h \
 	upipe_ts_demux.h \
+	upipe_ts_encaps.h \
 	upipe_ts_join.h \
 	upipe_ts_pat_decoder.h \
 	upipe_ts_pes_decaps.h \

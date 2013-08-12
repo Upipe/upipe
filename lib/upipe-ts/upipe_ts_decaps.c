@@ -28,6 +28,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
@@ -174,6 +175,7 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
                 ret = uref_block_peek_unmap(uref, 2, buffer2, pcr);
                 assert(ret);
 
+                uref_clock_set_ref(uref);
                 upipe_throw_clock_ref(upipe, uref, pcrval,
                                       discontinuity ? 1 : 0);
             }

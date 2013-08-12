@@ -39,6 +39,8 @@ extern "C" {
 
 #include <stdint.h>
 
+UREF_ATTR_VOID_UREF(clock, ref, UREF_FLAG_CLOCK_REF,
+        flag indicating the presence of a clock reference)
 UREF_ATTR_UNSIGNED_UREF(clock, systime, systime, reception time in system clock)
 UREF_ATTR_UNSIGNED_UREF(clock, systime_rap, systime_rap,
         reception time in system clock of the last random access point)
@@ -52,8 +54,7 @@ UREF_ATTR_UNSIGNED_UREF(clock, dts_orig, dts_orig,
         original decoding timestamp in stream clock)
 UREF_ATTR_UNSIGNED_UREF(clock, dts_sys, dts_sys,
         decoding timestamp in system clock)
-UREF_ATTR_UNSIGNED_SH(clock, vbv_delay, UDICT_TYPE_CLOCK_VBVDELAY,
-        vbv/dts delay)
+UREF_ATTR_UNSIGNED_UREF(clock, vbv_delay, vbv_delay, vbv/dts delay)
 UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
 UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
                     frame offset from last random access point)

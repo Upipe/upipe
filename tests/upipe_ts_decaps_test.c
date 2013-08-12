@@ -44,6 +44,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
@@ -87,6 +88,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             uint64_t decaps_pcr = va_arg(args, uint64_t);
             assert(uref != NULL);
             assert(decaps_pcr == pcr);
+            assert(uref_clock_get_ref(uref));
             pcr = 0;
             break;
         }

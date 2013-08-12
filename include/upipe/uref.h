@@ -52,7 +52,9 @@ enum uref_flag {
     /** there is a discontinuity in the flow */
     UREF_FLAG_FLOW_DISC = 0x2,
     /** the block is a starting point */
-    UREF_FLAG_BLOCK_START = 0x4
+    UREF_FLAG_BLOCK_START = 0x4,
+    /** the block contains a clock reference */
+    UREF_FLAG_CLOCK_REF = 0x8
 };
 
 /** @This stores references to a ubuf wth attributes. */
@@ -85,6 +87,8 @@ struct uref {
     uint64_t dts_orig;
     /** decoding timestamp in system clock */
     uint64_t dts_sys;
+    /** vbv delay compared to DTS */
+    uint64_t vbv_delay;
     /** private for local pipe user */
     uint64_t priv;
 };
@@ -146,6 +150,7 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     uref->dts = UINT64_MAX;
     uref->dts_orig = UINT64_MAX;
     uref->dts_sys = UINT64_MAX;
+    uref->vbv_delay = UINT64_MAX;
 
     return uref;
 }
@@ -201,6 +206,7 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
     new_uref->dts = uref->dts;
     new_uref->dts_orig = uref->dts_orig;
     new_uref->dts_sys = uref->dts_sys;
+    new_uref->vbv_delay = uref->vbv_delay;
 
     return new_uref;
 }
