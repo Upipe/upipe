@@ -79,9 +79,6 @@ struct upipe_ts_encaps {
     /** T-STD max retention time */
     uint64_t max_delay;
 
-    /** true if the end of an access unit can overlap the beginning of the
-     * next - TODO */
-    bool overlap;
     /** PCR period (or 0) */
     uint64_t pcr_period;
     /** PCR tolerance */
@@ -142,7 +139,6 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
     upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
-    upipe_ts_encaps->overlap = false;
     upipe_ts_encaps->pcr_period = 0;
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
@@ -162,9 +158,10 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
 /** @internal @This allocates a TS packet containing padding and a PCR.
  *
  * @param upipe description structure of the pipe
+ * @param pcr PCR value to encode
  * @return allocated TS packet
  */
-static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe)
+static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     struct uref *output = uref_block_alloc(upipe_ts_encaps->uref_mgr,
@@ -188,8 +185,8 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe)
     /* Do not increase continuity counter on packets containing no payload */
     ts_set_cc(buffer, upipe_ts_encaps->last_cc);
     ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE - 1);
-    tsaf_set_pcr(buffer, 0);
-    tsaf_set_pcrext(buffer, 0);
+    tsaf_set_pcr(buffer, pcr / 300);
+    tsaf_set_pcrext(buffer, pcr % 300);
 
     uref_block_unmap(output, 0);
     return output;
@@ -208,7 +205,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe)
  */
 static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
                                            struct uref *uref, bool start,
-                                           bool pcr, bool random,
+                                           uint64_t pcr, bool random,
                                            bool discontinuity)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
@@ -257,8 +254,8 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (random)
             tsaf_set_randomaccess(buffer);
         if (pcr) {
-            tsaf_set_pcr(buffer, 0);
-            tsaf_set_pcrext(buffer, 0);
+            tsaf_set_pcr(buffer, pcr / 300);
+            tsaf_set_pcrext(buffer, pcr % 300);
         }
     }
 
@@ -324,7 +321,8 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
          * stream */
         while (upipe_ts_encaps->next_pcr <=
                    begin + upipe_ts_encaps->pcr_tolerance) {
-            struct uref *output = upipe_ts_encaps_pad_pcr(upipe);
+            struct uref *output = upipe_ts_encaps_pad_pcr(upipe,
+                                              upipe_ts_encaps->next_pcr);
             if (likely(output != NULL)) {
                 uref_clock_set_ref(output);
                 uref_clock_set_dts(output, upipe_ts_encaps->next_pcr);
@@ -374,8 +372,8 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         bool ret = true;
 
         struct uref *output =
-            upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1, pcr, random,
-                                   discontinuity);
+            upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1,
+                                   pcr ? muxdate : 0, random, discontinuity);
         if (unlikely(output == NULL))
             break;
 

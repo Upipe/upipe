@@ -47,6 +47,8 @@ UREF_ATTR_OPAQUE(ts_flow, psi_filter_internal, "t.psi.filter", PSI filter)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_id, "t.pes_id", PES stream ID)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_header, "t.pes_header",
         minimum PES header size)
+UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
+        minimum PES duration)
 
 /** @This returns the value of a PSI section filter.
  *

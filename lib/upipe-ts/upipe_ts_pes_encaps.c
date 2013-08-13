@@ -66,6 +66,11 @@ struct upipe_ts_pese {
     uint8_t pes_id;
     /** minimum PES header size */
     uint8_t pes_header_size;
+    /** minimum PES duration */
+    uint64_t pes_min_duration;
+
+    /** buffered incomplete PES */
+    struct uref *next_pes;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -108,6 +113,10 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
     upipe_ts_pese->pes_id = pes_id;
     upipe_ts_pese->pes_header_size = 0;
     uref_ts_flow_get_pes_header(flow_def, &upipe_ts_pese->pes_header_size);
+    upipe_ts_pese->pes_min_duration = 0;
+    uref_ts_flow_get_pes_min_duration(flow_def,
+                                      &upipe_ts_pese->pes_min_duration);
+    upipe_ts_pese->next_pes = NULL;
     upipe_throw_ready(upipe);
 
     const char *def;
@@ -123,14 +132,15 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
  * contain part of a PES header, and outputs it.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void upipe_ts_pese_work(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
+    struct uref *uref = upipe_ts_pese->next_pes;
+    upipe_ts_pese->next_pes = NULL;
+
     size_t uref_size;
     if (!uref_block_size(uref, &uref_size) || !uref_size) {
         upipe_warn_va(upipe, "empty packet received");
@@ -203,6 +213,54 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct uref *uref,
     upipe_ts_pese_output(upipe, uref, upump);
 }
 
+/** @internal @This merges the new access unit into a possibly existing
+ * incomplete PES, and outputs the PES if possible.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump pump that generated the buffer
+ */
+static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
+{
+    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
+    bool force = false;
+    uint64_t uref_duration;
+    if (!uref_clock_get_duration(uref, &uref_duration))
+        force = true;
+
+    if (upipe_ts_pese->next_pes != NULL) {
+        if (!uref_block_append(upipe_ts_pese->next_pes, uref->ubuf)) {
+            upipe_warn(upipe, "unable to merge a PES");
+            upipe_ts_pese_work(upipe, upump);
+            upipe_ts_pese->next_pes = uref;
+        } else {
+            uref_detach_ubuf(uref);
+            uref_free(uref);
+            if (!force) {
+                uint64_t pes_duration;
+                if (uref_clock_get_duration(upipe_ts_pese->next_pes,
+                                            &pes_duration)) {
+                    pes_duration += uref_duration;
+                    if (!uref_clock_set_duration(upipe_ts_pese->next_pes,
+                                                 pes_duration))
+                        force = true;
+                }
+            }
+        }
+    } else
+        upipe_ts_pese->next_pes = uref;
+
+    if (upipe_ts_pese->pes_min_duration && !force) {
+        uint64_t duration;
+        if (uref_clock_get_duration(upipe_ts_pese->next_pes,
+                                    &duration) &&
+            duration < upipe_ts_pese->pes_min_duration)
+            return;
+    }
+    upipe_ts_pese_work(upipe, upump);
+}
+
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
@@ -225,7 +283,7 @@ static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_ts_pese_work(upipe, uref, upump);
+    upipe_ts_pese_merge(upipe, uref, upump);
 }
 
 /** @internal @This processes control commands on a ts pese pipe.
@@ -271,6 +329,10 @@ static bool upipe_ts_pese_control(struct upipe *upipe,
  */
 static void upipe_ts_pese_free(struct upipe *upipe)
 {
+    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
+    if (upipe_ts_pese->next_pes != NULL)
+        upipe_ts_pese_work(upipe, NULL);
+
     upipe_throw_dead(upipe);
 
     upipe_ts_pese_clean_output(upipe);

@@ -207,8 +207,8 @@ int main(int argc, char *argv[])
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, 27000000 * 2));
-    assert(uref_clock_set_dts(uref, 27000000));
+    assert(uref_clock_set_pts(uref, UCLOCK_FREQ * 2));
+    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 2048);
     assert(header_size == PES_HEADER_SIZE_PTSDTS);
@@ -216,8 +216,8 @@ int main(int argc, char *argv[])
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 70000);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, 27000000));
-    assert(uref_clock_set_dts(uref, 27000000));
+    assert(uref_clock_set_pts(uref, UCLOCK_FREQ));
+    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 70000);
     assert(header_size == PES_HEADER_SIZE_PTS);
@@ -262,6 +262,37 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 12);
     assert(header_size == PES_HEADER_SIZE);
+
+    upipe_release(upipe_ts_pese);
+    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
+    assert(uref != NULL);
+    stream_id = PES_STREAM_ID_AUDIO_MPEG;
+    assert(uref_ts_flow_set_pes_id(uref, stream_id));
+    assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
+    upipe_ts_pese = upipe_flow_alloc(upipe_ts_pese_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                   "ts pese"), uref);
+    assert(upipe_ts_pese != NULL);
+    uref_free(uref);
+    assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
+    assert(upipe_set_output(upipe_ts_pese, upipe_sink));
+
+    total_size = 0;
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);
+    assert(uref != NULL);
+    assert(uref_clock_set_pts(uref, UCLOCK_FREQ));
+    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
+    assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
+    upipe_input(upipe_ts_pese, uref, NULL);
+    assert(total_size == 0);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);
+    assert(uref != NULL);
+    assert(uref_clock_set_pts(uref, UCLOCK_FREQ * 2));
+    assert(uref_clock_set_dts(uref, UCLOCK_FREQ * 2));
+    assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
+    upipe_input(upipe_ts_pese, uref, NULL);
+    assert(total_size == 24);
 
     upipe_release(upipe_ts_pese);
     upipe_mgr_release(upipe_ts_pese_mgr); // nop
