@@ -77,7 +77,7 @@ struct upipe_qsink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_qsink, upipe)
+UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_qsink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)

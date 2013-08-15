@@ -86,7 +86,7 @@ struct upipe_sws {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_sws, upipe);
+UPIPE_HELPER_UPIPE(upipe_sws, upipe, UPIPE_SWS_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_sws, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);

@@ -100,7 +100,7 @@ struct upipe_udpsink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_udpsink, upipe)
+UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)

@@ -64,7 +64,7 @@ struct upipe_filter_blend {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe);
+UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_filter_blend, NULL)
 UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, output_flow, output_flow_sent)

@@ -67,7 +67,7 @@ struct upipe_ts_check {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_check, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_check, upipe, UPIPE_TS_CHECK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_check, EXPECTED_FLOW_DEF)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_check, output, flow_def, flow_def_sent)

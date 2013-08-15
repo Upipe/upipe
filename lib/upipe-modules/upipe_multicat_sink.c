@@ -86,7 +86,7 @@ struct upipe_multicat_sink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_multicat_sink, upipe);
+UPIPE_HELPER_UPIPE(upipe_multicat_sink, upipe, UPIPE_MULTICAT_SINK_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_multicat_sink, EXPECTED_FLOW_DEF)
 
 /** @internal @This generates a path from idx and send set_path to the internal

@@ -64,7 +64,7 @@ struct upipe_ts_decaps {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_decaps, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_decaps, upipe, UPIPE_TS_DECAPS_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_decaps, EXPECTED_FLOW_DEF)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)

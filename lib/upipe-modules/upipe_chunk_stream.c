@@ -86,7 +86,7 @@ struct upipe_chunk_stream {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_chunk_stream, upipe);
+UPIPE_HELPER_UPIPE(upipe_chunk_stream, upipe, UPIPE_CHUNK_STREAM_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_chunk_stream, EXPECTED_FLOW)
 UPIPE_HELPER_OUTPUT(upipe_chunk_stream, output, flow_def, flow_def_sent);
 UPIPE_HELPER_UREF_STREAM(upipe_chunk_stream, next_uref, next_uref_size, urefs, NULL)

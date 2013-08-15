@@ -53,6 +53,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <arpa/inet.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 10

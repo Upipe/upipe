@@ -102,7 +102,7 @@ struct upipe_udpsrc {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_udpsrc, upipe)
+UPIPE_HELPER_UPIPE(upipe_udpsrc, upipe, UPIPE_UDPSRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_udpsrc)
 UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr)
 

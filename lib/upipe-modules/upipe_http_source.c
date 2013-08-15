@@ -115,7 +115,7 @@ struct upipe_http_src {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_http_src, upipe)
+UPIPE_HELPER_UPIPE(upipe_http_src, upipe, UPIPE_HTTP_SRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_http_src)
 UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr)
 

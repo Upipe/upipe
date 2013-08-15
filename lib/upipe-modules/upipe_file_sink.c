@@ -98,7 +98,7 @@ struct upipe_fsink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_fsink, upipe)
+UPIPE_HELPER_UPIPE(upipe_fsink, upipe, UPIPE_FSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_fsink, UPIPE_FSINK_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsink, upump, upump_mgr)

@@ -215,7 +215,7 @@ struct upipe_ts_demux {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_demux, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_demux, upipe, UPIPE_TS_DEMUX_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_demux, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
 
@@ -266,7 +266,7 @@ struct upipe_ts_demux_program {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe, UPIPE_TS_DEMUX_PROGRAM_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_demux_program, "program.")
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux, upipe_ts_demux_program, program,
@@ -306,7 +306,7 @@ struct upipe_ts_demux_output {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe, UPIPE_TS_DEMUX_OUTPUT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
 UPIPE_HELPER_BIN(upipe_ts_demux_output, last_subpipe_probe, last_subpipe,
                  output)
@@ -1918,7 +1918,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe->sub_mgr == NULL)) {
         upipe_ts_demux_clean_sub_programs(upipe);
         uref_free(flow_def);
-        free(upipe_ts_demux);
+        upipe_ts_demux_free_flow(upipe);
         return NULL;
     }
 

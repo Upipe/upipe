@@ -66,7 +66,7 @@ struct upipe_qsrc {
     uint8_t uqueue_extra[];
 };
 
-UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe)
+UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe, UPIPE_QSRC_SIGNATURE)
 
 UPIPE_HELPER_OUTPUT(upipe_qsrc, output, flow_def, flow_def_sent)
 

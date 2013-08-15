@@ -56,7 +56,7 @@ struct upipe_ts_pmtd {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe, UPIPE_TS_PMTD_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_pmtd, EXPECTED_FLOW_DEF)
 
 /** @internal @This allocates a ts_pmtd pipe.

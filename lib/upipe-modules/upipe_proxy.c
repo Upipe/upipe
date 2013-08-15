@@ -92,7 +92,7 @@ struct upipe_proxy {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_proxy, upipe);
+UPIPE_HELPER_UPIPE(upipe_proxy, upipe, UPIPE_PROXY_SIGNATURE)
 
 /** @internal @This catches event from the super pipe to reroute them to us.
  *

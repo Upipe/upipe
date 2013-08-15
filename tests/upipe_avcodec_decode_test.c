@@ -155,7 +155,7 @@ struct avcdec_test {
 };
 
 /** helper phony pipe to test upipe_avcdec */
-UPIPE_HELPER_UPIPE(avcdec_test, upipe);
+UPIPE_HELPER_UPIPE(avcdec_test, upipe, 0);
 
 /** helper phony pipe to test upipe_avcdec */
 static struct upipe *avcdec_test_alloc(struct upipe_mgr *mgr,
@@ -203,6 +203,7 @@ static void avcdec_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_avcdec */
 static struct upipe_mgr avcdec_test_mgr = {
+    .signature = 0,
     .upipe_alloc = avcdec_test_alloc,
     .upipe_input = avcdec_test_input,
     .upipe_control = NULL,

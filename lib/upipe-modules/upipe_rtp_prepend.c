@@ -86,7 +86,7 @@ struct upipe_rtp_prepend {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe);
+UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_rtp_prepend, EXPECTED_FLOW)
 UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);

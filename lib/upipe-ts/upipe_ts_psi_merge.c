@@ -66,7 +66,7 @@ struct upipe_ts_psim {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe, UPIPE_TS_PSIM_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_psim, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_psim, acquired)
 

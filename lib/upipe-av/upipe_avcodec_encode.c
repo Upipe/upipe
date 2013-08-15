@@ -133,7 +133,7 @@ struct upipe_avcenc {
 };
 
 
-UPIPE_HELPER_UPIPE(upipe_avcenc, upipe);
+UPIPE_HELPER_UPIPE(upipe_avcenc, upipe, UPIPE_AVCENC_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_avcenc, EXPECTED_FLOW)
 UPIPE_HELPER_UREF_MGR(upipe_avcenc, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)

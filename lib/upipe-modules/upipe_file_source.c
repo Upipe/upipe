@@ -104,7 +104,7 @@ struct upipe_fsrc {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_fsrc, upipe)
+UPIPE_HELPER_UPIPE(upipe_fsrc, upipe, UPIPE_FSRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_fsrc)
 UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr)
 

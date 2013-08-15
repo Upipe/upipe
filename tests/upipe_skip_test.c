@@ -70,7 +70,7 @@ struct skip_test {
 };
 
 /** helper phony pipe to test upipe_skip */
-UPIPE_HELPER_UPIPE(skip_test, upipe);
+UPIPE_HELPER_UPIPE(skip_test, upipe, 0);
 
 /** helper phony pipe to test upipe_skip */
 static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
@@ -122,6 +122,7 @@ static void skip_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_skip */
 static struct upipe_mgr skip_test_mgr = {
+    .signature = 0,
     .upipe_alloc = skip_test_alloc,
     .upipe_input = skip_test_input,
     .upipe_control = NULL,

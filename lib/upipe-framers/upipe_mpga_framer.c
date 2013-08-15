@@ -144,7 +144,7 @@ struct upipe_mpgaf {
 /** @hidden */
 static void upipe_mpgaf_promote_uref(struct upipe *upipe);
 
-UPIPE_HELPER_UPIPE(upipe_mpgaf, upipe)
+UPIPE_HELPER_UPIPE(upipe_mpgaf, upipe, UPIPE_MPGAF_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_mpgaf, NULL)
 UPIPE_HELPER_SYNC(upipe_mpgaf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgaf, next_uref, next_uref_size, urefs,

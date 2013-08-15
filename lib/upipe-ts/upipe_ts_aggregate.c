@@ -67,7 +67,7 @@ struct upipe_ts_aggregate {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_aggregate, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_aggregate, upipe, UPIPE_TS_AGGREGATE_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_aggregate, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_OUTPUT(upipe_ts_aggregate, output, flow_def, flow_def_sent)
 

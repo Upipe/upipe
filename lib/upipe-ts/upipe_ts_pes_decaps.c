@@ -69,7 +69,7 @@ struct upipe_ts_pesd {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_pesd, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_pesd, upipe, UPIPE_TS_PESD_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_pesd, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_pesd, acquired)
 

@@ -59,7 +59,7 @@ struct upipe_setattr {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_setattr, upipe)
+UPIPE_HELPER_UPIPE(upipe_setattr, upipe, UPIPE_SETATTR_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_setattr, NULL)
 UPIPE_HELPER_OUTPUT(upipe_setattr, output, flow_def, flow_def_sent)
 

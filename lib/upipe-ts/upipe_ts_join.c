@@ -69,7 +69,7 @@ struct upipe_ts_join {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_join, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_join, upipe, UPIPE_TS_JOIN_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_ts_join)
 UPIPE_HELPER_UREF_MGR(upipe_ts_join, uref_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_join, output, flow_def, flow_def_sent)
@@ -88,7 +88,7 @@ struct upipe_ts_join_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_join_sub, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_join_sub, upipe, UPIPE_TS_JOIN_INPUT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_join_sub, EXPECTED_FLOW_DEF)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_join, upipe_ts_join_sub, sub, sub_mgr,

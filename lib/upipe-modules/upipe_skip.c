@@ -70,7 +70,7 @@ struct upipe_skip {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_skip, upipe);
+UPIPE_HELPER_UPIPE(upipe_skip, upipe, UPIPE_SKIP_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_skip, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_OUTPUT(upipe_skip, output, flow_def, flow_def_sent);
 

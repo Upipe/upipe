@@ -95,7 +95,7 @@ struct upipe_ts_encaps {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe, UPIPE_TS_ENCAPS_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_encaps, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr)

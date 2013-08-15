@@ -60,7 +60,7 @@ struct upipe_dup {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_dup, upipe)
+UPIPE_HELPER_UPIPE(upipe_dup, upipe, UPIPE_DUP_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_dup, NULL)
 
 /** @internal @This is the private context of an output of a dup pipe. */
@@ -79,7 +79,7 @@ struct upipe_dup_output {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_dup_output, upipe)
+UPIPE_HELPER_UPIPE(upipe_dup_output, upipe, UPIPE_DUP_OUTPUT_SIGNATURE)
 UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_output, output, sub_mgr, outputs,

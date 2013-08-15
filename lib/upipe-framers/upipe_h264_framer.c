@@ -215,7 +215,7 @@ struct upipe_h264f {
 /** @hidden */
 static void upipe_h264f_promote_uref(struct upipe *upipe);
 
-UPIPE_HELPER_UPIPE(upipe_h264f, upipe)
+UPIPE_HELPER_UPIPE(upipe_h264f, upipe, UPIPE_H264F_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_h264f, UPIPE_H264F_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_h264f, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,

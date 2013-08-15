@@ -64,7 +64,7 @@ struct upipe_ts_patd {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe, UPIPE_TS_PATD_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_patd, EXPECTED_FLOW_DEF)
 
 /** @internal @This allocates a ts_patd pipe.

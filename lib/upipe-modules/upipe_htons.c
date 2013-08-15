@@ -68,7 +68,7 @@ struct upipe_htons {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_htons, upipe);
+UPIPE_HELPER_UPIPE(upipe_htons, upipe, UPIPE_HTONS_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_htons, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);

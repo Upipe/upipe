@@ -73,7 +73,7 @@ struct upipe_ts_split {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_split, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_split, upipe, UPIPE_TS_SPLIT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_split, EXPECTED_FLOW_DEF)
 
 /** @internal @This is the private context of an output of a ts_split pipe. */
@@ -94,7 +94,7 @@ struct upipe_ts_split_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_split_sub, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_split_sub, upipe, UPIPE_TS_SPLIT_OUTPUT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_split_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_ts_split_sub, output, flow_def, flow_def_sent)
 

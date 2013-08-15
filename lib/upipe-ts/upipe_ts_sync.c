@@ -81,7 +81,7 @@ struct upipe_ts_sync {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe, UPIPE_TS_SYNC_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_sync, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)

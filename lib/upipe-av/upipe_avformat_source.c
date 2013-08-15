@@ -119,7 +119,7 @@ struct upipe_avfsrc {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe)
+UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe, UPIPE_AVFSRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
 
@@ -148,7 +148,7 @@ struct upipe_avfsrc_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe)
+UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe, UPIPE_AVFSRC_OUTPUT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr)

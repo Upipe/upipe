@@ -37,6 +37,8 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
 
+#include <assert.h>
+
 /** @This declares two functions dealing with public and private parts
  * of the allocated pipe structure.
  *
@@ -61,8 +63,9 @@ extern "C" {
  * @param STRUCTURE name of your private upipe structure 
  * @param UPIPE name of the @tt{struct upipe} field of
  * your private upipe structure
+ * @param SIGNATURE signature of the manager of the upipe
  */
-#define UPIPE_HELPER_UPIPE(STRUCTURE, UPIPE)                                \
+#define UPIPE_HELPER_UPIPE(STRUCTURE, UPIPE, SIGNATURE)                     \
 /** @internal @This returns the public upipe structure.                     \
  *                                                                          \
  * @param STRUCTURE pointer to the private STRUCTURE structure              \
@@ -79,6 +82,7 @@ static inline struct upipe *STRUCTURE##_to_upipe(struct STRUCTURE *s)       \
  */                                                                         \
 static inline struct STRUCTURE *STRUCTURE##_from_upipe(struct upipe *upipe) \
 {                                                                           \
+    assert(upipe->mgr->signature == SIGNATURE);                             \
     return container_of(upipe, struct STRUCTURE, UPIPE);                    \
 }
 

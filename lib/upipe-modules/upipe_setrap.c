@@ -59,7 +59,7 @@ struct upipe_setrap {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_setrap, upipe)
+UPIPE_HELPER_UPIPE(upipe_setrap, upipe, UPIPE_SETRAP_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_setrap, NULL)
 UPIPE_HELPER_OUTPUT(upipe_setrap, output, flow_def, flow_def_sent)
 

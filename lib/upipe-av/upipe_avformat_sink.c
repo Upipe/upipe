@@ -88,7 +88,7 @@ struct upipe_avfsink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_avfsink, upipe)
+UPIPE_HELPER_UPIPE(upipe_avfsink, upipe, UPIPE_AVFSINK_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_avfsink)
 
 /** @internal @This is the private context of an output of an avformat source
@@ -108,7 +108,7 @@ struct upipe_avfsink_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_avfsink_sub, upipe)
+UPIPE_HELPER_UPIPE(upipe_avfsink_sub, upipe, UPIPE_AVFSINK_INPUT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_avfsink_sub, "block.")
 
 UPIPE_HELPER_SUBPIPE(upipe_avfsink, upipe_avfsink_sub, sub, sub_mgr,

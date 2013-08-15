@@ -74,7 +74,7 @@ struct upipe_match_attr {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_match_attr, upipe)
+UPIPE_HELPER_UPIPE(upipe_match_attr, upipe, UPIPE_MATCH_ATTR_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_match_attr, NULL)
 UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
 

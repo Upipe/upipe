@@ -63,7 +63,7 @@ struct upipe_probe_uref {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_probe_uref, upipe);
+UPIPE_HELPER_UPIPE(upipe_probe_uref, upipe, UPIPE_PROBE_UREF_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_probe_uref, NULL)
 UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
 

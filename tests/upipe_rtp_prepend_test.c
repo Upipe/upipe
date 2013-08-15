@@ -90,7 +90,7 @@ struct rtp_prepend_test {
 };
 
 /** helper phony pipe to test upipe_rtp_prepend */
-UPIPE_HELPER_UPIPE(rtp_prepend_test, upipe);
+UPIPE_HELPER_UPIPE(rtp_prepend_test, upipe, 0);
 
 /** helper phony pipe to test upipe_rtp_prepend */
 static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
@@ -173,6 +173,7 @@ static void rtp_prepend_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr rtp_prepend_test_mgr = {
+    .signature = 0,
     .upipe_alloc = rtp_prepend_test_alloc,
     .upipe_input = rtp_prepend_test_input,
     .upipe_control = NULL,

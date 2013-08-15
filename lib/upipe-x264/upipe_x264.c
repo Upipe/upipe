@@ -78,7 +78,7 @@ struct upipe_x264 {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_x264, upipe);
+UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_x264, EXPECTED_FLOW)
 UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr);
 UPIPE_HELPER_UREF_MGR(upipe_x264, uref_mgr);

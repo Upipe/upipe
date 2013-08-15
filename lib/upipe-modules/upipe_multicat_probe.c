@@ -69,7 +69,7 @@ struct upipe_multicat_probe {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_multicat_probe, upipe);
+UPIPE_HELPER_UPIPE(upipe_multicat_probe, upipe, UPIPE_MULTICAT_PROBE_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_multicat_probe, NULL)
 UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, flow_def_sent);
 

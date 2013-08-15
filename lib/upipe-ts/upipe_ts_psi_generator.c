@@ -77,7 +77,7 @@ struct upipe_ts_psig {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_psig, "void.")
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, flow_def_sent)
@@ -117,7 +117,7 @@ struct upipe_ts_psig_program {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_psig_program, "void.")
 UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, flow_def_sent)
 
@@ -145,7 +145,7 @@ struct upipe_ts_psig_flow {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psig_flow, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_psig_flow, upipe, UPIPE_TS_PSIG_FLOW_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_psig_flow, "void.")
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig_program, upipe_ts_psig_flow, flow, flow_mgr,

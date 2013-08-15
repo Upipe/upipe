@@ -47,7 +47,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_source_read_size.h>
-#include <upipe-modules/upipe_file_source.h>
+#include <upipe-modules/upipe_sine_wave_source.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -96,7 +96,7 @@ struct upipe_sinesrc {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_sinesrc, upipe)
+UPIPE_HELPER_UPIPE(upipe_sinesrc, upipe, UPIPE_SINESRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_sinesrc)
 UPIPE_HELPER_UREF_MGR(upipe_sinesrc, uref_mgr)
 
@@ -313,7 +313,7 @@ static void upipe_sinesrc_free(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_sinesrc_mgr = {
-    .signature = UPIPE_FSRC_SIGNATURE,
+    .signature = UPIPE_SINESRC_SIGNATURE,
 
     .upipe_alloc = upipe_sinesrc_alloc,
     .upipe_input = NULL,

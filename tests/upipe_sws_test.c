@@ -204,7 +204,7 @@ struct sws_test {
 };
 
 /** helper phony pipe to test upipe_sws */
-UPIPE_HELPER_UPIPE(sws_test, upipe);
+UPIPE_HELPER_UPIPE(sws_test, upipe, 0);
 
 /** helper phony pipe to test upipe_sws */
 static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
@@ -261,6 +261,7 @@ static void sws_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr sws_test_mgr = {
+    .signature = 0,
     .upipe_alloc = sws_test_alloc,
     .upipe_input = sws_test_input,
     .upipe_control = NULL,

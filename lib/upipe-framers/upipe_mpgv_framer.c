@@ -169,7 +169,7 @@ struct upipe_mpgvf {
 /** @hidden */
 static void upipe_mpgvf_promote_uref(struct upipe *upipe);
 
-UPIPE_HELPER_UPIPE(upipe_mpgvf, upipe)
+UPIPE_HELPER_UPIPE(upipe_mpgvf, upipe, UPIPE_MPGVF_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_mpgvf, UPIPE_MPGVF_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_mpgvf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgvf, next_uref, next_uref_size, urefs,

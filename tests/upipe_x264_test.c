@@ -81,7 +81,7 @@ struct x264_test {
 };
 
 /** helper phony pipe to test upipe_x264 */
-UPIPE_HELPER_UPIPE(x264_test, upipe);
+UPIPE_HELPER_UPIPE(x264_test, upipe, 0);
 
 /** helper phony pipe to test upipe_x264 */
 static struct upipe *x264_test_alloc(struct upipe_mgr *mgr,
@@ -140,6 +140,7 @@ static void x264_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_x264 */
 static struct upipe_mgr x264_test_mgr = {
+    .signature = 0,
     .upipe_alloc = x264_test_alloc,
     .upipe_input = x264_test_input,
     .upipe_control = NULL,

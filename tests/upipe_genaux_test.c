@@ -83,7 +83,7 @@ struct genaux_test {
 };
 
 /** helper phony pipe to test upipe_genaux */
-UPIPE_HELPER_UPIPE(genaux_test, upipe);
+UPIPE_HELPER_UPIPE(genaux_test, upipe, 0);
 
 /** helper phony pipe to test upipe_genaux */
 static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
@@ -126,6 +126,8 @@ static void genaux_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr genaux_test_mgr = {
+    .signature = 0,
+
     .upipe_alloc = genaux_test_alloc,
     .upipe_input = genaux_test_input,
     .upipe_control = NULL,

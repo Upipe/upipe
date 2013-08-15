@@ -38,6 +38,8 @@ extern "C" {
 #include <upipe/ulist.h>
 #include <upipe/upipe.h>
 
+#include <assert.h>
+
 /** @This declares nine functions dealing with subpipes of split and join pipes.
  *
  * You must add two members to your private pipe structure:
@@ -137,7 +139,10 @@ static inline struct upipe_mgr *STRUCTURE##_to_##MGR(struct STRUCTURE *s)   \
 static inline struct STRUCTURE *                                            \
     STRUCTURE##_from_##MGR(struct upipe_mgr *mgr)                           \
 {                                                                           \
-    return container_of(mgr, struct STRUCTURE, MGR);                        \
+    struct STRUCTURE *s = container_of(mgr, struct STRUCTURE, MGR);         \
+    STRUCTURE##_from_upipe(STRUCTURE##_to_upipe(s));                        \
+        /* for the assert on signature */                                   \
+    return s;                                                               \
 }                                                                           \
 /** @This returns the high-level STRUCTURE_SUB structure.                   \
  *                                                                          \
@@ -148,7 +153,11 @@ static inline struct STRUCTURE *                                            \
 static inline struct STRUCTURE_SUB *                                        \
     STRUCTURE_SUB##_from_uchain(struct uchain *uchain)                      \
 {                                                                           \
-    return container_of(uchain, struct STRUCTURE_SUB, UCHAIN);              \
+    struct STRUCTURE_SUB *sub =                                             \
+            container_of(uchain, struct STRUCTURE_SUB, UCHAIN);             \
+    STRUCTURE_SUB##_from_upipe(STRUCTURE_SUB##_to_upipe(sub));              \
+        /* for the assert on signature */                                   \
+    return sub;                                                             \
 }                                                                           \
 /** @This returns the uchain structure used for FIFO, LIFO and lists.       \
  *                                                                          \
@@ -156,9 +165,9 @@ static inline struct STRUCTURE_SUB *                                        \
  * @return pointer to the uchain structure                                  \
  */                                                                         \
 static inline struct uchain *                                               \
-    STRUCTURE_SUB##_to_uchain(struct STRUCTURE_SUB *s)                      \
+    STRUCTURE_SUB##_to_uchain(struct STRUCTURE_SUB *sub)                    \
 {                                                                           \
-    return &s->UCHAIN;                                                      \
+    return &sub->UCHAIN;                                                    \
 }                                                                           \
 /** @This initializes the private members for this helper in STRUCTURE_SUB, \
  * and adds it to the ULIST in STRUCTURE.                                   \

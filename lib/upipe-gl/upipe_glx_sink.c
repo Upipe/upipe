@@ -105,7 +105,7 @@ struct upipe_glx_sink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe);
+UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe, UPIPE_GLX_SINK_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)

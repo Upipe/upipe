@@ -127,7 +127,7 @@ struct udpsrc_test {
 };
 
 /** helper phony pipe to test upipe_udpsrc */
-UPIPE_HELPER_UPIPE(udpsrc_test, upipe);
+UPIPE_HELPER_UPIPE(udpsrc_test, upipe, 0);
 
 /** helper phony pipe to test upipe_udpsrc */
 static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, uint32_t signature, va_list args)
@@ -175,6 +175,7 @@ static void udpsrc_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_udpsrc */
 static struct upipe_mgr udpsrc_test_mgr = {
+    .signature = 0,
     .upipe_alloc = udpsrc_test_alloc,
     .upipe_input = udpsrc_test_input,
     .upipe_control = NULL,

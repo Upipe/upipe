@@ -97,7 +97,7 @@ struct upipe_sws_thumbs {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_sws_thumbs, upipe);
+UPIPE_HELPER_UPIPE(upipe_sws_thumbs, upipe, UPIPE_SWS_THUMBS_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_sws_thumbs, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr);

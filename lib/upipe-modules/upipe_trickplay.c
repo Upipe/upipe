@@ -81,7 +81,7 @@ struct upipe_trickp {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_trickp, upipe)
+UPIPE_HELPER_UPIPE(upipe_trickp, upipe, UPIPE_TRICKP_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_trickp)
 UPIPE_HELPER_UCLOCK(upipe_trickp, uclock)
 
@@ -115,7 +115,7 @@ struct upipe_trickp_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe)
+UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe, UPIPE_TRICKP_SUB_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_trickp_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, blockers, upipe_trickp_sub_process)

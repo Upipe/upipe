@@ -76,7 +76,7 @@ struct upipe_ts_pese {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_pese, upipe)
+UPIPE_HELPER_UPIPE(upipe_ts_pese, upipe, UPIPE_TS_PESE_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_pese, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_pese, ubuf_mgr)
 

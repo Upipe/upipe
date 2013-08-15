@@ -189,7 +189,7 @@ struct upipe_xfer {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_xfer, upipe);
+UPIPE_HELPER_UPIPE(upipe_xfer, upipe, UPIPE_XFER_SIGNATURE)
 
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then

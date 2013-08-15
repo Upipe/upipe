@@ -73,7 +73,7 @@ struct upipe_genaux {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_genaux, upipe);
+UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_genaux, NULL);
 UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);

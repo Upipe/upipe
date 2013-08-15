@@ -59,7 +59,7 @@ struct upipe_null {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_null, upipe);
+UPIPE_HELPER_UPIPE(upipe_null, upipe, UPIPE_NULL_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_null, NULL)
 
 /** @internal @This allocates a null pipe.
@@ -139,6 +139,7 @@ static void upipe_null_free(struct upipe *upipe)
 
 /** upipe_null (/dev/null) */
 static struct upipe_mgr upipe_null_mgr = {
+    .signature = UPIPE_NULL_SIGNATURE,
     .upipe_alloc = upipe_null_alloc,
     .upipe_input = upipe_null_input,
     .upipe_control = upipe_null_control,
