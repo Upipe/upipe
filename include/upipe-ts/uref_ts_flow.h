@@ -49,6 +49,13 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_header, "t.pes_header",
         minimum PES header size)
 UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
         minimum PES duration)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, psi_version, "t.psi_version",
+        initial version number)
+UREF_ATTR_UNSIGNED(ts_flow, tsid, "t.tsid", transport stream ID)
+UREF_ATTR_UNSIGNED(ts_flow, sid, "t.sid", service ID/program number)
+UREF_ATTR_UNSIGNED(ts_flow, pcr_pid, "t.pcr_pid", PCR PID)
+UREF_ATTR_OPAQUE(ts_flow, descriptors, "t.desc", descriptors)
+UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
 
 /** @This returns the value of a PSI section filter.
  *
