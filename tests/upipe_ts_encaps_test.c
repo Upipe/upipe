@@ -75,6 +75,8 @@ static uint64_t dts, dts_sys, dts_step;
 static unsigned int nb_ts;
 static uint64_t next_pcr = UINT64_MAX;
 static uint64_t pcr_tolerance = 0;
+static bool psi = false;
+static bool psi_first = false;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -152,15 +154,38 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     }
     uref_block_unmap(uref, 0);
 
-    /* check payload */
     int offset = size;
+    if (psi_first) {
+        /* check pointer_field */
+        size = -1;
+        assert(uref_block_read(uref, offset, &size, &buffer));
+        assert(size == 1);
+        assert(buffer[0] == 0);
+        uref_block_unmap(uref, offset);
+        offset++;
+        psi_first = false;
+    }
+
+    /* check payload */
     size = -1;
     assert(uref_block_read(uref, offset, &size, &buffer));
-    assert(size + offset == TS_SIZE);
+    if (size + offset != TS_SIZE)
+        assert(psi);
     int i;
     for (i = 0; i < size; i++)
         assert(buffer[i] == total_size++ % 256);
     uref_block_unmap(uref, offset);
+
+    if (size + offset != TS_SIZE) {
+        /* check padding */
+        offset += size;
+        assert(uref_block_read(uref, offset, &size, &buffer));
+        assert(size + offset == TS_SIZE);
+        for (i = 0; i < size; i++)
+            assert(buffer[i] == 0xff);
+        uref_block_unmap(uref, offset);
+        psi = false;
+    }
     uref_free(uref);
 
     randomaccess = false;
@@ -294,6 +319,43 @@ int main(int argc, char *argv[])
     dts_step = 27000000 / nb_ts;
     upipe_input(upipe_ts_encaps, uref, NULL);
     assert(total_size == 2048);
+    assert(nb_ts == 0);
+    upipe_release(upipe_ts_encaps);
+
+    total_size = 0;
+    cc = 0;
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
+    assert(uref != NULL);
+    assert(uref_block_flow_set_octetrate(uref, 1025));
+    assert(uref_ts_flow_set_pid(uref, 68));
+
+    upipe_ts_encaps = upipe_flow_alloc(upipe_ts_encaps_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                   "ts encaps"), uref);
+    assert(upipe_ts_encaps != NULL);
+    uref_free(uref);
+    assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
+    assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
+    assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1024);
+    assert(uref != NULL);
+    size = -1;
+    assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 1024);
+    for (i = 0; i < 1024; i++)
+        buffer[i] = i % 256;
+    uref_block_unmap(uref, 0);
+    assert(uref_clock_set_dts(uref, 27000000));
+    assert(uref_clock_set_dts_sys(uref, 270000000));
+    dts = 27000000;
+    dts_sys = 270000000;
+    nb_ts = 1024 / (TS_SIZE - TS_HEADER_SIZE) + 1;
+    dts_step = 27000000 / nb_ts;
+    psi = true;
+    psi_first = true;
+    upipe_input(upipe_ts_encaps, uref, NULL);
+    assert(total_size == 1024);
     assert(nb_ts == 0);
     upipe_release(upipe_ts_encaps);
 

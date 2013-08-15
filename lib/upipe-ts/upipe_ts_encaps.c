@@ -78,6 +78,8 @@ struct upipe_ts_encaps {
     uint64_t ts_delay;
     /** T-STD max retention time */
     uint64_t max_delay;
+    /** true if we chop PSI sections */
+    bool psi;
 
     /** PCR period (or 0) */
     uint64_t pcr_period;
@@ -117,10 +119,16 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    const char *def;
+    uref_flow_get_def(flow_def, &def);
+    bool psi = !ubase_ncmp(def, "block.mpegtspsi.");
+
     uint64_t pid;
     uint64_t octetrate;
-    if (!uref_block_flow_get_octetrate(flow_def, &octetrate) ||
-        !uref_ts_flow_get_pid(flow_def, &pid)) {
+    if (unlikely(!uref_block_flow_get_octetrate(flow_def, &octetrate) ||
+                 !uref_ts_flow_get_pid(flow_def, &pid) ||
+                 !uref_flow_set_def_va(flow_def, "block.mpegts.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF)))) {
         uref_free(flow_def);
         upipe_ts_encaps_free_flow(upipe);
         return NULL;
@@ -139,19 +147,14 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
     upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
+    upipe_ts_encaps->psi = psi;
     upipe_ts_encaps->pcr_period = 0;
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
                                      octetrate;
     upipe_ts_encaps->next_pcr = UINT64_MAX;
-    upipe_throw_ready(upipe);
-
-    const char *def;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 !uref_flow_set_def_va(flow_def, "block.mpegts.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     upipe_ts_encaps_store_flow_def(upipe, flow_def);
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -174,7 +177,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
 
     uint8_t *buffer;
     int size = -1;
-    if (!uref_block_write(output, 0, &size, &buffer)) {
+    if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
         uref_free(output);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return NULL;
@@ -217,10 +220,14 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
     else
         header_size = TS_HEADER_SIZE;
 
-    size_t uref_size;
+    size_t uref_size, padding_size = 0;
     uref_block_size(uref, &uref_size);
-    if (uref_size < TS_SIZE - header_size)
-        header_size = TS_SIZE - uref_size;
+    if (uref_size < TS_SIZE - header_size) {
+        if (upipe_ts_encaps->psi)
+            padding_size = TS_SIZE - uref_size - header_size;
+        else
+            header_size = TS_SIZE - uref_size;
+    }
 
     struct uref *output = uref_block_alloc(upipe_ts_encaps->uref_mgr,
                                            upipe_ts_encaps->ubuf_mgr,
@@ -232,7 +239,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
 
     uint8_t *buffer;
     int size = -1;
-    if (!uref_block_write(output, 0, &size, &buffer)) {
+    if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
         uref_free(output);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return NULL;
@@ -262,14 +269,36 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
     uref_block_unmap(output, 0);
 
     struct ubuf *payload = ubuf_block_splice(uref->ubuf, 0,
-                                             TS_SIZE - header_size);
-    if (payload == NULL || !uref_block_append(output, payload) ||
-        !uref_block_resize(uref, TS_SIZE - header_size, -1)) {
+                                         TS_SIZE - header_size - padding_size);
+    if (unlikely(payload == NULL || !uref_block_append(output, payload) ||
+                 !uref_block_resize(uref,
+                            TS_SIZE - header_size - padding_size, -1))) {
         if (payload != NULL)
             ubuf_free(payload);
         uref_free(output);
         return NULL;
     }
+
+    if (padding_size) {
+        /* With PSI, pad with 0xff */
+        struct ubuf *padding = ubuf_block_alloc(upipe_ts_encaps->ubuf_mgr,
+                                                padding_size);
+        size = -1;
+        if (unlikely(padding == NULL ||
+                     !ubuf_block_write(padding, 0, &size, &buffer))) {
+            uref_free(output);
+            return NULL;
+        }
+        memset(buffer, 0xff, size);
+        ubuf_block_unmap(padding, 0);
+
+        if (unlikely(!uref_block_append(output, padding))) {
+            ubuf_free(padding);
+            uref_free(output);
+            return NULL;
+        }
+    }
+
     return output;
 }
 
@@ -300,7 +329,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                       delay * 1000 / UCLOCK_FREQ);
 
     size_t size;
-    if (!uref_block_size(uref, &size)) {
+    if (!uref_block_size(uref, &size) || !size) {
         upipe_warn_va(upipe, "empty packet received");
         uref_free(uref);
         return;
@@ -437,12 +466,40 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(upipe_ts_encaps->uref_mgr == NULL))
         upipe_throw_need_uref_mgr(upipe);
-    if (unlikely(upipe_ts_encaps->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_encaps->flow_def);
-    if (unlikely(upipe_ts_encaps->uref_mgr == NULL ||
-                 upipe_ts_encaps->ubuf_mgr == NULL)) {
+    if (unlikely(upipe_ts_encaps->uref_mgr == NULL)) {
         uref_free(uref);
         return;
+    }
+    if (unlikely(upipe_ts_encaps->ubuf_mgr == NULL))
+        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_encaps->flow_def);
+    if (unlikely(upipe_ts_encaps->ubuf_mgr == NULL)) {
+        uref_free(uref);
+        return;
+    }
+
+    /* FIXME For the moment we do not handle overlaps */
+    if (upipe_ts_encaps->psi) {
+        /* Prepend pointer_field */
+        struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_encaps->ubuf_mgr, 1);
+        uint8_t *buffer;
+        int size = -1;
+        if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buffer))) {
+            ubuf_free(ubuf);
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return;
+        }
+        assert(size == 1);
+        buffer[0] = 0;
+        ubuf_block_unmap(ubuf, 0);
+        struct ubuf *section = uref_detach_ubuf(uref);
+        uref_attach_ubuf(uref, ubuf);
+        if (unlikely(!uref_block_append(uref, section))) {
+            ubuf_free(section);
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return;
+        }
     }
 
     upipe_ts_encaps_work(upipe, uref, upump);
