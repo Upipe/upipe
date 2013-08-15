@@ -140,9 +140,9 @@ static inline bool ubuf_block_common_splice(struct ubuf *ubuf,
     size -= new_block->size;
 
     if (size > 0) {
-        assert(block->next_ubuf != NULL);
-        if (unlikely((new_block->next_ubuf = ubuf_block_splice(block->next_ubuf,
-                                                          0, size)) == NULL))
+        if (unlikely(block->next_ubuf == NULL ||
+                     (new_block->next_ubuf = ubuf_block_splice(block->next_ubuf,
+                                                             0, size)) == NULL))
             return false;
     }
     new_block->cached_ubuf = new_ubuf;
