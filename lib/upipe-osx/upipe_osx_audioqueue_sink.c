@@ -62,7 +62,7 @@ struct upipe_osx_audioqueue_sink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_osx_audioqueue_sink, upipe);
+UPIPE_HELPER_UPIPE(upipe_osx_audioqueue_sink, upipe, UPIPE_OSX_AUDIOQUEUE_SINK_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_osx_audioqueue_sink, "block.")
 
 /** @internal @This is called by AudioQueue after reading a buffer
