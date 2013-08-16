@@ -45,6 +45,8 @@ enum AVCodecID;
 enum CodecID;
 /** @hidden */
 #define AVCodecID CodecID
+#define AV_CODEC_ID_FIRST_SUBTITLE CODEC_ID_FIRST_SUBTITLE
+#define AV_CODEC_ID_FIRST_AUDIO CODEC_ID_FIRST_AUDIO
 #endif
 
 /** structure to protect exclusive access to avcodec_open() */
