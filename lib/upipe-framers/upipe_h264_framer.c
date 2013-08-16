@@ -1349,6 +1349,10 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
+    if (unlikely(upipe_h264f->flow_def == NULL)) {
+        uref_free(uref);
+        return;
+    }
 
     upipe_h264f_output(upipe, uref, upump);
 }
