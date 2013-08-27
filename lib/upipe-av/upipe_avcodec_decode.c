@@ -287,9 +287,15 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     struct ubuf *ubuf_samples;
     uint8_t *buf;
     int size;
+    uint64_t framenum = 0;
 
     frame->opaque = upipe_avcdec->uref;
     upipe_avcdec->uref = NULL;
+
+    uref_pic_get_number(frame->opaque, &framenum);
+    upipe_dbg_va(upipe, "Allocating frame for %"PRIu64" (%p)",
+                 framenum, frame->opaque);
+
 
     /* direct rendering - allocate ubuf for audio */
     if (!av_sample_fmt_is_planar(upipe_avcdec->context->sample_fmt) &&
@@ -687,6 +693,12 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
     struct uref *uref = frame->opaque;
+
+    uint64_t framenum = 0;
+    uref_pic_get_number(frame->opaque, &framenum);
+
+    upipe_dbg_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64,
+                 upipe_avcdec->counter, framenum);
 
     /* fetch audio sample size (in case it has been reduced) */
     int avbufsize = av_samples_get_buffer_size(NULL, context->channels,
