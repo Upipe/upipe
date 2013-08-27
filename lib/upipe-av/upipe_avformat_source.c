@@ -720,6 +720,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
         }
 
         stream->discard = AVDISCARD_DEFAULT; 
+        uref_flow_set_headers(flow_def, codec->extradata, codec->extradata_size);
         upipe_split_throw_add_flow(upipe, i, flow_def);
         uref_free(flow_def);
     }
