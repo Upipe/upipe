@@ -64,7 +64,7 @@ static const struct {
  * @param fmt av sample format
  * @return flow definition, or NULL if not found
  */
-const char *upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
+static const char *upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
 {
     for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
          i++)
@@ -78,13 +78,13 @@ const char *upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
  * @param flow_def flow definition
  * @return av sample format, or AV_SAMPLE_FMT_NONE if not found
  */
-enum AVSampleFormat upipe_av_samplefmt_from_flow_def(const char *flow_def)
+static enum AVSampleFormat upipe_av_samplefmt_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
          i++)
         if (!ubase_ncmp(flow_def, upipe_av_sample_fmts[i].flow_def))
             return upipe_av_sample_fmts[i].fmt;
-    return 0;
+    return AV_SAMPLE_FMT_NONE;
 }
 
 #ifdef __cplusplus

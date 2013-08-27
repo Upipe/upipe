@@ -46,6 +46,10 @@ enum upipe_avcenc_command {
     UPIPE_AVCENC_GET_CODEC,
     /** asks to open the given codec (const char *) */
     UPIPE_AVCENC_SET_CODEC,
+    /** asks to open the given codec by name(const char *) */
+    UPIPE_AVCENC_SET_CODEC_BY_NAME,
+    /** sets the content of an avcodec option (const char *, const char *) */
+    UPIPE_AVCENC_SET_OPTION
 };
 
 /** @This returns the currently opened codec.
@@ -70,6 +74,35 @@ static inline bool upipe_avcenc_set_codec(struct upipe *upipe, const char *codec
 {
     return upipe_control(upipe, UPIPE_AVCENC_SET_CODEC, UPIPE_AVCENC_SIGNATURE,
                          codec);
+}
+
+/** @This asks to open the given codec.
+ *
+ * @param upipe description structure of the pipe
+ * @param codec codec to open
+ * @return false in case of error
+ */
+static inline bool upipe_avcenc_set_codec_by_name(struct upipe *upipe,
+                                                  const char *codec)
+{
+    return upipe_control(upipe, UPIPE_AVCENC_SET_CODEC_BY_NAME,
+                         UPIPE_AVCENC_SIGNATURE, codec);
+}
+
+/** @This sets the content of an avcodec option. It only has effect before the
+ * first packet is sent.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param content content of the option
+ * @return false in case of error
+ */
+static inline bool upipe_avcenc_set_option(struct upipe *upipe,
+                                           const char *option,
+                                           const char *content)
+{
+    return upipe_control(upipe, UPIPE_AVCENC_SET_OPTION, UPIPE_AVCENC_SIGNATURE,
+                         option, content);
 }
 
 /** @This returns the management structure for all avformat sources.

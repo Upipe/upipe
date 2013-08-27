@@ -45,9 +45,10 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
@@ -146,6 +147,12 @@ struct upipe *build_pipeline(const char *codec_def,
                              struct upump_mgr *upump_mgr, int num,
                              struct uref *flow_def)
 {
+    /* check def to choose ubuf manager */
+    struct ubuf_mgr *ubuf_mgr = pic_mgr;
+    if (strstr(codec_def, ".sound.")) {
+        ubuf_mgr = block_mgr;
+    }
+
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcenc %d", num),
@@ -165,7 +172,7 @@ struct upipe *build_pipeline(const char *codec_def,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcdec %d", num),
         flow_def);
     assert(avcdec);
-    assert(upipe_set_ubuf_mgr(avcdec, pic_mgr));
+    assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcdec, upump_mgr));
     }
@@ -256,7 +263,7 @@ void *thread_start(void *_thread)
 
 int main(int argc, char **argv)
 {
-    struct uref *pic;
+    struct uref *pic, *sound;
     int i;
     int opt;
     int thread_num = THREAD_NUM;
@@ -338,6 +345,24 @@ int main(int argc, char **argv)
         pic = uref_pic_alloc(uref_mgr, pic_mgr, 120, 96);
         fill_pic(pic->ubuf);
         upipe_input(avcenc, pic, NULL);
+   }
+
+    upipe_release(avcenc);
+    printf("Everything good so far, cleaning\n");
+
+    /* mono-threaded audio test without upump_mgr */
+    flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
+    avcenc = build_pipeline("mp2.sound.", NULL, -1, flow);
+    uref_free(flow);
+
+    for (i=0; i < FRAMES_LIMIT; i++) {
+        uint8_t *buf = NULL;
+        int size = -1;
+        sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*(1024+i-FRAMES_LIMIT/2));
+        uref_block_write(sound, 0, &size, &buf);
+        memset(buf, 0, size);
+        uref_block_unmap(sound, 0);
+        upipe_input(avcenc, sound, NULL);
    }
 
     upipe_release(avcenc);
