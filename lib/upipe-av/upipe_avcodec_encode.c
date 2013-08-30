@@ -29,12 +29,14 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
+#include <upipe/uclock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block.h>
@@ -69,6 +71,8 @@
 
 #define PREFIX_FLOW "block."
 
+UREF_ATTR_INT(avcenc, pts, "x.avcenc_pts", avcenc pts)
+
 static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
                                       struct upump *upump);
@@ -85,7 +89,6 @@ struct upipe_avcodec_open_params {
     AVDictionary *options;
     int width;
     int height;
-    struct urational timebase;
 };
 
 /** upipe_avcenc structure with avcenc parameters */ 
@@ -120,9 +123,10 @@ struct upipe_avcenc {
 
     /** uref associated to frames currently in encoder */
     struct uref **uref;
+    /** urefs array size */
     int uref_max;
-    /** last incoming pts */
-    uint64_t pts;
+    /** last incoming pts (in avcodec timebase) */
+    int64_t avcpts;
 
     /** frame counter */
     uint64_t counter;
@@ -253,9 +257,18 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
                                                codec->pix_fmts);
             }
 
+            /* aspect ratio */
+            struct urational sar = {0, 0};
+            if (uref_pic_get_aspect(upipe_avcenc->input_flow, &sar)) {
+                context->sample_aspect_ratio.num = sar.num;
+                context->sample_aspect_ratio.den = sar.den;
+            }
 
-            context->time_base.num = 1;
-            context->time_base.den = 25;
+            /* timebase (1/fps) */
+            struct urational timebase = {25, 1};
+            uref_pic_flow_get_fps(upipe_avcenc->input_flow, &timebase);
+            context->time_base.num = timebase.den;
+            context->time_base.den = timebase.num;
             context->pix_fmt = pix_fmt;
             context->width = params->width;
             context->height = params->height;
@@ -267,6 +280,8 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
             uint64_t rate = 44100;
             uref_sound_flow_get_channels(upipe_avcenc->input_flow, &channels);
             uref_sound_flow_get_rate(upipe_avcenc->input_flow, &rate);
+            context->time_base.num = 1;
+            context->time_base.den = 1;//rate;
             context->sample_fmt = upipe_avcenc->sample_fmt;
             context->channels = channels;
             context->channel_layout = av_get_default_channel_layout(channels);
@@ -361,7 +376,6 @@ static bool upipe_avcenc_open_codec_wrap(struct upipe *upipe)
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
 
     /* use udeal/upump callback if available */
-    upipe_dbg_va(upipe, "ALIVE %s %d", __func__, __LINE__);
     if (upipe_avcenc->upump_mgr) {
         upipe_dbg(upipe, "upump_mgr present, using udeal");
 
@@ -468,7 +482,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     int i, gotframe, ret, size;
     struct ubuf *ubuf_block;
     uint8_t *buf;
-    uint64_t pts = 0;
+    int64_t priv = 0;
+    uint64_t ts = 0, ts_diff;
 
     if (unlikely(frame == NULL)) {
         /* uref == NULL, flushing encoder */
@@ -518,9 +533,9 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     struct uref *uref = NULL;
     for (i=0; i < upipe_avcenc->uref_max; i++) {
         if (upipe_avcenc->uref[i]) {
-            pts = 0;
-            if (uref_clock_get_pts(upipe_avcenc->uref[i], &pts)
-                                           && pts == avpkt.pts) {
+            priv = 0;
+            if (uref_avcenc_get_pts(upipe_avcenc->uref[i], &priv)
+                                           && priv == avpkt.pts) {
                 uref = upipe_avcenc->uref[i];
                 upipe_avcenc->uref[i] = NULL;
                 break;
@@ -532,6 +547,24 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                                                   avpkt.pts);
         uref = uref_alloc(upipe_avcenc->uref_mgr);
     }
+    uref_avcenc_delete_pts(uref);
+
+    /* set dts */
+    ts_diff = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
+              * upipe_avcenc->context->time_base.num
+              / upipe_avcenc->context->time_base.den;
+    if (uref_clock_get_pts(uref, &ts)) {
+        uref_clock_set_dts(uref, ts - ts_diff);
+    }
+    if (uref_clock_get_pts_sys(uref, &ts)) {
+        uref_clock_set_dts_sys(uref, ts - ts_diff);
+    }
+
+    /* vbv delay */
+    if (upipe_avcenc->context->vbv_delay) {
+        uref_clock_set_vbv_delay(uref, upipe_avcenc->context->vbv_delay);
+    }
+
     /* unmap input and clean */
     switch (codec->type) {
         case AVMEDIA_TYPE_VIDEO: {
@@ -638,7 +671,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
             if (blocksize != size) {
                 upipe_avcenc_append_uref_stream(upipe, uref);
 
-                /* TODO: extrapolate pts for extracted uref*/
+                /* TODO: extrapolate pts for extracted uref */
                 while (upipe_avcenc->next_uref &&
                        uref_block_size(upipe_avcenc->next_uref, &remaining) &&
                        (remaining >= size)) {
@@ -670,14 +703,15 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
     }
 
     /* set pts (needed for uref/avpkt mapping) */
-    if (unlikely(!uref_clock_get_pts(uref, &pts) || pts == 0
-                                    || pts == AV_NOPTS_VALUE )) {
-        pts = upipe_avcenc->pts++;
-        uref_clock_set_pts(uref, pts);
-    } else {
-        upipe_avcenc->pts = pts;
+    frame->pts = upipe_avcenc->avcpts++;
+    uref_avcenc_set_pts(uref, frame->pts);
+
+    /* aspect ratio */
+    struct urational sar = {0, 0};
+    if (uref_pic_get_aspect(uref, &sar)) {
+        context->sample_aspect_ratio.num = sar.num;
+        context->sample_aspect_ratio.den = sar.den;
     }
-    frame->pts = pts;
 
     /* store uref in mapping array */
     for (i=0; i < upipe_avcenc->uref_max
@@ -930,7 +964,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->frame = avcodec_alloc_frame();
     upipe_avcenc->uref = NULL;
     upipe_avcenc->uref_max = 1;
-    upipe_avcenc->pts = 1;
+    upipe_avcenc->avcpts = 1;
     upipe_avcenc->sample_fmt = upipe_av_samplefmt_from_flow_def(def);
 
     memset(&upipe_avcenc->open_params, 0, sizeof(struct upipe_avcodec_open_params));

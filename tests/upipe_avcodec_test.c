@@ -358,7 +358,9 @@ int main(int argc, char **argv)
     for (i=0; i < FRAMES_LIMIT; i++) {
         uint8_t *buf = NULL;
         int size = -1;
-        sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*(1024+i-FRAMES_LIMIT/2));
+        int samples = (1024+i-FRAMES_LIMIT/2);
+        sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*samples);
+        uref_sound_flow_set_samples(sound, samples);
         uref_block_write(sound, 0, &size, &buf);
         memset(buf, 0, size);
         uref_block_unmap(sound, 0);
