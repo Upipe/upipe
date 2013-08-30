@@ -462,6 +462,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
         uref_free(uref);
 
         int error = av_write_frame(upipe_avfsink->context, &avpkt);
+        free(avpkt.data);
         if (unlikely(error < 0)) {
             upipe_av_strerror(error, buf);
             upipe_err_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
