@@ -19,25 +19,29 @@
  */
 
 /** @file
- * @short Upipe module encapsulating (adding TS header) PES and PSI access units
+ * @short Upipe declarations common to TS demux and mux
  */
 
-#ifndef _UPIPE_TS_UPIPE_TS_ENCAPS_H_
+#ifndef _UPIPE_TS_UPIPE_TS_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_TS_ENCAPS_H_
+#define _UPIPE_TS_UPIPE_TS_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
-#define UPIPE_TS_ENCAPS_SIGNATURE UBASE_FOURCC('t','s','e','c')
-
-/** @This returns the management structure for all ts_encaps pipes.
- *
- * @return pointer to manager
- */
-struct upipe_mgr *upipe_ts_encaps_mgr_alloc(void);
+/** @This is the conformance mode of a transport stream. */
+enum upipe_ts_conformance {
+    /** automatic conformance */
+    UPIPE_TS_CONFORMANCE_AUTO,
+    /** no conformance, just ISO 13818-1 */
+    UPIPE_TS_CONFORMANCE_ISO,
+    /** DVB conformance (ETSI EN 300 468) */
+    UPIPE_TS_CONFORMANCE_DVB,
+    /** ATSC conformance */
+    UPIPE_TS_CONFORMANCE_ATSC,
+    /** ISDB conformance */
+    UPIPE_TS_CONFORMANCE_ISDB
+};
 
 #ifdef __cplusplus
 }

@@ -192,7 +192,7 @@ struct upipe_ts_demux {
     /** true if the conformance is guessed from the stream */
     bool auto_conformance;
     /** current conformance */
-    enum upipe_ts_demux_conformance conformance;
+    enum upipe_ts_conformance conformance;
 
     /** probe to get new flow events from subpipes created by psi_pid objects */
     struct uprobe psi_pid_plumber;
@@ -267,7 +267,7 @@ struct upipe_ts_demux_program {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe, UPIPE_TS_DEMUX_PROGRAM_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_demux_program, "program.")
+UPIPE_HELPER_FLOW(upipe_ts_demux_program, "void.")
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux, upipe_ts_demux_program, program,
                      program_mgr, programs, uchain)
@@ -1500,7 +1500,7 @@ static void upipe_ts_demux_program_proxy_released(struct upipe *upipe)
     }
 }
 
-/** @internal @This initializes the output manager for a ts_demux pipe.
+/** @internal @This initializes the program manager for a ts_demux pipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -1587,7 +1587,7 @@ static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
 /** @internal @This catches the new_flow_def events coming from psim subpipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param upipe pointer to the subpipe
+ * @param psim pointer to the subpipe
  * @param event event triggered by the subpipe
  * @param args arguments of the event
  * @return true if the event was caught
@@ -1648,15 +1648,15 @@ static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
         default:
         case 0:
             /* No NIT yet, nothing to guess */
-            upipe_ts_demux->conformance = CONFORMANCE_ISO;
+            upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_ISO;
             break;
         case 16:
             /* Mandatory PID in DVB systems */
-            upipe_ts_demux->conformance = CONFORMANCE_DVB;
+            upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_DVB;
             break;
         case 0x1ffb:
             /* Discouraged use of the base PID as NIT in ATSC systems */
-            upipe_ts_demux->conformance = CONFORMANCE_ATSC;
+            upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_ATSC;
             break;
     }
 }
@@ -1744,7 +1744,7 @@ static bool upipe_ts_demux_patd_add_program(struct uprobe *uprobe,
 
     struct uref *flow_def = uref_dup(upipe_ts_demux->flow_def_input);
     if (likely(flow_def != NULL &&
-               uref_flow_set_def(flow_def, "program.") &&
+               uref_flow_set_def(flow_def, "void.") &&
                uref_flow_set_raw_def(flow_def, "block.mpegtspsi.mpegtspmt.") &&
                uref_ts_flow_set_psi_filter(flow_def, filter, mask,
                                            PSI_HEADER_SIZE_SYNTAX1) &&
@@ -1929,7 +1929,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux->psi_pid_pat = NULL;
 
     ulist_init(&upipe_ts_demux->psi_pids);
-    upipe_ts_demux->conformance = CONFORMANCE_ISO;
+    upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_ISO;
     upipe_ts_demux->auto_conformance = true;
     upipe_ts_demux->nit_pid = 0;
 
@@ -2077,14 +2077,14 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
 }
 
 /** @internal @This returns the currently detected conformance mode. It cannot
- * return CONFORMANCE_AUTO.
+ * return UPIPE_TS_CONFORMANCE_AUTO.
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
  * @return false in case of error
  */
 static bool _upipe_ts_demux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_demux_conformance *conformance_p)
+                                enum upipe_ts_conformance *conformance_p)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     assert(conformance_p != NULL);
@@ -2099,18 +2099,18 @@ static bool _upipe_ts_demux_get_conformance(struct upipe *upipe,
  * @return false in case of error
  */
 static bool _upipe_ts_demux_set_conformance(struct upipe *upipe,
-                                enum upipe_ts_demux_conformance conformance)
+                                enum upipe_ts_conformance conformance)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     switch (conformance) {
-        case CONFORMANCE_AUTO:
+        case UPIPE_TS_CONFORMANCE_AUTO:
             upipe_ts_demux->auto_conformance = true;
             upipe_ts_demux_conformance_guess(upipe);
             break;
-        case CONFORMANCE_ISO:
-        case CONFORMANCE_DVB:
-        case CONFORMANCE_ATSC:
-        case CONFORMANCE_ISDB:
+        case UPIPE_TS_CONFORMANCE_ISO:
+        case UPIPE_TS_CONFORMANCE_DVB:
+        case UPIPE_TS_CONFORMANCE_ATSC:
+        case UPIPE_TS_CONFORMANCE_ISDB:
             upipe_ts_demux->auto_conformance = false;
             upipe_ts_demux->conformance = conformance;
             break;
@@ -2134,15 +2134,15 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
         case UPIPE_TS_DEMUX_GET_CONFORMANCE: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
-            enum upipe_ts_demux_conformance *conformance_p =
-                va_arg(args, enum upipe_ts_demux_conformance *);
+            enum upipe_ts_conformance *conformance_p =
+                va_arg(args, enum upipe_ts_conformance *);
             return _upipe_ts_demux_get_conformance(upipe, conformance_p);
         }
         case UPIPE_TS_DEMUX_SET_CONFORMANCE: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
-            enum upipe_ts_demux_conformance conformance =
-                va_arg(args, enum upipe_ts_demux_conformance);
+            enum upipe_ts_conformance conformance =
+                va_arg(args, enum upipe_ts_conformance);
             return _upipe_ts_demux_set_conformance(upipe, conformance);
         }
 

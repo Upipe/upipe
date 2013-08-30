@@ -51,6 +51,7 @@
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/upipe_ts_encaps.h>
+#include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdbool.h>
@@ -241,6 +242,7 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     assert(uref_block_flow_set_octetrate(uref, 2206));
+    assert(uref_ts_flow_set_tb_rate(uref, 2206));
     assert(uref_ts_flow_set_pid(uref, 68));
 
     struct upipe_mgr *upipe_ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
@@ -289,6 +291,7 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     assert(uref_block_flow_set_octetrate(uref, 2048));
+    assert(uref_ts_flow_set_tb_rate(uref, 2048));
     assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_flow_alloc(upipe_ts_encaps_mgr,
@@ -298,7 +301,7 @@ int main(int argc, char *argv[])
     uref_free(uref);
     assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
     assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
-    assert(upipe_ts_encaps_set_pcr_period(upipe_ts_encaps, UCLOCK_FREQ / 5));
+    assert(upipe_ts_mux_set_pcr_interval(upipe_ts_encaps, UCLOCK_FREQ / 5));
     assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
@@ -327,6 +330,7 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
     assert(uref_block_flow_set_octetrate(uref, 1025));
+    assert(uref_ts_flow_set_tb_rate(uref, 1025));
     assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_flow_alloc(upipe_ts_encaps_mgr,

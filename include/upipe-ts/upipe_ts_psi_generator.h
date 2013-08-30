@@ -35,6 +35,42 @@ extern "C" {
 #define UPIPE_TS_PSIG_PROGRAM_SIGNATURE UBASE_FOURCC('t','P','g','p')
 #define UPIPE_TS_PSIG_FLOW_SIGNATURE UBASE_FOURCC('t','P','g','f')
 
+/** @This extends upipe_command with specific commands for ts_psig_program. */
+enum upipe_ts_psig_program_command {
+    UPIPE_TS_PSIG_PROGRAM_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the current PCR PID (unsigned int *) */
+    UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID,
+    /** sets the PCR PID (unsigned int) */
+    UPIPE_TS_PSIG_PROGRAM_SET_PCR_PID
+};
+
+/** @This returns the current PCR PID.
+ *
+ * @param upipe description structure of the pipe
+ * @param pcr_pid_p filled in with the pcr_pid
+ * @return false in case of error
+ */
+static inline bool upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
+                                                     unsigned int *pcr_pid_p)
+{
+    return upipe_control(upipe, UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID,
+                         UPIPE_TS_PSIG_PROGRAM_SIGNATURE, pcr_pid_p);
+}
+
+/** @This sets the PCR PID.
+ *
+ * @param upipe description structure of the pipe
+ * @param pcr_pid pcr_pid
+ * @return false in case of error
+ */
+static inline bool upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
+                                                     unsigned int pcr_pid)
+{
+    return upipe_control(upipe, UPIPE_TS_PSIG_PROGRAM_SET_PCR_PID,
+                         UPIPE_TS_PSIG_PROGRAM_SIGNATURE, pcr_pid);
+}
+
 /** @This returns the management structure for all ts_psig pipes.
  *
  * @return pointer to manager

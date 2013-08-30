@@ -8,13 +8,15 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_check.c \
 	upipe_ts_demux.c \
 	upipe_ts_decaps.c \
-	upipe_ts_join.c \
 	upipe_ts_encaps.c \
+	upipe_ts_join.c \
+	upipe_ts_mux.c \
 	upipe_ts_pes_decaps.c \
 	upipe_ts_pes_encaps.c \
 	upipe_ts_pat_decoder.c \
 	upipe_ts_pmt_decoder.c \
 	upipe_ts_psi_generator.c \
+	upipe_ts_psi_inserter.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
 	upipe_ts_split.c \

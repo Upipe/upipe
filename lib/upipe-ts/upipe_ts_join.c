@@ -106,8 +106,8 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump);
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
-                                              struct uprobe *uprobe,
-                                              uint32_t signature, va_list args)
+                                             struct uprobe *uprobe,
+                                             uint32_t signature, va_list args)
 {
     struct uref *flow_def;
     struct upipe *upipe = upipe_ts_join_sub_alloc_flow(mgr, uprobe, signature,
@@ -143,7 +143,6 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_join_sub_from_upipe(upipe);
 
     if (unlikely(uref->ubuf == NULL)) {
-        /* TODO */
         uref_free(uref);
         return;
     }
@@ -248,11 +247,9 @@ static struct upipe_ts_join_sub *upipe_ts_join_find_input(struct upipe *upipe)
             earliest_input = input;
         }
     }
-    if (earliest_input != NULL) {
-        uchain = ulist_peek(&earliest_input->urefs);
-        if (uchain == NULL)
-            return NULL; /* wait for the incoming packet */
-    }
+    if (earliest_input == NULL)
+        return NULL;
+
     return earliest_input;
 }
 
@@ -277,11 +274,7 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
         struct uref *uref = uref_from_uchain(uchain);
 
         if (ulist_empty(&input->urefs)) {
-            uint64_t duration;
-            if (uref_clock_get_duration(uref, &duration))
-                input->next_dts += duration;
-            else
-                input->next_dts = UINT64_MAX;
+            input->next_dts = UINT64_MAX;
             upipe_release(upipe_ts_join_sub_to_upipe(input));
         } else {
             uchain = ulist_peek(&input->urefs);
@@ -294,6 +287,22 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
 
         upipe_ts_join_output(upipe, uref, upump);
     }
+}
+
+/** @internal @This returns the flow definition on the output.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the flow definition
+ * @return false in case of error
+ */
+static bool _upipe_ts_join_get_flow_def(struct upipe *upipe, struct uref **p)
+{
+    struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
+    if (unlikely(upipe_ts_join->uref_mgr == NULL))
+        upipe_throw_need_uref_mgr(upipe);
+    if (unlikely(upipe_ts_join->flow_def == NULL))
+        return false;
+    return upipe_ts_join_get_flow_def(upipe, p);
 }
 
 /** @internal @This processes control commands.
@@ -319,7 +328,7 @@ static bool _upipe_ts_join_control(struct upipe *upipe,
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_join_get_flow_def(upipe, p);
+            return _upipe_ts_join_get_flow_def(upipe, p);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -353,7 +362,7 @@ static bool upipe_ts_join_control(struct upipe *upipe,
     if (upipe_ts_join->uref_mgr != NULL && upipe_ts_join->flow_def == NULL) {
         struct uref *flow_def =
             uref_block_flow_alloc_def(upipe_ts_join->uref_mgr,
-                                      EXPECTED_FLOW_DEF);
+                                      "mpegts.");
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;

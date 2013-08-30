@@ -26,6 +26,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
+#include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
@@ -50,8 +51,6 @@
 
 /** @internal @This is the private context of a ts psig pipe. */
 struct upipe_ts_psig {
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -63,7 +62,7 @@ struct upipe_ts_psig {
     bool flow_def_sent;
 
     /** TS ID */
-    uint32_t tsid;
+    uint16_t tsid;
     /** PAT version */
     uint8_t pat_version;
 
@@ -192,6 +191,7 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
     upipe_use(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program));
+    upipe_ts_psig_program->pmt_version++;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -272,9 +272,7 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_program->pmt_pid = pid;
     upipe_ts_psig_program->pmt_version = 0;
     uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig_program->pmt_version);
-    uint64_t pcr_pid = 8191;
-    uref_ts_flow_get_pcr_pid(flow_def, &pcr_pid);
-    upipe_ts_psig_program->pcr_pid = pcr_pid;
+    upipe_ts_psig_program->pcr_pid = 8191;
     upipe_ts_psig_program->descriptors = NULL;
     upipe_ts_psig_program->descriptors_size = 0;
     uref_ts_flow_get_descriptors(flow_def, &upipe_ts_psig_program->descriptors,
@@ -285,6 +283,7 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_psig *upipe_ts_psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
     upipe_use(upipe_ts_psig_to_upipe(upipe_ts_psig));
+    upipe_ts_psig->pat_version++;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -309,6 +308,12 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+
+    upipe_notice_va(upipe,
+                    "new PMT program=%"PRIu16" version=%"PRIu8" pcrpid=%"PRIu16,
+                    upipe_ts_psig_program->program_number,
+                    upipe_ts_psig_program->pmt_version,
+                    upipe_ts_psig_program->pcr_pid);
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_psig->ubuf_mgr,
                                          PSI_MAX_SIZE + PSI_HEADER_SIZE);
@@ -350,6 +355,10 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach (&upipe_ts_psig_program->flows, uchain) {
         struct upipe_ts_psig_flow *upipe_ts_psig_flow =
             upipe_ts_psig_flow_from_uchain(uchain);
+        upipe_notice_va(upipe, " * ES pid=%"PRIu16" streamtype=0x%"PRIx8,
+                        upipe_ts_psig_flow->pid,
+                        upipe_ts_psig_flow->stream_type);
+
         uint8_t *es = pmt_get_es(buffer, j);
         if (unlikely(es == NULL ||
                      !pmt_validate_es(buffer, es,
@@ -383,7 +392,41 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
 
     ubuf_block_resize(ubuf, 0, pmt_size);
     uref_attach_ubuf(uref, ubuf);
+    uref_block_set_start(uref);
     upipe_ts_psig_program_output(upipe, uref, upump);
+
+    upipe_notice(upipe, "end PMT");
+}
+
+/** @internal @This returns the current PCR PID.
+ *
+ * @param upipe description structure of the pipe
+ * @param pcr_pid_p filled in with the pcr_pid
+ * @return false in case of error
+ */
+static bool _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
+                                               unsigned int *pcr_pid_p)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    assert(pcr_pid_p != NULL);
+    *pcr_pid_p = upipe_ts_psig_program->pcr_pid;
+    return true;
+}
+
+/** @internal @This sets the PCR PID.
+ *
+ * @param upipe description structure of the pipe
+ * @param pcr_pid pcr_pid
+ * @return false in case of error
+ */
+static bool _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
+                                               unsigned int pcr_pid)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    upipe_ts_psig_program->pcr_pid = pcr_pid;
+    return true;
 }
 
 /** @internal @This processes control commands.
@@ -409,6 +452,19 @@ static bool upipe_ts_psig_program_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psig_program_set_output(upipe, output);
+        }
+
+        case UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_PSIG_PROGRAM_SIGNATURE);
+            unsigned int *pcr_pid_p = va_arg(args, unsigned int *);
+            return _upipe_ts_psig_program_get_pcr_pid(upipe, pcr_pid_p);
+        }
+        case UPIPE_TS_PSIG_PROGRAM_SET_PCR_PID: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_PSIG_PROGRAM_SIGNATURE);
+            unsigned int pcr_pid = va_arg(args, unsigned int);
+            return _upipe_ts_psig_program_set_pcr_pid(upipe, pcr_pid);
         }
 
         default:
@@ -509,6 +565,9 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    upipe_notice_va(upipe, "new PAT tsid=%"PRIu16" version=%"PRIu8,
+                    upipe_ts_psig->tsid, upipe_ts_psig->pat_version);
+
     unsigned int nb_sections = 0;
     struct ulist sections;
     ulist_init(&sections);
@@ -554,6 +613,10 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         {
             struct upipe_ts_psig_program *upipe_ts_psig_program =
                 upipe_ts_psig_program_from_uchain(program_chain);
+            upipe_notice_va(upipe, " * program number=%"PRIu16" pid=%"PRIu16,
+                            upipe_ts_psig_program->program_number,
+                            upipe_ts_psig_program->pmt_pid);
+
             patn_init(program);
             patn_set_program(program, upipe_ts_psig_program->program_number);
             patn_set_pid(program, upipe_ts_psig_program->pmt_pid);
@@ -570,7 +633,10 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         nb_sections++;
     } while (program_chain != NULL);
 
+    upipe_notice_va(upipe, "end PAT (%u sections)", nb_sections);
+
     struct uchain *section_chain;
+    bool first = true;
     while ((section_chain = ulist_pop(&sections)) != NULL) {
         bool last = ulist_empty(&sections);
         struct ubuf *ubuf = ubuf_from_uchain(section_chain);
@@ -601,7 +667,10 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             }
         }
         uref_attach_ubuf(output, ubuf);
+        if (first)
+            uref_block_set_start(uref);
         upipe_ts_psig_output(upipe, output, upump);
+        first = false;
     }
 }
 

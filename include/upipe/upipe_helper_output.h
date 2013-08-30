@@ -179,6 +179,8 @@ static bool STRUCTURE##_get_flow_def(struct upipe *upipe, struct uref **p)  \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
+    if (STRUCTURE->FLOW_DEF == NULL)                                        \
+        return false;                                                       \
     *p = STRUCTURE->FLOW_DEF;                                               \
     STRUCTURE->FLOW_DEF_SENT = true;                                        \
     return true;                                                            \

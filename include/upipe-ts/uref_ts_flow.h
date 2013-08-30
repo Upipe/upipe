@@ -43,6 +43,7 @@ extern "C" {
 UREF_ATTR_UNSIGNED(ts_flow, pid, "t.pid", PID)
 UREF_ATTR_UNSIGNED(ts_flow, ts_delay, "t.ts_delay", T-STD TS delay (TB buffer))
 UREF_ATTR_UNSIGNED(ts_flow, max_delay, "t.maxdelay", maximum retention time)
+UREF_ATTR_UNSIGNED(ts_flow, tb_rate, "t.tbrate", T-STD TB emptying rate)
 UREF_ATTR_OPAQUE(ts_flow, psi_filter_internal, "t.psi.filter", PSI filter)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_id, "t.pes_id", PES stream ID)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_header, "t.pes_header",
@@ -53,7 +54,6 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, psi_version, "t.psi_version",
         initial version number)
 UREF_ATTR_UNSIGNED(ts_flow, tsid, "t.tsid", transport stream ID)
 UREF_ATTR_UNSIGNED(ts_flow, sid, "t.sid", service ID/program number)
-UREF_ATTR_UNSIGNED(ts_flow, pcr_pid, "t.pcr_pid", PCR PID)
 UREF_ATTR_OPAQUE(ts_flow, descriptors, "t.desc", descriptors)
 UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
 

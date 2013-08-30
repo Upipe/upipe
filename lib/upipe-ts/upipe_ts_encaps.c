@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_encaps.h>
+#include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdlib.h>
@@ -51,6 +52,8 @@
 
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
+/** 2^33 (max resolution of PCR, PTS and DTS) */
+#define UINT33_MAX UINT64_C(8589934592)
 /** T-STD standard max retention time - 1 s */
 #define T_STD_MAX_RETENTION UCLOCK_FREQ
 
@@ -72,8 +75,8 @@ struct upipe_ts_encaps {
     uint16_t pid;
     /** octetrate */
     uint64_t octetrate;
-    /** max octetrate (in the sense of T-STD) */
-    uint64_t max_octetrate;
+    /** T-STD TB rate */
+    uint64_t tb_rate;
     /** T-STD TS delay (TB buffer) */
     uint64_t ts_delay;
     /** T-STD max retention time */
@@ -81,8 +84,8 @@ struct upipe_ts_encaps {
     /** true if we chop PSI sections */
     bool psi;
 
-    /** PCR period (or 0) */
-    uint64_t pcr_period;
+    /** PCR interval (or 0) */
+    uint64_t pcr_interval;
     /** PCR tolerance */
     uint64_t pcr_tolerance;
 
@@ -124,8 +127,10 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     bool psi = !ubase_ncmp(def, "block.mpegtspsi.");
 
     uint64_t pid;
-    uint64_t octetrate;
+    uint64_t octetrate, tb_rate;
     if (unlikely(!uref_block_flow_get_octetrate(flow_def, &octetrate) ||
+                 !octetrate ||
+                 !uref_ts_flow_get_tb_rate(flow_def, &tb_rate) ||
                  !uref_ts_flow_get_pid(flow_def, &pid) ||
                  !uref_flow_set_def_va(flow_def, "block.mpegts.%s",
                                        def + strlen(EXPECTED_FLOW_DEF)))) {
@@ -140,15 +145,13 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps_init_ubuf_mgr(upipe);
     upipe_ts_encaps->pid = pid;
     upipe_ts_encaps->octetrate = octetrate;
-    upipe_ts_encaps->max_octetrate = octetrate;
-    uref_block_flow_get_max_octetrate(flow_def,
-                                      &upipe_ts_encaps->max_octetrate);
+    upipe_ts_encaps->tb_rate = tb_rate;
     upipe_ts_encaps->ts_delay = 0;
     uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
     upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
     upipe_ts_encaps->psi = psi;
-    upipe_ts_encaps->pcr_period = 0;
+    upipe_ts_encaps->pcr_interval = 0;
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
                                      octetrate;
@@ -188,7 +191,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
     /* Do not increase continuity counter on packets containing no payload */
     ts_set_cc(buffer, upipe_ts_encaps->last_cc);
     ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE - 1);
-    tsaf_set_pcr(buffer, pcr / 300);
+    tsaf_set_pcr(buffer, (pcr / 300) % UINT33_MAX);
     tsaf_set_pcrext(buffer, pcr % 300);
 
     uref_block_unmap(output, 0);
@@ -261,7 +264,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (random)
             tsaf_set_randomaccess(buffer);
         if (pcr) {
-            tsaf_set_pcr(buffer, pcr / 300);
+            tsaf_set_pcr(buffer, (pcr / 300) % UINT33_MAX);
             tsaf_set_pcrext(buffer, pcr % 300);
         }
     }
@@ -340,7 +343,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
     uint64_t duration = (uint64_t)size * UCLOCK_FREQ /
                         upipe_ts_encaps->octetrate;
     uint64_t peak_duration = (uint64_t)size * UCLOCK_FREQ /
-                             upipe_ts_encaps->max_octetrate;
+                             upipe_ts_encaps->tb_rate;
     uint64_t end = dts - delay;
     uint64_t begin = end - duration;
 
@@ -365,14 +368,14 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                                          upipe_ts_encaps->pcr_tolerance);
                 upipe_ts_encaps_output(upipe, output, upump);
             }
-            upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_period;
+            upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
         }
     }
 
     bool random = uref_flow_get_random(uref);
     if (unlikely(upipe_ts_encaps->next_pcr != UINT64_MAX &&
                  (random || upipe_ts_encaps->next_pcr == 0)))
-        /* Insert PCR on key frames and on PCR period change */
+        /* Insert PCR on key frames and on PCR interval change */
         upipe_ts_encaps->next_pcr = begin;
 
     /* Find out how many TS packets */
@@ -380,7 +383,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
     uint64_t next_pcr = upipe_ts_encaps->next_pcr;
     while (next_pcr <= end + upipe_ts_encaps->pcr_tolerance) {
         nb_pcr++;
-        next_pcr += upipe_ts_encaps->pcr_period;
+        next_pcr += upipe_ts_encaps->pcr_interval;
     }
 
     size += nb_pcr * (TS_HEADER_SIZE_PCR - TS_HEADER_SIZE);
@@ -393,7 +396,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         nb_ts = nb_pcr;
 
     /* Outputs the packets */
-    unsigned int i;
+    int i;
     for (i = nb_ts - 1; i >= 0; i--) {
         uint64_t muxdate = end - i * duration / nb_ts;
         bool pcr = upipe_ts_encaps->next_pcr <=
@@ -403,8 +406,13 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         struct uref *output =
             upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1,
                                    pcr ? muxdate : 0, random, discontinuity);
-        if (unlikely(output == NULL))
+        if (unlikely(output == NULL)) {
+            /* This can happen if the last packet was only planned to contain
+             * a PCR. In this case we will catch up next time. */
+            if (i)
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             break;
+        }
 
         /* DTS is now the latest theorical time at which we can output the
          * packet, considering the rest of the elementary stream will be output
@@ -430,7 +438,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 
         if (pcr) {
             ret = ret && uref_clock_set_ref(output);
-            upipe_ts_encaps->next_pcr = muxdate + upipe_ts_encaps->pcr_period;
+            upipe_ts_encaps->next_pcr = muxdate + upipe_ts_encaps->pcr_interval;
         }
 
         if (!ret) {
@@ -505,34 +513,34 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_encaps_work(upipe, uref, upump);
 }
 
-/** @internal @This returns the currently configured PCR period.
+/** @internal @This returns the currently configured PCR interval.
  *
  * @param upipe description structure of the pipe
- * @param pcr_period_p filled in with the PCR period
+ * @param pcr_interval_p filled in with the PCR interval
  * @return false in case of error
  */
-static bool _upipe_ts_encaps_get_pcr_period(struct upipe *upipe,
-                                            uint64_t *pcr_period_p)
+static bool upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
+                                            uint64_t *pcr_interval_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
-    assert(pcr_period_p != NULL);
-    *pcr_period_p = upipe_ts_encaps->pcr_period;
+    assert(pcr_interval_p != NULL);
+    *pcr_interval_p = upipe_ts_encaps->pcr_interval;
     return true;
 }
 
-/** @internal @This sets the PCR period. To cancel insertion of PCRs, set it
+/** @internal @This sets the PCR interval. To cancel insertion of PCRs, set it
  * to 0.
  *
  * @param upipe description structure of the pipe
- * @param pcr_period new PCR period
+ * @param pcr_interval new PCR interval
  * @return false in case of error
  */
-static bool _upipe_ts_encaps_set_pcr_period(struct upipe *upipe,
-                                            uint64_t pcr_period)
+static bool upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
+                                            uint64_t pcr_interval)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
-    upipe_ts_encaps->pcr_period = pcr_period;
-    upipe_ts_encaps->next_pcr = pcr_period ? 0 : UINT64_MAX;
+    upipe_ts_encaps->pcr_interval = pcr_interval;
+    upipe_ts_encaps->next_pcr = pcr_interval ? 0 : UINT64_MAX;
     return true;
 }
 
@@ -577,17 +585,17 @@ static bool upipe_ts_encaps_control(struct upipe *upipe,
             return upipe_ts_encaps_set_output(upipe, output);
         }
 
-        case UPIPE_TS_ENCAPS_GET_PCR_PERIOD: {
+        case UPIPE_TS_MUX_GET_PCR_INTERVAL: {
             unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_ENCAPS_SIGNATURE);
-            uint64_t *pcr_period_p = va_arg(args, uint64_t *);
-            return _upipe_ts_encaps_get_pcr_period(upipe, pcr_period_p);
+            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            uint64_t *pcr_interval_p = va_arg(args, uint64_t *);
+            return upipe_ts_encaps_get_pcr_interval(upipe, pcr_interval_p);
         }
-        case UPIPE_TS_ENCAPS_SET_PCR_PERIOD: {
+        case UPIPE_TS_MUX_SET_PCR_INTERVAL: {
             unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_ENCAPS_SIGNATURE);
-            uint64_t pcr_period = va_arg(args, uint64_t);
-            return _upipe_ts_encaps_set_pcr_period(upipe, pcr_period);
+            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            uint64_t pcr_interval = va_arg(args, uint64_t);
+            return upipe_ts_encaps_set_pcr_interval(upipe, pcr_interval);
         }
         default:
             return false;

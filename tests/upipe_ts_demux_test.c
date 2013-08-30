@@ -111,7 +111,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             const char *def;
             assert(uref_flow_get_def(uref, &def));
             assert(flow_id == wanted_flow_id);
-            if (!ubase_ncmp(def, "program.")) {
+            if (!ubase_ncmp(def, "void.")) {
                 if (upipe_ts_demux_output_pmt != NULL) {
                     printf("pmt\n");
                     upipe_release(upipe_ts_demux_output_pmt);

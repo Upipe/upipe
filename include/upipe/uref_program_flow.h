@@ -43,7 +43,7 @@ extern "C" {
 #include <inttypes.h>
 
 /** @internal flow definition prefix for programs */
-#define UREF_PROGRAM_FLOW_DEF "program."
+#define UREF_PROGRAM_FLOW_DEF "void."
 
 UREF_ATTR_STRING(program_flow, name, "prog.name", name of the program)
 

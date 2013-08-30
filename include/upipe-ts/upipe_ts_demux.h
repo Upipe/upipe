@@ -30,6 +30,7 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe-ts/upipe_ts.h>
 
 #define UPIPE_TS_DEMUX_SIGNATURE UBASE_FOURCC('t','s','d','x')
 #define UPIPE_TS_DEMUX_PROGRAM_SIGNATURE UBASE_FOURCC('t','s','d','p')
@@ -47,20 +48,6 @@ enum uprobe_ts_demux_event {
     UPROBE_TS_DEMUX_PMTD = UPROBE_LOCAL + 0x1200
 };
 
-/** @This is the conformance mode of a transport stream. */
-enum upipe_ts_demux_conformance {
-    /** automatic conformance */
-    CONFORMANCE_AUTO,
-    /** no conformance, just ISO 13818-1 */
-    CONFORMANCE_ISO,
-    /** DVB conformance (ETSI EN 300 468) */
-    CONFORMANCE_DVB,
-    /** ATSC conformance */
-    CONFORMANCE_ATSC,
-    /** ISDB conformance */
-    CONFORMANCE_ISDB
-};
-
 /** @This extends upipe_command with specific commands for ts demux. */
 enum upipe_ts_demux_command {
     UPIPE_TS_DEMUX_SENTINEL = UPIPE_CONTROL_LOCAL,
@@ -72,14 +59,14 @@ enum upipe_ts_demux_command {
 };
 
 /** @This returns the currently detected conformance mode. It cannot return
- * CONFORMANCE_AUTO.
+ * UPIPE_TS_CONFORMANCE_AUTO.
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
  * @return false in case of error
  */
 static inline bool upipe_ts_demux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_demux_conformance *conformance_p)
+                                enum upipe_ts_conformance *conformance_p)
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_GET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance_p);
@@ -92,7 +79,7 @@ static inline bool upipe_ts_demux_get_conformance(struct upipe *upipe,
  * @return false in case of error
  */
 static inline bool upipe_ts_demux_set_conformance(struct upipe *upipe,
-                                enum upipe_ts_demux_conformance conformance)
+                                enum upipe_ts_conformance conformance)
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance);

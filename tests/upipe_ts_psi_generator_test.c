@@ -230,23 +230,22 @@ int main(int argc, char *argv[])
     assert(upipe_sink != NULL);
     assert(upipe_set_output(upipe_ts_psig, upipe_sink));
 
-    /* preograms */
+    /* programs */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "void."));
     assert(uref_ts_flow_set_sid(uref, 1));
     assert(uref_ts_flow_set_pid(uref, 66));
-    assert(uref_ts_flow_set_pcr_pid(uref, 67));
     struct upipe *upipe_ts_psig_program1 = upipe_flow_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                    "ts psig program1"),
             uref);
     assert(upipe_ts_psig_program1 != NULL);
     assert(upipe_set_output(upipe_ts_psig_program1, upipe_sink));
+    assert(upipe_ts_psig_program_set_pcr_pid(upipe_ts_psig_program1, 67));
 
     assert(uref_ts_flow_set_sid(uref, 2));
     assert(uref_ts_flow_set_pid(uref, 1500));
-    assert(uref_ts_flow_delete_pcr_pid(uref));
     struct upipe *upipe_ts_psig_program2 = upipe_flow_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
                                    "ts psig program2"),

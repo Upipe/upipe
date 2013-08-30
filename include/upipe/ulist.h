@@ -47,7 +47,7 @@ struct ulist {
     struct uchain **last_p;
 };
 
-/** @This initializes a struct ulist.
+/** @This initializes a ulist.
  *
  * @param ulist pointer to a ulist structure
  */

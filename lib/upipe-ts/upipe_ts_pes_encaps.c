@@ -49,6 +49,8 @@
 
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
+/** 2^33 (max resolution of PCR, PTS and DTS) */
+#define UINT33_MAX UINT64_C(8589934592)
 
 /** @internal @This is the private context of a ts_pese pipe. */
 struct upipe_ts_pese {
@@ -194,9 +196,10 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
         pes_set_headerlength(buffer, header_size - PES_HEADER_SIZE_NOPTS);
         pes_set_dataalignment(buffer);
         if (pts != UINT64_MAX) {
-            pes_set_pts(buffer, pts / 300);
-            if (dts != UINT64_MAX && (pts / 300) != (dts / 300))
-                pes_set_dts(buffer, dts / 300);
+            pes_set_pts(buffer, (pts / 300) % UINT33_MAX);
+            if (dts != UINT64_MAX &&
+                ((pts / 300) % UINT33_MAX) != ((dts / 300) % UINT33_MAX))
+                pes_set_dts(buffer, (dts / 300) % UINT33_MAX);
         }
     }
     ubuf_block_unmap(ubuf, 0);

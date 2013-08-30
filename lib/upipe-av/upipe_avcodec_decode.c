@@ -512,6 +512,9 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
     if (pts != UINT64_MAX)
         ret = ret && uref_clock_set_dts(uref, pts);
 
+    /* VBV demay has no meaning from now on. */
+    ret = ret && uref_clock_delete_vbv_delay(uref);
+
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration)) {
         upipe_avcdec->next_pts = pts + duration;

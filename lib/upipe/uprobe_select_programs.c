@@ -27,7 +27,7 @@
  * @short probe catching add_flow events and forwarding flows of some outputs
  *
  * The probe catches the add_flow events for optional program flows (of flow
- * definition "program."), meaning that it is necessary to decode the program
+ * definition "void."), meaning that it is necessary to decode the program
  * description, and decides whether to allocate such a demux void subpipe.
  *
  * It also catches add_flow events for elementary streams and only exports
@@ -409,7 +409,7 @@ static bool uprobe_selprog_add_flow(struct uprobe *uprobe, struct upipe *upipe,
     output->program_number = program_number;
     uprobe_selprog_update_list(uprobe);
     output->selected = uprobe_selprog_check(uprobe, program_number);
-    output->program_def = !ubase_ncmp(def, "program.");
+    output->program_def = !ubase_ncmp(def, "void.");
 
     if (!output->program_def) {
         if (output->void_pipe != NULL) {
