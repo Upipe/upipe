@@ -181,7 +181,7 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
         default:                                                            \
             if (s->LAST_SUBPIPE == NULL)                                    \
                 return false;                                               \
-            return upipe_control(s->LAST_SUBPIPE, command, args);           \
+            return upipe_control_va(s->LAST_SUBPIPE, command, args);        \
     }                                                                       \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
