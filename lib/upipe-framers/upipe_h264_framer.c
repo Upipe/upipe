@@ -1112,7 +1112,7 @@ static void upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
     if (upipe_h264f->hrd) {
         size_t cpb_removal_delay_length =
             upipe_h264f->cpb_removal_delay_length;
-        if (cpb_removal_delay_length > 24) {
+        while (cpb_removal_delay_length > 24) {
             upipe_h264f_stream_fill_bits(s, 24);
             ubuf_block_stream_skip_bits(s, 24);
             cpb_removal_delay_length -= 24;
@@ -1122,7 +1122,7 @@ static void upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
 
         size_t dpb_output_delay_length =
             upipe_h264f->dpb_output_delay_length;
-        if (dpb_output_delay_length > 24) {
+        while (dpb_output_delay_length > 24) {
             upipe_h264f_stream_fill_bits(s, 24);
             ubuf_block_stream_skip_bits(s, 24);
             dpb_output_delay_length -= 24;
