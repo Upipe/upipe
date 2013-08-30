@@ -345,9 +345,10 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     ret = ret && uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels);
     ret = ret && uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
-    ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate * 1000);
+    ret = ret && uref_block_flow_set_octetrate(flow_def,
+            (uint64_t)octetrate * 1000);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def,
-                                                   max_octetrate * 1000);
+            (uint64_t)max_octetrate * 1000);
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
@@ -408,6 +409,13 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         ret = ret && uref_sound_flow_set_rate(flow_def,
                                               upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
+
+    /* Calculate bitrate assuming the stream is CBR. Do not take SBR into
+     * account here, as it would * 2 both the samplerate and the number of
+     * samples. */
+    ret = ret && uref_block_flow_set_octetrate(flow_def,
+            adts_get_length(header) * upipe_mpgaf->samplerate /
+            upipe_mpgaf->samples);
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
