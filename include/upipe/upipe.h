@@ -308,12 +308,22 @@ static inline void upipe_use(struct upipe *upipe)
 
 /** @This decrements the reference count of a upipe or frees it.
  *
- * @param mgr pointer to upipe manager.
+ * @param upipe pointer to upipe
  */
 static inline void upipe_release(struct upipe *upipe)
 {
     if (upipe->mgr->upipe_free != NULL && urefcount_release(&upipe->refcount))
         upipe->mgr->upipe_free(upipe);
+}
+
+/** @This checks if the pipe has more than one reference.
+ *
+ * @param upipe pointer to upipe
+ * @return true if there is only one reference to the pipe
+ */
+static inline bool upipe_single(struct upipe *upipe)
+{
+    return upipe->mgr->upipe_free != NULL && urefcount_single(&upipe->refcount);
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
