@@ -7,7 +7,7 @@ use Getopt::Std;
 my $file = "$ARGV[0]";
 
 (-f "$file") or die "couldn't find $file !";
-open(FILE, '-|', "$ENV{'CPP'} -E \"$file\"") or die "couldn't open $file";
+open(FILE, '-|', "$ENV{'CPP'} $ENV{'CFLAGS'} \"$file\"") or die "couldn't open $file";
 
 print <<EOF;
 /* Auto-generated file from libavcodec/avcodec.h */
