@@ -2,6 +2,7 @@
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -29,6 +30,7 @@
 
 #undef NDEBUG
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -44,9 +46,11 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_aggregate.h>
+#include <upipe-ts/upipe_ts_mux.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -57,15 +61,16 @@
 
 #include <bitstream/mpeg/ts.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 10
-#define UBUF_POOL_DEPTH 10
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
+#define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 #define TS_PER_PACKET 7
 #define PACKETS_NUM 45
 
-unsigned int nb_packets = 0;
+static unsigned int nb_packets = 0;
+static unsigned int nb_padding = 0;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -83,7 +88,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
-/** helper phony pipe to test upipe_ts_aggregate */
+/** helper phony pipe to test upipe_ts_agg */
 static struct upipe *aggregate_test_alloc(struct upipe_mgr *mgr,
                                           struct uprobe *uprobe,
                                           uint32_t signature, va_list args)
@@ -94,7 +99,7 @@ static struct upipe *aggregate_test_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_ts_aggregate */
+/** helper phony pipe to test upipe_ts_agg */
 static void aggregate_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
@@ -108,23 +113,27 @@ static void aggregate_test_input(struct upipe *upipe, struct uref *uref,
     while (size > 0) {
         assert(uref_block_read(uref, pos, &len, &buffer));
         assert(ts_validate(buffer));
+        bool padding = ts_get_pid(buffer) == 8191;
         uref_block_unmap(uref, 0);
         size -= len;
         pos += len;
+        if (padding)
+            nb_padding--;
+        else
+            nb_packets--;
     }
     uref_free(uref);
-    nb_packets--;
-    upipe_dbg_va(upipe, "nb_packets %u", nb_packets);
+    upipe_dbg_va(upipe, "nb_packets %u padding %u", nb_packets, nb_padding);
 }
 
-/** helper phony pipe to test upipe_ts_aggregate */
+/** helper phony pipe to test upipe_ts_agg */
 static void aggregate_test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_ts_aggregate */
+/** helper phony pipe to test upipe_ts_agg */
 static struct upipe_mgr aggregate_test_mgr = {
     .upipe_alloc = aggregate_test_alloc,
     .upipe_input = aggregate_test_input,
@@ -165,38 +174,113 @@ int main(int argc, char *argv[])
     struct upipe *upipe_sink = upipe_flow_alloc(&aggregate_test_mgr, log, uref);
     assert(upipe_sink != NULL);
 
-    struct upipe_mgr *upipe_ts_aggregate_mgr = upipe_ts_aggregate_mgr_alloc();
-    assert(upipe_ts_aggregate_mgr != NULL);
-    struct upipe *upipe_ts_aggregate = upipe_flow_alloc(upipe_ts_aggregate_mgr,
+    struct upipe_mgr *upipe_ts_agg_mgr = upipe_ts_agg_mgr_alloc();
+    assert(upipe_ts_agg_mgr != NULL);
+    struct upipe *upipe_ts_agg = upipe_flow_alloc(upipe_ts_agg_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "aggregate"),
             uref);
-    assert(upipe_ts_aggregate != NULL);
-    assert(upipe_set_output(upipe_ts_aggregate, upipe_sink));
+    assert(upipe_ts_agg != NULL);
+    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;
     int size, i;
 
     /* valid TS packets */
-    nb_packets = (PACKETS_NUM + TS_PER_PACKET - 1) / TS_PER_PACKET;
-    for (i=0; i < PACKETS_NUM; i++) {
+    nb_packets = PACKETS_NUM;
+    nb_padding = ((PACKETS_NUM + TS_PER_PACKET - 1) / TS_PER_PACKET) * TS_PER_PACKET - PACKETS_NUM;
+    for (i = 0; i < PACKETS_NUM; i++) {
         uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
         size = -1;
         uref_block_write(uref, 0, &size, &buffer);
         assert(size == TS_SIZE);
-        buffer[0] = 0x47;
+        ts_pad(buffer);
+        ts_set_pid(buffer, 8190);
         uref_block_unmap(uref, 0);
-        upipe_input(upipe_ts_aggregate, uref, NULL);
+        upipe_input(upipe_ts_agg, uref, NULL);
     }
 
     /* flush */
-    upipe_release(upipe_ts_aggregate);
+    upipe_release(upipe_ts_agg);
 
-    printf("nb_packets: %u\n", nb_packets);
+    printf("nb_packets: %u padding: %u\n", nb_packets, nb_padding);
     assert(!nb_packets);
+    assert(!nb_padding);
+
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
+    assert(uref != NULL);
+
+    upipe_ts_agg = upipe_flow_alloc(upipe_ts_agg_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "aggregate"),
+            uref);
+    assert(upipe_ts_agg != NULL);
+    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
+    uref_free(uref);
+    assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
+    assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+
+    /* valid TS packets */
+    nb_packets = PACKETS_NUM;
+    nb_padding = PACKETS_NUM * (TS_PER_PACKET - 1);
+    for (i = 0; i < PACKETS_NUM; i++) {
+        uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+        size = -1;
+        uref_block_write(uref, 0, &size, &buffer);
+        assert(size == TS_SIZE);
+        ts_pad(buffer);
+        ts_set_pid(buffer, 8190);
+        uref_block_unmap(uref, 0);
+        uref_clock_set_dts(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
+        upipe_input(upipe_ts_agg, uref, NULL);
+    }
+
+    /* flush */
+    upipe_release(upipe_ts_agg);
+
+    printf("nb_packets: %u %u\n", nb_packets, nb_padding);
+    assert(!nb_packets);
+    assert(!nb_padding);
+
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
+    assert(uref != NULL);
+
+    upipe_ts_agg = upipe_flow_alloc(upipe_ts_agg_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "aggregate"),
+            uref);
+    assert(upipe_ts_agg != NULL);
+    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
+    uref_free(uref);
+    assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
+    assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+
+    /* valid TS packets */
+    nb_packets = PACKETS_NUM;
+    nb_padding = ((PACKETS_NUM + TS_PER_PACKET - 1) / TS_PER_PACKET) * TS_PER_PACKET - PACKETS_NUM;
+    for (i = 0; i < PACKETS_NUM; i++) {
+        uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+        size = -1;
+        uref_block_write(uref, 0, &size, &buffer);
+        assert(size == TS_SIZE);
+        ts_pad(buffer);
+        ts_set_pid(buffer, 8190);
+        uref_block_unmap(uref, 0);
+        uref_clock_set_dts(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
+        uref_clock_set_vbv_delay(uref, UCLOCK_FREQ);
+        upipe_input(upipe_ts_agg, uref, NULL);
+    }
+
+    /* flush */
+    upipe_release(upipe_ts_agg);
+
+    printf("nb_packets: %u padding:%u\n", nb_packets, nb_padding);
+    assert(!nb_packets);
+    assert(!nb_padding);
 
     /* release everything */
-    upipe_mgr_release(upipe_ts_aggregate_mgr); // nop
+    upipe_mgr_release(upipe_ts_agg_mgr); // nop
 
     aggregate_test_free(upipe_sink);
 

@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,46 +32,13 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
-#define UPIPE_TS_AGGREGATE_SIGNATURE UBASE_FOURCC('t','s','a','g')
+#define UPIPE_TS_AGG_SIGNATURE UBASE_FOURCC('t','s','a','g')
 
-/** @This extends upipe_command with specific commands for ts check. */
-enum upipe_ts_aggregate_command {
-    UPIPE_TS_AGGREGATE_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the configured mtu of TS packets (int *) */
-    UPIPE_TS_AGGREGATE_GET_MTU,
-    /** sets the configured mtu of TS packets (int) */
-    UPIPE_TS_AGGREGATE_SET_MTU
-};
-
-/** @This returns the management structure for all ts_aggregate pipes.
+/** @This returns the management structure for all ts_agg pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_ts_aggregate_mgr_alloc(void);
-
-/** @This returns the configured mtu of TS packets.
- *
- * @param upipe description structure of the pipe
- * @param mtu_p filled in with the configured mtu, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_aggregate_get_mtu(struct upipe *upipe, int *mtu_p)
-{
-    return upipe_control(upipe, UPIPE_TS_AGGREGATE_GET_MTU,
-                         UPIPE_TS_AGGREGATE_SIGNATURE, mtu_p);
-}
-
-/** @This sets the configured mtu of TS packets.
- * @param upipe description structure of the pipe
- * @param mtu configured mtu, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_aggregate_set_mtu(struct upipe *upipe, int mtu)
-{
-    return upipe_control(upipe, UPIPE_TS_AGGREGATE_SET_MTU,
-                         UPIPE_TS_AGGREGATE_SIGNATURE, mtu);
-}
+struct upipe_mgr *upipe_ts_agg_mgr_alloc(void);
 
 #ifdef __cplusplus
 }

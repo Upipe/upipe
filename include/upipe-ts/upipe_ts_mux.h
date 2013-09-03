@@ -36,11 +36,21 @@ extern "C" {
 #define UPIPE_TS_MUX_PROGRAM_SIGNATURE UBASE_FOURCC('t','s','m','p')
 #define UPIPE_TS_MUX_INPUT_SIGNATURE UBASE_FOURCC('t','s','m','i')
 
+/** @This defines the modes of multiplexing, by order of strictness. */
+enum upipe_ts_mux_mode {
+    /** variable octetrate */
+    UPIPE_TS_MUX_MODE_VBR,
+    /** capped octetrate, drop extra packets */
+    UPIPE_TS_MUX_MODE_CAPPED,
+    /** constant octetrate, drop extra packets */
+    UPIPE_TS_MUX_MODE_CBR
+};
+
 /** @This extends upipe_command with specific commands for ts mux. */
 enum upipe_ts_mux_command {
     UPIPE_TS_MUX_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the currently detected conformance (int *) */
+    /** returns the current conformance (int *) */
     UPIPE_TS_MUX_GET_CONFORMANCE,
     /** sets the conformance (int) */
     UPIPE_TS_MUX_SET_CONFORMANCE,
@@ -55,10 +65,26 @@ enum upipe_ts_mux_command {
     /** returns the current PCR interval (uint64_t *) */
     UPIPE_TS_MUX_GET_PCR_INTERVAL,
     /** sets the PCR interval (uint64_t) */
-    UPIPE_TS_MUX_SET_PCR_INTERVAL
+    UPIPE_TS_MUX_SET_PCR_INTERVAL,
+    /** returns the current mux octetrate (uint64_t *) */
+    UPIPE_TS_MUX_GET_OCTETRATE,
+    /** sets the mux octetrate (uint64_t) */
+    UPIPE_TS_MUX_SET_OCTETRATE,
+    /** returns the current padding octetrate (uint64_t *) */
+    UPIPE_TS_MUX_GET_PADDING_OCTETRATE,
+    /** sets the padding octetrate (uint64_t) */
+    UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
+    /** returns the current mode (int *) */
+    UPIPE_TS_MUX_GET_MODE,
+    /** sets the mode (int) */
+    UPIPE_TS_MUX_SET_MODE,
+    /** returns the configured MTU (unsigned int *) */
+    UPIPE_TS_MUX_GET_MTU,
+    /** sets the MTU (unsigned int) */
+    UPIPE_TS_MUX_SET_MTU
 };
 
-/** @This returns the currently detected conformance mode. It cannot return
+/** @This returns the current conformance mode. It cannot return
  * UPIPE_TS_CONFORMANCE_AUTO.
  *
  * @param upipe description structure of the pipe
@@ -165,6 +191,114 @@ static inline bool upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
                          UPIPE_TS_MUX_SIGNATURE, interval);
 }
 
+/** @This returns the current mux octetrate. It may also be called on
+ * upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_get_octetrate(struct upipe *upipe,
+                                              uint64_t *octetrate_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate_p);
+}
+
+/** @This sets the mux octetrate. It may also be called on upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_set_octetrate(struct upipe *upipe,
+                                              uint64_t octetrate)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate);
+}
+
+/** @This returns the current padding octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
+                                                      uint64_t *octetrate_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_PADDING_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate_p);
+}
+
+/** @This sets the padding octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
+                                                      uint64_t octetrate)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate);
+}
+
+/** @This returns the current mode. It may also be called on
+ * upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param mode_p filled in with the mode
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_get_mode(struct upipe *upipe,
+                                         enum upipe_ts_mux_mode *mode_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_MODE,
+                         UPIPE_TS_MUX_SIGNATURE, mode_p);
+}
+
+/** @This sets the mode. It may also be called on upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param mode new mode
+ * @return false in case of error
+ */
+static inline bool upipe_ts_mux_set_mode(struct upipe *upipe,
+                                         enum upipe_ts_mux_mode mode)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_MODE,
+                         UPIPE_TS_MUX_SIGNATURE, mode);
+}
+
+/** @This returns the configured mtu of TS packets. It may also be called on
+ * upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param mtu_p filled in with the configured mtu, in octets
+ * @return false in case of error
+ */
+static inline bool upipe_ts_aggregate_get_mtu(struct upipe *upipe,
+                                              unsigned int *mtu_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_MTU,
+                         UPIPE_TS_MUX_SIGNATURE, mtu_p);
+}
+
+/** @This sets the configured mtu of TS packets. It may also be called on
+ * upipe_ts_aggregate.
+ *
+ * @param upipe description structure of the pipe
+ * @param mtu configured mtu, in octets
+ * @return false in case of error
+ */
+static inline bool upipe_ts_aggregate_set_mtu(struct upipe *upipe,
+                                              unsigned int mtu)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
+                         UPIPE_TS_MUX_SIGNATURE, mtu);
+}
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager
@@ -181,6 +315,7 @@ enum upipe_ts_mux_mgr_command {
     /** sets the manager for name subpipes (struct upipe_mgr *) */          \
     UPIPE_TS_MUX_MGR_SET_##NAME##_MGR,
 
+    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_agg, TS_AGG)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_join, TS_JOIN)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_encaps, TS_ENCAPS)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_pese, TS_PESE)
@@ -241,6 +376,7 @@ static inline bool                                                          \
 }
 
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_join, TS_JOIN)
+UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_agg, TS_AGG)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_encaps, TS_ENCAPS)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_pese, TS_PESE)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psig, TS_PSIG)

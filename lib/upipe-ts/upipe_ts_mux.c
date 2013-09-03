@@ -20,17 +20,6 @@
 
 /** @file
  * @short Upipe higher-level module muxing elementary streams in a TS
- * Four parts in this file:
- * @list
- * @item psi_pid structure, which handles PSI demultiplexing from ts_split
- * until ts_psi_split
- * @item output source pipe, which is returned to the application, and
- * represents an elementary stream; it sets up the ts_decaps, pes_decaps and
- * framer subpipes
- * @item program split pipe, which is returned to the application, and
- * represents a program; it sets up the ts_split_output and ts_pmtd subpipes
- * @item mux sink pipe which sets up the ts_split, ts_patd and optional input
- * synchronizer subpipes
  */
 
 #include <upipe/ubase.h>
@@ -62,6 +51,7 @@
 #include <upipe-ts/upipe_ts_pes_encaps.h>
 #include <upipe-ts/upipe_ts_psi_generator.h>
 #include <upipe-ts/upipe_ts_psi_inserter.h>
+#include <upipe-ts/upipe_ts_aggregate.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -117,6 +107,8 @@
 struct upipe_ts_mux_mgr {
     /** pointer to ts_join manager */
     struct upipe_mgr *ts_join_mgr;
+    /** pointer to ts_agg manager */
+    struct upipe_mgr *ts_agg_mgr;
 
     /* inputs */
     /** pointer to ts_encaps manager */
@@ -169,12 +161,14 @@ struct upipe_ts_mux {
     struct uprobe probe;
     /** pointer to ts_join subpipe */
     struct upipe *join;
-    /** bin probe for the ts_psii subpipe */
-    struct uprobe psii_probe_bin;
-    /** probe for the ts_psii subpipe */
-    struct uprobe psii_probe;
-    /** pointer to ts_psii subpipe (last subpipe for the bin) */
+    /** pointer to ts_psii subpipe */
     struct upipe *psii;
+    /** bin probe for the ts_agg subpipe */
+    struct uprobe agg_probe_bin;
+    /** probe for the ts_agg subpipe */
+    struct uprobe agg_probe;
+    /** pointer to ts_agg subpipe (last subpipe for the bin) */
+    struct upipe *agg;
     /** pipe acting as output */
     struct upipe *output;
 
@@ -196,6 +190,17 @@ struct upipe_ts_mux {
     /** last attributed automatic PID */
     uint16_t pid_auto;
 
+    /** start DTS */
+    uint64_t start_dts;
+    /** start DTS (system clock) */
+    uint64_t start_dts_sys;
+    /** octetrate reserved for padding (and emergency situation) */
+    uint64_t padding_octetrate;
+    /** total octetrate including overheads, PMTs and PAT */
+    uint64_t total_octetrate;
+    /** true if the mux octetrate is automatically assigned */
+    bool octetrate_auto;
+
     /** list of programs */
     struct ulist programs;
 
@@ -210,8 +215,10 @@ UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_mux, "void.")
 UPIPE_HELPER_UREF_MGR(upipe_ts_mux, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_mux, ubuf_mgr)
-UPIPE_HELPER_BIN(upipe_ts_mux, psii_probe_bin, psii, output)
+UPIPE_HELPER_BIN(upipe_ts_mux, agg_probe_bin, agg, output)
 
+/** @hidden */
+static void upipe_ts_mux_update(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_mux_change(struct upipe *upipe);
 /** @hidden */
@@ -240,6 +247,8 @@ struct upipe_ts_mux_program {
     uint64_t start_dts;
     /** start DTS (system clock), used to bootstrap the PAT */
     uint64_t start_dts_sys;
+    /** total octetrate including overheads and PMT */
+    uint64_t total_octetrate;
 
     /** interval between PMTs */
     uint64_t pmt_interval;
@@ -291,6 +300,8 @@ struct upipe_ts_mux_input {
     uint64_t octetrate;
     /** true if the output is used for PCR */
     bool pcr;
+    /** total octetrate including overheads */
+    uint64_t total_octetrate;
 
     /** start DTS, used to bootstrap the PMT */
     uint64_t start_dts;
@@ -488,6 +499,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input->octetrate = octetrate;
     upipe_ts_mux_input->start_dts = UINT64_MAX;
     upipe_ts_mux_input->start_dts_sys = UINT64_MAX;
+    upipe_ts_mux_input->total_octetrate = octetrate +
+                                          pes_overhead + ts_overhead;
     upipe_ts_mux_input->psig_flow = upipe_ts_mux_input->pes_encaps =
         upipe_ts_mux_input->encaps = NULL;
 
@@ -495,21 +508,26 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_use(upipe_ts_mux_program_to_upipe(program));
     upipe_throw_ready(upipe);
 
+    uref_flow_get_def(flow_def, &def);
+    upipe_notice_va(upipe, "adding %s on PID %"PRIu16" (%"PRIu64" bits/s)",
+                    def, pid, octetrate * 8);
+
     struct upipe_ts_mux_mgr *ts_mux_mgr =
         upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
     upipe_ts_mux_input->pes_encaps =
         upipe_flow_alloc(ts_mux_mgr->ts_pese_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG,
-                                                "pes encaps"),
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "pes encaps %"PRIu64, pid),
                          flow_def);
     struct uref *flow_def_next;
     if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->pes_encaps,
                                      &flow_def_next) ||
                  (upipe_ts_mux_input->encaps =
                   upipe_flow_alloc(ts_mux_mgr->ts_encaps_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "encaps"),
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "encaps %"PRIu64, pid),
                          flow_def_next)) == NULL)) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -522,8 +540,9 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->encaps,
                                      &flow_def_next) ||
                  (join = upipe_flow_alloc_sub(upipe_ts_mux->join,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "join"),
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "join %"PRIu64, pid),
                          flow_def_next)) == NULL)) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -536,8 +555,10 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     if (!uref_flow_set_def(flow_def, "void.") ||
         (upipe_ts_mux_input->psig_flow =
             upipe_flow_alloc_sub(program->program_psig,
-                 uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe, UPROBE_LOG_DEBUG,
-                                        "psig flow"), flow_def)) == NULL) {
+                 uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                           UPROBE_LOG_DEBUG,
+                                           "psig flow %"PRIu64, pid),
+                 flow_def)) == NULL) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
         return upipe;
@@ -650,9 +671,9 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
                                                 va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(mgr);
-    if (upipe_ts_mux->uref_mgr == NULL)
+    if (unlikely(upipe_ts_mux->uref_mgr == NULL))
         upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    if (upipe_ts_mux->uref_mgr == NULL)
+    if (unlikely(upipe_ts_mux->uref_mgr == NULL))
         return NULL;
 
     struct uref *flow_def;
@@ -720,6 +741,9 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_program->start_dts_sys = UINT64_MAX;
     upipe_ts_mux_program->pmt_interval = upipe_ts_mux->pmt_interval;
     upipe_ts_mux_program->pcr_interval = upipe_ts_mux->pcr_interval;
+    upipe_ts_mux_program->total_octetrate = (uint64_t)TS_SIZE *
+        ((UCLOCK_FREQ + upipe_ts_mux_program->pmt_interval - 1) /
+         upipe_ts_mux_program->pmt_interval);
 
     upipe_ts_mux_program_init_sub(upipe);
     upipe_use(upipe_ts_mux_to_upipe(upipe_ts_mux));
@@ -754,6 +778,37 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_mux_change(upipe_ts_mux_to_upipe(upipe_ts_mux));
     return upipe;
+}
+
+/** @This calculates the total octetrate used by a program and updates the
+ * aggregate subpipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_mux_program_update(struct upipe *upipe)
+{
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    uint64_t total_octetrate = (uint64_t)TS_SIZE *
+        (((UCLOCK_FREQ + upipe_ts_mux_program->pmt_interval - 1) /
+           upipe_ts_mux_program->pmt_interval) +
+         ((UCLOCK_FREQ + upipe_ts_mux_program->pcr_interval - 1) /
+          upipe_ts_mux_program->pcr_interval));
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_mux_program->inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain(uchain);
+        total_octetrate += input->total_octetrate;
+    }
+
+    if (total_octetrate != upipe_ts_mux_program->total_octetrate) {
+        upipe_ts_mux_program->total_octetrate = total_octetrate;
+
+        struct upipe_ts_mux *upipe_ts_mux =
+            upipe_ts_mux_from_program_mgr(upipe->mgr);
+        upipe_ts_mux_update(upipe_ts_mux_to_upipe(upipe_ts_mux));
+    }
 }
 
 /** @This is called when the program definition is changed (input added or
@@ -815,6 +870,8 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
 
+    upipe_ts_mux_program_update(upipe);
+
     uint64_t earliest_dts = UINT64_MAX, earliest_dts_sys = UINT64_MAX;
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_mux_program->inputs, uchain) {
@@ -841,9 +898,9 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
     /* Build a new PMT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
     if (unlikely(uref == NULL ||
-                 !uref_clock_set_dts(uref, earliest_dts) ||
-                 !uref_clock_set_vbv_delay(uref, PMT_OFFSET) ||
-                 (earliest_dts_sys != UINT64_MAX &&
+                 (first && !uref_clock_set_dts(uref, earliest_dts)) ||
+                 (first && !uref_clock_set_vbv_delay(uref, PMT_OFFSET)) ||
+                 (first && earliest_dts_sys != UINT64_MAX &&
                   !uref_clock_set_dts_sys(uref, earliest_dts_sys)))) {
         if (uref != NULL)
             uref_free(uref);
@@ -851,6 +908,7 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
         return;
     }
 
+    /* FIXME in case of deletion PMT will be output too early */
     upipe_input(upipe_ts_mux_program->program_psig, uref, NULL);
 }
 
@@ -886,6 +944,7 @@ static inline bool upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
     if (upipe_ts_mux_program->pmt_psii != NULL)
         upipe_ts_psii_sub_set_interval(upipe_ts_mux_program->pmt_psii,
                                        interval);
+    upipe_ts_mux_program_update(upipe);
     return true;
 }
 
@@ -926,6 +985,7 @@ static inline bool upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
         if (input->pcr && input->encaps != NULL)
             upipe_ts_mux_set_pcr_interval(input->encaps, interval);
     }
+    upipe_ts_mux_program_update(upipe);
     return true;
 }
 
@@ -1026,26 +1086,26 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  * @param args arguments of the event
  * @return true if the event was caught
  */
-static bool upipe_ts_mux_psii_probe(struct uprobe *uprobe,
-                                    struct upipe *subpipe,
-                                    enum uprobe_event event, va_list args)
+static bool upipe_ts_mux_agg_probe(struct uprobe *uprobe,
+                                         struct upipe *subpipe,
+                                         enum uprobe_event event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
-        container_of(uprobe, struct upipe_ts_mux, psii_probe);
+        container_of(uprobe, struct upipe_ts_mux, agg_probe);
     struct upipe *upipe = upipe_ts_mux_to_upipe(upipe_ts_mux);
 
     switch (event) {
         case UPROBE_NEED_UREF_MGR:
-            if (upipe_ts_mux->uref_mgr == NULL)
+            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
                 upipe_throw_need_uref_mgr(upipe);
-            if (upipe_ts_mux->uref_mgr != NULL)
+            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
                 upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
             return true;
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
-            if (upipe_ts_mux->ubuf_mgr == NULL)
+            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
                 upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (upipe_ts_mux->ubuf_mgr != NULL)
+            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
                 upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
             return true;
         }
@@ -1072,19 +1132,21 @@ static bool upipe_ts_mux_probe(struct uprobe *uprobe, struct upipe *subpipe,
 
     switch (event) {
         case UPROBE_NEED_UREF_MGR:
-            if (upipe_ts_mux->uref_mgr == NULL)
+            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
                 upipe_throw_need_uref_mgr(upipe);
-            if (upipe_ts_mux->uref_mgr != NULL)
+            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
                 upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
             return true;
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
-            if (upipe_ts_mux->ubuf_mgr == NULL)
+            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
                 upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (upipe_ts_mux->ubuf_mgr != NULL)
+            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
                 upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
             return true;
         }
+        case UPROBE_NEW_FLOW_DEF:
+            return true;
         default:
             return false;
     }
@@ -1138,10 +1200,17 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pcr_interval = DEFAULT_PCR_INTERVAL;
     upipe_ts_mux->sid_auto = DEFAULT_SID_AUTO;
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
+    upipe_ts_mux->start_dts = UINT64_MAX;
+    upipe_ts_mux->start_dts_sys = UINT64_MAX;
+    upipe_ts_mux->padding_octetrate = 0;
+    upipe_ts_mux->total_octetrate = (uint64_t)TS_SIZE *
+        ((UCLOCK_FREQ + upipe_ts_mux->pat_interval - 1) /
+         upipe_ts_mux->pat_interval);
+    upipe_ts_mux->octetrate_auto = true;
 
     uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, uprobe);
-    uprobe_init(&upipe_ts_mux->psii_probe, upipe_ts_mux_psii_probe,
-                &upipe_ts_mux->psii_probe_bin);
+    uprobe_init(&upipe_ts_mux->agg_probe, upipe_ts_mux_agg_probe,
+                &upipe_ts_mux->agg_probe_bin);
 
     upipe_throw_ready(upipe);
 
@@ -1184,20 +1253,35 @@ static void upipe_ts_mux_init(struct upipe *upipe)
         return;
     }
 
-    struct upipe *psii =
+    upipe_ts_mux->psii =
         upipe_flow_alloc(ts_mux_mgr->ts_psii_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->psii_probe,
+                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
                                                 UPROBE_LOG_DEBUG, "psii"),
                          flow_def);
-    if (unlikely(psii == NULL)) {
+    if (unlikely(upipe_ts_mux->psii == NULL ||
+                 !upipe_get_flow_def(upipe_ts_mux->psii, &flow_def))) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
-    upipe_set_output(upipe_ts_mux->join, psii);
-    upipe_ts_mux_store_last_subpipe(upipe, psii);
+    upipe_set_output(upipe_ts_mux->join, upipe_ts_mux->psii);
 
-    if (unlikely(!upipe_get_flow_def(upipe_ts_mux->psig, &flow_def) ||
+    struct upipe *agg =
+        upipe_flow_alloc(ts_mux_mgr->ts_agg_mgr,
+                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->agg_probe,
+                                                UPROBE_LOG_DEBUG, "agg"),
+                         flow_def);
+    if (unlikely(agg == NULL)) {
+        uref_free(flow_def);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return;
+    }
+    upipe_set_output(upipe_ts_mux->psii, agg);
+    upipe_ts_mux_store_last_subpipe(upipe, agg);
+
+    if (unlikely(!upipe_ts_mux_set_mode(upipe_ts_mux->agg,
+                                        UPIPE_TS_MUX_MODE_CAPPED) ||
+                 !upipe_get_flow_def(upipe_ts_mux->psig, &flow_def) ||
                  (upipe_ts_mux->pat_psii =
                   upipe_flow_alloc_sub(upipe_ts_mux->psii,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
@@ -1209,6 +1293,33 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     upipe_ts_psii_sub_set_interval(upipe_ts_mux->pat_psii,
                                    upipe_ts_mux->pat_interval);
     upipe_set_output(upipe_ts_mux->psig, upipe_ts_mux->pat_psii);
+}
+
+/** @This calculates the total octetrate used by a stream and updates the
+ * aggregate subpipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_mux_update(struct upipe *upipe)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    uint64_t total_octetrate = (uint64_t)TS_SIZE *
+        ((UCLOCK_FREQ + upipe_ts_mux->pat_interval - 1) /
+         upipe_ts_mux->pat_interval) + upipe_ts_mux->padding_octetrate;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_mux->programs, uchain) {
+        struct upipe_ts_mux_program *program =
+            upipe_ts_mux_program_from_uchain(uchain);
+        total_octetrate += program->total_octetrate;
+    }
+
+    if (total_octetrate != upipe_ts_mux->total_octetrate) {
+        upipe_ts_mux->total_octetrate = total_octetrate;
+        if (upipe_ts_mux->octetrate_auto && upipe_ts_mux->agg != NULL)
+            upipe_ts_mux_set_octetrate(upipe_ts_mux->agg,
+                                       upipe_ts_mux->total_octetrate);
+    }
 }
 
 /** @This is called when the transport stream definition is changed (program
@@ -1229,6 +1340,8 @@ static void upipe_ts_mux_start(struct upipe *upipe)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
 
+    upipe_ts_mux_update(upipe);
+
     uint64_t earliest_dts = UINT64_MAX, earliest_dts_sys = UINT64_MAX;
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_mux->programs, uchain) {
@@ -1242,12 +1355,16 @@ static void upipe_ts_mux_start(struct upipe *upipe)
         }
     }
 
+    bool first = upipe_ts_mux->start_dts == UINT64_MAX;
+    upipe_ts_mux->start_dts = earliest_dts;
+    upipe_ts_mux->start_dts_sys = earliest_dts_sys;
+
     /* Build a new PAT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
     if (unlikely(uref == NULL ||
-                 !uref_clock_set_dts(uref, earliest_dts) ||
-                 !uref_clock_set_vbv_delay(uref, PAT_OFFSET) ||
-                 (earliest_dts_sys != UINT64_MAX &&
+                 (first && !uref_clock_set_dts(uref, earliest_dts)) ||
+                 (first && !uref_clock_set_vbv_delay(uref, PAT_OFFSET)) ||
+                 (first && earliest_dts_sys != UINT64_MAX &&
                   !uref_clock_set_dts_sys(uref, earliest_dts_sys)))) {
         if (uref != NULL)
             uref_free(uref);
@@ -1255,6 +1372,7 @@ static void upipe_ts_mux_start(struct upipe *upipe)
         return;
     }
 
+    /* FIXME in case of deletion PAT will be output too early */
     upipe_input(upipe_ts_mux->psig, uref, NULL);
 }
 
@@ -1310,7 +1428,7 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
     return false;
 }
 
-/** @internal @This returns the currently detected conformance mode. It cannot
+/** @internal @This returns the current conformance mode. It cannot
  * return CONFORMANCE_AUTO.
  *
  * @param upipe description structure of the pipe
@@ -1398,6 +1516,7 @@ static inline bool _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
     upipe_ts_mux->pat_interval = interval;
     if (upipe_ts_mux->pat_psii != NULL)
         upipe_ts_psii_sub_set_interval(upipe_ts_mux->pat_psii, interval);
+    upipe_ts_mux_update(upipe);
     return true;
 }
 
@@ -1474,6 +1593,58 @@ static inline bool _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
                                       interval);
     }
     return true;
+}
+
+/** @internal @This returns the current padding octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return false in case of error
+ */
+static inline bool _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
+                                                       uint64_t *octetrate_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(octetrate_p != NULL);
+    *octetrate_p = upipe_ts_mux->padding_octetrate;
+    return true;
+}
+
+/** @internal @This sets the PCR octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return false in case of error
+ */
+static inline bool _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
+                                                       uint64_t octetrate)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->padding_octetrate = octetrate;
+    upipe_ts_mux_update(upipe);
+    return true;
+}
+
+/** @internal @This sets the mux octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return false in case of error
+ */
+static inline bool _upipe_ts_mux_set_octetrate(struct upipe *upipe,
+                                               uint64_t octetrate)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    if (upipe_ts_mux->agg == NULL)
+        return false;
+
+    if (octetrate) {
+        upipe_ts_mux->octetrate_auto = false;
+        return upipe_ts_mux_set_octetrate(upipe_ts_mux->agg, octetrate);
+    }
+    upipe_ts_mux->octetrate_auto = true;
+    return upipe_ts_mux_set_octetrate(upipe_ts_mux->agg,
+                                      upipe_ts_mux->total_octetrate);
 }
 
 /** @internal @This processes control commands on a ts_mux pipe.
@@ -1560,6 +1731,18 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
             uint64_t interval = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_pcr_interval(upipe, interval);
         }
+        case UPIPE_TS_MUX_GET_PADDING_OCTETRATE: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            uint64_t *interval_p = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_get_padding_octetrate(upipe, interval_p);
+        }
+        case UPIPE_TS_MUX_SET_PADDING_OCTETRATE: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            uint64_t interval = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_padding_octetrate(upipe, interval);
+        }
 
         default:
             return upipe_ts_mux_control_bin(upipe, command, args);
@@ -1573,6 +1756,8 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
 static void upipe_ts_mux_free(struct upipe *upipe)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    if (upipe_ts_mux->psii != NULL)
+        upipe_release(upipe_ts_mux->psii);
     if (upipe_ts_mux->join != NULL)
         upipe_release(upipe_ts_mux->join);
     if (upipe_ts_mux->psig != NULL)
@@ -1597,6 +1782,8 @@ static void upipe_ts_mux_mgr_free(struct upipe_mgr *mgr)
         upipe_ts_mux_mgr_from_upipe_mgr(mgr);
     if (ts_mux_mgr->ts_join_mgr != NULL)
         upipe_mgr_release(ts_mux_mgr->ts_join_mgr);
+    if (ts_mux_mgr->ts_agg_mgr != NULL)
+        upipe_mgr_release(ts_mux_mgr->ts_agg_mgr);
     if (ts_mux_mgr->ts_encaps_mgr != NULL)
         upipe_mgr_release(ts_mux_mgr->ts_encaps_mgr);
     if (ts_mux_mgr->ts_pese_mgr != NULL)
@@ -1622,6 +1809,7 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
         return NULL;
 
     ts_mux_mgr->ts_join_mgr = upipe_ts_join_mgr_alloc();
+    ts_mux_mgr->ts_agg_mgr = upipe_ts_agg_mgr_alloc();
     ts_mux_mgr->ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     ts_mux_mgr->ts_pese_mgr = upipe_ts_pese_mgr_alloc();
     ts_mux_mgr->ts_psig_mgr = upipe_ts_psig_mgr_alloc();
@@ -1670,6 +1858,7 @@ bool upipe_ts_mux_mgr_control_va(struct upipe_mgr *mgr,
         }
 
         GET_SET_MGR(ts_join, TS_JOIN)
+        GET_SET_MGR(ts_agg, TS_AGG)
         GET_SET_MGR(ts_encaps, TS_ENCAPS)
         GET_SET_MGR(ts_pese, TS_PESE)
         GET_SET_MGR(ts_psig, TS_PSIG)
