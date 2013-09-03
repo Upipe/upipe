@@ -242,7 +242,6 @@ int main(int argc, char **argv)
                     flow_def);
     uref_free(flow_def);
     assert(x264);
-    assert(upipe_set_uref_mgr(x264, uref_mgr));
     assert(upipe_set_ubuf_mgr(x264, block_mgr));
 
     /* x264_test */

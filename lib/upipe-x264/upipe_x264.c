@@ -27,22 +27,25 @@
  * @short Upipe x264 module
  */
 
+#include <upipe/uclock.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/udict.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_dump.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
-#include <upipe/uref_block.h>
+#include <upipe/uref_pic_flow.h>
+#include <upipe/uref_block_flow.h>
+#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-x264/upipe_x264.h>
 
@@ -67,8 +70,6 @@ struct upipe_x264 {
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** uref manager */
-    struct uref_mgr *uref_mgr;
-    /** output */
     struct upipe *output;
     /** output flow */
     struct uref *output_flow;
@@ -81,7 +82,6 @@ struct upipe_x264 {
 UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_x264, EXPECTED_FLOW)
 UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr);
-UPIPE_HELPER_UREF_MGR(upipe_x264, uref_mgr);
 UPIPE_HELPER_OUTPUT(upipe_x264, output, output_flow, output_flow_sent)
 
 
@@ -92,7 +92,7 @@ static const enum uprobe_log_level loglevel_map[] = {
     [X264_LOG_ERROR] = UPROBE_LOG_ERROR,
     [X264_LOG_WARNING] = UPROBE_LOG_WARNING,
     [X264_LOG_INFO] = UPROBE_LOG_NOTICE,
-    [X264_LOG_DEBUG] = UPROBE_LOG_DEBUG
+    [X264_LOG_DEBUG] = UPROBE_LOG_VERBOSE
 };
 
 /** @internal @This sends x264 logs to uprobe_log
@@ -178,6 +178,27 @@ static bool _upipe_x264_set_profile(struct upipe *upipe, const char *profile)
     return ( (ret < 0) ? false : true );
 }
 
+/** @internal @This sets the content of an x264 option.
+ * upipe_x264_reconfigure must be called to apply changes.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param content content of the option
+ * @return false in case of error
+ */
+static bool _upipe_x264_set_option(struct upipe *upipe, const char *option,
+                                     const char *content)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    int ret = x264_param_parse(&upipe_x264->params, option, content);
+    if (unlikely(ret < 0)) {
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     option, content, ret);
+        return false;
+    }
+    return true;
+}
+
 /** @internal @This allocates a filter pipe.
  *
  * @param mgr common management structure
@@ -202,7 +223,6 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     _upipe_x264_set_default(upipe);
 
     upipe_x264_init_ubuf_mgr(upipe);
-    upipe_x264_init_uref_mgr(upipe);
     upipe_x264_init_output(upipe);
     upipe_throw_ready(upipe);
 
@@ -223,25 +243,42 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
                             struct urational *aspect)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    struct urational fps = {0, 0};
     x264_param_t *params = &upipe_x264->params;
 
     params->pf_log = upipe_x264_log;
     params->p_log_private = upipe;
     params->i_log_level = X264_LOG_DEBUG;
+    if (likely(uref_pic_flow_get_fps(upipe_x264->output_flow, &fps))) {
+        params->i_fps_num = fps.num;
+        params->i_fps_den = fps.den;
+        //params->b_vfr_input = 0;
+    }
 
     params->vui.i_sar_width = aspect->num;
     params->vui.i_sar_height = aspect->den;
     params->i_width = width;
     params->i_height = height;
 
+    /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
         return _upipe_x264_reconfigure(upipe);
-    } else {
-        upipe_x264->encoder = x264_encoder_open(params);
-        if (unlikely(!upipe_x264->encoder)) {
-            return false;
-        }
     }
+    
+    /* open encoder */
+    upipe_x264->encoder = x264_encoder_open(params);
+    if (unlikely(!upipe_x264->encoder)) {
+        return false;
+    }
+
+    /* set octetrate for CBR streams */
+    if (params->rc.i_bitrate) {
+        uref_block_flow_set_octetrate(upipe_x264->output_flow,
+                                      params->rc.i_bitrate * (1024 / 8));
+    }
+
+    /* delete global headers */
+    uref_flow_delete_headers(upipe_x264->output_flow);
 
     return true;
 }
@@ -301,14 +338,18 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     const char *chroma = NULL;
     int i, nals_num, size = 0;
     size_t stride;
-    struct uref *uref_block;
+    struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
     struct urational aspect;
     uint64_t pts;
+    uint64_t ts_diff;
+    x264_param_t curparams;
     bool needopen = false;
+    int ret = 0;
 
-    // init x264 picture
+    /* init x264 picture */
     x264_picture_init(&pic);
+    pic.opaque = uref;
     pic.img.i_csp = X264_CSP_I420;
 
     if (likely(uref)) {
@@ -317,7 +358,7 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
         urational_simplify(&aspect);
         uref_pic_size(uref, &width, &height, NULL);
 
-        // open encoder if not already opened or if update needed
+        /* open encoder if not already opened or if update needed */
         if (unlikely(!upipe_x264->encoder)) {
             needopen = true;
         } else if (unlikely(upipe_x264_need_update(upipe, width, height, &aspect))) {
@@ -331,13 +372,16 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
                 return;
             }
         }
+        x264_encoder_parameters(upipe_x264->encoder, &curparams);
 
-        // Set pts
+        /* set pts in x264 timebase */
         pts = 0;
         uref_clock_get_pts(uref, &pts);
-        pic.i_pts = pts;
+        pic.i_pts = pts * curparams.i_timebase_den
+                        / curparams.i_timebase_num
+                        / UCLOCK_FREQ;
 
-        // map
+        /* map */
         for (i=0; uref_pic_plane_iterate(uref, &chroma) && chroma; i++) {
             if (unlikely(!uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL))) {
                 upipe_err_va(upipe, "Could not read origin chroma %s", chroma);
@@ -349,48 +393,67 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
         }
         pic.img.i_plane = i;
 
-        // encode frame !
-        x264_encoder_encode(upipe_x264->encoder, &nals, &nals_num, &pic, &pic);
+        /* encode frame ! */
+        ret = x264_encoder_encode(upipe_x264->encoder,
+                                  &nals, &nals_num, &pic, &pic);
 
-        // unmap
+        /* unmap */
         for (chroma = NULL; uref_pic_plane_iterate(uref, &chroma) && chroma; ) {
             uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
         }
-        uref_free(uref);
+        ubuf_free(uref_detach_ubuf(uref));
     }
     else {
-        // NULL uref, flushing delayed frame
-        x264_encoder_encode(upipe_x264->encoder, &nals, &nals_num, NULL, &pic);
+        /* NULL uref, flushing delayed frame */
+        ret = x264_encoder_encode(upipe_x264->encoder,
+                                  &nals, &nals_num, NULL, &pic);
+        x264_encoder_parameters(upipe_x264->encoder, &curparams);
+    }
+    
+    if (unlikely(ret < 0)) {
+        upipe_warn(upipe, "Error encoding frame");
+        uref_free(uref);
+        return;
+    } else if (unlikely(ret == 0)) {
+        upipe_verbose(upipe, "No nal units returned");
+        return;
     }
 
-    if (unlikely(nals < 0)) {
-        upipe_warn(upipe, "Error encoding frame");
-        return;
-    } else if (unlikely(nals == 0)) {
-        upipe_dbg(upipe, "No nal units returned");
-        return;
-    }
+    /* get uref back */
+    uref = pic.opaque;
+    assert(uref);
 
     for (i=0; i < nals_num; i++) {
         size += nals[i].i_payload;
     }
 
-    // alloc ubuf, map, copy, unmap
-    uref_block = uref_block_alloc(upipe_x264->uref_mgr, upipe_x264->ubuf_mgr, size);
-    if (unlikely(uref_block == NULL)) {
+    /* alloc ubuf, map, copy, unmap */
+    ubuf_block = ubuf_block_alloc(upipe_x264->ubuf_mgr, size);
+    if (unlikely(ubuf_block == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
-    uref_block_write(uref_block, 0, &size, &buf);
+    ubuf_block_write(ubuf_block, 0, &size, &buf);
     memcpy(buf, nals[0].p_payload, size);
-    uref_block_unmap(uref_block, 0);
+    ubuf_block_unmap(ubuf_block, 0);
+    uref_attach_ubuf(uref, ubuf_block);
 
-    /* dts shouldn't be negative in upipe because of pts definition
-     * see x264.h */
-    uref_clock_set_dts(uref_block, pic.i_dts); 
-    uref_clock_set_pts(uref_block, pic.i_pts);
+    /* compute dts from pts and x264 pts/dts difference */
+    ts_diff = (uint64_t)(pic.i_pts - pic.i_dts) * UCLOCK_FREQ
+              * curparams.i_timebase_num
+              / curparams.i_timebase_den;
+    if (uref_clock_get_pts(uref, &pts)) {
+        uref_clock_set_dts(uref, pts - ts_diff);
+    }
+    if (uref_clock_get_pts_sys(uref, &pts)) {
+        uref_clock_set_dts_sys(uref, pts - ts_diff);
+    }
 
-    upipe_x264_output(upipe, uref_block, upump);
+    if (pic.b_keyframe) {
+        uref_flow_set_random(uref);
+    }
+
+    upipe_x264_output(upipe, uref, upump);
 }
 
 /** @internal @This handles input.
@@ -404,7 +467,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
 
-    if (unlikely(!uref->ubuf)) { // no ubuf in uref
+    if (unlikely(!uref->ubuf)) { /* no ubuf in uref */
         upipe_x264_output(upipe, uref, upump);
         return;
     }
@@ -412,13 +475,6 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_x264->ubuf_mgr)) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_x264->output_flow);
         if (unlikely(upipe_x264->ubuf_mgr == NULL)) {
-            uref_free(uref);
-            return;
-        }
-    }
-    if (unlikely(!upipe_x264->uref_mgr)) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(upipe_x264->uref_mgr == NULL)) {
             uref_free(uref);
             return;
         }
@@ -445,14 +501,6 @@ static bool upipe_x264_control(struct upipe *upipe,
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_x264_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_x264_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_x264_set_uref_mgr(upipe, uref_mgr);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -490,6 +538,13 @@ static bool upipe_x264_control(struct upipe *upipe,
             const char *profile = va_arg(args, const char *);
             return _upipe_x264_set_profile(upipe, profile);
         }
+        case UPIPE_X264_SET_OPTION: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            const char *option = va_arg(args, const char *);
+            const char *content = va_arg(args, const char *);
+            return _upipe_x264_set_option(upipe, option, content);
+        }
         default:
             return false;
     }
@@ -505,7 +560,6 @@ static void upipe_x264_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
     upipe_x264_clean_ubuf_mgr(upipe);
-    upipe_x264_clean_uref_mgr(upipe);
     upipe_x264_clean_output(upipe);
     upipe_x264_free_flow(upipe);
 }
