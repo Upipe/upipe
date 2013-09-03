@@ -490,7 +490,7 @@ static void upipe_h264f_stream_parse_scaling(struct ubuf_block_stream *s,
  * @param upipe description structure of the pipe
  * @param s ubuf block stream
  * @param octetrate_p filled in with the octet rate
- * @param cpb_size_p fille in with the CPB buffer size
+ * @param cpb_size_p filled in with the CPB buffer size
  * @return true if the stream is CBR
  */
 static bool upipe_h264f_stream_parse_hrd(struct upipe *upipe,
@@ -963,7 +963,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             if (ubuf_block_stream_show_bits(s, 1)) { /* fixed_frame_rate */
                 struct urational frame_rate = {
                     .num = upipe_h264f->time_scale,
-                    .den = num_units_in_ticks
+                    .den = num_units_in_ticks * 2
                 };
                 urational_simplify(&frame_rate);
                 ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
@@ -1327,12 +1327,15 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
             upipe_h264f->au_size * UCLOCK_FREQ / upipe_h264f->octet_rate;
 
         if (upipe_h264f->initial_cpb_removal_delay < 0) {
-            upipe_warn_va(upipe, "CPB underflow "PRId64,
+            upipe_warn_va(upipe, "CPB underflow %"PRId64,
                           -upipe_h264f->initial_cpb_removal_delay);
             upipe_h264f->initial_cpb_removal_delay = 0;
         } else if (upipe_h264f->initial_cpb_removal_delay >
-                        upipe_h264f->cpb_length)
+                        upipe_h264f->cpb_length) {
+            upipe_warn_va(upipe, "CPB overflow %"PRId64,
+                          upipe_h264f->initial_cpb_removal_delay - upipe_h264f->cpb_length);
             upipe_h264f->initial_cpb_removal_delay = upipe_h264f->cpb_length;
+        }
 
         ret = ret && uref_clock_set_vbv_delay(uref,
                             upipe_h264f->initial_cpb_removal_delay);
@@ -1709,6 +1712,9 @@ static bool upipe_h264f_control(struct upipe *upipe,
 static void upipe_h264f_free(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+
+    /* Output any buffered frame. */
+    upipe_h264f_output_au(upipe, NULL);
     upipe_throw_dead(upipe);
 
     upipe_h264f_clean_uref_stream(upipe);
