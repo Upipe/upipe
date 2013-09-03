@@ -55,6 +55,15 @@
 #include <bitstream/mpeg/mpga.h>
 #include <bitstream/mpeg/aac.h>
 
+/** BS for <= 2 channels */
+#define ADTS_BS_2 3584
+/** BS for <= 8 channels */
+#define ADTS_BS_8 8976
+/** BS for <= 12 channels */
+#define ADTS_BS_12 12804
+/** BS for <= 48 channels */
+#define ADTS_BS_48 51216
+
 /** @This returns the octetrate / 1000 of an MPEG-1 or 2 audio stream. */
 static const uint8_t mpeg_octetrate_table[2][3][16] = {
     { /* MPEG-1 */
@@ -109,12 +118,18 @@ struct upipe_mpgaf {
     size_t samplerate;
     /** number of channels */
     uint8_t channels;
+    /** octet rate */
+    uint64_t octetrate;
     /** residue of the duration in 27 MHz units */
     uint64_t duration_residue;
     /** true we have had a discontinuity recently */
     bool got_discontinuity;
     /** sync header */
     uint8_t sync_header[MPGA_HEADER_SIZE + ADTS_HEADER_SIZE]; // to be sure
+    /** ADTS BS duration */
+    uint64_t adts_bs_duration;
+    /** ADTS BS leakage per frame */
+    uint64_t adts_bs_leakage;
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -133,6 +148,8 @@ struct upipe_mpgaf {
     uint64_t next_frame_pts;
     /** system PTS of the next picture, or UINT64_MAX */
     uint64_t next_frame_pts_sys;
+    /** delay due to the ADTS BS */
+    int64_t bs_delay;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -345,8 +362,8 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     ret = ret && uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels);
     ret = ret && uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
-    ret = ret && uref_block_flow_set_octetrate(flow_def,
-            (uint64_t)octetrate * 1000);
+    upipe_mpgaf->octetrate = (uint64_t)octetrate * 1000;
+    ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def,
             (uint64_t)max_octetrate * 1000);
 
@@ -359,6 +376,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     upipe_mpgaf->next_frame_size = padding ?
                                    upipe_mpgaf->frame_size_padding :
                                    upipe_mpgaf->frame_size;
+    upipe_mpgaf->bs_delay = 0;
     return true;
 }
 
@@ -377,12 +395,13 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     if (likely(adts_sync_compare(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
-        upipe_mpgaf->next_frame_size = adts_get_length(header);
-        return true;
+        goto upipe_mpgaf_parse_adts_shortcut;
     }
 
-    if (!adts_samplerate_table[adts_get_sampling_freq(header)])
+    if (!adts_samplerate_table[adts_get_sampling_freq(header)]) {
+        upipe_warn(upipe, "invalid samplerate");
         return false;
+    }
 
     memcpy(upipe_mpgaf->sync_header, header, ADTS_HEADER_SIZE);
 
@@ -410,12 +429,31 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
                                               upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
 
-    /* Calculate bitrate assuming the stream is CBR. Do not take SBR into
+    /* Calculate octetrate assuming the stream is CBR. Do not take SBR into
      * account here, as it would * 2 both the samplerate and the number of
      * samples. */
-    ret = ret && uref_block_flow_set_octetrate(flow_def,
-            adts_get_length(header) * upipe_mpgaf->samplerate /
-            upipe_mpgaf->samples);
+    uint64_t octetrate = adts_get_length(header) * upipe_mpgaf->samplerate /
+                         upipe_mpgaf->samples;
+    /* Round up to a multiple of 8 kbits/s. */
+    octetrate += 999;
+    octetrate -= octetrate % 1000;
+    upipe_mpgaf->octetrate = octetrate;
+    ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate);
+
+    uint64_t adts_bs;
+    if (upipe_mpgaf->channels <= 2)
+        adts_bs = ADTS_BS_2;
+    else if (upipe_mpgaf->channels <= 8)
+        adts_bs = ADTS_BS_8;
+    else if (upipe_mpgaf->channels <= 12)
+        adts_bs = ADTS_BS_12;
+    else
+        adts_bs = ADTS_BS_48;
+    ret = ret && uref_block_flow_set_cpb_buffer(flow_def, adts_bs);
+    upipe_mpgaf->adts_bs_duration = adts_bs * UCLOCK_FREQ / octetrate;
+    upipe_mpgaf->adts_bs_leakage = UCLOCK_FREQ * upipe_mpgaf->samples /
+                                   upipe_mpgaf->samplerate;
+    upipe_mpgaf->bs_delay = upipe_mpgaf->adts_bs_duration;
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
@@ -423,7 +461,18 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         return false;
     }
     upipe_mpgaf_store_flow_def(upipe, flow_def);
+
+upipe_mpgaf_parse_adts_shortcut:
     upipe_mpgaf->next_frame_size = adts_get_length(header);
+    upipe_mpgaf->bs_delay += upipe_mpgaf->adts_bs_leakage;
+    upipe_mpgaf->bs_delay -= upipe_mpgaf->next_frame_size * UCLOCK_FREQ /
+                             upipe_mpgaf->octetrate;
+    if (upipe_mpgaf->bs_delay < 0) {
+        upipe_warn_va(upipe, "ADTS BS underflow %"PRId64,
+                      -upipe_mpgaf->bs_delay);
+        upipe_mpgaf->bs_delay = 0;
+    } else if (upipe_mpgaf->bs_delay > upipe_mpgaf->adts_bs_duration)
+        upipe_mpgaf->bs_delay = upipe_mpgaf->adts_bs_duration;
     return true;
 }
 
@@ -437,7 +486,7 @@ static bool upipe_mpgaf_parse_header(struct upipe *upipe)
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     uint8_t header[2];
     if (unlikely(!uref_block_extract(upipe_mpgaf->next_uref, 0, 2, header)))
-        return false;
+        return true;
 
     switch (mpga_get_layer(header)) {
         case MPGA_LAYER_1:
@@ -509,6 +558,9 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
     INCREMENT_PTS(pts)
     INCREMENT_PTS(pts_sys)
 #undef INCREMENT_PTS
+
+    if (upipe_mpgaf->bs_delay)
+        uref_clock_set_vbv_delay(uref, upipe_mpgaf->bs_delay);
 
     upipe_mpgaf_output(upipe, uref, upump);
 }
