@@ -103,6 +103,8 @@ enum uprobe_event {
 
 /** @This defines the levels of log messages. */
 enum uprobe_log_level {
+    /** verbose messages, on a uref basis */
+    UPROBE_LOG_VERBOSE,
     /** debug messages, not necessarily meaningful */
     UPROBE_LOG_DEBUG,
     /** notice messages, only informative */
@@ -310,6 +312,29 @@ static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
                                  const char *format, ...)
 {
     UBASE_VARARG(uprobe_dbg(uprobe, upipe, string))
+}
+
+/** @This throws a verbose statement event. This event is thrown whenever a
+ * pipe wants to send a textual message.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define uprobe_verbose(uprobe, upipe, msg)                                      \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_VERBOSE, msg)
+
+/** @This throws a verbose statement event, with printf-style message
+ * generation.
+ *
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
+                                 const char *format, ...)
+{
+    UBASE_VARARG(uprobe_verbose(uprobe, upipe, string))
 }
 
 /** @This throws a fatal error event. After this event, the behaviour

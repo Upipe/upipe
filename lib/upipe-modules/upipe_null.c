@@ -95,7 +95,7 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
 static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
-    upipe_dbg(upipe, "sending uref to devnull");
+    upipe_verbose(upipe, "sending uref to devnull");
     upipe_null->counter++;
     if (upipe_null->dump)
         uref_dump(uref, upipe->uprobe);

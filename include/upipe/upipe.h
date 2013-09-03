@@ -606,6 +606,26 @@ static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
     UBASE_VARARG(upipe_dbg(upipe, string))
 }
 
+/** @This throws a verbose statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_verbose(upipe, msg) upipe_log(upipe, UPROBE_LOG_VERBOSE, msg)
+
+/** @This throws a verbose statement event, with printf-style message
+ * generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_verbose_va(struct upipe *upipe,
+                                    const char *format, ...)
+{
+    UBASE_VARARG(upipe_verbose(upipe, string))
+}
+
 /** @This throws a fatal error event. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
  *

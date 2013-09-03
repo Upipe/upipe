@@ -111,7 +111,7 @@ static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
                                          struct picsize *dstsize) {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
 
-    upipe_dbg_va(upipe, "%zux%zu => %zux%zu",
+    upipe_verbose_va(upipe, "%zux%zu => %zux%zu",
           srcsize->hsize, srcsize->vsize, dstsize->hsize, dstsize->vsize);
 
     upipe_sws_thumbs->convert_ctx = sws_getCachedContext(upipe_sws_thumbs->convert_ctx,
@@ -268,9 +268,6 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
                          surface.hsize, surface.vsize, &dslices[i]);
         uref_pic_plane_size(gallery, planes[i].chroma, &stride, NULL, NULL, NULL);
         dstrides[i] = stride;
-        /*upipe_dbg_va(upipe, "%s(%d) %dx%d : %dx%d %p (%d)", planes[i].chroma, i,
-                     pos.hsize + margins.hsize, pos.vsize + margins.vsize,
-                     surface.hsize, surface.vsize, dslices[i], stride);*/
     }
 
     /* fire ! */

@@ -100,7 +100,7 @@ static inline bool upipe_sws_set_context(struct upipe *upipe,
                                          struct picsize *dstsize) {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
 
-    upipe_dbg_va(upipe, "%zux%zu => %zux%zu",
+    upipe_verbose_va(upipe, "%zux%zu => %zux%zu",
           srcsize->hsize, srcsize->vsize, dstsize->hsize, dstsize->vsize);
 
     upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx,
