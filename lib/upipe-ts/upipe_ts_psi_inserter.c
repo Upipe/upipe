@@ -50,6 +50,8 @@
 
 /** default interval for PSI tables */
 #define DEFAULT_INTERVAL (UCLOCK_FREQ / 10)
+/** default delay for PSI tables */
+#define DEFAULT_DELAY (UCLOCK_FREQ / 100)
 
 /** @internal @This is the private context of a ts_psii manager. */
 struct upipe_ts_psii_mgr {
@@ -255,15 +257,8 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
     uint64_t dts_sys = upipe_ts_psii_sub->next_dts_sys;
 
     if (unlikely(!dts)) {
-        uint64_t uref_dts = UINT64_MAX, uref_dts_sys = UINT64_MAX, delay = 0;
-        uref_clock_get_dts(next_uref, &uref_dts);
-        uref_clock_get_dts_sys(next_uref, &uref_dts_sys);
-        uref_clock_get_vbv_delay(next_uref, &delay);
-        dts = uref_dts - delay;
-        if (uref_dts_sys != UINT64_MAX)
-            dts_sys = uref_dts_sys - delay;
-        else
-            dts_sys = UINT64_MAX;
+        uref_clock_get_dts(next_uref, &dts);
+        uref_clock_get_dts_sys(next_uref, &dts_sys);
     }
 
     upipe_ts_psii_sub->next_dts = dts + upipe_ts_psii_sub->interval;
@@ -284,6 +279,7 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
         uref_clock_set_dts(output, dts);
         if (dts_sys != UINT64_MAX)
             uref_clock_set_dts_sys(output, dts_sys);
+        uref_clock_set_vbv_delay(output, DEFAULT_DELAY);
         upipe_input(upipe_ts_psii_sub->encaps, output, NULL);
     }
 }
@@ -469,18 +465,20 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
 
-    uint64_t dts, delay = 0;
+    uint64_t dts;
     if (unlikely(!uref_clock_get_dts(uref, &dts))) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
         return;
     }
-    uref_clock_get_vbv_delay(uref, &delay);
 
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_psii->subs, uchain) {
         struct upipe_ts_psii_sub *sub = upipe_ts_psii_sub_from_uchain(uchain);
-        while (sub->next_dts <= dts - delay)
+        /* We only compare to DTS and do not use delay because DTS is the
+         * latest time at which the incoming packet may be muxed, so if we
+         * take into account delay the PSI section may arrive too late. */
+        while (sub->next_dts <= dts)
             upipe_ts_psii_sub_output(upipe_ts_psii_sub_to_upipe(sub), uref);
     }
 
