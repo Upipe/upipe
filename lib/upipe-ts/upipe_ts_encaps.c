@@ -352,20 +352,21 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         /* Send out PCRs that may be missing due to an interruption of our
          * stream */
         while (upipe_ts_encaps->next_pcr <=
-                   begin + upipe_ts_encaps->pcr_tolerance) {
+                   begin - upipe_ts_encaps->pcr_tolerance -
+                   upipe_ts_encaps->ts_delay) {
             struct uref *output = upipe_ts_encaps_pad_pcr(upipe,
                                               upipe_ts_encaps->next_pcr);
             if (likely(output != NULL)) {
                 uref_clock_set_ref(output);
-                uref_clock_set_dts(output, upipe_ts_encaps->next_pcr);
+                uref_clock_set_dts(output, end);
                 if (dts_sys != UINT64_MAX)
-                    uref_clock_set_dts_sys(output,
-                            dts_sys - (dts - upipe_ts_encaps->next_pcr));
+                    uref_clock_set_dts_sys(output, dts_sys - (dts - end));
                 if (dts_orig != UINT64_MAX)
-                    uref_clock_set_dts_orig(output,
-                            dts_orig - (dts - upipe_ts_encaps->next_pcr));
+                    uref_clock_set_dts_orig(output, dts_orig - (dts - end));
                 uref_clock_set_vbv_delay(output,
-                                         upipe_ts_encaps->pcr_tolerance);
+                                         end - upipe_ts_encaps->next_pcr +
+                                         upipe_ts_encaps->pcr_tolerance +
+                                         upipe_ts_encaps->ts_delay);
                 upipe_ts_encaps_output(upipe, output, upump);
             }
             upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
@@ -432,9 +433,9 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
             upipe_warn(upipe, "input is bursting above its max octet rate");
             output_delay = 0;
         } else
-            output_delay = output_dts + upipe_ts_encaps->ts_delay - muxdate;
-        if (output_delay)
-            ret = ret && uref_clock_set_vbv_delay(output, output_delay);
+            output_delay = output_dts - muxdate;
+        ret = ret && uref_clock_set_vbv_delay(output,
+                output_delay + upipe_ts_encaps->ts_delay);
 
         if (pcr) {
             ret = ret && uref_clock_set_ref(output);
