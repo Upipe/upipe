@@ -589,8 +589,8 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
     CHK(uref_pic_set_vsize(flow_def, codec->height))
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
     if (codec->time_base.den) {
-        struct urational fps = { .num = codec->time_base.num * ticks,
-                                 .den = codec->time_base.den };
+        struct urational fps = { .num = codec->time_base.den,
+                                 .den = codec->time_base.num * ticks };
         urational_simplify(&fps);
         CHK(uref_pic_flow_set_fps(flow_def, fps))
     }
