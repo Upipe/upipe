@@ -79,6 +79,9 @@ extern "C" {
  * Releases all buffers.
  * @end list
  *
+ * Please take note that this function internally uses @ref uref_attr_set_priv
+ * and @ref uref_attr_get_priv.
+ *
  * @param STRUCTURE name of your private upipe structure 
  * @param NEXT_UREF name of the @tt{struct uref} field of
  * your private upipe structure
