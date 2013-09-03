@@ -42,6 +42,7 @@
 #include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
+#include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
@@ -58,6 +59,8 @@
 #include <upipe-modules/upipe_null.h>
 
 #undef NDEBUG
+
+UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 
 #include <stdio.h>
 #include <unistd.h>
@@ -91,6 +94,7 @@ struct uref_mgr *uref_mgr;
 struct ubuf_mgr *block_mgr;
 struct ubuf_mgr *pic_mgr;
 struct uprobe *logger;
+struct uprobe uprobe_avcenc_s;
 
 struct thread {
     pthread_t id;
@@ -117,6 +121,57 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, 
             assert(0);
             break;
     }
+    return true;
+}
+
+/** definition of our uprobe */
+bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
+                  enum uprobe_event event, va_list args)
+{
+    struct uref *flow = NULL;
+    const char *def;
+    int64_t num = 0;
+    struct ubuf_mgr *ubuf_mgr = pic_mgr;
+    struct upump_mgr *upump_mgr = NULL;
+
+    if (event != UPROBE_NEW_FLOW_DEF) {
+        return false;
+    }
+
+    upipe_get_flow_def(upipe, &flow);
+    assert(flow != NULL);
+    uref_xflow_get_num(flow, &num);
+    uref_flow_get_def(flow, &def);
+    assert(def != NULL);
+
+    /* check def to choose ubuf manager */
+    if (strstr(def, ".sound.")) {
+        ubuf_mgr = block_mgr;
+    }
+
+    /* decoder lives in encoder's thread */
+    upipe_get_upump_mgr(upipe, &upump_mgr);
+
+    /* decoder */
+    struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
+                                  "avcdec %"PRId64, num), flow);
+    assert(avcdec);
+    assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
+    if (upump_mgr) {
+        assert(upipe_set_upump_mgr(avcdec, upump_mgr));
+    }
+    assert(upipe_set_output(upipe, avcdec));
+    upipe_release(avcdec);
+
+    /* /dev/null */
+    struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
+        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
+                                  "null %"PRId64, num), NULL);
+    assert(null);
+    upipe_null_dump_dict(null, true);
+    upipe_set_output(avcdec, null);
+    upipe_release(null);
     return true;
 }
 
@@ -147,16 +202,12 @@ struct upipe *build_pipeline(const char *codec_def,
                              struct upump_mgr *upump_mgr, int num,
                              struct uref *flow_def)
 {
-    /* check def to choose ubuf manager */
-    struct ubuf_mgr *ubuf_mgr = pic_mgr;
-    if (strstr(codec_def, ".sound.")) {
-        ubuf_mgr = block_mgr;
-    }
+    uref_xflow_set_num(flow_def, num);
 
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcenc %d", num),
-        flow_def);
+        uprobe_pfx_adhoc_alloc_va(&uprobe_avcenc_s, UPROBE_LOG_LEVEL,
+                                  "avcenc %d", num), flow_def);
     assert(avcenc);
     assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
     assert(upipe_set_uref_mgr(avcenc, uref_mgr));
@@ -164,29 +215,6 @@ struct upipe *build_pipeline(const char *codec_def,
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcenc, upump_mgr));
     }
-    upipe_get_flow_def(avcenc, &flow_def);
-    assert(flow_def != NULL);
-
-    /* decoder */
-    struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "avcdec %d", num),
-        flow_def);
-    assert(avcdec);
-    assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
-    if (upump_mgr) {
-        assert(upipe_set_upump_mgr(avcdec, upump_mgr));
-    }
-    assert(upipe_set_output(avcenc, avcdec));
-    upipe_release(avcdec);
-
-    /* /dev/null */
-    struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "null %d", num),
-        NULL);
-    assert(null);
-    upipe_null_dump_dict(null, true);
-    upipe_set_output(avcdec, null);
-    upipe_release(null);
 
     return avcenc;
 }
@@ -269,11 +297,14 @@ int main(int argc, char **argv)
     int thread_num = THREAD_NUM;
 
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
-    while ((opt = getopt(argc, argv, "n:")) != -1) {
+    while ((opt = getopt(argc, argv, "hn:")) != -1) {
         switch(opt) {
             case 'n':
                 thread_num = strtod(optarg, NULL);
                 break;
+            case 'h':
+                printf("Usage: %s [-n <threads>]\n", argv[0]);
+                exit(0);
             default:
                 exit(EXIT_FAILURE);
         }
@@ -313,6 +344,9 @@ int main(int argc, char **argv)
     assert(uprobe_stdio != NULL);
     logger = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+
+    uprobe_init(&uprobe_avcenc_s, catch_avcenc, logger);
+
 
     /* init upipe_av */
     assert(upipe_av_init(false));

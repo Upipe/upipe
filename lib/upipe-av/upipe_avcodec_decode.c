@@ -187,11 +187,14 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     frame->opaque = upipe_avcdec->uref;
     upipe_avcdec->uref = NULL;
+    if (!frame->opaque) { /* dont die on invalid (?) calls */
+        return -1;
+    }
 
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
 
-    upipe_dbg_va(upipe, "Allocating frame for %"PRIu64" (%p) - %dx%d",
+    upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p) - %dx%d",
                  framenum, frame->opaque, frame->width, frame->height);
 
     if (unlikely(!upipe_avcdec->pixfmt)) {
@@ -235,7 +238,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
             
             return 0; /* success */
         } else {
-            upipe_dbg_va(upipe, "ubuf_pic_alloc(%d, %d) failed, fallback", width_aligned, height_aligned);
+            upipe_verbose_va(upipe, "ubuf_pic_alloc(%d, %d) failed, fallback", width_aligned, height_aligned);
         }
     }
 
@@ -259,7 +262,7 @@ static void upipe_avcdec_release_buffer_pic(struct AVCodecContext *context,
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
 
-    upipe_dbg_va(upipe, "Releasing frame %"PRIu64" (%p)", (uint64_t) framenum, uref);
+    upipe_verbose_va(upipe, "Releasing frame %"PRIu64" (%p)", (uint64_t) framenum, uref);
 
     if (likely(uref->ubuf)) {
         planes = upipe_avcdec_from_upipe(upipe)->pixfmt->planes;
@@ -291,10 +294,13 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 
     frame->opaque = upipe_avcdec->uref;
     upipe_avcdec->uref = NULL;
+    if (!frame->opaque) { /* dont die on invalid (?) calls */
+        return -1;
+    }
 
     uref_pic_get_number(frame->opaque, &framenum);
-    upipe_dbg_va(upipe, "Allocating frame for %"PRIu64" (%p)",
-                 framenum, frame->opaque);
+    upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p)",
+                     framenum, frame->opaque);
 
 
     /* direct rendering - allocate ubuf for audio */
@@ -316,7 +322,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
             
             return 0; /* success */
         } else {
-            upipe_dbg_va(upipe, "ubuf allocation failed, fallback");
+            upipe_verbose_va(upipe, "ubuf allocation failed, fallback");
         }
     }
 
@@ -540,7 +546,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
 
-    upipe_dbg_va(upipe, "%"PRIu64"\t - Picture decoded ! %dx%d - %"PRIu64,
+    upipe_verbose_va(upipe, "%"PRIu64"\t - Picture decoded ! %dx%d - %"PRIu64,
                  upipe_avcdec->counter, frame->width, frame->height, framenum);
 
     /* if uref has no attached ubuf (ie DR not supported) */
@@ -700,8 +706,8 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
 
-    upipe_dbg_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64,
-                 upipe_avcdec->counter, framenum);
+    upipe_verbose_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64,
+                     upipe_avcdec->counter, framenum);
 
     /* fetch audio sample size (in case it has been reduced) */
     int avbufsize = av_samples_get_buffer_size(NULL, context->channels,
@@ -813,8 +819,8 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     }
     avpkt.size = size;
 
-    upipe_dbg_va(upipe, "Received packet %"PRIu64" - size : %zu",
-                 upipe_avcdec->counter, avpkt.size);
+    upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %zu",
+                     upipe_avcdec->counter, avpkt.size);
     /* TODO replace with umem */
     avpkt.data = malloc(avpkt.size + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(avpkt.data == NULL)) {

@@ -428,7 +428,6 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def,
             upipe_warn_va(upipe, "codec %s not found", codec_name);
             return false;
         }
-        codec_def = upipe_av_to_flow_def(codec->id);
     } else if (codec_def) {
         codec_id = upipe_av_from_flow_def(codec_def);
         if (unlikely(!codec_id)) {
@@ -451,15 +450,6 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def,
         return upipe_avcenc_open_codec_wrap(upipe);
     }
 
-    /* flow definition */
-    if (unlikely(!upipe_avcenc->output_flow)) {
-        char def[strlen(PREFIX_FLOW) + strlen(codec_def) + 1];
-        snprintf(def, sizeof(def), PREFIX_FLOW "%s", codec_def);
-        struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
-        uref_flow_set_def(outflow, def);
-        upipe_avcenc_store_flow_def(upipe, outflow);
-    }
-
     upipe_dbg_va(upipe, "codec %s (%d) set", codec_def, codec_id);
     return true;
 }
@@ -477,7 +467,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     const struct upipe_av_plane *plane = upipe_avcenc->pixfmt->planes;
-    const AVCodec *codec = upipe_avcenc->context->codec;
+    AVCodecContext *context = upipe_avcenc->context;
+    const AVCodec *codec = context->codec;
     AVPacket avpkt;
     int i, gotframe, ret, size;
     struct ubuf *ubuf_block;
@@ -488,8 +479,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     if (unlikely(frame == NULL)) {
         /* uref == NULL, flushing encoder */
         upipe_dbg(upipe, "received null frame");
-        if (unlikely(!upipe_avcenc->context ||
-            !(upipe_avcenc->context->codec->capabilities & CODEC_CAP_DELAY))) {
+        if (unlikely(!context || !(codec->capabilities & CODEC_CAP_DELAY))) {
                 return false;
         }
     }
@@ -501,11 +491,11 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     gotframe = 0;
     switch (codec->type) {
         case AVMEDIA_TYPE_VIDEO: {
-            ret = avcodec_encode_video2(upipe_avcenc->context, &avpkt, frame, &gotframe);
+            ret = avcodec_encode_video2(context, &avpkt, frame, &gotframe);
             break;
         }
         case AVMEDIA_TYPE_AUDIO: {
-            ret = avcodec_encode_audio2(upipe_avcenc->context, &avpkt, frame, &gotframe);
+            ret = avcodec_encode_audio2(context, &avpkt, frame, &gotframe);
             break;
         }
         default: /* should never be there */
@@ -551,8 +541,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
     /* set dts */
     ts_diff = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
-              * upipe_avcenc->context->time_base.num
-              / upipe_avcenc->context->time_base.den;
+              * context->time_base.num
+              / context->time_base.den;
     if (uref_clock_get_pts(uref, &ts)) {
         uref_clock_set_dts(uref, ts - ts_diff);
     }
@@ -561,8 +551,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     }
 
     /* vbv delay */
-    if (upipe_avcenc->context->vbv_delay) {
-        uref_clock_set_vbv_delay(uref, upipe_avcenc->context->vbv_delay);
+    if (context->vbv_delay) {
+        uref_clock_set_vbv_delay(uref, context->vbv_delay);
     }
 
     /* unmap input and clean */
@@ -584,6 +574,20 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     }
 
     uref_attach_ubuf(uref, ubuf_block);
+
+    /* flow definition */
+    if (unlikely(!upipe_avcenc->output_flow)) {
+        const char *codec_def = upipe_av_to_flow_def(codec->id);
+        char def[strlen(PREFIX_FLOW) + strlen(codec_def) + 1];
+        snprintf(def, sizeof(def), PREFIX_FLOW "%s", codec_def);
+
+        struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
+        uref_flow_set_def(outflow, def);
+        if (context->bit_rate) {
+            uref_block_flow_set_octetrate(outflow, context->bit_rate / 8);
+        }
+        upipe_avcenc_store_flow_def(upipe, outflow);
+    }
 
     upipe_avcenc_output(upipe, uref, upump);
     return true;
@@ -725,7 +729,7 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
                upipe_avcenc->uref_max * sizeof(void*));
         upipe_avcenc->uref_max *= 2;
     }
-    upipe_dbg_va(upipe, "uref %p (%"PRIu64") stored at index %d",
+    upipe_verbose_va(upipe, "uref %p (%"PRIu64") stored at index %d",
                  uref, pts, i);
     upipe_avcenc->uref[i] = uref;
 
