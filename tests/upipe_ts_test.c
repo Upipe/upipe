@@ -131,6 +131,8 @@ static bool catch_ts_demux_output(struct uprobe *uprobe, struct upipe *upipe,
     struct uref *flow_def = va_arg(args, struct uref *);
     uint64_t octetrate;
     assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
+    /* Free the previous output. */
+    assert(upipe_set_output(upipe, NULL));
 
     struct upipe *mux_input = upipe_flow_alloc_sub(upipe_ts_mux_program,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
@@ -277,6 +279,8 @@ int main(int argc, char *argv[])
     uref_free(flow_def),
     assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
     assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
+    //assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
+    //assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
 
     flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
