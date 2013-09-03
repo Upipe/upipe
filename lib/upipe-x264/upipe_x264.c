@@ -453,6 +453,11 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
         uref_flow_set_random(uref);
     }
 
+    if (pic.hrd_timing.cpb_final_arrival_time)
+        uref_clock_set_vbv_delay(uref, UCLOCK_FREQ *
+                (pic.hrd_timing.cpb_removal_time -
+                 pic.hrd_timing.cpb_final_arrival_time));
+
     upipe_x264_output(upipe, uref, upump);
 }
 
