@@ -74,7 +74,7 @@ typedef void (*upump_cb)(struct upump *);
  * thread at once.
  */
 struct upump {
-    /** structure for double-linked lists */
+    /** structure for double-linked lists - for use by the allocating pipe */
     struct uchain uchain;
     /** pointer to the event loop manager */
     struct upump_mgr *mgr;
@@ -114,6 +114,10 @@ static inline struct uchain *upump_to_uchain(struct upump *upump)
 struct upump_mgr {
     /** refcount management structure */
     urefcount refcount;
+    /** structure for double-linked lists - for use by the application only */
+    struct uchain uchain;
+    /** opaque - for use by the application only */
+    void *opaque;
 
     /** function to create a pump */
     struct upump *(*upump_alloc)(struct upump_mgr *,
@@ -252,6 +256,10 @@ static inline void upump_free(struct upump *upump)
 }
 
 /** @This gets the opaque structure with a cast.
+ *
+ * @param upump description structure of the pump
+ * @param type type to cast to
+ * return opaque
  */
 #define upump_get_opaque(upump, type) (type)(upump)->opaque
 
@@ -285,6 +293,25 @@ static inline void upump_mgr_release(struct upump_mgr *mgr)
     if (unlikely(mgr->upump_mgr_free != NULL &&
                  urefcount_release(&mgr->refcount)))
         mgr->upump_mgr_free(mgr);
+}
+
+/** @This gets the opaque member of a upump manager.
+ *
+ * @param upump_mgr pointer to upump_mgr
+ * @param type type to cast to
+ * @return opaque
+ */
+#define upump_mgr_get_opaque(upump_mgr, type) (type)(upump_mgr)->opaque
+
+/** @This sets the opaque member of a upump manager
+ *
+ * @param upump_mgr pointer to upump_mgr
+ * @param opaque opaque
+ */
+static inline void upump_mgr_set_opaque(struct upump_mgr *upump_mgr,
+                                        void *opaque)
+{
+    upump_mgr->opaque = opaque;
 }
 
 #ifdef __cplusplus
