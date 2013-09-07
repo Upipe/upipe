@@ -662,6 +662,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
+    upipe_mpgvf->got_discontinuity = false;
 
     uint8_t picture_buffer[MP2VPIC_HEADER_SIZE];
     const uint8_t *picture;
