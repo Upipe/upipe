@@ -295,6 +295,8 @@ void upump_common_mgr_init(struct upump_mgr *mgr,
                            void (*upump_real_stop)(struct upump *))
 {
     urefcount_init(&mgr->refcount);
+    uchain_init(&mgr->uchain);
+    mgr->opaque = NULL;
     mgr->upump_start = upump_common_start;
     mgr->upump_stop = upump_common_stop;
     mgr->upump_blocker_alloc = upump_common_blocker_alloc;
