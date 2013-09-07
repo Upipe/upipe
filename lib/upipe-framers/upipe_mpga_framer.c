@@ -283,7 +283,9 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     uint8_t header[MPGA_HEADER_SIZE];
-    uref_block_extract(upipe_mpgaf->next_uref, 0, MPGA_HEADER_SIZE, header);
+    if (!uref_block_extract(upipe_mpgaf->next_uref, 0, MPGA_HEADER_SIZE,
+                            header))
+        return true; /* not enough data */
 
     if (likely(mpga_sync_compare(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
@@ -363,7 +365,8 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     ret = ret && uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
     upipe_mpgaf->octetrate = (uint64_t)octetrate * 1000;
-    ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate);
+    ret = ret && uref_block_flow_set_octetrate(flow_def,
+                                               upipe_mpgaf->octetrate);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def,
             (uint64_t)max_octetrate * 1000);
 
