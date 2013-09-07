@@ -220,8 +220,10 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
         uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
                                 0);
         uref_clock_set_dts(uref, next_dts);
-        if (upipe_ts_agg->next_dts_sys != UINT64_MAX)
+        if (next_dts_sys != UINT64_MAX) {
             uref_clock_set_dts_sys(uref, next_dts_sys);
+            uref_clock_set_systime(uref, next_dts_sys);
+        }
     }
 
     while (uref_size + TS_SIZE <= upipe_ts_agg->mtu) {
@@ -345,9 +347,11 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
 
     /* keep or attach incoming packet */
     if (unlikely(upipe_ts_agg->next_uref == NULL)) {
-        if (dts != UINT64_MAX) {
-            if (upipe_ts_agg->next_dts_sys != UINT64_MAX)
+        if (upipe_ts_agg->next_dts != UINT64_MAX) {
+            if (upipe_ts_agg->next_dts_sys != UINT64_MAX) {
                 uref_clock_set_dts_sys(uref, upipe_ts_agg->next_dts_sys);
+                uref_clock_set_systime(uref, upipe_ts_agg->next_dts_sys);
+            }
             uref_clock_set_dts(uref, upipe_ts_agg->next_dts);
         }
         uref_clock_delete_vbv_delay(uref);
