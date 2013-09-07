@@ -66,6 +66,9 @@ struct upipe_qsink {
     /** flow definition */
     struct uref *flow_def;
 
+    /** pseudo-output */
+    struct upipe *output;
+
     /** pointer to queue source */
     struct upipe *qsrc;
     /** temporary uref storage */
@@ -107,6 +110,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
     upipe_qsink_init_sink(upipe);
     upipe_qsink->qsrc = NULL;
     upipe_qsink->flow_def = flow_def;
+    upipe_qsink->output = NULL;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -177,6 +181,40 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
          * have been sent. */
         upipe_use(upipe);
     }
+}
+
+/** @internal @This returns a pointer to the current pseudo-output.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with a pointer to the pseudo-output
+ * @return false in case of error
+ */
+static bool upipe_qsink_get_output(struct upipe *upipe, struct upipe **p)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    assert(p != NULL);
+    *p = upipe_qsink->output;
+    return true;
+}
+
+/** @internal @This sets the pointer to the current pseudo-output.
+ *
+ * @param upipe description structure of the pipe
+ * @param output pointer to the pseudo-output
+ * @return false in case of error
+ */
+static bool upipe_qsink_set_output(struct upipe *upipe, struct upipe *output)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+
+    if (unlikely(upipe_qsink->output != NULL))
+        upipe_release(upipe_qsink->output);
+    if (unlikely(output == NULL))
+        return true;
+
+    upipe_qsink->output = output;
+    upipe_use(output);
+    return true;
 }
 
 /** @internal @This sets the input flow definition.
@@ -284,6 +322,14 @@ static bool _upipe_qsink_control(struct upipe *upipe,
                                  va_list args)
 {
     switch (command) {
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_qsink_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_qsink_set_output(upipe, output);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_qsink_set_flow_def(upipe, uref);
@@ -364,6 +410,8 @@ static void upipe_qsink_free(struct upipe *upipe)
     }
     upipe_throw_dead(upipe);
 
+    if (upipe_qsink->output != NULL)
+        upipe_release(upipe_qsink->output);
     if (upipe_qsink->flow_def != NULL)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink_clean_upump(upipe);
