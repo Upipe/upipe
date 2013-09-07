@@ -583,8 +583,13 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
         struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
         uref_flow_set_def(outflow, def);
+        uref_block_flow_delete_octetrate(outflow);
+        uref_block_flow_delete_cpb_buffer(outflow);
         if (context->bit_rate) {
             uref_block_flow_set_octetrate(outflow, context->bit_rate / 8);
+            if (context->rc_buffer_size)
+                uref_block_flow_set_cpb_buffer(outflow,
+                                               context->rc_buffer_size / 8);
         }
         upipe_avcenc_store_flow_def(upipe, outflow);
     }
