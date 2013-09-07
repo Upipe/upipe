@@ -272,9 +272,14 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     }
 
     /* set octetrate for CBR streams */
+    uref_block_flow_delete_octetrate(upipe_x264->output_flow);
+    uref_block_flow_delete_cpb_buffer(upipe_x264->output_flow);
     if (params->rc.i_bitrate) {
         uref_block_flow_set_octetrate(upipe_x264->output_flow,
-                                      params->rc.i_bitrate * (1024 / 8));
+                                      params->rc.i_bitrate * 125);
+        if (params->rc.i_vbv_buffer_size)
+            uref_block_flow_set_cpb_buffer(upipe_x264->output_flow,
+                                           params->rc.i_vbv_buffer_size * 125);
     }
 
     /* delete global headers */
