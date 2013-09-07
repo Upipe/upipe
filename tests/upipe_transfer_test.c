@@ -112,6 +112,7 @@ static void *thread(void *_upipe_xfer_mgr)
     assert(upump_mgr != NULL);
 
     assert(upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr));
+    upipe_mgr_release(upipe_xfer_mgr);
 
     ev_loop(loop, 0);
 
@@ -131,6 +132,7 @@ int main(int argc, char **argv)
     assert(upipe_xfer_mgr != NULL);
 
     pthread_t id;
+    upipe_mgr_use(upipe_xfer_mgr);
     assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
 
     struct upipe *upipe_handle = upipe_xfer_alloc(upipe_xfer_mgr, NULL,
@@ -140,7 +142,6 @@ int main(int argc, char **argv)
     upipe_set_uri(upipe_handle, "toto");
     upipe_release(upipe_handle);
 
-    upipe_xfer_mgr_detach(upipe_xfer_mgr);
     upipe_mgr_release(upipe_xfer_mgr);
 
     assert(!pthread_join(id, NULL));

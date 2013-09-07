@@ -161,7 +161,6 @@ static struct upipe_xfer_msg *upipe_xfer_msg_alloc(struct upipe_mgr *mgr)
         msg = malloc(sizeof(struct upipe_xfer_msg));
     if (unlikely(msg == NULL))
         return NULL;
-    upipe_mgr_use(mgr);
     return msg;
 }
 
@@ -176,7 +175,6 @@ static void upipe_xfer_msg_free(struct upipe_mgr *mgr,
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     if (unlikely(!ulifo_push(&xfer_mgr->msg_pool, msg)))
         free(msg);
-    upipe_mgr_release(mgr);
 }
 
 /** @internal @This is the private context of a xfer pipe. */
@@ -194,6 +192,10 @@ UPIPE_HELPER_UPIPE(upipe_xfer, upipe, UPIPE_XFER_SIGNATURE)
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
  * used to remotely release the transferred pipe.
+ *
+ * Please note that upipe_remote is not "used" so its refcount is not
+ * incremented. For that reason it shouldn't be "released" afterwards. Only
+ * release the xfer pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -294,19 +296,33 @@ void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr)
         free(msg);
 }
 
-/** @This frees a upipe manager.
+/** @internal @This detaches the upipe_xfer_mgr, and eventually frees all
+ * data structures.
  *
  * @param mgr pointer to a upipe manager
  */
-static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
+static void upipe_xfer_mgr_detach(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    /* being here implies that the upump_mgr has already been released, and
-     * the queue emptied */
+    upump_stop(xfer_mgr->upump);
+    upump_free(xfer_mgr->upump);
+    upump_mgr_release(xfer_mgr->upump_mgr);
     uqueue_clean(&xfer_mgr->uqueue);
     upipe_xfer_mgr_vacuum(mgr);
     urefcount_clean(&xfer_mgr->mgr.refcount);
     free(xfer_mgr);
+}
+
+/** @This frees a upipe manager. Real deallocation is only performed after
+ * detach. This call is thread-safe and may be performed from any thread.
+ *
+ * @param mgr xfer_mgr structure
+ */
+static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
+{
+    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    assert(xfer_mgr->upump_mgr != NULL);
+    upipe_xfer_mgr_send(mgr, UPIPE_XFER_DETACH, NULL, NULL);
 }
 
 /** @This is called by the remote upump manager to receive messages.
@@ -338,13 +354,9 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
             upipe_release(msg->upipe_remote);
             break;
         case UPIPE_XFER_DETACH:
-            upump_stop(xfer_mgr->upump);
-            upump_free(xfer_mgr->upump);
-            upump_mgr_release(xfer_mgr->upump_mgr);
-            xfer_mgr->upump = NULL;
-            xfer_mgr->upump_mgr = NULL;
-            upipe_mgr_release(mgr);
-            break;
+            upipe_xfer_msg_free(mgr, msg);
+            upipe_xfer_mgr_detach(mgr);
+            return;
     }
 
     upipe_xfer_msg_free(mgr, msg);
@@ -425,6 +437,9 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
  * the same thread that runs the event loop (upump managers aren't generally
  * thread-safe).
  *
+ * Please note that an xfer_mgr must be attached to a upump manager before it
+ * can be released.
+ *
  * @param mgr xfer_mgr structure
  * @param upump_mgr event loop to attach
  * @return false in case of error
@@ -444,21 +459,5 @@ bool upipe_xfer_mgr_attach(struct upipe_mgr *mgr, struct upump_mgr *upump_mgr)
     xfer_mgr->upump_mgr = upump_mgr;
     upump_mgr_use(upump_mgr);
     upump_start(xfer_mgr->upump);
-
-    /* also increment the local refcount to avoid being released before all
-     * messages have been received */
-    upipe_mgr_use(mgr);
     return true;
-}
-
-/** @This detaches a upipe_xfer_mgr from an event loop. This call is thread-safe
- * and may be performed from any thread. The manager cannot be reattached
- * to another thread afterwards.
- *
- * @param mgr xfer_mgr structure
- * @return false in case of error
- */
-bool upipe_xfer_mgr_detach(struct upipe_mgr *mgr)
-{
-    return upipe_xfer_mgr_send(mgr, UPIPE_XFER_DETACH, NULL, NULL);
 }

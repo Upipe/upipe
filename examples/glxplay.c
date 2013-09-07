@@ -225,7 +225,6 @@ static void *upipe_glxplayer_source_thread(void *_glxplayer)
     upump_mgr_release(glxplayer->upump_mgr_source);
     ev_loop_destroy(loop);
     printf("end of source thread\n");
-    upipe_xfer_mgr_detach(glxplayer->dec_xfer);
     upipe_mgr_release(glxplayer->dec_xfer);
     pthread_join(glxplayer->dec_thread_id, NULL);
 
@@ -365,7 +364,6 @@ static bool upipe_glxplayer_catch_demux(struct uprobe *uprobe,
                                            glxplayer->loglevel, "dec qsrc xfer"),
                     upipe_dec_qsrc);
             if (unlikely(glxplayer->upipe_dec_qsrc_handle == NULL)) {
-                upipe_xfer_mgr_detach(glxplayer->dec_xfer);
                 upipe_mgr_release(glxplayer->dec_xfer);
                 upipe_release(upipe_dec_qsrc);
                 upipe_release(output);
@@ -628,7 +626,6 @@ static bool upipe_glxplayer_catch_glx(struct uprobe *uprobe,
                     upipe_notice_va(upipe, "exit key pressed (%d), exiting",
                                     key);
                     upipe_release(glxplayer->upipe_src_xfer);
-                    upipe_xfer_mgr_detach(glxplayer->src_xfer);
                     upipe_mgr_release(glxplayer->src_xfer);
                     break;
                 }
@@ -1014,7 +1011,6 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                                        glxplayer->loglevel, "source xfer"),
                 upipe_src);
     if (unlikely(glxplayer->upipe_src_xfer == NULL)) {
-        upipe_xfer_mgr_detach(glxplayer->src_xfer);
         upipe_mgr_release(glxplayer->src_xfer);
         upipe_release(upipe_src);
         upipe_release(glxplayer->upipe_glx_qsrc);

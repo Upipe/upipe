@@ -64,24 +64,22 @@ void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr);
  * the same thread that runs the event loop (upump managers aren't generally
  * thread-safe).
  *
+ * Please note that an xfer_mgr must be attached to a upump manager before it
+ * can be released.
+ *
  * @param mgr xfer_mgr structure
  * @param upump_mgr event loop to attach
  * @return false in case of error
  */
 bool upipe_xfer_mgr_attach(struct upipe_mgr *mgr, struct upump_mgr *upump_mgr);
 
-/** @This detaches a upipe_xfer_mgr from an event loop. This call is thread-safe
- * and may be performed from any thread. The manager cannot be reattached
- * to another thread afterwards.
- *
- * @param mgr xfer_mgr structure
- * @return false in case of error
- */
-bool upipe_xfer_mgr_detach(struct upipe_mgr *mgr);
-
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
  * used to remotely release the transferred pipe.
+ *
+ * Please note that upipe_remote is not "used" so its refcount is not
+ * incremented. For that reason it shouldn't be "released" afterwards. Only
+ * release the xfer pipe.
  *
  * @param mgr management structure for queue source type
  * @param uprobe structure used to raise events
