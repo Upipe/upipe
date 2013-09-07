@@ -111,6 +111,8 @@ struct upipe_avcdec {
     struct uref *uref;
     /** next PTS */
     uint64_t next_pts;
+    /** next PTS (systime time) */
+    uint64_t next_pts_sys;
 
     /* parameters for last advertised outflow */
     /** last sample format */
@@ -494,7 +496,7 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
                                              struct uref *uref)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    uint64_t rap = 0, duration, pts;
+    uint64_t rap = 0, duration, pts, pts_sys;
     bool ret = true;
 
     /* rap */
@@ -513,10 +515,22 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
             ret = ret && uref_clock_set_pts(uref, pts);
         }
     }
+    if (!uref_clock_get_pts_sys(uref, &pts_sys)) {
+        pts_sys = upipe_avcdec->next_pts_sys;
+        if (pts_sys != UINT64_MAX) {
+            ret = ret && uref_clock_set_pts_sys(uref, pts_sys);
+        }
+    }
 
     /* DTS has no meaning from now on and is identical to PTS. */
     if (pts != UINT64_MAX)
         ret = ret && uref_clock_set_dts(uref, pts);
+    else
+        uref_clock_delete_dts(uref);
+    if (pts_sys != UINT64_MAX)
+        ret = ret && uref_clock_set_dts_sys(uref, pts_sys);
+    else
+        uref_clock_delete_dts_sys(uref);
 
     /* VBV demay has no meaning from now on. */
     ret = ret && uref_clock_delete_vbv_delay(uref);
@@ -524,6 +538,8 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration)) {
         upipe_avcdec->next_pts = pts + duration;
+        if (pts_sys != UINT64_MAX)
+            upipe_avcdec->next_pts_sys = pts_sys + duration;
     } else {
         upipe_warn(upipe, "couldn't determine next_pts");
     }
@@ -1097,6 +1113,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->index_rap = 0;
     upipe_avcdec->prev_rap = 0;
     upipe_avcdec->next_pts = UINT64_MAX;
+    upipe_avcdec->next_pts_sys = UINT64_MAX;
 
     /* Increment our refcount so the context will have time to be closed
      * (decremented in @ref upipe_avcdec_do_av_deal) */
