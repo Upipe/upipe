@@ -90,6 +90,16 @@ static inline bool urefcount_single(urefcount *refcount)
     return uatomic_load(refcount) == 1;
 }
 
+/** @This checks for no reference.
+ *
+ * @param refcount pointer to a urefcount structure
+ * @return true if there is no reference to the object
+ */
+static inline bool urefcount_dead(urefcount *refcount)
+{
+    return uatomic_load(refcount) == 0;
+}
+
 /** @This cleans up the urefcount structure.
  *
  * @param refcount pointer to a urefcount structure
