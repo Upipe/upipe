@@ -225,6 +225,8 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
 
     size_t uref_size, padding_size = 0;
     uref_block_size(uref, &uref_size);
+    if (!uref_size)
+        return NULL;
     if (uref_size < TS_SIZE - header_size) {
         if (upipe_ts_encaps->psi)
             padding_size = TS_SIZE - uref_size - header_size;
@@ -279,6 +281,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (payload != NULL)
             ubuf_free(payload);
         uref_free(output);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return NULL;
     }
 
@@ -290,6 +293,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (unlikely(padding == NULL ||
                      !ubuf_block_write(padding, 0, &size, &buffer))) {
             uref_free(output);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return NULL;
         }
         memset(buffer, 0xff, size);
@@ -298,6 +302,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (unlikely(!uref_block_append(output, padding))) {
             ubuf_free(padding);
             uref_free(output);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return NULL;
         }
     }
@@ -407,13 +412,10 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         struct uref *output =
             upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1,
                                    pcr ? muxdate : 0, random, discontinuity);
-        if (unlikely(output == NULL)) {
+        if (unlikely(output == NULL))
             /* This can happen if the last packet was only planned to contain
              * a PCR. In this case we will catch up next time. */
-            if (i)
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             break;
-        }
 
         /* DTS is now the latest theorical time at which we can output the
          * packet, considering the rest of the elementary stream will be output
@@ -429,7 +431,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 
         /* DTS - delay is the theorical muxing date */
         uint64_t output_delay;
-        if (output_dts + upipe_ts_encaps->ts_delay < muxdate) {
+        if (output_dts < muxdate) {
             upipe_warn(upipe, "input is bursting above its max octet rate");
             output_delay = 0;
         } else
