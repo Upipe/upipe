@@ -64,7 +64,8 @@ static const struct {
  * @param fmt av sample format
  * @return flow definition, or NULL if not found
  */
-static const char *upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
+static inline const char *
+    upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
 {
     for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
          i++)
@@ -78,7 +79,8 @@ static const char *upipe_av_samplefmt_to_flow_def(enum AVSampleFormat fmt)
  * @param flow_def flow definition
  * @return av sample format, or AV_SAMPLE_FMT_NONE if not found
  */
-static enum AVSampleFormat upipe_av_samplefmt_from_flow_def(const char *flow_def)
+static inline enum AVSampleFormat
+    upipe_av_samplefmt_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
          i++)
