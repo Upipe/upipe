@@ -607,6 +607,28 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
     upipe_input(upipe_ts_mux_input->pes_encaps, uref, upump);
 }
 
+/** @internal @This processes control commands on a ts_mux_input
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_mux_input_control(struct upipe *upipe,
+                                       enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_mux_input_get_super(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -647,7 +669,7 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
     input_mgr->signature = UPIPE_TS_MUX_INPUT_SIGNATURE;
     input_mgr->upipe_alloc = upipe_ts_mux_input_alloc;
     input_mgr->upipe_input = upipe_ts_mux_input_input;
-    input_mgr->upipe_control = NULL;
+    input_mgr->upipe_control = upipe_ts_mux_input_control;
     input_mgr->upipe_free = upipe_ts_mux_input_free;
     input_mgr->upipe_mgr_free = NULL;
 }
@@ -1001,6 +1023,15 @@ static bool upipe_ts_mux_program_control(struct upipe *upipe,
                                          va_list args)
 {
     switch (command) {
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_mux_program_get_sub_mgr(upipe, p);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_mux_program_get_super(upipe, p);
+        }
+
         case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_MUX_SIGNATURE);
@@ -1679,6 +1710,10 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_ts_mux_set_ubuf_mgr(upipe, ubuf_mgr);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_mux_get_sub_mgr(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_CONFORMANCE: {

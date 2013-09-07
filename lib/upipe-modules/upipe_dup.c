@@ -148,6 +148,10 @@ static bool upipe_dup_output_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_dup_output_set_output(upipe, output);
         }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_dup_output_get_super(upipe, p);
+        }
 
         default:
             return false;
@@ -296,6 +300,10 @@ static bool upipe_dup_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_dup_set_flow_def(upipe, uref);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_dup_get_sub_mgr(upipe, p);
         }
 
         default:

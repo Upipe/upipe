@@ -37,8 +37,6 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_UNSIGNED(av_flow, id, "a.id", libavformat ID)
-
 #ifdef __cplusplus
 }
 #endif

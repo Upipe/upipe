@@ -50,6 +50,7 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_bin.h>
 #include <upipe/upipe_helper_sync.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_setrap.h>
@@ -166,6 +167,13 @@ struct upipe_ts_demux_psi_pid;
 
 /** @internal @This is the private context of a ts_demux pipe. */
 struct upipe_ts_demux {
+    /** pipe acting as output */
+    struct upipe *output;
+    /** output flow definition packet */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
     /** pointer to null subpipe */
     struct upipe *null;
 
@@ -210,6 +218,8 @@ struct upipe_ts_demux {
 
     /** manager to create programs */
     struct upipe_mgr program_mgr;
+    /** pointer to proxy manager, proxying program_mgr */
+    struct upipe_mgr *program_proxy_mgr;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -218,14 +228,20 @@ struct upipe_ts_demux {
 UPIPE_HELPER_UPIPE(upipe_ts_demux, upipe, UPIPE_TS_DEMUX_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_demux, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
+UPIPE_HELPER_OUTPUT(upipe_ts_demux, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_demux pipe. */
 struct upipe_ts_demux_program {
     /** structure for double-linked lists */
     struct uchain uchain;
 
-    /** flow definition of the input */
-    struct uref *flow_def_input;
+    /** pipe acting as output */
+    struct upipe *output;
+    /** output flow definition packet */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
     /** program number */
     unsigned int program;
     /** ts_psi_split_output subpipe */
@@ -268,6 +284,7 @@ struct upipe_ts_demux_program {
 
 UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe, UPIPE_TS_DEMUX_PROGRAM_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_demux_program, "void.")
+UPIPE_HELPER_OUTPUT(upipe_ts_demux_program, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux, upipe_ts_demux_program, program,
                      program_mgr, programs, uchain)
@@ -813,6 +830,30 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This processes control commands on a ts_demux_output pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_output_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
+{
+    switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            upipe_ts_demux_output_get_super(upipe, p);
+            upipe_proxy_throw_get_proxy(*p, p);
+            return true;
+        }
+
+        default:
+            return upipe_ts_demux_output_control_bin(upipe, command, args);
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -851,7 +892,7 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
     output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
     output_mgr->upipe_input = NULL;
-    output_mgr->upipe_control = upipe_ts_demux_output_control_bin;
+    output_mgr->upipe_control = upipe_ts_demux_output_control;
     output_mgr->upipe_free = upipe_ts_demux_output_free;
     output_mgr->upipe_mgr_free = NULL;
 }
@@ -943,9 +984,11 @@ static bool upipe_ts_demux_program_pmtd_header(struct uprobe *uprobe,
     upipe_ts_demux_program->pcr_pid = pmtd_pcrpid;
     upipe_ts_demux_program_check_pcr(upipe);
 
-    /* send the event upstream, in case there is some descrambling involved */
-    upipe_throw(upipe, event, signature, uref, pmtd_pcrpid,
-                pmtd_desc_offset, pmtd_desc_size);
+    /* force throwing new flow def */
+    if (!upipe_ts_demux_program->flow_def_sent) {
+        upipe_throw_new_flow_def(upipe, upipe_ts_demux_program->flow_def);
+        upipe_ts_demux_program->flow_def_sent = true;
+    }
     return true;
 }
 
@@ -1011,9 +1054,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
     switch (streamtype) {
         case 0x1: {
             struct uref *flow_def =
-                uref_dup(upipe_ts_demux_program->flow_def_input);
+                uref_dup(upipe_ts_demux_program->flow_def);
             if (likely(flow_def != NULL &&
                        uref_flow_set_def(flow_def, "block.mpeg1video.pic.") &&
+                       uref_flow_set_id(flow_def, pid) &&
                        uref_flow_set_raw_def(flow_def,
                            "block.mpegts.mpegtspes.mpeg1video.pic.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
@@ -1028,9 +1072,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
         }
         case 0x2: {
             struct uref *flow_def =
-                uref_dup(upipe_ts_demux_program->flow_def_input);
+                uref_dup(upipe_ts_demux_program->flow_def);
             if (likely(flow_def != NULL &&
                        uref_flow_set_def(flow_def, "block.mpeg2video.pic.") &&
+                       uref_flow_set_id(flow_def, pid) &&
                        uref_flow_set_raw_def(flow_def,
                            "block.mpegts.mpegtspes.mpeg2video.pic.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
@@ -1046,9 +1091,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
         case 0x3:
         case 0x4: {
             struct uref *flow_def =
-                uref_dup(upipe_ts_demux_program->flow_def_input);
+                uref_dup(upipe_ts_demux_program->flow_def);
             if (likely(flow_def != NULL &&
                        uref_flow_set_def(flow_def, "block.mp2.sound.") &&
+                       uref_flow_set_id(flow_def, pid) &&
                        uref_flow_set_raw_def(flow_def,
                            "block.mpegts.mpegtspes.mp2.sound.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
@@ -1063,9 +1109,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
         }
         case 0xf: {
             struct uref *flow_def =
-                uref_dup(upipe_ts_demux_program->flow_def_input);
+                uref_dup(upipe_ts_demux_program->flow_def);
             if (likely(flow_def != NULL &&
                        uref_flow_set_def(flow_def, "block.aac.sound.") &&
+                       uref_flow_set_id(flow_def, pid) &&
                        uref_flow_set_raw_def(flow_def,
                            "block.mpegts.mpegtspes.aac.sound.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
@@ -1080,9 +1127,10 @@ static bool upipe_ts_demux_program_pmtd_add_es(struct uprobe *uprobe,
         }
         case 0x1b: {
             struct uref *flow_def =
-                uref_dup(upipe_ts_demux_program->flow_def_input);
+                uref_dup(upipe_ts_demux_program->flow_def);
             if (likely(flow_def != NULL &&
                        uref_flow_set_def(flow_def, "block.h264.pic.") &&
+                       uref_flow_set_id(flow_def, pid) &&
                        uref_flow_set_raw_def(flow_def,
                            "block.mpegts.mpegtspes.h264.pic.") &&
                        uref_ts_flow_set_pid(flow_def, pid) &&
@@ -1312,7 +1360,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     if (upipe_ts_demux_program->pcr_split_output != NULL)
         return;
 
-    struct uref *flow_def = uref_dup(upipe_ts_demux_program->flow_def_input);
+    struct uref *flow_def = uref_dup(upipe_ts_demux_program->flow_def);
     if (unlikely(flow_def == NULL ||
                  !uref_flow_set_def(flow_def, "block.mpegts.") ||
                  !uref_ts_flow_set_pid(flow_def,
@@ -1382,9 +1430,10 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
+    upipe_ts_demux_program_init_output(upipe);
     upipe_ts_demux_program_init_output_mgr(upipe);
     upipe_ts_demux_program_init_sub_outputs(upipe);
-    upipe_ts_demux_program->flow_def_input = flow_def;
+    upipe_ts_demux_program_store_flow_def(upipe, flow_def);
     upipe_ts_demux_program->program = 0;
     upipe_ts_demux_program->systime_pmt = 0;
     upipe_ts_demux_program->systime_pcr = 0;
@@ -1452,6 +1501,46 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This processes control commands on a ts_demux_program pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_demux_program_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_demux_program_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_demux_program_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_demux_program_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_demux_program_get_sub_mgr(upipe, p);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            upipe_ts_demux_program_get_super(upipe, p);
+            upipe_proxy_throw_get_proxy(*p, p);
+            return true;
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -1472,9 +1561,9 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
         upipe_release(upipe_ts_demux_program->pcr_split_output);
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_ts_demux_program->flow_def_input);
     upipe_ts_demux_program_clean_sub_outputs(upipe);
     upipe_ts_demux_program_clean_sub(upipe);
+    upipe_ts_demux_program_clean_output(upipe);
     upipe_ts_demux_program_free_flow(upipe);
 
     upipe_release(upipe_ts_demux_to_upipe(demux));
@@ -1511,7 +1600,7 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
     program_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
     program_mgr->upipe_input = NULL;
-    program_mgr->upipe_control = NULL;
+    program_mgr->upipe_control = upipe_ts_demux_program_control;
     program_mgr->upipe_free = upipe_ts_demux_program_free;
     program_mgr->upipe_mgr_free = NULL;
 }
@@ -1701,6 +1790,42 @@ static bool upipe_ts_demux_patd_systime(struct uprobe *uprobe,
     return true;
 }
 
+/** @internal @This catches ts_patd_tsid events coming from patd subpipe.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux
+ * @param patd pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_demux_patd_tsid(struct uprobe *uprobe, struct upipe *patd,
+                                     enum uprobe_event event, va_list args)
+{
+    struct upipe_ts_demux *upipe_ts_demux =
+        container_of(uprobe, struct upipe_ts_demux, patd_probe);
+    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
+
+    unsigned int signature = va_arg(args, unsigned int);
+    struct uref *uref = va_arg(args, struct uref *);
+    unsigned int tsid = va_arg(args, unsigned int);
+    assert(signature == UPIPE_TS_PATD_SIGNATURE);
+
+    struct uref *flow_def = uref_dup(upipe_ts_demux->flow_def_input);
+    if (unlikely(flow_def == NULL ||
+                 !uref_flow_set_def(flow_def, "void.") ||
+                 !uref_ts_flow_set_tsid(flow_def, tsid))) {
+        if (flow_def != NULL)
+            uref_free(flow_def);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return true;
+    }
+    upipe_ts_demux_store_flow_def(upipe, flow_def);
+    /* force throwing new flow def */
+    upipe_throw_new_flow_def(upipe, upipe_ts_demux->flow_def);
+    upipe_ts_demux->flow_def_sent = true;
+    return true;
+}
+
 /** @internal @This catches ts_patd_add_program events coming from patd subpipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
@@ -1745,10 +1870,12 @@ static bool upipe_ts_demux_patd_add_program(struct uprobe *uprobe,
     struct uref *flow_def = uref_dup(upipe_ts_demux->flow_def_input);
     if (likely(flow_def != NULL &&
                uref_flow_set_def(flow_def, "void.") &&
+               uref_flow_set_id(flow_def, program) &&
                uref_flow_set_raw_def(flow_def, "block.mpegtspsi.mpegtspmt.") &&
                uref_ts_flow_set_psi_filter(flow_def, filter, mask,
                                            PSI_HEADER_SIZE_SYNTAX1) &&
                uref_ts_flow_set_pid(flow_def, pid) &&
+               uref_ts_flow_set_sid(flow_def, program) &&
                uref_flow_set_program_va(flow_def, "%u,", program)))
         upipe_split_throw_add_flow(upipe, program, flow_def);
 
@@ -1824,8 +1951,7 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
         case UPROBE_TS_PATD_SYSTIME:
             return upipe_ts_demux_patd_systime(uprobe, patd, event, args);
         case UPROBE_TS_PATD_TSID:
-            upipe_throw_va(upipe, event, args);
-            return true;
+            return upipe_ts_demux_patd_tsid(uprobe, patd, event, args);
         case UPROBE_TS_PATD_ADD_PROGRAM:
             return upipe_ts_demux_patd_add_program(uprobe, patd, event, args);
         case UPROBE_TS_PATD_DEL_PROGRAM:
@@ -1911,11 +2037,13 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     const char *def;
     uref_flow_get_def(flow_def, &def);
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    upipe_ts_demux_init_output(upipe);
     upipe_ts_demux_init_program_mgr(upipe);
     upipe_ts_demux_init_sub_programs(upipe);
-    upipe->sub_mgr = upipe_proxy_mgr_alloc(upipe->sub_mgr,
-                                     upipe_ts_demux_program_proxy_released);
-    if (unlikely(upipe->sub_mgr == NULL)) {
+    upipe_ts_demux->program_proxy_mgr =
+        upipe_proxy_mgr_alloc(&upipe_ts_demux->program_mgr,
+                              upipe_ts_demux_program_proxy_released);
+    if (unlikely(upipe_ts_demux->program_proxy_mgr == NULL)) {
         upipe_ts_demux_clean_sub_programs(upipe);
         uref_free(flow_def);
         upipe_ts_demux_free_flow(upipe);
@@ -1985,9 +2113,9 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux->input = upipe_ts_demux->setrap;
         upipe_use(upipe_ts_demux->setrap);
         upipe_ts_demux_sync_acquired(upipe);
-        upipe_get_flow_def(upipe_ts_demux->setrap, &flow_def);
     } else
         upipe_set_output(upipe_ts_demux->input, upipe_ts_demux->setrap);
+    upipe_get_flow_def(upipe_ts_demux->setrap, &flow_def);
 
     upipe_ts_demux->split =
         upipe_flow_alloc(ts_demux_mgr->ts_split_mgr,
@@ -2131,6 +2259,26 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
                                    enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_demux_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_demux_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_demux_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            struct upipe_ts_demux *upipe_ts_demux =
+                upipe_ts_demux_from_upipe(upipe);
+            *p = upipe_ts_demux->program_proxy_mgr;
+            return true;
+        }
+
         case UPIPE_TS_DEMUX_GET_CONFORMANCE: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
@@ -2171,10 +2319,11 @@ static void upipe_ts_demux_free(struct upipe *upipe)
     if (upipe_ts_demux->psi_pid_pat != NULL)
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
     upipe_throw_dead(upipe);
-    upipe_mgr_release(upipe->sub_mgr);
+    upipe_mgr_release(upipe_ts_demux->program_proxy_mgr);
     uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux_clean_sub_programs(upipe);
     upipe_ts_demux_clean_sync(upipe);
+    upipe_ts_demux_clean_output(upipe);
     upipe_ts_demux_free_flow(upipe);
 }
 

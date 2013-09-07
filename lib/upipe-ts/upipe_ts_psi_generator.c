@@ -197,6 +197,27 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This processes control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_psig_flow_control(struct upipe *upipe,
+                                       enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psig_flow_get_super(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -228,7 +249,7 @@ static void upipe_ts_psig_program_init_flow_mgr(struct upipe *upipe)
     flow_mgr->signature = UPIPE_TS_PSIG_FLOW_SIGNATURE;
     flow_mgr->upipe_alloc = upipe_ts_psig_flow_alloc;
     flow_mgr->upipe_input = NULL;
-    flow_mgr->upipe_control = NULL;
+    flow_mgr->upipe_control = upipe_ts_psig_flow_control;
     flow_mgr->upipe_free = upipe_ts_psig_flow_free;
     flow_mgr->upipe_mgr_free = NULL;
 }
@@ -452,6 +473,14 @@ static bool upipe_ts_psig_program_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psig_program_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_psig_program_get_sub_mgr(upipe, p);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psig_program_get_super(upipe, p);
         }
 
         case UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID: {
@@ -706,6 +735,10 @@ static bool upipe_ts_psig_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psig_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_psig_get_sub_mgr(upipe, p);
         }
 
         default:

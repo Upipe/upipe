@@ -276,6 +276,28 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
     upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump);
 }
 
+/** @internal @This processes control commands on an output subpipe of an
+ * avfsink pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_avfsink_sub_control(struct upipe *upipe,
+                                      enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_avfsink_sub_get_super(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -304,7 +326,7 @@ static void upipe_avfsink_init_sub_mgr(struct upipe *upipe)
     sub_mgr->signature = UPIPE_AVFSINK_INPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_avfsink_sub_alloc;
     sub_mgr->upipe_input = upipe_avfsink_sub_input;
-    sub_mgr->upipe_control = NULL;
+    sub_mgr->upipe_control = upipe_avfsink_sub_control;
     sub_mgr->upipe_free = upipe_avfsink_sub_free;
     sub_mgr->upipe_mgr_free = NULL;
 }
@@ -626,6 +648,10 @@ static bool upipe_avfsink_control(struct upipe *upipe,
                                   enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_avfsink_get_sub_mgr(upipe, p);
+        }
         case UPIPE_AVFSINK_GET_OPTION: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_AVFSINK_SIGNATURE);

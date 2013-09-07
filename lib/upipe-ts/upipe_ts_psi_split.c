@@ -142,6 +142,10 @@ static bool upipe_ts_psi_split_sub_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psi_split_sub_set_output(upipe, output);
         }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psi_split_sub_get_super(upipe, p);
+        }
 
         default:
             return false;
@@ -264,6 +268,27 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_psi_split_work(upipe, uref, upump);
 }
 
+/** @internal @This processes control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_psi_split_control(struct upipe *upipe,
+                                       enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_psi_split_get_sub_mgr(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -281,7 +306,7 @@ static struct upipe_mgr upipe_ts_psi_split_mgr = {
 
     .upipe_alloc = upipe_ts_psi_split_alloc,
     .upipe_input = upipe_ts_psi_split_input,
-    .upipe_control = NULL,
+    .upipe_control = upipe_ts_psi_split_control,
     .upipe_free = upipe_ts_psi_split_free,
 
     .upipe_mgr_free = NULL

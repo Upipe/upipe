@@ -108,7 +108,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             uint64_t id;
-            assert(uref_av_flow_get_id(flow_def, &id));
+            assert(uref_flow_get_id(flow_def, &id));
 
             struct upipe *upipe_avfsrc_output =
                 upipe_flow_alloc_sub(upipe_avfsrc,

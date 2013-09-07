@@ -88,6 +88,17 @@ extern "C" {
  * adds the output to the list in upipe_foo.
  *
  * @item @code
+ *  void upipe_foo_output_get_super(struct upipe *upipe, struct upipe **p)
+ * @end code
+ * Typically called from your upipe_foo_output_control() handler, such as:
+ * @code
+ *  case UPIPE_SUB_GET_SUPER: {
+ *      struct upipe **p = va_arg(args, struct upipe **);
+ *      return upipe_foo_output_get_super(upipe, p);
+ *  }
+ * @end code
+ *
+ * @item @code
  *  void upipe_foo_output_clean_sub(struct upipe *upipe)
  * @end code
  * Cleans up the private members of upipe_foo_output for this helper and
@@ -97,6 +108,17 @@ extern "C" {
  *  void upipe_foo_init_sub_outputs(struct upipe *upipe)
  * @end code
  * Initializes the list in upipe_foo.
+ *
+ * @item @code
+ *  void upipe_foo_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
+ * @end code
+ * Typically called from your upipe_foo_output_control() handler, such as:
+ * @code
+ *  case UPIPE_GET_SUB_MGR: {
+ *      struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+ *      return upipe_foo_get_sub_mgr(upipe, p);
+ *  }
+ * @end code
  *
  * @item @code
  *  void upipe_foo_throw_sub_outputs(struct upipe *upipe,
@@ -172,7 +194,7 @@ static inline struct uchain *                                               \
 /** @This initializes the private members for this helper in STRUCTURE_SUB, \
  * and adds it to the ULIST in STRUCTURE.                                   \
  *                                                                          \
- * @param upipe description structure of the subpipe.                       \
+ * @param upipe description structure of the subpipe                        \
  */                                                                         \
 static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
 {                                                                           \
@@ -181,10 +203,23 @@ static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
     ulist_add(&s->ULIST, STRUCTURE_SUB##_to_uchain(sub));                   \
 }                                                                           \
+/** @This returns the super-pipe of the subpipe.                            \
+ *                                                                          \
+ * @param upipe description structure of the subpipe                        \
+ * @param p filled in with a pointer to the super-pipe                      \
+ * return always true                                                       \
+ */                                                                         \
+static bool STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p)\
+{                                                                           \
+    assert(p != NULL);                                                      \
+    struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
+    *p = STRUCTURE##_to_upipe(s);                                           \
+    return true;                                                            \
+}                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE_SUB,   \
  * and removes it from the ULIST in STRUCTURE.                              \
  *                                                                          \
- * @param upipe description structure of the subpipe.                       \
+ * @param upipe description structure of the subpipe                        \
  */                                                                         \
 static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
 {                                                                           \
@@ -206,7 +241,20 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_init(&s->ULIST);                                                  \
-    upipe->sub_mgr = &s->MGR;                                               \
+}                                                                           \
+/** @This returns the subpipe manager of a super-pipe.                      \
+ *                                                                          \
+ * @param upipe description structure of the super-pipe                     \
+ * @param p filled in with a pointer to the subpipe manager                 \
+ * return always true                                                       \
+ */                                                                         \
+static bool STRUCTURE##_get_sub_mgr(struct upipe *upipe,                    \
+                                    struct upipe_mgr **p)                   \
+{                                                                           \
+    assert(p != NULL);                                                      \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    *p = &s->MGR;                                                           \
+    return true;                                                            \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \
  *                                                                          \

@@ -272,10 +272,15 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!upipe_udpsink_check_sink(upipe) ||
-                 !upipe_udpsink_output(upipe, uref, upump))) {
+    if (!upipe_udpsink_check_sink(upipe)) {
         upipe_udpsink_hold_sink(upipe, uref);
         upipe_udpsink_block_sink(upipe, upump);
+    } else if (!upipe_udpsink_output(upipe, uref, upump)) {
+        upipe_udpsink_hold_sink(upipe, uref);
+        upipe_udpsink_block_sink(upipe, upump);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
     }
 }
 
@@ -337,7 +342,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
     if (unlikely(upipe_udpsink->fd == -1)) {
-        upipe_err_va(upipe, "can't open file %s (%s)", uri, mode_desc);
+        upipe_err_va(upipe, "can't open uri %s (%s)", uri, mode_desc);
         return false;
     }
 
@@ -350,6 +355,23 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     }
     upipe_notice_va(upipe, "opening uri %s in %s mode",
                     upipe_udpsink->uri, mode_desc);
+    return true;
+}
+
+/** @internal @This flushes all currently held buffers, and unblocks the
+ * sources.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_udpsink_flush(struct upipe *upipe)
+{
+    if (upipe_udpsink_flush_sink(upipe)) {
+        upipe_udpsink_set_upump(upipe, NULL);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_udpsink_input. */
+        upipe_release(upipe);
+    }
     return true;
 }
 
@@ -405,6 +427,8 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
             enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
             return _upipe_udpsink_set_uri(upipe, uri, mode);
         }
+        case UPIPE_SINK_FLUSH:
+            return upipe_udpsink_flush(upipe);
         default:
             return false;
     }

@@ -66,6 +66,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "f.random", UDICT_TYPE_VOID },
     { "f.error", UDICT_TYPE_VOID },
     { "f.def", UDICT_TYPE_STRING },
+    { "f.id", UDICT_TYPE_UNSIGNED },
     { "f.rawdef", UDICT_TYPE_STRING },
     { "f.program", UDICT_TYPE_STRING },
     { "f.lang", UDICT_TYPE_STRING },

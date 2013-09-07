@@ -40,8 +40,27 @@ extern "C" {
 
 #define UPIPE_PROXY_SIGNATURE UBASE_FOURCC('p','r','x','y')
 
+/** @This extends uprobe_event with specific events for proxy. */
+enum uprobe_proxy_event {
+    UPROBE_PROXY_SENTINEL = UPROBE_LOCAL,
+
+    /** ask for a pointer to the proxy pipe (struct upipe **) */
+    UPROBE_PROXY_GET_PROXY
+};
+
 /** @This defines a function called when the proxy is released. */
 typedef void (*upipe_proxy_released)(struct upipe *);
+
+/** @This asks for a pointer to the proxy pipe pointing to the current pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the proxy
+ */
+static inline void upipe_proxy_throw_get_proxy(struct upipe *upipe,
+                                               struct upipe **p)
+{
+    upipe_throw(upipe, UPROBE_PROXY_GET_PROXY, UPIPE_PROXY_SIGNATURE, p);
+}
 
 /** @This returns the management structure for proxy pipes. Please note that
  * the refcount for super_mgr is not incremented, so super_mgr belongs to the

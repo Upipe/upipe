@@ -76,6 +76,8 @@ enum udict_type {
     UDICT_TYPE_FLOW_ERROR,
     /** f.def */
     UDICT_TYPE_FLOW_DEF,
+    /** f.id */
+    UDICT_TYPE_FLOW_ID,
     /** f.rawdef */
     UDICT_TYPE_FLOW_RAWDEF,
     /** f.program */

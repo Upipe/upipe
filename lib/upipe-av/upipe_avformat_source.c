@@ -187,7 +187,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     uint64_t id;
-    if (unlikely(!uref_av_flow_get_id(flow_def, &id))) {
+    if (unlikely(!uref_flow_get_id(flow_def, &id))) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
@@ -242,6 +242,10 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_avfsrc_sub_set_output(upipe, output);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_avfsrc_sub_get_super(upipe, p);
         }
 
         default:
@@ -706,13 +710,15 @@ static void upipe_avfsrc_probe(struct upump *upump)
                           codec->codec_type, codec->codec_id);
             continue;
         }
-        ret = uref_av_flow_set_id(flow_def, i);
+        ret = uref_flow_set_id(flow_def, i);
 
         AVDictionaryEntry *lang = av_dict_get(stream->metadata, "language",
                                               NULL, 0);
         if (lang != NULL && lang->value != NULL)
             ret = uref_flow_set_lang(flow_def, lang->value) && ret;
 
+        ret = ret && uref_flow_set_headers(flow_def, codec->extradata,
+                                           codec->extradata_size);
         if (unlikely(!ret)) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -720,7 +726,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
         }
 
         stream->discard = AVDISCARD_DEFAULT; 
-        uref_flow_set_headers(flow_def, codec->extradata, codec->extradata_size);
         upipe_split_throw_add_flow(upipe, i, flow_def);
         uref_free(flow_def);
     }
@@ -906,6 +911,10 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
             struct uclock *uclock = va_arg(args, struct uclock *);
             upipe_avfsrc_set_upump(upipe, NULL);
             return upipe_avfsrc_set_uclock(upipe, uclock);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_avfsrc_get_sub_mgr(upipe, p);
         }
 
         case UPIPE_AVFSRC_GET_OPTION: {

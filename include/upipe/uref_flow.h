@@ -49,6 +49,8 @@ UREF_ATTR_VOID_SH(flow, random, UDICT_TYPE_FLOW_RANDOM,
 UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
         error flag that may be present in any uref carrying data)
 UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
+UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,
+        flow ID from the last split pipe)
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
 UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
 UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)

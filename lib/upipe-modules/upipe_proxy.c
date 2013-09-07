@@ -109,10 +109,19 @@ static bool upipe_proxy_probe(struct uprobe *uprobe, struct upipe *upipe_super,
                                                    uprobe);
     struct upipe *upipe = upipe_proxy_to_upipe(upipe_proxy);
 
-    if (event == UPROBE_READY && upipe_proxy->upipe_super == NULL) {
-        upipe_proxy->upipe_super = upipe_super;
-        upipe->sub_mgr = upipe_super->sub_mgr;
+    if (event == UPROBE_PROXY_GET_PROXY) {
+        va_list args_copy;
+        va_copy(args_copy, args);
+        unsigned int signature = va_arg(args_copy, unsigned int);
+        if (signature == UPIPE_PROXY_SIGNATURE) {
+            struct upipe **p = va_arg(args_copy, struct upipe **);
+            *p = upipe_proxy_to_upipe(upipe_proxy);
+            return true;
+        }
     }
+
+    if (event == UPROBE_READY && upipe_proxy->upipe_super == NULL)
+        upipe_proxy->upipe_super = upipe_super;
     if (upipe_super != upipe_proxy->upipe_super) {
         uprobe_throw_va(upipe->uprobe, upipe_super, event, args);
         return true;

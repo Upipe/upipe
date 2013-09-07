@@ -253,6 +253,10 @@ static bool upipe_trickp_sub_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_trickp_sub_set_output(upipe, output);
         }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_trickp_sub_get_super(upipe, p);
+        }
 
         default:
             return false;
@@ -448,6 +452,10 @@ static bool upipe_trickp_control(struct upipe *upipe,
             struct uclock *uclock = va_arg(args, struct uclock *);
             upipe_trickp_reset_uclock(upipe);
             return upipe_trickp_set_uclock(upipe, uclock);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_trickp_get_sub_mgr(upipe, p);
         }
 
         case UPIPE_TRICKP_GET_RATE: {

@@ -34,6 +34,7 @@
 extern "C" {
 #endif
 
+#include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 
@@ -115,6 +116,15 @@ enum upipe_command {
     /** sets delay applied to systime attribute (uint64_t) */
     UPIPE_SINK_SET_DELAY,
 
+    /*
+     * Sub/super pipes commands
+     */
+    /** returns the sub manager associated with a super-pipe
+     * (struct upipe_mgr **) */
+    UPIPE_GET_SUB_MGR,
+    /** returns the super-pipe associated with a subpipe (struct upipe **) */
+    UPIPE_SUB_GET_SUPER,
+
     /** non-standard commands implemented by a module type can start from
      * there (first arg = signature) */
     UPIPE_CONTROL_LOCAL = 0x8000
@@ -124,14 +134,15 @@ enum upipe_command {
 struct upipe {
     /** refcount management structure */
     urefcount refcount;
+    /** structure for double-linked lists - for use by the application only */
+    struct uchain uchain;
+    /** opaque - for use by the application only */
+    void *opaque;
 
     /** pointer to the uprobe hierarchy passed on initialization */
     struct uprobe *uprobe;
     /** pointer to the manager for this pipe type */
     struct upipe_mgr *mgr;
-
-    /** pointer to manager used to allocate subpipes, or NULL */
-    struct upipe_mgr *sub_mgr;
 };
 
 /** @This stores common management parameters for a pipe type. */
@@ -249,36 +260,6 @@ static inline struct upipe *upipe_flow_alloc(struct upipe_mgr *mgr,
     return upipe_alloc(mgr, uprobe, UPIPE_FLOW_SIGNATURE, flow_def);
 }
 
-/** @This allocates and initializes a subpipe which is designed to accept no
- * argument.
- *
- * @param upipe structure of the super-pipe
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @return pointer to allocated subpipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
-                                                 struct uprobe *uprobe)
-{
-    return upipe_void_alloc(upipe->sub_mgr, uprobe);
-}
-
-/** @This allocates and initializes a subpipe which is designed to accept a
- * flow definition.
- *
- * @param upipe structure of the super-pipe
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the input
- * @return pointer to allocated subpipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
-                                                 struct uprobe *uprobe,
-                                                 struct uref *flow_def)
-{
-    return upipe_flow_alloc(upipe->sub_mgr, uprobe, flow_def);
-}
-
 /** @This initializes the public members of a pipe.
  *
  * @param upipe description structure of the pipe
@@ -290,10 +271,11 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
 {
     assert(upipe != NULL);
     urefcount_init(&upipe->refcount);
+    uchain_init(&upipe->uchain);
+    upipe->opaque = NULL;
     upipe->uprobe = uprobe;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
-    upipe->sub_mgr = NULL;
 }
 
 /** @This increments the reference count of a upipe.
@@ -324,6 +306,24 @@ static inline void upipe_release(struct upipe *upipe)
 static inline bool upipe_single(struct upipe *upipe)
 {
     return upipe->mgr->upipe_free != NULL && urefcount_single(&upipe->refcount);
+}
+
+/** @This gets the opaque member of a pipe.
+ *
+ * @param upipe pointer to upipe
+ * @param type type to cast to
+ * @return opaque
+ */
+#define upipe_get_opaque(upipe, type) (type)(upipe)->opaque
+
+/** @This sets the opaque member of a pipe.
+ *
+ * @param upipe pointer to upipe
+ * @param opaque opaque
+ */
+static inline void upipe_set_opaque(struct upipe *upipe, void *opaque)
+{
+    upipe->opaque = opaque;
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
@@ -462,6 +462,72 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
 static inline bool upipe_sink_flush(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_SINK_FLUSH);
+}
+
+/** @This returns the super-pipe of a subpipe.
+ *
+ * @param upipe description structure of the subpipe
+ * @param p filled in with a pointer to the super-pipe
+ * @return false in case of error
+ */
+static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
+{
+    return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
+}
+
+/** @This returns the subpipe manager of a super-pipe.
+ *
+ * @param upipe description structure of the super-pipe
+ * @param p filled in with a pointer to the subpipe manager
+ * @return false in case of error
+ */
+static inline bool upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
+{
+    return upipe_control(upipe, UPIPE_GET_SUB_MGR, p);
+}
+
+/** @This allocates and initializes a subpipe which is designed to accept no
+ * argument.
+ *
+ * @param upipe structure of the super-pipe
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @return pointer to allocated subpipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
+                                                 struct uprobe *uprobe)
+{
+    struct upipe_mgr *sub_mgr;
+    if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
+        /* notify ad-hoc probes that something went wrong so they can
+         * deallocate */
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        return NULL;
+    }
+    return upipe_void_alloc(sub_mgr, uprobe);
+}
+
+/** @This allocates and initializes a subpipe which is designed to accept a
+ * flow definition.
+ *
+ * @param upipe structure of the super-pipe
+ * @param uprobe structure used to raise events (belongs to the caller and
+ * must be kept alive for all the duration of the pipe)
+ * @param flow_def flow definition of the input
+ * @return pointer to allocated subpipe, or NULL in case of failure
+ */
+static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
+                                                 struct uprobe *uprobe,
+                                                 struct uref *flow_def)
+{
+    struct upipe_mgr *sub_mgr;
+    if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
+        /* notify ad-hoc probes that something went wrong so they can
+         * deallocate */
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        return NULL;
+    }
+    return upipe_flow_alloc(sub_mgr, uprobe, flow_def);
 }
 
 /** @internal @This throws generic events with optional arguments.

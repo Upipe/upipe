@@ -225,6 +225,7 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 12;
+    expect_new_flow_def = true;
     upipe_input(upipe_ts_demux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
@@ -258,7 +259,9 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
+    expect_new_flow_def = true;
     upipe_input(upipe_ts_demux, uref, NULL);
+    assert(!expect_new_flow_def);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
@@ -323,7 +326,9 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
+    expect_new_flow_def = true;
     upipe_input(upipe_ts_demux, uref, NULL);
+    assert(!expect_new_flow_def);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);

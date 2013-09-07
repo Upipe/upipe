@@ -136,8 +136,23 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
-    upipe->sub_mgr = &test_output_mgr;
     return upipe;
+}
+
+/** helper phony pipe to test uprobe_select_programs */
+static bool test_control(struct upipe *upipe,
+                         enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            *p = &test_output_mgr;
+            return true;
+        }
+
+        default:
+            return false;
+    }
 }
 
 /** helper phony pipe to test uprobe_select_programs */
@@ -151,7 +166,7 @@ static void test_free(struct upipe *upipe)
 static struct upipe_mgr test_mgr = {
     .upipe_alloc = NULL,
     .upipe_input = NULL,
-    .upipe_control = NULL,
+    .upipe_control = test_control,
     .upipe_free = NULL,
 
     .upipe_mgr_free = NULL

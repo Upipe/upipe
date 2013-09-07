@@ -168,6 +168,28 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_join_mux(upipe_ts_join_to_upipe(upipe_ts_join), upump);
 }
 
+/** @internal @This processes control commands on a subpipe of a ts_join
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_join_sub_control(struct upipe *upipe,
+                                      enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_join_sub_get_super(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -196,7 +218,7 @@ static void upipe_ts_join_init_sub_mgr(struct upipe *upipe)
     sub_mgr->signature = UPIPE_TS_JOIN_INPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_join_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_join_sub_input;
-    sub_mgr->upipe_control = NULL;
+    sub_mgr->upipe_control = upipe_ts_join_sub_control;
     sub_mgr->upipe_free = upipe_ts_join_sub_free;
     sub_mgr->upipe_mgr_free = NULL;
 }
@@ -337,6 +359,10 @@ static bool _upipe_ts_join_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_join_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_join_get_sub_mgr(upipe, p);
         }
 
         default:

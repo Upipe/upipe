@@ -331,6 +331,11 @@ static bool upipe_ts_psii_sub_control(struct upipe *upipe,
                                       enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psii_sub_get_super(upipe, p);
+        }
+
         case UPIPE_TS_PSII_SUB_GET_INTERVAL: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_PSII_SUB_SIGNATURE);
@@ -546,6 +551,10 @@ static bool upipe_ts_psii_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return _upipe_ts_psii_set_output(upipe, output);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            return upipe_ts_psii_get_sub_mgr(upipe, p);
         }
 
         default:
