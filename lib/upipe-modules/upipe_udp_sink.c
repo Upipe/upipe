@@ -232,11 +232,9 @@ write_buffer:
                 default:
                     break;
             }
-            uref_free(uref);
-            upipe_warn_va(upipe, "write error to %s (%m)", upipe_udpsink->uri);
-            upipe_udpsink_set_upump(upipe, NULL);
-            upipe_throw_sink_end(upipe);
-            return true;
+            /* Errors at this point come from ICMP messages such as
+             * "port unreachable", and we do not want to kill the application
+             * with transient errors. */
         }
 
         uref_free(uref);
