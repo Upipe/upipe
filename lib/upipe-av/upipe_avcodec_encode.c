@@ -450,7 +450,10 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def,
         return upipe_avcenc_open_codec_wrap(upipe);
     }
 
-    upipe_dbg_va(upipe, "codec %s (%d) set", codec_def, codec_id);
+    if (codec_name)
+        upipe_dbg_va(upipe, "codec %s set", codec_name);
+    else
+        upipe_dbg_va(upipe, "codec %s (%d) set", codec_def, codec_id);
     return true;
 }
 

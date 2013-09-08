@@ -82,6 +82,8 @@ struct upipe_ts_agg {
 
     /** one TS packet of padding */
     struct ubuf *padding;
+    /** number of packets dropped since last muxing */
+    unsigned int dropped;
 
     /** DTS of the next uref */
     uint64_t next_dts;
@@ -137,6 +139,7 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg->mode = UPIPE_TS_MUX_MODE_VBR;
     upipe_ts_agg->mtu = DEFAULT_MTU;
     upipe_ts_agg->padding = NULL;
+    upipe_ts_agg->dropped = 0;
     upipe_ts_agg->next_dts = UINT64_MAX;
     upipe_ts_agg->next_dts_sys = UINT64_MAX;
     upipe_ts_agg->next_dts_remainder = 0;
@@ -334,9 +337,17 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
         dts + upipe_ts_agg->interval < upipe_ts_agg->next_dts) {
         uint8_t ts_header[TS_HEADER_SIZE];
         uref_block_extract(uref, 0, TS_HEADER_SIZE, ts_header);
-        upipe_warn_va(upipe, "dropping late packet %"PRIu16" %"PRIu64" %"PRIu64, ts_get_pid(ts_header), (upipe_ts_agg->next_dts - dts) / 27, delay / 27);
+        upipe_verbose_va(upipe, "dropping late packet %"PRIu16" %"PRIu64,
+                         ts_get_pid(ts_header),
+                         (upipe_ts_agg->next_dts - dts) / 27);
         uref_free(uref);
+        upipe_ts_agg->dropped++;
         return;
+    }
+
+    if (upipe_ts_agg->dropped) {
+        upipe_warn_va(upipe, "%u packets dropped", upipe_ts_agg->dropped);
+        upipe_ts_agg->dropped = 0;
     }
 
     /* packet in the future that would arrive too early if muxed into this
