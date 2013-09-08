@@ -49,7 +49,7 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
-#include <upipe/upipe_helper_uref_stream.h>
+#include <upipe/upipe_helper_sound_stream.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
 #include <stdlib.h>
@@ -158,8 +158,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcenc, urefs, blockers, upipe_avcenc_input_frame)
-UPIPE_HELPER_UREF_STREAM(upipe_avcenc, next_uref, next_uref_size, stream_urefs,
-                         NULL)
+UPIPE_HELPER_SOUND_STREAM(upipe_avcenc, next_uref, next_uref_size, stream_urefs)
 
 /** @This aborts and frees an existing upump watching for exclusive access to
  * avcodec_open().
@@ -204,7 +203,10 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
                             upipe_avcenc->context->sample_fmt, 0);
             struct uref *uref = NULL;
             while (upipe_avcenc->next_uref) {
-                uref = upipe_avcenc_extract_uref_stream(upipe, size);
+                uref = upipe_avcenc_extract_sound_stream(upipe, size,
+                        upipe_avcenc->context->channels,
+                        av_get_bytes_per_sample(upipe_avcenc->context->sample_fmt),
+                        upipe_avcenc->context->sample_rate);
                 upipe_avcenc_input_frame(upipe, uref, NULL);
             }
         }
@@ -680,14 +682,19 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
             uref_block_size(uref, &blocksize);
 
             /* audio packets must be of a codec-specific size ... */
-            if (blocksize != size) {
-                upipe_avcenc_append_uref_stream(upipe, uref);
+            int64_t junk;
+            if (!uref_avcenc_get_pts(uref, &junk)) {
+                upipe_avcenc_append_sound_stream(upipe, uref);
 
                 /* TODO: extrapolate pts for extracted uref */
                 while (upipe_avcenc->next_uref &&
                        uref_block_size(upipe_avcenc->next_uref, &remaining) &&
                        (remaining >= size)) {
-                    uref = upipe_avcenc_extract_uref_stream(upipe, size);
+                    uref = upipe_avcenc_extract_sound_stream(upipe, size,
+                        context->channels,
+                        av_get_bytes_per_sample(context->sample_fmt),
+                        context->sample_rate);
+                    uref_avcenc_set_pts(uref, 0);
                     upipe_avcenc_input_frame(upipe, uref, upump);
                 }
                 return true;
@@ -932,7 +939,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
     upipe_avcenc_clean_uref_mgr(upipe);
     upipe_avcenc_clean_upump_av_deal(upipe);
     upipe_avcenc_clean_upump_mgr(upipe);
-    upipe_avcenc_clean_uref_stream(upipe);
+    upipe_avcenc_clean_sound_stream(upipe);
 
     upipe_throw_dead(upipe);
     upipe_avcenc_clean_output(upipe);
@@ -967,7 +974,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_upump_av_deal(upipe);
     upipe_avcenc_init_output(upipe);
     upipe_avcenc_init_sink(upipe);
-    upipe_avcenc_init_uref_stream(upipe);
+    upipe_avcenc_init_sound_stream(upipe);
 
     upipe_avcenc->input_flow = flow_def;
     upipe_avcenc->context = NULL;
