@@ -54,6 +54,8 @@ UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
 UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
 UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)
+UREF_ATTR_UNSIGNED_SH(flow, latency, UDICT_TYPE_FLOW_LATENCY,
+        latency in uclock units)
 UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
 

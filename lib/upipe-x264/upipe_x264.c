@@ -291,6 +291,15 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     /* delete global headers */
     uref_flow_delete_headers(upipe_x264->output_flow);
 
+    /* find latency */
+    int delayed = x264_encoder_maximum_delayed_frames(upipe_x264->encoder);
+    if (delayed >= 0) {
+        uint64_t latency = 0;
+        uref_flow_get_latency(upipe_x264->output_flow, &latency);
+        latency += (uint64_t)delayed * UCLOCK_FREQ * fps.den / fps.num;
+        uref_flow_set_latency(upipe_x264->output_flow, latency);
+    }
+
     return true;
 }
 

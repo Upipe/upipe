@@ -84,6 +84,8 @@ enum udict_type {
     UDICT_TYPE_FLOW_PROGRAM,
     /** f.lang */
     UDICT_TYPE_FLOW_LANG,
+    /** f.latency */
+    UDICT_TYPE_FLOW_LATENCY,
 
     /** k.vbvdelay */
     UDICT_TYPE_CLOCK_VBVDELAY,
