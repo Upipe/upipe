@@ -111,6 +111,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_PMTD_DEL_ES:
         case UPROBE_SOURCE_END:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEED_UREF_MGR:
             break;
     }
     return false;

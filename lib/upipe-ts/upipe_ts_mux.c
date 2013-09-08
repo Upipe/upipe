@@ -76,6 +76,8 @@
 #define TB_RATE_AUDIO 250000
 /** T-STD TS buffer */
 #define T_STD_TS_BUFFER 512
+/** default minimum duration of audio PES */
+#define DEFAULT_AUDIO_PES_MIN_DURATION (UCLOCK_FREQ / 25)
 /** max interval between PCRs (ISO/IEC 13818-1 2.7.2) */
 #define MAX_PCR_INTERVAL (UCLOCK_FREQ / 10)
 /** default interval between PCRs */
@@ -443,10 +445,17 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         }
         ret = ret && uref_ts_flow_set_tb_rate(flow_def, TB_RATE_AUDIO);
         ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY);
+        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
+        if (!uref_ts_flow_get_pes_min_duration(flow_def, &pes_min_duration))
+            ret = ret && uref_ts_flow_set_pes_min_duration(flow_def,
+                                                           pes_min_duration);
 
         uint64_t rate, samples;
         if (uref_sound_flow_get_rate(flow_def, &rate) &&
             uref_sound_flow_get_samples(flow_def, &samples)) {
+            unsigned int nb_frames = 1;
+            while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
+                nb_frames++;
             /* PES header overhead */
             pes_overhead += (PES_HEADER_SIZE_PTS * rate + samples - 1) /
                             samples;
@@ -520,19 +529,25 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
                                                    UPROBE_LOG_DEBUG,
                                                    "pes encaps %"PRIu64, pid),
                          flow_def);
-    struct uref *flow_def_next;
+    struct uref *flow_def_next, *flow_def_next_dup;
     if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->pes_encaps,
                                      &flow_def_next) ||
+                 (flow_def_next_dup = uref_dup(flow_def_next)) == NULL ||
+                 !uref_block_flow_set_octetrate(flow_def_next_dup,
+                                                octetrate + pes_overhead) ||
                  (upipe_ts_mux_input->encaps =
                   upipe_flow_alloc(ts_mux_mgr->ts_encaps_mgr,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "encaps %"PRIu64, pid),
-                         flow_def_next)) == NULL)) {
+                         flow_def_next_dup)) == NULL)) {
+        if (flow_def_next_dup != NULL)
+            uref_free(flow_def_next_dup);
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
+    uref_free(flow_def_next_dup);
     upipe_set_output(upipe_ts_mux_input->pes_encaps,
                      upipe_ts_mux_input->encaps);
 
@@ -1258,6 +1273,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
+    upipe_throw_need_uref_mgr(upipe);
     return upipe;
 }
 
