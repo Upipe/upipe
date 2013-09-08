@@ -120,8 +120,9 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe = upipe_udpsink_alloc_flow(mgr, uprobe, signature, args,
-                                                   NULL);
+                                                   &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -133,6 +134,11 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_delay(upipe, SYSTIME_DELAY);
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
+
+    uint64_t latency;
+    if (uref_flow_get_latency(flow_def, &latency))
+        upipe_udpsink_set_delay(upipe, latency);
+    uref_free(flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
