@@ -72,6 +72,7 @@ static bool uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
                 return true;
             const char *level_name;
             switch (level) {
+                case UPROBE_LOG_VERBOSE: level_name = "verbose"; break;
                 case UPROBE_LOG_DEBUG: level_name = "debug"; break;
                 case UPROBE_LOG_NOTICE: level_name = "notice"; break;
                 case UPROBE_LOG_WARNING: level_name = "warning"; break;
