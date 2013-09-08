@@ -27,9 +27,9 @@
  * @short Upipe helper functions to work on input as a stream of raw sound
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_UREF_STREAM_H_
+#ifndef _UPIPE_UPIPE_HELPER_SOUND_STREAM_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_UREF_STREAM_H_
+#define _UPIPE_UPIPE_HELPER_SOUND_STREAM_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
