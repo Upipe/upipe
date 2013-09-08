@@ -456,6 +456,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
             unsigned int nb_frames = 1;
             while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
                 nb_frames++;
+            samples *= nb_frames;
             /* PES header overhead */
             pes_overhead += (PES_HEADER_SIZE_PTS * rate + samples - 1) /
                             samples;
