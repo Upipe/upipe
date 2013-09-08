@@ -261,6 +261,9 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
             duration < upipe_ts_pese->pes_min_duration)
             return;
     }
+
+    if (force)
+        upipe_dbg(upipe, "couldn't merge a PES");
     upipe_ts_pese_work(upipe, upump);
 }
 

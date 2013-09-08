@@ -406,13 +406,12 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         struct urational fps;
         if (uref_pic_flow_get_fps(flow_def, &fps)) {
             /* PES header overhead */
-            pes_overhead += (PES_HEADER_SIZE_PTSDTS * fps.num + fps.den - 1) /
+            pes_overhead += PES_HEADER_SIZE_PTSDTS * (fps.num + fps.den - 1) /
                             fps.den;
             /* At worst we'll have 183 octets wasted per frame, if all frames
              * are I-frames or if we don't overlap. This includes PCR overhead.
              */
-            pes_overhead += ((TS_SIZE - TS_HEADER_SIZE - 1) * fps.num +
-                             fps.den - 1) / fps.den;
+            pes_overhead += TS_SIZE * (fps.num + fps.den - 1) / fps.den;
         }
 
     } else if (strstr(def, ".sound.") != NULL) {
@@ -458,19 +457,18 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
                 nb_frames++;
             samples *= nb_frames;
             /* PES header overhead */
-            pes_overhead += (PES_HEADER_SIZE_PTS * rate + samples - 1) /
+            pes_overhead += PES_HEADER_SIZE_PTS * (rate + samples - 1) /
                             samples;
             /* TS padding overhead */
-            pes_overhead += ((TS_SIZE - TS_HEADER_SIZE - 1) * rate +
-                             samples - 1) / samples;
+            pes_overhead += TS_SIZE * (rate + samples - 1) / samples;
         }
 
     } else if (strstr(def, ".subpic.") != NULL) {
     }
 
-    uint64_t ts_overhead = ((octetrate + pes_overhead) * TS_HEADER_SIZE +
-                            TS_SIZE - TS_HEADER_SIZE - 1) /
-                           (TS_SIZE - TS_HEADER_SIZE);
+    uint64_t ts_overhead = TS_HEADER_SIZE *
+        (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
+        (TS_SIZE - TS_HEADER_SIZE);
     uint64_t ts_delay;
     if (!uref_ts_flow_get_ts_delay(flow_def, &ts_delay))
         ret = ret && uref_ts_flow_set_ts_delay(flow_def,

@@ -287,7 +287,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                             header))
         return true; /* not enough data */
 
-    if (likely(mpga_sync_compare(header, upipe_mpgaf->sync_header))) {
+    if (likely(mpga_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
                                        upipe_mpgaf->frame_size_padding :
@@ -396,7 +396,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
                             header))
         return true; /* not enough data */
 
-    if (likely(adts_sync_compare(header, upipe_mpgaf->sync_header))) {
+    if (likely(adts_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         goto upipe_mpgaf_parse_adts_shortcut;
     }
