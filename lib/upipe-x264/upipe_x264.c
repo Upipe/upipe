@@ -60,12 +60,17 @@
 #define EXPECTED_FLOW "pic."
 #define OUT_FLOW "block.h264.pic."
 
+#define OBE_TREE 1
+
 /** @internal upipe_x264 private structure */
 struct upipe_x264 {
     /** x264 encoder */
     x264_t *encoder;
     /** x264 params */
     x264_param_t params;
+
+    /** x264 "PTS" */
+    uint64_t x264_ts;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -221,6 +226,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
 
     upipe_x264->encoder = NULL;
     _upipe_x264_set_default(upipe);
+    upipe_x264->x264_ts = 0;
 
     upipe_x264_init_ubuf_mgr(upipe);
     upipe_x264_init_output(upipe);
@@ -380,11 +386,8 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
 
         /* set pts in x264 timebase */
-        pts = 0;
-        uref_clock_get_pts(uref, &pts);
-        pic.i_pts = pts * curparams.i_timebase_den
-                        / curparams.i_timebase_num
-                        / UCLOCK_FREQ;
+        pic.i_pts = upipe_x264->x264_ts;
+        upipe_x264->x264_ts++;
 
         /* map */
         for (i=0; uref_pic_plane_iterate(uref, &chroma) && chroma; i++) {
@@ -459,7 +462,10 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     }
 
     if (pic.hrd_timing.cpb_final_arrival_time)
-        uref_clock_set_vbv_delay(uref, UCLOCK_FREQ *
+        uref_clock_set_vbv_delay(uref,
+#ifndef OBE_TREE
+                UCLOCK_FREQ *
+#endif
                 (pic.hrd_timing.cpb_removal_time -
                  pic.hrd_timing.cpb_final_arrival_time));
 
