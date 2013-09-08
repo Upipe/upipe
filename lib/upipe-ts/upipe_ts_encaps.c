@@ -225,8 +225,10 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
 
     size_t uref_size, padding_size = 0;
     uref_block_size(uref, &uref_size);
-    if (!uref_size)
+    if (!uref_size) {
+        upipe_dbg(upipe, "splicing an empty uref");
         return NULL;
+    }
     if (uref_size < TS_SIZE - header_size) {
         if (upipe_ts_encaps->psi)
             padding_size = TS_SIZE - uref_size - header_size;
