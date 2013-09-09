@@ -63,7 +63,9 @@
 
 /** default delay to use compared to the theorical reception time of the
  * packet */
-#define SYSTIME_DELAY        (0.01 * UCLOCK_FREQ)
+#define SYSTIME_DELAY        (UCLOCK_FREQ / 100)
+/** tolerance for late packets */
+#define SYSTIME_TOLERANCE (UCLOCK_FREQ / 100)
 /** expected flow definition on all flows */
 #define EXPECTED_FLOW_DEF    "block."
 
@@ -194,7 +196,9 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     if (unlikely(now < systime)) {
         upipe_udpsink_wait_upump(upipe, systime - now, upipe_udpsink_watcher);
         return false;
-    }
+    } else if (now > systime + SYSTIME_TOLERANCE)
+        upipe_warn_va(upipe, "outputting late packet %"PRIu64" ms",
+                      (now - systime) / 27000);
 
 write_buffer:
     for ( ; ; ) {
