@@ -255,6 +255,8 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
 
     uint64_t dts = upipe_ts_psii_sub->next_dts;
     uint64_t dts_sys = upipe_ts_psii_sub->next_dts_sys;
+    uint64_t delay = 0;
+    uref_clock_get_vbv_delay(next_uref, &delay);
 
     if (unlikely(!dts)) {
         uref_clock_get_dts(next_uref, &dts);
@@ -279,7 +281,8 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
         uref_clock_set_dts(output, dts);
         if (dts_sys != UINT64_MAX)
             uref_clock_set_dts_sys(output, dts_sys);
-        uref_clock_set_vbv_delay(output, DEFAULT_DELAY);
+        uref_clock_set_vbv_delay(output,
+                delay > DEFAULT_DELAY ? delay : DEFAULT_DELAY);
         upipe_input(upipe_ts_psii_sub->encaps, output, NULL);
     }
 }
@@ -459,7 +462,7 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This generates a PAT PSI section, using the uref received.
+/** @internal @This receives the TS stream.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure

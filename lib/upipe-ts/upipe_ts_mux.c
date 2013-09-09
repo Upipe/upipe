@@ -528,25 +528,22 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
                                                    UPROBE_LOG_DEBUG,
                                                    "pes encaps %"PRIu64, pid),
                          flow_def);
-    struct uref *flow_def_next, *flow_def_next_dup;
+    struct uref *flow_def_next;
+    /* We do not take into account PES overhead here: the PES header isn't
+     * part of the VBV buffer calculation stuff, and this allows to send the
+     * packets a bit earlier. */
     if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->pes_encaps,
                                      &flow_def_next) ||
-                 (flow_def_next_dup = uref_dup(flow_def_next)) == NULL ||
-                 !uref_block_flow_set_octetrate(flow_def_next_dup,
-                                                octetrate + pes_overhead) ||
                  (upipe_ts_mux_input->encaps =
                   upipe_flow_alloc(ts_mux_mgr->ts_encaps_mgr,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "encaps %"PRIu64, pid),
-                         flow_def_next_dup)) == NULL)) {
-        if (flow_def_next_dup != NULL)
-            uref_free(flow_def_next_dup);
+                         flow_def_next)) == NULL)) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
-    uref_free(flow_def_next_dup);
     upipe_set_output(upipe_ts_mux_input->pes_encaps,
                      upipe_ts_mux_input->encaps);
 
