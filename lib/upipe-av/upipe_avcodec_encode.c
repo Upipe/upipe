@@ -71,6 +71,9 @@
 
 #define PREFIX_FLOW "block."
 
+/** BS for <= 2 channels */
+#define AUDIO_BS 3584
+
 UREF_ATTR_INT(avcenc, pts, "x.avcenc_pts", avcenc pts)
 
 static bool upipe_avcenc_encode_frame(struct upipe *upipe,
@@ -130,6 +133,12 @@ struct upipe_avcenc {
 
     /** frame counter */
     uint64_t counter;
+    /** audio BS duration */
+    uint64_t audio_bs_duration;
+    /** audio BS leakage per frame */
+    uint64_t audio_bs_leakage;
+    /** audio BS delay */
+    int64_t audio_bs_delay;
 
     /** next uref to be processed */
     struct uref *next_uref;
@@ -517,6 +526,34 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         return false;
     }
 
+    /* flow definition */
+    if (unlikely(!upipe_avcenc->output_flow)) {
+        const char *codec_def = upipe_av_to_flow_def(codec->id);
+        char def[strlen(PREFIX_FLOW) + strlen(codec_def) + 1];
+        snprintf(def, sizeof(def), PREFIX_FLOW "%s", codec_def);
+
+        struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
+        uref_flow_set_def(outflow, def);
+        uref_block_flow_delete_octetrate(outflow);
+        uref_block_flow_delete_cpb_buffer(outflow);
+        if (context->bit_rate) {
+            uref_block_flow_set_octetrate(outflow, context->bit_rate / 8);
+            if (context->rc_buffer_size)
+                uref_block_flow_set_cpb_buffer(outflow,
+                                               context->rc_buffer_size / 8);
+            else if (codec->type == AVMEDIA_TYPE_AUDIO &&
+                     strcmp(codec->name, "mp2") && strcmp(codec->name, "mp3")) {
+                uref_block_flow_set_cpb_buffer(outflow, AUDIO_BS);
+                upipe_avcenc->audio_bs_duration = AUDIO_BS * UCLOCK_FREQ /
+                                                  (context->bit_rate / 8);
+                upipe_avcenc->audio_bs_leakage = UCLOCK_FREQ *
+                    context->frame_size / context->sample_rate;
+                upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
+            }
+        }
+        upipe_avcenc_store_flow_def(upipe, outflow);
+    }
+
     size = -1;
     ubuf_block = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
     ubuf_block_write(ubuf_block, 0, &size, &buf);
@@ -561,6 +598,21 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     /* vbv delay */
     if (context->vbv_delay) {
         uref_clock_set_vbv_delay(uref, context->vbv_delay);
+    } else if (codec->type == AVMEDIA_TYPE_AUDIO &&
+               strcmp(codec->name, "mp2") && strcmp(codec->name, "mp3")) {
+        upipe_avcenc->audio_bs_delay += upipe_avcenc->audio_bs_leakage;
+        upipe_avcenc->audio_bs_delay -= size * UCLOCK_FREQ /
+                                 (context->bit_rate / 8);
+        if (upipe_avcenc->audio_bs_delay < 0) {
+            upipe_warn_va(upipe, "audio BS underflow %"PRId64,
+                          -upipe_avcenc->audio_bs_delay);
+            upipe_avcenc->audio_bs_delay = 0;
+        } else if (upipe_avcenc->audio_bs_delay >
+                   upipe_avcenc->audio_bs_duration)
+            upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
+        uref_clock_set_vbv_delay(uref, upipe_avcenc->audio_bs_delay);
+    } else {
+        uref_clock_delete_vbv_delay(uref);
     }
 
     /* unmap input and clean */
@@ -582,25 +634,6 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     }
 
     uref_attach_ubuf(uref, ubuf_block);
-
-    /* flow definition */
-    if (unlikely(!upipe_avcenc->output_flow)) {
-        const char *codec_def = upipe_av_to_flow_def(codec->id);
-        char def[strlen(PREFIX_FLOW) + strlen(codec_def) + 1];
-        snprintf(def, sizeof(def), PREFIX_FLOW "%s", codec_def);
-
-        struct uref *outflow = uref_dup(upipe_avcenc->input_flow);
-        uref_flow_set_def(outflow, def);
-        uref_block_flow_delete_octetrate(outflow);
-        uref_block_flow_delete_cpb_buffer(outflow);
-        if (context->bit_rate) {
-            uref_block_flow_set_octetrate(outflow, context->bit_rate / 8);
-            if (context->rc_buffer_size)
-                uref_block_flow_set_cpb_buffer(outflow,
-                                               context->rc_buffer_size / 8);
-        }
-        upipe_avcenc_store_flow_def(upipe, outflow);
-    }
 
     upipe_avcenc_output(upipe, uref, upump);
     return true;
@@ -987,6 +1020,9 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->uref_max = 1;
     upipe_avcenc->avcpts = 1;
     upipe_avcenc->sample_fmt = upipe_av_samplefmt_from_flow_def(def);
+    upipe_avcenc->audio_bs_duration = 0;
+    upipe_avcenc->audio_bs_leakage = 0;
+    upipe_avcenc->audio_bs_delay = 0;
 
     memset(&upipe_avcenc->open_params, 0, sizeof(struct upipe_avcodec_open_params));
 
