@@ -928,6 +928,28 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
     upipe_avcdec_decode(upipe, uref, upump);
 }
 
+/** @internal @This checks some option compatibility (kinda kludgy ...).
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param content content of the option, or NULL
+ * @return false in case of error
+ */
+static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
+                                       const char *content)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
+    /* lowres */
+    if (!strcmp(option, "lowres")) {
+        if (!content) return true;
+        uint8_t lowres = strtoul(content, NULL, 10);
+        if (lowres > upipe_avcdec->context->codec->max_lowres) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /** @internal @This sets the content of an avcodec option. It only take effect
  * after the next call to @ref upipe_avcdec_set_url.
  *
@@ -943,6 +965,10 @@ static bool _upipe_avcdec_set_option(struct upipe *upipe, const char *option,
     if (avcodec_is_open(upipe_avcdec->context))
         return false;
     assert(option != NULL);
+    if (unlikely(!upipe_avcdec_check_option(upipe, option, content))) {
+        upipe_err_va(upipe, "can't set option %s:%s", option, content);
+        return false;
+    }
     int error = av_opt_set(upipe_avcdec->context, option, content,
                            AV_OPT_SEARCH_CHILDREN);
     if (unlikely(error < 0)) {
