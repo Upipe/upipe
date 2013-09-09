@@ -443,7 +443,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 
         if (pcr) {
             ret = ret && uref_clock_set_ref(output);
-            upipe_ts_encaps->next_pcr = muxdate + upipe_ts_encaps->pcr_interval;
+            upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
         }
 
         if (!ret) {
