@@ -277,6 +277,9 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         return false;
     }
 
+    /* sync pipe parameters with internal copy */
+    x264_encoder_parameters(upipe_x264->encoder, params);
+
     /* set octetrate for CBR streams */
     uref_block_flow_delete_octetrate(upipe_x264->output_flow);
     uref_block_flow_delete_cpb_buffer(upipe_x264->output_flow);
@@ -296,7 +299,9 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     if (delayed >= 0) {
         uint64_t latency = 0;
         uref_flow_get_latency(upipe_x264->output_flow, &latency);
-        latency += (uint64_t)delayed * UCLOCK_FREQ * fps.den / fps.num;
+        latency += (uint64_t)delayed * UCLOCK_FREQ
+                                     * params->i_fps_den
+                                     / params->i_fps_num;
         uref_flow_set_latency(upipe_x264->output_flow, latency);
     }
 
