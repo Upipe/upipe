@@ -828,8 +828,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     if (!upipe_h264f->poc_type) {
         upipe_h264f->log2_max_poc_lsb = 4 + upipe_h264f_stream_ue(s);
         if (upipe_h264f->log2_max_poc_lsb > 16) {
-            upipe_err_va(upipe, "invalid log2_max_frame_num %"PRIu32,
-                         upipe_h264f->log2_max_frame_num);
+            upipe_err_va(upipe, "invalid log2_max_poc_lsb %"PRIu32,
+                         upipe_h264f->log2_max_poc_lsb);
             upipe_h264f->log2_max_poc_lsb = 0;
             ubuf_block_stream_clean(s);
             uref_free(flow_def);
@@ -1418,6 +1418,7 @@ upipe_h264f_parse_slice_retry:
         upipe_h264f_stream_fill_bits(s, 2);
         ubuf_block_stream_skip_bits(s, 2);
     }
+    upipe_h264f_stream_fill_bits(s, upipe_h264f->log2_max_frame_num);
     uint32_t frame_num = ubuf_block_stream_show_bits(s,
             upipe_h264f->log2_max_frame_num);
     ubuf_block_stream_skip_bits(s, upipe_h264f->log2_max_frame_num);
