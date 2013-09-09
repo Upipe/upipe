@@ -455,10 +455,12 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         upipe_ts_encaps_output(upipe, output, upump);
         random = false;
         discontinuity = false;
+        if (pcr)
+            nb_pcr--;
     }
 
     if (uref_block_size(uref, &size) && size)
-        upipe_warn_va(upipe, "failed to mux %u octets", size);
+        upipe_warn_va(upipe, "failed to mux %u octets (pcr=%u)", size, nb_pcr);
     uref_free(uref);
 }
 

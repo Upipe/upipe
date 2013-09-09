@@ -229,6 +229,7 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
         }
     }
 
+    unsigned int padding = 0;
     while (uref_size + TS_SIZE <= upipe_ts_agg->mtu) {
         struct ubuf *ubuf = ubuf_dup(upipe_ts_agg->padding);
         if (unlikely(ubuf == NULL)) {
@@ -239,7 +240,11 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
 
         uref_block_append(uref, ubuf);
         uref_size += TS_SIZE;
+        padding++;
     }
+    if (padding)
+        upipe_verbose_va(upipe, "inserting %u padding at %"PRIu64, padding,
+                         next_dts);
 
     int offset = 0;
     while (offset + TS_SIZE <= upipe_ts_agg->mtu) {
@@ -335,11 +340,8 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     /* packet in the past */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
         dts + upipe_ts_agg->interval < upipe_ts_agg->next_dts) {
-        uint8_t ts_header[TS_HEADER_SIZE];
-        uref_block_extract(uref, 0, TS_HEADER_SIZE, ts_header);
-        upipe_verbose_va(upipe, "dropping late packet %"PRIu16" %"PRIu64,
-                         ts_get_pid(ts_header),
-                         (upipe_ts_agg->next_dts - dts) / 27);
+        upipe_verbose_va(upipe, "dropping late packet %"PRIu64" %"PRIu64,
+                         dts, dts - delay);
         uref_free(uref);
         upipe_ts_agg->dropped++;
         return;
@@ -353,7 +355,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     /* packet in the future that would arrive too early if muxed into this
      * aggregate */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts - delay >= upipe_ts_agg->next_dts + upipe_ts_agg->interval)
+        dts - delay > upipe_ts_agg->next_dts + upipe_ts_agg->interval)
         upipe_ts_agg_complete(upipe, upump);
 
     /* keep or attach incoming packet */
