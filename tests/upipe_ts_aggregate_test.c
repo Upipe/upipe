@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
 
     /* valid TS packets */
     nb_packets = PACKETS_NUM;
-    nb_padding = PACKETS_NUM * (TS_PER_PACKET - 1);
+    nb_padding = (PACKETS_NUM - 1) * (TS_PER_PACKET - 1) - 1;
     for (i = 0; i < PACKETS_NUM; i++) {
         uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
         size = -1;
