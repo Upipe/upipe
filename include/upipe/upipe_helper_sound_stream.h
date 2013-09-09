@@ -170,7 +170,10 @@ static void STRUCTURE##_consume_sound_stream(struct upipe *upipe,           \
         STRUCTURE->NEXT_UREF_SIZE = size;                                   \
     }                                                                       \
     STRUCTURE->NEXT_UREF_SIZE -= consumed;                                  \
-    uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);                  \
+    struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);             \
+    struct ubuf *new_ubuf = ubuf_block_splice(ubuf, consumed, -1);          \
+    ubuf_free(ubuf);                                                        \
+    uref_attach_ubuf(STRUCTURE->NEXT_UREF, new_ubuf);                       \
     uint64_t duration = (uint64_t)(consumed / sample_size / channels) *     \
                         UCLOCK_FREQ / rate;                                 \
     uint64_t pts;                                                           \
@@ -199,46 +202,17 @@ static struct uref *STRUCTURE##_extract_sound_stream(struct upipe *upipe,   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    size_t offset = 0;                                                      \
-    while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
-        struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
-        if (uchain == NULL) {                                               \
-            struct uref *uref = STRUCTURE->NEXT_UREF;                       \
-            STRUCTURE->NEXT_UREF = NULL;                                    \
-            return uref;                                                    \
-        }                                                                   \
-        struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);         \
-        uref_free(STRUCTURE->NEXT_UREF);                                    \
-        STRUCTURE->NEXT_UREF = uref_from_uchain(uchain);                    \
-        uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                       \
-        offset += STRUCTURE->NEXT_UREF_SIZE;                                \
-        extracted -= STRUCTURE->NEXT_UREF_SIZE;                             \
-        uint64_t size = 0;                                                  \
-        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
-        STRUCTURE->NEXT_UREF_SIZE = size;                                   \
-    }                                                                       \
-    offset += extracted;                                                    \
-    STRUCTURE->NEXT_UREF_SIZE -= extracted;                                 \
-    struct uref *uref = STRUCTURE->NEXT_UREF;                               \
-    STRUCTURE->NEXT_UREF = uref_block_splice(uref, offset, -1);             \
-    uref_block_truncate(uref, offset);                                      \
-    uref_sound_flow_set_samples(uref, offset / sample_size / channels);     \
-    uint64_t duration = (uint64_t)(offset / sample_size / channels) *       \
-                        UCLOCK_FREQ / rate;                                 \
-    uint64_t pts;                                                           \
-    if (uref_clock_get_pts(STRUCTURE->NEXT_UREF, &pts))                     \
-        uref_clock_set_pts(STRUCTURE->NEXT_UREF, pts + duration);           \
-    if (uref_clock_get_pts_sys(STRUCTURE->NEXT_UREF, &pts))                 \
-        uref_clock_set_pts_sys(STRUCTURE->NEXT_UREF, pts + duration);       \
-    if (uref_clock_get_pts_orig(STRUCTURE->NEXT_UREF, &pts))                \
-        uref_clock_set_pts_orig(STRUCTURE->NEXT_UREF, pts + duration);      \
+    struct uref *uref = uref_block_splice(STRUCTURE->NEXT_UREF, 0,          \
+                                          extracted);   \
+    STRUCTURE##_consume_sound_stream(upipe, extracted, channels,            \
+                                     sample_size, rate);                    \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_clean_sound_stream(struct upipe *upipe)              \
+static void STRUCTURE##_clean_sound_stream(struct upipe *upipe)             \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (STRUCTURE->NEXT_UREF != NULL) {                                     \

@@ -554,6 +554,9 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     if (uref_clock_get_pts_sys(uref, &ts)) {
         uref_clock_set_dts_sys(uref, ts - ts_diff);
     }
+    if (uref_clock_get_pts_orig(uref, &ts)) {
+        uref_clock_set_dts_orig(uref, ts - ts_diff);
+    }
 
     /* vbv delay */
     if (context->vbv_delay) {
@@ -686,7 +689,6 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
             if (!uref_avcenc_get_pts(uref, &junk)) {
                 upipe_avcenc_append_sound_stream(upipe, uref);
 
-                /* TODO: extrapolate pts for extracted uref */
                 while (upipe_avcenc->next_uref &&
                        uref_block_size(upipe_avcenc->next_uref, &remaining) &&
                        (remaining >= size)) {
