@@ -149,7 +149,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
         assert(tsaf_has_discontinuity(buffer) == discontinuity);
         if (next_pcr <= uref_dts + pcr_tolerance) {
             assert(tsaf_has_pcr(buffer));
-            next_pcr = uref_dts + UCLOCK_FREQ / 5;
+            next_pcr += UCLOCK_FREQ / 5;
         } else
             assert(!tsaf_has_pcr(buffer));
     }
