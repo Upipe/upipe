@@ -302,6 +302,9 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         latency += (uint64_t)delayed * UCLOCK_FREQ
                                      * params->i_fps_den
                                      / params->i_fps_num;
+        if (params->rc.i_bitrate)
+            latency += (uint64_t)params->rc.i_vbv_buffer_size * UCLOCK_FREQ /
+                       params->rc.i_bitrate;
         uref_flow_set_latency(upipe_x264->output_flow, latency);
     }
 
