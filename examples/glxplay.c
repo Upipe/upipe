@@ -732,7 +732,7 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     glxplayer->uprobe_logger = uprobe;
 
     /* upipe-av */
-    if (unlikely(!upipe_av_init(false)))
+    if (unlikely(!upipe_av_init(false, glxplayer->uprobe_logger)))
         goto fail_probe_uref_mgr;
 
     /* pipes managers */

@@ -28,6 +28,7 @@
  */
 
 #include <upipe/udeal.h>
+#include <upipe/uprobe.h>
 #include <upipe-av/upipe_av.h>
 
 #include <libavformat/avformat.h>
@@ -41,15 +42,66 @@
 struct udeal upipe_av_deal;
 /** @internal true if only avcodec was initialized */
 static bool avcodec_only = false;
+/** @internal probe used by upipe_av_vlog, defined in upipe_av_init() */
+static struct uprobe *logprobe = NULL;
+
+/** @internal @This replaces av_log_default_callback
+ * @param avcl A pointer to an arbitrary struct of which the first field is a
+ * pointer to an AVClass struct.
+ * @param level The importance level of the message, lower values signifying
+ * higher importance.
+ * @param fmt The format string (printf-compatible) that specifies how
+ * subsequent arguments are converted to output.
+ * @param args optional arguments
+ */
+static void upipe_av_vlog(void *avcl, int level,
+                          const char *fmt, va_list args)
+{
+    enum uprobe_log_level loglevel = UPROBE_LOG_ERROR;
+    char string[1024], *end = NULL;
+    /* static variable (persistent integer as required
+     * for av_log_format_line) */
+    static int print_prefix = 1;
+
+    switch(level) {
+        case AV_LOG_PANIC:
+        case AV_LOG_ERROR:
+            loglevel = UPROBE_LOG_ERROR;
+            break;
+        case AV_LOG_WARNING:
+            loglevel = UPROBE_LOG_WARNING;
+            break;
+        case AV_LOG_INFO:
+            loglevel = UPROBE_LOG_NOTICE;
+            break;
+        case AV_LOG_VERBOSE:
+            loglevel = UPROBE_LOG_DEBUG;
+            break;
+        case AV_LOG_DEBUG:
+        default:
+            loglevel = UPROBE_LOG_VERBOSE;
+            break;
+    }
+
+    assert(logprobe);
+    av_log_format_line(avcl, level, fmt, args,
+                       string, sizeof(string), &print_prefix);
+    end = string + strlen(string) - 1;
+    if (isspace(*end)) {
+        *end = '\0';
+    }
+    uprobe_log(logprobe, NULL, loglevel, string);
+}
 
 /** @This initializes non-reentrant parts of avcodec and avformat. Call it
  * before allocating managers from this library.
  *
  * @param init_avcodec_only if set to true, avformat source and sink may not
  * be used (saves memory)
+ * @param uprobe uprobe to print libav messages
  * @return false in case of error
  */
-bool upipe_av_init(bool init_avcodec_only)
+bool upipe_av_init(bool init_avcodec_only, struct uprobe *uprobe)
 {
     avcodec_only = init_avcodec_only;
 
@@ -61,6 +113,11 @@ bool upipe_av_init(bool init_avcodec_only)
     } else {
         av_register_all(); /* does avcodec_register_all() behind our back */
         avformat_network_init();
+    }
+
+    if (uprobe) {
+        logprobe = uprobe;
+        av_log_set_callback(upipe_av_vlog);
     }
     return true;
 }

@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
     log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    assert(upipe_av_init(false));
+    assert(upipe_av_init(false, log));
 
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);

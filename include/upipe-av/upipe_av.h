@@ -39,9 +39,10 @@ extern "C" {
  *
  * @param init_avcodec_only if set to true, avformat source and sink may not
  * be used (saves memory)
+ * @param uprobe uprobe to print libav messages
  * @return false in case of error
  */
-bool upipe_av_init(bool init_avcodec_only);
+bool upipe_av_init(bool init_avcodec_only, struct uprobe *uprobe);
 
 /** @This cleans up memory allocated by @ref upipe_av_init. Call it when all
  * avformat- and avcodec-related managers have been freed.

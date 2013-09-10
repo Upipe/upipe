@@ -429,7 +429,7 @@ int main (int argc, char **argv)
 
     // Open file with avformat
     printf("Trying to open %s ...\n", srcpath);
-    assert(upipe_av_init(false));
+    assert(upipe_av_init(false, log));
     avformat_open_input(&mainthread.avfctx, srcpath, NULL, NULL);
     assert(mainthread.avfctx);
     assert(avformat_find_stream_info(mainthread.avfctx, NULL) >= 0);

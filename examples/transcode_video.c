@@ -144,7 +144,10 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
+            return true;
+
         case UPROBE_SOURCE_END:
+            upipe_release(upipe);
             return true;
 
         case UPROBE_SPLIT_ADD_FLOW: {
@@ -247,6 +250,7 @@ static void *encoding_thread(void *_qsrc)
 
     ev_loop(loop, 0);
 
+    printf("encoding thread ended\n");
     return NULL;
 }
 
@@ -336,7 +340,7 @@ int main(int argc, char **argv)
         uprobe_pfx_adhoc_alloc(&uprobe_outputs, loglevel, "qsrc"), QUEUE_LENGTH);
 
     /* upipe-av */
-    upipe_av_init(false);
+    upipe_av_init(false, logger);
 
     /* launch encoding thread */
     pthread_t thread;

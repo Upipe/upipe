@@ -349,7 +349,7 @@ int main(int argc, char **argv)
 
 
     /* init upipe_av */
-    assert(upipe_av_init(false));
+    assert(upipe_av_init(false, logger));
 
     /* global managers */
     assert(upipe_avcdec_mgr = upipe_avcdec_mgr_alloc());
