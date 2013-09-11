@@ -321,7 +321,7 @@ static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param msg textual message
  */
-#define uprobe_verbose(uprobe, upipe, msg)                                      \
+#define uprobe_verbose(uprobe, upipe, msg)                                  \
     uprobe_log(uprobe, upipe, UPROBE_LOG_VERBOSE, msg)
 
 /** @This throws a verbose statement event, with printf-style message

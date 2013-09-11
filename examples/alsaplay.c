@@ -213,7 +213,7 @@ int main(int argc, char **argv)
     uclock = uclock_std_alloc(0);
 
     /* upipe-av */
-    upipe_av_init(true);
+    upipe_av_init(true, logger);
 
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
