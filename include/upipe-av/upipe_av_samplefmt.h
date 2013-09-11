@@ -83,9 +83,17 @@ static inline enum AVSampleFormat
     upipe_av_samplefmt_from_flow_def(const char *flow_def)
 {
     for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
-         i++)
-        if (!ubase_ncmp(flow_def, upipe_av_sample_fmts[i].flow_def))
+         i++) {
+        const char *fmt_def = upipe_av_sample_fmts[i].flow_def;
+        size_t len = strlen(fmt_def) - strlen(".sound.");
+        if (strstr(fmt_def, "le.sound.") || strstr(fmt_def, "be.sound.")) {
+            len -= strlen("le");
+        }
+
+        if (!strncmp(flow_def, fmt_def, len)) {
             return upipe_av_sample_fmts[i].fmt;
+        }
+    }
     return AV_SAMPLE_FMT_NONE;
 }
 
