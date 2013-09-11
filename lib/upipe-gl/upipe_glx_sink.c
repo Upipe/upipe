@@ -72,6 +72,10 @@ struct upipe_glx_sink {
     struct uclock *uclock;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers */
     struct ulist blockers;
 
@@ -110,7 +114,7 @@ UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump_watcher, upump_mgr)
-UPIPE_HELPER_SINK(upipe_glx_sink, urefs, blockers, upipe_glx_sink_input_pic)
+UPIPE_HELPER_SINK(upipe_glx_sink, urefs, nb_urefs, max_urefs, blockers, upipe_glx_sink_input_pic)
 UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock)
 
 static inline void upipe_glx_sink_flush(struct upipe *upipe)
@@ -427,8 +431,8 @@ static void upipe_glx_sink_write_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_glx_sink_set_upump(upipe, NULL);
-    if (upipe_glx_sink_output_sink(upipe))
-        upipe_glx_sink_unblock_sink(upipe);
+    upipe_glx_sink_output_sink(upipe);
+    upipe_glx_sink_unblock_sink(upipe);
 }
 
 /** @internal @This handles input.
@@ -493,6 +497,14 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
             struct uclock *uclock = va_arg(args, struct uclock *);
             upipe_glx_sink_set_upump(upipe, NULL);
             return upipe_glx_sink_set_uclock(upipe, uclock);
+        }
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_glx_sink_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_glx_sink_set_max_length(upipe, max_length);
         }
 
         case UPIPE_GLX_SINK_INIT: {

@@ -101,6 +101,10 @@ struct upipe_trickp_sub {
     enum upipe_trickp_sub_type type;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers */
     struct ulist blockers;
 
@@ -118,7 +122,7 @@ struct upipe_trickp_sub {
 UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe, UPIPE_TRICKP_SUB_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_trickp_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, flow_def_sent)
-UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, blockers, upipe_trickp_sub_process)
+UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, nb_urefs, max_urefs, blockers, upipe_trickp_sub_process)
 
 UPIPE_HELPER_SUBPIPE(upipe_trickp, upipe_trickp_sub, sub, sub_mgr, subs, uchain)
 
@@ -258,6 +262,15 @@ static bool upipe_trickp_sub_control(struct upipe *upipe,
             return upipe_trickp_sub_get_super(upipe, p);
         }
 
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_trickp_sub_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_trickp_sub_set_max_length(upipe, max_length);
+        }
+
         default:
             return false;
     }
@@ -367,10 +380,10 @@ static void upipe_trickp_check_start(struct upipe *upipe)
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =
             upipe_trickp_sub_from_uchain(uchain);
-        if (upipe_trickp_sub_output_sink(
-                    upipe_trickp_sub_to_upipe(upipe_trickp_sub)))
-            upipe_trickp_sub_unblock_sink(
+        upipe_trickp_sub_output_sink(
                     upipe_trickp_sub_to_upipe(upipe_trickp_sub));
+        upipe_trickp_sub_unblock_sink(
+                upipe_trickp_sub_to_upipe(upipe_trickp_sub));
     }
 }
 

@@ -103,6 +103,10 @@ struct upipe_alsink {
     snd_pcm_t *handle;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** duration of temporary uref storage */
     uint64_t urefs_duration;
     /** list of blockers */
@@ -116,7 +120,7 @@ UPIPE_HELPER_UPIPE(upipe_alsink, upipe, UPIPE_ALSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_alsink, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_alsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_alsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_alsink, urefs, blockers, NULL)
+UPIPE_HELPER_SINK(upipe_alsink, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_UCLOCK(upipe_alsink, uclock)
 
 /** @internal @This allocates a file sink pipe.

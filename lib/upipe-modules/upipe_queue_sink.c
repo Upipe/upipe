@@ -73,6 +73,10 @@ struct upipe_qsink {
     struct upipe *qsrc;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers */
     struct ulist blockers;
 
@@ -84,7 +88,7 @@ UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_qsink, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_qsink, urefs, blockers, upipe_qsink_output)
+UPIPE_HELPER_SINK(upipe_qsink, urefs, nb_urefs, max_urefs, blockers, upipe_qsink_output)
 
 /** @internal @This allocates a queue sink pipe.
  *
@@ -138,12 +142,12 @@ static void upipe_qsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     if (upipe_qsink_output_sink(upipe)) {
-        upipe_qsink_unblock_sink(upipe);
         upump_stop(upump);
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_qsink_input. */
         upipe_release(upipe);
     }
+    upipe_qsink_unblock_sink(upipe);
 }
 
 /** @internal @This receives data.
@@ -342,6 +346,15 @@ static bool _upipe_qsink_control(struct upipe *upipe,
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
             upipe_qsink_set_upump(upipe, NULL);
             return upipe_qsink_set_upump_mgr(upipe, upump_mgr);
+        }
+
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_qsink_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_qsink_set_max_length(upipe, max_length);
         }
 
         case UPIPE_QSINK_GET_QSRC: {

@@ -109,6 +109,10 @@ enum upipe_command {
     /*
      * Sink elements commands
      */
+    /** gets the length of the internal queue (unsigned int *) */
+    UPIPE_SINK_GET_MAX_LENGTH,
+    /** sets the length of the internal queue (unsigned int) */
+    UPIPE_SINK_SET_MAX_LENGTH,
     /** flushes all currently held buffers and unblock the sources (void) */
     UPIPE_SINK_FLUSH,
     /** gets delay applied to systime attribute (uint64_t *) */
@@ -450,6 +454,9 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
                        unsigned int, read size of the source)
 
+UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, max_length, MAX_LENGTH,
+                       unsigned int,
+                       max length of the internal queue)
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
                        delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE

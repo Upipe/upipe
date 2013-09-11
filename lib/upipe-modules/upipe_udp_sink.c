@@ -95,6 +95,10 @@ struct upipe_udpsink {
     char *uri;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers */
     struct ulist blockers;
 
@@ -106,7 +110,7 @@ UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_udpsink, urefs, blockers, upipe_udpsink_output)
+UPIPE_HELPER_SINK(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
 
@@ -262,8 +266,8 @@ static void upipe_udpsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_udpsink_set_upump(upipe, NULL);
-    if (upipe_udpsink_output_sink(upipe))
-        upipe_udpsink_unblock_sink(upipe);
+    upipe_udpsink_output_sink(upipe);
+    upipe_udpsink_unblock_sink(upipe);
 }
 
 /** @internal @This receives data.
@@ -327,7 +331,6 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     free(upipe_udpsink->uri);
     upipe_udpsink->uri = NULL;
     upipe_udpsink_set_upump(upipe, NULL);
-    upipe_udpsink_unblock_sink(upipe);
 
     if (unlikely(uri == NULL))
         return true;
@@ -420,6 +423,14 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_SINK_SET_DELAY: {
             uint64_t delay = va_arg(args, uint64_t);
             return upipe_udpsink_set_delay(upipe, delay);
+        }
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_udpsink_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_udpsink_set_max_length(upipe, max_length);
         }
 
         case UPIPE_UDPSINK_GET_URI: {

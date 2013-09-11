@@ -98,6 +98,10 @@ struct upipe_avcdec {
     struct upump *upump_av_deal;
     /** temporary uref storage (used during udeal) */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers (used during udeal) */
     struct ulist blockers;
 
@@ -146,7 +150,7 @@ UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
-UPIPE_HELPER_SINK(upipe_avcdec, urefs, blockers, upipe_avcdec_decode)
+UPIPE_HELPER_SINK(upipe_avcdec, urefs, nb_urefs, max_urefs, blockers, upipe_avcdec_decode)
 
 /* Documentation from libavcodec.h (get_buffer) :
  * The function will set AVFrame.data[], AVFrame.linesize[].

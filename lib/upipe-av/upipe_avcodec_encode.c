@@ -121,6 +121,10 @@ struct upipe_avcenc {
     struct upump *upump_av_deal;
     /** temporary uref storage (used during udeal) */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers (used during udeal) */
     struct ulist blockers;
 
@@ -168,7 +172,7 @@ UPIPE_HELPER_OUTPUT(upipe_avcenc, output, output_flow, output_flow_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
-UPIPE_HELPER_SINK(upipe_avcenc, urefs, blockers, upipe_avcenc_input_frame)
+UPIPE_HELPER_SINK(upipe_avcenc, urefs, nb_urefs, max_urefs, blockers, upipe_avcenc_input_frame)
 UPIPE_HELPER_SOUND_STREAM(upipe_avcenc, next_uref, next_uref_size, stream_urefs)
 
 /** @This aborts and frees an existing upump watching for exclusive access to

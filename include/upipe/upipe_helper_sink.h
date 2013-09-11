@@ -47,9 +47,11 @@ extern "C" {
 /** @This declares eight functions helping a sink pipe to block source pumps,
  * and to hold urefs that can't be immediately output.
  *
- * You must add two members to your private upipe structure, for instance:
+ * You must add four members to your private upipe structure, for instance:
  * @code
  *  struct ulist urefs;
+ *  unsigned int nb_urefs;
+ *  unsigned int max_urefs;
  *  struct ulist blockers;
  * @end code
  *
@@ -94,6 +96,28 @@ extern "C" {
  * Outputs urefs that have been held.
  *
  * @item @code
+ *  bool upipe_foo_get_max_length(struct upipe *upipe, unsigned int *p)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  case UPIPE_SINK_GET_MAX_LENGTH: {
+ *      unsigned int *p = va_arg(args, unsigned int *);
+ *      return upipe_foo_get_max_length(upipe, p);
+ *  }
+ * @end code
+ *
+ * @item @code
+ *  bool upipe_foo_set_max_length(struct upipe *upipe, unsigned int max_length)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  case UPIPE_SINK_SET_MAX_LENGTH: {
+ *      unsigned int max_length = va_arg(args, unsigned int);
+ *      return upipe_foo_set_max_length(upipe, max_length);
+ *  }
+ * @end code
+ *
+ * @item @code
  *  void upipe_foo_clean_sink(struct upipe *upipe)
  * @end code
  * Free all urefs that have been held, and unblocks all pumps.
@@ -113,7 +137,8 @@ extern "C" {
  * @param OUTPUT function to use to output urefs (struct upipe *, struct uref *,
  * struct upump *), returns false when the uref can't be written
  */
-#define UPIPE_HELPER_SINK(STRUCTURE, UREFS, BLOCKERS, OUTPUT)               \
+#define UPIPE_HELPER_SINK(STRUCTURE, UREFS, NB_UREFS, MAX_UREFS, BLOCKERS,  \
+                          OUTPUT)                                           \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -122,6 +147,8 @@ static void STRUCTURE##_init_sink(struct upipe *upipe)                      \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_init(&s->UREFS);                                                  \
+    s->NB_UREFS = 0;                                                        \
+    s->MAX_UREFS = 0;                                                       \
     ulist_init(&s->BLOCKERS);                                               \
 }                                                                           \
 /** @internal @This is called when the source pump is released by its owner.\
@@ -143,6 +170,8 @@ static void STRUCTURE##_block_sink_cb(struct upump_blocker *blocker)        \
 static void STRUCTURE##_block_sink(struct upipe *upipe, struct upump *upump)\
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (s->NB_UREFS <= s->MAX_UREFS)                                        \
+        return;                                                             \
     if (upump != NULL &&                                                    \
         upump_blocker_find(&s->BLOCKERS, upump) == NULL) {                  \
         struct upump_blocker *blocker =                                     \
@@ -157,6 +186,8 @@ static void STRUCTURE##_block_sink(struct upipe *upipe, struct upump *upump)\
 static void STRUCTURE##_unblock_sink(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (s->NB_UREFS > s->MAX_UREFS)                                         \
+        return;                                                             \
     struct uchain *uchain;                                                  \
     ulist_delete_foreach (&s->BLOCKERS, uchain) {                           \
         ulist_delete(&s->BLOCKERS, uchain);                                 \
@@ -184,6 +215,7 @@ static void STRUCTURE##_hold_sink(struct upipe *upipe, struct uref *uref)   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_add(&s->UREFS, uref_to_uchain(uref));                             \
+    s->NB_UREFS++;                                                          \
 }                                                                           \
 /** @internal @This outputs all urefs that have been held.                  \
  *                                                                          \
@@ -195,14 +227,43 @@ static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->UREFS)) != NULL) {                       \
+        s->NB_UREFS--;                                                      \
         bool (*output)(struct upipe *, struct uref *, struct upump *) =     \
             OUTPUT;                                                         \
         if (output != NULL &&                                               \
             !output(upipe, uref_from_uchain(uchain), NULL)) {               \
             ulist_unshift(&s->UREFS, uchain);                               \
+            s->NB_UREFS++;                                                  \
             return false;                                                   \
         }                                                                   \
     }                                                                       \
+    return true;                                                            \
+}                                                                           \
+/** @internal @This gets the current max length of the internal queue.      \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param p filled in with the length                                       \
+ * @return false in case of error                                           \
+ */                                                                         \
+static bool STRUCTURE##_get_max_length(struct upipe *upipe,                 \
+                                       unsigned int *p)                     \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(p != NULL);                                                      \
+    *p = STRUCTURE->MAX_UREFS;                                              \
+    return true;                                                            \
+}                                                                           \
+/** @internal @This sets the max length of the internal queue.              \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param length new length                                                 \
+ * @return false in case of error                                           \
+ */                                                                         \
+static bool STRUCTURE##_set_max_length(struct upipe *upipe,                 \
+                                       unsigned int length)                 \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    STRUCTURE->MAX_UREFS = length;                                          \
     return true;                                                            \
 }                                                                           \
 /** @internal @This frees all urefs that have been held, and unblocks       \

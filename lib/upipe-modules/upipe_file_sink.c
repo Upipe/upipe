@@ -91,6 +91,10 @@ struct upipe_fsink {
     char *path;
     /** temporary uref storage */
     struct ulist urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
     /** list of blockers */
     struct ulist blockers;
 
@@ -102,7 +106,7 @@ UPIPE_HELPER_UPIPE(upipe_fsink, upipe, UPIPE_FSINK_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_fsink, UPIPE_FSINK_EXPECTED_FLOW_DEF)
 UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_fsink, urefs, blockers, upipe_fsink_output)
+UPIPE_HELPER_SINK(upipe_fsink, urefs, nb_urefs, max_urefs, blockers, upipe_fsink_output)
 UPIPE_HELPER_UCLOCK(upipe_fsink, uclock)
 UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
 
@@ -253,11 +257,11 @@ static void upipe_fsink_watcher(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_fsink_set_upump(upipe, NULL);
     if (upipe_fsink_output_sink(upipe)) {
-        upipe_fsink_unblock_sink(upipe);
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_fsink_input. */
         upipe_release(upipe);
     }
+    upipe_fsink_unblock_sink(upipe);
 }
 
 /** @internal @This receives data.
@@ -320,7 +324,6 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     free(upipe_fsink->path);
     upipe_fsink->path = NULL;
     upipe_fsink_set_upump(upipe, NULL);
-    upipe_fsink_unblock_sink(upipe);
     if (!upipe_fsink_check_sink(upipe))
         /* Release the pipe used in @ref upipe_fsink_input. */
         upipe_release(upipe);
@@ -445,6 +448,14 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         case UPIPE_SINK_SET_DELAY: {
             uint64_t delay = va_arg(args, uint64_t);
             return upipe_fsink_set_delay(upipe, delay);
+        }
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_fsink_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_fsink_set_max_length(upipe, max_length);
         }
 
         case UPIPE_FSINK_GET_PATH: {
