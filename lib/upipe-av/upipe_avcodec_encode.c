@@ -149,6 +149,8 @@ struct upipe_avcenc {
 
     /** avcodec context */
     AVCodecContext *context;
+    /** true if open_codec failed */
+    bool open_failed;
     /** avcodec frame */
     AVFrame *frame;
     /** avcodec_open parameters */
@@ -302,6 +304,7 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
         default: {
             av_free(context);
             upipe_err_va(upipe, "Unsupported media type (%d)", codec->type);
+            upipe_avcenc->open_failed = true;
             upipe_release(upipe);
             return false;
             break;
@@ -318,6 +321,7 @@ static bool upipe_avcenc_open_codec(struct upipe *upipe)
     /* open new context */
     if (unlikely(avcodec_open2(context, codec, NULL) < 0)) {
         upipe_warn(upipe, "could not open codec");
+        upipe_avcenc->open_failed = true;
         av_free(context);
         upipe_release(upipe);
         return false;
@@ -370,10 +374,8 @@ static void upipe_avcenc_open_codec_cb(struct upump *upump)
     upipe_av_deal_yield(upump_av_deal);
     upump_free(upump_av_deal);
 
-    if (upipe_avcenc->context) {
-        upipe_avcenc_unblock_sink(upipe);
-        upipe_avcenc_output_sink(upipe);
-    }
+    upipe_avcenc_unblock_sink(upipe);
+    upipe_avcenc_output_sink(upipe);
     upipe_release(upipe);
 }
 
@@ -452,6 +454,7 @@ static bool _upipe_avcenc_set_codec(struct upipe *upipe, const char *codec_def,
         }
     }
     params->codec = codec;
+    upipe_avcenc->open_failed = false;
 
     /* call open_codec_wrap at once to close codec if codec == NULL.
      * else openc_codec_wrap shall be called upon receiving next frame.
@@ -678,12 +681,20 @@ static bool upipe_avcenc_input_frame(struct upipe *upipe,
 
     /* open context */
     if (unlikely(!upipe_avcenc->context)) {
+        if (upipe_avcenc->open_failed) {
+            uref_free(uref);
+            return true;
+        }
         upipe_dbg_va(upipe, "received frame (%dx%d), opening codec",
                                                         width, height);
 
         params->width  = width;
         params->height = height;
         upipe_avcenc_open_codec_wrap(upipe);
+        if (upipe_avcenc->open_failed) {
+            uref_free(uref);
+            return true;
+        }
 
         /* if open_codec still pending, save uref and return */
         if (!upipe_avcenc->context) {
@@ -1013,6 +1024,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     upipe_avcenc->input_flow = flow_def;
     upipe_avcenc->context = NULL;
+    upipe_avcenc->open_failed = false;
     upipe_avcenc->upump_av_deal = NULL;
     upipe_avcenc->pixfmt = NULL;
     upipe_avcenc->frame = avcodec_alloc_frame();
