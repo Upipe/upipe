@@ -46,6 +46,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-x264/upipe_x264.h>
 
@@ -68,10 +69,16 @@ struct upipe_x264 {
     x264_t *encoder;
     /** x264 params */
     x264_param_t params;
+    /** supposed latency of the packets when leaving the encoder */
+    uint64_t initial_latency;
+    /** latency introduced by speedcontrol */
+    uint64_t sc_latency;
 
     /** x264 "PTS" */
     uint64_t x264_ts;
 
+    /** uclock */
+    struct uclock *uclock;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** uref manager */
@@ -87,6 +94,7 @@ struct upipe_x264 {
 UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_x264, EXPECTED_FLOW)
 UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr);
+UPIPE_HELPER_UCLOCK(upipe_x264, uclock);
 UPIPE_HELPER_OUTPUT(upipe_x264, output, output_flow, output_flow_sent)
 
 
@@ -204,6 +212,37 @@ static bool _upipe_x264_set_option(struct upipe *upipe, const char *option,
     return true;
 }
 
+/** @This switches x264 into speedcontrol mode, with the given latency (size
+ * of sc buffer).
+ *
+ * @param upipe description structure of the pipe
+ * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
+ * @return false in case of error
+ */
+static bool _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
+{
+#ifndef OBE_TREE
+    return false;
+#else
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    upipe_x264->sc_latency = sc_latency;
+    struct urational fps;
+    if (likely(uref_pic_flow_get_fps(upipe_x264->output_flow, &fps))) {
+        upipe_x264->params.sc.i_buffer_size = sc_latency * fps.num / fps.den /
+                                              UCLOCK_FREQ;
+    }
+    upipe_x264->params.sc.f_speed = 1.0;
+    upipe_x264->params.sc.f_buffer_init = 1.0;
+    upipe_x264->params.sc.b_alt_timer = 1;
+    uint64_t height;
+    if (uref_pic_get_hsize(upipe_x264->output_flow, &height) && height >= 720)
+        upipe_x264->params.sc.max_preset = 7;
+    else
+        upipe_x264->params.sc.max_preset = 10;
+    return true;
+#endif
+}
+
 /** @internal @This allocates a filter pipe.
  *
  * @param mgr common management structure
@@ -226,9 +265,12 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
 
     upipe_x264->encoder = NULL;
     _upipe_x264_set_default(upipe);
+    upipe_x264->initial_latency = 0;
+    upipe_x264->sc_latency = 0;
     upipe_x264->x264_ts = 0;
 
     upipe_x264_init_ubuf_mgr(upipe);
+    upipe_x264_init_uclock(upipe);
     upipe_x264_init_output(upipe);
     upipe_throw_ready(upipe);
 
@@ -302,9 +344,12 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         latency += (uint64_t)delayed * UCLOCK_FREQ
                                      * params->i_fps_den
                                      / params->i_fps_num;
+        upipe_x264->initial_latency = latency;
+
         if (params->rc.i_bitrate)
             latency += (uint64_t)params->rc.i_vbv_buffer_size * UCLOCK_FREQ /
                        params->rc.i_bitrate;
+        latency += upipe_x264->sc_latency;
         uref_flow_set_latency(upipe_x264->output_flow, latency);
     }
 
@@ -472,6 +517,22 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     }
     if (uref_clock_get_pts_sys(uref, &pts)) {
         uref_clock_set_dts_sys(uref, pts - ts_diff);
+
+#ifdef OBE_TREE
+        if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
+            uint64_t systime = uclock_now(upipe_x264->uclock);
+            float buffer_fill =
+                (float)(systime + upipe_x264->sc_latency -
+                        (pts - ts_diff + upipe_x264->initial_latency)) /
+                (float)upipe_x264->sc_latency;
+            if (buffer_fill > 1.0)
+                buffer_fill = 1.0;
+            if (buffer_fill < 0.0)
+                buffer_fill = 0.0;
+            x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill,
+                                   upipe_x264->params.sc.i_buffer_size, 1 );
+        }
+#endif
     }
 
     if (pic.b_keyframe) {
@@ -535,6 +596,14 @@ static bool upipe_x264_control(struct upipe *upipe,
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_x264_set_ubuf_mgr(upipe, ubuf_mgr);
         }
+        case UPIPE_GET_UCLOCK: {
+            struct uclock **p = va_arg(args, struct uclock **);
+            return upipe_x264_get_uclock(upipe, p);
+        }
+        case UPIPE_SET_UCLOCK: {
+            struct uclock *uclock = va_arg(args, struct uclock *);
+            return upipe_x264_set_uclock(upipe, uclock);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_x264_get_flow_def(upipe, p);
@@ -578,6 +647,12 @@ static bool upipe_x264_control(struct upipe *upipe,
             const char *content = va_arg(args, const char *);
             return _upipe_x264_set_option(upipe, option, content);
         }
+        case UPIPE_X264_SET_SC_LATENCY: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_X264_SIGNATURE);
+            uint64_t sc_latency = va_arg(args, uint64_t);
+            return _upipe_x264_set_sc_latency(upipe, sc_latency);
+        }
         default:
             return false;
     }
@@ -592,6 +667,7 @@ static void upipe_x264_free(struct upipe *upipe)
     upipe_x264_close(upipe);
 
     upipe_throw_dead(upipe);
+    upipe_x264_clean_uclock(upipe);
     upipe_x264_clean_ubuf_mgr(upipe);
     upipe_x264_clean_output(upipe);
     upipe_x264_free_flow(upipe);

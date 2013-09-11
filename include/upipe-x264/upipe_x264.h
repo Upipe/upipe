@@ -58,6 +58,9 @@ enum upipe_x264_command {
 
     /** sets the content of an avcodec option (const char *, const char *) */
     UPIPE_X264_SET_OPTION,
+
+    /** switches to speedcontrol mode with the given latency (uint64_t) */
+    UPIPE_X264_SET_SC_LATENCY
 };
 
 /** @This reconfigures encoder with updated parameters.
@@ -120,6 +123,20 @@ static inline bool upipe_x264_set_option(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_X264_SET_OPTION, UPIPE_X264_SIGNATURE,
                          option, content);
+}
+
+/** @This switches x264 into speedcontrol mode, with the given latency (size
+ * of sc buffer).
+ *
+ * @param upipe description structure of the pipe
+ * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
+ * @return false in case of error
+ */
+static inline bool upipe_x264_set_sc_latency(struct upipe *upipe,
+                                             uint64_t sc_latency)
+{
+    return upipe_control(upipe, UPIPE_X264_SET_SC_LATENCY, UPIPE_X264_SIGNATURE,
+                         sc_latency);
 }
 
 /** @This returns the management structure for x264 pipes.
