@@ -129,6 +129,13 @@ TESTS += \
 	upipe_sws_test
 endif
 
+if HAVE_SWRESAMPLE
+check_PROGRAMS += \
+	upipe_swr_test
+TESTS += \
+	upipe_swr_test
+endif
+
 if HAVE_BITSTREAM
 check_PROGRAMS += \
 	uprobe_ts_log_test \
@@ -221,6 +228,9 @@ upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/lib
 
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
+
+upipe_swr_test_CFLAGS = $(SWRESAMPLE_CFLAGS)
+upipe_swr_test_LDADD = $(LDADD) $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swr.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 uprobe_ts_log_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la

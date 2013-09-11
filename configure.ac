@@ -39,6 +39,7 @@ AC_CHECK_HEADERS([ev.h], [
 
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.0 libavutil, [libswscale/swscale.h libavutil/avutil.h])
+PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 
@@ -117,6 +118,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-x264/Makefile
                  include/upipe-osx/Makefile
                  include/upipe-alsa/Makefile
+                 include/upipe-swresample/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -142,6 +144,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-osx/libupipe_osx.pc
                  lib/upipe-alsa/Makefile
                  lib/upipe-alsa/libupipe_alsa.pc
+                 lib/upipe-swresample/Makefile
+                 lib/upipe-swresample/libupipe_swr.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
