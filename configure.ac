@@ -43,6 +43,15 @@ PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 
+# x264-obe (with speedcontrol)
+CFLAGS_save="$CFLAGS" LDFLAGS_save="$LDFLAGS"
+CFLAGS="$CFLAGS $X264_CFLAGS" LDFLAGS="$LDFLAGS $X264_LIBS"
+AC_CHECK_FUNC(x264_speedcontrol_sync,
+                AM_CONDITIONAL(HAVE_X264_OBE, true),
+                AM_CONDITIONAL(HAVE_X264_OBE, false)
+)
+CFLAGS="$CFLAGS_save" LDFLAGS="$LDFLAGS_save"
+
 AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
 
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
