@@ -72,6 +72,9 @@
 #define EXPECTED_FLOW "block."
 
 /** @hidden */
+static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
+                                      struct upump *upump);
+/** @hidden */
 static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump);
 
@@ -486,6 +489,15 @@ static void upipe_avcdec_open(struct upipe *upipe)
 static void upipe_avcdec_close(struct upipe *upipe)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    if (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DELAY) {
+        /* Feed avcodec with NULL packets to output the remaining frames */
+        AVPacket avpkt;
+        memset(&avpkt, 0, sizeof(AVPacket));
+        av_init_packet(&avpkt);
+        avpkt.size = 0;
+        avpkt.data = NULL;
+        while (upipe_avcdec_decode_avpkt(upipe, &avpkt, NULL));
+    }
     upipe_avcdec->close = true;
     upipe_avcdec_start_av_deal(upipe);
 }
@@ -610,9 +622,8 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
         ret = ret && uref_pic_set_tff(uref);
 
     /* set aspect-ratio */
-    struct urational aspect;
-    aspect.den = 0; /* null denom is invalid */
     if (frame->sample_aspect_ratio.num) {
+        struct urational aspect;
         aspect.num = frame->sample_aspect_ratio.num;
         aspect.den = frame->sample_aspect_ratio.den;
         urational_simplify(&aspect);
@@ -668,7 +679,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
                 .den = context->sample_aspect_ratio.den
             };
             urational_simplify(&sar);
-            ret = ret && uref_pic_set_aspect(outflow, aspect);
+            ret = ret && uref_pic_set_aspect(outflow, sar);
         }
         if (!ret) {
             uref_free(outflow);
@@ -808,6 +819,57 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     upipe_avcdec_output(upipe, uref, upump);
 }
 
+/** @internal @This decodes av packets.
+ *
+ * @param upipe description structure of the pipe
+ * @param avpkt av packet
+ * @param upump upump structure
+ * @return true if a frame was output
+ */
+static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
+                                      struct upump *upump)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    int gotframe = 0, len;
+    switch (upipe_avcdec->context->codec->type)
+        case AVMEDIA_TYPE_VIDEO: {
+            len = avcodec_decode_video2(upipe_avcdec->context,
+                                        upipe_avcdec->frame,
+                                        &gotframe, avpkt);
+            if (len < 0) {
+                upipe_warn(upipe, "Error while decoding frame");
+            }
+
+            /* output frame if any has been decoded */
+            if (gotframe) {
+                upipe_avcdec_output_pic(upipe, upump);
+            }
+            break;
+
+        case AVMEDIA_TYPE_AUDIO:
+            len = avcodec_decode_audio4(upipe_avcdec->context,
+                                        upipe_avcdec->frame,
+                                        &gotframe, avpkt);
+            if (len < 0) {
+                upipe_warn(upipe, "Error while decoding frame");
+            }
+
+            /* output samples if any has been decoded */
+            if (gotframe) {
+                upipe_avcdec_output_sound(upipe, upump);
+            }
+            break;
+
+        default: {
+            /* should never be here */
+            upipe_err_va(upipe, "Unsupported media type (%d)",
+                         upipe_avcdec->context->codec->type);
+            break;
+        }
+    }
+    return !!gotframe;
+}
+
 /** @internal @This decodes packets.
  *
  * @param upipe description structure of the pipe
@@ -858,43 +920,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
      * in upipe_avcdec_get_buffer */
     upipe_avcdec->uref = uref;
 
-    int gotframe = 0, len;
-    switch (upipe_avcdec->context->codec->type)
-        case AVMEDIA_TYPE_VIDEO: {
-            len = avcodec_decode_video2(upipe_avcdec->context,
-                                        upipe_avcdec->frame,
-                                        &gotframe, &avpkt);
-            if (len < 0) {
-                upipe_warn(upipe, "Error while decoding frame");
-            }
-
-            /* output frame if any has been decoded */
-            if (gotframe) {
-                upipe_avcdec_output_pic(upipe, upump);
-            }
-            break;
-
-        case AVMEDIA_TYPE_AUDIO:
-            len = avcodec_decode_audio4(upipe_avcdec->context,
-                                        upipe_avcdec->frame,
-                                        &gotframe, &avpkt);
-            if (len < 0) {
-                upipe_warn(upipe, "Error while decoding frame");
-            }
-
-            /* output samples if any has been decoded */
-            if (gotframe) {
-                upipe_avcdec_output_sound(upipe, upump);
-            }
-            break;
-
-        default: {
-            /* should never be here */
-            upipe_err_va(upipe, "Unsupported media type (%d)",
-                         upipe_avcdec->context->codec->type);
-            break;
-        }
-    }
+    upipe_avcdec_decode_avpkt(upipe, &avpkt, upump);
 
     free(avpkt.data);
     return true;
