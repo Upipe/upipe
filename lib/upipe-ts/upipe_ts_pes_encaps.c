@@ -155,7 +155,8 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
         uref_clock_get_pts(uref, &pts);
         uref_clock_get_dts(uref, &dts);
         if (pts != UINT64_MAX) {
-            if (dts != UINT64_MAX && (pts / 300) != (dts / 300))
+            if (dts != UINT64_MAX &&
+                ((pts / 300) % UINT33_MAX) != ((dts / 300) % UINT33_MAX))
                 header_size = PES_HEADER_SIZE_PTSDTS;
             else
                 header_size = PES_HEADER_SIZE_PTS;
