@@ -80,6 +80,8 @@ struct upipe_avfsink {
     AVFormatContext *context;
     /** true if the header has already been written */
     bool opened;
+    /** offset between Upipe timestamp and avformat timestamp */
+    uint64_t ts_offset;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -357,6 +359,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink->options = NULL;
     upipe_avfsink->context = NULL;
     upipe_avfsink->opened = false;
+    upipe_avfsink->ts_offset = UINT64_MAX;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -401,6 +404,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
     while ((input = upipe_avfsink_find_input(upipe)) != NULL) {
         if (unlikely(!upipe_avfsink->opened)) {
             upipe_dbg(upipe, "writing header");
+            upipe_avfsink->ts_offset = input->next_dts;
             if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)) {
                 int error = avio_open(&upipe_avfsink->context->pb,
                                       upipe_avfsink->context->filename,
@@ -457,12 +461,14 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
 
         uint64_t dts;
         if (uref_clock_get_dts(uref, &dts))
-            avpkt.dts = dts * stream->time_base.den / UCLOCK_FREQ /
-                        stream->time_base.num;
+            avpkt.dts = ((dts - upipe_avfsink->ts_offset) *
+                         stream->time_base.den + UCLOCK_FREQ / 2) /
+                        UCLOCK_FREQ / stream->time_base.num;
         uint64_t pts;
         if (uref_clock_get_pts(uref, &pts))
-            avpkt.pts = pts * stream->time_base.den / UCLOCK_FREQ /
-                        stream->time_base.num;
+            avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
+                         stream->time_base.den + UCLOCK_FREQ / 2) /
+                        UCLOCK_FREQ / stream->time_base.num;
 
         size_t size = 0;
         uref_block_size(uref, &size);
