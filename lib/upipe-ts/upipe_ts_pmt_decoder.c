@@ -24,6 +24,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
@@ -32,6 +33,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psi_decoder.h"
@@ -46,11 +48,28 @@
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspmt."
+/** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY UCLOCK_FREQ
+/** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 
 /** @internal @This is the private context of a ts_pmtd pipe. */
 struct upipe_ts_pmtd {
+    /** pipe acting as output */
+    struct upipe *output;
+    /** output flow definition */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
+    /** input flow definition */
+    struct uref *flow_def_input;
     /** currently in effect PMT table */
     struct uref *pmt;
+    /** list of flows */
+    struct ulist flows;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -58,6 +77,7 @@ struct upipe_ts_pmtd {
 
 UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe, UPIPE_TS_PMTD_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_pmtd, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_OUTPUT(upipe_ts_pmtd, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_pmtd pipe.
  *
@@ -71,73 +91,34 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe = upipe_ts_pmtd_alloc_flow(mgr, uprobe, signature,
-                                                   args, NULL);
+                                                   args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
 
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    upipe_ts_pmtd_init_output(upipe);
+    upipe_ts_pmtd->flow_def_input = flow_def;
     upipe_ts_pmtd->pmt = NULL;
+    ulist_init(&upipe_ts_pmtd->flows);
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-/** @internal @This sends the pmtd_systime event.
+/** @internal @This cleans up the list of programs.
  *
  * @param upipe description structure of the pipe
- * @param uref uref triggering the event
  */
-static void upipe_ts_pmtd_systime(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
 {
-    upipe_throw(upipe, UPROBE_TS_PMTD_SYSTIME, UPIPE_TS_PMTD_SIGNATURE, uref);
-}
-
-/** @internal @This sends the pmtd_header event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param pcrpid PCR PID detected in the PMT
- * @param desc_offset offset of the PMT descriptors array in uref
- * @param desc_size size of the PMT descriptors array in uref
- */
-static void upipe_ts_pmtd_header(struct upipe *upipe, struct uref *uref,
-                                       unsigned int pcrpid,
-                                       unsigned int desc_offset,
-                                       unsigned int desc_size)
-{
-    upipe_throw(upipe, UPROBE_TS_PMTD_HEADER, UPIPE_TS_PMTD_SIGNATURE,
-                uref, pcrpid, desc_offset, desc_size);
-}
-
-/** @internal @This sends the pmtd_add_es event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param pid PID for the ES
- * @param streamtype stream type of the ES
- * @param desc_offset offset of the ES descriptors array in uref
- * @param desc_size size of the ES descriptors array in uref
- */
-static void upipe_ts_pmtd_add_es(struct upipe *upipe, struct uref *uref,
-                                 unsigned int pid, unsigned int streamtype,
-                                 unsigned int desc_offset,
-                                 unsigned int desc_size)
-{
-    upipe_throw(upipe, UPROBE_TS_PMTD_ADD_ES, UPIPE_TS_PMTD_SIGNATURE,
-                uref, pid, streamtype, desc_offset, desc_size);
-}
-
-/** @internal @This sends the pmtd_del_es event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param pid PID for the ES
- */
-static void upipe_ts_pmtd_del_es(struct upipe *upipe, struct uref *uref,
-                                 unsigned int pid)
-{
-    upipe_throw(upipe, UPROBE_TS_PMTD_DEL_ES, UPIPE_TS_PMTD_SIGNATURE,
-                uref, pid);
+    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    struct uchain *uchain;
+    ulist_delete_foreach(&upipe_ts_pmtd->flows, uchain) {
+        struct uref *flow_def = uref_from_uchain(uchain);
+        ulist_delete(&upipe_ts_pmtd->flows, uchain);
+        uref_free(flow_def);
+    }
 }
 
 /** @internal @This reads the header of a PMT.
@@ -327,75 +308,30 @@ static bool upipe_ts_pmtd_compare_header(struct upipe *upipe,
     return compare;
 }
 
-/** @internal @This compares an elementary stream definition with the current
- * PMT.
+/** @internal @This is a helper function to determine the maximum retention
+ * delay of an h264 elementary stream.
  *
- * @param upipe description structure of the pipe
- * @param es iterator pointing to ES definition
- * @param desc iterator pointing to descriptors of the ES
- * @param desclength pointing to size of ES descriptors
- * @return false if there is no such ES, or it has a different description
+ * @param pmtd_desc_offset offset of the ES descriptors in the uref
+ * @param pmtd_desc_size size of the ES descriptors in the uref
+ * @return max delay in 27 MHz time scale
  */
-static bool upipe_ts_pmtd_compare_es(struct upipe *upipe, const uint8_t *es,
-                                     const uint8_t *desc, uint16_t desclength)
+static uint64_t upipe_ts_pmtd_h264_max_delay(const uint8_t *descl,
+                                             uint16_t desclength)
 {
-    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    if (upipe_ts_pmtd->pmt == NULL)
-        return false;
+    bool still = true;
+    const uint8_t *desc;
+    int j = 0;
 
-    UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, old_header, old_header_desc,
-                         old_header_desclength)
-    UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, old_header,
-                               old_header_desc, old_header_desclength)
+    /* cast needed because biTStream expects an uint8_t * (but doesn't write
+     * to it */
+    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL)
+        if (desc_get_tag(desc) == 0x28 && desc28_validate(desc))
+            break;
 
-    UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset, old_header_desclength,
-                       old_es, old_desc, old_desclength)
+    if (desc != NULL)
+        still = desc28_get_avc_still_present(desc);
 
-    uint16_t pid = pmtn_get_pid(old_es);
-    bool compare = pmtn_get_streamtype(es) == pmtn_get_streamtype(old_es) &&
-                   desclength == old_desclength &&
-                   (!desclength || !memcmp(desc, old_desc, desclength));
-
-    UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, old_es,
-                             old_desc, old_desclength)
-
-    if (pid == pmtn_get_pid(es))
-        return compare;
-
-    UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
-    return false;
-}
-
-/** @internal @This checks whether a given ES is still present in the PMT.
- *
- * @param upipe description structure of the pipe
- * @param wanted_pid elementary stream to check
- * @return false if the PID is not present
- */
-static uint16_t upipe_ts_pmtd_pid(struct upipe *upipe, uint16_t wanted_pid)
-{
-    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    if (upipe_ts_pmtd->pmt == NULL)
-        return false;
-
-    UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, header, header_desc,
-                         header_desclength)
-    UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, header,
-                               header_desc, header_desclength)
-
-    UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset, header_desclength,
-                       es, desc, desclength)
-
-    uint16_t pid = pmtn_get_pid(es);
-
-    UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, es,
-                             desc, desclength)
-
-    if (pid == wanted_pid)
-        return true;
-
-    UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
-    return false;
+    return still ? MAX_DELAY_STILL : MAX_DELAY_14496;
 }
 
 /** @internal @This parses a new PSI section.
@@ -409,7 +345,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     if (upipe_ts_pmtd->pmt != NULL &&
         uref_block_equal(upipe_ts_pmtd->pmt, uref)) {
         /* Identical PMT. */
-        upipe_ts_pmtd_systime(upipe, uref);
+        upipe_throw_new_rap(upipe, uref);
         uref_free(uref);
         return;
     }
@@ -419,7 +355,7 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
         return;
     }
-    upipe_ts_pmtd_systime(upipe, uref);
+    upipe_throw_new_rap(upipe, uref);
 
     UPIPE_TS_PMTD_HEADER(upipe, uref, header, header_desc, header_desclength)
 
@@ -436,52 +372,123 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     UPIPE_TS_PMTD_HEADER_UNMAP(upipe, uref, header, header_desc,
                                header_desclength)
 
-    if (!compare)
-        upipe_ts_pmtd_header(upipe, uref, pcrpid, PMT_HEADER_SIZE,
-                             header_desclength);
+    if (!compare) {
+        struct uref *flow_def = uref_dup(upipe_ts_pmtd->flow_def_input);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
+        if (unlikely(!uref_flow_set_def(flow_def, "void.") ||
+                     !uref_ts_flow_set_pcr_pid(flow_def, pcrpid) ||
+                     !uref_ts_flow_set_descriptors(flow_def, header_desc,
+                                                   header_desclength)))
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_ts_pmtd_store_flow_def(upipe, flow_def);
+        /* Force sending flow def */
+        upipe_throw_new_flow_def(upipe, flow_def);
+    }
+
+    upipe_ts_pmtd_clean_flows(upipe);
 
     UPIPE_TS_PMTD_PEEK(upipe, uref, offset, header_desclength, es, desc,
                        desclength)
 
     uint16_t pid = pmtn_get_pid(es);
     uint16_t streamtype = pmtn_get_streamtype(es);
-    bool compare = upipe_ts_pmtd_compare_es(upipe, es, desc, desclength);
-    int desc_offset = offset + PMT_ES_SIZE;
+
+    struct uref *flow_def = uref_dup(upipe_ts_pmtd->flow_def_input);
+    if (likely(flow_def != NULL)) {
+        switch (streamtype) {
+            case PMT_STREAMTYPE_VIDEO_MPEG1:
+                if (unlikely(!uref_flow_set_def(flow_def,
+                                "block.mpeg1video.pic.") ||
+                             !uref_flow_set_id(flow_def, pid) ||
+                             !uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mpeg1video.pic.") ||
+                             !uref_ts_flow_set_pid(flow_def, pid) ||
+                             !uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength) ||
+                             !uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY_STILL)))
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+                break;
+
+            case PMT_STREAMTYPE_VIDEO_MPEG2:
+                if (unlikely(!uref_flow_set_def(flow_def,
+                                "block.mpeg2video.pic.") ||
+                             !uref_flow_set_id(flow_def, pid) ||
+                             !uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mpeg2video.pic.") ||
+                             !uref_ts_flow_set_pid(flow_def, pid) ||
+                             !uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength) ||
+                             !uref_ts_flow_set_max_delay(flow_def,
+                                 MAX_DELAY_STILL)))
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+                break;
+
+            case PMT_STREAMTYPE_AUDIO_MPEG1:
+            case PMT_STREAMTYPE_AUDIO_MPEG2:
+                if (unlikely(!uref_flow_set_def(flow_def, "block.mp2.sound.") ||
+                             !uref_flow_set_id(flow_def, pid) ||
+                             !uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mp2.sound.") ||
+                             !uref_ts_flow_set_pid(flow_def, pid) ||
+                             !uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength) ||
+                             !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+                break;
+
+            case PMT_STREAMTYPE_AUDIO_ADTS:
+                if (unlikely(!uref_flow_set_def(flow_def, "block.aac.sound.") ||
+                             !uref_flow_set_id(flow_def, pid) ||
+                             !uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.aac.sound.") ||
+                             !uref_ts_flow_set_pid(flow_def, pid) ||
+                             !uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength) ||
+                             !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+                break;
+
+            case PMT_STREAMTYPE_VIDEO_AVC:
+                if (unlikely(!uref_flow_set_def(flow_def, "block.h264.pic.") ||
+                             !uref_flow_set_id(flow_def, pid) ||
+                             !uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.h264.pic.") ||
+                             !uref_ts_flow_set_pid(flow_def, pid) ||
+                             !uref_ts_flow_set_max_delay(flow_def,
+                                upipe_ts_pmtd_h264_max_delay(desc,
+                                    desclength))))
+                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+                break;
+
+            default:
+                upipe_warn_va(upipe, "unhandled stream type %u for PID %u",
+                              streamtype, pid);
+                uref_free(flow_def);
+                break;
+        }
+    } else
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
 
     UPIPE_TS_PMTD_PEEK_UNMAP(upipe, uref, offset, es, desc, desclength)
-
-    if (!compare)
-        upipe_ts_pmtd_add_es(upipe, uref, pid, streamtype, desc_offset,
-                             desclength);
 
     UPIPE_TS_PMTD_PEEK_END(upipe, uref, offset)
 
     /* Switch tables. */
-    struct uref *old_pmt = upipe_ts_pmtd->pmt;
+    if (upipe_ts_pmtd->pmt != NULL)
+        uref_free(upipe_ts_pmtd->pmt);
     upipe_ts_pmtd->pmt = uref;
 
-    if (old_pmt != NULL) {
-        UPIPE_TS_PMTD_HEADER(upipe, old_pmt, old_header, old_header_desc,
-                             old_header_desclength)
-        UPIPE_TS_PMTD_HEADER_UNMAP(upipe, old_pmt, old_header,
-                                   old_header_desc, old_header_desclength)
-
-        UPIPE_TS_PMTD_PEEK(upipe, old_pmt, offset,
-                           old_header_desclength, old_es, old_desc,
-                           old_desclength)
-
-        uint16_t pid = pmtn_get_pid(old_es);
-
-        UPIPE_TS_PMTD_PEEK_UNMAP(upipe, old_pmt, offset, old_es,
-                                 old_desc, old_desclength)
-
-        if (!upipe_ts_pmtd_pid(upipe, pid))
-            upipe_ts_pmtd_del_es(upipe, uref, pid);
-
-        UPIPE_TS_PMTD_PEEK_END(upipe, old_pmt, offset)
-
-        uref_free(old_pmt);
-    }
+    upipe_split_throw_update(upipe);
 }
 
 /** @internal @This receives data.
@@ -501,36 +508,75 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_pmtd_work(upipe, uref);
 }
 
+/** @internal @This iterates over flow definitions.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the next flow definition, initialize with NULL
+ * @return false when no more flow definition is available
+ */
+static bool upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
+{
+    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    assert(p != NULL);
+    struct uchain *uchain;
+    if (*p != NULL)
+        uchain = uref_to_uchain(*p)->next;
+    else
+        uchain = ulist_peek(&upipe_ts_pmtd->flows);
+    if (uchain == NULL)
+        return false;
+    *p = uref_from_uchain(uchain);
+    return true;
+}
+
+/** @internal @This processes control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_pmtd_control(struct upipe *upipe,
+                                  enum upipe_command command,
+                                  va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_pmtd_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_pmtd_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_pmtd_set_output(upipe, output);
+        }
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_pmtd_iterate(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
 static void upipe_ts_pmtd_free(struct upipe *upipe)
 {
-    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    /* send del_es on all elementary streams of the last PMT */
-    if (upipe_ts_pmtd->pmt != NULL) {
-        UPIPE_TS_PMTD_HEADER(upipe, upipe_ts_pmtd->pmt, old_header,
-                             old_header_desc, old_header_desclength)
-        UPIPE_TS_PMTD_HEADER_UNMAP(upipe, upipe_ts_pmtd->pmt, old_header,
-                                   old_header_desc, old_header_desclength)
-
-        UPIPE_TS_PMTD_PEEK(upipe, upipe_ts_pmtd->pmt, offset,
-                           old_header_desclength, old_es, old_desc,
-                           old_desclength)
-
-        uint16_t pid = pmtn_get_pid(old_es);
-
-        UPIPE_TS_PMTD_PEEK_UNMAP(upipe, upipe_ts_pmtd->pmt, offset, old_es,
-                                 old_desc, old_desclength)
-
-        upipe_ts_pmtd_del_es(upipe, NULL, pid);
-
-        UPIPE_TS_PMTD_PEEK_END(upipe, upipe_ts_pmtd->pmt, offset)
-
-        uref_free(upipe_ts_pmtd->pmt);
-    }
     upipe_throw_dead(upipe);
+
+    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    if (upipe_ts_pmtd->pmt != NULL)
+        uref_free(upipe_ts_pmtd->pmt);
+    uref_free(upipe_ts_pmtd->flow_def_input);
+    upipe_ts_pmtd_clean_flows(upipe);
+    upipe_ts_pmtd_clean_output(upipe);
     upipe_ts_pmtd_free_flow(upipe);
 }
 
@@ -540,7 +586,7 @@ static struct upipe_mgr upipe_ts_pmtd_mgr = {
 
     .upipe_alloc = upipe_ts_pmtd_alloc,
     .upipe_input = upipe_ts_pmtd_input,
-    .upipe_control = NULL,
+    .upipe_control = upipe_ts_pmtd_control,
     .upipe_free = upipe_ts_pmtd_free,
 
     .upipe_mgr_free = NULL

@@ -141,10 +141,6 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEED_UCLOCK:
             upipe_log(upipe, log->level, "probe caught need uclock");
             break;
-        case UPROBE_NEED_UBUF_MGR:
-            upipe_log(upipe, log->level,
-                      "probe caught need ubuf manager");
-            break;
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
             const char *def = "[invalid]";
@@ -154,22 +150,23 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
                          "probe caught new flow def \"%s\"", def);
             break;
         }
-        case UPROBE_SPLIT_ADD_FLOW: {
-            uint64_t flow_id = va_arg(args_copy, uint64_t);
+        case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
             const char *def = "[invalid]";
-            uref_flow_get_def(flow_def, &def);
+            if (flow_def != NULL)
+                uref_flow_get_def(flow_def, &def);
             upipe_log_va(upipe, log->level,
-                         "probe caught add flow 0x%"PRIx64" def \"%s\"",
-                         flow_id, def);
+                         "probe caught need ubuf manager for flow def \"%s\"",
+                         def);
             break;
         }
-        case UPROBE_SPLIT_DEL_FLOW: {
-            uint64_t flow_id = va_arg(args_copy, uint64_t);
-            upipe_log_va(upipe, log->level,
-                         "probe caught del flow 0x%"PRIx64"", flow_id);
+        case UPROBE_NEW_RAP:
+            upipe_log(upipe, log->level,
+                      "probe caught new random access point");
             break;
-        }
+        case UPROBE_SPLIT_UPDATE:
+            upipe_log(upipe, log->level, "probe caught split update");
+            break;
         case UPROBE_SYNC_ACQUIRED:
             upipe_log(upipe, log->level, "probe caught sync acquired");
             break;

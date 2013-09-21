@@ -50,8 +50,6 @@
 #include <upump-ev/upump_ev.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/uprobe_ts_log.h>
-#include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_select_programs.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
@@ -81,9 +79,14 @@
 #define READ_SIZE 4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-static struct upipe *upipe_ts_mux_program;
-static struct uprobe *uprobe_ts_log;
+static const char *src_file, *sink_file;
+static struct uref_mgr *uref_mgr;
+static struct ubuf_mgr *ubuf_mgr;
+static struct upump_mgr *upump_mgr;
+
+static struct uprobe *uprobe_ts_log, *log;
 static struct uprobe uprobe_demux_output_s;
+static struct uprobe uprobe_demux_program_s;
 
 /** generic probe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -101,14 +104,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_CLOCK_TS:
         case UPROBE_TS_SPLIT_ADD_PID:
         case UPROBE_TS_SPLIT_DEL_PID:
-        case UPROBE_TS_PATD_SYSTIME:
-        case UPROBE_TS_PATD_TSID:
-        case UPROBE_TS_PATD_ADD_PROGRAM:
-        case UPROBE_TS_PATD_DEL_PROGRAM:
-        case UPROBE_TS_PMTD_SYSTIME:
-        case UPROBE_TS_PMTD_HEADER:
-        case UPROBE_TS_PMTD_ADD_ES:
-        case UPROBE_TS_PMTD_DEL_ES:
         case UPROBE_SOURCE_END:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_NEED_UREF_MGR:
@@ -130,47 +125,153 @@ static bool catch_ts_demux_output(struct uprobe *uprobe, struct upipe *upipe,
         return false;
 
     struct uref *flow_def = va_arg(args, struct uref *);
+    uint64_t flow_id;
+    assert(uref_flow_get_id(flow_def, &flow_id));
     uint64_t octetrate;
     assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
     /* Free the previous output. */
     assert(upipe_set_output(upipe, NULL));
 
+    struct upipe *upipe_ts_demux_program;
+    assert(upipe_sub_get_super(upipe, &upipe_ts_demux_program));
+    struct upipe *upipe_ts_mux_program;
+    assert(upipe_get_output(upipe_ts_demux_program, &upipe_ts_mux_program));
+
     struct upipe *mux_input = upipe_flow_alloc_sub(upipe_ts_mux_program,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "mux input"), flow_def);
+            uprobe_pfx_adhoc_alloc_va(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                      "mux input %"PRIu64, flow_id), flow_def);
     assert(mux_input != NULL);
     assert(upipe_set_output(upipe, mux_input));
     upipe_release(mux_input);
     return true;
 }
 
+/** probe to catch events from the TS demux programs */
+static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
+                                   enum uprobe_event event, va_list args)
+{
+    switch (event) {
+        case UPROBE_SOURCE_END:
+            upipe_release(upipe);
+            return true;
+
+        case UPROBE_NEW_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            struct upipe *upipe_ts_demux;
+            assert(upipe_sub_get_super(upipe, &upipe_ts_demux));
+            struct upipe *upipe_ts_mux;
+            assert(upipe_get_output(upipe_ts_demux, &upipe_ts_mux));
+            uint64_t flow_id;
+            assert(uref_flow_get_id(flow_def, &flow_id));
+
+            struct upipe *mux_program = upipe_flow_alloc_sub(upipe_ts_mux,
+                    uprobe_pfx_adhoc_alloc_va(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                                           "ts mux program %"PRIu64, flow_id),
+                    flow_def);
+            assert(mux_program != NULL);
+            assert(upipe_set_output(upipe, mux_program));
+            upipe_release(mux_program);
+            return true;
+        }
+        case UPROBE_SPLIT_UPDATE: {
+            struct uref *flow_def = NULL;
+            while (upipe_split_iterate(upipe, &flow_def)) {
+                uint64_t flow_id;
+                assert(uref_flow_get_id(flow_def, &flow_id));
+
+                struct upipe *output = NULL;
+                while (upipe_iterate_sub(upipe, &output)) {
+                    struct uref *flow_def2;
+                    uint64_t id2;
+                    if (upipe_get_flow_def(output, &flow_def2) &&
+                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
+                        /* We already have a output */
+                        return true;
+                }
+
+                output = upipe_flow_alloc_sub(upipe,
+                    uprobe_pfx_adhoc_alloc_va(&uprobe_demux_output_s,
+                                              UPROBE_LOG_LEVEL,
+                                              "ts demux output %"PRIu64,
+                                              flow_id), flow_def);
+                assert(output != NULL);
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 /** probe to catch events from the TS demux */
 static bool catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                            enum uprobe_event event, va_list args)
 {
-    if (event == UPROBE_SPLIT_DEL_FLOW)
-        return true;
-    if (event != UPROBE_SPLIT_ADD_FLOW)
-        return false;
+    switch (event) {
+        case UPROBE_NEW_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            /* TS mux */
+            struct upipe_mgr *upipe_ts_mux_mgr = upipe_ts_mux_mgr_alloc();
+            assert(upipe_ts_mux_mgr != NULL);
+            assert(flow_def != NULL);
 
-    uint64_t flow_id = va_arg(args, uint64_t);
-    struct uref *flow_def = va_arg(args, struct uref *);
-    assert(flow_def != NULL);
-    const char *def = "(none)";
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, "block.")) {
-        upipe_warn_va(upipe, "flow def %s is not supported", def);
-        return true;
+            struct upipe *upipe_ts_mux = upipe_flow_alloc(upipe_ts_mux_mgr,
+                    uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts mux"),
+                    flow_def);
+            assert(upipe_ts_mux != NULL);
+            upipe_mgr_release(upipe_ts_mux_mgr);
+            assert(upipe_set_output(upipe, upipe_ts_mux));
+            assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
+            assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
+            //assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
+            //assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
+
+            /* file sink */
+            struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+            assert(upipe_fsink_mgr != NULL);
+            assert(upipe_get_flow_def(upipe_ts_mux, &flow_def));
+            assert(flow_def != NULL);
+            struct upipe *upipe_fsink = upipe_flow_alloc(upipe_fsink_mgr,
+                    uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"),
+                    flow_def);
+            assert(upipe_fsink != NULL);
+            upipe_mgr_release(upipe_fsink_mgr);
+            assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
+            assert(upipe_fsink_set_path(upipe_fsink, sink_file, UPIPE_FSINK_OVERWRITE));
+
+            assert(upipe_set_output(upipe_ts_mux, upipe_fsink));
+            upipe_release(upipe_fsink);
+            upipe_release(upipe_ts_mux);
+            return true;
+        }
+        case UPROBE_SPLIT_UPDATE: {
+            struct uref *flow_def = NULL;
+            while (upipe_split_iterate(upipe, &flow_def)) {
+                uint64_t flow_id;
+                assert(uref_flow_get_id(flow_def, &flow_id));
+
+                struct upipe *program = NULL;
+                while (upipe_iterate_sub(upipe, &program)) {
+                    struct uref *flow_def2;
+                    uint64_t id2;
+                    if (upipe_get_flow_def(program, &flow_def2) &&
+                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
+                        /* We already have a program */
+                        return true;
+                }
+
+                program = upipe_flow_alloc_sub(upipe,
+                    uprobe_pfx_adhoc_alloc_va(&uprobe_demux_program_s,
+                                              UPROBE_LOG_LEVEL,
+                                              "ts demux program %"PRIu64,
+                                              flow_id), flow_def);
+                assert(program != NULL);
+            }
+            return true;
+        }
+        default:
+            return false;
     }
-
-    upipe_dbg_va(upipe, "add flow %"PRIu64" (%s)", flow_id, def);
-
-    struct upipe *output = upipe_flow_alloc_sub(upipe,
-            uprobe_pfx_adhoc_alloc_va(&uprobe_demux_output_s,
-                                      UPROBE_LOG_LEVEL, "demux output %"PRIu64,
-                                      flow_id), flow_def);
-    assert(output != NULL);
-    return true;
 }
 
 static void usage(const char *argv0) {
@@ -180,7 +281,6 @@ static void usage(const char *argv0) {
 
 int main(int argc, char *argv[])
 {
-    const char *src_file, *sink_file;
     if (argc != 3)
         usage(argv[0]);
     src_file = argv[1];
@@ -192,16 +292,12 @@ int main(int argc, char *argv[])
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                                         UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, -1,
-                                                         -1, 0);
+    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
+                                        umem_mgr, -1, -1, -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uprobe uprobe_s;
@@ -209,7 +305,7 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe_s, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
     /* file source */
@@ -228,17 +324,9 @@ int main(int argc, char *argv[])
     uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
     uprobe_init(&uprobe_demux_output_s, catch_ts_demux_output, uprobe_ts_log);
+    uprobe_init(&uprobe_demux_program_s, catch_ts_demux_program, uprobe_ts_log);
     struct uprobe uprobe_ts_demux_s;
     uprobe_init(&uprobe_ts_demux_s, catch_ts_demux, uprobe_ts_log);
-    struct uprobe *uprobe = uprobe_selflow_alloc(&uprobe_ts_demux_s,
-                                  UPROBE_SELFLOW_PIC, "auto");
-    assert(uprobe != NULL);
-    uprobe = uprobe_selflow_alloc(uprobe, UPROBE_SELFLOW_SOUND, "auto");
-    assert(uprobe != NULL);
-    uprobe = uprobe_selflow_alloc(uprobe, UPROBE_SELFLOW_SUBPIC, "");
-    assert(uprobe != NULL);
-    uprobe = uprobe_selprog_alloc(uprobe, "auto");
-    assert(uprobe != NULL);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
@@ -261,70 +349,21 @@ int main(int argc, char *argv[])
     assert(flow_def != NULL);
 
     struct upipe *upipe_ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_LEVEL, "ts demux"),
-            flow_def);
+            uprobe_pfx_adhoc_alloc(&uprobe_ts_demux_s, UPROBE_LOG_LEVEL,
+                                   "ts demux"), flow_def);
     assert(upipe_ts_demux != NULL);
-    assert(upipe_set_output(upipe_fsrc, upipe_ts_demux));
-
-    /* TS mux */
-    struct upipe_mgr *upipe_ts_mux_mgr = upipe_ts_mux_mgr_alloc();
-    assert(upipe_ts_mux_mgr != NULL);
-    flow_def = uref_alloc(uref_mgr);
-    assert(flow_def != NULL);
-    assert(uref_flow_set_def(flow_def, "void."));
-
-    struct upipe *upipe_ts_mux = upipe_flow_alloc(upipe_ts_mux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts mux"),
-            flow_def);
-    assert(upipe_ts_mux != NULL);
-    uref_free(flow_def),
-    assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
-    //assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
-    //assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
-
-    flow_def = uref_program_flow_alloc_def(uref_mgr);
-    assert(flow_def != NULL);
-    upipe_ts_mux_program = upipe_flow_alloc_sub(upipe_ts_mux,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts mux program"), flow_def);
-    assert(upipe_ts_mux_program != NULL);
-    uref_free(flow_def);
-
-    /* file sink */
-    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
-    assert(upipe_fsink_mgr != NULL);
-    assert(upipe_get_flow_def(upipe_ts_mux, &flow_def));
-    assert(flow_def != NULL);
-    struct upipe *upipe_fsink = upipe_flow_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"),
-            flow_def);
-    assert(upipe_fsink != NULL);
-    assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
-    assert(upipe_fsink_set_path(upipe_fsink, sink_file, UPIPE_FSINK_OVERWRITE));
-
-    assert(upipe_set_output(upipe_ts_mux, upipe_fsink));
-
-    ev_loop(loop, 0);
-
-    upipe_release(upipe_ts_demux);
-    upipe_release(upipe_ts_mux_program);
-    upipe_release(upipe_ts_mux);
-    upipe_release(upipe_fsrc);
-    upipe_release(upipe_fsink);
-
-    uprobe = uprobe_selprog_free(uprobe);
-    uprobe = uprobe_selflow_free(uprobe);
-    uprobe = uprobe_selflow_free(uprobe);
-    uprobe = uprobe_selflow_free(uprobe);
-
     upipe_mgr_release(upipe_ts_demux_mgr);
-    upipe_mgr_release(upipe_ts_mux_mgr);
     upipe_mgr_release(upipe_mpgvf_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
     upipe_mgr_release(upipe_mpgaf_mgr);
     upipe_mgr_release(upipe_fsrc_mgr);
-    upipe_mgr_release(upipe_fsink_mgr);
+
+    assert(upipe_set_output(upipe_fsrc, upipe_ts_demux));
+    upipe_release(upipe_ts_demux);
+
+    ev_loop(loop, 0);
+
+    upipe_release(upipe_fsrc);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);

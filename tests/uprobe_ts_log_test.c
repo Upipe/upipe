@@ -71,20 +71,6 @@ int main(int argc, char **argv)
     upipe_throw(&test_pipe, UPROBE_TS_SPLIT_DEL_PID, UPIPE_TS_SPLIT_SIGNATURE,
                 42);
 
-    upipe_throw(&test_pipe, UPROBE_TS_PATD_TSID, UPIPE_TS_PATD_SIGNATURE, NULL,
-                42);
-    upipe_throw(&test_pipe, UPROBE_TS_PATD_ADD_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                NULL, 42, 12);
-    upipe_throw(&test_pipe, UPROBE_TS_PATD_DEL_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                NULL, 42);
-
-    upipe_throw(&test_pipe, UPROBE_TS_PMTD_HEADER, UPIPE_TS_PMTD_SIGNATURE,
-                NULL, 42);
-    upipe_throw(&test_pipe, UPROBE_TS_PMTD_ADD_ES, UPIPE_TS_PMTD_SIGNATURE,
-                NULL, 42, 12);
-    upipe_throw(&test_pipe, UPROBE_TS_PMTD_DEL_ES, UPIPE_TS_PMTD_SIGNATURE,
-                NULL, 42);
-
     uprobe_ts_log_free(uprobe);
     uprobe_stdio_free(uprobe_stdio);
     return 0;

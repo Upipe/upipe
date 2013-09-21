@@ -364,6 +364,10 @@ static bool _upipe_ts_join_control(struct upipe *upipe,
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_ts_join_get_sub_mgr(upipe, p);
         }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_join_iterate_sub(upipe, p);
+        }
 
         default:
             return false;

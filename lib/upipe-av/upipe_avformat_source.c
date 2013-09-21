@@ -205,6 +205,15 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
         }
     }
 
+    /* select the stream */
+    if (upipe_avfsrc->context == NULL ||
+        id >= upipe_avfsrc->context->nb_streams) {
+        upipe_warn_va(upipe, "ID %"PRIu64" doesn't exist", id);
+        uref_free(flow_def);
+        return upipe;
+    }
+    upipe_avfsrc->context->streams[id]->discard = AVDISCARD_DEFAULT;
+
     upipe_avfsrc_sub->id = id;
     upipe_avfsrc_sub_store_flow_def(upipe, flow_def);
     return upipe;
@@ -679,7 +688,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
         struct uref *flow_def;
         bool ret;
 
-        // discard all packets from this stream unless add_flow is throwed
+        // discard all packets from this stream
         stream->discard = AVDISCARD_ALL; 
 
         switch (codec->codec_type) {
@@ -716,23 +725,53 @@ static void upipe_avfsrc_probe(struct upump *upump)
                                               NULL, 0);
         if (lang != NULL && lang->value != NULL)
             ret = uref_flow_set_lang(flow_def, lang->value) && ret;
+        if (codec->extradata_size)
+            ret = ret && uref_flow_set_headers(flow_def, codec->extradata,
+                                               codec->extradata_size);
 
-        ret = ret && uref_flow_set_headers(flow_def, codec->extradata,
-                                           codec->extradata_size);
         if (unlikely(!ret)) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
-        stream->discard = AVDISCARD_DEFAULT; 
-        upipe_split_throw_add_flow(upipe, i, flow_def);
-        uref_free(flow_def);
+        codec->opaque = flow_def;
     }
 
+    upipe_split_throw_update(upipe);
     upipe_avfsrc_start(upipe);
 }
 
+
+/** @internal @This iterates over output flow definitions.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the next flow definition, initialize with NULL
+ * @return false when no more flow definition is available
+ */
+static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    AVFormatContext *context = upipe_avfsrc->context;
+    if (context == NULL)
+        return false;
+    assert(p != NULL);
+    uint64_t id = 0;
+    if (*p != NULL) {
+        uref_flow_get_id(*p, &id);
+        id++;
+    }
+
+    while (id < context->nb_streams) {
+        if (context->streams[id]->codec->opaque != NULL) {
+            *p = (struct uref *)context->streams[id]->codec->opaque;
+            return true;
+        }
+        id++;
+    }
+
+    return false;
+}
 
 /** @internal @This returns the content of an avformat option.
  *
@@ -912,9 +951,17 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
             upipe_avfsrc_set_upump(upipe, NULL);
             return upipe_avfsrc_set_uclock(upipe, uclock);
         }
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_avfsrc_iterate(upipe, p);
+        }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_avfsrc_get_sub_mgr(upipe, p);
+        }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_avfsrc_iterate_sub(upipe, p);
         }
 
         case UPIPE_AVFSRC_GET_OPTION: {
@@ -1009,11 +1056,9 @@ static void upipe_avfsrc_free(struct upipe *upipe)
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         
         /* Throw del_flow for non-discarded streams. */
-        for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++) {
-            if (upipe_avfsrc->context->streams[i]->discard != AVDISCARD_ALL) {
-                upipe_split_throw_del_flow(upipe, i);
-            }
-        }
+        for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++)
+            if (upipe_avfsrc->context->streams[i]->codec->opaque != NULL)
+                uref_free((struct uref *)upipe_avfsrc->context->streams[i]->codec->opaque);
 
         avformat_close_input(&upipe_avfsrc->context);
     }

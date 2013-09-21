@@ -121,6 +121,17 @@ extern "C" {
  * @end code
  *
  * @item @code
+ *  void upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
+ * @end code
+ * Typically called from your upipe_foo_output_control() handler, such as:
+ * @code
+ *  case UPIPE_ITERATE_SUB: {
+ *      struct upipe **p = va_arg(args, struct upipe **);
+ *      return upipe_foo_iterate_sub(upipe, p);
+ *  }
+ * @end code
+ *
+ * @item @code
  *  void upipe_foo_throw_sub_outputs(struct upipe *upipe,
  *                                   enum uprobe_event event, ...)
  * @end code
@@ -254,6 +265,28 @@ static bool STRUCTURE##_get_sub_mgr(struct upipe *upipe,                    \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     *p = &s->MGR;                                                           \
+    return true;                                                            \
+}                                                                           \
+/** @This iterates over the subpipes of a super-pipe.                       \
+ *                                                                          \
+ * @param upipe description structure of the super-pipe                     \
+ * @param p filled in with the next subpipe, initialize with NULL           \
+ * return false when no other subpipe is available                          \
+ */                                                                         \
+static bool STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)  \
+{                                                                           \
+    assert(p != NULL);                                                      \
+    struct uchain *uchain;                                                  \
+    if (*p == NULL) {                                                       \
+        struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                \
+        uchain = ulist_peek(&s->ULIST);                                     \
+    } else {                                                                \
+        struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_upipe(*p);         \
+        uchain = sub->UCHAIN.next;                                          \
+    }                                                                       \
+    if (uchain == NULL)                                                     \
+        return false;                                                       \
+    *p = STRUCTURE_SUB##_to_upipe(STRUCTURE_SUB##_from_uchain(uchain));     \
     return true;                                                            \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \

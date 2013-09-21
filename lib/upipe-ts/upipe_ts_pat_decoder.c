@@ -51,14 +51,23 @@
 
 /** @internal @This is the private context of a ts_patd pipe. */
 struct upipe_ts_patd {
+    /** pipe acting as output */
+    struct upipe *output;
+    /** output flow definition */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
+
+    /** input flow definition */
+    struct uref *flow_def_input;
     /** currently in effect PAT table */
     UPIPE_TS_PSID_TABLE_DECLARE(pat);
     /** PAT table being gathered */
     UPIPE_TS_PSID_TABLE_DECLARE(next_pat);
     /** current TSID */
     int tsid;
-    /** true if we received a compatible flow definition */
-    bool flow_def_ok;
+    /** list of programs */
+    struct ulist programs;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -66,6 +75,7 @@ struct upipe_ts_patd {
 
 UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe, UPIPE_TS_PATD_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ts_patd, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_OUTPUT(upipe_ts_patd, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_patd pipe.
  *
@@ -79,71 +89,36 @@ static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe = upipe_ts_patd_alloc_flow(mgr, uprobe, signature,
-                                                   args, NULL);
+                                                   args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
 
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    upipe_ts_patd_init_output(upipe);
+    upipe_ts_patd->flow_def_input = flow_def;
     upipe_ts_psid_table_init(upipe_ts_patd->pat);
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
     upipe_ts_patd->tsid = -1;
+    ulist_init(&upipe_ts_patd->programs);
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-/** @internal @This sends the patd_systime event.
+/** @internal @This cleans up the list of programs.
  *
  * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param systime systime of the earliest section of the PAT
  */
-static void upipe_ts_patd_systime(struct upipe *upipe, struct uref *uref,
-                                  uint64_t systime)
+static void upipe_ts_patd_clean_programs(struct upipe *upipe)
 {
-    upipe_throw(upipe, UPROBE_TS_PATD_SYSTIME, UPIPE_TS_PATD_SIGNATURE, uref,
-                systime);
-}
-
-/** @internal @This sends the patd_tsid event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param tsid new TSID
- */
-static void upipe_ts_patd_tsid(struct upipe *upipe, struct uref *uref,
-                               unsigned int tsid)
-{
-    upipe_throw(upipe, UPROBE_TS_PATD_TSID, UPIPE_TS_PATD_SIGNATURE,
-                uref, tsid);
-}
-
-/** @internal @This sends the patd_add_program event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param program program number (a.k.a. service ID)
- * @param pid PID of the PMT
- */
-static void upipe_ts_patd_add_program(struct upipe *upipe, struct uref *uref,
-                                      unsigned int program,
-                                      unsigned int pid)
-{
-    upipe_throw(upipe, UPROBE_TS_PATD_ADD_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                uref, program, pid);
-}
-
-/** @internal @This sends the patd_del_program event.
- *
- * @param upipe description structure of the pipe
- * @param uref uref triggering the event
- * @param program program number (a.k.a. service ID)
- */
-static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
-                                      unsigned int program)
-{
-    upipe_throw(upipe, UPROBE_TS_PATD_DEL_PROGRAM, UPIPE_TS_PATD_SIGNATURE,
-                uref, program);
+    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    struct uchain *uchain;
+    ulist_delete_foreach(&upipe_ts_patd->programs, uchain) {
+        struct uref *flow_def = uref_from_uchain(uchain);
+        ulist_delete(&upipe_ts_patd->programs, uchain);
+        uref_free(flow_def);
+    }
 }
 
 /** @internal @This walks through the programs in a PAT. This is the first part:
@@ -194,42 +169,6 @@ static void upipe_ts_patd_del_program(struct upipe *upipe, struct uref *uref,
             break;                                                          \
         }                                                                   \
     }
-
-/** @internal @This compares a PAT program with the current PAT.
- *
- * @param upipe description structure of the pipe
- * @param wanted_pat_program pointer to the program description in the PAT
- * @param pid_p filled in with the PMT PID
- * @return false if there is no such program, or it has a different description
- */
-static bool upipe_ts_patd_table_compare_program(struct upipe *upipe,
-                                            const uint8_t *wanted_pat_program,
-                                            uint16_t *pid_p)
-{
-    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    *pid_p = 0;
-    if (!upipe_ts_psid_table_validate(upipe_ts_patd->pat))
-        return false;
-
-    uint16_t wanted_program = patn_get_program(wanted_pat_program);
-    uint16_t wanted_pid = patn_get_pid(wanted_pat_program);
-
-    UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
-
-    uint16_t program = patn_get_program(pat_program);
-    uint16_t pid = patn_get_pid(pat_program);
-    bool compare = pid == wanted_pid;
-
-    UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat, pat_program)
-
-    if (program == wanted_program) {
-        *pid_p = pid;
-        return compare;
-    }
-
-    UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->pat, pat_program)
-    return false;
-}
 
 /** @internal @This returns the PMT PID of the given program in the given
  * PAT.
@@ -291,12 +230,12 @@ static bool upipe_ts_patd_table_validate(struct upipe *upipe)
 }
 
 /** @internal @This gets the systime of the earliest section of the next PAT,
- * and sends the approriate event.
+ * and sends the new rap event.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure triggering the event
  */
-static void upipe_ts_patd_table_systime(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_patd_table_rap(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     uint64_t systime = UINT64_MAX;
@@ -306,8 +245,12 @@ static void upipe_ts_patd_table_systime(struct upipe *upipe, struct uref *uref)
             section_systime < systime)
             systime = section_systime;
     }
-    if (systime != UINT64_MAX)
-        upipe_ts_patd_systime(upipe, uref, systime);
+    if (systime != UINT64_MAX) {
+        if (uref_clock_set_systime_rap(uref, systime))
+            upipe_throw_new_rap(upipe, uref);
+        else
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    }
 }
 
 /** @internal @This parses a new PSI section.
@@ -338,11 +281,6 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         return;
     }
 
-    if (unlikely(tsid != upipe_ts_patd->tsid)) {
-        upipe_ts_patd_tsid(upipe, uref, tsid);
-        upipe_ts_patd->tsid = tsid;
-    }
-
     if (!upipe_ts_psid_table_section(upipe_ts_patd->next_pat, uref))
         return;
 
@@ -350,7 +288,7 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         upipe_ts_psid_table_compare(upipe_ts_patd->pat,
                                     upipe_ts_patd->next_pat)) {
         /* Identical PAT. */
-        upipe_ts_patd_table_systime(upipe, uref);
+        upipe_ts_patd_table_rap(upipe, uref);
         upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
         upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
         return;
@@ -362,43 +300,72 @@ static void upipe_ts_patd_work(struct upipe *upipe, struct uref *uref)
         upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
         return;
     }
-    upipe_ts_patd_table_systime(upipe, uref);
+
+    if (unlikely(tsid != upipe_ts_patd->tsid)) {
+        struct uref *flow_def = uref_dup(upipe_ts_patd->flow_def_input);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
+        upipe_ts_patd->tsid = tsid;
+        if (unlikely(!uref_flow_set_def(flow_def, "void.") ||
+                     !uref_flow_set_id(flow_def, tsid)))
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_ts_patd_store_flow_def(upipe, flow_def);
+        /* Force sending flow def */
+        upipe_throw_new_flow_def(upipe, flow_def);
+    }
+
+    upipe_ts_patd_table_rap(upipe, uref);
+    upipe_ts_patd_clean_programs(upipe);
 
     UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->next_pat, pat_program)
 
     uint16_t program = patn_get_program(pat_program);
     uint16_t pid = patn_get_pid(pat_program);
-    uint16_t old_pid;
-    bool compare = upipe_ts_patd_table_compare_program(upipe, pat_program,
-                                                       &old_pid);
 
     UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->next_pat, pat_program)
 
-    if (!compare)
-        upipe_ts_patd_add_program(upipe, uref, program, pid);
+    if (program) {
+        struct uref *flow_def = uref_dup(upipe_ts_patd->flow_def_input);
+        if (likely(flow_def != NULL)) {
+            /* prepare filter on table 2, current, program number */
+            uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+            uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+            memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+            memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+            psi_set_syntax(filter);
+            psi_set_syntax(mask);
+            psi_set_current(filter);
+            psi_set_current(mask);
+            psi_set_tableid(filter, PMT_TABLE_ID);
+            psi_set_tableid(mask, 0xff);
+            psi_set_tableidext(filter, program);
+            psi_set_tableidext(mask, 0xffff);
+
+            if (unlikely(!uref_flow_set_def(flow_def, "void.") ||
+                         !uref_flow_set_id(flow_def, program) ||
+                         !uref_flow_set_raw_def(flow_def,
+                             "block.mpegtspsi.mpegtspmt.") ||
+                         !uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                             PSI_HEADER_SIZE_SYNTAX1) ||
+                         !uref_ts_flow_set_pid(flow_def, pid)))
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            ulist_add(&upipe_ts_patd->programs, uref_to_uchain(flow_def));
+        } else
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    }
 
     UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->next_pat, pat_program)
 
     /* Switch tables. */
-    UPIPE_TS_PSID_TABLE_DECLARE(old_pat);
-    upipe_ts_psid_table_copy(old_pat, upipe_ts_patd->pat);
+    if (upipe_ts_psid_table_validate(upipe_ts_patd->pat))
+        upipe_ts_psid_table_clean(upipe_ts_patd->pat);
     upipe_ts_psid_table_copy(upipe_ts_patd->pat, upipe_ts_patd->next_pat);
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
 
-    if (upipe_ts_psid_table_validate(old_pat)) {
-        UPIPE_TS_PATD_TABLE_PEEK(upipe, old_pat, pat_program)
-
-        uint16_t program = patn_get_program(pat_program);
-
-        UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, old_pat, pat_program)
-
-        if (!upipe_ts_patd_table_pmt_pid(upipe, upipe_ts_patd->pat, program))
-            upipe_ts_patd_del_program(upipe, uref, program);
-
-        UPIPE_TS_PATD_TABLE_PEEK_END(upipe, old_pat, pat_program)
-
-        upipe_ts_psid_table_clean(old_pat);
-    }
+    upipe_split_throw_update(upipe);
 }
 
 /** @internal @This receives data.
@@ -418,29 +385,75 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_patd_work(upipe, uref);
 }
 
+/** @internal @This iterates over program flow definitions.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the next flow definition, initialize with NULL
+ * @return false when no more flow definition is available
+ */
+static bool upipe_ts_patd_iterate(struct upipe *upipe, struct uref **p)
+{
+    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    assert(p != NULL);
+    struct uchain *uchain;
+    if (*p != NULL)
+        uchain = uref_to_uchain(*p)->next;
+    else
+        uchain = ulist_peek(&upipe_ts_patd->programs);
+    if (uchain == NULL)
+        return false;
+    *p = uref_from_uchain(uchain);
+    return true;
+}
+
+/** @internal @This processes control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool upipe_ts_patd_control(struct upipe *upipe,
+                                  enum upipe_command command,
+                                  va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_patd_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_patd_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_ts_patd_set_output(upipe, output);
+        }
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_patd_iterate(upipe, p);
+        }
+
+        default:
+            return false;
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
 static void upipe_ts_patd_free(struct upipe *upipe)
 {
-    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    if (upipe_ts_psid_table_validate(upipe_ts_patd->pat)) {
-        UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->pat, pat_program)
-
-        uint16_t program = patn_get_program(pat_program);
-
-        UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->pat,
-                                       pat_program)
-
-        upipe_ts_patd_del_program(upipe, NULL, program);
-
-        UPIPE_TS_PATD_TABLE_PEEK_END(upipe, upipe_ts_patd->pat, pat_program)
-    }
     upipe_throw_dead(upipe);
 
+    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    uref_free(upipe_ts_patd->flow_def_input);
     upipe_ts_psid_table_clean(upipe_ts_patd->pat);
     upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
+    upipe_ts_patd_clean_programs(upipe);
+    upipe_ts_patd_clean_output(upipe);
     upipe_ts_patd_free_flow(upipe);
 }
 
@@ -450,7 +463,7 @@ static struct upipe_mgr upipe_ts_patd_mgr = {
 
     .upipe_alloc = upipe_ts_patd_alloc,
     .upipe_input = upipe_ts_patd_input,
-    .upipe_control = NULL,
+    .upipe_control = upipe_ts_patd_control,
     .upipe_free = upipe_ts_patd_free,
 
     .upipe_mgr_free = NULL

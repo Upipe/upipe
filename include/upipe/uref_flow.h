@@ -52,7 +52,6 @@ UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
 UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,
         flow ID from the last split pipe)
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
-UREF_ATTR_STRING_SH(flow, program, UDICT_TYPE_FLOW_PROGRAM, flow program)
 UREF_ATTR_STRING_SH(flow, lang, UDICT_TYPE_FLOW_LANG, flow language)
 UREF_ATTR_UNSIGNED_SH(flow, latency, UDICT_TYPE_FLOW_LATENCY,
         latency in uclock units)
@@ -71,20 +70,6 @@ static inline bool uref_flow_set_def_va(struct uref *uref,
                                         const char *format, ...)
 {
     UBASE_VARARG(uref_flow_set_def(uref, string))
-}
-
-/** @This sets the flow program attribute of a uref, with printf-style program
- * generation.
- *
- * @param uref uref structure
- * @param format printf-style format of the flow program, followed by a variable
- * list of arguments
- * @return true if no allocation failure occurred
- */
-static inline bool uref_flow_set_program_va(struct uref *uref,
-                                            const char *format, ...)
-{
-    UBASE_VARARG(uref_flow_set_program(uref, string))
 }
 
 #ifdef __cplusplus

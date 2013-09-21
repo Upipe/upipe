@@ -69,10 +69,7 @@ static uint8_t program = 42;
 static uint16_t pcrpid = 142;
 static unsigned int header_desc_size = 0;
 static unsigned int pid_sum;
-static unsigned int streamtype_sum;
-static unsigned int desc_offset_sum;
 static unsigned int desc_size_sum;
-static unsigned int del_pid_sum;
 static uint64_t systime = UINT32_MAX;
 
 /** definition of our uprobe */
@@ -86,10 +83,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
-        case UPROBE_TS_PMTD_SYSTIME: {
-            unsigned int signature = va_arg(args, unsigned int);
+        case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
             assert(uref != NULL);
             uint64_t pmtd_systime;
             assert(uref_clock_get_systime(uref, &pmtd_systime));
@@ -97,48 +92,34 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             systime = 0;
             break;
         }
-        case UPROBE_TS_PMTD_HEADER: {
-            unsigned int signature = va_arg(args, unsigned int);
+        case UPROBE_NEW_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pmtd_pcrpid = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
             assert(uref != NULL);
-            fprintf(stdout, "ts probe: pipe %p detected new PMT header (PCR PID:%u descs: %u)\n",
+            uint64_t pmtd_pcrpid;
+            assert(uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid));
+            const uint8_t *pmtd_desc;
+            size_t pmtd_desc_size;
+            assert(uref_ts_flow_get_descriptors(uref, &pmtd_desc,
+                                                &pmtd_desc_size));
+            fprintf(stdout, "ts probe: pipe %p detected new PMT header (PCR PID:%"PRIu64" descs: %zu)\n",
                     upipe, pmtd_pcrpid, pmtd_desc_size);
             assert(pmtd_pcrpid == pcrpid);
-            assert(pmtd_desc_offset == PMT_HEADER_SIZE);
             assert(pmtd_desc_size == header_desc_size);
             pcrpid = 0;
             break;
         }
-        case UPROBE_TS_PMTD_ADD_ES: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pid = va_arg(args, unsigned int);
-            unsigned int streamtype = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_offset = va_arg(args, unsigned int);
-            unsigned int pmtd_desc_size = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            assert(uref != NULL);
-            pid_sum -= pid;
-            streamtype_sum -= streamtype;
-            desc_offset_sum -= pmtd_desc_offset;
-            desc_size_sum -= pmtd_desc_size;
-            fprintf(stdout,
-                    "ts probe: pipe %p added PID %u (stream type 0x%x descs: %u at offset %u)\n",
-                    upipe, pid, streamtype, pmtd_desc_size, pmtd_desc_offset);
-            break;
-        }
-        case UPROBE_TS_PMTD_DEL_ES: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int pid = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PMTD_SIGNATURE);
-            del_pid_sum -= pid;
-            fprintf(stdout,
-                    "ts probe: pipe %p deleted PID %u\n", upipe, pid);
+        case UPROBE_SPLIT_UPDATE: {
+            struct uref *flow_def = NULL;
+            while (upipe_split_iterate(upipe, &flow_def)) {
+                uint64_t id;
+                assert(uref_flow_get_id(flow_def, &id));
+                const uint8_t *pmtd_desc;
+                size_t pmtd_desc_size;
+                assert(uref_ts_flow_get_descriptors(flow_def, &pmtd_desc,
+                                                    &pmtd_desc_size));
+                pid_sum -= id;
+                desc_size_sum -= pmtd_desc_size;
+            }
             break;
         }
     }
@@ -200,22 +181,16 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 12);
-    pmtn_set_streamtype(pmt_es, 42);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_VIDEO_MPEG2);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     pid_sum = 12;
-    streamtype_sum = 42;
-    del_pid_sum = 0;
-    desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 0;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
@@ -236,7 +211,7 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 12);
-    pmtn_set_streamtype(pmt_es, 42);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_VIDEO_MPEG2);
     pmtn_set_desclength(pmt_es, 5);
     desc = descs_get_desc(pmtn_get_descs(pmt_es), 0);
     desc_set_tag(desc, 0x42);
@@ -245,17 +220,12 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     pid_sum = 12;
-    streamtype_sum = 42;
-    desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
     desc_size_sum = 5;
     systime = 2 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 142);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
@@ -279,7 +249,7 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 13);
-    pmtn_set_streamtype(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_MPEG2);
     pmtn_set_desclength(pmt_es, 5);
     desc = descs_get_desc(pmtn_get_descs(pmt_es), 0);
     desc_set_tag(desc, 0x42);
@@ -288,19 +258,13 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     header_desc_size = 5;
-    del_pid_sum = 12;
     pid_sum = 13;
-    streamtype_sum = 43;
-    desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE + 5;
     desc_size_sum = 5;
     systime = 3 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
@@ -325,7 +289,7 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 13);
-    pmtn_set_streamtype(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_MPEG2);
     pmtn_set_desclength(pmt_es, 5);
     desc = descs_get_desc(pmtn_get_descs(pmt_es), 0);
     desc_set_tag(desc, 0x42);
@@ -334,14 +298,13 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     header_desc_size = 5;
+    pid_sum = 13;
+    desc_size_sum = 5;
     systime = 4 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
@@ -362,15 +325,15 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 13);
-    pmtn_set_streamtype(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_MPEG2);
     pmtn_set_desclength(pmt_es, 0);
     pmt_es = pmt_get_es(buffer, 1);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 14);
-    pmtn_set_streamtype(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_MPEG2);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer); //set invalid CRC
-    pmtn_set_streamtype(pmt_es, 44);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_ADTS);
     uref_block_unmap(uref, 0);
     header_desc_size = 0;
     systime = 5 * UINT32_MAX;
@@ -378,9 +341,6 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(systime);
 
@@ -401,28 +361,22 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 13);
-    pmtn_set_streamtype(pmt_es, 43);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_MPEG2);
     pmtn_set_desclength(pmt_es, 0);
     pmt_es = pmt_get_es(buffer, 1);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 14);
-    pmtn_set_streamtype(pmt_es, 44);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_ADTS);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     header_desc_size = 0;
     pid_sum = 13 + 14;
-    streamtype_sum = 43 + 44;
-    del_pid_sum = 0;
-    desc_offset_sum = (PMT_HEADER_SIZE + PMT_ES_SIZE) * 2 + PMT_ES_SIZE;
     desc_size_sum = 0;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
@@ -443,38 +397,28 @@ int main(int argc, char *argv[])
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 12);
-    pmtn_set_streamtype(pmt_es, 42);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_VIDEO_MPEG2);
     pmtn_set_desclength(pmt_es, 0);
     pmt_es = pmt_get_es(buffer, 1);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 14);
-    pmtn_set_streamtype(pmt_es, 44);
+    pmtn_set_streamtype(pmt_es, PMT_STREAMTYPE_AUDIO_ADTS);
     pmtn_set_desclength(pmt_es, 0);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     header_desc_size = 0;
-    pid_sum = 12;
-    streamtype_sum = 42;
-    del_pid_sum = 13;
-    desc_offset_sum = PMT_HEADER_SIZE + PMT_ES_SIZE;
+    pid_sum = 12 + 14;
     desc_size_sum = 0;
     systime = 6 * UINT32_MAX;
     uref_clock_set_systime(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 
-    del_pid_sum = 12 + 14;
     upipe_release(upipe_ts_pmtd);
     assert(!pid_sum);
-    assert(!streamtype_sum);
-    assert(!del_pid_sum);
-    assert(!desc_offset_sum);
     assert(!desc_size_sum);
     assert(!systime);
 

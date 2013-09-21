@@ -94,37 +94,39 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
-        case UPROBE_SPLIT_DEL_FLOW:
             break;
-        case UPROBE_SPLIT_ADD_FLOW: {
-            uint64_t flow_id = va_arg(args, uint64_t);
-            struct uref *flow_def = va_arg(args, struct uref *);
-            const char *def;
-            assert(uref_flow_get_def(flow_def, &def));
-            if (ubase_ncmp(def, "block.")) {
-                upipe_warn_va(upipe,
-                              "flow def %s is not supported by unit test", def);
-                break;
+        case UPROBE_SPLIT_UPDATE: {
+            struct uref *flow_def = NULL;
+            while (upipe_split_iterate(upipe, &flow_def)) {
+                const char *def;
+                assert(uref_flow_get_def(flow_def, &def));
+                if (ubase_ncmp(def, "block.")) {
+                    upipe_warn_va(upipe,
+                                  "flow def %s is not supported by unit test",
+                                  def);
+                    break;
+                }
+
+                uint64_t id;
+                assert(uref_flow_get_id(flow_def, &id));
+
+                struct upipe *upipe_avfsrc_output =
+                    upipe_flow_alloc_sub(upipe_avfsrc,
+                        uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
+                                                  "src %"PRIu64, id), flow_def);
+                assert(upipe_avfsrc_output != NULL);
+                assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
+                struct uref *flow_def2;
+                assert(upipe_get_flow_def(upipe_avfsrc_output, &flow_def2));
+
+                struct upipe *upipe_sink = upipe_flow_alloc_sub(upipe_avfsink,
+                        uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
+                                                  "sink %"PRIu64, id),
+                        flow_def2);
+                assert(upipe_sink != NULL);
+                assert(upipe_set_output(upipe_avfsrc_output, upipe_sink));
+                upipe_release(upipe_sink);
             }
-
-            uint64_t id;
-            assert(uref_flow_get_id(flow_def, &id));
-
-            struct upipe *upipe_avfsrc_output =
-                upipe_flow_alloc_sub(upipe_avfsrc,
-                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
-                                              "src %"PRIu64, id), flow_def);
-            assert(upipe_avfsrc_output != NULL);
-            assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
-            assert(upipe_get_flow_def(upipe_avfsrc_output, &flow_def));
-
-            struct upipe *upipe_sink = upipe_flow_alloc_sub(upipe_avfsink,
-                    uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
-                                              "sink %"PRIu64, id),
-                    flow_def);
-            assert(upipe_sink != NULL);
-            assert(upipe_set_output(upipe_avfsrc_output, upipe_sink));
-            upipe_release(upipe_sink);
             return true;
         }
         case UPROBE_SOURCE_END:

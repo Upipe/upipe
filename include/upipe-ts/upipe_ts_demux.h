@@ -42,10 +42,6 @@ enum uprobe_ts_demux_event {
 
     /** ts_split events begin here */
     UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000,
-    /** ts_patd events begin here */
-    UPROBE_TS_DEMUX_PATD = UPROBE_LOCAL + 0x1100,
-    /** ts_pmtd events begin here */
-    UPROBE_TS_DEMUX_PMTD = UPROBE_LOCAL + 0x1200
 };
 
 /** @This extends upipe_command with specific commands for ts demux. */

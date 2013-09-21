@@ -79,12 +79,10 @@ enum uprobe_event {
     UPROBE_NEW_FLOW_DEF,
     /** a ubuf manager is necessary to operate (struct uref *) */
     UPROBE_NEED_UBUF_MGR,
-    /** a split pipe declares a new possible output flow (uint64_t,
-     * struct uref *) */
-    UPROBE_SPLIT_ADD_FLOW,
-    /** a split pipe declares an output flow is no longer possible
-     * (uint64_t) */
-    UPROBE_SPLIT_DEL_FLOW,
+    /** a new random access point is available in the input (struct uref *) */
+    UPROBE_NEW_RAP,
+    /** a split pipe declares a new output flow list (void) */
+    UPROBE_SPLIT_UPDATE,
     /** a pipe got synchronized with its input (void) */
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */

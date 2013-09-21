@@ -305,6 +305,10 @@ static bool upipe_dup_control(struct upipe *upipe,
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_dup_get_sub_mgr(upipe, p);
         }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_dup_iterate_sub(upipe, p);
+        }
 
         default:
             return false;

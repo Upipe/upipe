@@ -658,6 +658,10 @@ static bool upipe_avfsink_control(struct upipe *upipe,
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_avfsink_get_sub_mgr(upipe, p);
         }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_avfsink_iterate_sub(upipe, p);
+        }
         case UPIPE_AVFSINK_GET_OPTION: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_AVFSINK_SIGNATURE);

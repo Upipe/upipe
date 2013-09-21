@@ -84,9 +84,9 @@ int main(int argc, char **argv)
     struct uref *uref = uref_block_flow_alloc_def(mgr, "test.");
     upipe_throw_need_ubuf_mgr(&test_pipe, uref);
     upipe_throw_new_flow_def(&test_pipe, uref);
-    upipe_split_throw_add_flow(&test_pipe, 0x42, uref);
     uref_free(uref);
-    upipe_split_throw_del_flow(&test_pipe, 0x42);
+
+    upipe_split_throw_update(&test_pipe);
 
     upipe_throw_sync_acquired(&test_pipe);
     upipe_throw_sync_lost(&test_pipe);

@@ -65,10 +65,9 @@
 #define UBUF_POOL_DEPTH 10
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-static uint8_t tsid = 42;
+static uint64_t tsid = 42;
 static unsigned int program_sum;
 static unsigned int pid_sum;
-static unsigned int del_program_sum;
 static uint64_t systime = UINT32_MAX;
 
 /** definition of our uprobe */
@@ -82,42 +81,34 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
             break;
-        case UPROBE_TS_PATD_SYSTIME: {
-            unsigned int signature = va_arg(args, unsigned int);
+        case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);
-            uint64_t patd_systime = va_arg(args, uint64_t);
-            assert(signature == UPIPE_TS_PATD_SIGNATURE);
             assert(uref != NULL);
+            uint64_t patd_systime;
+            assert(uref_clock_get_systime_rap(uref, &patd_systime));
             assert(patd_systime == systime);
             systime = 0;
             break;
         }
-        case UPROBE_TS_PATD_TSID: {
-            unsigned int signature = va_arg(args, unsigned int);
+        case UPROBE_NEW_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
-            unsigned int patd_tsid = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PATD_SIGNATURE);
+            assert(uref != NULL);
+            uint64_t patd_tsid;
+            assert(uref_flow_get_id(uref, &patd_tsid));
             assert(uref != NULL);
             assert(patd_tsid == tsid);
             break;
         }
-        case UPROBE_TS_PATD_ADD_PROGRAM: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int program = va_arg(args, unsigned int);
-            unsigned int pid = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PATD_SIGNATURE);
-            assert(uref != NULL);
-            program_sum -= program;
-            pid_sum -= pid;
-            break;
-        }
-        case UPROBE_TS_PATD_DEL_PROGRAM: {
-            unsigned int signature = va_arg(args, unsigned int);
-            struct uref *uref = va_arg(args, struct uref *);
-            unsigned int program = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PATD_SIGNATURE);
-            del_program_sum -= program;
+        case UPROBE_SPLIT_UPDATE: {
+            struct uref *flow_def = NULL;
+            while (upipe_split_iterate(upipe, &flow_def)) {
+                uint64_t id;
+                assert(uref_flow_get_id(flow_def, &id));
+                uint64_t pid;
+                assert(uref_ts_flow_get_pid(flow_def, &pid));
+                program_sum -= id;
+                pid_sum -= pid;
+            }
             break;
         }
     }
@@ -313,8 +304,8 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
-    program_sum = 13; // the first program already exists
-    pid_sum = 43;
+    program_sum = 12 + 13;
+    pid_sum = 42 + 43;
     systime += UINT32_MAX;
     assert(uref_clock_set_systime(uref, systime));
     systime = UINT32_MAX;
@@ -342,11 +333,11 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
-    del_program_sum = 12;
+    program_sum = 13;
+    pid_sum = 43;
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
-    assert(!del_program_sum);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE * 2 +
@@ -372,18 +363,15 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 44);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
-    program_sum = 14;
-    pid_sum = 44;
+    program_sum = 13 + 14;
+    pid_sum = 43 + 44;
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
-    assert(!del_program_sum);
 
-    del_program_sum = 13 + 14;
     upipe_release(upipe_ts_patd);
     assert(!program_sum);
     assert(!pid_sum);
-    assert(!del_program_sum);
 
     upipe_mgr_release(upipe_ts_patd_mgr); // nop
 

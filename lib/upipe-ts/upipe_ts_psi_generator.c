@@ -478,6 +478,10 @@ static bool upipe_ts_psig_program_control(struct upipe *upipe,
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_ts_psig_program_get_sub_mgr(upipe, p);
         }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psig_program_iterate_sub(upipe, p);
+        }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psig_program_get_super(upipe, p);
@@ -739,6 +743,10 @@ static bool upipe_ts_psig_control(struct upipe *upipe,
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_ts_psig_get_sub_mgr(upipe, p);
+        }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_ts_psig_iterate_sub(upipe, p);
         }
 
         default:

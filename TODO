@@ -1,15 +1,16 @@
 Shitty APIs:
  - ulist
  - flow defs
- - uprobe
+ - uprobe: easier adhoc creation? impossible to chain "generic" common probes. policy for passing probes to subpipes?
+ - ubuf_mem rework
 
 Plans for core:
+ - ubuf_sound
  - thread pool support in upump-ev
  - rewrite ubuf_mem
  - fast memcpy/memset ?
 
 Other plans:
- - avresample
 
 Bugs documentation:
  - doubly declared functions (due to __attribute__((format)))

@@ -34,23 +34,6 @@ extern "C" {
 
 #define UPIPE_TS_PATD_SIGNATURE UBASE_FOURCC('t','s','1','d')
 
-/** @This extends uprobe_event with specific events for ts patd. */
-enum uprobe_ts_patd_event {
-    UPROBE_TS_PATD_SENTINEL = UPROBE_TS_DEMUX_PATD,
-
-    /** a new or repeated PAT was detected from the given systime
-     * (struct uref *, uint64_t) */
-    UPROBE_TS_PATD_SYSTIME,
-    /** a new TSID was detected (struct uref *, unsigned int tsid) */
-    UPROBE_TS_PATD_TSID,
-    /** a new program was found in the given uref (struct uref *,
-     * unsigned int, unsigned int) */
-    UPROBE_TS_PATD_ADD_PROGRAM,
-    /** a program was deleted in the given uref, which may be NULL
-     * (struct uref *, unsigned int) */
-    UPROBE_TS_PATD_DEL_PROGRAM,
-};
-
 /** @This returns the management structure for all ts_patd pipes.
  *
  * @return pointer to manager

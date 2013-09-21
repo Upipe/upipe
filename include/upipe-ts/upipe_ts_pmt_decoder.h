@@ -34,23 +34,6 @@ extern "C" {
 
 #define UPIPE_TS_PMTD_SIGNATURE UBASE_FOURCC('t','s','2','d')
 
-/** @This extends uprobe_event with specific events for ts pmtd. */
-enum uprobe_ts_pmtd_event {
-    UPROBE_TS_PMTD_SENTINEL = UPROBE_TS_DEMUX_PMTD,
-
-    /** a new or repeated PMT was found in the given uref (struct uref *) */
-    UPROBE_TS_PMTD_SYSTIME,
-    /** a new PMT header was found in the given uref (struct uref *,
-     * unsigned int, unsigned int, unsigned int) */
-    UPROBE_TS_PMTD_HEADER,
-    /** a new ES was found in the given uref (struct uref *, unsigned int,
-     * unsigned int, unsigned int, unsigned int) */
-    UPROBE_TS_PMTD_ADD_ES,
-    /** an ES was deleted in the given uref, which may be NULL (struct uref *,
-     * unsigned int) */
-    UPROBE_TS_PMTD_DEL_ES,
-};
-
 /** @This returns the management structure for all ts_pmtd pipes.
  *
  * @return pointer to manager

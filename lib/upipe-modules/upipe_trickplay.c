@@ -470,6 +470,10 @@ static bool upipe_trickp_control(struct upipe *upipe,
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_trickp_get_sub_mgr(upipe, p);
         }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_trickp_iterate_sub(upipe, p);
+        }
 
         case UPIPE_TRICKP_GET_RATE: {
             unsigned int signature = va_arg(args, unsigned int);

@@ -1,8 +1,2 @@
 debug: ts probe caught add PID 42
 debug: ts probe caught delete PID 42
-debug: ts probe caught new TSID 42
-debug: ts probe caught add program 42 with PID 12
-debug: ts probe caught delete program 42
-debug: ts probe caught new PCR PID 42
-debug: ts probe caught add ES PID 42, stream type 12
-debug: ts probe caught delete ES PID 42

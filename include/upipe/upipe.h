@@ -121,11 +121,19 @@ enum upipe_command {
     UPIPE_SINK_SET_DELAY,
 
     /*
+     * Split elements commands
+     */
+    /** iterates over the flows (struct uref **) */
+    UPIPE_SPLIT_ITERATE,
+
+    /*
      * Sub/super pipes commands
      */
     /** returns the sub manager associated with a super-pipe
      * (struct upipe_mgr **) */
     UPIPE_GET_SUB_MGR,
+    /** iterates over subpipes (struct upipe **) */
+    UPIPE_ITERATE_SUB,
     /** returns the super-pipe associated with a subpipe (struct upipe **) */
     UPIPE_SUB_GET_SUPER,
 
@@ -471,15 +479,15 @@ static inline bool upipe_sink_flush(struct upipe *upipe)
     return upipe_control(upipe, UPIPE_SINK_FLUSH);
 }
 
-/** @This returns the super-pipe of a subpipe.
+/** @This iterates over the list of possible output flow definitions.
  *
- * @param upipe description structure of the subpipe
- * @param p filled in with a pointer to the super-pipe
- * @return false in case of error
+ * @param upipe description structure of the pipe
+ * @param p filled in with the next flow def, initialize at NULL
+ * @return false when no other flow definition is available
  */
-static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
+static inline bool upipe_split_iterate(struct upipe *upipe, struct uref **p)
 {
-    return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
+    return upipe_control(upipe, UPIPE_SPLIT_ITERATE, p);
 }
 
 /** @This returns the subpipe manager of a super-pipe.
@@ -491,6 +499,28 @@ static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
 static inline bool upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
 {
     return upipe_control(upipe, UPIPE_GET_SUB_MGR, p);
+}
+
+/** @This iterates over the subpipes of a super-pipe.
+ *
+ * @param upipe description structure of the super-pipe
+ * @param p filled in with a pointer to the next subpipe, initialize at NULL
+ * @return false when no other subpipe is available
+ */
+static inline bool upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
+{
+    return upipe_control(upipe, UPIPE_ITERATE_SUB, p);
+}
+
+/** @This returns the super-pipe of a subpipe.
+ *
+ * @param upipe description structure of the subpipe
+ * @param p filled in with a pointer to the super-pipe
+ * @return false in case of error
+ */
+static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
+{
+    return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }
 
 /** @This allocates and initializes a subpipe which is designed to accept no
@@ -786,31 +816,24 @@ static inline void upipe_throw_need_ubuf_mgr(struct upipe *upipe,
     upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
 }
 
-/** @This throws an add flow event. This event is thrown whenever a split pipe
- * declares a new possible output flow.
+/** @This throws an event declaring a new random access point in the input.
  *
  * @param upipe description structure of the pipe
- * @param flow_id unique ID for the split pipe
- * @param flow_def definition for this flow
+ * @param uref uref containing the random access point
  */
-static inline void upipe_split_throw_add_flow(struct upipe *upipe,
-                                              uint64_t flow_id,
-                                              struct uref *flow_def)
+static inline void upipe_throw_new_rap(struct upipe *upipe, struct uref *uref)
 {
-    upipe_throw(upipe, UPROBE_SPLIT_ADD_FLOW, flow_id, flow_def);
+    upipe_throw(upipe, UPROBE_NEW_RAP, uref);
 }
 
-/** @This throws a del flow event. This event is thrown whenever a split pipe
- * declares that a given flow is no longer possible. If there is currently
- * an output subpipe on this flow, it will afterwards throw a read_end event.
+/** @This throws an update event. This event is thrown whenever a split pipe
+ * declares a new output flow list.
  *
  * @param upipe description structure of the pipe
- * @param flow_id unique ID for the split pipe
  */
-static inline void upipe_split_throw_del_flow(struct upipe *upipe,
-                                              uint64_t flow_id)
+static inline void upipe_split_throw_update(struct upipe *upipe)
 {
-    upipe_throw(upipe, UPROBE_SPLIT_DEL_FLOW, flow_id);
+    upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
 }
 
 /** @This throws an event telling that a pipe synchronized on its input.
