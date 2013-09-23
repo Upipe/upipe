@@ -61,8 +61,6 @@
 #define EXPECTED_FLOW "pic."
 #define OUT_FLOW "block.h264.pic."
 
-#define OBE_TREE 1
-
 /** @internal upipe_x264 private structure */
 struct upipe_x264 {
     /** x264 encoder */
@@ -221,7 +219,7 @@ static bool _upipe_x264_set_option(struct upipe *upipe, const char *option,
  */
 static bool _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
 {
-#ifndef OBE_TREE
+#ifndef HAVE_X264_OBE
     return false;
 #else
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
@@ -518,7 +516,7 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     if (uref_clock_get_pts_sys(uref, &pts)) {
         uref_clock_set_dts_sys(uref, pts - ts_diff);
 
-#ifdef OBE_TREE
+#ifdef HAVE_X264_OBE
         if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
             uint64_t systime = uclock_now(upipe_x264->uclock);
             float buffer_fill =
@@ -541,7 +539,7 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
 
     if (pic.hrd_timing.cpb_final_arrival_time)
         uref_clock_set_vbv_delay(uref,
-#ifndef OBE_TREE
+#ifndef HAVE_X264_OBE
                 UCLOCK_FREQ *
 #endif
                 (pic.hrd_timing.cpb_removal_time -
