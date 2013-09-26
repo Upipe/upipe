@@ -180,7 +180,7 @@ static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
         goto write_buffer;
 
     uint64_t systime = 0;
-    if (unlikely(!uref_clock_get_systime(uref, &systime))) {
+    if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
         upipe_warn(upipe, "received non-dated buffer");
         goto write_buffer;
     }

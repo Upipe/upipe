@@ -192,10 +192,10 @@ struct upipe_ts_mux {
     /** last attributed automatic PID */
     uint16_t pid_auto;
 
-    /** start DTS */
-    uint64_t start_dts;
-    /** start DTS (system clock) */
-    uint64_t start_dts_sys;
+    /** start date */
+    uint64_t start_cr;
+    /** start date (system clock) */
+    uint64_t start_cr_sys;
     /** octetrate reserved for padding (and emergency situation) */
     uint64_t padding_octetrate;
     /** total octetrate including overheads, PMTs and PAT */
@@ -245,10 +245,10 @@ struct upipe_ts_mux_program {
     /** pointer to ts_psii_sub dealing with PMT */
     struct upipe *pmt_psii;
 
-    /** start DTS, used to bootstrap the PAT */
-    uint64_t start_dts;
-    /** start DTS (system clock), used to bootstrap the PAT */
-    uint64_t start_dts_sys;
+    /** start date, used to bootstrap the PAT */
+    uint64_t start_cr;
+    /** start date (system clock), used to bootstrap the PAT */
+    uint64_t start_cr_sys;
     /** total octetrate including overheads and PMT */
     uint64_t total_octetrate;
 
@@ -305,10 +305,10 @@ struct upipe_ts_mux_input {
     /** total octetrate including overheads */
     uint64_t total_octetrate;
 
-    /** start DTS, used to bootstrap the PMT */
-    uint64_t start_dts;
-    /** start DTS (system clock), used to bootstrap the PMT */
-    uint64_t start_dts_sys;
+    /** start date, used to bootstrap the PMT */
+    uint64_t start_cr;
+    /** start date (system clock), used to bootstrap the PMT */
+    uint64_t start_cr_sys;
 
     /** pointer to ts_psig_flow */
     struct upipe *psig_flow;
@@ -505,8 +505,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->pid = pid;
     upipe_ts_mux_input->octetrate = octetrate;
-    upipe_ts_mux_input->start_dts = UINT64_MAX;
-    upipe_ts_mux_input->start_dts_sys = UINT64_MAX;
+    upipe_ts_mux_input->start_cr = UINT64_MAX;
+    upipe_ts_mux_input->start_cr_sys = UINT64_MAX;
     upipe_ts_mux_input->total_octetrate = octetrate +
                                           pes_overhead + ts_overhead;
     upipe_ts_mux_input->psig_flow = upipe_ts_mux_input->pes_encaps =
@@ -592,19 +592,17 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
 
-    if (unlikely(upipe_ts_mux_input->start_dts == UINT64_MAX &&
-                 uref_clock_get_dts(uref, &upipe_ts_mux_input->start_dts))) {
-        uint64_t delay = 0;
-        uref_clock_get_vbv_delay(uref, &delay);
+    if (unlikely(upipe_ts_mux_input->start_cr == UINT64_MAX &&
+                 uref_clock_get_cr_prog(uref, &upipe_ts_mux_input->start_cr) &&
+                 uref_clock_get_cr_sys(uref,
+                     &upipe_ts_mux_input->start_cr_sys))) {
         size_t uref_size = 0;
         uref_block_size(uref, &uref_size);
 
-        upipe_ts_mux_input->start_dts -= delay +
+        upipe_ts_mux_input->start_cr -=
             (uint64_t)uref_size * UCLOCK_FREQ / upipe_ts_mux_input->octetrate;
-        if (uref_clock_get_dts_sys(uref, &upipe_ts_mux_input->start_dts_sys))
-            upipe_ts_mux_input->start_dts_sys -= delay +
-                (uint64_t)uref_size * UCLOCK_FREQ /
-                upipe_ts_mux_input->octetrate;
+        upipe_ts_mux_input->start_cr_sys -=
+            (uint64_t)uref_size * UCLOCK_FREQ / upipe_ts_mux_input->octetrate;
 
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_input_mgr(upipe->mgr);
@@ -770,8 +768,8 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_program_init_sub_inputs(upipe);
     upipe_ts_mux_program->sid = sid;
     upipe_ts_mux_program->pmt_pid = pid;
-    upipe_ts_mux_program->start_dts = UINT64_MAX;
-    upipe_ts_mux_program->start_dts_sys = UINT64_MAX;
+    upipe_ts_mux_program->start_cr = UINT64_MAX;
+    upipe_ts_mux_program->start_cr_sys = UINT64_MAX;
     upipe_ts_mux_program->pmt_interval = upipe_ts_mux->pmt_interval;
     upipe_ts_mux_program->pcr_interval = upipe_ts_mux->pcr_interval;
     upipe_ts_mux_program->total_octetrate = (uint64_t)TS_SIZE *
@@ -905,23 +903,22 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
 
     upipe_ts_mux_program_update(upipe);
 
-    uint64_t earliest_dts = UINT64_MAX, earliest_dts_sys = UINT64_MAX;
+    uint64_t earliest_cr = UINT64_MAX, earliest_cr_sys = UINT64_MAX;
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_mux_program->inputs, uchain) {
         struct upipe_ts_mux_input *input =
             upipe_ts_mux_input_from_uchain(uchain);
-        if (input->start_dts == UINT64_MAX)
+        if (input->start_cr == UINT64_MAX)
             return; /* an input is not ready yet */
-        if (input->start_dts < earliest_dts) {
-            earliest_dts = input->start_dts;
-            earliest_dts_sys = input->start_dts_sys;
+        if (input->start_cr < earliest_cr) {
+            earliest_cr = input->start_cr;
+            earliest_cr_sys = input->start_cr_sys;
         }
     }
 
-    bool first = upipe_ts_mux_program->start_dts == UINT64_MAX;
-    upipe_ts_mux_program->start_dts = earliest_dts - PMT_OFFSET;
-    if (earliest_dts_sys != UINT64_MAX)
-        upipe_ts_mux_program->start_dts_sys = earliest_dts_sys - PMT_OFFSET;
+    bool first = upipe_ts_mux_program->start_cr == UINT64_MAX;
+    upipe_ts_mux_program->start_cr = earliest_cr - PMT_OFFSET;
+    upipe_ts_mux_program->start_cr_sys = earliest_cr_sys - PMT_OFFSET;
 
     struct upipe_ts_mux *upipe_ts_mux =
         upipe_ts_mux_from_program_mgr(upipe->mgr);
@@ -930,17 +927,16 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
 
     /* Build a new PMT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
-    if (unlikely(uref == NULL ||
-                 (first && !uref_clock_set_dts(uref, earliest_dts)) ||
-                 (first && !uref_clock_set_vbv_delay(uref, PMT_OFFSET)) ||
-                 (first && earliest_dts_sys != UINT64_MAX &&
-                  !uref_clock_set_dts_sys(uref, earliest_dts_sys)))) {
-        if (uref != NULL)
-            uref_free(uref);
+    if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
+    if (first) {
+         uref_clock_set_cr_prog(uref, earliest_cr);
+         uref_clock_set_cr_sys(uref, earliest_cr_sys);
+         uref_clock_set_cr_dts_delay(uref, PMT_OFFSET);
+    }
     /* FIXME in case of deletion PMT will be output too early */
     upipe_input(upipe_ts_mux_program->program_psig, uref, NULL);
 }
@@ -1246,8 +1242,8 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pcr_interval = DEFAULT_PCR_INTERVAL;
     upipe_ts_mux->sid_auto = DEFAULT_SID_AUTO;
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
-    upipe_ts_mux->start_dts = UINT64_MAX;
-    upipe_ts_mux->start_dts_sys = UINT64_MAX;
+    upipe_ts_mux->start_cr = UINT64_MAX;
+    upipe_ts_mux->start_cr_sys = UINT64_MAX;
     upipe_ts_mux->padding_octetrate = 0;
     upipe_ts_mux->total_octetrate = (uint64_t)TS_SIZE *
         ((UCLOCK_FREQ + upipe_ts_mux->pat_interval - 1) /
@@ -1389,36 +1385,35 @@ static void upipe_ts_mux_start(struct upipe *upipe)
 
     upipe_ts_mux_update(upipe);
 
-    uint64_t earliest_dts = UINT64_MAX, earliest_dts_sys = UINT64_MAX;
+    uint64_t earliest_cr = UINT64_MAX, earliest_cr_sys = UINT64_MAX;
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_mux->programs, uchain) {
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_uchain(uchain);
-        if (program->start_dts == UINT64_MAX)
+        if (program->start_cr == UINT64_MAX)
             return; /* a program is not ready yet */
-        if (program->start_dts < earliest_dts) {
-            earliest_dts = program->start_dts;
-            earliest_dts_sys = program->start_dts_sys;
+        if (program->start_cr < earliest_cr) {
+            earliest_cr = program->start_cr;
+            earliest_cr_sys = program->start_cr_sys;
         }
     }
 
-    bool first = upipe_ts_mux->start_dts == UINT64_MAX;
-    upipe_ts_mux->start_dts = earliest_dts;
-    upipe_ts_mux->start_dts_sys = earliest_dts_sys;
+    bool first = upipe_ts_mux->start_cr == UINT64_MAX;
+    upipe_ts_mux->start_cr = earliest_cr;
+    upipe_ts_mux->start_cr_sys = earliest_cr_sys;
 
     /* Build a new PAT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
-    if (unlikely(uref == NULL ||
-                 (first && !uref_clock_set_dts(uref, earliest_dts)) ||
-                 (first && !uref_clock_set_vbv_delay(uref, PAT_OFFSET)) ||
-                 (first && earliest_dts_sys != UINT64_MAX &&
-                  !uref_clock_set_dts_sys(uref, earliest_dts_sys)))) {
-        if (uref != NULL)
-            uref_free(uref);
+    if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
+    if (first) {
+         uref_clock_set_cr_prog(uref, earliest_cr);
+         uref_clock_set_cr_sys(uref, earliest_cr_sys);
+         uref_clock_set_cr_dts_delay(uref, PAT_OFFSET);
+    }
     /* FIXME in case of deletion PAT will be output too early */
     upipe_input(upipe_ts_mux->psig, uref, NULL);
 }

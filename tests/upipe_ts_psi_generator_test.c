@@ -100,8 +100,8 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
                           struct upump *upump)
 {
     assert(uref != NULL);
-    uint64_t dts;
-    assert(uref_clock_get_dts(uref, &dts));
+    uint64_t cr;
+    assert(uref_clock_get_cr_sys(uref, &cr));
     const uint8_t *buffer;
     int size = -1;
     assert(uref_block_read(uref, 0, &size, &buffer));
@@ -109,7 +109,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(psi_validate(buffer));
     assert(psi_check_crc(buffer));
     if (pat) {
-        assert(dts == UCLOCK_FREQ);
+        assert(cr == UCLOCK_FREQ);
         assert(pat_validate(buffer));
         const uint8_t *program = pat_get_program((uint8_t *)buffer, 0);
         assert(program != NULL);
@@ -125,7 +125,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     } else {
         assert(pmt_validate(buffer));
         if (program == 1) {
-            assert(dts == UCLOCK_FREQ * 2);
+            assert(cr == UCLOCK_FREQ * 2);
             assert(pmt_get_pcrpid(buffer) == 67);
             assert(pmt_get_desclength(buffer) == 0);
             const uint8_t *es = pmt_get_es((uint8_t *)buffer, 0);
@@ -151,7 +151,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
             assert(descs_get_desc(pmtn_get_descs((uint8_t *)es), 1) == NULL);
             assert(pmt_get_es((uint8_t *)buffer, 2) == NULL);
         } else {
-            assert(dts == UCLOCK_FREQ * 3);
+            assert(cr == UCLOCK_FREQ * 3);
             assert(pmt_get_pcrpid(buffer) == 8191);
             assert(pmt_get_desclength(buffer) == 0);
             const uint8_t *es = pmt_get_es((uint8_t *)buffer, 0);
@@ -304,20 +304,23 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_dts(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
     upipe_input(upipe_ts_psig, uref, NULL);
     assert(pat == false);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_dts(uref, UCLOCK_FREQ * 2);
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 2);
+    uref_clock_set_cr_orig(uref, UCLOCK_FREQ * 2);
     program = 1;
     upipe_input(upipe_ts_psig_program1, uref, NULL);
     assert(program == 0);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_dts(uref, UCLOCK_FREQ * 3);
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 3);
+    uref_clock_set_cr_orig(uref, UCLOCK_FREQ * 3);
     program = 2;
     upipe_input(upipe_ts_psig_program2, uref, NULL);
     assert(program == 0);

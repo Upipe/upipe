@@ -177,8 +177,8 @@ static void STRUCTURE##_consume_sound_stream(struct upipe *upipe,           \
     uint64_t duration = (uint64_t)(consumed / sample_size / channels) *     \
                         UCLOCK_FREQ / rate;                                 \
     uint64_t pts;                                                           \
-    if (uref_clock_get_pts(STRUCTURE->NEXT_UREF, &pts))                     \
-        uref_clock_set_pts(STRUCTURE->NEXT_UREF, pts + duration);           \
+    if (uref_clock_get_pts_prog(STRUCTURE->NEXT_UREF, &pts))                \
+        uref_clock_set_pts_prog(STRUCTURE->NEXT_UREF, pts + duration);      \
     if (uref_clock_get_pts_sys(STRUCTURE->NEXT_UREF, &pts))                 \
         uref_clock_set_pts_sys(STRUCTURE->NEXT_UREF, pts + duration);       \
     if (uref_clock_get_pts_orig(STRUCTURE->NEXT_UREF, &pts))                \

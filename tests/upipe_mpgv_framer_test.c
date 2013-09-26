@@ -105,7 +105,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
-    uref_clock_get_systime_rap(uref, &systime_rap);
+    uref_clock_get_rap_sys(uref, &systime_rap);
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_dts_orig(uref, &dts_orig);
     switch (nb_packets) {
@@ -261,10 +261,10 @@ int main(int argc, char *argv[])
 
     mp2vend_init(buffer);
     uref_block_unmap(uref, 0);
-    uref_clock_set_pts_orig(uref, 27000000);
     uref_clock_set_dts_orig(uref, 27000000);
-    uref_clock_set_systime(uref, 84);
-    uref_clock_set_systime_rap(uref, 42);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
     upipe_input(upipe_mpgvf, uref, NULL);
     assert(nb_packets == 2);
 

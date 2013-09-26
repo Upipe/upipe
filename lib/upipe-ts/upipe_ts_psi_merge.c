@@ -224,8 +224,7 @@ static void upipe_ts_psim_work(struct upipe *upipe, struct uref *uref,
             }
             upipe_ts_psim_sync_acquired(upipe);
         }
-        bool ret = uref_block_delete_start(uref);
-        assert(ret);
+        uref_block_delete_start(uref);
 
     } else if (unlikely(upipe_ts_psim->next_uref == NULL)) {
         uref_free(uref);

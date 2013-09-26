@@ -115,10 +115,10 @@ static void x264_test_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
-    if (!uref_clock_get_pts(uref, &pts)) {
+    if (!uref_clock_get_pts_prog(uref, &pts)) {
         upipe_warn(upipe, "received packet with no pts");
     }
-    if (!uref_clock_get_dts(uref, &dts)) {
+    if (!uref_clock_get_dts_prog(uref, &dts)) {
         upipe_warn(upipe, "received packet with no dts");
     }
     upipe_dbg_va(upipe, "received pic %d, pts: %"PRIu64" , dts: %"PRIu64,
@@ -266,7 +266,7 @@ int main(int argc, char **argv)
         fill_pic(pic, counter);
         pts = counter + 42;
         uref_clock_set_pts_orig(pic, pts);
-        uref_clock_set_pts(pic, pts * UCLOCK_FREQ + UINT32_MAX);
+        uref_clock_set_pts_prog(pic, pts * UCLOCK_FREQ + UINT32_MAX);
         upipe_input(x264, pic, NULL);
     }
 

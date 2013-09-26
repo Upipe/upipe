@@ -123,7 +123,7 @@ static void genpacket_idler(struct upump *upump)
 	assert(size == sizeof(uint64_t));
 
 	memcpy(buf, &systime, sizeof(uint64_t));
-	uref_clock_set_systime(uref, systime);
+	uref_clock_set_cr_sys(uref, systime);
 
 	uref_block_unmap(uref, 0);
 	upipe_input(multicat_sink, uref, upump);

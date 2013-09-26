@@ -45,6 +45,18 @@ extern "C" {
 /** @hidden */
 struct uref_mgr;
 
+/** @This defines the type of the date. */
+enum uref_date_type {
+    /** no date is defined */
+    UREF_DATE_NONE = 0,
+    /** clock ref is defined, DTS and PTS are derived */
+    UREF_DATE_CR = 1,
+    /** DTS is defined, CR and PTS are derived */
+    UREF_DATE_DTS = 2,
+    /** PTS is defined, CR and DTS are derived */
+    UREF_DATE_PTS = 3
+};
+
 /** @This lists all void attributes handled in flags. */
 enum uref_flag {
     /** the upstream pipe has disconnected */
@@ -54,8 +66,22 @@ enum uref_flag {
     /** the block is a starting point */
     UREF_FLAG_BLOCK_START = 0x4,
     /** the block contains a clock reference */
-    UREF_FLAG_CLOCK_REF = 0x8
+    UREF_FLAG_CLOCK_REF = 0x8,
+
+    /** position of the bitfield for the type of sys date */
+    UREF_FLAG_DATE_SYS = 0x0400000000000000,
+    /** position of the bitfield for the type of prog date */
+    UREF_FLAG_DATE_PROG = 0x1000000000000000,
+    /** position of the bitfield for the type of orig date */
+    UREF_FLAG_DATE_ORIG = 0x4000000000000000
 };
+
+/** @internal @This is the number of bits to shift to get sys date type. */
+#define UREF_FLAG_DATE_SYS_SHIFT 58
+/** @internal @This is the number of bits to shift to get prog date type. */
+#define UREF_FLAG_DATE_PROG_SHIFT 60
+/** @internal @This is the number of bits to shift to get orig date type. */
+#define UREF_FLAG_DATE_ORIG_SHIFT 62
 
 /** @This stores references to a ubuf wth attributes. */
 struct uref {
@@ -71,24 +97,18 @@ struct uref {
 
     /** void flags */
     uint64_t flags;
-    /** reception systime */
-    uint64_t systime;
-    /** reception systime of the random access point */
-    uint64_t systime_rap;
-    /** presentation timestamp in simulated stream clock */
-    uint64_t pts;
-    /** presentation timestamp in original stream clock */
-    uint64_t pts_orig;
-    /** presentation timestamp in system clock */
-    uint64_t pts_sys;
-    /** decoding timestamp in simulated stream clock */
-    uint64_t dts;
-    /** decoding timestamp in original stream clock */
-    uint64_t dts_orig;
-    /** decoding timestamp in system clock */
-    uint64_t dts_sys;
-    /** vbv delay compared to DTS */
-    uint64_t vbv_delay;
+    /** date in system time */
+    uint64_t date_sys;
+    /** date in program time */
+    uint64_t date_prog;
+    /** original date */
+    uint64_t date_orig;
+    /** duration between DTS and PTS */
+    uint64_t dts_pts_delay;
+    /** duration between CR and DTS */
+    uint64_t cr_dts_delay;
+    /** date of the latest RAP in system time */
+    uint64_t rap_sys;
     /** private for local pipe user */
     uint64_t priv;
 };
@@ -142,15 +162,13 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     uref->udict = NULL;
 
     uref->flags = 0;
-    uref->systime = UINT64_MAX;
-    uref->systime_rap = UINT64_MAX;
-    uref->pts = UINT64_MAX;
-    uref->pts_orig = UINT64_MAX;
-    uref->pts_sys = UINT64_MAX;
-    uref->dts = UINT64_MAX;
-    uref->dts_orig = UINT64_MAX;
-    uref->dts_sys = UINT64_MAX;
-    uref->vbv_delay = UINT64_MAX;
+    uref->date_sys = UINT64_MAX;
+    uref->date_prog = UINT64_MAX;
+    uref->date_orig = UINT64_MAX;
+    uref->dts_pts_delay = UINT64_MAX;
+    uref->cr_dts_delay = UINT64_MAX;
+    uref->rap_sys = UINT64_MAX;
+    uref->priv = UINT64_MAX;
 
     return uref;
 }
@@ -198,15 +216,13 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
         new_uref->udict = NULL;
 
     new_uref->flags = uref->flags;
-    new_uref->systime = uref->systime;
-    new_uref->systime_rap = uref->systime_rap;
-    new_uref->pts = uref->pts;
-    new_uref->pts_orig = uref->pts_orig;
-    new_uref->pts_sys = uref->pts_sys;
-    new_uref->dts = uref->dts;
-    new_uref->dts_orig = uref->dts_orig;
-    new_uref->dts_sys = uref->dts_sys;
-    new_uref->vbv_delay = uref->vbv_delay;
+    new_uref->date_sys = uref->date_sys;
+    new_uref->date_prog = uref->date_prog;
+    new_uref->date_orig = uref->date_orig;
+    new_uref->dts_pts_delay = uref->dts_pts_delay;
+    new_uref->cr_dts_delay = uref->cr_dts_delay;
+    new_uref->rap_sys = uref->rap_sys;
+    new_uref->priv = uref->priv;
 
     return new_uref;
 }

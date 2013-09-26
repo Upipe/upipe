@@ -87,7 +87,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t pmtd_systime;
-            assert(uref_clock_get_systime(uref, &pmtd_systime));
+            assert(uref_clock_get_cr_sys(uref, &pmtd_systime));
             assert(pmtd_systime == systime);
             systime = 0;
             break;
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     pid_sum = 12;
     desc_size_sum = 0;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
     pid_sum = 12;
     desc_size_sum = 5;
     systime = 2 * UINT32_MAX;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 142);
     assert(!pid_sum);
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
     pid_sum = 13;
     desc_size_sum = 5;
     systime = 3 * UINT32_MAX;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
     pid_sum = 13;
     desc_size_sum = 5;
     systime = 4 * UINT32_MAX;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -337,7 +337,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     header_desc_size = 0;
     systime = 5 * UINT32_MAX;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);
@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
     header_desc_size = 0;
     pid_sum = 13 + 14;
     desc_size_sum = 0;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(!pcrpid);
     assert(!pid_sum);
@@ -410,7 +410,7 @@ int main(int argc, char *argv[])
     pid_sum = 12 + 14;
     desc_size_sum = 0;
     systime = 6 * UINT32_MAX;
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_pmtd, uref, NULL);
     assert(pcrpid == 143);
     assert(!pid_sum);

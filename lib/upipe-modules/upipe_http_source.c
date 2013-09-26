@@ -199,7 +199,7 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
     memcpy(buf, at, len);
     uref_block_unmap(uref, 0);
 
-    uref_clock_set_systime(uref, systime);
+    uref_clock_set_cr_sys(uref, systime);
     upipe_http_src_output(upipe, uref, upipe_http_src->upump_read);
 
     /* everything's fine, return 0 to http_parser */

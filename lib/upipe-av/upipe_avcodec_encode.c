@@ -495,7 +495,6 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     struct ubuf *ubuf_block;
     uint8_t *buf;
     int64_t priv = 0;
-    uint64_t ts = 0, ts_diff;
 
     if (unlikely(frame == NULL)) {
         /* uref == NULL, flushing encoder */
@@ -589,22 +588,19 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_avcenc_delete_pts(uref);
 
     /* set dts */
-    ts_diff = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
-              * context->time_base.num
-              / context->time_base.den;
-    if (uref_clock_get_pts(uref, &ts)) {
-        uref_clock_set_dts(uref, ts - ts_diff);
-    }
-    if (uref_clock_get_pts_sys(uref, &ts)) {
-        uref_clock_set_dts_sys(uref, ts - ts_diff);
-    }
-    if (uref_clock_get_pts_orig(uref, &ts)) {
-        uref_clock_set_dts_orig(uref, ts - ts_diff);
-    }
+    uint64_t dts_pts_delay = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
+                              * context->time_base.num
+                              / context->time_base.den;
+    uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
+
+    /* rebase to dts as we're in encoded domain now */
+    uref_clock_rebase_dts_sys(uref);
+    uref_clock_rebase_dts_prog(uref);
+    uref_clock_rebase_dts_orig(uref);
 
     /* vbv delay */
     if (context->vbv_delay) {
-        uref_clock_set_vbv_delay(uref, context->vbv_delay);
+        uref_clock_set_cr_dts_delay(uref, context->vbv_delay);
     } else if (codec->type == AVMEDIA_TYPE_AUDIO &&
                strcmp(codec->name, "mp2") && strcmp(codec->name, "mp3")) {
         upipe_avcenc->audio_bs_delay += upipe_avcenc->audio_bs_leakage;
@@ -617,9 +613,9 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         } else if (upipe_avcenc->audio_bs_delay >
                    upipe_avcenc->audio_bs_duration)
             upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
-        uref_clock_set_vbv_delay(uref, upipe_avcenc->audio_bs_delay);
+        uref_clock_set_cr_dts_delay(uref, upipe_avcenc->audio_bs_delay);
     } else {
-        uref_clock_delete_vbv_delay(uref);
+        uref_clock_delete_cr_dts_delay(uref);
     }
 
     /* unmap input and clean */

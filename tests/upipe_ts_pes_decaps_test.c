@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
     pes_set_pts(buffer, pts);
     pes_set_dts(buffer, dts);
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);
     assert(!nb_packets);
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
         assert(dup != NULL);
         assert(uref_block_resize(dup, i, 1));
         if (!i)
-            assert(uref_block_set_start(dup));
+            uref_block_set_start(dup);
         upipe_input(upipe_ts_pesd, dup, NULL);
     }
     assert(!nb_packets);
@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     payload_size = 0;
     expect_lost = true;
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     /* do not increment nb_packets */
     upipe_input(upipe_ts_pesd, uref, NULL);
     assert(!nb_packets);
@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
     pes_set_headerlength(buffer, 0);
     dataalignment = false;
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     payload_size = 12;
     expect_acquired = true;
     nb_packets++;

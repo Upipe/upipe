@@ -104,8 +104,8 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
-    uref_clock_get_pts(uref, &pts);
-    uref_clock_get_dts(uref, &dts);
+    uref_clock_get_pts_prog(uref, &pts);
+    uref_clock_get_dts_prog(uref, &dts);
 
     /* check header */
     uint16_t pes_size;
@@ -207,8 +207,8 @@ int main(int argc, char *argv[])
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, UCLOCK_FREQ * 2));
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
+    uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, UCLOCK_FREQ);
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 2048);
     assert(header_size == PES_HEADER_SIZE_PTSDTS);
@@ -216,8 +216,8 @@ int main(int argc, char *argv[])
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 70000);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, UCLOCK_FREQ));
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
+    uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 70000);
     assert(header_size == PES_HEADER_SIZE_PTS);
@@ -280,16 +280,16 @@ int main(int argc, char *argv[])
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, UCLOCK_FREQ));
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
+    uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
     assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 0);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);
     assert(uref != NULL);
-    assert(uref_clock_set_pts(uref, UCLOCK_FREQ * 2));
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ * 2));
+    uref_clock_set_dts_prog(uref, UCLOCK_FREQ * 2);
+    uref_clock_set_dts_pts_delay(uref, 0);
     assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 24);

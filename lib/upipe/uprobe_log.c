@@ -188,22 +188,15 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_CLOCK_TS: {
             struct uref *uref = va_arg(args_copy, struct uref *);
-            uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
-            uref_clock_get_pts_orig(uref, &pts);
-            uref_clock_get_dts_orig(uref, &dts);
-            if (pts == UINT64_MAX && dts == UINT64_MAX)
+            uint64_t date = UINT64_MAX;
+            enum uref_date_type type;
+            uref_clock_get_date_orig(uref, &date, &type);
+            if (unlikely(type == UREF_DATE_NONE))
                 upipe_log(upipe, log->level,
                           "probe caught an invalid timestamp event");
-            else if (pts == UINT64_MAX)
-                upipe_log_va(upipe, log->level, "probe caught new DTS %"PRIu64,
-                             dts);
-            else if (dts == UINT64_MAX)
-                upipe_log_va(upipe, log->level, "probe caught new PTS %"PRIu64,
-                             pts);
             else
-                upipe_log_va(upipe, log->level,
-                             "probe caught new PTS %"PRIu64" and DTS %"PRIu64,
-                             pts, dts);
+                upipe_log_va(upipe, log->level, "probe caught new date %"PRIu64,
+                             date);
             break;
         }
         default:

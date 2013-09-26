@@ -260,7 +260,7 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t dts;
-    if (unlikely(!uref_clock_get_dts(uref, &dts))) {
+    if (unlikely(!uref_clock_get_dts_prog(uref, &dts))) {
         upipe_warn_va(upipe, "packet without DTS");
         uref_free(uref);
         return;
@@ -449,7 +449,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
         } else {
             uchain = ulist_peek(&input->urefs);
             struct uref *next_uref = uref_from_uchain(uchain);
-            uref_clock_get_dts(next_uref, &input->next_dts);
+            uref_clock_get_dts_prog(next_uref, &input->next_dts);
         }
 
         AVPacket avpkt;
@@ -460,12 +460,12 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
             avpkt.flags |= AV_PKT_FLAG_KEY;
 
         uint64_t dts;
-        if (uref_clock_get_dts(uref, &dts))
+        if (uref_clock_get_dts_prog(uref, &dts))
             avpkt.dts = ((dts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;
         uint64_t pts;
-        if (uref_clock_get_pts(uref, &pts))
+        if (uref_clock_get_pts_prog(uref, &pts))
             avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;

@@ -83,8 +83,12 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t clock_ref = va_arg(args, uint64_t);
     int discontinuity = va_arg(args, int);
+    if (unlikely(uref == NULL))
+        return false;
     uint64_t sys_ref;
-    if (unlikely(uref == NULL || !uref_clock_get_systime(uref, &sys_ref)))
+    enum uref_date_type type;
+    uref_clock_get_date_sys(uref, &sys_ref, &type);
+    if (unlikely(type != UREF_DATE_CR))
         return false;
 
     int64_t offset = sys_ref - clock_ref;
@@ -139,25 +143,16 @@ static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
     if (unlikely(uref == NULL || !uprobe_dejitter->offset_count))
         return false;
 
-    uint64_t clock_pts;
-    if (uref_clock_get_pts(uref, &clock_pts)) {
-        if (unlikely(!uref_clock_set_pts_sys(uref,
-                            clock_pts + uprobe_dejitter->offset +
-                            uprobe_dejitter->deviation))) {
-            uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
-            return true;
-        }
-    }
+    uint64_t date;
+    enum uref_date_type type;
+    uref_clock_get_date_prog(uref, &date, &type);
+    if (type == UREF_DATE_NONE)
+        return true;
 
-    uint64_t clock_dts;
-    if (uref_clock_get_dts(uref, &clock_dts)) {
-        if (unlikely(!uref_clock_set_dts_sys(uref,
-                            clock_dts + uprobe_dejitter->offset +
-                            uprobe_dejitter->deviation))) {
-            uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
-            return true;
-        }
-    }
+    uref_clock_set_date_sys(uref,
+            date + uprobe_dejitter->offset + uprobe_dejitter->deviation,
+            type);
+
     return true;
 }
 

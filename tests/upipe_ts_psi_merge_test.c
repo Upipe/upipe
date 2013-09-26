@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer + 1, tableid);
     psi_set_length(buffer + 1, 12);
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     nb_packets++;
     upipe_input(upipe_ts_psim, uref, NULL);
     assert(!nb_packets);
@@ -207,8 +207,8 @@ int main(int argc, char *argv[])
     memset(buffer + 12 + PSI_HEADER_SIZE + 1, 0xff, 11);
     payload_size = 1;
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
-    assert(uref_flow_set_discontinuity(uref));
+    uref_block_set_start(uref);
+    uref_flow_set_discontinuity(uref);
     nb_packets++;
     expect_lost = true;
     expect_acquired = true;
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
         assert(dup != NULL);
         assert(uref_block_resize(dup, i, 2));
         if (!i)
-            assert(uref_block_set_start(dup));
+            uref_block_set_start(dup);
         upipe_input(upipe_ts_psim, dup, NULL);
     }
     assert(!nb_packets);
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer + 1, tableid);
     psi_set_length(buffer + 1, 12);
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     /* do not increment nb_packets */
     expect_acquired = true;
     upipe_input(upipe_ts_psim, uref, NULL);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(buffer + 1 + 6, tableid);
     psi_set_length(buffer + 1 + 6, 12);
     uref_block_unmap(uref, 0);
-    assert(uref_block_set_start(uref));
+    uref_block_set_start(uref);
     nb_packets += 2;
     payload_size = 12;
     upipe_input(upipe_ts_psim, uref, NULL);

@@ -426,23 +426,34 @@ static void upipe_avfsrc_worker(struct upump *upump)
     uref_block_unmap(uref, 0);
     av_free_packet(&pkt);
 
-    bool ret = true, ts = false;;
+    bool ret = true, ts = false;
     if (upipe_avfsrc->uclock != NULL)
-        ret = ret && uref_clock_set_systime(uref, systime);
+        uref_clock_set_cr_sys(uref, systime);
     if (pkt.flags & AV_PKT_FLAG_KEY)
         ret = ret && uref_flow_set_random(uref);
+
+    uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        uint64_t dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
-                            stream->time_base.den;
-        ret = ret && uref_clock_set_dts_orig(uref, dts_orig);
+        dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
+                   stream->time_base.den;
+        if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
+            dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
+                            UCLOCK_FREQ / stream->time_base.den;
+    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
+        dts_orig = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
+                   stream->time_base.den;
+
+    if (dts_orig != UINT64_MAX) {
+        uref_clock_set_dts_orig(uref, dts_orig);
+        uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
 
         if (!upipe_avfsrc->timestamp_offset)
             upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
                                              dts_orig + PCR_OFFSET;
         uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
-        ret = ret && uref_clock_set_dts(uref, dts);
-        if (upipe_avfsrc->timestamp_highest < dts)
-            upipe_avfsrc->timestamp_highest = dts;
+        uref_clock_set_dts_prog(uref, dts);
+        if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
+            upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
         ts = true;
 
         if (upipe_avfsrc->uclock != NULL && stream->reference_dts == pkt.dts)
@@ -453,20 +464,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
                               dts + upipe_avfsrc->timestamp_offset - PCR_OFFSET,
                               0);
     }
-    if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
-        uint64_t pts_orig = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
-                            stream->time_base.den;
-        ret = ret && uref_clock_set_pts_orig(uref, pts_orig);
-
-        if (!upipe_avfsrc->timestamp_offset)
-            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
-                                             pts_orig + PCR_OFFSET;
-        uint64_t pts = pts_orig + upipe_avfsrc->timestamp_offset;
-        ret = ret && uref_clock_set_pts(uref, pts);
-        if (upipe_avfsrc->timestamp_highest < pts)
-            upipe_avfsrc->timestamp_highest = pts;
-        ts = true;
-    }
     if (pkt.duration > 0) {
         uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
                             stream->time_base.den;
@@ -474,8 +471,13 @@ static void upipe_avfsrc_worker(struct upump *upump)
     } else
         upipe_warn(upipe, "packet without duration");
     if (upipe_avfsrc->systime_rap != UINT64_MAX)
-        ret = ret && uref_clock_set_systime_rap(uref,
-                                                upipe_avfsrc->systime_rap);
+        uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
+
+    if (unlikely(!ret)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return;
+    }
 
     if (ts)
         upipe_throw_clock_ts(upipe, uref);

@@ -185,6 +185,8 @@ static void upipe_sinesrc_timer(struct upump *upump)
 
     if (upipe_sinesrc->next_pts != UINT64_MAX) {
         uref_clock_set_pts_sys(uref, upipe_sinesrc->next_pts);
+        uref_clock_set_dts_pts_delay(uref, 0);
+        uref_clock_set_cr_dts_delay(uref, 0);
         upipe_sinesrc->next_pts += UPIPE_SINESRC_DURATION;
     }
     upipe_sinesrc_output(upipe, uref, upump);

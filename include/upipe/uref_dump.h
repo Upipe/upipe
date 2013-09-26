@@ -36,6 +36,7 @@ extern "C" {
 
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
+#include <upipe/uref_clock.h>
 #include <upipe/udict_dump.h>
 #include <upipe/uprobe.h>
 
@@ -63,19 +64,39 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
     UREF_DUMP_VOID("b.start", UREF_FLAG_BLOCK_START)
 #undef UREF_DUMP_VOID
 
+#define UREF_DUMP_DATE(name, member)                                        \
+    {                                                                       \
+        enum uref_date_type type;                                           \
+        uint64_t date;                                                      \
+        uref_clock_get_date_##member(uref, &date, &type);                   \
+        switch (type) {                                                     \
+            case UREF_DATE_PTS:                                             \
+                uprobe_dbg_va(uprobe, NULL, " - \""name"\" [pts]: %"PRIu64, \
+                              date);                                        \
+                break;                                                      \
+            case UREF_DATE_DTS:                                             \
+                uprobe_dbg_va(uprobe, NULL, " - \""name"\" [dts]: %"PRIu64, \
+                              date);                                        \
+                break;                                                      \
+            case UREF_DATE_CR:                                              \
+                uprobe_dbg_va(uprobe, NULL, " - \""name"\" [cr]: %"PRIu64,  \
+                              date);                                        \
+                break;                                                      \
+            default:                                                        \
+                break;                                                      \
+        }                                                                   \
+    }
+    UREF_DUMP_DATE("k.sys", sys);
+    UREF_DUMP_DATE("k.prog", prog);
+    UREF_DUMP_DATE("k.orig", orig);
+
 #define UREF_DUMP_UNSIGNED(name, member)                                    \
     if (uref->member != UINT64_MAX)                                         \
         uprobe_dbg_va(uprobe, NULL, " - \"" name "\" [unsigned]: %"PRIu64,  \
                       uref->member);
-    UREF_DUMP_UNSIGNED("k.systime", systime)
-    UREF_DUMP_UNSIGNED("k.systime_rap", systime_rap)
-    UREF_DUMP_UNSIGNED("k.pts", pts)
-    UREF_DUMP_UNSIGNED("k.pts.orig", pts_orig)
-    UREF_DUMP_UNSIGNED("k.pts.sys", pts_sys)
-    UREF_DUMP_UNSIGNED("k.dts", dts)
-    UREF_DUMP_UNSIGNED("k.dts.orig", dts_orig)
-    UREF_DUMP_UNSIGNED("k.dts.sys", dts_sys)
-    UREF_DUMP_UNSIGNED("k.vbv_delay", vbv_delay)
+    UREF_DUMP_UNSIGNED("k.dts_pts_delay", dts_pts_delay)
+    UREF_DUMP_UNSIGNED("k.cr_dts_delay", cr_dts_delay)
+    UREF_DUMP_UNSIGNED("k.rap_sys", rap_sys)
 #undef UREF_DUMP_UNSIGNED
 
     if (uref->udict != NULL)

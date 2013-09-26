@@ -571,7 +571,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 /** @This returns the presence of a desc attribute in a uref.               \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @return true if the attribute was found, otherwise p is not modified     \
+ * @return true if the attribute was found                                  \
  */                                                                         \
 static inline bool uref_##group##_get_##attr(struct uref *uref)             \
 {                                                                           \
@@ -580,22 +580,18 @@ static inline bool uref_##group##_get_##attr(struct uref *uref)             \
 /** @This sets a desc attribute in a uref.                                  \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @return true if no allocation failure occurred                           \
  */                                                                         \
-static inline bool uref_##group##_set_##attr(struct uref *uref)             \
+static inline void uref_##group##_set_##attr(struct uref *uref)             \
 {                                                                           \
     uref->flags |= flag;                                                    \
-    return true;                                                            \
 }                                                                           \
 /** @This deletes a desc attribute from a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @return true if no allocation failure occurred                           \
  */                                                                         \
-static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+static inline void uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->flags &= ~(uint64_t)flag;                                         \
-    return true;                                                            \
 }
 
 
@@ -967,23 +963,19 @@ static inline bool uref_##group##_get_##attr(struct uref *uref,             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @param v value to set                                                    \
- * @return true if no allocation failure occurred                           \
  */                                                                         \
-static inline bool uref_##group##_set_##attr(struct uref *uref,             \
+static inline void uref_##group##_set_##attr(struct uref *uref,             \
                                              uint64_t v)                    \
 {                                                                           \
     uref->member = v;                                                       \
-    return true;                                                            \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
- * @return true if no allocation failure occurred                           \
  */                                                                         \
-static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
+static inline void uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->member = UINT64_MAX;                                              \
-    return true;                                                            \
 }                                                                           \
 /** @This compares attribute to given values.                               \
  *                                                                          \

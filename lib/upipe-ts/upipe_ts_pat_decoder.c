@@ -241,15 +241,13 @@ static void upipe_ts_patd_table_rap(struct upipe *upipe, struct uref *uref)
     uint64_t systime = UINT64_MAX;
     upipe_ts_psid_table_foreach(upipe_ts_patd->next_pat, section) {
         uint64_t section_systime;
-        if (uref_clock_get_systime(section, &section_systime) &&
+        if (uref_clock_get_cr_sys(section, &section_systime) &&
             section_systime < systime)
             systime = section_systime;
     }
     if (systime != UINT64_MAX) {
-        if (uref_clock_set_systime_rap(uref, systime))
-            upipe_throw_new_rap(upipe, uref);
-        else
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        uref_clock_set_rap_sys(uref, systime);
+        upipe_throw_new_rap(upipe, uref);
     }
 }
 

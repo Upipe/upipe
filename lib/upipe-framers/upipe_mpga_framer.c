@@ -142,12 +142,8 @@ struct upipe_mpgaf {
     /* octet stream parser stuff */
     /** current size of next frame (in next_uref) */
     ssize_t next_frame_size;
-    /** original PTS of the next picture, or UINT64_MAX */
-    uint64_t next_frame_pts_orig;
-    /** PTS of the next picture, or UINT64_MAX */
-    uint64_t next_frame_pts;
-    /** system PTS of the next picture, or UINT64_MAX */
-    uint64_t next_frame_pts_sys;
+    /** pseudo-packet containing date information for the next picture */
+    struct uref au_uref_s;
     /** delay due to the ADTS BS */
     int64_t bs_delay;
     /** true if we have thrown the sync_acquired event (that means we found a
@@ -169,16 +165,20 @@ UPIPE_HELPER_UREF_STREAM(upipe_mpgaf, next_uref, next_uref_size, urefs,
 
 UPIPE_HELPER_OUTPUT(upipe_mpgaf, output, flow_def, flow_def_sent)
 
-/** @internal @This flushes all PTS timestamps.
+/** @internal @This flushes all dates.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_mpgaf_flush_pts(struct upipe *upipe)
+static void upipe_mpgaf_flush_dates(struct upipe *upipe)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    upipe_mpgaf->next_frame_pts_orig = UINT64_MAX;
-    upipe_mpgaf->next_frame_pts = UINT64_MAX;
-    upipe_mpgaf->next_frame_pts_sys = UINT64_MAX;
+    uref_clock_set_date_sys(&upipe_mpgaf->au_uref_s, UINT64_MAX,
+                            UREF_DATE_NONE);
+    uref_clock_set_date_prog(&upipe_mpgaf->au_uref_s, UINT64_MAX,
+                             UREF_DATE_NONE);
+    uref_clock_set_date_orig(&upipe_mpgaf->au_uref_s, UINT64_MAX,
+                             UREF_DATE_NONE);
+    uref_clock_delete_dts_pts_delay(&upipe_mpgaf->au_uref_s);
 }
 
 /** @internal @This allocates an mpgaf pipe.
@@ -215,7 +215,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->flow_def_input = flow_def;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
-    upipe_mpgaf_flush_pts(upipe);
+    upipe_mpgaf_flush_dates(upipe);
     upipe_mpgaf->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);
     return upipe;
@@ -511,14 +511,9 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
 
-#define KEEP_TIMESTAMP(name)                                                \
-    uint64_t name = upipe_mpgaf->next_frame_##name;
-    KEEP_TIMESTAMP(pts_orig)
-    KEEP_TIMESTAMP(pts)
-    KEEP_TIMESTAMP(pts_sys)
-#undef KEEP_TIMESTAMP
+    struct uref au_uref_s = upipe_mpgaf->au_uref_s;
     /* From now on, PTS declaration only impacts the next frame. */
-    upipe_mpgaf_flush_pts(upipe);
+    upipe_mpgaf_flush_dates(upipe);
 
     struct uref *uref = upipe_mpgaf_extract_uref_stream(upipe,
             upipe_mpgaf->next_frame_size);
@@ -533,37 +528,24 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
     uint64_t duration = div.quot;
     upipe_mpgaf->duration_residue = div.rem;
 
-    bool ret = true;
-#define SET_TIMESTAMP(name, other)                                          \
-    if (name != UINT64_MAX) {                                               \
-        ret = ret && uref_clock_set_##name(uref, name);                     \
-        ret = ret && uref_clock_set_##other(uref, name);                    \
-    } else {                                                                \
-        uref_clock_delete_##name(uref);                                     \
-        uref_clock_delete_##other(uref);                                    \
-    }
-    SET_TIMESTAMP(pts_orig, dts_orig)
-    SET_TIMESTAMP(pts, dts)
-    SET_TIMESTAMP(pts_sys, dts_sys)
-#undef SET_TIMESTAMP
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
+    uint64_t date;
+#define SET_DATE(dv)                                                        \
+    if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
+        uref_clock_set_dts_##dv(uref, date);                                \
+        uref_clock_set_dts_##dv(&upipe_mpgaf->au_uref_s, date + duration);  \
+    } else if (uref_clock_get_dts_##dv(uref, &date))                        \
+        uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
 
-    ret = ret && uref_clock_set_duration(uref, duration);
-    if (unlikely(!ret)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        return;
-    }
-
-#define INCREMENT_PTS(name)                                                 \
-    if (upipe_mpgaf->next_frame_##name == UINT64_MAX && name != UINT64_MAX) \
-        upipe_mpgaf->next_frame_##name = name + duration;
-    INCREMENT_PTS(pts_orig)
-    INCREMENT_PTS(pts)
-    INCREMENT_PTS(pts_sys)
-#undef INCREMENT_PTS
+    /* PTS = DTS for MPEG audio */
+    uref_clock_set_dts_pts_delay(uref, 0);
 
     if (upipe_mpgaf->bs_delay)
-        uref_clock_set_vbv_delay(uref, upipe_mpgaf->bs_delay);
+        uref_clock_set_cr_dts_delay(uref, upipe_mpgaf->bs_delay);
 
     upipe_mpgaf_output(upipe, uref, upump);
 }
@@ -576,14 +558,15 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
 static void upipe_mpgaf_promote_uref(struct upipe *upipe)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    uint64_t ts;
-#define SET_TIMESTAMP(name)                                                 \
-    if (uref_clock_get_##name(upipe_mpgaf->next_uref, &ts))                 \
-        upipe_mpgaf->next_frame_##name = ts;
-    SET_TIMESTAMP(pts_orig)
-    SET_TIMESTAMP(pts)
-    SET_TIMESTAMP(pts_sys)
-#undef SET_TIMESTAMP
+    uint64_t date;
+#define SET_DATE(dv)                                                        \
+    if (uref_clock_get_dts_##dv(upipe_mpgaf->next_uref, &date))             \
+        uref_clock_set_dts_##dv(&upipe_mpgaf->au_uref_s, date);
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
+
     upipe_mpgaf->duration_residue = 0;
 }
 

@@ -177,29 +177,37 @@ int main(int argc, char *argv[])
     /* create a pseudo-PAT */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
-    assert(uref_block_set_start(uref));
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ));
+    uref_block_set_start(uref);
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii_sub, uref, NULL);
     assert(!nb_packets);
 
     /* create pseudo inputs */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ * 3));
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 3);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 3);
+    uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
     assert(nb_packets == 3);
     nb_packets = 0;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ * 4));
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 4);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 4);
+    uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
     assert(nb_packets == 1);
     nb_packets = 0;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
-    assert(uref_clock_set_dts(uref, UCLOCK_FREQ * 5));
+    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 5);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 5);
+    uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
     assert(nb_packets == 2);
     nb_packets = 0;

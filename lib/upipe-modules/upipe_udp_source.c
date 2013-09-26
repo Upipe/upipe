@@ -206,7 +206,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
         return;
     }
     if (unlikely(upipe_udpsrc->uclock != NULL))
-        uref_clock_set_systime(uref, systime);
+        uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_udpsrc->read_size))
         uref_block_resize(uref, 0, ret);
     upipe_udpsrc_output(upipe, uref, upump);

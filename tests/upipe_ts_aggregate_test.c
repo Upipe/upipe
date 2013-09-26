@@ -232,7 +232,8 @@ int main(int argc, char *argv[])
         ts_pad(buffer);
         ts_set_pid(buffer, 8190);
         uref_block_unmap(uref, 0);
-        uref_clock_set_dts(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
+        uref_clock_set_dts_sys(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
+        uref_clock_set_dts_prog(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
         upipe_input(upipe_ts_agg, uref, NULL);
     }
 
@@ -267,8 +268,9 @@ int main(int argc, char *argv[])
         ts_pad(buffer);
         ts_set_pid(buffer, 8190);
         uref_block_unmap(uref, 0);
-        uref_clock_set_dts(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
-        uref_clock_set_vbv_delay(uref, UCLOCK_FREQ);
+        uref_clock_set_dts_sys(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
+        uref_clock_set_dts_prog(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
+        uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
         upipe_input(upipe_ts_agg, uref, NULL);
     }
 

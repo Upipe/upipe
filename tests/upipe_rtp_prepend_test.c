@@ -123,8 +123,8 @@ static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
     uref_dump(uref, upipe->uprobe);
 
     /* compute expected timestamp */
-    if (unlikely(!uref_clock_get_dts(uref, &dts))) {
-        uref_clock_get_systime(uref, &dts);
+    if (unlikely(!uref_clock_get_cr_prog(uref, &dts))) {
+        uref_clock_get_cr_sys(uref, &dts);
     }
     div = lldiv(dts, UCLOCK_FREQ);
     expected = div.quot * freq + ((uint64_t)div.rem * freq)/UCLOCK_FREQ;
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
         opaque += i * UCLOCK_FREQ + rand();
         uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
         assert(uref);
-        assert(uref_clock_set_systime(uref, opaque));
+        uref_clock_set_cr_sys(uref, opaque);
         upipe_input(rtp_prepend, uref, NULL);
         assert(rtp_prepend_test_from_upipe(rtp_prepend_test)->entry);
     }

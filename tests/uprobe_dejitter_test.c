@@ -99,40 +99,40 @@ int main(int argc, char **argv)
     struct uref *uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
 
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_throw_clock_ref(upipe, uref, clock, 1);
 
-    assert(uref_clock_set_pts(uref, clock));
+    uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts == systime);
 
     systime += 8000;
     clock += 10000;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_throw_clock_ref(upipe, uref, clock, 0);
 
-    assert(uref_clock_set_pts(uref, clock));
+    uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 9500 == systime - 8000);
 
     systime += 12000;
     clock += 10000;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_throw_clock_ref(upipe, uref, clock, 0);
 
-    assert(uref_clock_set_pts(uref, clock));
+    uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 19888 == systime - 20000);
 
     systime += UINT32_MAX;
     clock += 10000;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_throw_clock_ref(upipe, uref, clock, 1);
 
-    assert(uref_clock_set_pts(uref, clock));
+    uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 416 == systime);

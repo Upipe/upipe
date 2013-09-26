@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_pts(uref, (uint64_t)UINT32_MAX);
+    uref_clock_set_pts_prog(uref, (uint64_t)UINT32_MAX);
     upipe_input(upipe_trickp_pic, uref, NULL);
     assert(count_pic == 0);
     assert(count_sound == 0);
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_pts(uref, (uint64_t)UINT32_MAX + 1);
+    uref_clock_set_pts_prog(uref, (uint64_t)UINT32_MAX + 1);
     upipe_input(upipe_trickp_sound, uref, NULL);
     assert(count_pic == 42);
     assert(count_sound == 43);
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_pts(uref, (uint64_t)UINT32_MAX);
+    uref_clock_set_pts_prog(uref, (uint64_t)UINT32_MAX);
     upipe_input(upipe_trickp_subpic, uref, NULL);
     assert(count_pic == 0);
     assert(count_sound == 0);
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    uref_clock_set_pts(uref, (uint64_t)UINT32_MAX + 2);
+    uref_clock_set_pts_prog(uref, (uint64_t)UINT32_MAX + 2);
     upipe_input(upipe_trickp_pic, uref, NULL);
     assert(count_pic == 44);
     assert(count_sound == 0);

@@ -85,12 +85,12 @@ struct upipe_ts_agg {
     /** number of packets dropped since last muxing */
     unsigned int dropped;
 
-    /** DTS of the next uref */
-    uint64_t next_dts;
-    /** DTS of the next uref (system time) */
-    uint64_t next_dts_sys;
+    /** date of the next uref */
+    uint64_t next_cr;
+    /** date of the next uref (system time) */
+    uint64_t next_cr_sys;
     /** remainder of the uref_size / octetrate calculation */
-    uint64_t next_dts_remainder;
+    uint64_t next_cr_remainder;
     /** next segmented aggregation */
     struct uref *next_uref;
     /** next uref size */
@@ -140,9 +140,9 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg->mtu = DEFAULT_MTU;
     upipe_ts_agg->padding = NULL;
     upipe_ts_agg->dropped = 0;
-    upipe_ts_agg->next_dts = UINT64_MAX;
-    upipe_ts_agg->next_dts_sys = UINT64_MAX;
-    upipe_ts_agg->next_dts_remainder = 0;
+    upipe_ts_agg->next_cr = UINT64_MAX;
+    upipe_ts_agg->next_cr_sys = UINT64_MAX;
+    upipe_ts_agg->next_cr_remainder = 0;
     upipe_ts_agg->next_uref = NULL;
     upipe_ts_agg->next_uref_size = 0;
     upipe_ts_agg_store_flow_def(upipe, flow_def);
@@ -192,20 +192,19 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     struct uref *uref = upipe_ts_agg->next_uref;
     size_t uref_size = upipe_ts_agg->next_uref_size;
-    uint64_t next_dts = upipe_ts_agg->next_dts;
-    uint64_t next_dts_sys = upipe_ts_agg->next_dts_sys;
+    uint64_t next_cr = upipe_ts_agg->next_cr;
+    uint64_t next_cr_sys = upipe_ts_agg->next_cr_sys;
 
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR) {
         lldiv_t q = lldiv((uint64_t)upipe_ts_agg->mtu * UCLOCK_FREQ +
-                          upipe_ts_agg->next_dts_remainder,
+                          upipe_ts_agg->next_cr_remainder,
                           upipe_ts_agg->octetrate);
-        upipe_ts_agg->next_dts += q.quot;
-        if (upipe_ts_agg->next_dts_sys != UINT64_MAX)
-            upipe_ts_agg->next_dts_sys += q.quot;
-        upipe_ts_agg->next_dts_remainder = q.rem;
+        upipe_ts_agg->next_cr += q.quot;
+        upipe_ts_agg->next_cr_sys += q.quot;
+        upipe_ts_agg->next_cr_remainder = q.rem;
     } else {
-        upipe_ts_agg->next_dts = UINT64_MAX;
-        upipe_ts_agg->next_dts_sys = UINT64_MAX;
+        upipe_ts_agg->next_cr = UINT64_MAX;
+        upipe_ts_agg->next_cr_sys = UINT64_MAX;
     }
     upipe_ts_agg->next_uref = NULL;
     upipe_ts_agg->next_uref_size = 0;
@@ -222,11 +221,8 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
 
         uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
                                 0);
-        uref_clock_set_dts(uref, next_dts);
-        if (next_dts_sys != UINT64_MAX) {
-            uref_clock_set_dts_sys(uref, next_dts_sys);
-            uref_clock_set_systime(uref, next_dts_sys);
-        }
+        uref_clock_set_cr_prog(uref, next_cr);
+        uref_clock_set_cr_sys(uref, next_cr_sys);
     }
 
     unsigned int padding = 0;
@@ -244,7 +240,7 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
     }
     if (padding)
         upipe_verbose_va(upipe, "inserting %u padding at %"PRIu64, padding,
-                         next_dts);
+                         next_cr_sys);
 
     int offset = 0;
     while (offset + TS_SIZE <= upipe_ts_agg->mtu) {
@@ -266,8 +262,8 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
             if (unlikely(!uref_block_write(uref, offset, &size, &buffer)))
                 upipe_warn_va(upipe, "couldn't fix PCR");
             else {
-                tsaf_set_pcr(buffer, (next_dts / 300) % UINT33_MAX);
-                tsaf_set_pcrext(buffer, next_dts % 300);
+                tsaf_set_pcr(buffer, (next_cr / 300) % UINT33_MAX);
+                tsaf_set_pcrext(buffer, next_cr % 300);
                 uref_block_unmap(uref, offset);
             }
         }
@@ -321,27 +317,27 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t dts = UINT64_MAX;
-    if (unlikely(!uref_clock_get_dts(uref, &dts) &&
+    uint64_t dts_sys = UINT64_MAX, dts_prog = UINT64_MAX;
+    if (unlikely((!uref_clock_get_dts_sys(uref, &dts_sys) ||
+                  !uref_clock_get_dts_prog(uref, &dts_prog)) &&
                  upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR)) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
         return;
     }
     uint64_t delay = 0;
-    uref_clock_get_vbv_delay(uref, &delay);
+    uref_clock_get_cr_dts_delay(uref, &delay);
 
-    if (upipe_ts_agg->next_dts == UINT64_MAX) {
-        upipe_ts_agg->next_dts = dts - delay;
-        if (uref_clock_get_dts_sys(uref, &upipe_ts_agg->next_dts_sys))
-            upipe_ts_agg->next_dts_sys -= delay;
+    if (upipe_ts_agg->next_cr_sys == UINT64_MAX) {
+        upipe_ts_agg->next_cr_sys = dts_sys - delay;
+        upipe_ts_agg->next_cr = dts_prog - delay;
     }
 
     /* packet in the past */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts + upipe_ts_agg->interval < upipe_ts_agg->next_dts) {
+        dts_sys + upipe_ts_agg->interval < upipe_ts_agg->next_cr_sys) {
         upipe_verbose_va(upipe, "dropping late packet %"PRIu64" %"PRIu64,
-                         dts, dts - delay);
+                         dts_sys, dts_sys - delay);
         uref_free(uref);
         upipe_ts_agg->dropped++;
         return;
@@ -355,19 +351,15 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     /* packet in the future that would arrive too early if muxed into this
      * aggregate */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts - delay > upipe_ts_agg->next_dts + upipe_ts_agg->interval)
+        dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval)
         upipe_ts_agg_complete(upipe, upump);
 
     /* keep or attach incoming packet */
     if (unlikely(upipe_ts_agg->next_uref == NULL)) {
-        if (upipe_ts_agg->next_dts != UINT64_MAX) {
-            if (upipe_ts_agg->next_dts_sys != UINT64_MAX) {
-                uref_clock_set_dts_sys(uref, upipe_ts_agg->next_dts_sys);
-                uref_clock_set_systime(uref, upipe_ts_agg->next_dts_sys);
-            }
-            uref_clock_set_dts(uref, upipe_ts_agg->next_dts);
+        if (upipe_ts_agg->next_cr_sys != UINT64_MAX) {
+            uref_clock_set_cr_prog(uref, upipe_ts_agg->next_cr);
+            uref_clock_set_cr_sys(uref, upipe_ts_agg->next_cr_sys);
         }
-        uref_clock_delete_vbv_delay(uref);
 
         upipe_ts_agg->next_uref = uref;
         upipe_ts_agg->next_uref_size = size;
@@ -414,7 +406,7 @@ static bool upipe_ts_agg_set_octetrate(struct upipe *upipe, uint64_t octetrate)
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(octetrate != 0);
     if (upipe_ts_agg->octetrate != octetrate)
-        upipe_ts_agg->next_dts_remainder = 0;
+        upipe_ts_agg->next_cr_remainder = 0;
     upipe_ts_agg->octetrate = octetrate;
     upipe_ts_agg->interval = upipe_ts_agg->mtu * UCLOCK_FREQ /
                              upipe_ts_agg->octetrate;

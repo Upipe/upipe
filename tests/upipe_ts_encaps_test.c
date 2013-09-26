@@ -113,9 +113,9 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     /* check attributes */
     uint64_t uref_dts, uref_dts_sys, vbv_delay = 0;
-    assert(uref_clock_get_dts(uref, &uref_dts));
+    assert(uref_clock_get_dts_prog(uref, &uref_dts));
     assert(uref_clock_get_dts_sys(uref, &uref_dts_sys));
-    uref_clock_get_vbv_delay(uref, &vbv_delay);
+    uref_clock_get_cr_dts_delay(uref, &vbv_delay);
     uref_dts -= vbv_delay;
     uref_dts_sys -= vbv_delay;
     --nb_ts;
@@ -268,10 +268,10 @@ int main(int argc, char *argv[])
     for (i = 0; i < 2206; i++)
         buffer[i] = i % 256;
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 27000000 + 27000000));
-    assert(uref_clock_set_dts_sys(uref, 270000000 + 27000000));
-    assert(uref_clock_set_vbv_delay(uref, 27000000));
-    assert(uref_flow_set_discontinuity(uref));
+    uref_clock_set_dts_prog(uref, 27000000 + 27000000);
+    uref_clock_set_dts_sys(uref, 270000000 + 27000000);
+    uref_clock_set_cr_dts_delay(uref, 27000000);
+    uref_flow_set_discontinuity(uref);
     assert(uref_flow_set_random(uref));
     dts = 27000000;
     dts_sys = 270000000;
@@ -312,9 +312,9 @@ int main(int argc, char *argv[])
     for (i = 0; i < 2048; i++)
         buffer[i] = i % 256;
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 27000000));
-    assert(uref_clock_set_dts_sys(uref, 270000000));
-    assert(uref_flow_set_discontinuity(uref));
+    uref_clock_set_dts_prog(uref, 27000000);
+    uref_clock_set_dts_sys(uref, 270000000);
+    uref_flow_set_discontinuity(uref);
     assert(uref_flow_set_random(uref));
     dts = 27000000;
     dts_sys = 270000000;
@@ -350,8 +350,8 @@ int main(int argc, char *argv[])
     for (i = 0; i < 1024; i++)
         buffer[i] = i % 256;
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 27000000));
-    assert(uref_clock_set_dts_sys(uref, 270000000));
+    uref_clock_set_dts_prog(uref, 27000000);
+    uref_clock_set_dts_sys(uref, 270000000);
     dts = 27000000;
     dts_sys = 270000000;
     nb_ts = 1024 / (TS_SIZE - TS_HEADER_SIZE) + 1;

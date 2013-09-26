@@ -101,7 +101,9 @@
         @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
         @item @ref upipe_sws_thumbs_mgr_alloc @item linear pipe building a mosaic of thumbnails out of a picture flow @item @tt -lupipe-sws
         @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
-        @item @ref upipe_mp2vf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_ts_mux_mgr_alloc @item join pipe multiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
+        @item @ref upipe_mpgaf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 audio (including AAC ADTS) streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_mpgvf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_h264f_mgr_alloc @item linear pipe gathering MPEG-4 AVC video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_filter_blend_mgr_alloc @item linear pipe deinterlacing pictures using a blending algorithm @item @tt -lupipe-filters
         @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
@@ -224,18 +226,38 @@
 
   @section T {Clocks}
 
-    All timestamps in Upipe are represented, by convention, as ticks of a 27 MHz clock. The origin and pace of the clock depends on the nature of the timestamp:
+    All dates in Upipe are represented, by convention, as ticks of a 27 MHz clock. The origin and pace of the clock depends on the variation of the date. There are three date variations stored in @ref uref:
 
-    @list
+    @table 3
 
-      @item systime timestamps are expressed using the monotonic or real-time clock of the system; they typically express the reception or emission time of a block
-      @item pts_sys timestamps are expressed using the monotonic or real-time clock of the system; they typically express the presentation time of a picture or a sound
-      @item pts timestamps are expressed using a fictional monotonic clock retrieved from the input stream; they must not contain gaps and do not loop; they must start at a "high-enough" value so that all values are positive (by convention 2^33)
-      @item pts_orig timestamps are directly retrieved from the input source; they are typically used when one wants to remux a stream with the exact same timestamps
+      @item date variation @item scope @item description
 
-    @end list
+      @item sys @item whole stream @item Uses the same scale as @ref uclock_now. The date is represented in system time. On live streams, incoming packets should be stamped with this clock, and outgoing packets (for presentation or streaming) should be scheduled according to it. A fictious system time may be necessary even for some file to file conversion, as it is the only clock that is stream-wide.
 
-    There are the equivalent dts_sys, dts and dts_orig attributes to express the decoding time of a picture or a sound. By definition, at least dts must be set at the output of a framer, and an encoder. By definition, at least pts must be set at the output of a decoder, and at the input of an encoder. If a decoder does not set the _sys timestamps, a trickplay pipe may be inserted at the end of the pipeline to set them.
+      @item orig @item program @item Carries the dates coded in the incoming stream, with the same origin, scaled to 27 MHz (if necessary). Its only use is for remultiplexing a stream with the exact same timestamps. A demux should typically retrieve this value.
+
+      @item prog @item program @item Is based on the orig clock, but the origin may be changed to make sure that the dates are always monotonically increasing, without large gaps. A demux should typically infer this clock, and a mux should use it to write its timestamps. @ref upipe_trickp_mgr_alloc is also able to derive the system clock from the prog clock.
+
+    @end table
+
+    Please note that the three clocks may drift slightly. For instance, a 25 progressive frames per second stream should have a frame exactly every 40 ms according to the orig and prog clocks, but in the sys clock it may drift to 39 or 41 ms if the sender's clock is too fast or too slow. Also, when reading files, the trickplay module may create slow motion or fast forward effects by changing the pace of the sys clock.
+
+    In a @ref uref, every date variation has a semantic attached to it (@ref uref_date_type). There are three date types, which are used in different parts of the pipeline to represent different events:
+
+    @table 3
+
+      @item date type @item uref domain @item description
+
+      @item Clock reference (cr) @item block data @item Represents the date of reception (resp. emission) of a low-level packet. It does not necessarily have a relationship with actual video or audio data. When dealing with live processing, clock references should be set on all packets entering a demux, and on all packets leaving a mux.
+
+      @item Decoding timestamp (dts) @item encoded frame @item Represents the theorical date of decoding of an encoded audio or video frame. It must be set on all frames leaving a demux, and all frames entering a mux.
+
+      @item Presentation timestamp (pts) @item raw frame @item Represents the theorical date of presentation of an audio or video frame. It must be set on all frames leaving a decoder, and all frames entering an encoder.
+    @end table
+
+    A @ref uref contains only one date type for each date variation. The date type should be cr for block data (input of demux and output of mux), dts for encoded frames (output of demux and input of mux), and pts for raw frames (output of decoder and input of encoder). This is called the "base". Dates are set using @ref uref_clock_set_cr_prog, @ref uref_clock_set_dts_prog, @ref uref_clock_set_pts_prog, etc. Note that each call to uref_clock_set_XXX_prog will overwrite previous values for prog and rebase the prog date. It is possible to set the delay between the dts and pts using @ref uref_clock_set_dts_pts_delay, and between the cr and dts using @ref uref_clock_set_cr_dts_delay (typically the vbv delay). This makes it possible for a demux to set both dts and pts when it is available. @ref uref_clock_rebase_dts_prog may be used by the decoder to rebase the prog date using dts. @ref uref_clock_rebase_cr_sys would typically be used in a mux.
+
+    The @ref uref also contains the sys date of the last random access point. It can be retrieved (resp. set) with @ref uref_clock_get_rap_sys (resp. @ref uref_clock_set_rap_sys).
 
   @end section
 
@@ -254,7 +276,7 @@
       @item The worker thread initializes a new event loop and a new upump manager, and calls @ref upipe_xfer_mgr_attach on the xfer_mgr passed by the main thread. It can then enter the event loop.
       @item The main thread creates a pipe that is supposed to run on the worker thread via @ref upipe_flow_alloc or @ref upipe_void_alloc, and initializes it. The pipe is supposed to work with a upump_mgr, either directly, or through the use of @ref upipe_qsrc_mgr_alloc and/or @ref upipe_qsink_mgr_alloc. If a group of pipes has to be moved (for instance with queue source and queue sink), the group can be built normally with @ref upipe_set_output, and then all members requiring a upump manager have to be transferred.
       @item Pipes that need a upump manager are transferred to the worked thread by calling @ref upipe_xfer_alloc on them. In case there are several pipes, they must be transferred in the sink to source order. After @ref upipe_xfer_alloc, the original upipe pointer shall no longer be used in the main thread; however this function returns a pointer to a pipe handle, that allows to do basic operations on the remote pipe, such as releasing it.
-      @item At the end of the processing, all pipe handles are released, which in turn releases the remote pipes in the worker thread. The main thread calls @ref upipe_xfer_mgr_detach to stop the event loop in the worker thread, and @ref upipe_mgr_release to release the xfer_mgr.
+      @item At the end of the processing, all pipe handles are released, which in turn releases the remote pipes in the worker thread. The main thread calls  @ref upipe_mgr_release to stop the event loop in the worker thread, and release the xfer_mgr.
 
     @end list
 

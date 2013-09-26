@@ -52,7 +52,7 @@
 #define UPIPE_TRICKP_PTS_DELAY (UCLOCK_FREQ / 10)
 
 /** @hidden */
-static uint64_t upipe_trickp_get_systime(struct upipe *upipe, uint64_t ts);
+static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts);
 /** @hidden */
 static void upipe_trickp_check_start(struct upipe *upipe);
 /** @hidden */
@@ -185,16 +185,14 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
     }
 
     uref_clock_set_rate(uref, upipe_trickp->rate);
-    uint64_t pts;
-    if (likely(uref_clock_get_pts(uref, &pts)))
-        uref_clock_set_pts_sys(uref,
-                upipe_trickp_get_systime(upipe_trickp_to_upipe(upipe_trickp),
-                                         pts));
-    uint64_t dts;
-    if (likely(uref_clock_get_dts(uref, &dts)))
-        uref_clock_set_dts_sys(uref,
-                upipe_trickp_get_systime(upipe_trickp_to_upipe(upipe_trickp),
-                                         dts));
+    uint64_t date;
+    enum uref_date_type type;
+    uref_clock_get_date_prog(uref, &date, &type);
+    if (likely(type != UREF_DATE_NONE))
+        uref_clock_set_date_sys(uref,
+                upipe_trickp_get_date_sys(upipe_trickp_to_upipe(upipe_trickp),
+                                          date),
+                type);
 
     upipe_trickp_sub_output(upipe, uref, upump);
     return true;
@@ -360,8 +358,9 @@ static void upipe_trickp_check_start(struct upipe *upipe)
                 return; /* not ready */
             struct uref *uref = uref_from_uchain(uchain2);
             uint64_t ts;
-            if (!uref_clock_get_dts(uref, &ts) &&
-                !uref_clock_get_pts(uref, &ts)) {
+            enum uref_date_type type;
+            uref_clock_get_date_prog(uref, &ts, &type);
+            if (unlikely(type == UREF_DATE_NONE)) {
                 upipe_warn(upipe, "non-dated uref");
                 ulist_pop(&upipe_trickp_sub->urefs);
                 uref_free(uref);
@@ -375,7 +374,7 @@ static void upipe_trickp_check_start(struct upipe *upipe)
 
     upipe_trickp->ts_origin = earliest_ts;
     upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock) +
-                                   UPIPE_TRICKP_PTS_DELAY;
+                                   UPIPE_TRICKP_PTS_DELAY; //FIXME
 
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =
@@ -387,13 +386,13 @@ static void upipe_trickp_check_start(struct upipe *upipe)
     }
 }
 
-/** @internal @This returns a systime converted from a timestamp.
+/** @internal @This returns a system date converted from a timestamp.
  *
  * @param upipe description structure of the pipe
  * @param ts timestamp
  * @return systime
  */
-static uint64_t upipe_trickp_get_systime(struct upipe *upipe, uint64_t ts)
+static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     if (unlikely(ts < upipe_trickp->ts_origin)) {

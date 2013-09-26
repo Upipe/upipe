@@ -187,7 +187,8 @@ int main(int argc, char *argv[])
     ts_pad(buffer);
     ts_set_pid(buffer, 68);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 2));
+    uref_clock_set_cr_sys(uref, 2);
+    uref_clock_set_cr_prog(uref, 2);
     upipe_input(upipe_ts_join_input68, uref, NULL);
     assert(!received_pids);
 
@@ -199,7 +200,8 @@ int main(int argc, char *argv[])
     ts_pad(buffer);
     ts_set_pid(buffer, 69);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 1));
+    uref_clock_set_cr_sys(uref, 1);
+    uref_clock_set_cr_prog(uref, 1);
     upipe_input(upipe_ts_join_input69, uref, NULL);
     assert(received_pids == 69);
     received_pids = 0;
@@ -212,7 +214,8 @@ int main(int argc, char *argv[])
     ts_pad(buffer);
     ts_set_pid(buffer, 69);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_dts(uref, 3));
+    uref_clock_set_cr_sys(uref, 3);
+    uref_clock_set_cr_prog(uref, 3);
     upipe_input(upipe_ts_join_input69, uref, NULL);
     assert(received_pids == 68);
     received_pids = 0;

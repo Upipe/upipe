@@ -227,7 +227,7 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
-    upipe_genaux->getattr = uref_clock_get_systime;
+    upipe_genaux->getattr = uref_clock_get_cr_sys;
     upipe_throw_ready(upipe);
 
     if (unlikely(!uref_flow_set_def(flow_def, "block.aux.")))

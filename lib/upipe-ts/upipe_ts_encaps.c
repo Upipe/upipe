@@ -323,14 +323,14 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     uint64_t dts, dts_sys = UINT64_MAX, dts_orig = UINT64_MAX, delay = 0;
-    if (!uref_clock_get_dts(uref, &dts)) {
+    if (!uref_clock_get_dts_prog(uref, &dts)) {
         upipe_warn_va(upipe, "non-dated packet received");
         uref_free(uref);
         return;
     }
     uref_clock_get_dts_sys(uref, &dts_sys);
     uref_clock_get_dts_orig(uref, &dts_orig);
-    uref_clock_get_vbv_delay(uref, &delay);
+    uref_clock_get_cr_dts_delay(uref, &delay);
 
     if (delay > upipe_ts_encaps->max_delay)
         /* TODO what do we do then ? */
@@ -365,15 +365,20 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                                               upipe_ts_encaps->next_pcr);
             if (likely(output != NULL)) {
                 uref_clock_set_ref(output);
-                uref_clock_set_dts(output, end);
-                if (dts_sys != UINT64_MAX)
+                uref_clock_set_cr_dts_delay(output,
+                                            end - upipe_ts_encaps->next_pcr +
+                                            upipe_ts_encaps->pcr_tolerance +
+                                            upipe_ts_encaps->ts_delay);
+                uref_clock_set_dts_prog(output, end);
+                uref_clock_rebase_cr_prog(output);
+                if (dts_sys != UINT64_MAX) {
                     uref_clock_set_dts_sys(output, dts_sys - (dts - end));
-                if (dts_orig != UINT64_MAX)
+                    uref_clock_rebase_cr_sys(output);
+                }
+                if (dts_orig != UINT64_MAX) {
                     uref_clock_set_dts_orig(output, dts_orig - (dts - end));
-                uref_clock_set_vbv_delay(output,
-                                         end - upipe_ts_encaps->next_pcr +
-                                         upipe_ts_encaps->pcr_tolerance +
-                                         upipe_ts_encaps->ts_delay);
+                    uref_clock_rebase_cr_orig(output);
+                }
                 upipe_ts_encaps_output(upipe, output, upump);
             }
             upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
@@ -409,7 +414,6 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         uint64_t muxdate = end - i * duration / nb_ts;
         bool pcr = upipe_ts_encaps->next_pcr <=
                        muxdate + upipe_ts_encaps->pcr_tolerance;
-        bool ret = true;
 
         struct uref *output =
             upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1,
@@ -423,33 +427,34 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
          * packet, considering the rest of the elementary stream will be output
          * at peak octet rate. */
         uint64_t output_dts = dts - i * peak_duration / nb_ts;
-        ret = ret && uref_clock_set_dts(output, output_dts);
-        if (dts_sys != UINT64_MAX)
-            ret = ret && uref_clock_set_dts_sys(output,
-                                        dts_sys - i * peak_duration / nb_ts);
-        if (dts_orig != UINT64_MAX)
-            ret = ret && uref_clock_set_dts_orig(output,
-                                        dts_orig - i * peak_duration / nb_ts);
-
-        /* DTS - delay is the theorical muxing date */
         uint64_t output_delay;
         if (output_dts < muxdate) {
             upipe_warn(upipe, "input is bursting above its max octet rate");
             output_delay = 0;
         } else
             output_delay = output_dts - muxdate;
-        ret = ret && uref_clock_set_vbv_delay(output,
-                output_delay + upipe_ts_encaps->ts_delay);
+        uref_clock_set_cr_dts_delay(output,
+                                    output_delay + upipe_ts_encaps->ts_delay);
 
-        if (pcr) {
-            ret = ret && uref_clock_set_ref(output);
-            upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
+        /* Rebase against clock ref (== muxdate). */
+        uref_clock_set_dts_prog(output, output_dts);
+        uref_clock_rebase_cr_prog(output);
+        if (dts_sys != UINT64_MAX) {
+            uref_clock_set_dts_sys(output, dts_sys - i * peak_duration / nb_ts);
+            uref_clock_rebase_cr_sys(output);
+        }
+        if (dts_orig != UINT64_MAX) {
+            uref_clock_set_dts_orig(output,
+                                    dts_orig - i * peak_duration / nb_ts);
+            uref_clock_rebase_cr_orig(output);
         }
 
-        if (!ret) {
-            uref_free(output);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            break;
+        /* PTS is now meaningless. */
+        uref_clock_delete_dts_pts_delay(output);
+
+        if (pcr) {
+            uref_clock_set_ref(output);
+            upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
         }
 
         upipe_ts_encaps_output(upipe, output, upump);

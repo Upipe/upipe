@@ -122,7 +122,7 @@ static void _upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
     uint64_t systime = 0;
     int64_t newidx;
 
-    if (unlikely(!uref_clock_get_systime(uref, &systime))) {
+    if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
         uref_free(uref);
         return;
     }

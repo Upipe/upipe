@@ -95,7 +95,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t rap;
-    assert(uref_clock_get_systime_rap(uref, &rap));
+    assert(uref_clock_get_rap_sys(uref, &rap));
     assert(rap == UINT32_MAX);
     uref_free(uref);
     nb_packets++;

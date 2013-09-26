@@ -195,7 +195,7 @@ int main(int argc, char **argv)
 
     uref = uref_alloc(uref_mgr);
     assert(uref);
-    assert(uref_clock_set_systime(uref, opaque));
+    uref_clock_set_cr_sys(uref, opaque);
     /* Now send uref */
     upipe_input(genaux, uref, NULL);
 
@@ -206,10 +206,10 @@ int main(int argc, char **argv)
     assert(opaque == result);
 
     /* test arbitrary geattr */
-    assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts));
+    assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts_prog));
     uref = uref_alloc(uref_mgr);
     assert(uref);
-    assert(uref_clock_set_pts(uref, opaque));
+    uref_clock_set_pts_prog(uref, opaque);
     upipe_input(genaux, uref, NULL);
 
     uref_block_extract(genaux_test_from_upipe(genaux_test)->entry, 0, sizeof(uint64_t), buf);

@@ -192,18 +192,8 @@ struct upipe_h264f {
     bool au_slice;
     /** NAL start code of the first slice, or UINT8_MAX */
     uint8_t au_slice_nal;
-    /** original PTS of the next picture, or UINT64_MAX */
-    uint64_t au_pts_orig;
-    /** PTS of the next picture, or UINT64_MAX */
-    uint64_t au_pts;
-    /** system PTS of the next picture, or UINT64_MAX */
-    uint64_t au_pts_sys;
-    /** original DTS of the next picture, or UINT64_MAX */
-    uint64_t au_dts_orig;
-    /** DTS of the next picture, or UINT64_MAX */
-    uint64_t au_dts;
-    /** system DTS of the next picture, or UINT64_MAX */
-    uint64_t au_dts_sys;
+    /** pseudo-packet containing date information for the next picture */
+    struct uref au_uref_s;
     /** true if we have thrown the sync_acquired event (that means we found a
      * NAL start) */
     bool acquired;
@@ -223,28 +213,20 @@ UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
 
 UPIPE_HELPER_OUTPUT(upipe_h264f, output, flow_def, flow_def_sent)
 
-/** @internal @This flushes all PTS timestamps.
+/** @internal @This flushes all dates.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_h264f_flush_pts(struct upipe *upipe)
+static void upipe_h264f_flush_dates(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    upipe_h264f->au_pts_orig = UINT64_MAX;
-    upipe_h264f->au_pts = UINT64_MAX;
-    upipe_h264f->au_pts_sys = UINT64_MAX;
-}
-
-/** @internal @This flushes all DTS timestamps.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_h264f_flush_dts(struct upipe *upipe)
-{
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    upipe_h264f->au_dts_orig = UINT64_MAX;
-    upipe_h264f->au_dts = UINT64_MAX;
-    upipe_h264f->au_dts_sys = UINT64_MAX;
+    uref_clock_set_date_sys(&upipe_h264f->au_uref_s, UINT64_MAX,
+                            UREF_DATE_NONE);
+    uref_clock_set_date_prog(&upipe_h264f->au_uref_s, UINT64_MAX,
+                             UREF_DATE_NONE);
+    uref_clock_set_date_orig(&upipe_h264f->au_uref_s, UINT64_MAX,
+                             UREF_DATE_NONE);
+    uref_clock_delete_dts_pts_delay(&upipe_h264f->au_uref_s);
 }
 
 /** @internal @This is called back by @ref upipe_h264f_append_uref_stream
@@ -255,17 +237,17 @@ static void upipe_h264f_flush_dts(struct upipe *upipe)
 static void upipe_h264f_promote_uref(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    uint64_t ts;
-#define SET_TIMESTAMP(name)                                                 \
-    if (uref_clock_get_##name(upipe_h264f->next_uref, &ts))                 \
-        upipe_h264f->au_##name = ts;
-    SET_TIMESTAMP(pts_orig)
-    SET_TIMESTAMP(pts)
-    SET_TIMESTAMP(pts_sys)
-    SET_TIMESTAMP(dts_orig)
-    SET_TIMESTAMP(dts)
-    SET_TIMESTAMP(dts_sys)
-#undef SET_TIMESTAMP
+    uint64_t date;
+#define SET_DATE(dv)                                                        \
+    if (uref_clock_get_dts_##dv(upipe_h264f->next_uref, &date))             \
+        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date);
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
+
+    if (uref_clock_get_dts_pts_delay(upipe_h264f->next_uref, &date))
+        uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
 }
 
 /** @internal @This allocates an h264f pipe.
@@ -305,8 +287,7 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->au_vcl_offset = -1;
     upipe_h264f->au_slice = false;
     upipe_h264f->au_slice_nal = UINT8_MAX;
-    upipe_h264f_flush_pts(upipe);
-    upipe_h264f_flush_dts(upipe);
+    upipe_h264f_flush_dates(upipe);
 
     int i;
     for (i = 0; i < H264SPS_ID_MAX; i++) {
@@ -1195,18 +1176,9 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     if (!upipe_h264f->au_size || upipe_h264f->au_slice_nal == UINT8_MAX)
         return;
 
-#define KEEP_TIMESTAMP(name)                                                \
-    uint64_t name = upipe_h264f->au_##name;
-    KEEP_TIMESTAMP(pts_orig)
-    KEEP_TIMESTAMP(pts)
-    KEEP_TIMESTAMP(pts_sys)
-    KEEP_TIMESTAMP(dts_orig)
-    KEEP_TIMESTAMP(dts)
-    KEEP_TIMESTAMP(dts_sys)
-#undef KEEP_TIMESTAMP
+    struct uref au_uref_s = upipe_h264f->au_uref_s;
     /* From now on, PTS declaration only impacts the next frame. */
-    upipe_h264f_flush_pts(upipe);
-    upipe_h264f_flush_dts(upipe);
+    upipe_h264f_flush_dates(upipe);
 
     struct uref *uref = upipe_h264f_extract_uref_stream(upipe,
                                                         upipe_h264f->au_size);
@@ -1293,29 +1265,26 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     if (duration)
         ret = ret && uref_clock_set_duration(uref, duration);
 
-#define SET_TIMESTAMP(name)                                                 \
-    if (name != UINT64_MAX)                                                 \
-        ret = ret && uref_clock_set_##name(uref, name);                     \
-    else                                                                    \
-        uref_clock_delete_##name(uref);
-    SET_TIMESTAMP(pts_orig)
-    SET_TIMESTAMP(pts)
-    SET_TIMESTAMP(pts_sys)
-    SET_TIMESTAMP(dts_orig)
-    SET_TIMESTAMP(dts)
-    SET_TIMESTAMP(dts_sys)
-#undef SET_TIMESTAMP
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
+    uint64_t date;
+#define SET_DATE(dv)                                                        \
+    if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
+        uref_clock_set_dts_##dv(uref, date);                                \
+        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date + duration);  \
+    } else if (uref_clock_get_dts_##dv(uref, &date))                        \
+        uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
 
-#define INCREMENT_DTS(name)                                                 \
-    if (upipe_h264f->au_##name == UINT64_MAX && name != UINT64_MAX)         \
-        upipe_h264f->au_##name = name + duration;
-    INCREMENT_DTS(dts_orig)
-    INCREMENT_DTS(dts)
-    INCREMENT_DTS(dts_sys)
-#undef INCREMENT_DTS
+    if (uref_clock_get_dts_pts_delay(&au_uref_s, &date))
+        uref_clock_set_dts_pts_delay(uref, date);
+    else
+        uref_clock_delete_dts_pts_delay(uref);
 
     if (upipe_h264f->systime_rap != UINT64_MAX)
-        ret = ret && uref_clock_set_systime_rap(uref, upipe_h264f->systime_rap);
+        uref_clock_set_rap_sys(uref, upipe_h264f->systime_rap);
     if (upipe_h264f->au_vcl_offset > 0)
         ret = ret && uref_block_set_header_size(uref,
                                                 upipe_h264f->au_vcl_offset);
@@ -1337,8 +1306,8 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
             upipe_h264f->initial_cpb_removal_delay = upipe_h264f->cpb_length;
         }
 
-        ret = ret && uref_clock_set_vbv_delay(uref,
-                            upipe_h264f->initial_cpb_removal_delay);
+        uref_clock_set_cr_dts_delay(uref,
+                                    upipe_h264f->initial_cpb_removal_delay);
     }
 
     upipe_h264f->au_size = 0;
@@ -1520,8 +1489,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
             upipe_h264f_parse_slice(upipe, upump);
         if (last_nal_type == H264NAL_TYPE_IDR) {
             uint64_t systime_rap;
-            if (uref_clock_get_systime_rap(upipe_h264f->next_uref,
-                                           &systime_rap) && systime_rap)
+            if (uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap))
                 upipe_h264f->systime_rap = systime_rap;
         }
         return;

@@ -85,7 +85,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t patd_systime;
-            assert(uref_clock_get_systime_rap(uref, &patd_systime));
+            assert(uref_clock_get_rap_sys(uref, &patd_systime));
             assert(patd_systime == systime);
             systime = 0;
             break;
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     program_sum = 12;
     pid_sum = 42;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer); /* set invalid CRC */
     patn_set_pid(pat_program, 42);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
     systime = UINT32_MAX;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 43); // invalid: program defined twice
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
     patn_set_pid(pat_program, 42);
     psi_set_crc(buffer);
     uref_block_unmap(uref, 0);
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);
     assert(!pid_sum);
@@ -307,7 +307,7 @@ int main(int argc, char *argv[])
     program_sum = 12 + 13;
     pid_sum = 42 + 43;
     systime += UINT32_MAX;
-    assert(uref_clock_set_systime(uref, systime));
+    uref_clock_set_cr_sys(uref, systime);
     systime = UINT32_MAX;
     upipe_input(upipe_ts_patd, uref, NULL);
     assert(!program_sum);

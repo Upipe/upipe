@@ -516,7 +516,7 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
     bool ret = true;
 
     /* rap */
-    uref_clock_get_systime_rap(uref, &rap);
+    uref_clock_get_rap_sys(uref, &rap);
     if (unlikely(rap != upipe_avcdec->prev_rap)) {
         upipe_avcdec->prev_rap = rap;
         upipe_avcdec->index_rap = 0;
@@ -524,32 +524,30 @@ static bool upipe_avcdec_set_time_attributes(struct upipe *upipe,
     ret = ret && uref_clock_set_index_rap(uref, upipe_avcdec->index_rap);
     upipe_avcdec->index_rap++;
 
-    /* pts */
-    if (!uref_clock_get_pts(uref, &pts)) {
+    /* Rebase dates to PTS. */
+    if (!uref_clock_get_pts_prog(uref, &pts)) {
         pts = upipe_avcdec->next_pts;
         if (pts != UINT64_MAX) {
-            ret = ret && uref_clock_set_pts(uref, pts);
+            uref_clock_set_pts_prog(uref, pts);
         }
-    }
+    } else
+        uref_clock_rebase_pts_prog(uref);
+
     if (!uref_clock_get_pts_sys(uref, &pts_sys)) {
         pts_sys = upipe_avcdec->next_pts_sys;
         if (pts_sys != UINT64_MAX) {
-            ret = ret && uref_clock_set_pts_sys(uref, pts_sys);
+            uref_clock_set_pts_sys(uref, pts_sys);
         }
-    }
+    } else
+        uref_clock_rebase_pts_sys(uref);
 
-    /* DTS has no meaning from now on and is identical to PTS. */
-    if (pts != UINT64_MAX)
-        ret = ret && uref_clock_set_dts(uref, pts);
-    else
-        uref_clock_delete_dts(uref);
-    if (pts_sys != UINT64_MAX)
-        ret = ret && uref_clock_set_dts_sys(uref, pts_sys);
-    else
-        uref_clock_delete_dts_sys(uref);
+    uref_clock_rebase_pts_orig(uref);
 
-    /* VBV demay has no meaning from now on. */
-    ret = ret && uref_clock_delete_vbv_delay(uref);
+    /* DTS has no meaning from now on. */
+    uref_clock_delete_dts_pts_delay(uref);
+
+    /* CR has no meaning from now on. */
+    uref_clock_delete_cr_dts_delay(uref);
 
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && uref_clock_get_duration(uref, &duration)) {

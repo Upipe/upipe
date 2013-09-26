@@ -412,8 +412,6 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
     struct urational aspect;
-    uint64_t pts;
-    uint64_t ts_diff;
     x264_param_t curparams;
     bool needopen = false;
     int ret = 0;
@@ -506,22 +504,26 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
     ubuf_block_unmap(ubuf_block, 0);
     uref_attach_ubuf(uref, ubuf_block);
 
-    /* compute dts from pts and x264 pts/dts difference */
-    ts_diff = (uint64_t)(pic.i_pts - pic.i_dts) * UCLOCK_FREQ
-              * curparams.i_timebase_num
-              / curparams.i_timebase_den;
-    if (uref_clock_get_pts(uref, &pts)) {
-        uref_clock_set_dts(uref, pts - ts_diff);
-    }
-    if (uref_clock_get_pts_sys(uref, &pts)) {
-        uref_clock_set_dts_sys(uref, pts - ts_diff);
+    /* set dts */
+    uint64_t dts_pts_delay = (uint64_t)(pic.i_pts - pic.i_dts) * UCLOCK_FREQ
+                              * curparams.i_timebase_num
+                              / curparams.i_timebase_den;
+    uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
+
+    /* rebase to dts as we're in encoded domain now */
+    uref_clock_rebase_dts_sys(uref);
+    uref_clock_rebase_dts_prog(uref);
+    uref_clock_rebase_dts_orig(uref);
 
 #ifdef HAVE_X264_OBE
+    /* speedcontrol */
+    uint64_t dts;
+    if (uref_clock_get_dts_sys(uref, &dts)) {
         if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
             uint64_t systime = uclock_now(upipe_x264->uclock);
             float buffer_fill =
                 (float)(systime + upipe_x264->sc_latency -
-                        (pts - ts_diff + upipe_x264->initial_latency)) /
+                        (dts + upipe_x264->initial_latency)) /
                 (float)upipe_x264->sc_latency;
             if (buffer_fill > 1.0)
                 buffer_fill = 1.0;
@@ -530,15 +532,15 @@ static void upipe_x264_input_pic(struct upipe *upipe, struct uref *uref,
             x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill,
                                    upipe_x264->params.sc.i_buffer_size, 1 );
         }
-#endif
     }
+#endif
 
     if (pic.b_keyframe) {
         uref_flow_set_random(uref);
     }
 
     if (pic.hrd_timing.cpb_final_arrival_time)
-        uref_clock_set_vbv_delay(uref,
+        uref_clock_set_cr_dts_delay(uref,
 #ifndef HAVE_X264_OBE
                 UCLOCK_FREQ *
 #endif

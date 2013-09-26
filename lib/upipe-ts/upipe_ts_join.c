@@ -81,8 +81,8 @@ struct upipe_ts_join_sub {
 
     /** temporary uref storage */
     struct ulist urefs;
-    /** next DTS that is supposed to be dequeued */
-    uint64_t next_dts;
+    /** next date that is supposed to be dequeued */
+    uint64_t next_cr;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -120,7 +120,7 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
         upipe_ts_join_sub_from_upipe(upipe);
     upipe_ts_join_sub_init_sub(upipe);
     ulist_init(&upipe_ts_join_sub->urefs);
-    upipe_ts_join_sub->next_dts = UINT64_MAX;
+    upipe_ts_join_sub->next_cr = UINT64_MAX;
 
     struct upipe_ts_join *upipe_ts_join =
         upipe_ts_join_from_sub_mgr(upipe->mgr);
@@ -147,9 +147,9 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t dts;
-    if (unlikely(!uref_clock_get_dts(uref, &dts))) {
-        upipe_warn_va(upipe, "packet without DTS");
+    uint64_t cr;
+    if (unlikely(!uref_clock_get_cr_sys(uref, &cr))) {
+        upipe_warn_va(upipe, "packet without date");
         uref_free(uref);
         return;
     }
@@ -157,9 +157,7 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
     bool was_empty = ulist_empty(&upipe_ts_join_sub->urefs);
     ulist_add(&upipe_ts_join_sub->urefs, uref_to_uchain(uref));
     if (was_empty) {
-        uint64_t delay = 0;
-        uref_clock_get_vbv_delay(uref, &delay);
-        upipe_ts_join_sub->next_dts = dts - delay;
+        upipe_ts_join_sub->next_cr = cr;
         upipe_use(upipe);
     }
 
@@ -249,7 +247,7 @@ static struct upipe *upipe_ts_join_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This finds the input with the lowest DTS.
+/** @internal @This finds the input with the lowest date.
  *
  * @param upipe description structure of the pipe
  * @return a pointer to the sub pipe, or NULL if not all inputs have packets
@@ -258,14 +256,14 @@ static struct upipe_ts_join_sub *upipe_ts_join_find_input(struct upipe *upipe)
 {
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     struct uchain *uchain;
-    uint64_t earliest_dts = UINT64_MAX;
+    uint64_t earliest_cr = UINT64_MAX;
     struct upipe_ts_join_sub *earliest_input = NULL;
     ulist_foreach (&upipe_ts_join->subs, uchain) {
         struct upipe_ts_join_sub *input = upipe_ts_join_sub_from_uchain(uchain);
-        if (input->next_dts == UINT64_MAX)
+        if (input->next_cr == UINT64_MAX)
             return NULL;
-        if (input->next_dts < earliest_dts) {
-            earliest_dts = input->next_dts;
+        if (input->next_cr < earliest_cr) {
+            earliest_cr = input->next_cr;
             earliest_input = input;
         }
     }
@@ -296,15 +294,12 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
         struct uref *uref = uref_from_uchain(uchain);
 
         if (ulist_empty(&input->urefs)) {
-            input->next_dts = UINT64_MAX;
+            input->next_cr = UINT64_MAX;
             upipe_release(upipe_ts_join_sub_to_upipe(input));
         } else {
             uchain = ulist_peek(&input->urefs);
             struct uref *next_uref = uref_from_uchain(uchain);
-            uref_clock_get_dts(next_uref, &input->next_dts);
-            uint64_t delay = 0;
-            uref_clock_get_vbv_delay(next_uref, &delay);
-            input->next_dts -= delay;
+            uref_clock_get_cr_sys(next_uref, &input->next_cr);
         }
 
         upipe_ts_join_output(upipe, uref, upump);

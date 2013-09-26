@@ -50,6 +50,8 @@
 /** we only accept formerly TS packets that contain PES headers when unit
  * start is true */
 #define EXPECTED_FLOW_DEF "block.mpegtspes."
+/** 2^33 (max resolution of PCR, PTS and DTS) */
+#define UINT33_MAX UINT64_C(8589934592)
 
 /** @internal @This is the private context of a ts_pesd pipe. */
 struct upipe_ts_pesd {
@@ -251,25 +253,18 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             return;
         }
 
-        pts *= UCLOCK_FREQ / 90000;
+        uint64_t dts_pts_delay = (UINT33_MAX + pts - dts) % UINT33_MAX;
+        dts_pts_delay *= UCLOCK_FREQ / 90000;
         dts *= UCLOCK_FREQ / 90000;
-        if (unlikely(!uref_clock_set_pts_orig(upipe_ts_pesd->next_uref, pts) ||
-                     !uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts))) {
-            upipe_ts_pesd_flush(upipe);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            return;
-        }
+        uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts);
+        uref_clock_set_dts_pts_delay(upipe_ts_pesd->next_uref, dts_pts_delay);
         upipe_throw_clock_ts(upipe, upipe_ts_pesd->next_uref);
     }
 
-    if (unlikely((alignment &&
-                  !uref_block_set_start(upipe_ts_pesd->next_uref)) ||
-                 (!alignment &&
-                  !uref_block_delete_start(upipe_ts_pesd->next_uref)))) {
-        upipe_ts_pesd_flush(upipe);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        return;
-    }
+    if (alignment)
+        uref_block_set_start(upipe_ts_pesd->next_uref);
+    else
+        uref_block_delete_start(upipe_ts_pesd->next_uref);
 
     ret = uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1);

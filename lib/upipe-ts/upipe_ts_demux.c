@@ -561,31 +561,21 @@ static bool upipe_ts_demux_output_clock_ts(struct uprobe *uprobe,
         upipe_ts_demux_program_from_output_mgr(upipe->mgr);
 
     struct uref *uref = va_arg(args, struct uref *);
-    uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
-    uref_clock_get_pts_orig(uref, &pts_orig);
-    uref_clock_get_dts_orig(uref, &dts_orig);
-    if (pts_orig != UINT64_MAX) {
-        /* handle 2^33 wrap-arounds */
-        uint64_t delta = (TS_CLOCK_MAX + pts_orig -
-                          (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-        if (delta <= upipe_ts_demux_output->max_delay) {
-            uint64_t pts = program->timestamp_offset +
-                           program->last_pcr + delta;
-            uref_clock_set_pts(uref, pts);
-            if (pts > program->timestamp_highest)
-                program->timestamp_highest = pts;
-        } else
-            upipe_warn_va(upipe, "too long delay for PTS (%"PRIu64")", delta);
-    }
-    if (dts_orig != UINT64_MAX) {
+    uint64_t dts_orig;
+    if (uref_clock_get_dts_orig(uref, &dts_orig)) {
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-        if (delta <= upipe_ts_demux_output->max_delay)
-            uref_clock_set_dts(uref, program->timestamp_offset +
-                                     program->last_pcr + delta);
-        else
-            upipe_warn_va(upipe, "too long delay for DTS (%"PRIu64")", delta);
+        if (delta <= upipe_ts_demux_output->max_delay) {
+            uint64_t dts = program->timestamp_offset +
+                           program->last_pcr + delta;
+            uref_clock_set_dts_prog(uref, dts);
+            uint64_t dts_pts_delay = 0;
+            uref_clock_get_dts_pts_delay(uref, &dts_pts_delay);
+            if (dts + dts_pts_delay > program->timestamp_highest)
+                program->timestamp_highest = dts + dts_pts_delay;
+        } else
+            upipe_warn_va(upipe, "too long delay for PTS (%"PRIu64")", delta);
     }
 
     upipe_throw(upipe, event, uref);
@@ -1054,7 +1044,7 @@ static bool upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
         case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);
             uint64_t systime;
-            if (uref_clock_get_systime_rap(uref, &systime))
+            if (uref_clock_get_rap_sys(uref, &systime))
                 upipe_ts_demux_program->systime_pmt = systime;
             return true;
         }
@@ -1119,6 +1109,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     if (delta <= MAX_PCR_INTERVAL && !discontinuity)
         upipe_ts_demux_program->last_pcr += delta;
     else {
+        /* FIXME same clock for all programs */
         upipe_warn(upipe, "PCR discontinuity");
         upipe_ts_demux_program->last_pcr = pcr_orig;
         upipe_ts_demux_program->timestamp_offset =
@@ -1142,7 +1133,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
                                     upipe_ts_demux_program->systime_pcr);
         }
         /* this is also valid for the packet we are processing */
-        uref_clock_set_systime_rap(uref, upipe_ts_demux_program->systime_pcr);
+        uref_clock_set_rap_sys(uref, upipe_ts_demux_program->systime_pcr);
         if (!ret)
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
     }
@@ -1600,7 +1591,7 @@ static bool upipe_ts_demux_patd_new_rap(struct uprobe *uprobe,
     assert(uref != NULL);
 
     uint64_t systime_rap;
-    if (likely(uref_clock_get_systime_rap(uref, &systime_rap)))
+    if (likely(uref_clock_get_rap_sys(uref, &systime_rap)))
         if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap,
                                            systime_rap)))
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);

@@ -101,7 +101,7 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
 
     if (likely(upipe_setrap->systime_rap != UINT64_MAX))
-        uref->systime_rap = upipe_setrap->systime_rap;
+        uref->rap_sys = upipe_setrap->systime_rap;
     upipe_setrap_output(upipe, uref, upump);
 }
 

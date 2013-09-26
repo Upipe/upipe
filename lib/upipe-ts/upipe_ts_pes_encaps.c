@@ -51,6 +51,8 @@
 #define EXPECTED_FLOW_DEF "block."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
 #define UINT33_MAX UINT64_C(8589934592)
+/** ratio between Upipe freq and MPEG freq */
+#define CLOCK_SCALE (UCLOCK_FREQ / 90000)
 
 /** @internal @This is the private context of a ts_pese pipe. */
 struct upipe_ts_pese {
@@ -152,11 +154,12 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
 
     size_t header_size;
     if (upipe_ts_pese->pes_id != PES_STREAM_ID_PRIVATE_2) {
-        uref_clock_get_pts(uref, &pts);
-        uref_clock_get_dts(uref, &dts);
+        uref_clock_get_pts_prog(uref, &pts);
+        uref_clock_get_dts_prog(uref, &dts);
         if (pts != UINT64_MAX) {
             if (dts != UINT64_MAX &&
-                ((pts / 300) % UINT33_MAX) != ((dts / 300) % UINT33_MAX))
+                ((pts / CLOCK_SCALE) % UINT33_MAX) !=
+                    ((dts / CLOCK_SCALE) % UINT33_MAX))
                 header_size = PES_HEADER_SIZE_PTSDTS;
             else
                 header_size = PES_HEADER_SIZE_PTS;
@@ -199,8 +202,9 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
         if (pts != UINT64_MAX) {
             pes_set_pts(buffer, (pts / 300) % UINT33_MAX);
             if (dts != UINT64_MAX &&
-                ((pts / 300) % UINT33_MAX) != ((dts / 300) % UINT33_MAX))
-                pes_set_dts(buffer, (dts / 300) % UINT33_MAX);
+                ((pts / CLOCK_SCALE) % UINT33_MAX) !=
+                    ((dts / CLOCK_SCALE) % UINT33_MAX))
+                pes_set_dts(buffer, (dts / CLOCK_SCALE) % UINT33_MAX);
         }
     }
     ubuf_block_unmap(ubuf, 0);
@@ -229,7 +233,7 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     bool force = false;
-    uint64_t uref_duration;
+    uint64_t uref_duration = UINT64_MAX;
     if (!uref_clock_get_duration(uref, &uref_duration))
         force = true;
 

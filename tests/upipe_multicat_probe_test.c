@@ -80,7 +80,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref*);
             uint64_t index = va_arg(args, uint64_t);
             uint64_t systime = 0;
-            uref_clock_get_systime(uref, &systime);
+            assert(uref_clock_get_cr_sys(uref, &systime));
             assert(systime/ROTATE == index);
             assert(index == probe_counter);
 
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
     for (i=0; i < UREFNB; i++) {
         uref = uref_alloc(uref_mgr);
         assert(uref != NULL);
-        uref_clock_set_systime(uref, SYSTIMEINC * i);
+        uref_clock_set_cr_sys(uref, SYSTIMEINC * i);
         upipe_input(upipe_multicat_probe, uref, NULL);
     }
     assert(pipe_counter == UREFNB);

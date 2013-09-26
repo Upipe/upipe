@@ -103,16 +103,16 @@ static void _upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
     struct ubuf *header, *payload;
     uint8_t *buf = NULL;
-    uint64_t dts = 0;
+    uint64_t cr = 0;
     uint32_t ts;
     lldiv_t div;
     int size = -1;
 
-    /* timestamp (synced to dts, fallback to systime) */
-    if (unlikely(!uref_clock_get_dts(uref, &dts))) {
-        uref_clock_get_systime(uref, &dts);
+    /* timestamp (synced to program clock ref, fallback to system clock ref) */
+    if (unlikely(!uref_clock_get_cr_prog(uref, &cr))) {
+        uref_clock_get_cr_sys(uref, &cr);
     }
-    div = lldiv(dts, UCLOCK_FREQ);
+    div = lldiv(cr, UCLOCK_FREQ);
     ts = div.quot * upipe_rtp_prepend->clockrate
          + ((uint64_t)div.rem * upipe_rtp_prepend->clockrate)/UCLOCK_FREQ;
     
