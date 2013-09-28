@@ -812,6 +812,58 @@ udict_copy_err:
     return NULL;
 }
 
+/** @This compares two udicts.
+ *
+ * @param udict1 first udict
+ * @param udict2 second udict
+ * @return 0 if the two udicts are identical
+ */
+static inline int udict_cmp(struct udict *udict1, struct udict *udict2)
+{
+    const char *name = NULL;
+    enum udict_type type = UDICT_TYPE_END;
+    for ( ; ; ) {
+        udict_iterate(udict1, &name, &type);
+        if (unlikely(type == UDICT_TYPE_END))
+            break;
+
+        size_t attr1_size;
+        const uint8_t *attr1 = udict_get(udict1, name, type, &attr1_size);
+        if (unlikely(attr1 == NULL))
+            return 1;
+
+        size_t attr2_size;
+        const uint8_t *attr2 = udict_get(udict2, name, type, &attr2_size);
+        if (unlikely(attr2 == NULL))
+            return 1;
+
+        if (attr1_size != attr2_size || memcmp(attr1, attr2, attr1_size))
+            return 1;
+    }
+
+    name = NULL;
+    type = UDICT_TYPE_END;
+    for ( ; ; ) {
+        udict_iterate(udict2, &name, &type);
+        if (unlikely(type == UDICT_TYPE_END))
+            break;
+
+        size_t attr2_size;
+        const uint8_t *attr2 = udict_get(udict2, name, type, &attr2_size);
+        if (unlikely(attr2 == NULL))
+            return -1;
+
+        size_t attr1_size;
+        const uint8_t *attr1 = udict_get(udict1, name, type, &attr1_size);
+        if (unlikely(attr1 == NULL))
+            return -1;
+
+        if (attr1_size != attr2_size || memcmp(attr1, attr2, attr1_size))
+            return -1;
+    }
+    return 0;
+}
+
 /** @This instructs an existing udict manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.
  *
