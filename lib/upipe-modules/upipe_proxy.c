@@ -87,6 +87,8 @@ struct upipe_proxy {
     struct upipe *upipe_super;
     /** probe to reroute events */
     struct uprobe uprobe;
+    /** true when the proxy has been released */
+    bool proxy_dead;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -154,6 +156,7 @@ static struct upipe *upipe_proxy_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     uprobe_init(&upipe_proxy->uprobe, upipe_proxy_probe, NULL);
     upipe_proxy->upipe_super = NULL;
+    upipe_proxy->proxy_dead = false;
 
     struct upipe_proxy_mgr *proxy_mgr = upipe_proxy_mgr_from_upipe_mgr(mgr);
     struct upipe *upipe_super = upipe_alloc_va(proxy_mgr->super_mgr,
@@ -205,8 +208,11 @@ static void upipe_proxy_free(struct upipe *upipe)
     struct upipe_proxy_mgr *proxy_mgr =
         upipe_proxy_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_proxy *upipe_proxy = upipe_proxy_from_upipe(upipe);
-    proxy_mgr->proxy_released(upipe_proxy->upipe_super);
-    upipe_release(upipe_proxy->upipe_super);
+    if (!upipe_proxy->proxy_dead) {
+        upipe_proxy->proxy_dead = true;
+        proxy_mgr->proxy_released(upipe_proxy->upipe_super);
+        upipe_release(upipe_proxy->upipe_super);
+    }
     /* Defer deletion to catching dead event */
 }
 

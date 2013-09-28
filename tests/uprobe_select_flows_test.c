@@ -30,6 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/urefcount.h>
+#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_log.h>
@@ -44,6 +45,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
+#include <upipe/uref_program_flow.h>
 #include <upipe/uref_std.h>
 
 #include <stdio.h>
@@ -52,10 +54,11 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 1
-#define UREF_POOL_DEPTH 1
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
 
 static uint64_t add_flows, del_flows;
+static struct ulist flow_defs;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -67,20 +70,113 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_SPLIT_UPDATE:
             break;
-        case UPROBE_SPLIT_ADD_FLOW: {
-            uint64_t flow_id = va_arg(args, uint64_t);
-            add_flows -= flow_id;
-            break;
-        }
-        case UPROBE_SPLIT_DEL_FLOW: {
-            uint64_t flow_id = va_arg(args, uint64_t);
-            del_flows -= flow_id;
-            break;
-        }
     }
     return true;
 }
+
+struct test_sub {
+    uint64_t flow_id;
+    struct upipe upipe;
+};
+
+/** helper phony pipe to test uprobe_select_flows */
+static struct upipe *test_sub_alloc(struct upipe_mgr *mgr,
+                                    struct uprobe *uprobe,
+                                    uint32_t signature, va_list args)
+{
+    assert(signature == UPIPE_FLOW_SIGNATURE);
+    struct uref *flow_def = va_arg(args, struct uref *);
+    uint64_t flow_id;
+    assert(uref_flow_get_id(flow_def, &flow_id));
+    add_flows -= flow_id;
+
+    struct test_sub *test_sub = malloc(sizeof(struct test_sub));
+    assert(test_sub != NULL);
+    upipe_init(&test_sub->upipe, mgr, uprobe);
+    test_sub->flow_id = flow_id;
+    upipe_throw_ready(&test_sub->upipe);
+    return &test_sub->upipe;
+}
+
+/** helper phony pipe to test uprobe_select_flows */
+static void test_sub_free(struct upipe *upipe)
+{
+    struct test_sub *test_sub = container_of(upipe, struct test_sub, upipe);
+    upipe_throw_dead(upipe);
+    assert(test_sub->flow_id != UINT64_MAX);
+    del_flows -= test_sub->flow_id;
+    upipe_clean(upipe);
+    free(test_sub);
+}
+
+/** helper phony pipe to test uprobe_select_flows */
+static struct upipe_mgr test_sub_mgr = {
+    .upipe_alloc = test_sub_alloc,
+    .upipe_input = NULL,
+    .upipe_control = NULL,
+    .upipe_free = test_sub_free,
+
+    .upipe_mgr_free = NULL
+};
+
+/** helper phony pipe to test uprobe_select_flows */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
+{
+    struct upipe *upipe = malloc(sizeof(struct upipe));
+    assert(upipe != NULL);
+    upipe_init(upipe, mgr, uprobe);
+    ulist_init(&flow_defs);
+    return upipe;
+}
+
+/** helper phony pipe to test uprobe_select_flows */
+static bool test_control(struct upipe *upipe,
+                         enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
+            assert(p != NULL);
+            *p = &test_sub_mgr;
+            return true;
+        }
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **p = va_arg(args, struct uref **);
+            assert(p != NULL);
+            struct uchain *uchain;
+            if (*p != NULL)
+                uchain = uref_to_uchain(*p)->next;
+            else
+                uchain = ulist_peek(&flow_defs);
+            if (uchain == NULL)
+                return false;
+            *p = uref_from_uchain(uchain);
+            return true;
+        }
+
+        default:
+            return false;
+    }
+}
+
+/** helper phony pipe to test uprobe_select_flows */
+static void test_free(struct upipe *upipe)
+{
+    upipe_clean(upipe);
+    free(upipe);
+}
+
+/** helper phony pipe to test uprobe_select_flows */
+static struct upipe_mgr test_mgr = {
+    .upipe_alloc = NULL,
+    .upipe_input = NULL,
+    .upipe_control = test_control,
+    .upipe_free = NULL,
+
+    .upipe_mgr_free = NULL
+};
 
 int main(int argc, char **argv)
 {
@@ -101,108 +197,189 @@ int main(int argc, char **argv)
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
     assert(log != NULL);
 
-    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(log,
-                                                 UPROBE_SELFLOW_PIC, "auto");
-    assert(uprobe_selflow != NULL);
+    /* programs */
 
-    struct upipe test_pipe;
-    test_pipe.uprobe = uprobe_selflow;
-    struct upipe *upipe = &test_pipe;
+    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(log, log,
+                                                 UPROBE_SELFLOW_VOID, "auto");
+    assert(uprobe_selflow != NULL);
+    struct upipe *upipe = test_alloc(&test_mgr, uprobe_selflow);
 
     struct uref *flow_def;
     const char *flows;
-    flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
+
+    flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    add_flows = 42;
+    assert(uref_flow_set_id(flow_def, 12));
+    assert(uref_program_flow_set_name(flow_def, "A 1"));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    add_flows = 12;
     del_flows = 0;
-    upipe_split_throw_add_flow(upipe, 42, flow_def);
+    upipe_split_throw_update(upipe);
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "12,"));
+
+    flow_def = uref_program_flow_alloc_def(uref_mgr);
+    assert(flow_def != NULL);
+    assert(uref_flow_set_id(flow_def, 13));
+    assert(uref_program_flow_set_name(flow_def, "B 2"));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    upipe_split_throw_update(upipe);
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "12,"));
+
+    add_flows = 13;
+    del_flows = 12;
+    uprobe_selflow_set(uprobe_selflow, "13,");
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "13,"));
+
+    add_flows = 12;
+    uprobe_selflow_set(uprobe_selflow, "name=B 2,name=A 1,foo=bar,");
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "name=B 2,name=A 1,foo=bar,"));
+
+    del_flows = 12 + 13;
+    uprobe_selflow_set(uprobe_selflow, "14,");
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "14,"));
+
+    add_flows = 12 + 13;
+    uprobe_selflow_set(uprobe_selflow, "all");
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "all"));
+
+    del_flows = 13;
+    uprobe_selflow_set(uprobe_selflow, "auto");
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "12,"));
+
+    del_flows = 12;
+    {
+        struct uchain *uchain;
+        ulist_delete_foreach (&flow_defs, uchain) {
+            struct uref *flow_def = uref_from_uchain(uchain);
+            ulist_delete(&flow_defs, uchain);
+            uref_free(flow_def);
+        }
+    }
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "auto"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, ""));
-    uref_free(flow_def);
+
+    uprobe_selflow_free(uprobe_selflow);
+
+    /* pictures */
+
+    uprobe_selflow = uprobe_selflow_alloc(log, log, UPROBE_SELFLOW_PIC, "auto");
+    assert(uprobe_selflow != NULL);
+    upipe->uprobe = uprobe_selflow;
+
+    flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
+    assert(flow_def != NULL);
+    assert(uref_flow_set_id(flow_def, 42));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    add_flows = 0;
+    del_flows = 0;
+    upipe_split_throw_update(upipe);
+    assert(!add_flows);
+    assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "auto"));
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
+    assert(uref_flow_set_id(flow_def, 43));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
     add_flows = 43;
-    upipe_split_throw_add_flow(upipe, 43, flow_def);
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "43,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "43,"));
-    uref_free(flow_def);
 
     flow_def = uref_block_flow_alloc_def(uref_mgr, "pic.");
     assert(flow_def != NULL);
-    upipe_split_throw_add_flow(upipe, 44, flow_def);
+    assert(uref_flow_set_id(flow_def, 44));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "43,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "43,44,"));
-    uref_free(flow_def);
 
     flow_def = uref_block_flow_alloc_def(uref_mgr, "pic.sub.");
     assert(flow_def != NULL);
-    add_flows = 45;
-    upipe_split_throw_add_flow(upipe, 45, flow_def);
+    assert(uref_flow_set_id(flow_def, 45));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "43,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "43,44,"));
-    uref_free(flow_def);
 
+    struct uchain *uchain = ulist_pop(&flow_defs);
+    flow_def = uref_from_uchain(uchain);
+    uref_free(flow_def);
+    upipe_split_throw_update(upipe);
+    assert(!add_flows);
+    assert(!del_flows);
+
+    uchain = ulist_pop(&flow_defs);
+    flow_def = uref_from_uchain(uchain);
+    uref_free(flow_def);
     add_flows = 44;
     del_flows = 43;
-    upipe_split_throw_del_flow(upipe, 43);
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "44,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "44,"));
-
-    del_flows = 42;
-    upipe_split_throw_del_flow(upipe, 42);
-    assert(!add_flows);
-    assert(!del_flows);
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
     assert(uref_flow_set_lang(flow_def, "eng"));
-    upipe_split_throw_add_flow(upipe, 46, flow_def);
+    assert(uref_flow_set_id(flow_def, 46));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "44,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "44,46,"));
-    uref_free(flow_def);
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
     assert(uref_flow_set_lang(flow_def, "fra"));
-    upipe_split_throw_add_flow(upipe, 47, flow_def);
+    assert(uref_flow_set_id(flow_def, 47));
+    ulist_add(&flow_defs, uref_to_uchain(flow_def));
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "44,"));
-    uprobe_selflow_list(uprobe_selflow, &flows);
-    assert(!strcmp(flows, "44,46,47,"));
-    uref_free(flow_def);
 
     add_flows = 47;
     del_flows = 44;
     uprobe_selflow_set(uprobe_selflow, "47,");
     assert(!add_flows);
     assert(!del_flows);
+    uprobe_selflow_get(uprobe_selflow, &flows);
+    assert(!strcmp(flows, "47,"));
 
     add_flows = 44 + 46;
     del_flows = 47;
@@ -221,17 +398,17 @@ int main(int argc, char **argv)
     assert(!add_flows);
     assert(!del_flows);
 
-    del_flows = 45;
-    upipe_split_throw_del_flow(upipe, 45);
+    ulist_delete_foreach (&flow_defs, uchain) {
+        struct uref *flow_def = uref_from_uchain(uchain);
+        ulist_delete(&flow_defs, uchain);
+        uref_free(flow_def);
+    }
+    del_flows = 44 + 46 + 47;
+    upipe_split_throw_update(upipe);
     assert(!add_flows);
     assert(!del_flows);
 
-    del_flows = 44 + 46 + 47;
-    upipe_split_throw_del_flow(upipe, 44);
-    upipe_split_throw_del_flow(upipe, 46);
-    upipe_split_throw_del_flow(upipe, 47);
-    assert(!add_flows);
-    assert(!del_flows);
+    test_free(upipe);
 
     uprobe_selflow_free(uprobe_selflow);
     uprobe_log_free(log);

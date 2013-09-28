@@ -111,6 +111,8 @@ struct upipe_avfsrc {
     AVFormatContext *context;
     /** true if the URL has already been probed by avformat */
     bool probed;
+    /** true if the proxy has been released */
+    bool proxy_dead;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -329,6 +331,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
     upipe_avfsrc->probed = false;
+    upipe_avfsrc->proxy_dead = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -754,6 +757,9 @@ static void upipe_avfsrc_probe(struct upump *upump)
 static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    if (upipe_avfsrc->proxy_dead)
+        return false;
+
     AVFormatContext *context = upipe_avfsrc->context;
     if (context == NULL)
         return false;
@@ -1094,7 +1100,10 @@ static struct upipe_mgr upipe_avfsrc_mgr = {
  */
 static void upipe_avfsrc_proxy_released(struct upipe *upipe)
 {
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    upipe_avfsrc->proxy_dead = true;
     upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+    upipe_split_throw_update(upipe);
 }
 
 /** @This returns the management structure for all avformat sources.

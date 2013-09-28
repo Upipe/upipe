@@ -37,7 +37,6 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
 #include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_select_programs.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
@@ -72,7 +71,6 @@
 #define UPUMP_BLOCKER_POOL 10
 
 static uint64_t duration = 0;
-struct upipe *output = NULL;
 
 /** helper phony pipe to count pictures */
 static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
@@ -111,27 +109,17 @@ static struct upipe_mgr count_mgr = {
     .upipe_mgr_free = NULL
 };
 
-/** catch callback (main thread) */
+/** catch callback (demux subpipes for flows) */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_SOURCE_END:
-            return true;
-
-        case UPROBE_SPLIT_ADD_FLOW: {
-            uint64_t flow_id = va_arg(args, uint64_t);
+        case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
-
-            assert(output == NULL);
-            output = upipe_flow_alloc_sub(upipe,
-                     uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "video"),
-                     flow_def);
-            assert(output != NULL);
 
             struct upipe *sink = upipe_flow_alloc(&count_mgr, NULL, flow_def);
             assert(sink != NULL);
-            upipe_set_output(output, sink);
+            upipe_set_output(upipe, sink);
             upipe_release(sink);
             return true;
         }
@@ -177,10 +165,12 @@ int main(int argc, char **argv)
     struct uprobe uprobe_split_s;
     uprobe_init(&uprobe_split_s, catch, uprobe);
     struct uprobe *uprobe_split = &uprobe_split_s;
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_PIC, "auto");
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SOUND, "");
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SUBPIC, "");
-    uprobe_split = uprobe_selprog_alloc(uprobe_split, "auto");
+    struct uprobe *uprobe_split_pic =
+        uprobe_selflow_alloc(uprobe, uprobe_split,
+                             UPROBE_SELFLOW_PIC, "auto");
+    struct uprobe *uprobe_split_void =
+        uprobe_selflow_alloc(uprobe, uprobe_split_pic, UPROBE_SELFLOW_VOID,
+                             "auto");
 
     /* pipes */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
@@ -205,7 +195,8 @@ int main(int argc, char **argv)
     upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
     struct upipe *ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_split, UPROBE_LOG_DEBUG, "ts demux"),
+            uprobe_pfx_adhoc_alloc(uprobe_split_void, UPROBE_LOG_DEBUG,
+                                   "ts demux"),
             flow_def);
     upipe_set_output(upipe_src, ts_demux);
     upipe_release(ts_demux);
@@ -214,15 +205,10 @@ int main(int argc, char **argv)
     /* main loop */
     ev_loop(loop, 0);
 
-    if (output != NULL)
-        upipe_release(output);
     upipe_release(upipe_src);
 
-    uprobe_selprog_set(uprobe_split, "");
-    uprobe_split = uprobe_selprog_free(uprobe_split);
-    uprobe_split = uprobe_selflow_free(uprobe_split);
-    uprobe_split = uprobe_selflow_free(uprobe_split);
-    uprobe_split = uprobe_selflow_free(uprobe_split);
+    uprobe_selflow_free(uprobe_split_void);
+    uprobe_selflow_free(uprobe_split_pic);
     uprobe = uprobe_upump_mgr_free(uprobe);
     uprobe = uprobe_uref_mgr_free(uprobe);
     uprobe = uprobe_log_free(uprobe);

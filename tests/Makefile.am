@@ -25,6 +25,7 @@ check_PROGRAMS = \
 	uprobe_prefix_test \
 	uprobe_log_test \
 	uprobe_dejitter_test \
+	uprobe_select_flows_test \
 	uprobe_uref_mgr_test \
 	umem_alloc_test \
 	umem_pool_test \
@@ -58,6 +59,7 @@ TESTS = \
 	uprobe_prefix_test.sh \
 	uprobe_log_test.sh \
 	uprobe_dejitter_test \
+	uprobe_select_flows_test \
 	uprobe_uref_mgr_test \
 	uclock_std_test \
 	upipe_trickplay_test \

@@ -137,44 +137,27 @@ static bool catch_split(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         default:
             break;
-        case UPROBE_DEAD:
-        case UPROBE_READY:
-        case UPROBE_SPLIT_DEL_FLOW:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_CLOCK_REF:
-        case UPROBE_CLOCK_TS:
+        case UPROBE_NEED_UBUF_MGR:
+            upipe_set_ubuf_mgr(upipe, block_mgr);
             return true;
 
-        case UPROBE_SOURCE_END:
-            upipe_release(upipe);
-            return true;
-
-        case UPROBE_SPLIT_ADD_FLOW: {
-            uint64_t flow_id = va_arg(args, uint64_t);
+        case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             const char *def = NULL;
             uref_flow_get_def(flow_def, &def);
             if (ubase_ncmp(def, "block.")) {
                 upipe_warn_va(upipe,
-                         "flow def %s (%d) is not supported", def, flow_id);
+                         "flow def %s is not supported", def);
                 break;
             }
-            upipe_notice_va(upipe, "adding flow %s (%d)", def, flow_id);
-
-            struct upipe *output = upipe_flow_alloc_sub(upipe,
-                    uprobe_pfx_adhoc_alloc_va(&uprobe_outputs, loglevel,
-                                              "output %"PRIu64, flow_id),
-                    flow_def);
-
-            upipe_set_ubuf_mgr(output, block_mgr);
+            upipe_notice_va(upipe, "adding flow %s", def);
 
             struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
             struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
                     uprobe_pfx_adhoc_alloc_va(logger, loglevel, "avcdec"),
                     flow_def);
             upipe_set_ubuf_mgr(avcdec, yuv_mgr);
-            upipe_set_output(output, avcdec);
+            upipe_set_output(upipe, avcdec);
             upipe_get_flow_def(avcdec, &flow_def);
 
             /* queue sink */
@@ -325,9 +308,8 @@ int main(int argc, char **argv)
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch_split, logger);
     struct uprobe *uprobe_split = &uprobe;
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_PIC, "auto");
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SOUND, "");
-    uprobe_split = uprobe_selflow_alloc(uprobe_split, UPROBE_SELFLOW_SUBPIC, "");
+    uprobe_split = uprobe_selflow_alloc(logger, uprobe_split,
+                                        UPROBE_SELFLOW_PIC, "auto");
     /* output probe */
     uprobe_init(&uprobe_outputs, catch_outputs, logger);
 
@@ -366,8 +348,6 @@ int main(int argc, char **argv)
     upipe_av_clean();
     uclock_release(uclock);
     
-    uprobe_split = uprobe_selflow_free(uprobe_split);
-    uprobe_split = uprobe_selflow_free(uprobe_split);
     uprobe_split = uprobe_selflow_free(uprobe_split);
 
     upump_mgr_release(upump_mgr);

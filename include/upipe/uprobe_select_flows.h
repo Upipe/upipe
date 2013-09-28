@@ -24,14 +24,13 @@
  */
 
 /** @file
- * @short probe catching add_flow events and forwarding some flows
+ * @short probe catching need_update events and creating subpipes
  *
- * The probe catches the add_flow events and only exports
- * (ie. forwards upstream) the flows that are selected.
+ * The probe catches the need_update events, checks whether it is necessary
+ * to output the flow, and allocates a subpipe.
  *
  * In case of a change of configuration, or if flows are added or deleted,
- * the selections are reconsidered and appropriate del_flows/add_flows are
- * emitted.
+ * the selections are reconsidered.
  */
 
 #ifndef _UPIPE_UPROBE_SELECT_FLOWS_H_
@@ -45,7 +44,9 @@ extern "C" {
 
 /** @This defines types of flows to select from. */
 enum uprobe_selflow_type {
-    /** flows, excepting sub pictures */
+    /** void flows (programs) */
+    UPROBE_SELFLOW_VOID,
+    /** picture flows, excepting sub pictures */
     UPROBE_SELFLOW_PIC,
     /** sound flows */
     UPROBE_SELFLOW_SOUND,
@@ -56,13 +57,15 @@ enum uprobe_selflow_type {
 /** @This allocates a new uprobe_selflow structure.
  *
  * @param next next probe to test if this one doesn't catch the event
+ * @param subprobe probe to set on flow subpipes
  * @param type type of flows to filter
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng) to select, terminated by a comma, or "auto" to automatically
- * select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
+ * automatically select the first flow, or "all"
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
+                                    struct uprobe *subprobe,
                                     enum uprobe_selflow_type type,
                                     const char *flows);
 
@@ -76,26 +79,17 @@ struct uprobe *uprobe_selflow_free(struct uprobe *uprobe);
 /** @This returns the flows selected by this probe.
  *
  * @param uprobe pointer to probe
- * @param flows_p filled in with a comma-separated list of flows or
- * attribute/value pairs (lang=eng) to select, terminated by a comma, or "all",
- * or "auto" if no flow has been found yet
+ * @param flows_p filled in with a comma-separated list of flows to select,
+ * terminated by a comma, or "all", or "auto" if no flow has been found yet
  */
 void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p);
-
-/** @This returns a list of all the flows of the given type available.
- *
- * @param uprobe pointer to probe
- * @param flows_p filled in with a comma-separated list of all flows,
- * terminated by a comma
- */
-void uprobe_selflow_list(struct uprobe *uprobe, const char **flows_p);
 
 /** @This changes the flows selected by this probe.
  *
  * @param uprobe pointer to probe
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng) to select, terminated by a comma, or "auto" to automatically
- * select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
+ * automatically select the first flow, or "all"
  */
 void uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
 

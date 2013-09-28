@@ -1394,6 +1394,8 @@ static void upipe_ts_demux_program_proxy_released(struct upipe *upipe)
                                        upipe_ts_demux_program->psi_pid);
         upipe_ts_demux_program->psi_split_output = NULL;
     }
+    upipe_ts_demux_program_store_last_subpipe(upipe, NULL);
+    upipe_split_throw_update(upipe);
 }
 
 /** @internal @This initializes the program manager for a ts_demux pipe.
@@ -2040,6 +2042,8 @@ static void upipe_ts_demux_proxy_released(struct upipe *upipe)
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
         upipe_ts_demux->psi_pid_pat = NULL;
     }
+    upipe_ts_demux_store_last_subpipe(upipe, NULL);
+    upipe_split_throw_update(upipe);
 }
 
 /** @This frees a upipe manager.

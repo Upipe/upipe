@@ -5,6 +5,7 @@ libupipe_la_SOURCES = \
 	uprobe_stdio.c \
 	uprobe_log.c \
 	uprobe_dejitter.c \
+	uprobe_select_flows.c \
 	uprobe_upump_mgr.c \
 	uprobe_uref_mgr.c \
 	uclock_std.c \
