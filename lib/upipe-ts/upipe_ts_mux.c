@@ -204,7 +204,7 @@ struct upipe_ts_mux {
     bool octetrate_auto;
 
     /** list of programs */
-    struct ulist programs;
+    struct uchain programs;
 
     /** manager to create programs */
     struct upipe_mgr program_mgr;
@@ -258,7 +258,7 @@ struct upipe_ts_mux_program {
     uint64_t pcr_interval;
 
     /** list of inputs */
-    struct ulist inputs;
+    struct uchain inputs;
 
     /** manager to create inputs */
     struct upipe_mgr input_mgr;

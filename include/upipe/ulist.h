@@ -38,47 +38,73 @@ extern "C" {
 
 #include <stdbool.h>
 
-/** @This is the implementation of local list data structure. Please note
- * that it is not thread-safe. */
-struct ulist {
-    /** pointer to first queued structure, or NULL */
-    struct uchain *first;
-    /** pointer to next pointer of last queued structure, or &first */
-    struct uchain **last_p;
-};
-
 /** @This initializes a ulist.
  *
- * @param ulist pointer to a ulist structure
+ * @param uchain pointer to a ulist
  */
-static inline void ulist_init(struct ulist *ulist)
+static inline void ulist_init(struct uchain *ulist)
 {
-    ulist->first = NULL;
-    ulist->last_p = &ulist->first;
+    ulist->next = ulist->prev = ulist;
+}
+
+/** @This checks if the element is the last of the list.
+ *
+ * @param ulist pointer to a ulist
+ * @param element pointer to element
+ */
+static inline bool ulist_is_last(struct uchain *ulist, struct uchain *element)
+{
+    return element->next == ulist;
 }
 
 /** @This checks if the list is empty.
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  */
-static inline bool ulist_empty(struct ulist *ulist)
+static inline bool ulist_empty(struct uchain *ulist)
 {
-    return ulist->first == NULL;
+    return ulist_is_last(ulist, ulist);
 }
 
 /** @This calculates the depth of the list (suboptimal, only for debug).
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  */
-static inline size_t ulist_depth(struct ulist *ulist)
+static inline size_t ulist_depth(struct uchain *ulist)
 {
-    struct uchain *uchain = ulist->first;
+    struct uchain *uchain = ulist->next;
     size_t depth = 0;
-    while (uchain != NULL) {
-        depth ++;
+    while (uchain != ulist) {
+        depth++;
         uchain = uchain->next;
     }
     return depth;
+}
+
+/** @This adds a new element to a ulist at the given position.
+ *
+ * @param element pointer to element to add
+ * @param prev pointer to previous element
+ * @param next pointer to next element
+ */
+static inline void ulist_insert(struct uchain *prev, struct uchain *next,
+                                struct uchain *element)
+{
+    next->prev = element;
+    element->next = next;
+    element->prev = prev;
+    prev->next = element;
+}
+
+/** @This deletes an element from a ulist.
+ *
+ * @param element pointer to element to delete
+ */
+static inline void ulist_delete(struct uchain *element)
+{
+    element->prev->next = element->next;
+    element->next->prev = element->prev;
+    uchain_init(element);
 }
 
 /** @This adds a new element at the end.
@@ -86,123 +112,72 @@ static inline size_t ulist_depth(struct ulist *ulist)
  * @param ulist pointer to a ulist structure
  * @param element pointer to element to add
  */
-static inline void ulist_add(struct ulist *ulist, struct uchain *element)
+static inline void ulist_add(struct uchain *ulist, struct uchain *element)
 {
-    element->next = NULL;
-    *ulist->last_p = element;
-    ulist->last_p = &element->next;
-}
-
-/** @This adds new elements at the end.
- *
- * @param ulist pointer to a ulist structure
- * @param element pointer to the first element to add
- */
-static inline void ulist_add_list(struct ulist *ulist, struct uchain *element)
-{
-    *ulist->last_p = element;
-    while (element->next != NULL)
-        element = element->next;
-    ulist->last_p = &element->next;
+    ulist_insert(ulist->prev, ulist, element);
 }
 
 /** @This adds a new element at the beginning.
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  * @param element pointer to the first element to add
  */
-static inline void ulist_unshift(struct ulist *ulist, struct uchain *element)
+static inline void ulist_unshift(struct uchain *ulist, struct uchain *element)
 {
-    element->next = ulist->first;
-    ulist->first = element;
-    if (element->next == NULL)
-        ulist->last_p = &element->next;
+    ulist_insert(ulist, ulist->next, element);
 }
 
 /** @This returns a pointer to the first element of the list (without
  * removing it).
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  * @return pointer to the first element
  */
-static inline struct uchain *ulist_peek(struct ulist *ulist)
+static inline struct uchain *ulist_peek(struct uchain *ulist)
 {
-    return ulist->first;
+    if (ulist_empty(ulist))
+        return NULL;
+    return ulist->next;
 }
 
 /** @This returns a pointer to the first element of the list and removes
  * it.
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  * @return pointer to the first element
  */
-static inline struct uchain *ulist_pop(struct ulist *ulist)
+static inline struct uchain *ulist_pop(struct uchain *ulist)
 {
-    struct uchain *uchain = ulist->first;
-    if (uchain != NULL) {
-        ulist->first = uchain->next;
-        uchain->next = NULL;
-        if (ulist->first == NULL)
-            ulist->last_p = &ulist->first;
-    }
-    return uchain;
+    if (ulist_empty(ulist))
+        return NULL;
+    struct uchain *element = ulist->next;
+    ulist->next = element->next;
+    ulist->next->prev = ulist;
+    uchain_init(element);
+    return element;
 }
 
-/** @This walks through a ulist.
+/** @This walks through a ulist. Please note that the list may not be altered
+ * during the walk (see @ref ulist_delete_foreach).
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  * @param uchain iterator
  */
 #define ulist_foreach(ulist, uchain)                                        \
-    for ((uchain) = (ulist)->first; (uchain) != NULL; (uchain) = (uchain)->next)
+    for ((uchain) = (ulist)->next; (uchain) != (ulist);                     \
+         (uchain) = (uchain)->next)
 
-/** @This walks through a ulist for deletion.
+/** @This walks through a ulist. This variant allows to remove the current
+ * element safely.
  *
- * @param ulist pointer to a ulist structure
+ * @param ulist pointer to a ulist
  * @param uchain iterator
+ * @param uchain_tmp uchain to use for temporary storage
  */
-#define ulist_delete_foreach(ulist, uchain)                                 \
-    struct uchain **uchain_delete_p, **uchain_delete_next_p;                \
-    for (uchain_delete_p = &(ulist)->first, (uchain) = (ulist)->first,      \
-             uchain_delete_next_p = likely((uchain) != NULL) ?              \
-                                           &(uchain)->next : NULL;          \
-         (uchain) != NULL;                                                  \
-         uchain_delete_p = uchain_delete_next_p,                            \
-             (uchain) = *uchain_delete_p,                                   \
-             uchain_delete_next_p = likely((uchain) != NULL) ?              \
-                                            &(uchain)->next : NULL)
-
-/** @This deletes an element from a ulist. This macro can only be called
- * from inside a ulist_delete_foreach loop.
- *
- * @param ulist pointer to a ulist structure
- * @param uchain iterator
- */
-#define ulist_delete(ulist, uchain)                                         \
-    do {                                                                    \
-        *uchain_delete_p = (uchain)->next;                                  \
-        uchain_delete_next_p = uchain_delete_p;                             \
-        if (unlikely(*uchain_delete_p == NULL))                             \
-            (ulist)->last_p = uchain_delete_p;                              \
-    } while (0);
-
-/** @This finds a given element and removes it from the list.
- *
- * @param ulist pointer to a ulist structure
- * @param remove pointer to element to remove
- * @return true if the element was found and removed
- */
-static inline bool ulist_remove(struct ulist *ulist, struct uchain *remove)
-{
-    struct uchain *uchain;
-    ulist_delete_foreach (ulist, uchain) {
-        if (uchain == remove) {
-            ulist_delete(ulist, uchain);
-            return true;
-        }
-    }
-    return false;
-}
+#define ulist_delete_foreach(ulist, uchain, uchain_tmp)                     \
+    for ((uchain) = (ulist)->next, (uchain_tmp) = (uchain)->next;           \
+         (uchain) != (ulist);                                               \
+         (uchain) = (uchain_tmp), (uchain_tmp) = (uchain)->next)
 
 #ifdef __cplusplus
 }

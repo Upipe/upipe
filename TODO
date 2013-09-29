@@ -1,8 +1,6 @@
 Shitty APIs:
- - ulist
  - flow defs
  - uprobe: easier adhoc creation? impossible to chain "generic" common probes. policy for passing probes to subpipes?
- - ubuf_mem rework
 
 Plans for core:
  - ubuf_sound

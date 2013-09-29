@@ -132,7 +132,7 @@ static inline void upump_blocker_set_cb(struct upump_blocker *upump_blocker,
  * @param upump pump to block
  * @return a pointer to the blocker, or NULL if not found
  */
-static inline struct upump_blocker *upump_blocker_find(struct ulist *ulist,
+static inline struct upump_blocker *upump_blocker_find(struct uchain *ulist,
                                                        struct upump *upump)
 {
     struct uchain *uchain;

@@ -72,7 +72,7 @@ struct upipe_trickp {
     /** current rate */
     struct urational rate;
     /** list of subs */
-    struct ulist subs;
+    struct uchain subs;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -100,13 +100,13 @@ struct upipe_trickp_sub {
     /** type of the flow */
     enum upipe_trickp_sub_type type;
     /** temporary uref storage */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
     /** list of blockers */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** pipe acting as output */
     struct upipe *output;

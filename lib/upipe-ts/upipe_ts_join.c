@@ -60,7 +60,7 @@ struct upipe_ts_join {
     bool flow_def_sent;
 
     /** list of input subpipes */
-    struct ulist subs;
+    struct uchain subs;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -80,7 +80,7 @@ struct upipe_ts_join_sub {
     struct uchain uchain;
 
     /** temporary uref storage */
-    struct ulist urefs;
+    struct uchain urefs;
     /** next date that is supposed to be dequeued */
     uint64_t next_cr;
 

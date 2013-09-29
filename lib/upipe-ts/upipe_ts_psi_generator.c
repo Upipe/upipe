@@ -67,7 +67,7 @@ struct upipe_ts_psig {
     uint8_t pat_version;
 
     /** list of program subpipes */
-    struct ulist programs;
+    struct uchain programs;
 
     /** manager to create program subpipes */
     struct upipe_mgr program_mgr;
@@ -107,7 +107,7 @@ struct upipe_ts_psig_program {
     size_t descriptors_size;
 
     /** list of flow subpipes */
-    struct ulist flows;
+    struct uchain flows;
 
     /** manager to create flow subpipes */
     struct upipe_mgr flow_mgr;
@@ -602,9 +602,9 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
                     upipe_ts_psig->tsid, upipe_ts_psig->pat_version);
 
     unsigned int nb_sections = 0;
-    struct ulist sections;
+    struct uchain sections;
     ulist_init(&sections);
-    struct uchain *program_chain = ulist_peek(&upipe_ts_psig->programs);
+    struct uchain *program_chain = &upipe_ts_psig->programs;
 
     do {
         if (unlikely(nb_sections >= PSI_TABLE_MAX_SECTIONS)) {
@@ -642,8 +642,10 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         uint16_t j = 0;
         uint8_t *program;
         while ((program = pat_get_program(buffer, j)) != NULL &&
-               program_chain != NULL)
-        {
+               !ulist_is_last(&upipe_ts_psig->programs, program_chain)) {
+            program_chain = program_chain->next;
+            j++;
+
             struct upipe_ts_psig_program *upipe_ts_psig_program =
                 upipe_ts_psig_program_from_uchain(program_chain);
             upipe_notice_va(upipe, " * program number=%"PRIu16" pid=%"PRIu16,
@@ -653,8 +655,6 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             patn_init(program);
             patn_set_program(program, upipe_ts_psig_program->program_number);
             patn_set_pid(program, upipe_ts_psig_program->pmt_pid);
-            j++;
-            program_chain = program_chain->next;
         }
 
         pat_set_length(buffer, program - buffer - PAT_HEADER_SIZE);
@@ -664,7 +664,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         ubuf_block_resize(ubuf, 0, pat_size);
         ulist_add(&sections, ubuf_to_uchain(ubuf));
         nb_sections++;
-    } while (program_chain != NULL);
+    } while (!ulist_is_last(&upipe_ts_psig->programs, program_chain));
 
     upipe_notice_va(upipe, "end PAT (%u sections)", nb_sections);
 

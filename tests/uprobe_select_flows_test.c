@@ -58,7 +58,7 @@
 #define UREF_POOL_DEPTH 0
 
 static uint64_t add_flows, del_flows;
-static struct ulist flow_defs;
+static struct uchain flow_defs;
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -147,12 +147,12 @@ static bool test_control(struct upipe *upipe,
             assert(p != NULL);
             struct uchain *uchain;
             if (*p != NULL)
-                uchain = uref_to_uchain(*p)->next;
+                uchain = uref_to_uchain(*p);
             else
-                uchain = ulist_peek(&flow_defs);
-            if (uchain == NULL)
+                uchain = &flow_defs;
+            if (ulist_is_last(&flow_defs, uchain))
                 return false;
-            *p = uref_from_uchain(uchain);
+            *p = uref_from_uchain(uchain->next);
             return true;
         }
 
@@ -268,13 +268,11 @@ int main(int argc, char **argv)
     assert(!strcmp(flows, "12,"));
 
     del_flows = 12;
-    {
-        struct uchain *uchain;
-        ulist_delete_foreach (&flow_defs, uchain) {
-            struct uref *flow_def = uref_from_uchain(uchain);
-            ulist_delete(&flow_defs, uchain);
-            uref_free(flow_def);
-        }
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&flow_defs, uchain, uchain_tmp) {
+        struct uref *flow_def = uref_from_uchain(uchain);
+        ulist_delete(uchain);
+        uref_free(flow_def);
     }
     upipe_split_throw_update(upipe);
     assert(!add_flows);
@@ -333,7 +331,7 @@ int main(int argc, char **argv)
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "43,"));
 
-    struct uchain *uchain = ulist_pop(&flow_defs);
+    uchain = ulist_pop(&flow_defs);
     flow_def = uref_from_uchain(uchain);
     uref_free(flow_def);
     upipe_split_throw_update(upipe);
@@ -398,9 +396,9 @@ int main(int argc, char **argv)
     assert(!add_flows);
     assert(!del_flows);
 
-    ulist_delete_foreach (&flow_defs, uchain) {
+    ulist_delete_foreach (&flow_defs, uchain, uchain_tmp) {
         struct uref *flow_def = uref_from_uchain(uchain);
-        ulist_delete(&flow_defs, uchain);
+        ulist_delete(uchain);
         uref_free(flow_def);
     }
     del_flows = 44 + 46 + 47;

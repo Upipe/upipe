@@ -48,8 +48,8 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 10
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static int counter = 0;

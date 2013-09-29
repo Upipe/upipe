@@ -52,7 +52,7 @@ extern "C" {
  * @code
  *  struct uref *next_uref;
  *  size_t next_uref_size;
- *  struct ulist urefs;
+ *  struct uchain urefs;
  * @end code
  *
  * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
@@ -88,7 +88,7 @@ extern "C" {
  * your private upipe structure
  * @param NEXT_UREF_SIZE name of the @tt{size_t} field of
  * your private upipe structure
- * @param UREFS name of the @tt{struct ulist} field of
+ * @param UREFS name of the @tt{struct uchain} field of
  * your private upipe structure
  */
 #define UPIPE_HELPER_SOUND_STREAM(STRUCTURE, NEXT_UREF, NEXT_UREF_SIZE,     \

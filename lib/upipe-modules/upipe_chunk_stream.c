@@ -80,7 +80,7 @@ struct upipe_chunk_stream {
     /** original size of the next uref */
     size_t next_uref_size;
     /** urefs received after next uref */
-    struct ulist urefs;
+    struct uchain urefs;
 
     /** public upipe structure */
     struct upipe upipe;

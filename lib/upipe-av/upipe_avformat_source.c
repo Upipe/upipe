@@ -98,7 +98,7 @@ struct upipe_avfsrc {
     uint64_t systime_rap;
 
     /** list of subs */
-    struct ulist subs;
+    struct uchain subs;
 
     /** URL */
     char *url;

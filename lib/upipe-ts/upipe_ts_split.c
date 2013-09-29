@@ -53,7 +53,7 @@
 /** @internal @This keeps internal information about a PID. */
 struct upipe_ts_split_pid {
     /** subs specific to that PID */
-    struct ulist subs;
+    struct uchain subs;
     /** true if we asked for this PID */
     bool set;
 };
@@ -61,7 +61,7 @@ struct upipe_ts_split_pid {
 /** @internal @This is the private context of a ts split pipe. */
 struct upipe_ts_split {
     /** list of output subpipes */
-    struct ulist subs;
+    struct uchain subs;
 
     /** PIDs array */
     struct upipe_ts_split_pid pids[MAX_PIDS];
@@ -329,10 +329,10 @@ static void upipe_ts_split_pid_unset(struct upipe *upipe, uint16_t pid,
 {
     assert(pid < MAX_PIDS);
     struct upipe_ts_split *upipe_ts_split = upipe_ts_split_from_upipe(upipe);
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_ts_split->pids[pid].subs, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_ts_split->pids[pid].subs, uchain, uchain_tmp) {
         if (output == upipe_ts_split_sub_from_uchain_pid(uchain)) {
-            ulist_delete(&upipe_ts_split->pids[pid].subs, uchain);
+            ulist_delete(uchain);
         }
     }
     upipe_ts_split_pid_check(upipe, pid);

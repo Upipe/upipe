@@ -194,7 +194,7 @@ struct upipe_ts_demux {
     struct upipe *psi_split_output_pat;
 
     /** list of PIDs carrying PSI */
-    struct ulist psi_pids;
+    struct uchain psi_pids;
     /** PID of the NIT */
     uint16_t nit_pid;
     /** true if the conformance is guessed from the stream */
@@ -214,7 +214,7 @@ struct upipe_ts_demux {
     struct uprobe split_probe;
 
     /** list of programs */
-    struct ulist programs;
+    struct uchain programs;
 
     /** manager to create programs */
     struct upipe_mgr program_mgr;
@@ -277,7 +277,7 @@ struct upipe_ts_demux_program {
     struct uprobe pcr_probe;
 
     /** list of outputs */
-    struct ulist outputs;
+    struct uchain outputs;
 
     /** manager to create outputs */
     struct upipe_mgr output_mgr;
@@ -486,10 +486,10 @@ static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
 
     psi_pid->refcount--;
     if (!psi_pid->refcount) {
-        struct uchain *uchain;
-        ulist_delete_foreach (&upipe_ts_demux->psi_pids, uchain) {
+        struct uchain *uchain, *uchain_tmp;
+        ulist_delete_foreach (&upipe_ts_demux->psi_pids, uchain, uchain_tmp) {
             if (uchain == upipe_ts_demux_psi_pid_to_uchain(psi_pid)) {
-                ulist_delete(&upipe_ts_demux->psi_pids, uchain);
+                ulist_delete(uchain);
             }
         }
         upipe_release(psi_pid->split_output);

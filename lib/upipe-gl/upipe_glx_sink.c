@@ -71,13 +71,13 @@ struct upipe_glx_sink {
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
     /** temporary uref storage */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
     /** list of blockers */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** X display */
     Display *display;

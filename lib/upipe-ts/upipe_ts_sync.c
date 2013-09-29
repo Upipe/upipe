@@ -73,7 +73,7 @@ struct upipe_ts_sync {
     /** original size of the next uref */
     size_t next_uref_size;
     /** urefs received after next uref */
-    struct ulist urefs;
+    struct uchain urefs;
     /** true if we have thrown the sync_acquired event */
     bool acquired;
 

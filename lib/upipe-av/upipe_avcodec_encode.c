@@ -120,13 +120,13 @@ struct upipe_avcenc {
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
     /** temporary uref storage (used during udeal) */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
     /** list of blockers (used during udeal) */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** uref associated to frames currently in encoder */
     struct uref **uref;
@@ -149,7 +149,7 @@ struct upipe_avcenc {
     /** original size of the next uref */
     size_t next_uref_size;
     /** urefs received after next uref */
-    struct ulist stream_urefs;
+    struct uchain stream_urefs;
 
     /** avcodec context */
     AVCodecContext *context;

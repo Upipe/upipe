@@ -94,13 +94,13 @@ struct upipe_udpsink {
     /** file uri */
     char *uri;
     /** temporary uref storage */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
     /** list of blockers */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** public upipe structure */
     struct upipe upipe;

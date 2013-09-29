@@ -102,7 +102,7 @@ struct upipe_ts_psii {
     bool flow_def_sent;
 
     /** list of input subpipes */
-    struct ulist subs;
+    struct uchain subs;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -126,7 +126,7 @@ struct upipe_ts_psii_sub {
     uint64_t interval;
 
     /** latest table */
-    struct ulist table;
+    struct uchain table;
     /** date of the next table occurrence */
     uint64_t next_cr;
     /** date (in system time) of the next table occurrence */
@@ -203,10 +203,10 @@ static void upipe_ts_psii_sub_clean(struct upipe *upipe)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
-    struct uchain *uchain;
-    ulist_delete_foreach (&upipe_ts_psii_sub->table, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_ts_psii_sub->table, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);
-        ulist_delete(&upipe_ts_psii_sub->table, uchain);
+        ulist_delete(uchain);
         uref_free(uref);
     }
 }

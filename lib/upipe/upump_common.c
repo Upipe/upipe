@@ -147,8 +147,7 @@ void upump_common_blocker_free(struct upump_blocker *blocker)
         upump_blocker_common_from_upump_blocker(blocker);
     struct upump_common *common = upump_common_from_upump(blocker->upump);
 
-    ulist_remove(&common->blockers,
-                 upump_blocker_common_to_uchain(blocker_common));
+    ulist_delete(upump_blocker_common_to_uchain(blocker_common));
     if (common->started && ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =
             upump_common_mgr_from_upump_mgr(blocker->upump->mgr);
@@ -216,8 +215,8 @@ void upump_common_stop(struct upump *upump)
 void upump_common_clean(struct upump *upump)
 {
     struct upump_common *common = upump_common_from_upump(upump);
-    struct uchain *uchain;
-    ulist_delete_foreach (&common->blockers, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&common->blockers, uchain, uchain_tmp) {
         struct upump_blocker_common *blocker_common =
             upump_blocker_common_from_uchain(uchain);
         struct upump_blocker *blocker =

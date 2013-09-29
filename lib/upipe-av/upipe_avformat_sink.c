@@ -67,7 +67,7 @@
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsink {
     /** list of subs */
-    struct ulist subs;
+    struct uchain subs;
 
     /** URI */
     char *uri;
@@ -102,7 +102,7 @@ struct upipe_avfsink_sub {
     int id;
 
     /** buffered urefs */
-    struct ulist urefs;
+    struct uchain urefs;
     /** next DTS that is supposed to be dequeued */
     uint64_t next_dts;
 

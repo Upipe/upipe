@@ -49,7 +49,7 @@
 /** @internal @This is the private context of a dup pipe. */
 struct upipe_dup {
     /** list of output subpipes */
-    struct ulist outputs;
+    struct uchain outputs;
     /** flow definition packet */
     struct uref *flow_def;
 
@@ -235,7 +235,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach (&upipe_dup->outputs, uchain) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
-        if (uchain->next == NULL) {
+        if (ulist_is_last(&upipe_dup->outputs, uchain)) {
             upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
                                     uref, upump);
             uref = NULL;
@@ -250,6 +250,8 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                                     new_uref, upump);
         }
     }
+    if (uref != NULL)
+        uref_free(uref);
 }
 
 /** @internal @This changes the flow definition on all outputs.

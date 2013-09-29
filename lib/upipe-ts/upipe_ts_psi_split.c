@@ -51,7 +51,7 @@
 /** @internal @This is the private context of a ts_psi_split pipe. */
 struct upipe_ts_psi_split {
     /** list of subs */
-    struct ulist subs;
+    struct uchain subs;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;

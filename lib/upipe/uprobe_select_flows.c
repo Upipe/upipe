@@ -69,7 +69,7 @@ struct uprobe_selflow {
     bool has_selection;
 
     /** list of potential subpipes */
-    struct ulist subs;
+    struct uchain subs;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -357,8 +357,8 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     /* Find deleted flows. */
-    struct uchain *uchain;
-    ulist_delete_foreach (&uprobe_selflow->subs, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&uprobe_selflow->subs, uchain, uchain_tmp) {
         struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
         bool found = false;
         flow_def = NULL;
@@ -373,7 +373,7 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
         }
 
         if (!found) {
-            ulist_delete(&uprobe_selflow->subs, uchain);
+            ulist_delete(uchain);
             need_update = true;
 
             if (likely(sub->flow_def != NULL))

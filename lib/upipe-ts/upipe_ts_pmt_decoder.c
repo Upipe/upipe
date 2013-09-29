@@ -69,7 +69,7 @@ struct upipe_ts_pmtd {
     /** currently in effect PMT table */
     struct uref *pmt;
     /** list of flows */
-    struct ulist flows;
+    struct uchain flows;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -113,10 +113,10 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
 static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
-    struct uchain *uchain;
-    ulist_delete_foreach(&upipe_ts_pmtd->flows, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_ts_pmtd->flows, uchain, uchain_tmp) {
         struct uref *flow_def = uref_from_uchain(uchain);
-        ulist_delete(&upipe_ts_pmtd->flows, uchain);
+        ulist_delete(uchain);
         uref_free(flow_def);
     }
 }
@@ -520,12 +520,12 @@ static bool upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
     assert(p != NULL);
     struct uchain *uchain;
     if (*p != NULL)
-        uchain = uref_to_uchain(*p)->next;
+        uchain = uref_to_uchain(*p);
     else
-        uchain = ulist_peek(&upipe_ts_pmtd->flows);
-    if (uchain == NULL)
+        uchain = &upipe_ts_pmtd->flows;
+    if (ulist_is_last(&upipe_ts_pmtd->flows, uchain))
         return false;
-    *p = uref_from_uchain(uchain);
+    *p = uref_from_uchain(uchain->next);
     return true;
 }
 

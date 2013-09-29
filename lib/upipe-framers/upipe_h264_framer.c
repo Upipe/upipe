@@ -173,7 +173,7 @@ struct upipe_h264f {
     /** original size of the next uref */
     size_t next_uref_size;
     /** urefs received after next uref */
-    struct ulist urefs;
+    struct uchain urefs;
 
     /* octet stream parser stuff */
     /** context of the scan function */

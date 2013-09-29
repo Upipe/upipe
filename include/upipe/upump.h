@@ -82,7 +82,7 @@ struct upump {
     /** true if upump_start() was called on the pump */
     bool started;
     /** blockers registered on this pump */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** function to call back when triggered */
     upump_cb cb;

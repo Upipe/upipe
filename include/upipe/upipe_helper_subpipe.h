@@ -44,7 +44,7 @@ extern "C" {
  *
  * You must add two members to your private pipe structure:
  * @code
- *  struct ulist subpipes;
+ *  struct uchain subpipes;
  *  struct upipe_mgr subpipe_mgr;
  * @end code
  *
@@ -147,9 +147,12 @@ extern "C" {
  * @param STRUCTURE_SUB name of your private subpipe structure 
  * @param SUB suffix to use in upipe_foo_init_sub_XXX and
  * upipe_foo_clean_sub_XXX
- * @param MGR struct upipe_mgr member in your private upipe structure
- * @param ULIST struct ulist member in your private upipe structure
- * @param UCHAIN struct uchain member in your private subpipe structure
+ * @param MGR name of the @tt{struct upipe_mgr} member of your private upipe
+ * structure
+ * @param ULIST name of the @tt{struct uchain} member of your private upipe
+ * structure
+ * @param UCHAIN name of the @tt{struct uchain} member of your private subpipe
+ * structure
  * @param UPIPE name of the @tt{struct upipe} field of
  * your private upipe structure
  */
@@ -236,10 +239,10 @@ static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
 {                                                                           \
     struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_upipe(upipe);          \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
-    struct uchain *uchain;                                                  \
-    ulist_delete_foreach(&s->ULIST, uchain) {                               \
+    struct uchain *uchain, *uchain_tmp;                                     \
+    ulist_delete_foreach (&s->ULIST, uchain, uchain_tmp) {                  \
         if (STRUCTURE_SUB##_from_uchain(uchain) == sub) {                   \
-            ulist_delete(&s->ULIST, uchain);                                \
+            ulist_delete(uchain);                                           \
             break;                                                          \
         }                                                                   \
     }                                                                       \
@@ -275,18 +278,18 @@ static bool STRUCTURE##_get_sub_mgr(struct upipe *upipe,                    \
  */                                                                         \
 static bool STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)  \
 {                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     assert(p != NULL);                                                      \
-    struct uchain *uchain;                                                  \
+    struct uchain *u;                                                       \
     if (*p == NULL) {                                                       \
-        struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                \
-        uchain = ulist_peek(&s->ULIST);                                     \
+        u = &s->ULIST;                                                      \
     } else {                                                                \
         struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_upipe(*p);         \
-        uchain = sub->UCHAIN.next;                                          \
+        u = STRUCTURE_SUB##_to_uchain(sub);                                 \
     }                                                                       \
-    if (uchain == NULL)                                                     \
+    if (ulist_is_last(&s->ULIST, u))                                        \
         return false;                                                       \
-    *p = STRUCTURE_SUB##_to_upipe(STRUCTURE_SUB##_from_uchain(uchain));     \
+    *p = STRUCTURE_SUB##_to_upipe(STRUCTURE_SUB##_from_uchain(u->next));    \
     return true;                                                            \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \

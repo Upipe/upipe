@@ -102,7 +102,7 @@ struct upipe_alsink {
     /** ALSA handle */
     snd_pcm_t *handle;
     /** temporary uref storage */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
@@ -110,7 +110,7 @@ struct upipe_alsink {
     /** duration of temporary uref storage */
     uint64_t urefs_duration;
     /** list of blockers */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** public upipe structure */
     struct upipe upipe;

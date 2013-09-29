@@ -50,8 +50,8 @@ struct upump_blocker;
 struct upump_common {
     /** true if upump_start() was called on the pump */
     bool started;
-    /** blockers registered on this pump */
-    struct ulist blockers;
+    /** list of blockers registered on this pump */
+    struct uchain blockers;
 
     /** public upump structure */
     struct upump upump;

@@ -100,13 +100,13 @@ struct upipe_avcdec {
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
     /** temporary uref storage (used during udeal) */
-    struct ulist urefs;
+    struct uchain urefs;
     /** nb urefs in storage */
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
     /** list of blockers (used during udeal) */
-    struct ulist blockers;
+    struct uchain blockers;
 
     /** frame counter */
     uint64_t counter;
