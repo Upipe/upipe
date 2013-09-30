@@ -180,7 +180,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

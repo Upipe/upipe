@@ -49,7 +49,7 @@ struct upipe;
 enum uprobe_event {
     /** a pipe is ready to accept input and respond to control commands
      * (void) */
-    UPROBE_READY,
+    UPROBE_READY = 0,
     /** a pipe is about to be destroyed and will no longer accept input
      * and control commands (void) */
     UPROBE_DEAD,
@@ -96,7 +96,10 @@ enum uprobe_event {
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */
-    UPROBE_LOCAL = 0x8000
+    UPROBE_LOCAL = 0x8000,
+
+    /** when an event is handled, it is OR-ed with this value */
+    UPROBE_HANDLED_FLAG = 0x80000000,
 };
 
 /** @This defines the levels of log messages. */
@@ -173,10 +176,9 @@ static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
         va_copy(args_copy, args);
         /* in case our probe deletes itself */
         struct uprobe *next = uprobe->next;
-        bool ret = uprobe->uthrow(uprobe, upipe, event, args_copy);
+        if (uprobe->uthrow(uprobe, upipe, event, args_copy))
+            event |= UPROBE_HANDLED_FLAG;
         va_end(args_copy);
-        if (ret)
-            break;
         uprobe = next;
     }
 }
@@ -194,6 +196,23 @@ static inline void uprobe_throw(struct uprobe *uprobe, struct upipe *upipe,
     va_start(args, event);
     uprobe_throw_va(uprobe, upipe, event, args);
     va_end(args);
+}
+
+/** @internal @This deletes the given probe from a list of probes.
+ *
+ * @param uprobe reference to probe hierarchy
+ * @param deleted probe to delete
+ */
+static inline void uprobe_delete_probe(struct uprobe **uprobe_p,
+                                       struct uprobe *deleted)
+{
+    while (likely(*uprobe_p != NULL)) {
+        if (*uprobe_p == deleted) {
+            *uprobe_p = deleted->next;
+            break;
+        }
+        uprobe_p = &(*uprobe_p)->next;
+    }
 }
 
 /** @internal @This throws a log event. This event is thrown whenever a pipe

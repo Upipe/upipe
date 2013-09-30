@@ -1,18 +1,18 @@
-debug: probe caught ready event
+debug: probe caught unhandled ready event
 error: fatal error at
-debug: probe caught fatal error: allocation error (0)
+debug: probe caught unhandled fatal error: allocation error (0)
 error: error at
-debug: probe caught error: invalid argument (2)
-debug: probe caught source end
-debug: probe caught sink end
-debug: probe caught need uref manager
-debug: probe caught need upump manager
-debug: probe caught need ubuf manager for flow def "block.test."
-debug: probe caught new flow def "block.test."
-debug: probe caught split update
-debug: probe caught sync acquired
-debug: probe caught sync lost
-debug: probe caught new clock ref 42
-debug: probe caught new clock ref 43 (discontinuity)
-debug: probe caught new date 12
-debug: probe caught dead event
+debug: probe caught unhandled error: invalid argument (2)
+debug: probe caught unhandled source end
+debug: probe caught unhandled sink end
+debug: probe caught unhandled need uref manager
+debug: probe caught unhandled need upump manager
+debug: probe caught unhandled need ubuf manager for flow def "block.test."
+debug: probe caught unhandled new flow def "block.test."
+debug: probe caught unhandled split update
+debug: probe caught unhandled sync acquired
+debug: probe caught unhandled sync lost
+debug: probe caught unhandled new clock ref 42
+debug: probe caught unhandled new clock ref 43 (discontinuity)
+debug: probe caught unhandled new date 12
+debug: probe caught unhandled dead event

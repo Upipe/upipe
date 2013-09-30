@@ -58,9 +58,9 @@
 
 #include <bitstream/mpeg/psi.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 10
-#define UBUF_POOL_DEPTH 10
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
+#define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
@@ -69,7 +69,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

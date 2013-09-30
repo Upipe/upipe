@@ -40,20 +40,11 @@
 #include <stdarg.h>
 #include <inttypes.h>
 
-/** first event to log */
-#define UPROBE_FIRST_EVENT UPROBE_READY
-/** last event to log */
-#define UPROBE_LAST_EVENT UPROBE_CLOCK_TS
-
 /** @This is a super-set of the uprobe structure with additional local members.
  */
 struct uprobe_log {
     /** level at which to log the messages */
     enum uprobe_log_level level;
-    /** events to log */
-    bool events[UPROBE_LAST_EVENT + 1 - UPROBE_FIRST_EVENT];
-    /** whether to log unknown events */
-    bool unknown_events;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -95,51 +86,59 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
     va_list args_copy;
     va_copy(args_copy, args);
 
-    if (event >= UPROBE_FIRST_EVENT && event <= UPROBE_LAST_EVENT) {
-        if (!log->events[event - UPROBE_FIRST_EVENT])
-            return false;
-    } else if (!log->unknown_events)
-        return false;
+    bool handled = false;
+    const char *handled_str = "unhandled ";
+    if ((event & UPROBE_HANDLED_FLAG)) {
+        handled = true;
+        handled_str = "";
+        event &= ~UPROBE_HANDLED_FLAG;
+    }
 
     switch (event) {
         case UPROBE_READY:
-            upipe_log(upipe, log->level, "probe caught ready event");
+            upipe_log_va(upipe, log->level, "probe caught %sready event",
+                         handled_str);
             break;
         case UPROBE_DEAD:
-            upipe_log(upipe, log->level, "probe caught dead event");
+            upipe_log_va(upipe, log->level, "probe caught %sdead event",
+                         handled_str);
             break;
         case UPROBE_LOG:
             break;
         case UPROBE_FATAL: {
             enum uprobe_error_code errcode =
                 va_arg(args, enum uprobe_error_code);
-            upipe_log_va(upipe, log->level, "probe caught fatal error: %s (%x)",
-                         uprobe_log_errcode(errcode), errcode);
+            upipe_log_va(upipe, log->level,
+                         "probe caught %sfatal error: %s (%x)",
+                         handled_str, uprobe_log_errcode(errcode), errcode);
             break;
         }
         case UPROBE_ERROR: {
             enum uprobe_error_code errcode =
                 va_arg(args, enum uprobe_error_code);
-            upipe_log_va(upipe, log->level, "probe caught error: %s (%x)",
-                         uprobe_log_errcode(errcode), errcode);
+            upipe_log_va(upipe, log->level, "probe caught %serror: %s (%x)",
+                         handled_str, uprobe_log_errcode(errcode), errcode);
             break;
         }
         case UPROBE_SOURCE_END:
-            upipe_log_va(upipe, log->level, "probe caught source end");
+            upipe_log_va(upipe, log->level, "probe caught %ssource end",
+                         handled_str);
             break;
         case UPROBE_SINK_END:
-            upipe_log_va(upipe, log->level, "probe caught sink end");
+            upipe_log_va(upipe, log->level, "probe caught %ssink end",
+                         handled_str);
             break;
         case UPROBE_NEED_UREF_MGR:
-            upipe_log(upipe, log->level,
-                      "probe caught need uref manager");
+            upipe_log_va(upipe, log->level,
+                         "probe caught %sneed uref manager", handled_str);
             break;
         case UPROBE_NEED_UPUMP_MGR:
-            upipe_log(upipe, log->level,
-                      "probe caught need upump manager");
+            upipe_log_va(upipe, log->level,
+                         "probe caught %sneed upump manager", handled_str);
             break;
         case UPROBE_NEED_UCLOCK:
-            upipe_log(upipe, log->level, "probe caught need uclock");
+            upipe_log_va(upipe, log->level, "probe caught %sneed uclock",
+                         handled_str);
             break;
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args_copy, struct uref *);
@@ -147,7 +146,8 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             if (flow_def != NULL)
                 uref_flow_get_def(flow_def, &def);
             upipe_log_va(upipe, log->level,
-                         "probe caught new flow def \"%s\"", def);
+                         "probe caught %snew flow def \"%s\"",
+                         handled_str, def);
             break;
         }
         case UPROBE_NEED_UBUF_MGR: {
@@ -156,52 +156,62 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             if (flow_def != NULL)
                 uref_flow_get_def(flow_def, &def);
             upipe_log_va(upipe, log->level,
-                         "probe caught need ubuf manager for flow def \"%s\"",
-                         def);
+                         "probe caught %sneed ubuf manager for flow def \"%s\"",
+                         handled_str, def);
             break;
         }
         case UPROBE_NEW_RAP:
-            upipe_log(upipe, log->level,
-                      "probe caught new random access point");
+            upipe_log_va(upipe, log->level,
+                         "probe caught %snew random access point", handled_str);
             break;
         case UPROBE_SPLIT_UPDATE:
-            upipe_log(upipe, log->level, "probe caught split update");
+            upipe_log_va(upipe, log->level, "probe caught %ssplit update",
+                         handled_str);
             break;
         case UPROBE_SYNC_ACQUIRED:
-            upipe_log(upipe, log->level, "probe caught sync acquired");
+            upipe_log_va(upipe, log->level, "probe caught %ssync acquired",
+                         handled_str);
             break;
         case UPROBE_SYNC_LOST:
-            upipe_log(upipe, log->level, "probe caught sync lost");
+            upipe_log_va(upipe, log->level, "probe caught %ssync lost",
+                         handled_str);
             break;
-        case UPROBE_CLOCK_REF: {
-            struct uref *uref = va_arg(args_copy, struct uref *);
-            uint64_t pcr = va_arg(args_copy, uint64_t);
-            int discontinuity = va_arg(args_copy, int);
-            if (discontinuity == 1)
-                upipe_log_va(upipe, log->level,
-                         "probe caught new clock ref %"PRIu64" (discontinuity)",
-                         pcr);
-            else
-                upipe_log_va(upipe, log->level,
-                             "probe caught new clock ref %"PRIu64, pcr);
+        case UPROBE_CLOCK_REF:
+            if (!handled) {
+                struct uref *uref = va_arg(args_copy, struct uref *);
+                uint64_t pcr = va_arg(args_copy, uint64_t);
+                int discontinuity = va_arg(args_copy, int);
+                if (discontinuity == 1)
+                    upipe_log_va(upipe, log->level,
+                             "probe caught %snew clock ref %"PRIu64" (discontinuity)",
+                             handled_str, pcr);
+                else
+                    upipe_log_va(upipe, log->level,
+                                 "probe caught %snew clock ref %"PRIu64,
+                                 handled_str, pcr);
+            }
             break;
-        }
-        case UPROBE_CLOCK_TS: {
-            struct uref *uref = va_arg(args_copy, struct uref *);
-            uint64_t date = UINT64_MAX;
-            enum uref_date_type type;
-            uref_clock_get_date_orig(uref, &date, &type);
-            if (unlikely(type == UREF_DATE_NONE))
-                upipe_log(upipe, log->level,
-                          "probe caught an invalid timestamp event");
-            else
-                upipe_log_va(upipe, log->level, "probe caught new date %"PRIu64,
-                             date);
+        case UPROBE_CLOCK_TS:
+            if (!handled) {
+                struct uref *uref = va_arg(args_copy, struct uref *);
+                uint64_t date = UINT64_MAX;
+                enum uref_date_type type;
+                uref_clock_get_date_orig(uref, &date, &type);
+                if (unlikely(type == UREF_DATE_NONE))
+                    upipe_log_va(upipe, log->level,
+                                "probe caught %sinvalid timestamp event",
+                                handled_str);
+                else
+                    upipe_log_va(upipe, log->level,
+                            "probe caught %snew date %"PRIu64, handled_str,
+                            date);
+            }
             break;
-        }
         default:
-            upipe_log_va(upipe, log->level,
-                     "probe caught an unknown, uncaught event (0x%x)", event);
+            if (!handled)
+                upipe_log_va(upipe, log->level,
+                             "probe caught an unknown, unhandled event (0x%x)",
+                             event);
             break;
     }
     va_end(args_copy);
@@ -222,13 +232,6 @@ struct uprobe *uprobe_log_alloc(struct uprobe *next,
         return NULL;
     struct uprobe *uprobe = uprobe_log_to_uprobe(log);
     log->level = level;
-    int i;
-    for (i = 0; i < UPROBE_LAST_EVENT - UPROBE_FIRST_EVENT; i++)
-        log->events[i] = true;
-    /* by default disable clock events and unknown events */
-    log->events[UPROBE_CLOCK_REF - UPROBE_FIRST_EVENT] = false;
-    log->events[UPROBE_CLOCK_TS - UPROBE_FIRST_EVENT] = false;
-    log->unknown_events = false;
     uprobe_init(uprobe, uprobe_log_throw, next);
     return uprobe;
 }
@@ -244,50 +247,4 @@ struct uprobe *uprobe_log_free(struct uprobe *uprobe)
     struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
     free(log);
     return next;
-}
-
-/** @This masks an event from being logged.
- *
- * @param uprobe probe structure
- * @param event event to mask
- */
-void uprobe_log_mask_event(struct uprobe *uprobe, enum uprobe_event event)
-{
-    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
-    assert(event >= UPROBE_FIRST_EVENT);
-    assert(event <= UPROBE_LAST_EVENT);
-    log->events[event - UPROBE_FIRST_EVENT] = false;
-}
-
-/** @This unmasks an event from being logged.
- *
- * @param uprobe probe structure
- * @param event event to unmask
- */
-void uprobe_log_unmask_event(struct uprobe *uprobe, enum uprobe_event event)
-{
-    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
-    assert(event >= UPROBE_FIRST_EVENT);
-    assert(event <= UPROBE_LAST_EVENT);
-    log->events[event - UPROBE_FIRST_EVENT] = true;
-}
-
-/** @This masks unknown events from being logged.
- *
- * @param uprobe probe structure
- */
-void uprobe_log_mask_unknown_events(struct uprobe *uprobe)
-{
-    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
-    log->unknown_events = false;
-}
-
-/** @This unmasks unknown events from being logged.
- *
- * @param uprobe probe structure
- */
-void uprobe_log_unmask_unknown_events(struct uprobe *uprobe)
-{
-    struct uprobe_log *log = uprobe_log_from_uprobe(uprobe);
-    log->unknown_events = true;
 }

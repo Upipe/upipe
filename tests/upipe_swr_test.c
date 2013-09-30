@@ -50,9 +50,9 @@
 
 #undef NDEBUG
 
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
+#define UDICT_POOL_DEPTH    0
+#define UREF_POOL_DEPTH     0
+#define UBUF_POOL_DEPTH     0
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
@@ -74,7 +74,7 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event,
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
     }
     return true;

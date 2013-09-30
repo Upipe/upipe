@@ -96,7 +96,7 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_uprobe(uprobe);          \
     switch (event) {                                                        \
         case UPROBE_READY:                                                  \
-            if (STRUCTURE->UPIPE == NULL)                                   \
+            if (STRUCTURE->UPIPE == NULL) {                                 \
                 /* Keep a pointer to the pipe we're attaching to. There is  \
                  * no need to @ref upipe_use here, as the pipe cannot       \
                  * disappear without sending the @ref UPROBE_DEAD event,    \
@@ -104,11 +104,15 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
                  * match the pointers. Besides, using @ref upipe_use would  \
                  * make the pipe unkillable. */                             \
                 STRUCTURE->UPIPE = upipe;                                   \
+                uprobe_throw(uprobe->next, upipe, event, args);             \
+                return true;                                                \
+            }                                                               \
             break;                                                          \
         case UPROBE_DEAD:                                                   \
             if (STRUCTURE->UPIPE == upipe) {                                \
                 /* The pipe we're attached to is dying, let's deallocate. */\
                 uprobe_throw(uprobe->next, upipe, event, args);             \
+                upipe_delete_probe(upipe, uprobe);                          \
                 STRUCTURE##_free(uprobe);                                   \
                 return true;                                                \
             }                                                               \

@@ -1,2 +1,2 @@
-debug: ts probe caught add PID 42
-debug: ts probe caught delete PID 42
+debug: ts probe caught unhandled add PID 42
+debug: ts probe caught unhandled delete PID 42

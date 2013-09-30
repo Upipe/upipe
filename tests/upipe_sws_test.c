@@ -58,9 +58,9 @@
 #include <libswscale/swscale.h>
 #include <libavutil/pixdesc.h> // debug
 
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
+#define UDICT_POOL_DEPTH    0
+#define UREF_POOL_DEPTH     0
+#define UBUF_POOL_DEPTH     0
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          16
@@ -76,7 +76,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

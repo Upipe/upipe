@@ -124,13 +124,16 @@ static bool upipe_proxy_probe(struct uprobe *uprobe, struct upipe *upipe_super,
 
     if (event == UPROBE_READY && upipe_proxy->upipe_super == NULL)
         upipe_proxy->upipe_super = upipe_super;
+
     if (upipe_super != upipe_proxy->upipe_super) {
         uprobe_throw_va(upipe->uprobe, upipe_super, event, args);
         return true;
     }
 
     upipe_throw_va(upipe, event, args);
+
     if (event == UPROBE_DEAD && upipe_super == upipe_proxy->upipe_super) {
+        upipe_delete_probe(upipe_super, uprobe);
         upipe_clean(upipe);
         free(upipe_proxy);
     }

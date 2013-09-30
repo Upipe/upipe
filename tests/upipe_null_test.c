@@ -58,7 +58,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         case UPROBE_NEW_FLOW_DEF:
             break;
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
     }
     return true;

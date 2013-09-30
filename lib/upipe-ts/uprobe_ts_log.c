@@ -77,26 +77,35 @@ static bool uprobe_ts_log_throw(struct uprobe *uprobe, struct upipe *upipe,
     va_copy(args_copy, args);
     unsigned int signature = va_arg(args_copy, unsigned int);
 
+    bool handled = false;
+    const char *handled_str = "unhandled ";
+    if ((event & UPROBE_HANDLED_FLAG)) {
+        handled = true;
+        handled_str = "";
+        event &= ~UPROBE_HANDLED_FLAG;
+    }
+
     switch (event) {
         case UPROBE_TS_SPLIT_ADD_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
             upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught add PID %u", pid);
+                         "ts probe caught %sadd PID %u", handled_str, pid);
             break;
         }
         case UPROBE_TS_SPLIT_DEL_PID: {
             assert(signature == UPIPE_TS_SPLIT_SIGNATURE);
             unsigned int pid = va_arg(args_copy, unsigned int);
             upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught delete PID %u", pid);
+                         "ts probe caught %sdelete PID %u", handled_str, pid);
             break;
         }
 
         default:
-            upipe_log_va(upipe, uprobe_ts_log->level,
-                         "ts probe caught an unknown, uncaught event (0x%x)",
-                         event);
+            if (!handled)
+                upipe_log_va(upipe, uprobe_ts_log->level,
+                             "ts probe caught an unknown, unhandled event (0x%x)",
+                             event);
             break;
     }
     va_end(args_copy);

@@ -49,8 +49,8 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 1
-#define UREF_POOL_DEPTH 1
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
 
 /** definition of our uprobe */
 static bool catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -58,7 +58,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

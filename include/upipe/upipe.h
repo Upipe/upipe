@@ -882,6 +882,19 @@ static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
     upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
+/** @This deletes the given probe from the list of probes associated with a
+ * pipe. It is typically used for adhoc probes which delete themselves at
+ * some point.
+ *
+ * @param upipe description structure of the pipe
+ * @param uprobe pointer to probe
+ */
+static inline void upipe_delete_probe(struct upipe *upipe,
+                                      struct uprobe *uprobe)
+{
+    uprobe_delete_probe(&upipe->uprobe, uprobe);
+}
+
 #ifdef __cplusplus
 }
 #endif
