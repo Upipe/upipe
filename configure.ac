@@ -63,6 +63,11 @@ AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBO
 
 AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
 
+# BlackMagic Design API is in C++
+AC_LANG_PUSH([C++])
+AC_CHECK_HEADERS([DeckLinkAPI.h], AM_CONDITIONAL(HAVE_BLACKMAGIC, true), AM_CONDITIONAL(HAVE_BLACKMAGIC, false))
+AC_LANG_POP([C++])
+
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])
@@ -132,6 +137,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-osx/Makefile
                  include/upipe-alsa/Makefile
                  include/upipe-swresample/Makefile
+                 include/upipe-blackmagic/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -161,6 +167,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-alsa/libupipe_alsa.pc
                  lib/upipe-swresample/Makefile
                  lib/upipe-swresample/libupipe_swr.pc
+                 lib/upipe-blackmagic/Makefile
+                 lib/upipe-blackmagic/libupipe_blackmagic.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
