@@ -73,7 +73,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
@@ -122,8 +122,8 @@ int main(int argc, char *argv[])
     assert(log != NULL);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
-    struct upipe *upipe_null = upipe_flow_alloc(upipe_null_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "null"), NULL);
+    struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "null"));
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
     assert(upipe_http_src_mgr != NULL);

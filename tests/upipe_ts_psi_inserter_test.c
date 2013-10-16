@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, NULL);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -153,10 +153,11 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_psii_mgr = upipe_ts_psii_mgr_alloc();
     assert(upipe_ts_psii_mgr != NULL);
-    struct upipe *upipe_ts_psii = upipe_flow_alloc(upipe_ts_psii_mgr,
+    struct upipe *upipe_ts_psii = upipe_void_alloc(upipe_ts_psii_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psii"), uref);
+                                   "ts psii"));
     assert(upipe_ts_psii != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psii, uref));
     uref_free(uref);
     assert(upipe_set_uref_mgr(upipe_ts_psii, uref_mgr));
     assert(upipe_set_ubuf_mgr(upipe_ts_psii, ubuf_mgr));
@@ -167,10 +168,11 @@ int main(int argc, char *argv[])
     assert(uref_block_flow_set_octetrate(uref, 125000));
     assert(uref_ts_flow_set_tb_rate(uref, 125000));
     assert(uref_ts_flow_set_pid(uref, 0));
-    struct upipe *upipe_ts_psii_sub = upipe_flow_alloc_sub(upipe_ts_psii,
+    struct upipe *upipe_ts_psii_sub = upipe_void_alloc_sub(upipe_ts_psii,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psii sub"), uref);
+                                   "ts psii sub"));
     assert(upipe_ts_psii_sub != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psii_sub, uref));
     uref_free(uref);
     assert(upipe_ts_psii_sub_set_interval(upipe_ts_psii_sub, UCLOCK_FREQ * 2));
 

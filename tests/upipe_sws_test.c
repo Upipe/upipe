@@ -198,7 +198,6 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
 
 /** helper phony pipe to test upipe_sws */
 struct sws_test {
-    struct uref *flow;
     struct uref *pic;
     struct upipe upipe;
 };
@@ -213,7 +212,6 @@ static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     assert(sws_test != NULL);
-    sws_test->flow = NULL;
     sws_test->pic = NULL;
 	upipe_init(&sws_test->upipe, mgr, uprobe);
     upipe_throw_ready(&sws_test->upipe);
@@ -225,20 +223,9 @@ static void sws_test_input(struct upipe *upipe, struct uref *uref,
                            struct upump *upump)
 {
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
-    const char *def;
     assert(uref != NULL);
     upipe_dbg(upipe, "===> received input uref");
 
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        assert(def);
-        if (sws_test->flow) {
-            uref_free(sws_test->flow);
-            sws_test->flow = NULL;
-        }
-        sws_test->flow = uref;
-        upipe_dbg_va(upipe, "flow def %s", def);
-        return;
-    }
     if (sws_test->pic) {
         uref_free(sws_test->pic);
         sws_test->pic = NULL;
@@ -254,7 +241,6 @@ static void sws_test_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     if (sws_test->pic) uref_free(sws_test->pic);
-    if (sws_test->flow) uref_free(sws_test->flow);
     upipe_clean(upipe);
     free(sws_test);
 }
@@ -387,28 +373,30 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
 
+    /* Define outputflow */
+    struct uref *output_flow = uref_dup(pic_flow);
+    assert(output_flow != NULL);
+    assert(uref_pic_flow_set_hsize(output_flow, DSTSIZE));
+    assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
+
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws"),
-            pic_flow); 
+            output_flow); 
     assert(sws != NULL);
+    assert(upipe_set_flow_def(sws, pic_flow));
     assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
+    uref_free(output_flow);
+    uref_free(pic_flow);
 
     /* build phony pipe */
-    struct upipe *sws_test = upipe_flow_alloc(&sws_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"),
-            pic_flow);
+    struct upipe *sws_test = upipe_void_alloc(&sws_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
     uprobe_dbg_va(log, NULL, "Pipe addr: sws:\t %p", sws);
     uprobe_dbg_va(log, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
     assert(upipe_set_output(sws, sws_test));
-
-    /* Define outputflow */
-    uref_pic_set_hsize(pic_flow, DSTSIZE);
-    uref_pic_set_vsize(pic_flow, DSTSIZE);
-    assert(upipe_set_flow_def(sws, pic_flow));
-    pic_flow = NULL;
 
     /* Now send pic */
     struct uref *pic = uref_dup(uref1);

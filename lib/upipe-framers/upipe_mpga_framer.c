@@ -37,10 +37,11 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 
 #include "upipe_framers_common.h"
@@ -106,6 +107,8 @@ struct upipe_mpgaf {
     bool flow_def_sent;
     /** input flow definition packet */
     struct uref *flow_def_input;
+    /** attributes in the sequence header */
+    struct uref *flow_def_attr;
 
     /* sync parsing stuff */
     /** number of octets in a frame */
@@ -158,12 +161,13 @@ struct upipe_mpgaf {
 static void upipe_mpgaf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mpgaf, upipe, UPIPE_MPGAF_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_mpgaf, NULL)
+UPIPE_HELPER_VOID(upipe_mpgaf)
 UPIPE_HELPER_SYNC(upipe_mpgaf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgaf, next_uref, next_uref_size, urefs,
                          upipe_mpgaf_promote_uref)
 
 UPIPE_HELPER_OUTPUT(upipe_mpgaf, output, flow_def, flow_def_sent)
+UPIPE_HELPER_FLOW_DEF(upipe_mpgaf, flow_def_input, flow_def_attr)
 
 /** @internal @This flushes all dates.
  *
@@ -193,26 +197,15 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_mpgaf_alloc_flow(mgr, uprobe, signature, args,
-                                                 &flow_def);
+    struct upipe *upipe = upipe_mpgaf_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    const char *def;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 (ubase_ncmp(def, "block.mp2.sound.") &&
-                  ubase_ncmp(def, "block.aac.sound.")))) {
-        uref_free(flow_def);
-        upipe_mpgaf_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     upipe_mpgaf_init_sync(upipe);
     upipe_mpgaf_init_uref_stream(upipe);
     upipe_mpgaf_init_output(upipe);
-    upipe_mpgaf->flow_def_input = flow_def;
+    upipe_mpgaf_init_flow_def(upipe);
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
     upipe_mpgaf_flush_dates(upipe);
@@ -300,7 +293,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         mpga_get_emphasis(header) == MPGA_EMPHASIS_INVALID)
         return false;
 
-    struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def_input);
+    struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
@@ -375,6 +368,11 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
+    flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
     upipe_mpgaf_store_flow_def(upipe, flow_def);
     upipe_mpgaf->next_frame_size = padding ?
                                    upipe_mpgaf->frame_size_padding :
@@ -408,7 +406,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     memcpy(upipe_mpgaf->sync_header, header, ADTS_HEADER_SIZE);
 
-    struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def_input);
+    struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
@@ -460,6 +458,11 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -631,10 +634,6 @@ static void upipe_mpgaf_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_mpgaf_output(upipe, uref, upump);
-        return;
-    }
 
     if (unlikely(uref_flow_get_discontinuity(uref))) {
         /* Drop the current frame and resync. */
@@ -648,6 +647,30 @@ static void upipe_mpgaf_input(struct upipe *upipe, struct uref *uref,
     upipe_mpgaf_append_uref_stream(upipe, uref);
     upipe_mpgaf_work(upipe, upump);
 }
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (unlikely(!uref_flow_match_def(flow_def, "block.")))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    flow_def = upipe_mpgaf_store_flow_def_input(upipe, flow_def_dup);
+    if (flow_def != NULL)
+        upipe_mpgaf_store_flow_def(upipe, flow_def);
+    return true;
+}
+
 
 /** @internal @This processes control commands on a mpgaf pipe.
  *
@@ -663,6 +686,10 @@ static bool upipe_mpgaf_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_mpgaf_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_mpgaf_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -683,17 +710,14 @@ static bool upipe_mpgaf_control(struct upipe *upipe,
  */
 static void upipe_mpgaf_free(struct upipe *upipe)
 {
-    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_mpgaf_clean_uref_stream(upipe);
     upipe_mpgaf_clean_output(upipe);
+    upipe_mpgaf_clean_flow_def(upipe);
     upipe_mpgaf_clean_sync(upipe);
 
-    if (upipe_mpgaf->flow_def_input != NULL)
-        uref_free(upipe_mpgaf->flow_def_input);
-
-    upipe_mpgaf_free_flow(upipe);
+    upipe_mpgaf_free_void(upipe);
 }
 
 /** module manager static descriptor */

@@ -39,12 +39,11 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_sink_delay.h>
 #include <upipe-modules/upipe_file_sink.h>
 
 #include <stdlib.h>
@@ -64,10 +63,6 @@
 #   define O_CLOEXEC 0
 #endif
 
-/** default delay to use compared to the theorical reception time of the
- * packet */
-#define SYSTIME_DELAY        (0.01 * UCLOCK_FREQ)
-
 /** @hidden */
 static void upipe_fsink_watcher(struct upump *upump);
 /** @hidden */
@@ -82,9 +77,9 @@ struct upipe_fsink {
     struct upump *upump;
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
-    /** delay applied to systime attribute when uclock is provided */
-    uint64_t delay;
 
+    /** delay applied to system clock ref when uclock is provided */
+    uint64_t latency;
     /** file descriptor */
     int fd;
     /** file path */
@@ -103,12 +98,11 @@ struct upipe_fsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_fsink, upipe, UPIPE_FSINK_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_fsink, UPIPE_FSINK_EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_fsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_fsink, urefs, nb_urefs, max_urefs, blockers, upipe_fsink_output)
 UPIPE_HELPER_UCLOCK(upipe_fsink, uclock)
-UPIPE_HELPER_SINK_DELAY(upipe_fsink, delay)
 
 /** @internal @This allocates a file sink pipe.
  *
@@ -122,8 +116,7 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_fsink_alloc_flow(mgr, uprobe, signature, args,
-                                                 NULL);
+    struct upipe *upipe = upipe_fsink_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -132,7 +125,7 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
     upipe_fsink_init_upump(upipe);
     upipe_fsink_init_sink(upipe);
     upipe_fsink_init_uclock(upipe);
-    upipe_fsink_init_delay(upipe, SYSTIME_DELAY);
+    upipe_fsink->latency = 0;
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
     upipe_throw_ready(upipe);
@@ -179,16 +172,16 @@ static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
     if (likely(upipe_fsink->uclock == NULL))
         goto write_buffer;
 
-    uint64_t systime = 0;
-    if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
+    uint64_t cr_sys = 0;
+    if (unlikely(!uref_clock_get_cr_sys(uref, &cr_sys))) {
         upipe_warn(upipe, "received non-dated buffer");
         goto write_buffer;
     }
 
     uint64_t now = uclock_now(upipe_fsink->uclock);
-    systime += upipe_fsink->delay;
-    if (unlikely(now < systime)) {
-        upipe_fsink_wait_upump(upipe, systime - now, upipe_fsink_watcher);
+    cr_sys += upipe_fsink->latency;
+    if (unlikely(now < cr_sys)) {
+        upipe_fsink_wait_upump(upipe, cr_sys - now, upipe_fsink_watcher);
         return false;
     }
 
@@ -273,11 +266,6 @@ static void upipe_fsink_watcher(struct upump *upump)
 static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
     if (!upipe_fsink_check_sink(upipe)) {
         upipe_fsink_hold_sink(upipe, uref);
         upipe_fsink_block_sink(upipe, upump);
@@ -288,6 +276,26 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
          * have been sent. */
         upipe_use(upipe);
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_fsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    if (!uref_flow_match_def(flow_def, UPIPE_FSINK_EXPECTED_FLOW_DEF))
+        return false;
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+    if (latency > upipe_fsink->latency)
+        upipe_fsink->latency = latency;
+    return true;
 }
 
 /** @internal @This returns the path of the currently opened file.
@@ -422,6 +430,10 @@ static bool _upipe_fsink_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_fsink_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_fsink_get_upump_mgr(upipe, p);
@@ -441,14 +453,6 @@ static bool _upipe_fsink_control(struct upipe *upipe,
             return upipe_fsink_set_uclock(upipe, uclock);
         }
 
-        case UPIPE_SINK_GET_DELAY: {
-            uint64_t *p = va_arg(args, uint64_t *);
-            return upipe_fsink_get_delay(upipe, p);
-        }
-        case UPIPE_SINK_SET_DELAY: {
-            uint64_t delay = va_arg(args, uint64_t);
-            return upipe_fsink_set_delay(upipe, delay);
-        }
         case UPIPE_SINK_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_fsink_get_max_length(upipe, p);
@@ -513,13 +517,12 @@ static void upipe_fsink_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_fsink->path);
-    upipe_fsink_clean_delay(upipe);
     upipe_fsink_clean_uclock(upipe);
     upipe_fsink_clean_upump(upipe);
     upipe_fsink_clean_upump_mgr(upipe);
     upipe_fsink_clean_sink(upipe);
 
-    upipe_fsink_free_flow(upipe);
+    upipe_fsink_free_void(upipe);
 }
 
 /** module manager static descriptor */

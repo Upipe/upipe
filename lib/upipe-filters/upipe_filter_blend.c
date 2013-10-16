@@ -39,7 +39,7 @@
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-filters/upipe_filter_blend.h>
@@ -65,7 +65,7 @@ struct upipe_filter_blend {
 };
 
 UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_filter_blend, NULL)
+UPIPE_HELPER_VOID(upipe_filter_blend)
 UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, output_flow, output_flow_sent)
 
@@ -81,15 +81,13 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
                                               struct uprobe *uprobe,
                                               uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_filter_blend_alloc_flow(mgr, uprobe, signature,
-                                                        args, &flow_def);
+    struct upipe *upipe = upipe_filter_blend_alloc_void(mgr, uprobe, signature,
+                                                        args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     upipe_filter_blend_init_ubuf_mgr(upipe);
     upipe_filter_blend_init_output(upipe);
-    upipe_filter_blend_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -152,11 +150,6 @@ static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
 static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
-    if (unlikely(!uref->ubuf)) { // no ubuf in uref
-        upipe_filter_blend_output(upipe, uref, upump);
-        return;
-    }
-
     struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
     const uint8_t *in;
     uint8_t *out;
@@ -206,7 +199,6 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     }
 
     // Attach new ubuf and output frame
-    ubuf_free(uref_detach_ubuf(uref));
     uref_attach_ubuf(uref, ubuf_deint);
 
     upipe_filter_blend_output(upipe, uref, upump);
@@ -218,6 +210,28 @@ error:
         ubuf_free(ubuf_deint);
     }
     return;
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_filter_blend_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, "pic."))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    upipe_filter_blend_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -243,6 +257,10 @@ static bool upipe_filter_blend_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_filter_blend_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_filter_blend_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_filter_blend_get_output(upipe, p);
@@ -266,7 +284,7 @@ static void upipe_filter_blend_free(struct upipe *upipe)
 
     upipe_filter_blend_clean_ubuf_mgr(upipe);
     upipe_filter_blend_clean_output(upipe);
-    upipe_filter_blend_free_flow(upipe);
+    upipe_filter_blend_free_void(upipe);
 }
 
 /** module manager static descriptor */

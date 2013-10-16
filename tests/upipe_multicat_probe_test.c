@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, NULL);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -159,9 +159,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_multicat_probe_mgr = upipe_multicat_probe_mgr_alloc();
     assert(upipe_multicat_probe_mgr != NULL);
-    struct upipe *upipe_multicat_probe = upipe_flow_alloc(upipe_multicat_probe_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat_probe"), uref);
+    struct upipe *upipe_multicat_probe = upipe_void_alloc(upipe_multicat_probe_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat_probe"));
     assert(upipe_multicat_probe != NULL);
+    assert(upipe_set_flow_def(upipe_multicat_probe, uref));
     assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
     assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
     uref_free(uref);

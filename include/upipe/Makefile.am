@@ -27,13 +27,14 @@ pkginclude_HEADERS = \
 	umem_pool.h \
 	upipe.h \
 	upipe_helper_bin.h \
+	upipe_helper_flow_def_check.h \
+	upipe_helper_flow_def.h \
 	upipe_helper_flow.h \
 	upipe_helper_output.h \
 	upipe_helper_sink.h \
-	upipe_helper_sink_delay.h \
+	upipe_helper_sound_stream.h \
 	upipe_helper_source_read_size.h \
 	upipe_helper_subpipe.h \
-	upipe_helper_sound_stream.h \
 	upipe_helper_sync.h \
 	upipe_helper_ubuf_mgr.h \
 	upipe_helper_uclock.h \
@@ -48,6 +49,7 @@ pkginclude_HEADERS = \
 	uprobe_helper_adhoc.h \
 	uprobe_helper_uprobe.h \
 	uprobe_log.h \
+	uprobe_output.h \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \
 	uprobe_stdio.h \

@@ -51,6 +51,8 @@ UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
 UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
                     frame offset from last random access point)
 UREF_ATTR_RATIONAL(clock, rate, "k.rate", playing rate)
+UREF_ATTR_UNSIGNED_SH(clock, latency, UDICT_TYPE_CLOCK_LATENCY,
+        latency in uclock units)
 
 /** @hidden */
 #define UREF_CLOCK_TEMPLATE(dv, DV)                                         \

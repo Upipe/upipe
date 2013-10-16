@@ -19,7 +19,7 @@
 
         @item atomic operations with or without locks (@ref uatomic_uint32_t)
         @item reference counters (@ref urefcount)
-        @item chained lists (@ref uchain and @ref ulist) and rings allowing pointer tagging (@ref uring)
+        @item chained lists (@ref uchain) and rings allowing pointer tagging (@ref uring)
         @item lock-less LIFOs (@ref ulifo) without thread limitations
         @item lock-less FIFOs (@ref ufifo) without thread limitations
         @item lock-less buffer queues (@ref uqueue) without thread limitations
@@ -125,7 +125,6 @@
         @item @ref uprobe_ts_log_alloc @item log TS-related received events, for debug purposes @item @tt -lupipe-ts
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
-        @item @ref uprobe_selprog_alloc @item select programs according to criteria @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
 
@@ -164,7 +163,6 @@
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
         @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
         @item @ref #UPIPE_HELPER_SINK @item helper for sink pipes outputting data at a certain rate, to block pumps and buffer urefs
-        @item @ref #UPIPE_HELPER_SINK_DELAY @item helper for sink pipes outputting data at the given system time of packets, plus a configurable delay
         @item @ref #UPIPE_HELPER_UREF_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
         @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
@@ -224,6 +222,28 @@
 
   @end section
 
+  @section T {Flows}
+
+    The movement of buffers between the input and output of a pipe is called a flow. Pipes generally expect some parameters describing the flow; these are called a flow definition. A flow definition packet is a @ref uref pointing to a @ref udict with key/value pairs. Standard flow definitions are provided for block (@ref uref_block_flow_alloc_def), picture (@ref uref_pic_flow_alloc_def) and sound (@ref uref_sound_flow_alloc_def) formats.
+
+    The input flow definition is set on a pipe using @ref upipe_set_flow_def. It may be changed at any time, but the pipe may deny it by returning false if it considers it is too big a change; by convention, pipes only allow it if it doesn't require a full reset of the pipe's state.
+
+    Some pipes (filters) may also require a flow definition describing the requested output, for instance to change picture format. In that case the output flow definition packet is passed on allocation using @ref upipe_flow_alloc instead of @ref upipe_void_alloc. When a pipe changes the flow definition on its output, it must send the UPROBE_NEW_FLOW_DEF event. Upipe provides helper functions (see @ref upipe_void_alloc_output and @ref upipe_flow_alloc_output) to automatically forward the new flow definition to the output pipe.
+
+    It is useful to note that a flow definition packet is actually a patchwork of attributes with different purposes:
+
+      @list
+
+        @item attributes which define the format of the buffers, such as the number of planes or chroma subsampling
+        @item attributes which describe several properties useful for the display or processing of the flow, such as aspect ratio, fps, bitrate, sample rate, etc.
+        @item attributes which may have no relation with the data themselves but are useful to choose between elementary streams, such as the language, program name, event information, etc.
+
+      @end list
+
+    It should therefore be considered quite standard to have frequent flow definition updates, and most pipes won't probably feel the difference.
+
+  @end section
+
   @section T {Clocks}
 
     All dates in Upipe are represented, by convention, as ticks of a 27 MHz clock. The origin and pace of the clock depends on the variation of the date. There are three date variations stored in @ref uref:
@@ -274,7 +294,7 @@
       @item An xfer_mgr is created, in general from the main thread, using @ref upipe_xfer_mgr_alloc.
       @item A new thread is created (for instance with pthread_create). The pointer to the xfer_mgr is passed as the opaque argument to pthread_create, and retrieved in the worker thread.
       @item The worker thread initializes a new event loop and a new upump manager, and calls @ref upipe_xfer_mgr_attach on the xfer_mgr passed by the main thread. It can then enter the event loop.
-      @item The main thread creates a pipe that is supposed to run on the worker thread via @ref upipe_flow_alloc or @ref upipe_void_alloc, and initializes it. The pipe is supposed to work with a upump_mgr, either directly, or through the use of @ref upipe_qsrc_mgr_alloc and/or @ref upipe_qsink_mgr_alloc. If a group of pipes has to be moved (for instance with queue source and queue sink), the group can be built normally with @ref upipe_set_output, and then all members requiring a upump manager have to be transferred.
+      @item The main thread creates a pipe that is supposed to run on the worker thread via @ref upipe_void_alloc, and initializes it. The pipe is supposed to work with a upump_mgr, either directly, or through the use of @ref upipe_qsrc_mgr_alloc and/or @ref upipe_qsink_mgr_alloc. If a group of pipes has to be moved (for instance with queue source and queue sink), the group can be built normally with @ref upipe_set_output, and then all members requiring a upump manager have to be transferred.
       @item Pipes that need a upump manager are transferred to the worked thread by calling @ref upipe_xfer_alloc on them. In case there are several pipes, they must be transferred in the sink to source order. After @ref upipe_xfer_alloc, the original upipe pointer shall no longer be used in the main thread; however this function returns a pointer to a pipe handle, that allows to do basic operations on the remote pipe, such as releasing it.
       @item At the end of the processing, all pipe handles are released, which in turn releases the remote pipes in the worker thread. The main thread calls  @ref upipe_mgr_release to stop the event loop in the worker thread, and release the xfer_mgr.
 

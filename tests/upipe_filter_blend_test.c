@@ -110,11 +110,11 @@ int main(int argc, char **argv)
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr);
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "rgb24", 1, 1, 3));
+    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
 
     /* nullpipe */
     struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
-    struct upipe *nullpipe = upipe_flow_alloc(null_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"), NULL);
+    struct upipe *nullpipe = upipe_void_alloc(null_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
     assert(upipe_null_dump_dict(nullpipe, true));
 
@@ -123,8 +123,9 @@ int main(int argc, char **argv)
 
     /* blend */
     struct upipe_mgr *blend_mgr = upipe_filter_blend_mgr_alloc();
-    struct upipe *filter_blend = upipe_flow_alloc(blend_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "blend"), uref);
+    struct upipe *filter_blend = upipe_void_alloc(blend_mgr, uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "blend"));
     assert(filter_blend);
+    assert(upipe_set_flow_def(filter_blend, uref));
     assert(upipe_set_ubuf_mgr(filter_blend, ubuf_mgr));
     assert(upipe_set_output(filter_blend, nullpipe));
     upipe_release(nullpipe);
@@ -134,8 +135,8 @@ int main(int argc, char **argv)
         printf("Sending pic %d\n", counter);
         pic = uref_pic_alloc(uref_mgr, ubuf_mgr, WIDTH, HEIGHT);
         assert(pic);
-        uref_pic_plane_write(pic, "rgb24", 0, 0, -1, -1, &buf);
-        uref_pic_plane_size(pic, "rgb24", &stride, NULL, NULL, &macropixel);
+        assert(uref_pic_plane_write(pic, "r8g8b8", 0, 0, -1, -1, &buf));
+        assert(uref_pic_plane_size(pic, "r8g8b8", &stride, NULL, NULL, &macropixel));
         for (y=0; y < HEIGHT; y++) {
             for (x=0; x < WIDTH; x++) {
                 buf[macropixel * x] = x + y + counter * 3;
@@ -144,7 +145,7 @@ int main(int argc, char **argv)
             }
             buf += stride;
         }
-        uref_pic_plane_unmap(pic, "rgb24", 0, 0, -1, -1);
+        uref_pic_plane_unmap(pic, "r8g8b8", 0, 0, -1, -1);
         upipe_input(filter_blend, pic, NULL);
     }
 

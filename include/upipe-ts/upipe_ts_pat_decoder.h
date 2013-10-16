@@ -34,6 +34,27 @@ extern "C" {
 
 #define UPIPE_TS_PATD_SIGNATURE UBASE_FOURCC('t','s','1','d')
 
+/** @This extends upipe_command with specific commands for ts patd. */
+enum upipe_ts_patd_command {
+    UPIPE_TS_PATD_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the flow definition of the NIT (int *) */
+    UPIPE_TS_PATD_GET_NIT
+};
+
+/** @This returns the flow definition of the NIT.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def_p filled in with the flow definition
+ * @return false in case of error
+ */
+static inline bool upipe_ts_patd_get_nit(struct upipe *upipe,
+                                         struct uref **flow_def_p)
+{
+    return upipe_control(upipe, UPIPE_TS_PATD_GET_NIT,
+                         UPIPE_TS_PATD_SIGNATURE, flow_def_p);
+}
+
 /** @This returns the management structure for all ts_patd pipes.
  *
  * @return pointer to manager

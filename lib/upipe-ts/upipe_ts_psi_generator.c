@@ -33,7 +33,7 @@
 #include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -77,7 +77,7 @@ struct upipe_ts_psig {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psig, "void.")
+UPIPE_HELPER_VOID(upipe_ts_psig)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, flow_def_sent)
 
@@ -117,7 +117,7 @@ struct upipe_ts_psig_program {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psig_program, "void.")
+UPIPE_HELPER_VOID(upipe_ts_psig_program)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig, upipe_ts_psig_program, program, program_mgr,
@@ -145,7 +145,7 @@ struct upipe_ts_psig_flow {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psig_flow, upipe, UPIPE_TS_PSIG_FLOW_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psig_flow, "void.")
+UPIPE_HELPER_VOID(upipe_ts_psig_flow)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig_program, upipe_ts_psig_flow, flow, flow_mgr,
                      flows, uchain)
@@ -163,38 +163,77 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
                                               uint32_t signature,
                                               va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_psig_flow_alloc_flow(mgr, uprobe, signature,
-                                                        args, &flow_def);
+    struct upipe *upipe = upipe_ts_psig_flow_alloc_void(mgr, uprobe, signature,
+                                                        args);
     if (unlikely(upipe == NULL))
         return NULL;
 
-    uint64_t stream_type, pid;
-    if (unlikely(!uref_ts_flow_get_stream_type(flow_def, &stream_type) ||
-                 !uref_ts_flow_get_pid(flow_def, &pid))) {
-        uref_free(flow_def);
-        upipe_ts_psig_flow_free_flow(upipe);
-        return NULL;
-    }
-
     struct upipe_ts_psig_flow *upipe_ts_psig_flow =
         upipe_ts_psig_flow_from_upipe(upipe);
-    upipe_ts_psig_flow->pid = pid;
-    upipe_ts_psig_flow->stream_type = stream_type;
+    upipe_ts_psig_flow->pid = 8192;
+    upipe_ts_psig_flow->stream_type = 0;
     upipe_ts_psig_flow->descriptors = NULL;
     upipe_ts_psig_flow->descriptors_size = 0;
-    uref_ts_flow_get_descriptors(flow_def, &upipe_ts_psig_flow->descriptors,
-                                 &upipe_ts_psig_flow->descriptors_size);
-    upipe_ts_psig_flow->flow_def_input = flow_def;
+    upipe_ts_psig_flow->flow_def_input = NULL;
     upipe_ts_psig_flow_init_sub(upipe);
+
+    upipe_throw_ready(upipe);
 
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
     upipe_use(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program));
-    upipe_ts_psig_program->pmt_version++;
-
-    upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    uint64_t stream_type, pid;
+    if (!uref_flow_match_def(flow_def, "void.") ||
+        !uref_ts_flow_get_stream_type(flow_def, &stream_type) ||
+        !uref_ts_flow_get_pid(flow_def, &pid))
+        return false;
+    const uint8_t *descriptors = NULL;
+    size_t descriptors_size = 0;
+    uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
+
+    struct upipe_ts_psig_flow *upipe_ts_psig_flow =
+        upipe_ts_psig_flow_from_upipe(upipe);
+    if (stream_type != upipe_ts_psig_flow->stream_type ||
+        pid != upipe_ts_psig_flow->pid ||
+        descriptors_size != upipe_ts_psig_flow->descriptors_size ||
+        (descriptors_size &&
+         memcmp(descriptors, upipe_ts_psig_flow->descriptors,
+                descriptors_size))) {
+        struct uref *flow_def_dup;
+        if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+            return false;
+        if (upipe_ts_psig_flow->flow_def_input != NULL)
+            uref_free(upipe_ts_psig_flow->flow_def_input);
+        upipe_ts_psig_flow->flow_def_input = flow_def_dup;
+        upipe_ts_psig_flow->pid = pid;
+        upipe_ts_psig_flow->stream_type = stream_type;
+        upipe_ts_psig_flow->descriptors_size = 0;
+        upipe_ts_psig_flow->descriptors = NULL;
+        /* We can't use descriptors as it points to flow_def which we do not
+         * own. */
+        uref_ts_flow_get_descriptors(flow_def_dup,
+                                     &upipe_ts_psig_flow->descriptors,
+                                     &upipe_ts_psig_flow->descriptors_size);
+
+        struct upipe_ts_psig_program *upipe_ts_psig_program =
+            upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
+        upipe_ts_psig_program->pmt_version++;
+    }
+    return true;
 }
 
 /** @internal @This processes control commands.
@@ -208,6 +247,10 @@ static bool upipe_ts_psig_flow_control(struct upipe *upipe,
                                        enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psig_flow_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psig_flow_get_super(upipe, p);
@@ -232,8 +275,9 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
 
     uref_free(upipe_ts_psig_flow->flow_def_input);
     upipe_ts_psig_flow_clean_sub(upipe);
-    upipe_ts_psig_flow_free_flow(upipe);
+    upipe_ts_psig_flow_free_void(upipe);
 
+    upipe_ts_psig_program->pmt_version++;
     upipe_release(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program));
 }
 
@@ -267,46 +311,29 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
                                                  uint32_t signature,
                                                  va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_psig_program_alloc_flow(mgr, uprobe,
-                                                           signature,
-                                                           args, &flow_def);
+    struct upipe *upipe = upipe_ts_psig_program_alloc_void(mgr, uprobe,
+                                                           signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    uint64_t program_number, pid;
-    if (unlikely(!uref_flow_set_def(flow_def,
-                                    "block.mpegtspsi.mpegtspmt.") ||
-                 !uref_ts_flow_get_sid(flow_def, &program_number) ||
-                 !uref_ts_flow_get_pid(flow_def, &pid))) {
-        uref_free(flow_def);
-        upipe_ts_psig_program_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     upipe_ts_psig_program_init_output(upipe);
     upipe_ts_psig_program_init_flow_mgr(upipe);
     upipe_ts_psig_program_init_sub_flows(upipe);
-    upipe_ts_psig_program->program_number = program_number;
-    upipe_ts_psig_program->pmt_pid = pid;
+    upipe_ts_psig_program->program_number = 0;
+    upipe_ts_psig_program->pmt_pid = 8192;
     upipe_ts_psig_program->pmt_version = 0;
-    uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig_program->pmt_version);
     upipe_ts_psig_program->pcr_pid = 8191;
     upipe_ts_psig_program->descriptors = NULL;
     upipe_ts_psig_program->descriptors_size = 0;
-    uref_ts_flow_get_descriptors(flow_def, &upipe_ts_psig_program->descriptors,
-                                 &upipe_ts_psig_program->descriptors_size);
-    upipe_ts_psig_program_store_flow_def(upipe, flow_def);
     upipe_ts_psig_program_init_sub(upipe);
+
+    upipe_throw_ready(upipe);
 
     struct upipe_ts_psig *upipe_ts_psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
     upipe_use(upipe_ts_psig_to_upipe(upipe_ts_psig));
-    upipe_ts_psig->pat_version++;
-
-    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -376,6 +403,8 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach (&upipe_ts_psig_program->flows, uchain) {
         struct upipe_ts_psig_flow *upipe_ts_psig_flow =
             upipe_ts_psig_flow_from_uchain(uchain);
+        if (upipe_ts_psig_flow->pid == 8192)
+            continue;
         upipe_notice_va(upipe, " * ES pid=%"PRIu16" streamtype=0x%"PRIx8,
                         upipe_ts_psig_flow->pid,
                         upipe_ts_psig_flow->stream_type);
@@ -417,6 +446,66 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_psig_program_output(upipe, uref, upump);
 
     upipe_notice(upipe, "end PMT");
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    uint64_t program_number, pid;
+    if (!uref_flow_match_def(flow_def, "void.") ||
+        !uref_ts_flow_get_sid(flow_def, &program_number) ||
+        !uref_ts_flow_get_pid(flow_def, &pid))
+        return false;
+    const uint8_t *descriptors = NULL;
+    size_t descriptors_size = 0;
+    uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
+
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    if (program_number != upipe_ts_psig_program->program_number ||
+        pid != upipe_ts_psig_program->pmt_pid ||
+        descriptors_size != upipe_ts_psig_program->descriptors_size ||
+        (descriptors_size &&
+         memcmp(descriptors, upipe_ts_psig_program->descriptors,
+                descriptors_size))) {
+        struct uref *flow_def_dup;
+        if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+        if (unlikely(!uref_flow_set_def(flow_def_dup,
+                                        "block.mpegtspsi.mpegtspmt."))) {
+            uref_free(flow_def);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+
+        upipe_ts_psig_program_store_flow_def(upipe, flow_def_dup);
+        upipe_ts_psig_program->program_number = program_number;
+        upipe_ts_psig_program->pmt_pid = pid;
+        uref_ts_flow_get_psi_version(flow_def,
+                                     &upipe_ts_psig_program->pmt_version);
+        upipe_ts_psig_program->descriptors = NULL;
+        upipe_ts_psig_program->descriptors_size = 0;
+        /* We can't use descriptors as it points to flow_def which we do not
+         * own. */
+        uref_ts_flow_get_descriptors(flow_def_dup,
+                                     &upipe_ts_psig_program->descriptors,
+                                     &upipe_ts_psig_program->descriptors_size);
+
+        struct upipe_ts_psig *upipe_ts_psig =
+            upipe_ts_psig_from_program_mgr(upipe->mgr);
+        upipe_ts_psig->pat_version++;
+    }
+    return true;
 }
 
 /** @internal @This returns the current PCR PID.
@@ -465,6 +554,10 @@ static bool upipe_ts_psig_program_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psig_program_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psig_program_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -518,8 +611,9 @@ static void upipe_ts_psig_program_free(struct upipe *upipe)
     upipe_ts_psig_program_clean_sub_flows(upipe);
     upipe_ts_psig_program_clean_sub(upipe);
     upipe_ts_psig_program_clean_output(upipe);
-    upipe_ts_psig_program_free_flow(upipe);
+    upipe_ts_psig_program_free_void(upipe);
 
+    upipe_ts_psig->pat_version++;
     upipe_release(upipe_ts_psig_to_upipe(upipe_ts_psig));
 }
 
@@ -551,31 +645,18 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_psig_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
+    struct upipe *upipe = upipe_ts_psig_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    uint64_t tsid;
-
-    if (unlikely(!uref_flow_set_def(flow_def,
-                                    "block.mpegtspsi.mpegtspat.") ||
-                 !uref_ts_flow_get_tsid(flow_def, &tsid))) {
-        uref_free(flow_def);
-        upipe_ts_psig_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig_init_ubuf_mgr(upipe);
     upipe_ts_psig_init_output(upipe);
     upipe_ts_psig_init_program_mgr(upipe);
     upipe_ts_psig_init_sub_programs(upipe);
-    upipe_ts_psig->tsid = tsid;
+    upipe_ts_psig->tsid = 0;
     upipe_ts_psig->pat_version = 0;
-    uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig->pat_version);
-    upipe_ts_psig_store_flow_def(upipe, flow_def);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -644,14 +725,16 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         while ((program = pat_get_program(buffer, j)) != NULL &&
                !ulist_is_last(&upipe_ts_psig->programs, program_chain)) {
             program_chain = program_chain->next;
-            j++;
 
             struct upipe_ts_psig_program *upipe_ts_psig_program =
                 upipe_ts_psig_program_from_uchain(program_chain);
+            if (upipe_ts_psig_program->pmt_pid == 8192)
+                continue;
             upipe_notice_va(upipe, " * program number=%"PRIu16" pid=%"PRIu16,
                             upipe_ts_psig_program->program_number,
                             upipe_ts_psig_program->pmt_pid);
 
+            j++;
             patn_init(program);
             patn_set_program(program, upipe_ts_psig_program->program_number);
             patn_set_pid(program, upipe_ts_psig_program->pmt_pid);
@@ -707,6 +790,38 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    uint64_t tsid;
+    if (!uref_flow_match_def(flow_def, "void.") ||
+        !uref_ts_flow_get_tsid(flow_def, &tsid))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (unlikely(!uref_flow_set_def(flow_def_dup,
+                                    "block.mpegtspsi.mpegtspat.")))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_psig_store_flow_def(upipe, flow_def_dup);
+
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    upipe_ts_psig->tsid = tsid;
+    upipe_ts_psig->pat_version = 0;
+    uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig->pat_version);
+    return true;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -731,6 +846,10 @@ static bool upipe_ts_psig_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psig_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psig_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -764,7 +883,7 @@ static void upipe_ts_psig_free(struct upipe *upipe)
     upipe_ts_psig_clean_sub_programs(upipe);
     upipe_ts_psig_clean_output(upipe);
     upipe_ts_psig_clean_ubuf_mgr(upipe);
-    upipe_ts_psig_free_flow(upipe);
+    upipe_ts_psig_free_void(upipe);
 }
 
 /** module manager static descriptor */

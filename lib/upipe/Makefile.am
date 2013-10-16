@@ -1,11 +1,12 @@
 lib_LTLIBRARIES = libupipe.la
 
 libupipe_la_SOURCES = \
-	uprobe_prefix.c \
-	uprobe_stdio.c \
-	uprobe_log.c \
 	uprobe_dejitter.c \
+	uprobe_log.c \
+	uprobe_prefix.c \
+	uprobe_output.c \
 	uprobe_select_flows.c \
+	uprobe_stdio.c \
 	uprobe_upump_mgr.c \
 	uprobe_uref_mgr.c \
 	uclock_std.c \

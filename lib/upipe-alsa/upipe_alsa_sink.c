@@ -40,7 +40,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
@@ -71,6 +71,10 @@
 #define DEFAULT_PERIOD_DURATION (UCLOCK_FREQ / 25)
 /** tolerance on PTSs (plus or minus) */
 #define PTS_TOLERANCE (UCLOCK_FREQ / 25)
+/** number of periods to buffer */
+#define BUFFER_PERIODS 2
+/** max number of urefs to buffer */
+#define BUFFER_UREFS 5
 /** we expect sound */
 #define EXPECTED_FLOW_DEF "block."
 
@@ -86,10 +90,10 @@ struct upipe_alsink {
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
 
-    /** input flow definition */
-    struct uref *flow_def;
     /** sample rate */
     unsigned int rate;
+    /** number of channels */
+    unsigned int channels;
     /** sample format */
     snd_pcm_format_t format;
     /** duration of a period */
@@ -97,6 +101,8 @@ struct upipe_alsink {
     /** remainder of the number of frames to output per period */
     long long frames_remainder;
 
+    /** delay applied to system clock ref when uclock is provided */
+    uint64_t latency;
     /** device name */
     char *uri;
     /** ALSA handle */
@@ -117,7 +123,7 @@ struct upipe_alsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_alsink, upipe, UPIPE_ALSINK_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_alsink, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_alsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_alsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_alsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_alsink, urefs, nb_urefs, max_urefs, blockers, NULL)
@@ -135,9 +141,7 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_alsink_alloc_flow(mgr, uprobe, signature, args,
-                                                  &flow_def);
+    struct upipe *upipe = upipe_alsink_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -146,12 +150,169 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
     upipe_alsink_init_upump(upipe);
     upipe_alsink_init_sink(upipe);
     upipe_alsink_init_uclock(upipe);
-    upipe_alsink->uri = NULL;
-    upipe_alsink->flow_def = flow_def;
+    upipe_alsink->latency = 0;
+    upipe_alsink->rate = 0;
+    upipe_alsink->uri = strdup(DEFAULT_DEVICE);
     upipe_alsink->urefs_duration = 0;
     upipe_alsink->handle = NULL;
+    upipe_alsink->max_urefs = BUFFER_UREFS;
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This opens the ALSA device.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_alsink_open(struct upipe *upipe)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+
+    if (unlikely(upipe_alsink->uri == NULL))
+        return false;
+
+    const char *uri = upipe_alsink->uri;
+    if (!strcmp(uri, "default"))
+        uri = DEFAULT_DEVICE;
+
+    if (upipe_alsink->upump_mgr == NULL) {
+        upipe_throw_need_upump_mgr(upipe);
+        if (unlikely(upipe_alsink->upump_mgr == NULL))
+            return false;
+    }
+
+    if (snd_pcm_open(&upipe_alsink->handle, uri, SND_PCM_STREAM_PLAYBACK,
+                     SND_PCM_NONBLOCK) < 0) {
+        upipe_err_va(upipe, "can't open device %s", uri);
+        return false;
+    }
+
+    snd_pcm_hw_params_t *hwparams;
+    snd_pcm_hw_params_alloca(&hwparams);
+    if (snd_pcm_hw_params_any(upipe_alsink->handle, hwparams) < 0) {
+        upipe_err_va(upipe, "can't configure device %s", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_hw_params_set_rate_resample(upipe_alsink->handle, hwparams,
+                                            1) < 0) {
+        upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_hw_params_set_access(upipe_alsink->handle, hwparams,
+                                     SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
+        upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_hw_params_set_format(upipe_alsink->handle, hwparams,
+                                     upipe_alsink->format) < 0) {
+        upipe_err_va(upipe, "device %s is not compatible with format", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_hw_params_set_rate(upipe_alsink->handle, hwparams,
+                                   upipe_alsink->rate, 0) < 0) {
+        upipe_err_va(upipe, "error setting sample rate on device %s", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_hw_params_set_channels(upipe_alsink->handle, hwparams,
+                                       upipe_alsink->channels) < 0) {
+        upipe_err_va(upipe, "error setting channels on device %s", uri);
+        goto open_error;
+    }
+
+    upipe_alsink->frames_remainder = 0;
+    snd_pcm_uframes_t frames_in_period = (uint64_t)DEFAULT_PERIOD_DURATION *
+                                         upipe_alsink->rate / UCLOCK_FREQ;
+    if (snd_pcm_hw_params_set_period_size_near(upipe_alsink->handle, hwparams,
+                                               &frames_in_period, NULL) < 0) {
+        upipe_err_va(upipe, "error setting period size on device %s", uri);
+        goto open_error;
+    }
+    upipe_alsink->period_duration = (uint64_t)frames_in_period *
+                                    UCLOCK_FREQ / upipe_alsink->rate;
+
+    snd_pcm_uframes_t buffer_size = frames_in_period * 4;
+    if (snd_pcm_hw_params_set_buffer_size_min(upipe_alsink->handle, hwparams,
+                                              &buffer_size) < 0) {
+        upipe_err_va(upipe, "error setting buffer size on device %s", uri);
+        goto open_error;
+    }
+
+    /* Apply HW parameter settings to PCM device. */
+    if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
+        upipe_err_va(upipe, "error configuring hw device %s", uri);
+        goto open_error;
+    }
+
+    snd_pcm_sw_params_t *swparams;
+
+    snd_pcm_sw_params_alloca(&swparams);
+    snd_pcm_sw_params_current(upipe_alsink->handle, swparams);
+
+    /* Start when the buffer is full enough. */
+    if (snd_pcm_sw_params_set_start_threshold(upipe_alsink->handle, swparams,
+                                              frames_in_period * 2) < 0) {
+        upipe_err_va(upipe, "error setting threshold on device %s", uri);
+        goto open_error;
+    }
+
+    /* Apply SW parameter settings to PCM device. */
+    if (snd_pcm_sw_params(upipe_alsink->handle, swparams) < 0) {
+        upipe_err_va(upipe, "error configuring sw device %s", uri);
+        goto open_error;
+    }
+
+    if (snd_pcm_prepare(upipe_alsink->handle) < 0) {
+        upipe_err_va(upipe, "error preparing device %s", uri);
+        goto open_error;
+    }
+
+    struct upump *timer = upump_alloc_timer(upipe_alsink->upump_mgr,
+                                            upipe_alsink_timer, upipe, 0,
+                                            upipe_alsink->period_duration);
+    if (unlikely(timer == NULL)) {
+        upipe_err(upipe, "can't create timer");
+        goto open_error;
+    }
+    upipe_alsink_set_upump(upipe, timer);
+    upump_start(timer);
+
+    if (!upipe_alsink_check_sink(upipe))
+        upipe_use(upipe);
+    upipe_notice_va(upipe, "opened device %s", uri);
+    return true;
+
+open_error:
+    snd_pcm_close(upipe_alsink->handle);
+    upipe_alsink->handle = NULL;
+    return false;
+}
+
+/** @internal @This closes the ALSA device.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_alsink_close(struct upipe *upipe)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+
+    if (unlikely(upipe_alsink->handle == NULL))
+        return;
+
+    upipe_notice_va(upipe, "closing device %s", upipe_alsink->uri);
+    snd_pcm_close(upipe_alsink->handle);
+    upipe_alsink->handle = NULL;
+
+    upipe_alsink_set_upump(upipe, NULL);
+    upipe_alsink_unblock_sink(upipe);
+    if (!upipe_alsink_check_sink(upipe))
+        /* Release the pipe used in @ref upipe_alsink_input. */
+        upipe_release(upipe);
 }
 
 /** @internal @This is called to recover the ALSA device in case of error.
@@ -230,7 +391,7 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
 
     size_t uref_size;
     if (uref_block_size(uref, &uref_size) && uref_size <= bytes) {
-        ulist_pop(&upipe_alsink->urefs);
+        upipe_alsink_pop_sink(upipe);
         uref_free(uref);
         frames = snd_pcm_bytes_to_frames(upipe_alsink->handle, uref_size);
     } else {
@@ -294,7 +455,7 @@ static void upipe_alsink_timer(struct upump *upump)
         struct uchain *uchain = ulist_peek(&upipe_alsink->urefs);
         snd_pcm_sframes_t result;
         if (unlikely(uchain == NULL)) {
-            upipe_dbg_va(upipe, "playing %u frames of silence", frames);
+            upipe_dbg_va(upipe, "playing %u frames of silence (empty)", frames);
             result = upipe_alsink_silence(upipe, frames);
             if (result <= 0)
                 break;
@@ -306,11 +467,12 @@ static void upipe_alsink_timer(struct upump *upump)
         if (next_pts != UINT64_MAX) {
             uint64_t uref_pts;
             if (unlikely(!uref_clock_get_pts_sys(uref, &uref_pts))) {
-                ulist_pop(&upipe_alsink->urefs);
+                upipe_alsink_pop_sink(upipe);
                 uref_free(uref);
                 upipe_warn(upipe, "non-dated uref received");
                 continue;
             }
+            uref_pts += upipe_alsink->latency;
 
             int64_t tolerance = uref_pts - next_pts;
             if (tolerance > (int64_t)PTS_TOLERANCE) {
@@ -318,7 +480,7 @@ static void upipe_alsink_timer(struct upump *upump)
                     tolerance * upipe_alsink->rate / UCLOCK_FREQ;
                 if (silence_frames > frames)
                     silence_frames = frames;
-                upipe_dbg_va(upipe, "playing %u frames of silence",
+                upipe_dbg_va(upipe, "playing %u frames of silence (wait)",
                              silence_frames);
                 result = upipe_alsink_silence(upipe, silence_frames);
                 if (result <= 0)
@@ -338,7 +500,7 @@ static void upipe_alsink_timer(struct upump *upump)
         int size = -1;
         const uint8_t *buffer;
         if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
-            ulist_pop(&upipe_alsink->urefs);
+            upipe_alsink_pop_sink(upipe);
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             continue;
@@ -355,7 +517,8 @@ static void upipe_alsink_timer(struct upump *upump)
         frames -= result;
     }
 
-    if (upipe_alsink->urefs_duration < upipe_alsink->period_duration * 2)
+    if (upipe_alsink->urefs_duration < upipe_alsink->period_duration *
+                                       BUFFER_PERIODS)
         upipe_alsink_unblock_sink(upipe);
     if (!was_empty && upipe_alsink_check_sink(upipe)) {
         /* All packets have been output, release again the pipe that has been
@@ -374,11 +537,6 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
     size_t uref_size;
     if (unlikely(!uref_block_size(uref, &uref_size))) {
         upipe_warn(upipe, "unable to read uref");
@@ -386,8 +544,8 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(upipe_alsink->handle == NULL)) {
-        upipe_warn(upipe, "received a buffer before opening a device");
+    if (unlikely(upipe_alsink->handle == NULL && !upipe_alsink_open(upipe))) {
+        upipe_warn(upipe, "unable to open device");
         uref_free(uref);
         return;
     }
@@ -405,8 +563,95 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
 
     upipe_alsink_hold_sink(upipe, uref);
     upipe_alsink->urefs_duration += uref_duration;
-    if (upipe_alsink->urefs_duration >= upipe_alsink->period_duration * 2)
+    if (upipe_alsink->urefs_duration >= upipe_alsink->period_duration *
+                                        BUFFER_PERIODS)
         upipe_alsink_block_sink(upipe, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    const char *def;
+    uint64_t rate;
+    uint8_t channels;
+    if (!uref_flow_get_def(flow_def, &def) ||
+        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+        !uref_sound_flow_get_rate(flow_def, &rate) ||
+        !uref_sound_flow_get_channels(flow_def, &channels))
+        return false;
+    def += strlen(EXPECTED_FLOW_DEF);
+
+    snd_pcm_format_t format;
+    if (!ubase_ncmp(def, "pcm_s16le."))
+        format = SND_PCM_FORMAT_S16_LE;
+    else if (!ubase_ncmp(def, "pcm_s16be."))
+        format = SND_PCM_FORMAT_S16_BE;
+    else if (!ubase_ncmp(def, "pcm_u16le."))
+        format = SND_PCM_FORMAT_U16_LE;
+    else if (!ubase_ncmp(def, "pcm_u16be."))
+        format = SND_PCM_FORMAT_U16_BE;
+    else if (!ubase_ncmp(def, "pcm_s8."))
+        format = SND_PCM_FORMAT_S8;
+    else if (!ubase_ncmp(def, "pcm_u8."))
+        format = SND_PCM_FORMAT_U8;
+    else if (!ubase_ncmp(def, "pcm_mulaw."))
+        format = SND_PCM_FORMAT_MU_LAW;
+    else if (!ubase_ncmp(def, "pcm_alaw."))
+        format = SND_PCM_FORMAT_A_LAW;
+    else if (!ubase_ncmp(def, "pcm_s32le."))
+        format = SND_PCM_FORMAT_S32_LE;
+    else if (!ubase_ncmp(def, "pcm_s32be."))
+        format = SND_PCM_FORMAT_S32_BE;
+    else if (!ubase_ncmp(def, "pcm_u32le."))
+        format = SND_PCM_FORMAT_U32_LE;
+    else if (!ubase_ncmp(def, "pcm_u32be."))
+        format = SND_PCM_FORMAT_U32_BE;
+    else if (!ubase_ncmp(def, "pcm_s24le."))
+        format = SND_PCM_FORMAT_S24_LE;
+    else if (!ubase_ncmp(def, "pcm_s24be."))
+        format = SND_PCM_FORMAT_S24_BE;
+    else if (!ubase_ncmp(def, "pcm_u24le."))
+        format = SND_PCM_FORMAT_U24_LE;
+    else if (!ubase_ncmp(def, "pcm_u24be."))
+        format = SND_PCM_FORMAT_U24_BE;
+    else if (!ubase_ncmp(def, "pcm_f32le."))
+        format = SND_PCM_FORMAT_FLOAT_LE;
+    else if (!ubase_ncmp(def, "pcm_f32be."))
+        format = SND_PCM_FORMAT_FLOAT_BE;
+    else if (!ubase_ncmp(def, "pcm_f64le."))
+        format = SND_PCM_FORMAT_FLOAT64_LE;
+    else if (!ubase_ncmp(def, "pcm_f64be."))
+        format = SND_PCM_FORMAT_FLOAT64_BE;
+    else {
+        upipe_err_va(upipe, "unknown format %s", def);
+        return false;
+    }
+
+    if (upipe_alsink->handle != NULL) {
+        if (format != upipe_alsink->format ||
+            rate != upipe_alsink->rate ||
+            channels != upipe_alsink->channels)
+            return false;
+
+    } else {
+        upipe_alsink->rate = rate;
+        upipe_alsink->channels = channels;
+        upipe_alsink->format = format;
+    }
+
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+    if (latency > upipe_alsink->latency)
+        upipe_alsink->latency = latency;
+    return true;
 }
 
 /** @internal @This returns the name of the opened ALSA device.
@@ -433,203 +678,19 @@ static bool upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
 
-    if (unlikely(upipe_alsink->handle != NULL)) {
-        upipe_notice_va(upipe, "closing device %s", upipe_alsink->uri);
-        snd_pcm_close(upipe_alsink->handle);
-        upipe_alsink->handle = NULL;
-    }
+    upipe_alsink_close(upipe);
     free(upipe_alsink->uri);
     upipe_alsink->uri = NULL;
-    upipe_alsink_set_upump(upipe, NULL);
-    upipe_alsink_unblock_sink(upipe);
-    if (!upipe_alsink_check_sink(upipe))
-        /* Release the pipe used in @ref upipe_alsink_input. */
-        upipe_release(upipe);
 
     if (unlikely(uri == NULL))
         return true;
-    if (!strcmp(uri, "default"))
-        uri = DEFAULT_DEVICE;
-
-    if (upipe_alsink->upump_mgr == NULL) {
-        upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_alsink->upump_mgr == NULL))
-            return false;
-    }
-
-    if (snd_pcm_open(&upipe_alsink->handle, uri, SND_PCM_STREAM_PLAYBACK,
-                     SND_PCM_NONBLOCK) < 0) {
-        upipe_err_va(upipe, "can't open device %s", uri);
-        return false;
-    }
-  
-    snd_pcm_hw_params_t *hwparams;
-    snd_pcm_hw_params_alloca(&hwparams);
-    if (snd_pcm_hw_params_any(upipe_alsink->handle, hwparams) < 0) {
-        upipe_err_va(upipe, "can't configure device %s", uri);
-        goto set_uri_error;
-    }
-
-    if (snd_pcm_hw_params_set_rate_resample(upipe_alsink->handle, hwparams,
-                                            1) < 0) {
-        upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
-        goto set_uri_error;
-    }
-
-    if (snd_pcm_hw_params_set_access(upipe_alsink->handle, hwparams,
-                                     SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
-        upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
-        goto set_uri_error;
-    }
-
-    const char *def;
-    if (unlikely(!uref_flow_get_def(upipe_alsink->flow_def, &def))) {
-        assert(0);
-        goto set_uri_error;
-    }
-    def += strlen(EXPECTED_FLOW_DEF);
-
-    if (!ubase_ncmp(def, "pcm_s16le."))
-        upipe_alsink->format = SND_PCM_FORMAT_S16_LE;
-    else if (!ubase_ncmp(def, "pcm_s16be."))
-        upipe_alsink->format = SND_PCM_FORMAT_S16_BE;
-    else if (!ubase_ncmp(def, "pcm_u16le."))
-        upipe_alsink->format = SND_PCM_FORMAT_U16_LE;
-    else if (!ubase_ncmp(def, "pcm_u16be."))
-        upipe_alsink->format = SND_PCM_FORMAT_U16_BE;
-    else if (!ubase_ncmp(def, "pcm_s8."))
-        upipe_alsink->format = SND_PCM_FORMAT_S8;
-    else if (!ubase_ncmp(def, "pcm_u8."))
-        upipe_alsink->format = SND_PCM_FORMAT_U8;
-    else if (!ubase_ncmp(def, "pcm_mulaw."))
-        upipe_alsink->format = SND_PCM_FORMAT_MU_LAW;
-    else if (!ubase_ncmp(def, "pcm_alaw."))
-        upipe_alsink->format = SND_PCM_FORMAT_A_LAW;
-    else if (!ubase_ncmp(def, "pcm_s32le."))
-        upipe_alsink->format = SND_PCM_FORMAT_S32_LE;
-    else if (!ubase_ncmp(def, "pcm_s32be."))
-        upipe_alsink->format = SND_PCM_FORMAT_S32_BE;
-    else if (!ubase_ncmp(def, "pcm_u32le."))
-        upipe_alsink->format = SND_PCM_FORMAT_U32_LE;
-    else if (!ubase_ncmp(def, "pcm_u32be."))
-        upipe_alsink->format = SND_PCM_FORMAT_U32_BE;
-    else if (!ubase_ncmp(def, "pcm_s24le."))
-        upipe_alsink->format = SND_PCM_FORMAT_S24_LE;
-    else if (!ubase_ncmp(def, "pcm_s24be."))
-        upipe_alsink->format = SND_PCM_FORMAT_S24_BE;
-    else if (!ubase_ncmp(def, "pcm_u24le."))
-        upipe_alsink->format = SND_PCM_FORMAT_U24_LE;
-    else if (!ubase_ncmp(def, "pcm_u24be."))
-        upipe_alsink->format = SND_PCM_FORMAT_U24_BE;
-    else if (!ubase_ncmp(def, "pcm_f32le."))
-        upipe_alsink->format = SND_PCM_FORMAT_FLOAT_LE;
-    else if (!ubase_ncmp(def, "pcm_f32be."))
-        upipe_alsink->format = SND_PCM_FORMAT_FLOAT_BE;
-    else if (!ubase_ncmp(def, "pcm_f64le."))
-        upipe_alsink->format = SND_PCM_FORMAT_FLOAT64_LE;
-    else if (!ubase_ncmp(def, "pcm_f64be."))
-        upipe_alsink->format = SND_PCM_FORMAT_FLOAT64_BE;
-    else {
-        upipe_err_va(upipe, "unknown format %s", def);
-        goto set_uri_error;
-    }
-  
-    if (snd_pcm_hw_params_set_format(upipe_alsink->handle, hwparams,
-                                     upipe_alsink->format) < 0) {
-        upipe_err_va(upipe, "device %s is not compatible with format %s",
-                     uri, def);
-        goto set_uri_error;
-    }
-
-    uint64_t rate;
-    if (!uref_sound_flow_get_rate(upipe_alsink->flow_def, &rate) ||
-        snd_pcm_hw_params_set_rate(upipe_alsink->handle, hwparams,
-                                   rate, 0) < 0) {
-        upipe_err_va(upipe, "error setting sample rate on device %s", uri);
-        goto set_uri_error;
-    }
-    upipe_alsink->rate = rate;
-
-    uint8_t channels;
-    if (!uref_sound_flow_get_channels(upipe_alsink->flow_def, &channels) ||
-        snd_pcm_hw_params_set_channels(upipe_alsink->handle, hwparams,
-                                       channels) < 0) {
-        upipe_err_va(upipe, "error setting channels on device %s", uri);
-        goto set_uri_error;
-    }
-
-    upipe_alsink->frames_remainder = 0;
-    snd_pcm_uframes_t frames_in_period = (uint64_t)DEFAULT_PERIOD_DURATION *
-                                         upipe_alsink->rate / UCLOCK_FREQ;
-    if (snd_pcm_hw_params_set_period_size_near(upipe_alsink->handle, hwparams,
-                                               &frames_in_period, NULL) < 0) {
-        upipe_err_va(upipe, "error setting period size on device %s", uri);
-        goto set_uri_error;
-    }
-    upipe_alsink->period_duration = (uint64_t)frames_in_period *
-                                    UCLOCK_FREQ / upipe_alsink->rate;
-
-    snd_pcm_uframes_t buffer_size = frames_in_period * 4;
-    if (snd_pcm_hw_params_set_buffer_size_min(upipe_alsink->handle, hwparams,
-                                               &buffer_size) < 0) {
-        upipe_err_va(upipe, "error setting buffer size on device %s", uri);
-        goto set_uri_error;
-    }
-
-    /* Apply HW parameter settings to PCM device. */
-    if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
-        upipe_err_va(upipe, "error configuring hw device %s", uri);
-        goto set_uri_error;
-    }
-
-    snd_pcm_sw_params_t *swparams;
-
-    snd_pcm_sw_params_alloca(&swparams);
-    snd_pcm_sw_params_current(upipe_alsink->handle, swparams);
-
-    /* Start when the buffer is full enough. */
-    if (snd_pcm_sw_params_set_start_threshold(upipe_alsink->handle, swparams,
-                                              frames_in_period * 2) < 0) {
-        upipe_err_va(upipe, "error setting threshold on device %s", uri);
-        goto set_uri_error;
-    }
-
-    /* Apply SW parameter settings to PCM device. */
-    if (snd_pcm_sw_params(upipe_alsink->handle, swparams) < 0) {
-        upipe_err_va(upipe, "error configuring sw device %s", uri);
-        goto set_uri_error;
-    }
-
-    if (snd_pcm_prepare(upipe_alsink->handle) < 0) {
-        upipe_err_va(upipe, "error preparing device %s", uri);
-        goto set_uri_error;
-    }
-
-    struct upump *timer = upump_alloc_timer(upipe_alsink->upump_mgr,
-                                            upipe_alsink_timer, upipe, 0,
-                                            upipe_alsink->period_duration);
-    if (unlikely(timer == NULL)) {
-        upipe_err(upipe, "can't create timer");
-        goto set_uri_error;
-    }
-    upipe_alsink_set_upump(upipe, timer);
-    upump_start(timer);
 
     upipe_alsink->uri = strdup(uri);
     if (unlikely(upipe_alsink->uri == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        goto set_uri_error;
+        return false;
     }
-    if (!upipe_alsink_check_sink(upipe))
-        /* Use again the pipe that we previously released. */
-        upipe_use(upipe);
-    upipe_notice_va(upipe, "opened device %s", upipe_alsink->uri);
     return true;
-
-set_uri_error:
-    snd_pcm_close(upipe_alsink->handle);
-    upipe_alsink->handle = NULL;
-    return false;
 }
 
 /** @internal @This flushes all currently held buffers, and unblocks the
@@ -640,12 +701,10 @@ set_uri_error:
  */
 static bool upipe_alsink_flush(struct upipe *upipe)
 {
-    if (upipe_alsink_flush_sink(upipe)) {
+    if (upipe_alsink_flush_sink(upipe))
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_alsink_input. */
         upipe_release(upipe);
-        upipe_err(upipe, "release pouet");
-    }
     return true;
 }
 
@@ -660,6 +719,10 @@ static bool upipe_alsink_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_alsink_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_alsink_get_upump_mgr(upipe, p);
@@ -700,10 +763,7 @@ static bool upipe_alsink_control(struct upipe *upipe,
 static void upipe_alsink_free(struct upipe *upipe)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    if (likely(upipe_alsink->handle != NULL)) {
-        upipe_notice_va(upipe, "closing device %s", upipe_alsink->uri);
-        snd_pcm_close(upipe_alsink->handle);
-    }
+    upipe_alsink_close(upipe);
     upipe_throw_dead(upipe);
 
     free(upipe_alsink->uri);
@@ -712,7 +772,7 @@ static void upipe_alsink_free(struct upipe *upipe)
     upipe_alsink_clean_upump_mgr(upipe);
     upipe_alsink_clean_sink(upipe);
 
-    upipe_alsink_free_flow(upipe);
+    upipe_alsink_free_void(upipe);
 }
 
 /** module manager static descriptor */

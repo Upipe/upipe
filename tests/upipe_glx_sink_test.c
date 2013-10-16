@@ -99,7 +99,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
@@ -128,8 +128,8 @@ static void idler_cb(struct upump *upump)
     for (i=0; i < SINK_NUM; i++) {
         pic = uref_pic_alloc(uref_mgr, ubuf_mgr, WIDTH, HEIGHT);
         assert(pic);
-        uref_pic_plane_write(pic, "rgb24", 0, 0, -1, -1, &buf);
-        uref_pic_plane_size(pic, "rgb24", &stride, NULL, NULL, &macropixel);
+        uref_pic_plane_write(pic, "r8g8b8", 0, 0, -1, -1, &buf);
+        uref_pic_plane_size(pic, "r8g8b8", &stride, NULL, NULL, &macropixel);
 
         for (y=0; y < HEIGHT; y++) {
             for (x=0; x < WIDTH; x++) {
@@ -140,7 +140,7 @@ static void idler_cb(struct upump *upump)
             buf += stride;
         }
 
-        uref_pic_plane_unmap(pic, "rgb24", 0, 0, -1, -1);
+        uref_pic_plane_unmap(pic, "r8g8b8", 0, 0, -1, -1);
         upipe_input(glx_sink[i], pic, NULL);
     }
 
@@ -172,13 +172,13 @@ int main(int argc, char **argv)
     assert(udict_mgr != NULL);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    /* rgb24 */
+    /* r8g8b8 */
     ubuf_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr);
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "rgb24", 1, 1, 3));
+    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
 
     /* ev loop */
     struct ev_loop *loop = ev_default_loop(0);
@@ -186,16 +186,21 @@ int main(int argc, char **argv)
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
+    struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
+    assert(flow_def != NULL);
+    assert(uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8"));
+
     /* glx sink */
     struct upipe_mgr *glx_mgr = upipe_glx_sink_mgr_alloc();
     for (i=0; i < SINK_NUM; i++) {
-        glx_sink[i] = upipe_flow_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
-                uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "glx %d", i)),
-                NULL);
+        glx_sink[i] = upipe_void_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
+                uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "glx %d", i)));
         assert(glx_sink[i]);
+        assert(upipe_set_flow_def(glx_sink[i], flow_def));
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
         upipe_set_upump_mgr(glx_sink[i], upump_mgr);
     }
+    uref_free(flow_def);
 
     /* idler */
     struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL);

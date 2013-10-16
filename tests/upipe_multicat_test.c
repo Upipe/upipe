@@ -195,9 +195,10 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    multicat_sink = upipe_flow_alloc(upipe_multicat_sink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat sink"), flow);
+    multicat_sink = upipe_void_alloc(upipe_multicat_sink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "multicat sink"));
     assert(multicat_sink != NULL);
+    assert(upipe_set_flow_def(multicat_sink, flow));
     uref_free(flow);
     assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
     assert(upipe_set_upump_mgr(multicat_sink, upump_mgr));

@@ -71,12 +71,12 @@ UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 #include <ev.h>
 #include <pthread.h>
 
-#define UPUMP_POOL 1
-#define UPUMP_BLOCKER_POOL 1
+#define UPUMP_POOL 0
+#define UPUMP_BLOCKER_POOL 0
 
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
+#define UDICT_POOL_DEPTH    0
+#define UREF_POOL_DEPTH     0
+#define UBUF_POOL_DEPTH     0
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
@@ -84,8 +84,9 @@ UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define THREAD_NUM          4
 #define FRAMES_LIMIT        100
-#define SETCODEC_LIMIT      100
 #define THREAD_FRAMES_LIMIT (FRAMES_LIMIT / 8)
+#define WIDTH 120
+#define HEIGHT 90
 
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
@@ -102,7 +103,6 @@ struct thread {
     unsigned int iteration;
     unsigned int limit;
     struct upipe *avcenc;
-    struct upump *source;
 };
 
 /** definition of our uprobe */
@@ -153,21 +153,20 @@ bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     upipe_get_upump_mgr(upipe, &upump_mgr);
 
     /* decoder */
-    struct upipe *avcdec = upipe_flow_alloc(upipe_avcdec_mgr,
+    struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                  "avcdec %"PRId64, num), flow);
+                                  "avcdec %"PRId64, num));
     assert(avcdec);
     assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcdec, upump_mgr));
     }
-    assert(upipe_set_output(upipe, avcdec));
     upipe_release(avcdec);
 
     /* /dev/null */
-    struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
+    struct upipe *null = upipe_void_alloc(upipe_null_mgr,
         uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                  "null %"PRId64, num), NULL);
+                                  "null %"PRId64, num));
     assert(null);
     upipe_null_dump_dict(null, true);
     upipe_set_output(avcdec, null);
@@ -202,16 +201,19 @@ struct upipe *build_pipeline(const char *codec_def,
                              struct upump_mgr *upump_mgr, int num,
                              struct uref *flow_def)
 {
+    struct uref *output_flow = uref_dup(flow_def);
+    assert(uref_flow_set_def_va(output_flow, "block.%s", codec_def));
+    assert(flow_def != NULL);
     uref_xflow_set_num(flow_def, num);
 
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
         uprobe_pfx_adhoc_alloc_va(&uprobe_avcenc_s, UPROBE_LOG_LEVEL,
-                                  "avcenc %d", num), flow_def);
+                                  "avcenc %d", num), output_flow);
+    uref_free(output_flow);
     assert(avcenc);
+    assert(upipe_set_flow_def(avcenc, flow_def));
     assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
-    assert(upipe_set_uref_mgr(avcenc, uref_mgr));
-    assert(upipe_avcenc_set_codec(avcenc, codec_def));
     if (upump_mgr) {
         assert(upipe_set_upump_mgr(avcenc, upump_mgr));
     }
@@ -226,7 +228,7 @@ void source_idler(struct upump *upump)
     struct upipe *avcenc = thread->avcenc;
     struct uref *pic;
 
-    pic = uref_pic_alloc(uref_mgr, pic_mgr, 64, 48);
+    pic = uref_pic_alloc(uref_mgr, pic_mgr, WIDTH, HEIGHT);
     fill_pic(pic->ubuf);
     upipe_input(avcenc, pic, upump);
 
@@ -235,24 +237,6 @@ void source_idler(struct upump *upump)
         upump_stop(upump);
         return;
     }
-    thread->iteration++;
-}
-
-/* set codec */
-void setcodec_idler(struct upump *upump)
-{
-    struct thread *thread = upump_get_opaque(upump, struct thread*);
-    struct upipe *avcenc = thread->avcenc;
-
-    if (thread->iteration > thread->limit) {
-        /* enough played with set_codec(), start source */
-        thread->iteration = 0;
-        upump_stop(upump);
-        upump_start(thread->source);
-        return;
-    }
-
-    upipe_avcenc_set_codec(avcenc, "mpeg2video.pic.");
     thread->iteration++;
 }
 
@@ -268,21 +252,27 @@ void *thread_start(void *_thread)
                                                      UPUMP_BLOCKER_POOL);
 
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+    assert(flow != NULL);
+    assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
+    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
+    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
+    assert(uref_pic_flow_set_hsize(flow, WIDTH));
+    assert(uref_pic_flow_set_vsize(flow, HEIGHT));
+    struct urational fps = { .num = 25, .den = 1 };
+    assert(uref_pic_flow_set_fps(flow, fps));
     thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num,
                                     flow);
     uref_free(flow);
-    thread->limit = SETCODEC_LIMIT;
+    thread->limit = FRAMES_LIMIT;
 
-    thread->source = upump_alloc_idler(upump_mgr, source_idler, thread);
-    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler,
-                                                    thread);
-    upump_start(setcodec_pump);
+    struct upump *source = upump_alloc_idler(upump_mgr, source_idler, thread);
+    upump_start(source);
 
     ev_loop(loop, 0);
 
     printf("Thread %d ended.\n", thread->num);
-    upump_free(thread->source);
-    upump_free(setcodec_pump);
+    assert(thread->iteration > thread->limit);
+    upump_free(source);
     upump_mgr_release(upump_mgr);
     ev_loop_destroy(loop);
 
@@ -372,11 +362,20 @@ int main(int argc, char **argv)
 
     /* mono-threaded test without upump_mgr */
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+    assert(flow != NULL);
+    assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
+    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
+    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
+    assert(uref_pic_flow_set_hsize(flow, WIDTH));
+    assert(uref_pic_flow_set_vsize(flow, HEIGHT));
+    struct urational fps = { .num = 25, .den = 1 };
+    assert(uref_pic_flow_set_fps(flow, fps));
     struct upipe *avcenc = build_pipeline("mpeg2video.pic.", NULL, -1, flow);
     uref_free(flow);
 
     for (i=0; i < FRAMES_LIMIT; i++) {
-        pic = uref_pic_alloc(uref_mgr, pic_mgr, 120, 96);
+        pic = uref_pic_alloc(uref_mgr, pic_mgr, WIDTH, HEIGHT);
+        assert(pic != NULL);
         fill_pic(pic->ubuf);
         upipe_input(avcenc, pic, NULL);
    }
@@ -386,6 +385,9 @@ int main(int argc, char **argv)
 
     /* mono-threaded audio test without upump_mgr */
     flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
+    assert(flow != NULL);
+    assert(uref_sound_flow_set_channels(flow, 2));
+    assert(uref_sound_flow_set_rate(flow, 48000));
     avcenc = build_pipeline("mp2.sound.", NULL, -1, flow);
     uref_free(flow);
 
@@ -394,8 +396,9 @@ int main(int argc, char **argv)
         int size = -1;
         int samples = (1024+i-FRAMES_LIMIT/2);
         sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*samples);
-        uref_sound_flow_set_samples(sound, samples);
-        uref_block_write(sound, 0, &size, &buf);
+        assert(sound != NULL);
+        assert(uref_sound_flow_set_samples(sound, samples));
+        assert(uref_block_write(sound, 0, &size, &buf));
         memset(buf, 0, size);
         uref_block_unmap(sound, 0);
         upipe_input(avcenc, sound, NULL);

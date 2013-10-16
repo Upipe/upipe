@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe helper functions for flow
+ * @short Upipe helper functions for pipes taking an output flow in upipe_alloc
  */
 
 #ifndef _UPIPE_UPIPE_HELPER_FLOW_H_
@@ -39,8 +39,8 @@ extern "C" {
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 
-/** @This declares two functions dealing with the allocation of a pipe accepting
- * a flow definition.
+/** @This declares two functions dealing with the allocation of a pipe
+ * requiring an output flow definition.
  *
  * You must declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
  *
@@ -72,6 +72,8 @@ extern "C" {
  * @param uprobe structure used to raise events                             \
  * @param signature signature of the pipe allocator                         \
  * @param args optional arguments (flow definition)                         \
+ * @param flow_def_p filled in with a duplicate of the flow definition      \
+ * packet                                                                   \
  * @return pointer to allocated upipe, or NULL                              \
  */                                                                         \
 static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \

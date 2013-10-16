@@ -88,7 +88,8 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
 
     bool handled = false;
     const char *handled_str = "unhandled ";
-    if ((event & UPROBE_HANDLED_FLAG)) {
+    if ((event & UPROBE_HANDLED_FLAG) &&
+        event != UPROBE_READY && event != UPROBE_DEAD) {
         handled = true;
         handled_str = "";
         event &= ~UPROBE_HANDLED_FLAG;
@@ -96,12 +97,10 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
 
     switch (event) {
         case UPROBE_READY:
-            upipe_log_va(upipe, log->level, "probe caught %sready event",
-                         handled_str);
+            upipe_log(upipe, log->level, "probe caught ready event");
             break;
         case UPROBE_DEAD:
-            upipe_log_va(upipe, log->level, "probe caught %sdead event",
-                         handled_str);
+            upipe_log(upipe, log->level, "probe caught dead event");
             break;
         case UPROBE_LOG:
             break;
@@ -176,35 +175,35 @@ static bool uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
             upipe_log_va(upipe, log->level, "probe caught %ssync lost",
                          handled_str);
             break;
-        case UPROBE_CLOCK_REF:
-            if (!handled) {
-                struct uref *uref = va_arg(args_copy, struct uref *);
-                uint64_t pcr = va_arg(args_copy, uint64_t);
-                int discontinuity = va_arg(args_copy, int);
+        case UPROBE_CLOCK_REF: {
+            struct uref *uref = va_arg(args_copy, struct uref *);
+            uint64_t pcr = va_arg(args_copy, uint64_t);
+            int discontinuity = va_arg(args_copy, int);
+            if (0 || discontinuity) {
                 if (discontinuity == 1)
                     upipe_log_va(upipe, log->level,
-                             "probe caught %snew clock ref %"PRIu64" (discontinuity)",
-                             handled_str, pcr);
+                                 "probe caught %snew clock ref %"PRIu64" (discontinuity)",
+                                 handled_str, pcr);
                 else
                     upipe_log_va(upipe, log->level,
                                  "probe caught %snew clock ref %"PRIu64,
                                  handled_str, pcr);
             }
             break;
+        }
         case UPROBE_CLOCK_TS:
-            if (!handled) {
+            if (0) {
                 struct uref *uref = va_arg(args_copy, struct uref *);
                 uint64_t date = UINT64_MAX;
                 enum uref_date_type type;
                 uref_clock_get_date_orig(uref, &date, &type);
                 if (unlikely(type == UREF_DATE_NONE))
-                    upipe_log_va(upipe, log->level,
-                                "probe caught %sinvalid timestamp event",
-                                handled_str);
+                    upipe_log(upipe, log->level,
+                              "probe caught unhandled invalid timestamp event");
                 else
                     upipe_log_va(upipe, log->level,
-                            "probe caught %snew date %"PRIu64, handled_str,
-                            date);
+                                 "probe caught unhandled new date %"PRIu64,
+                                 date);
             }
             break;
         default:

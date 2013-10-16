@@ -34,7 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_probe_uref.h>
 
@@ -64,7 +64,7 @@ struct upipe_probe_uref {
 };
 
 UPIPE_HELPER_UPIPE(upipe_probe_uref, upipe, UPIPE_PROBE_UREF_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_probe_uref, NULL)
+UPIPE_HELPER_VOID(upipe_probe_uref)
 UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
 
 /** @internal @This handles urefs (data & flows).
@@ -78,6 +78,24 @@ static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
 {
     upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref);
     upipe_probe_uref_output(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_probe_uref_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_probe_uref_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -95,6 +113,10 @@ static bool upipe_probe_uref_control(struct upipe *upipe, enum upipe_command com
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_probe_uref_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_probe_uref_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -122,14 +144,12 @@ static struct upipe *upipe_probe_uref_alloc(struct upipe_mgr *mgr,
                                             struct uprobe *uprobe,
                                             uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_probe_uref_alloc_flow(mgr, uprobe, signature,
-                                                      args, &flow_def);
+    struct upipe *upipe = upipe_probe_uref_alloc_void(mgr, uprobe, signature,
+                                                      args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     upipe_probe_uref_init_output(upipe);
-    upipe_probe_uref_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -142,7 +162,7 @@ static void upipe_probe_uref_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_probe_uref_clean_output(upipe);
-    upipe_probe_uref_free_flow(upipe);
+    upipe_probe_uref_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_probe_uref_mgr = {

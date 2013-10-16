@@ -162,14 +162,11 @@ int main(int argc, char *argv[])
     else
         fprintf(stdout, "source path is not a regular file\n");
 
-    struct uref *uref;
-    assert(upipe_get_flow_def(upipe_fsrc, &uref));
-    assert(uref != NULL);
-
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    struct upipe *upipe_fsink = upipe_flow_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"), uref);
+    struct upipe *upipe_fsink = upipe_void_alloc_output(upipe_fsrc,
+            upipe_fsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
     assert(upipe_fsink != NULL);
     assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
     if (delay) {
@@ -177,8 +174,6 @@ int main(int argc, char *argv[])
         assert(upipe_sink_set_delay(upipe_fsink, delay));
     }
     assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
-
-    assert(upipe_set_output(upipe_fsrc, upipe_fsink));
 
     ev_loop(loop, 0);
 

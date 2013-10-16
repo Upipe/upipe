@@ -24,27 +24,35 @@
  */
 
 /** @file
- * @short Upipe module setting systime_rap to urefs
+ * @short Upipe module creating timestamps for single streams
+ *
+ * This module is used for simple pipelines where only a single elementary
+ * stream is played, and no demux is used. As there is no demux the packets
+ * do not get any timestamp. This module allows to create timestamps so that
+ * the stream can be played.
  */
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref.h>
-#include <upipe/uref_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_setrap.h>
+#include <upipe-modules/upipe_nodemux.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <assert.h>
 
-/** @internal @This is the private context of a setrap pipe. */
-struct upipe_setrap {
+/** lowest possible timestamp (just an arbitrarily high time) */
+#define NODEMUX_CLOCK_MIN UINT32_MAX
+
+/** @internal @This is the private context of a nodemux pipe. */
+struct upipe_nodemux {
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -52,18 +60,18 @@ struct upipe_setrap {
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
 
-    /** rap to set */
-    uint64_t systime_rap;
+    /** set to true after the first packet has been sent */
+    bool inited;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_setrap, upipe, UPIPE_SETRAP_SIGNATURE)
-UPIPE_HELPER_VOID(upipe_setrap)
-UPIPE_HELPER_OUTPUT(upipe_setrap, output, flow_def, flow_def_sent)
+UPIPE_HELPER_UPIPE(upipe_nodemux, upipe, UPIPE_NODEMUX_SIGNATURE)
+UPIPE_HELPER_VOID(upipe_nodemux)
+UPIPE_HELPER_OUTPUT(upipe_nodemux, output, flow_def, flow_def_sent)
 
-/** @internal @This allocates a setrap pipe.
+/** @internal @This allocates a nodemux pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -71,17 +79,18 @@ UPIPE_HELPER_OUTPUT(upipe_setrap, output, flow_def, flow_def_sent)
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
+static struct upipe *upipe_nodemux_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_setrap_alloc_void(mgr, uprobe, signature, args);
+    struct upipe *upipe = upipe_nodemux_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    upipe_setrap_init_output(upipe);
-    upipe_setrap->systime_rap = UINT64_MAX;
+    struct upipe_nodemux *upipe_nodemux = upipe_nodemux_from_upipe(upipe);
+    upipe_nodemux_init_output(upipe);
+    upipe_nodemux->inited = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -92,14 +101,15 @@ static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
+static void upipe_nodemux_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
-    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
+    struct upipe_nodemux *upipe_nodemux = upipe_nodemux_from_upipe(upipe);
 
-    if (likely(upipe_setrap->systime_rap != UINT64_MAX))
-        uref->rap_sys = upipe_setrap->systime_rap;
-    upipe_setrap_output(upipe, uref, upump);
+    if (unlikely(!upipe_nodemux->inited))
+        uref_clock_set_dts_prog(uref, NODEMUX_CLOCK_MIN);
+    upipe_nodemux->inited = true;
+    upipe_nodemux_output(upipe, uref, upump);
 }
 
 /** @internal @This sets the input flow definition.
@@ -108,7 +118,7 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_setrap_set_flow_def(struct upipe *upipe,
+static bool upipe_nodemux_set_flow_def(struct upipe *upipe,
                                       struct uref *flow_def)
 {
     if (flow_def == NULL)
@@ -116,76 +126,38 @@ static bool upipe_setrap_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return false;
-    upipe_setrap_store_flow_def(upipe, flow_def_dup);
+    upipe_nodemux_store_flow_def(upipe, flow_def_dup);
     return true;
 }
 
-/** @internal @This returns the current systime_rap being set into urefs.
- *
- * @param upipe description structure of the pipe
- * @param rap_p filled with the current systime_rap
- * @return false in case of error
- */
-static bool _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_p)
-{
-    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    *rap_p = upipe_setrap->systime_rap;
-    return true;
-}
-
-/** @This sets the systime_rap to set into urefs.
- *
- * @param upipe description structure of the pipe
- * @param rap systime_rap to set
- * @return false in case of error
- */
-static bool _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
-{
-    struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    upipe_setrap->systime_rap = rap;
-    return true;
-}
-
-/** @internal @This processes control commands on a setrap pipe.
+/** @internal @This processes control commands on a nodemux pipe.
  *
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_setrap_control(struct upipe *upipe,
+static bool upipe_nodemux_control(struct upipe *upipe,
                                 enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
-            return upipe_setrap_get_flow_def(upipe, p);
+            return upipe_nodemux_get_flow_def(upipe, p);
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_setrap_set_flow_def(upipe, flow_def);
+            return upipe_nodemux_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_setrap_get_output(upipe, p);
+            return upipe_nodemux_get_output(upipe, p);
         }
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_setrap_set_output(upipe, output);
+            return upipe_nodemux_set_output(upipe, output);
         }
 
-        case UPIPE_SETRAP_GET_RAP: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_SETRAP_SIGNATURE);
-            uint64_t *rap_p = va_arg(args, uint64_t *);
-            return _upipe_setrap_get_rap(upipe, rap_p);
-        }
-        case UPIPE_SETRAP_SET_RAP: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_SETRAP_SIGNATURE);
-            uint64_t rap = va_arg(args, uint64_t);
-            return _upipe_setrap_set_rap(upipe, rap);
-        }
         default:
             return false;
     }
@@ -195,31 +167,31 @@ static bool upipe_setrap_control(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_setrap_free(struct upipe *upipe)
+static void upipe_nodemux_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    upipe_setrap_clean_output(upipe);
-    upipe_setrap_free_void(upipe);
+    upipe_nodemux_clean_output(upipe);
+    upipe_nodemux_free_void(upipe);
 }
 
 /** module manager static descriptor */
-static struct upipe_mgr upipe_setrap_mgr = {
-    .signature = UPIPE_SETRAP_SIGNATURE,
+static struct upipe_mgr upipe_nodemux_mgr = {
+    .signature = UPIPE_NODEMUX_SIGNATURE,
 
-    .upipe_alloc = upipe_setrap_alloc,
-    .upipe_input = upipe_setrap_input,
-    .upipe_control = upipe_setrap_control,
-    .upipe_free = upipe_setrap_free,
+    .upipe_alloc = upipe_nodemux_alloc,
+    .upipe_input = upipe_nodemux_input,
+    .upipe_control = upipe_nodemux_control,
+    .upipe_free = upipe_nodemux_free,
 
     .upipe_mgr_free = NULL
 };
 
-/** @This returns the management structure for all setrap pipes.
+/** @This returns the management structure for all nodemux pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_setrap_mgr_alloc(void)
+struct upipe_mgr *upipe_nodemux_mgr_alloc(void)
 {
-    return &upipe_setrap_mgr;
+    return &upipe_nodemux_mgr;
 }

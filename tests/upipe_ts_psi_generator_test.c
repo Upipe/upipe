@@ -217,16 +217,16 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     assert(upipe_ts_psig_mgr != NULL);
-    struct upipe *upipe_ts_psig = upipe_flow_alloc(upipe_ts_psig_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts psig"),
-            uref);
+    struct upipe *upipe_ts_psig = upipe_void_alloc(upipe_ts_psig_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts psig"));
     assert(upipe_ts_psig != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig, uref));
     uref_free(uref);
     assert(upipe_set_ubuf_mgr(upipe_ts_psig, ubuf_mgr));
 
     assert(upipe_get_flow_def(upipe_ts_psig, &uref));
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, uref);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink != NULL);
     assert(upipe_set_output(upipe_ts_psig, upipe_sink));
 
@@ -236,21 +236,21 @@ int main(int argc, char *argv[])
     assert(uref_flow_set_def(uref, "void."));
     assert(uref_ts_flow_set_sid(uref, 1));
     assert(uref_ts_flow_set_pid(uref, 66));
-    struct upipe *upipe_ts_psig_program1 = upipe_flow_alloc_sub(upipe_ts_psig,
+    struct upipe *upipe_ts_psig_program1 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psig program1"),
-            uref);
+                                   "ts psig program1"));
     assert(upipe_ts_psig_program1 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig_program1, uref));
     assert(upipe_set_output(upipe_ts_psig_program1, upipe_sink));
     assert(upipe_ts_psig_program_set_pcr_pid(upipe_ts_psig_program1, 67));
 
     assert(uref_ts_flow_set_sid(uref, 2));
     assert(uref_ts_flow_set_pid(uref, 1500));
-    struct upipe *upipe_ts_psig_program2 = upipe_flow_alloc_sub(upipe_ts_psig,
+    struct upipe *upipe_ts_psig_program2 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psig program2"),
-            uref);
+                                   "ts psig program2"));
     assert(upipe_ts_psig_program2 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig_program2, uref));
     assert(upipe_set_output(upipe_ts_psig_program2, upipe_sink));
     uref_free(uref);
 
@@ -261,11 +261,11 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pid(uref, 67));
     assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_VIDEO_MPEG2));
     struct upipe *upipe_ts_psig_flow67 =
-        upipe_flow_alloc_sub(upipe_ts_psig_program1,
+        upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psig flow67"),
-            uref);
+                                   "ts psig flow67"));
     assert(upipe_ts_psig_flow67 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig_flow67, uref));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);
@@ -282,11 +282,11 @@ int main(int argc, char *argv[])
     assert(desc0a_validate(desc));
     assert(uref_ts_flow_set_descriptors(uref, desc, sizeof(desc)));
     struct upipe *upipe_ts_psig_flow68 =
-        upipe_flow_alloc_sub(upipe_ts_psig_program1,
+        upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psig flow68"),
-            uref);
+                                   "ts psig flow68"));
     assert(upipe_ts_psig_flow68 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig_flow68, uref));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);
@@ -295,11 +295,11 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pid(uref, 1501));
     assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_ADTS));
     struct upipe *upipe_ts_psig_flow1501 =
-        upipe_flow_alloc_sub(upipe_ts_psig_program2,
+        upipe_void_alloc_sub(upipe_ts_psig_program2,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts psig flow1501"),
-            uref);
+                                   "ts psig flow1501"));
     assert(upipe_ts_psig_flow1501 != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psig_flow1501, uref));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);

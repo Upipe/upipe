@@ -30,6 +30,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -61,7 +62,7 @@ struct upipe_ts_psi_split {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psi_split, upipe, UPIPE_TS_PSI_SPLIT_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psi_split, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_psi_split)
 
 /** @internal @This is the private context of an output of a ts_psi_split pipe. */
 struct upipe_ts_psi_split_sub {
@@ -198,8 +199,8 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
                                               struct uprobe *uprobe,
                                               uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_ts_psi_split_alloc_flow(mgr, uprobe, signature,
-                                                        args, NULL);
+    struct upipe *upipe = upipe_ts_psi_split_alloc_void(mgr, uprobe, signature,
+                                                        args);
     if (unlikely(upipe == NULL))
         return NULL;
     upipe_ts_psi_split_init_sub_mgr(upipe);
@@ -214,8 +215,8 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void upipe_ts_psi_split_work(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
+static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
+                                     struct upump *upump)
 {
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_upipe(upipe);
@@ -251,21 +252,18 @@ static void upipe_ts_psi_split_work(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
 }
 
-/** @internal @This receives data.
+/** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
  */
-static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump)
+static bool upipe_ts_psi_split_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
-    upipe_ts_psi_split_work(upipe, uref, upump);
+    if (flow_def == NULL)
+        return false;
+    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
 }
 
 /** @internal @This processes control commands.
@@ -279,6 +277,10 @@ static bool upipe_ts_psi_split_control(struct upipe *upipe,
                                        enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psi_split_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_ts_psi_split_get_sub_mgr(upipe, p);
@@ -301,7 +303,7 @@ static void upipe_ts_psi_split_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_ts_psi_split_clean_sub_subs(upipe);
-    upipe_ts_psi_split_free_flow(upipe);
+    upipe_ts_psi_split_free_void(upipe);
 }
 
 /** module manager static descriptor */

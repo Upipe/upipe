@@ -106,8 +106,8 @@ check_PROGRAMS += \
 	upipe_avformat_test \
 	upipe_avcodec_decode_test \
 	upipe_avcodec_test
-#TESTS += \
-#	upipe_avcodec_test
+TESTS += \
+	upipe_avcodec_test
 endif
 
 if HAVE_GLX
@@ -182,7 +182,7 @@ endif
 
 if HAVE_X264
 check_PROGRAMS += upipe_x264_test
-#TESTS += upipe_x264_test
+TESTS += upipe_x264_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

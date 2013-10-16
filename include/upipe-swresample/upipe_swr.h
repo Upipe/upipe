@@ -1,6 +1,4 @@
-/*****************************************************************************
- * upipe_swr.h: application interface for swr module
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
@@ -23,7 +21,7 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
 
 /** @file
  * @short Upipe swrcale (ffmpeg) module
@@ -39,25 +37,6 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_SWR_SIGNATURE UBASE_FOURCC('s','w','r',' ')
-
-/** @This extends upipe_command with specific commands for avcodec decode. */
-enum upipe_swr_command {
-    UPIPE_SWR_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** set format (const char*) */
-    UPIPE_SWR_SET_FMT,
-};
-
-/** @This sets the output format.
- *
- * @param upipe description structure of the pipe
- * @param fmt audio format
- * @return false in case of error
- */
-static inline bool upipe_swr_set_fmt(struct upipe *upipe, const char *fmt)
-{
-    return upipe_control(upipe, UPIPE_SWR_SET_FMT, UPIPE_SWR_SIGNATURE, fmt);
-}
 
 /** @This returns the management structure for swr pipes.
  *

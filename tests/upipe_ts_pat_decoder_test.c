@@ -146,10 +146,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     assert(upipe_ts_patd_mgr != NULL);
-    struct upipe *upipe_ts_patd = upipe_flow_alloc(upipe_ts_patd_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts patd"),
-            uref);
+    struct upipe *upipe_ts_patd = upipe_void_alloc(upipe_ts_patd_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL, "ts patd"));
     assert(upipe_ts_patd != NULL);
+    assert(upipe_set_flow_def(upipe_ts_patd, uref));
     uref_free(uref);
 
     uint8_t *buffer, *pat_program;

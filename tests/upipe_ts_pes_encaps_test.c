@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
     assert(uprobe_ts_log != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, NULL);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -197,10 +197,11 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_pese_mgr = upipe_ts_pese_mgr_alloc();
     assert(upipe_ts_pese_mgr != NULL);
-    struct upipe *upipe_ts_pese = upipe_flow_alloc(upipe_ts_pese_mgr,
+    struct upipe *upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts pese"), uref);
+                                   "ts pese"));
     assert(upipe_ts_pese != NULL);
+    assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
     assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     assert(upipe_set_output(upipe_ts_pese, upipe_sink));
@@ -228,10 +229,11 @@ int main(int argc, char *argv[])
     stream_id = PES_STREAM_ID_PRIVATE_1;
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
     assert(uref_ts_flow_set_pes_header(uref, 45));
-    upipe_ts_pese = upipe_flow_alloc(upipe_ts_pese_mgr,
+    upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts pese"), uref);
+                                   "ts pese"));
     assert(upipe_ts_pese != NULL);
+    assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
     assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     assert(upipe_set_output(upipe_ts_pese, upipe_sink));
@@ -248,10 +250,11 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     stream_id = PES_STREAM_ID_PRIVATE_2;
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
-    upipe_ts_pese = upipe_flow_alloc(upipe_ts_pese_mgr,
+    upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts pese"), uref);
+                                   "ts pese"));
     assert(upipe_ts_pese != NULL);
+    assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
     assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     assert(upipe_set_output(upipe_ts_pese, upipe_sink));
@@ -269,10 +272,11 @@ int main(int argc, char *argv[])
     stream_id = PES_STREAM_ID_AUDIO_MPEG;
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
     assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
-    upipe_ts_pese = upipe_flow_alloc(upipe_ts_pese_mgr,
+    upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts pese"), uref);
+                                   "ts pese"));
     assert(upipe_ts_pese != NULL);
+    assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
     assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     assert(upipe_set_output(upipe_ts_pese, upipe_sink));

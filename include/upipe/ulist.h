@@ -158,7 +158,7 @@ static inline struct uchain *ulist_pop(struct uchain *ulist)
 }
 
 /** @This walks through a ulist. Please note that the list may not be altered
- * during the walk (see @ref ulist_delete_foreach).
+ * during the walk (see @ref #ulist_delete_foreach).
  *
  * @param ulist pointer to a ulist
  * @param uchain iterator

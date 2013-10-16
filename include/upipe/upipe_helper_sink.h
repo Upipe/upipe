@@ -91,6 +91,12 @@ extern "C" {
  * Holds the given uref that can't be immediately output.
  *
  * @item @code
+ *  struct uref *upipe_foo_pop_sink(struct upipe *upipe)
+ * @end code
+ * Returns the first buffered uref.
+ *
+ * @item @code
+ * @item @code
  *  void upipe_foo_output_sink(struct upipe *upipe)
  * @end code
  * Outputs urefs that have been held.
@@ -214,6 +220,19 @@ static void STRUCTURE##_hold_sink(struct upipe *upipe, struct uref *uref)   \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_add(&s->UREFS, uref_to_uchain(uref));                             \
     s->NB_UREFS++;                                                          \
+}                                                                           \
+/** @internal @This pops an uref from the buffered urefs.                   \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @return buffered uref                                                    \
+ */                                                                         \
+static struct uref *STRUCTURE##_pop_sink(struct upipe *upipe)               \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    struct uchain *uchain = ulist_pop(&s->UREFS);                           \
+    if (uchain != NULL)                                                     \
+        s->NB_UREFS--;                                                      \
+    return uref_from_uchain(uchain);                                        \
 }                                                                           \
 /** @internal @This outputs all urefs that have been held.                  \
  *                                                                          \

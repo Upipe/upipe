@@ -183,10 +183,11 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_split_mgr = upipe_ts_split_mgr_alloc();
     assert(upipe_ts_split_mgr != NULL);
-    struct upipe *upipe_ts_split = upipe_flow_alloc(upipe_ts_split_mgr,
+    struct upipe *upipe_ts_split = upipe_void_alloc(upipe_ts_split_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts split"), uref);
+                                   "ts split"));
     assert(upipe_ts_split != NULL);
+    assert(upipe_set_flow_def(upipe_ts_split, uref));
 
     assert(uref_ts_flow_set_pid(uref, 68));
     struct upipe *upipe_sink68 = upipe_flow_alloc(&ts_test_mgr, log, uref);

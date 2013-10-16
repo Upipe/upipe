@@ -43,9 +43,11 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
@@ -69,7 +71,7 @@
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
 
-#define EXPECTED_FLOW "block."
+#define EXPECTED_FLOW_DEF "block."
 
 /** @hidden */
 static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
@@ -81,11 +83,17 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 /** upipe_avcdec structure with avcdec parameters */ 
 struct upipe_avcdec {
     /** input flow */
-    struct uref *input_flow;
+    struct uref *flow_def_input;
+    /** attributes describing picture format */
+    struct uref *flow_def_format;
+    /** attributes added by the pipe */
+    struct uref *flow_def_attr;
+    /** structure to check input flow def */
+    struct uref *flow_def_check;
     /** output flow */
-    struct uref *output_flow;
+    struct uref *flow_def;
     /** true if the flow definition has already been sent */
-    bool output_flow_sent;
+    bool flow_def_sent;
     /** output pipe */
     struct upipe *output;
 
@@ -93,9 +101,10 @@ struct upipe_avcdec {
     struct ubuf_mgr *ubuf_mgr;
     /** upump mgr */
     struct upump_mgr *upump_mgr;
-
-    /** upipe/av pixfmt translator */
-    const struct upipe_av_pixfmt *pixfmt;
+    /** pixel format used for the ubuf manager */
+    enum PixelFormat pix_fmt;
+    /** sample format used for the ubuf manager */
+    enum AVSampleFormat sample_fmt;
 
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
@@ -120,20 +129,8 @@ struct upipe_avcdec {
     uint64_t next_pts;
     /** next PTS (systime time) */
     uint64_t next_pts_sys;
-
-    /* parameters for last advertised outflow */
-    /** last sample format */
-    enum AVSampleFormat sample_fmt;
-    /** last number of channels */
-    int channels;
-    /** last sample rate */
-    int sample_rate;
-    /** last frame size */
-    int frame_size;
-    /** last pixel format */
-    enum PixelFormat pixel_fmt;
-    /** last time base */
-    AVRational time_base;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -148,8 +145,10 @@ struct upipe_avcdec {
 
 
 UPIPE_HELPER_UPIPE(upipe_avcdec, upipe, UPIPE_AVCDEC_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_avcdec, EXPECTED_FLOW)
-UPIPE_HELPER_OUTPUT(upipe_avcdec, output, output_flow, output_flow_sent)
+UPIPE_HELPER_VOID(upipe_avcdec)
+UPIPE_HELPER_OUTPUT(upipe_avcdec, output, flow_def, flow_def_sent)
+UPIPE_HELPER_FLOW_DEF(upipe_avcdec, flow_def_input, flow_def_attr)
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avcdec, flow_def_check)
 UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
@@ -189,70 +188,144 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    struct ubuf *ubuf_pic;
-    int width_aligned, height_aligned, i;
-    const struct upipe_av_plane *planes = NULL;
-    size_t stride = 0;
 
-    frame->opaque = upipe_avcdec->uref;
-    upipe_avcdec->uref = NULL;
-    if (!frame->opaque) { /* dont die on invalid (?) calls */
+    if (unlikely(upipe_avcdec->uref == NULL))
         return -1;
-    }
+
+    struct uref *uref = upipe_avcdec->uref;
+    upipe_avcdec->uref = NULL;
+    frame->opaque = uref;
 
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
 
     upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p) - %dx%d",
-                 framenum, frame->opaque, frame->width, frame->height);
+                     framenum, frame->opaque, frame->width, frame->height);
 
-    if (unlikely(!upipe_avcdec->pixfmt)) {
-        upipe_avcdec->pixfmt = upipe_av_pixfmt_from_ubuf_mgr(upipe_avcdec->ubuf_mgr);
-        if (unlikely(!upipe_avcdec->pixfmt)) {
-            upipe_err_va(upipe, "frame format of ubuf manager not recognized");
+    /* Check if we have a new pixel format. */
+    if (unlikely(context->pix_fmt != upipe_avcdec->pix_fmt)) {
+        if (upipe_avcdec->pix_fmt != AV_PIX_FMT_NONE)
+            upipe_avcdec_set_ubuf_mgr(upipe, NULL);
+        upipe_avcdec->pix_fmt = context->pix_fmt;
+    }
+
+    /* Use avcodec width/height alignement, then resize pic. */
+    int width_aligned = context->width, height_aligned = context->height;
+    avcodec_align_dimensions(context, &width_aligned, &height_aligned);
+
+    /* Prepare flow definition attributes. */
+    struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
+    if (unlikely(flow_def_attr == NULL)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
+    if (unlikely(!upipe_av_pixfmt_to_flow_def(upipe_avcdec->pix_fmt,
+                                              flow_def_attr))) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_err_va(upipe, "unhandled pixel format %d", upipe_avcdec->pix_fmt);
+        upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
+        return -1;
+    }
+
+    bool ret = true;
+    ret = ret && uref_pic_flow_set_hsize(flow_def_attr, width_aligned);
+    ret = ret && uref_pic_flow_set_vsize(flow_def_attr, height_aligned);
+    ret = ret && uref_pic_flow_set_hsize_visible(flow_def_attr, context->width);
+    ret = ret && uref_pic_flow_set_vsize_visible(flow_def_attr,
+                                                 context->height);
+    if (context->time_base.den) {
+        struct urational fps = {
+            .num = context->time_base.den,
+            .den = context->time_base.num * context->ticks_per_frame
+        };
+        urational_simplify(&fps);
+        ret = ret && uref_pic_flow_set_fps(flow_def_attr, fps);
+        if (context->delay)
+            ret = ret && uref_clock_set_latency(flow_def_attr,
+                    upipe_avcdec->input_latency +
+                    context->delay * UCLOCK_FREQ * fps.num / fps.den);
+    }
+    /* set aspect-ratio */
+    if (frame->sample_aspect_ratio.num) {
+        struct urational sar;
+        sar.num = frame->sample_aspect_ratio.num;
+        sar.den = frame->sample_aspect_ratio.den;
+        urational_simplify(&sar);
+        ret = ret && uref_pic_flow_set_sar(flow_def_attr, sar);
+    } else if (context->sample_aspect_ratio.num) {
+        struct urational sar = {
+            .num = context->sample_aspect_ratio.num,
+            .den = context->sample_aspect_ratio.den
+        };
+        urational_simplify(&sar);
+        ret = ret && uref_pic_flow_set_sar(flow_def_attr, sar);
+    }
+    if (unlikely(!ret)) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
+
+    if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
+        if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+            uref_free(uref);
+            uref_free(flow_def_attr);
             return -1;
         }
     }
-    if (context->pix_fmt != *upipe_avcdec->pixfmt->pixfmt) {
-        upipe_err_va(upipe, "frame format not compatible (%s != %s",
-                                       av_get_pix_fmt_name(context->pix_fmt),
-                            av_get_pix_fmt_name(*upipe_avcdec->pixfmt->pixfmt));
+
+    /* Allocate a ubuf */
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
+                                       width_aligned, height_aligned);
+    if (unlikely(ubuf == NULL)) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return -1;
     }
-    planes = upipe_avcdec->pixfmt->planes;
+    uref_attach_ubuf(uref, ubuf);
 
-    /* direct rendering - allocate ubuf pic */
-    if (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1) {
-        width_aligned = context->width;
-        height_aligned = context->height;
+    /* Chain the new flow def attributes to the uref so we can apply them
+     * later. */
+    uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-        /* use avcodec width/height alignement, then resize pic */
-        avcodec_align_dimensions(context, &width_aligned, &height_aligned);
-        ubuf_pic = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
+    if (!(context->codec->capabilities & CODEC_CAP_DR1))
+        return avcodec_default_get_buffer(context, frame);
 
-        if (likely(ubuf_pic)) {
-            ubuf_pic_resize(ubuf_pic, 0, 0, context->width, context->height);
-            uref_attach_ubuf(frame->opaque, ubuf_pic);
-
-            for (i=0; i < 4 && planes[i].chroma; i++) {
-                ubuf_pic_plane_write(ubuf_pic, planes[i].chroma,
-                        0, 0, -1, -1, &frame->data[i]);
-                ubuf_pic_plane_size(ubuf_pic, planes[i].chroma, &stride,
-                        NULL, NULL, NULL);
-                frame->linesize[i] = stride;
-            }
-
-            frame->extended_data = frame->data;
-            frame->type = FF_BUFFER_TYPE_USER;
-            
-            return 0; /* success */
-        } else {
-            upipe_verbose_va(upipe, "ubuf_pic_alloc(%d, %d) failed, fallback", width_aligned, height_aligned);
-        }
+    /* Direct rendering */
+    /* Iterate over the flow def attr because it's designed to be in the correct
+     * chroma order, while the ubuf manager is not necessarily. */
+    uint8_t planes;
+    if (unlikely(!uref_pic_flow_get_planes(flow_def_attr, &planes))) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
     }
 
-    /* default : DR failed or not available */
-    return avcodec_default_get_buffer(context, frame);
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        const char *chroma;
+        size_t stride = 0;
+        if (unlikely(!uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane) ||
+                     !ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1,
+                                           &frame->data[plane]) ||
+                     !ubuf_pic_plane_size(ubuf, chroma, &stride, NULL, NULL,
+                                          NULL))) {
+            uref_free(uref);
+            uref_free(flow_def_attr);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return -1;
+        }
+        frame->linesize[plane] = stride;
+    }
+    frame->extended_data = frame->data;
+    frame->type = FF_BUFFER_TYPE_USER;
+
+    return 0; /* success */
 }
 
 /** @internal @This is called by avcodec when releasing a picture.
@@ -265,23 +338,37 @@ static void upipe_avcdec_release_buffer_pic(struct AVCodecContext *context,
 {
     struct upipe *upipe = context->opaque;
     struct uref *uref = frame->opaque;
-    const struct upipe_av_plane *planes = NULL;
-    int i;
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
+    uref->uchain.next = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
 
     upipe_verbose_va(upipe, "Releasing frame %"PRIu64" (%p)", (uint64_t) framenum, uref);
 
-    if (likely(uref->ubuf)) {
-        planes = upipe_avcdec_from_upipe(upipe)->pixfmt->planes;
-        for (i=0; i < 4 && planes[i].chroma; i++) {
-            ubuf_pic_plane_unmap(uref->ubuf, planes[i].chroma, 0, 0, -1, -1);
-            frame->data[i] = NULL;
-        }
-    } else {
+    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
         avcodec_default_release_buffer(context, frame);
+        uref_free(flow_def_attr);
+        uref_free(uref);
+        return;
     }
+
+    /* Direct rendering */
+    uint8_t planes;
+    if (unlikely(!uref_pic_flow_get_planes(flow_def_attr, &planes))) {
+        uref_free(flow_def_attr);
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return;
+    }
+
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        const char *chroma;
+        if (uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane))
+            ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
+        frame->data[plane] = NULL;
+    }
+    uref_free(flow_def_attr);
     uref_free(uref);
 }
 
@@ -296,47 +383,111 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    struct ubuf *ubuf_samples;
-    uint8_t *buf;
-    int size;
-    uint64_t framenum = 0;
 
-    frame->opaque = upipe_avcdec->uref;
-    upipe_avcdec->uref = NULL;
-    if (!frame->opaque) { /* dont die on invalid (?) calls */
+    if (unlikely(upipe_avcdec->uref == NULL))
         return -1;
-    }
 
+    struct uref *uref = upipe_avcdec->uref;
+    upipe_avcdec->uref = NULL;
+    frame->opaque = uref;
+
+    uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
+
     upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p)",
                      framenum, frame->opaque);
 
+    /* Check if we have a new sample format. */
+    if (unlikely(context->sample_fmt != upipe_avcdec->sample_fmt)) {
+        if (upipe_avcdec->sample_fmt != AV_SAMPLE_FMT_NONE)
+            upipe_avcdec_set_ubuf_mgr(upipe, NULL);
+        upipe_avcdec->sample_fmt = context->sample_fmt;
+    }
 
-    /* direct rendering - allocate ubuf for audio */
-    if (!av_sample_fmt_is_planar(upipe_avcdec->context->sample_fmt) &&
-        (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)) {
-        ubuf_samples = ubuf_block_alloc(upipe_avcdec->ubuf_mgr,
-                    av_samples_get_buffer_size(NULL, context->channels,
-                        frame->nb_samples, context->sample_fmt, 1));
+    /* Prepare flow definition attributes. */
+    struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
+    if (unlikely(flow_def_attr == NULL)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
+    const char *def = upipe_av_samplefmt_to_flow_def(
+            av_get_packed_sample_fmt(upipe_avcdec->sample_fmt));
+    if (unlikely(def == NULL)) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_err_va(upipe, "unhandled sample format %d",
+                     upipe_avcdec->sample_fmt);
+        upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
+        return -1;
+    }
 
-        if (likely(ubuf_samples)) {
-            ubuf_block_write(ubuf_samples, 0, &size, &buf);
-            uref_attach_ubuf(frame->opaque, ubuf_samples);
+    bool ret = true;
+    ret = ret && uref_flow_set_def(flow_def_attr, def);
+    ret = ret && uref_sound_flow_set_channels(flow_def_attr, context->channels);
+    /* at the moment sample_rate is not filled until the first output */
+    if (context->sample_rate)
+        ret = ret && uref_sound_flow_set_rate(flow_def_attr,
+                                              context->sample_rate);
+    if (context->frame_size)
+        ret = ret && uref_sound_flow_set_samples(flow_def_attr,
+                                                 context->frame_size);
+    ret = ret && uref_sound_flow_set_sample_size(flow_def_attr,
+                     av_get_bytes_per_sample(context->sample_fmt));
+    if (unlikely(!ret)) {
+        uref_free(flow_def_attr);
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
 
-            av_samples_fill_arrays(frame->data, frame->linesize, buf,
-                    context->channels, frame->nb_samples, context->sample_fmt, 1);
-
-            frame->extended_data = frame->data;
-            frame->type = FF_BUFFER_TYPE_USER;
-            
-            return 0; /* success */
-        } else {
-            upipe_verbose_va(upipe, "ubuf allocation failed, fallback");
+    if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
+        if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+            uref_free(uref);
+            uref_free(flow_def_attr);
+            return -1;
         }
     }
 
-    /* default : DR failed or not available */
-    return avcodec_default_get_buffer(context, frame);
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcdec->ubuf_mgr,
+            av_samples_get_buffer_size(NULL, context->channels,
+                                       frame->nb_samples, context->sample_fmt,
+                                       1));
+    if (unlikely(ubuf == NULL)) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
+    uref_attach_ubuf(uref, ubuf);
+
+    /* Chain the new flow def attributes to the uref so we can apply them
+     * later. */
+    uref->uchain.next = uref_to_uchain(flow_def_attr);
+
+    if (av_sample_fmt_is_planar(context->sample_fmt) ||
+        !(context->codec->capabilities & CODEC_CAP_DR1))
+        /* For the moment no direct rendering with planar formats. */
+        return avcodec_default_get_buffer(context, frame);
+
+    /* Direct rendering */
+    int size = -1;
+    uint8_t *buf;
+    if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buf))) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return -1;
+    }
+
+    av_samples_fill_arrays(frame->data, frame->linesize, buf,
+            context->channels, frame->nb_samples, context->sample_fmt, 1);
+
+    frame->extended_data = frame->data;
+    frame->type = FF_BUFFER_TYPE_USER;
+
+    return 0; /* success */
 }
 
 /** @This aborts and frees an existing upump watching for exclusive access to
@@ -395,8 +546,10 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     }
 
     /* open new context */
-    if (unlikely(avcodec_open2(context, context->codec, NULL) < 0)) {
-        upipe_warn(upipe, "could not open codec");
+    int err;
+    if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
+        upipe_av_strerror(err, buf);
+        upipe_warn_va(upipe, "could not open codec (%s)", buf);
         upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
         return false;
     }
@@ -432,11 +585,11 @@ static void upipe_avcdec_cb_av_deal(struct upump *upump)
     upump_free(upipe_avcdec->upump_av_deal);
     upipe_avcdec->upump_av_deal = NULL;
 
-    if (ret) {
-        upipe_avcdec_unblock_sink(upipe);
+    if (ret)
         upipe_avcdec_output_sink(upipe);
-    } else
+    else
         upipe_avcdec_flush_sink(upipe);
+    upipe_avcdec_unblock_sink(upipe);
 
     upipe_release(upipe);
 }
@@ -453,7 +606,7 @@ static void upipe_avcdec_start_av_deal(struct upipe *upipe)
  
     /* use udeal/upump callback if available */
     if (upipe_avcdec->upump_mgr == NULL) {
-        upipe_dbg(upipe, "no upump_mgr present, direct call to avcdec_open");
+        upipe_dbg(upipe, "no upump_mgr present, direct call to avcodec_open");
         upipe_avcdec_do_av_deal(upipe);
         return;
     }
@@ -489,6 +642,11 @@ static void upipe_avcdec_open(struct upipe *upipe)
 static void upipe_avcdec_close(struct upipe *upipe)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    if (upipe_avcdec->context == NULL) {
+        upipe_release(upipe);
+        return;
+    }
+
     if (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DELAY) {
         /* Feed avcodec with NULL packets to output the remaining frames */
         AVPacket avpkt;
@@ -571,45 +729,63 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
-    struct uref *uref = uref_dup(frame->opaque);
+    struct uref *uref = frame->opaque;
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
     uint64_t framenum = 0;
-    uref_pic_get_number(frame->opaque, &framenum);
+    uref_pic_get_number(uref, &framenum);
 
     upipe_verbose_va(upipe, "%"PRIu64"\t - Picture decoded ! %dx%d - %"PRIu64,
                  upipe_avcdec->counter, frame->width, frame->height, framenum);
 
-    /* if uref has no attached ubuf (ie DR not supported) */
-    if (unlikely(!uref->ubuf)) {
-        struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
-                                           frame->width, frame->height);
-        if (!ubuf) {
+    /* Resize the picture (was allocated too big). */
+    if (unlikely(!uref_pic_resize(uref, 0, 0, frame->width, frame->height))) {
+        upipe_warn_va(upipe, "couldn't resize picture to %dx%d",
+                      frame->width, frame->height);
+        upipe_throw_error(upipe, UPROBE_ERR_EXTERNAL);
+    }
+
+    /* Duplicate uref because it is freed in _release, because the ubuf
+     * is still in use by avcodec. */
+    uref = uref_dup(uref);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return;
+    }
+
+    if (!(upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)) {
+        /* Not direct rendering, copy data. */
+        uint8_t planes;
+        if (unlikely(!uref_pic_flow_get_planes(flow_def_attr, &planes))) {
+            uref_free(uref);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
-        /* iterate through planes and copy data */
-        const struct upipe_av_plane *planes = upipe_avcdec->pixfmt->planes;
-        uint8_t *data, *src, hsub, vsub;
-        const char *chroma = NULL; 
-        size_t sstride, dstride;
-        int i, j;
-
-        i = j = 0;
-        for (i=0; i < 4 && (chroma = planes[i].chroma); i++) {
-            ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &data);
-            ubuf_pic_plane_size(ubuf, chroma, &dstride, &hsub, &vsub, NULL);
-            src = frame->data[i];
-            sstride = frame->linesize[i];
-            for (j = 0; j < frame->height/vsub; j++) {
-                memcpy(data, src, frame->width/hsub);
-                data += dstride;
+        for (uint8_t plane = 0; plane < planes; plane++) {
+            uint8_t *dst, *src, hsub, vsub;
+            size_t sstride, dstride, stride;
+            const char *chroma;
+            if (unlikely(!uref_pic_flow_get_chroma(flow_def_attr, &chroma,
+                                                   plane) ||
+                         !ubuf_pic_plane_write(uref->ubuf, chroma,
+                                               0, 0, -1, -1, &dst) ||
+                         !ubuf_pic_plane_size(uref->ubuf, chroma, &dstride,
+                                              &hsub, &vsub, NULL))) {
+                uref_free(uref);
+                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                return;
+            }
+            src = frame->data[plane];
+            sstride = frame->linesize[plane];
+            stride = sstride < dstride ? sstride : dstride;
+            for (int j = 0; j < frame->height / vsub; j++) {
+                memcpy(dst, src, stride);
+                dst += dstride;
                 src += sstride;
             }
-            ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, -1, -1);
+            ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
         }
-
-        uref_attach_ubuf(uref, ubuf);
     }
 
     bool ret = true;
@@ -619,76 +795,37 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
     else if (frame->top_field_first)
         ret = ret && uref_pic_set_tff(uref);
 
-    /* set aspect-ratio */
-    if (frame->sample_aspect_ratio.num) {
-        struct urational aspect;
-        aspect.num = frame->sample_aspect_ratio.num;
-        aspect.den = frame->sample_aspect_ratio.den;
-        urational_simplify(&aspect);
-        ret = ret && uref_pic_set_aspect(uref, aspect);
-    }
-
     if (context->time_base.den)
         ret = ret && uref_clock_set_duration(uref,
                 (uint64_t)(2 + frame->repeat_pict) * context->ticks_per_frame *
                 UCLOCK_FREQ * context->time_base.num /
                 (2 * context->time_base.den));
 
-    /* various time-related attribute */
+    /* various time-related attributes */
     ret = ret && upipe_avcdec_set_time_attributes(upipe, uref);
+
     if (!ret) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
-    /* flow definition */
-    if (unlikely(upipe_avcdec->output_flow == NULL ||
-                 upipe_avcdec->pixel_fmt != context->pix_fmt ||
-                 memcmp(&upipe_avcdec->time_base, &context->time_base,
-                        sizeof(AVRational)))) {
-        struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
-        ret = ret && uref_flow_set_def(outflow, UREF_PIC_FLOW_DEF);
-        ret = ret && uref_pic_flow_set_macropixel(outflow, 1);
-        ret = ret && uref_pic_flow_set_planes(outflow, 0);
-        int i;
-        for (i = 0; i < 4; i++) {
-            const struct upipe_av_plane *plane =
-                &upipe_avcdec->pixfmt->planes[i];
-            if (plane->chroma == NULL)
-                break;
-            ret = ret && uref_pic_flow_add_plane(outflow,
-                                                 plane->hsub, plane->vsub,
-                                                 plane->macropixel_size,
-                                                 plane->chroma);
-        }
-
-        if (context->time_base.den) {
-            struct urational fps = {
-                .num = context->time_base.den,
-                .den = context->time_base.num * context->ticks_per_frame
-            };
-            urational_simplify(&fps);
-            ret = ret && uref_pic_flow_set_fps(outflow, fps);
-        }
-        if (context->sample_aspect_ratio.num) {
-            struct urational sar = {
-                .num = context->sample_aspect_ratio.num,
-                .den = context->sample_aspect_ratio.den
-            };
-            urational_simplify(&sar);
-            ret = ret && uref_pic_set_aspect(outflow, sar);
-        }
-        if (!ret) {
-            uref_free(outflow);
+    /* Find out if flow def attributes have changed. */
+    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {
+        /* Make a copy as flow_def_attr is still used by _release. */
+        flow_def_attr = uref_dup(flow_def_attr);
+        if (unlikely(flow_def_attr == NULL)) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
-
-        upipe_avcdec_store_flow_def(upipe, outflow);
-        upipe_avcdec->pixel_fmt = context->pix_fmt;
-        upipe_avcdec->time_base = context->time_base;
+        struct uref *flow_def =
+            upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
+        if (flow_def != NULL) {
+            uref_block_flow_clear_format(flow_def);
+            uref_flow_delete_headers(flow_def);
+            upipe_avcdec_store_flow_def(upipe, flow_def);
+        }
     }
 
     upipe_avcdec_output(upipe, uref, upump);
@@ -731,6 +868,8 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
     struct uref *uref = frame->opaque;
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
+    uref->uchain.next = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
@@ -738,36 +877,31 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     upipe_verbose_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64,
                      upipe_avcdec->counter, framenum);
 
-    /* fetch audio sample size (in case it has been reduced) */
+    /* Fetch audio sample size (in case it has been reduced). */
     int avbufsize = av_samples_get_buffer_size(NULL, context->channels,
-                       frame->nb_samples, context->sample_fmt, 1);
-    enum AVSampleFormat sample_fmt = context->sample_fmt;
+                                               frame->nb_samples,
+                                               context->sample_fmt, 1);
+    uref_block_resize(uref, 0, avbufsize);
 
-    /* if uref has no attached ubuf (ie DR not supported) */
-    if (unlikely(!uref->ubuf)) {
-        struct ubuf *ubuf = ubuf_block_alloc(upipe_avcdec->ubuf_mgr, avbufsize);
-        if (unlikely(!ubuf)) {
+    if (av_sample_fmt_is_planar(context->sample_fmt) ||
+        !(context->codec->capabilities & CODEC_CAP_DR1)) {
+        /* Not direct rendering, copy data. */
+        int bufsize = -1;
+        uint8_t *buf;
+        if (unlikely(!ubuf_block_write(uref->ubuf, 0, &bufsize, &buf))) {
+            uref_free(flow_def_attr);
+            uref_free(uref);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
 
-        int bufsize = -1;
-        uint8_t *buf;
-        ubuf_block_write(ubuf, 0, &bufsize, &buf);
-        if (av_sample_fmt_is_planar(sample_fmt)) {
+        if (av_sample_fmt_is_planar(context->sample_fmt))
             /* FIXME support planar formats */
-            sample_fmt = av_get_packed_sample_fmt(sample_fmt);
             upipe_avcdec_interleave(upipe, buf, bufsize);
-        } else
+        else
             memcpy(buf, frame->data[0], bufsize);
-        ubuf_block_unmap(ubuf, 0);
-
-        uref_attach_ubuf(uref, ubuf);
-    } else {
-        /* unmap, reduce block if needed */
-        uref_block_unmap(uref, 0);
-        uref_block_resize(uref, 0, avbufsize);
     }
+    uref_block_unmap(uref, 0);
 
     bool ret = true;
     /* samples in uref */
@@ -779,40 +913,27 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
 
     /* various time-related attribute */
     ret = ret && upipe_avcdec_set_time_attributes(upipe, uref);
+
+    /* sample_rate can only be retrieved here */
+    ret = ret && uref_sound_flow_set_rate(flow_def_attr, context->sample_rate);
+
     if (!ret) {
+        uref_free(flow_def_attr);
         uref_free(uref);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
-    /* flow definition */
-    if (unlikely(upipe_avcdec->output_flow == NULL ||
-                 upipe_avcdec->sample_fmt != sample_fmt ||
-                 upipe_avcdec->channels != context->channels ||
-                 upipe_avcdec->sample_rate != context->sample_rate ||
-                 upipe_avcdec->frame_size != context->frame_size)) {
-        struct uref *outflow = uref_dup(upipe_avcdec->input_flow);
-        const char *def = upipe_av_samplefmt_to_flow_def(sample_fmt);
-        ret = def != NULL;
-        ret = ret && uref_flow_set_def(outflow, def);
-        ret = ret && uref_sound_flow_set_channels(outflow, context->channels);
-        ret = ret && uref_sound_flow_set_rate(outflow, context->sample_rate);
-        if (context->frame_size)
-            ret = ret && uref_sound_flow_set_samples(uref, context->frame_size);
-        ret = ret && uref_sound_flow_set_sample_size(outflow,
-                                 av_get_bytes_per_sample(context->sample_fmt));
-        if (!ret) {
-            uref_free(outflow);
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            return;
+    /* Find out if flow def attributes have changed. */
+    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {
+        struct uref *flow_def =
+            upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
+        if (flow_def != NULL) {
+            uref_block_flow_clear_format(flow_def);
+            upipe_avcdec_store_flow_def(upipe, flow_def);
         }
-        upipe_avcdec_store_flow_def(upipe, outflow);
-        upipe_avcdec->sample_fmt = sample_fmt;
-        upipe_avcdec->channels = context->channels;
-        upipe_avcdec->sample_rate = context->sample_rate;
-        upipe_avcdec->frame_size = context->frame_size;
-    }
+    } else
+        uref_free(flow_def_attr);
 
     upipe_avcdec_output(upipe, uref, upump);
 }
@@ -934,6 +1055,7 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
     while (unlikely(!avcodec_is_open(upipe_avcdec->context))) {
         if (upipe_avcdec->upump_av_deal != NULL) {
             upipe_avcdec_block_sink(upipe, upump);
@@ -944,28 +1066,122 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
         upipe_avcdec_open(upipe);
     }
 
-    if (unlikely(uref->ubuf == NULL)) {
-        if (unlikely(upipe_avcdec->output_flow == NULL)) {
-            upipe_warn(upipe, "received empty uref before opening the codec");
-            uref_free(uref);
-        } else
-            upipe_avcdec_output(upipe, uref, upump);
-        return;
-    }
-
     upipe_avcdec_decode(upipe, uref, upump);
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+
+    const char *def;
+    enum AVCodecID codec_id;
+    AVCodec *codec;
+    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
+                 ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+                 !(codec_id =
+                     upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW_DEF))) ||
+                 (codec = avcodec_find_decoder(codec_id)) == NULL))
+        return false;
+
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
+    uint8_t *extradata_alloc = NULL;
+    const uint8_t *extradata;
+    size_t extradata_size = 0;
+    if (uref_flow_get_headers(flow_def, &extradata, &extradata_size)) {
+        extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
+        if (unlikely(extradata_alloc == NULL)) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+        memcpy(extradata_alloc, extradata, extradata_size);
+        memset(extradata_alloc + extradata_size, 0,
+               FF_INPUT_BUFFER_PADDING_SIZE);
+    }
+
+    /* Extract relevant attributes to flow def check. */
+    struct uref *flow_def_check =
+        upipe_avcdec_alloc_flow_def_check(upipe, flow_def);
+    if (unlikely(flow_def_check == NULL)) {
+        free(extradata_alloc);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+
+    if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
+                 (extradata_alloc != NULL &&
+                  !uref_flow_set_headers(flow_def_check, extradata,
+                                         extradata_size)))) {
+        free(extradata_alloc);
+        uref_free(flow_def_check);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+
+    if (upipe_avcdec->context != NULL) {
+        free(extradata_alloc);
+        /* Die if the attributes changed. */
+        /* NB: this supposes that all attributes are in the udict, and that
+         * the udict is never empty. */
+        if (!upipe_avcdec_check_flow_def_check(upipe, flow_def_check)) {
+            uref_free(flow_def_check);
+            return false;
+        }
+        uref_free(flow_def_check);
+    } else {
+        if (unlikely((upipe_avcdec->context =
+                         avcodec_alloc_context3(codec)) == NULL)) {
+            free(extradata_alloc);
+            uref_free(flow_def_check);
+            upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+            return false;
+        }
+
+        upipe_avcdec->context->codec = codec;
+        upipe_avcdec->context->opaque = upipe;
+        if (extradata_alloc != NULL) {
+            upipe_avcdec->context->extradata = extradata_alloc;
+            upipe_avcdec->context->extradata_size = extradata_size;
+        }
+
+        upipe_avcdec_store_flow_def_check(upipe, flow_def_check);
+    }
+    flow_def = uref_dup(flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    flow_def = upipe_avcdec_store_flow_def_input(upipe, flow_def);
+    if (flow_def != NULL)
+        uref_free(flow_def);
+
+    upipe_avcdec->input_latency = 0;
+    uref_clock_get_latency(upipe_avcdec->flow_def_input,
+                           &upipe_avcdec->input_latency);
+    return true;
+}
+
 /** @internal @This checks some option compatibility (kinda kludgy ...).
+ *
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL
  * @return false in case of error
  */
 static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
-                                       const char *content)
+                                      const char *content)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    if (upipe_avcdec->context == NULL)
+        return false;
 
     /* lowres */
     if (!strcmp(option, "lowres")) {
@@ -990,7 +1206,7 @@ static bool _upipe_avcdec_set_option(struct upipe *upipe, const char *option,
                                      const char *content)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (avcodec_is_open(upipe_avcdec->context))
+    if (upipe_avcdec->context == NULL || avcodec_is_open(upipe_avcdec->context))
         return false;
     assert(option != NULL);
     if (unlikely(!upipe_avcdec_check_option(upipe, option, content))) {
@@ -1033,6 +1249,10 @@ static bool upipe_avcdec_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avcdec_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avcdec_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_avcdec_get_output(upipe, p);
@@ -1073,20 +1293,23 @@ static bool upipe_avcdec_control(struct upipe *upipe,
 static void upipe_avcdec_free(struct upipe *upipe)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    upipe_throw_dead(upipe);
 
-    free(upipe_avcdec->context->extradata);
-    av_free(upipe_avcdec->context);
+    if (upipe_avcdec->context != NULL) {
+        free(upipe_avcdec->context->extradata);
+        av_free(upipe_avcdec->context);
+    }
     av_free(upipe_avcdec->frame);
-    uref_free(upipe_avcdec->input_flow);
 
+    upipe_throw_dead(upipe);
     upipe_avcdec_abort_av_deal(upipe);
     upipe_avcdec_clean_sink(upipe);
     upipe_avcdec_clean_output(upipe);
+    upipe_avcdec_clean_flow_def(upipe);
+    upipe_avcdec_clean_flow_def_check(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
     upipe_avcdec_clean_upump_av_deal(upipe);
     upipe_avcdec_clean_upump_mgr(upipe);
-    upipe_avcdec_free_flow(upipe);
+    upipe_avcdec_free_void(upipe);
 }
 
 /** @internal @This allocates a avcdec pipe.
@@ -1101,73 +1324,36 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_avcdec_alloc_flow(mgr, uprobe, signature,
-                                                  args, &flow_def);
-    if (unlikely(upipe == NULL))
+    AVFrame *frame = avcodec_alloc_frame();
+    if (unlikely(frame == NULL))
         return NULL;
 
-    uint8_t *extradata_alloc = NULL;
-    const uint8_t *extradata;
-    size_t extradata_size = 0;
-    if (uref_flow_get_headers(flow_def, &extradata, &extradata_size)) {
-        extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
-        if (unlikely(extradata_alloc == NULL)) {
-            uref_free(flow_def);
-            upipe_avcdec_free_flow(upipe);
-            return NULL;
-        }
-        memcpy(extradata_alloc, extradata, extradata_size);
-        memset(extradata_alloc + extradata_size, 0,
-               FF_INPUT_BUFFER_PADDING_SIZE);
-    }
-
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (unlikely((upipe_avcdec->frame = avcodec_alloc_frame()) == NULL)) {
-        free(extradata_alloc);
-        uref_free(flow_def);
-        upipe_avcdec_free_flow(upipe);
+    struct upipe *upipe = upipe_avcdec_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL)) {
+        av_free(frame);
         return NULL;
     }
-
-    const char *def;
-    enum AVCodecID codec_id;
-    AVCodec *codec;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 !(codec_id =
-                     upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW))) ||
-                 (codec = avcodec_find_decoder(codec_id)) == NULL ||
-                 (upipe_avcdec->context =
-                     avcodec_alloc_context3(codec)) == NULL)) {
-        free(extradata_alloc);
-        uref_free(flow_def);
-        av_free(upipe_avcdec->frame);
-        upipe_avcdec_free_flow(upipe);
-        return NULL;
-    }
-
-    upipe_avcdec->context->codec = codec;
-    upipe_avcdec->context->opaque = upipe;
-    if (extradata_alloc != NULL) {
-        upipe_avcdec->context->extradata = extradata_alloc;
-        upipe_avcdec->context->extradata_size = extradata_size;
-    }
-
     upipe_avcdec_init_ubuf_mgr(upipe);
     upipe_avcdec_init_upump_mgr(upipe);
     upipe_avcdec_init_upump_av_deal(upipe);
     upipe_avcdec_init_output(upipe);
+    upipe_avcdec_init_flow_def(upipe);
+    upipe_avcdec_init_flow_def_check(upipe);
     upipe_avcdec_init_sink(upipe);
-    upipe_avcdec->input_flow = flow_def;
-    upipe_avcdec->output_flow = NULL;
-    upipe_avcdec->pixfmt = NULL;
+
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    upipe_avcdec->context = NULL;
+    upipe_avcdec->frame = frame;
     upipe_avcdec->counter = 0;
     upipe_avcdec->close = false;
+    upipe_avcdec->pix_fmt = PIX_FMT_NONE;
+    upipe_avcdec->sample_fmt = AV_SAMPLE_FMT_NONE;
 
     upipe_avcdec->index_rap = 0;
     upipe_avcdec->prev_rap = 0;
     upipe_avcdec->next_pts = UINT64_MAX;
     upipe_avcdec->next_pts_sys = UINT64_MAX;
+    upipe_avcdec->input_latency = 0;
 
     /* Increment our refcount so the context will have time to be closed
      * (decremented in @ref upipe_avcdec_do_av_deal) */
@@ -1189,7 +1375,7 @@ static struct upipe_mgr upipe_avcdec_mgr = {
     .upipe_mgr_free = NULL
 };
 
-/** @This returns the management structure for avcdec pipes
+/** @This returns the management structure for avcodec decoders.
  *
  * @return pointer to manager
  */

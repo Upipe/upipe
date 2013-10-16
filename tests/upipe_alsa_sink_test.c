@@ -68,7 +68,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         case UPROBE_DEAD:
             break;
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
     }
     return true;
@@ -120,20 +120,16 @@ int main(int argc, char **argv)
     assert(upipe_set_ubuf_mgr(sinesrc, ubuf_mgr));
     assert(upipe_set_uclock(sinesrc, uclock));
     assert(upipe_set_upump_mgr(sinesrc, upump_mgr));
-    struct uref *flow_def;
-    assert(upipe_get_flow_def(sinesrc, &flow_def));
 
     /* build alsink pipe */
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
     assert(upipe_alsink_mgr != NULL);
-    struct upipe *alsink = upipe_flow_alloc(upipe_alsink_mgr,
-               uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "alsink"),
-               flow_def);
+    struct upipe *alsink = upipe_void_alloc_output(sinesrc, upipe_alsink_mgr,
+               uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "alsink"));
     assert(alsink != NULL);
     assert(upipe_set_uclock(alsink, uclock));
     assert(upipe_set_upump_mgr(alsink, upump_mgr));
     assert(upipe_set_uri(alsink, "default"));
-    assert(upipe_set_output(sinesrc, alsink));
 
     ev_loop(loop, 0);
 

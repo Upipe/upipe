@@ -166,15 +166,15 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&chunk_test_mgr, log, uref);
+    struct upipe *upipe_sink = upipe_void_alloc(&chunk_test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_chunk_stream_mgr = upipe_chunk_stream_mgr_alloc();
     assert(upipe_chunk_stream_mgr != NULL);
-    struct upipe *upipe_chunk_stream = upipe_flow_alloc(upipe_chunk_stream_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "chunk"),
-            uref);
+    struct upipe *upipe_chunk_stream = upipe_void_alloc(upipe_chunk_stream_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "chunk"));
     assert(upipe_chunk_stream != NULL);
+    assert(upipe_set_flow_def(upipe_chunk_stream, uref));
     assert(upipe_set_output(upipe_chunk_stream, upipe_sink));
     uref_free(uref);
 

@@ -34,7 +34,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_dup.h>
@@ -61,7 +61,7 @@ struct upipe_dup {
 };
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe, UPIPE_DUP_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_dup, NULL)
+UPIPE_HELPER_VOID(upipe_dup)
 
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
@@ -207,16 +207,14 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_dup_alloc_flow(mgr, uprobe, signature, args,
-                                               &flow_def);
+    struct upipe *upipe = upipe_dup_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     upipe_dup_init_sub_mgr(upipe);
     upipe_dup_init_sub_outputs(upipe);
-    upipe_dup->flow_def = flow_def;
+    upipe_dup->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -264,7 +262,7 @@ static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return false;
-    struct uref *flow_def_dup = NULL;
+    struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return false;
 
@@ -328,7 +326,7 @@ static void upipe_dup_free(struct upipe *upipe)
     upipe_dup_clean_sub_outputs(upipe);
     if (upipe_dup->flow_def != NULL)
         uref_free(upipe_dup->flow_def);
-    upipe_dup_free_flow(upipe);
+    upipe_dup_free_void(upipe);
 }
 
 /** dup module manager static descriptor */

@@ -154,14 +154,15 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&ts_test_mgr, log, uref);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_ts_check_mgr = upipe_ts_check_mgr_alloc();
     assert(upipe_ts_check_mgr != NULL);
-    struct upipe *upipe_ts_check = upipe_flow_alloc(upipe_ts_check_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts check"), uref);
+    struct upipe *upipe_ts_check = upipe_void_alloc(upipe_ts_check_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts check"));
     assert(upipe_ts_check != NULL);
+    assert(upipe_set_flow_def(upipe_ts_check, uref));
     assert(upipe_set_output(upipe_ts_check, upipe_sink));
     uref_free(uref);
 

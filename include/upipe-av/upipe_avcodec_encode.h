@@ -2,6 +2,7 @@
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -42,52 +43,9 @@ extern "C" {
 enum upipe_avcenc_command {
     UPIPE_AVCENC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the currently opened codec (const char **) */
-    UPIPE_AVCENC_GET_CODEC,
-    /** asks to open the given codec (const char *) */
-    UPIPE_AVCENC_SET_CODEC,
-    /** asks to open the given codec by name(const char *) */
-    UPIPE_AVCENC_SET_CODEC_BY_NAME,
     /** sets the content of an avcodec option (const char *, const char *) */
     UPIPE_AVCENC_SET_OPTION
 };
-
-/** @This returns the currently opened codec.
- *
- * @param upipe description structure of the pipe
- * @param codec_p filled in with the codec name
- * @return false in case of error
- */
-static inline bool upipe_avcenc_get_codec(struct upipe *upipe, const char **codec_p)
-{
-    return upipe_control(upipe, UPIPE_AVCENC_GET_CODEC, UPIPE_AVCENC_SIGNATURE,
-                         codec_p);
-}
-
-/** @This asks to open the given codec.
- *
- * @param upipe description structure of the pipe
- * @param codec codec to open
- * @return false in case of error
- */
-static inline bool upipe_avcenc_set_codec(struct upipe *upipe, const char *codec)
-{
-    return upipe_control(upipe, UPIPE_AVCENC_SET_CODEC, UPIPE_AVCENC_SIGNATURE,
-                         codec);
-}
-
-/** @This asks to open the given codec.
- *
- * @param upipe description structure of the pipe
- * @param codec codec to open
- * @return false in case of error
- */
-static inline bool upipe_avcenc_set_codec_by_name(struct upipe *upipe,
-                                                  const char *codec)
-{
-    return upipe_control(upipe, UPIPE_AVCENC_SET_CODEC_BY_NAME,
-                         UPIPE_AVCENC_SIGNATURE, codec);
-}
 
 /** @This sets the content of an avcodec option. It only has effect before the
  * first packet is sent.
@@ -105,11 +63,21 @@ static inline bool upipe_avcenc_set_option(struct upipe *upipe,
                          option, content);
 }
 
-/** @This returns the management structure for all avformat sources.
+/** @This returns the management structure for avcodec encoders.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_avcenc_mgr_alloc(void);
+
+/** @This configures the given flow definition to be able to encode to the
+ * av codec described by name.
+ *
+ * @param flow_def flow definition packet
+ * @param name codec name
+ * @return false if the codec was not found
+ */
+bool upipe_avcenc_mgr_flow_def_from_name(struct uref *flow_def,
+                                         const char *name);
 
 #ifdef __cplusplus
 }

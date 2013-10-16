@@ -43,18 +43,10 @@ extern "C" {
 #include <stdbool.h>
 
 UREF_ATTR_UNSIGNED_SH(pic, number, UDICT_TYPE_PIC_NUM, picture number)
-UREF_ATTR_UNSIGNED_SH(pic, hsize, UDICT_TYPE_PIC_HSIZE, horizontal size)
-UREF_ATTR_UNSIGNED_SH(pic, vsize, UDICT_TYPE_PIC_VSIZE, vertical size)
-UREF_ATTR_UNSIGNED_SH(pic, hsize_visible, UDICT_TYPE_PIC_HSIZE_VISIBLE,
-        horizontal visible size)
-UREF_ATTR_UNSIGNED_SH(pic, vsize_visible, UDICT_TYPE_PIC_VSIZE_VISIBLE,
-        vertical visible size)
 UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
         horizontal position)
 UREF_ATTR_UNSIGNED_SH(pic, vposition, UDICT_TYPE_PIC_VPOSITION,
         vertical position)
-UREF_ATTR_RATIONAL_SH(pic, aspect, UDICT_TYPE_PIC_ASPECT, sample aspect ratio)
-UREF_ATTR_VOID_SH(pic, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
 UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
 UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
 UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)

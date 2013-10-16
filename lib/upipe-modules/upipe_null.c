@@ -34,7 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe-modules/upipe_null.h>
 
 #include <stdlib.h>
@@ -60,7 +60,7 @@ struct upipe_null {
 };
 
 UPIPE_HELPER_UPIPE(upipe_null, upipe, UPIPE_NULL_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_null, NULL)
+UPIPE_HELPER_VOID(upipe_null);
 
 /** @internal @This allocates a null pipe.
  *
@@ -74,8 +74,7 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
                                       struct uprobe *uprobe,
                                       uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_null_alloc_flow(mgr, uprobe, signature,
-                                                args, NULL);
+    struct upipe *upipe = upipe_null_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -113,7 +112,9 @@ static bool upipe_null_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
-    switch(command) {
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return true;
         case UPIPE_NULL_DUMP_DICT: {
             int signature = va_arg(args, int);
             assert (signature == UPIPE_NULL_SIGNATURE);
@@ -134,7 +135,7 @@ static void upipe_null_free(struct upipe *upipe)
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_warn_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
     upipe_throw_dead(upipe);
-    upipe_null_free_flow(upipe);
+    upipe_null_free_void(upipe);
 }
 
 /** upipe_null (/dev/null) */

@@ -33,7 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 
@@ -65,7 +65,7 @@ struct upipe_ts_decaps {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_decaps, upipe, UPIPE_TS_DECAPS_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_decaps, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_decaps)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)
 
@@ -81,9 +81,8 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
                                            struct uprobe *uprobe,
                                            uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_decaps_alloc_flow(mgr, uprobe, signature,
-                                                     args, &flow_def);
+    struct upipe *upipe = upipe_ts_decaps_alloc_void(mgr, uprobe, signature,
+                                                     args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -91,13 +90,6 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
     upipe_throw_ready(upipe);
-
-    const char *def;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 !uref_flow_set_def_va(flow_def, "block.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-    upipe_ts_decaps_store_flow_def(upipe, flow_def);
     return upipe;
 }
 
@@ -107,8 +99,8 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
+                                  struct upump *upump)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
     bool ret;
@@ -216,22 +208,33 @@ static void upipe_ts_decaps_work(struct upipe *upipe, struct uref *uref,
     upipe_ts_decaps_output(upipe, uref, upump);
 }
 
-/** @internal @This receives data.
+/** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
  */
-static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
-                                  struct upump *upump)
+static bool upipe_ts_decaps_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_ts_decaps_output(upipe, uref, upump);
-        return;
+    if (flow_def == NULL)
+        return false;
+    const char *def;
+    if (!uref_flow_get_def(flow_def, &def) ||
+        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
     }
-
-    upipe_ts_decaps_work(upipe, uref, upump);
+    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF))))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_decaps_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
+
 
 /** @internal @This processes control commands on a ts decaps pipe.
  *
@@ -247,6 +250,10 @@ static bool upipe_ts_decaps_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_decaps_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_decaps_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -270,7 +277,7 @@ static void upipe_ts_decaps_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_decaps_clean_output(upipe);
-    upipe_ts_decaps_free_flow(upipe);
+    upipe_ts_decaps_free_void(upipe);
 }
 
 /** module manager static descriptor */

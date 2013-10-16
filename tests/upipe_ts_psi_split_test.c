@@ -181,9 +181,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     assert(upipe_ts_psi_split_mgr != NULL);
-    struct upipe *upipe_ts_psi_split = upipe_flow_alloc(upipe_ts_psi_split_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts psi split"), uref);
+    struct upipe *upipe_ts_psi_split = upipe_void_alloc(upipe_ts_psi_split_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "ts psi split"));
     assert(upipe_ts_psi_split != NULL);
+    assert(upipe_set_flow_def(upipe_ts_psi_split, uref));
 
     uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
     memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
@@ -196,7 +197,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(filter, 68);
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    struct upipe *upipe_sink68 = upipe_flow_alloc(&ts_test_mgr, log, uref);
+    struct upipe *upipe_sink68 = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink68 != NULL);
     ts_test_set_table(upipe_sink68, 68);
 
@@ -212,7 +213,7 @@ int main(int argc, char *argv[])
     psi_set_tableidext(filter, 69);
     assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    struct upipe *upipe_sink69 = upipe_flow_alloc(&ts_test_mgr, log, NULL);
+    struct upipe *upipe_sink69 = upipe_void_alloc(&ts_test_mgr, log);
     assert(upipe_sink69 != NULL);
     ts_test_set_table(upipe_sink69, 69);
 

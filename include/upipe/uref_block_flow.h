@@ -96,6 +96,18 @@ static inline struct uref *uref_block_flow_alloc_def_va(struct uref_mgr *mgr,
     UBASE_VARARG(uref_block_flow_alloc_def(mgr, string))
 }
 
+/** @This clears the attributes that are no longer relevant when the block is
+ * decoded.
+ *
+ * @param uref uref control packet
+ */
+static inline void uref_block_flow_clear_format(struct uref *uref)
+{
+    uref_block_flow_delete_octetrate(uref);
+    uref_block_flow_delete_max_octetrate(uref);
+    uref_block_flow_delete_cpb_buffer(uref);
+}
+
 #undef UREF_BLOCK_FLOW_DEF
 
 #ifdef __cplusplus

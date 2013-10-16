@@ -2,6 +2,7 @@
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -36,189 +37,310 @@ extern "C" {
 #endif
 
 #include <upipe/ubuf_pic.h>
+#include <upipe/uref_pic_flow.h>
+
 #include <libavutil/avutil.h>
 #include <libavutil/pixdesc.h>
+
 #include <string.h>
 
-/** plane definition */
-struct upipe_av_plane {
-    /** chroma name */
-    const char *chroma;
-    /** horizontal subsampling */
-    uint8_t hsub;
-    /** vertical subsampling */
-    uint8_t vsub;
-    /** macropixel size */
-    uint8_t macropixel_size;
-};
+/** maximum number of planes + 1 in supported pixel formats */
+#define UPIPE_AV_MAX_PLANES 5
 
-/** format definition */
-struct upipe_av_pixfmt {
-    /** avutil pixelformat */
-    enum PixelFormat pixfmt[PIX_FMT_NB];
-    /** planes */
-    struct upipe_av_plane planes[4];
-};
-
-/** @internal @This is the upipe/avutil pixelformat array
+/** @This configures the flow definition according to the given pixel format.
+ *
+ * @param pix_fmt avcodec pixel format
+ * @param flow_def overwritten flow definition
+ * @return false in case of error
  */
-static const struct upipe_av_pixfmt upipe_av_pixfmt[] = {
-    {{PIX_FMT_YUV420P, PIX_FMT_YUVJ420P, PIX_FMT_NONE}, {
-        {"y8", 1, 1, 1},
-        {"u8", 2, 2, 1},
-        {"v8", 2, 2, 1},
-        {NULL, 0, 0, 0}
-    }},
-    {{PIX_FMT_RGB24, PIX_FMT_NONE}, {
-        {"rgb24", 1, 1, 3},
-        {NULL, 0, 0, 0}
-    }},
-
-    {{PIX_FMT_NONE}, {}}
-};
-
-/** @This finds the upipe_av_pixfmt structure corresponding to a picture ubuf
- * @param ubuf picture ubuf
- * @return pointer to upipe_av_pixfmt description structure
- */
-static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf(struct ubuf *ubuf)
+static inline bool upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
+                                               struct uref *flow_def)
 {
-    const struct upipe_av_pixfmt *pixfmt = NULL;
-    const struct upipe_av_plane *plane = NULL;
-    uint8_t hsub, vsub, macropixel;
-    int i;
-    
-    /* iterate through known formats */
-    for (pixfmt = upipe_av_pixfmt; *pixfmt->pixfmt != PIX_FMT_NONE; pixfmt++) {
-        /* iterate through knwon planes */
-        for (i = 0, plane = pixfmt->planes;
-                i < 4
-                && plane->chroma
-                && ubuf_pic_plane_size(ubuf, plane->chroma, NULL, &hsub, &vsub, &macropixel)
-                && hsub == plane->hsub
-                && vsub == plane->vsub
-                && macropixel == plane->macropixel_size;
-            plane++, i++);
+    bool ret = true;
 
-        /* if plane->chroma == NULL, every known plane has been found */
-        if (!plane->chroma) {
+    ret = ret && uref_pic_flow_set_planes(flow_def, 0);
+    switch (pix_fmt) {
+        case AV_PIX_FMT_YUV420P:
+        case AV_PIX_FMT_YUVJ420P:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8");
             break;
-        }
-    }
-    
-    /* if pixfmt->pixfmt != NONE, current format is suitable */
-    if (*pixfmt->pixfmt != PIX_FMT_NONE) {
-        return pixfmt;
-    }
-
-    /* unknown format */
-    return NULL;
-}
-
-/** @This finds the first upipe_av_pixfmt structure corresponding to a PixelFormat
- * @param format avutil pixel format
- * @returns pointer to upipe_av_pixfmt description structure
- */
-static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_pixfmt(enum PixelFormat format)
-{
-    const struct upipe_av_pixfmt *pixfmt = NULL;
-    for (pixfmt = upipe_av_pixfmt;
-         *pixfmt->pixfmt != PIX_FMT_NONE && *pixfmt->pixfmt != format;
-         pixfmt++);
-    if (*pixfmt->pixfmt == format) {
-        return pixfmt;
-    }
-    return NULL;
-}
-
-
-/** @This finds the upipe_av_pixfmt structure corresponding to a picture ubuf manager.
- * It works by allocating a tiny picture ubuf.
- * @param ubuf_mgr picture ubuf manager
- * @return pointer to upipe_av_pixfmt description structure
- */
-static inline const struct upipe_av_pixfmt *upipe_av_pixfmt_from_ubuf_mgr(struct ubuf_mgr *mgr)
-{
-    struct ubuf *ubuf;
-    const struct upipe_av_pixfmt *pixfmt = NULL;
-
-    /* allocate small picture */
-    ubuf = ubuf_pic_alloc(mgr, 4, 4);
-    if (unlikely(!ubuf)) {
-        return NULL;
-    }
-
-    pixfmt = upipe_av_pixfmt_from_ubuf(ubuf);
-    ubuf_free(ubuf);
-
-    return pixfmt;
-}
-
-/** @This returns the first PixelFormat in fmts_pref matching a
- * format in fmts
- * @param fmts_pref sorted preferred formats
- * @param available available formats
- */
-static inline enum PixelFormat upipe_av_pixfmt_best(const enum PixelFormat *fmts_pref,
-                                                    const enum PixelFormat *fmts)
-{
-    int i;
-    while (*fmts_pref != PIX_FMT_NONE) {
-        for (i=0; fmts[i] != PIX_FMT_NONE
-                && fmts[i] != *fmts_pref; i++);
-        if (fmts[i] != PIX_FMT_NONE) {
+        case AV_PIX_FMT_YUYV422:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 2);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "y8u8y8v8");
             break;
-        }
-        fmts_pref++;
+        case AV_PIX_FMT_UYVY422:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 2);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
+            break;
+        case AV_PIX_FMT_YUV420P16LE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 2, "u16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 2, "v16l");
+            break;
+        case AV_PIX_FMT_YUV420P16BE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 2, "u16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 2, "v16b");
+            break;
+        case AV_PIX_FMT_YUV422P16LE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 2, "u16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 2, "v16l");
+            break;
+        case AV_PIX_FMT_YUV422P16BE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 2, "u16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 2, "v16b");
+            break;
+        case AV_PIX_FMT_YUV444P16LE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "u16l");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "v16l");
+            break;
+        case AV_PIX_FMT_YUV444P16BE:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "u16b");
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 2, "v16b");
+            break;
+        case AV_PIX_FMT_RGB24:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8");
+            break;
+        case AV_PIX_FMT_BGR24:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 3, "b8g8r8");
+            break;
+        case AV_PIX_FMT_ARGB:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "a8r8g8b8");
+            break;
+        case AV_PIX_FMT_RGBA:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "r8g8b8a8");
+            break;
+        case AV_PIX_FMT_ABGR:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "a8b8g8r8");
+            break;
+        case AV_PIX_FMT_BGRA:
+            ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
+            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 4, "b8g8r8a8");
+            break;
+        default:
+            return false;
     }
-    return *fmts_pref;
+
+    ret = ret && uref_flow_set_def(flow_def, UREF_PIC_FLOW_DEF);
+    return ret;
 }
 
-/** @This clears the given (sub)picture to obtain a black area
- * @param ubuf picture ubuf
- * @param fmt pointer to upipe_av_pixfmt description structure
+/** @This finds the appropriate av pixel format according to the flow
+ * definition, and creates a mapping system for planes.
+ *
+ * @param flow_def flow definition
+ * @param pix_fmts allowed pixel formats, terminated by -1 (or NULL for any)
+ * @param chroma_map av plane number vs. chroma map
+ * @return selected pixel format, or PIX_FMT_NONE if no compatible pixel format
+ * was found
  */
-static inline void upipe_av_pixfmt_clear_picture(struct ubuf *ubuf,
-                    int hoffset, int voffset, int hsize, int vsize,
-                                 const struct upipe_av_pixfmt *fmt)
+static inline enum PixelFormat
+    upipe_av_pixfmt_from_flow_def(struct uref *flow_def,
+                                  const enum PixelFormat *pix_fmts,
+                                  const char *chroma_p[UPIPE_AV_MAX_PLANES])
 {
-    int i, j;
-    size_t stride, width, height;
-    uint8_t val, hsub, vsub, macropixel, *buf;
-    const struct upipe_av_plane *plane = NULL;
+    static const enum PixelFormat supported_fmts[] = {
+        AV_PIX_FMT_YUV420P,
+        AV_PIX_FMT_YUVJ420P,
+        AV_PIX_FMT_YUYV422,
+        AV_PIX_FMT_UYVY422,
+        AV_PIX_FMT_YUV420P16LE,
+        AV_PIX_FMT_YUV420P16BE,
+        AV_PIX_FMT_YUV422P16LE,
+        AV_PIX_FMT_YUV422P16BE,
+        AV_PIX_FMT_YUV444P16LE,
+        AV_PIX_FMT_YUV444P16BE,
+        AV_PIX_FMT_RGB24,
+        AV_PIX_FMT_BGR24,
+        AV_PIX_FMT_ARGB,
+        AV_PIX_FMT_RGBA,
+        AV_PIX_FMT_ABGR,
+        AV_PIX_FMT_BGRA,
+        -1
+    };
+    if (pix_fmts == NULL)
+        pix_fmts = supported_fmts;
 
-    if (unlikely(!ubuf)) {
-        return;
-    }
-    if (unlikely(*fmt->pixfmt <= PIX_FMT_NONE || *fmt->pixfmt >= PIX_FMT_NB)) {
-        return;
-    }
-    const AVPixFmtDescriptor *desc = av_pix_fmt_descriptors + *fmt->pixfmt;
+    uint8_t macropixel;
+    if (!uref_pic_flow_get_macropixel(flow_def, &macropixel))
+        return -1;
 
-    ubuf_pic_size(ubuf, &width, &height, NULL);
-    if (hsize <= 0) { 
-        hsize = width;
-    }
-    if (vsize <= 0) { 
-        vsize = height;
-    }
-    
-    plane = fmt->planes;
-    for (i=0; i < 4 && plane[i].chroma; i++) {
-        ubuf_pic_plane_write(ubuf, plane[i].chroma,
-                             hoffset, voffset, hsize, vsize, &buf);
-        ubuf_pic_plane_size(ubuf, plane[i].chroma,
-                            &stride, &hsub, &vsub, &macropixel);
-        val = 0;
-        if (i > 0 && !(desc->flags & PIX_FMT_RGB)) {
-            val = 0x80; /* UV value for black pixel */
+    while (*pix_fmts != -1) {
+        switch (*pix_fmts) {
+            case AV_PIX_FMT_YUV420P:
+            case AV_PIX_FMT_YUVJ420P:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")) {
+                    chroma_p[0] = "y8";
+                    chroma_p[1] = "u8";
+                    chroma_p[2] = "v8";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUYV422:
+                if (macropixel == 2 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "y8u8y8v8")) {
+                    chroma_p[0] = "y8u8y8v8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_UYVY422:
+                if (macropixel == 2 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "u8y8v8y8")) {
+                    chroma_p[0] = "u8y8v8y8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV420P16LE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v16l")) {
+                    chroma_p[0] = "y16l";
+                    chroma_p[1] = "u16l";
+                    chroma_p[2] = "v16l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV420P16BE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v16b")) {
+                    chroma_p[0] = "y16b";
+                    chroma_p[1] = "u16b";
+                    chroma_p[2] = "v16b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV422P16LE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v16l")) {
+                    chroma_p[0] = "y16l";
+                    chroma_p[1] = "u16l";
+                    chroma_p[2] = "v16l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV422P16BE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v16b")) {
+                    chroma_p[0] = "y16b";
+                    chroma_p[1] = "u16b";
+                    chroma_p[2] = "v16b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV444P16LE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "u16l") &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "v16l")) {
+                    chroma_p[0] = "y16l";
+                    chroma_p[1] = "u16l";
+                    chroma_p[2] = "v16l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV444P16BE:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "u16b") &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "v16b")) {
+                    chroma_p[0] = "y16b";
+                    chroma_p[1] = "u16b";
+                    chroma_p[2] = "v16b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_RGB24:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8")) {
+                    chroma_p[0] = "r8g8b8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_BGR24:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "b8g8r8")) {
+                    chroma_p[0] = "b8g8r8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_ARGB:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "a8r8g8b8")) {
+                    chroma_p[0] = "a8r8g8b8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_RGBA:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "r8g8b8a8")) {
+                    chroma_p[0] = "r8g8b8a8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_ABGR:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "a8b8g8r8")) {
+                    chroma_p[0] = "a8b8g8r8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_BGRA:
+                if (macropixel == 1 &&
+                    uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "b8g8r8a8")) {
+                    chroma_p[0] = "b8g8r8a8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            default:
+                return false;
         }
-        for (j=0; j < vsize/vsub; j++) {
-            memset(buf, val, macropixel*hsize/hsub);
-            buf += stride;
-        }
-        ubuf_pic_plane_unmap(ubuf, plane[i].chroma, 0, 0, -1, -1);
+        pix_fmts++;
     }
+
+    return AV_PIX_FMT_NONE;
 }
 
 #ifdef __cplusplus

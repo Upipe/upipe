@@ -35,7 +35,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_multicat_probe.h>
 
@@ -70,7 +70,7 @@ struct upipe_multicat_probe {
 };
 
 UPIPE_HELPER_UPIPE(upipe_multicat_probe, upipe, UPIPE_MULTICAT_PROBE_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_multicat_probe, NULL)
+UPIPE_HELPER_VOID(upipe_multicat_probe)
 UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, flow_def_sent);
 
 /** @internal @This handles data.
@@ -97,6 +97,24 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_multicat_probe_output(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_multicat_probe_set_flow_def(struct upipe *upipe,
+                                              struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_multicat_probe_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This changes the rotate interval
@@ -147,6 +165,10 @@ static bool upipe_multicat_probe_control(struct upipe *upipe, enum upipe_command
             struct uref **p = va_arg(args, struct uref **);
             return upipe_multicat_probe_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_multicat_probe_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_multicat_probe_get_output(upipe, p);
@@ -184,10 +206,8 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr,
                                                 uint32_t signature,
                                                 va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_multicat_probe_alloc_flow(mgr, uprobe,
-                                                          signature, args,
-                                                          &flow_def);
+    struct upipe *upipe = upipe_multicat_probe_alloc_void(mgr, uprobe,
+                                                          signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -196,7 +216,7 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr,
     upipe_multicat_probe_init_output(upipe);
     upipe_multicat_probe->rotate = UPIPE_MULTICAT_PROBE_DEF_ROTATE;
     upipe_multicat_probe->idx = 0;
-    upipe_multicat_probe_store_flow_def(upipe, flow_def);
+    upipe_multicat_probe->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -207,10 +227,9 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_multicat_probe_free(struct upipe *upipe)
 {
-    struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_multicat_probe_clean_output(upipe);
-    upipe_multicat_probe_free_flow(upipe);
+    upipe_multicat_probe_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_multicat_probe_mgr = {

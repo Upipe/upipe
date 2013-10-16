@@ -36,7 +36,6 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -47,9 +46,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <assert.h>
-
-/** @This is the minimum amount of time before presenting a flow. */
-#define UPIPE_TRICKP_PTS_DELAY (UCLOCK_FREQ / 10)
 
 /** @hidden */
 static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts);
@@ -87,6 +83,7 @@ UPIPE_HELPER_UCLOCK(upipe_trickp, uclock)
 
 /** @internal @This is the type of the flow (different behaviours). */
 enum upipe_trickp_sub_type {
+    UPIPE_TRICKP_UNKNOWN,
     UPIPE_TRICKP_PIC,
     UPIPE_TRICKP_SOUND,
     UPIPE_TRICKP_SUBPIC
@@ -120,7 +117,7 @@ struct upipe_trickp_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe, UPIPE_TRICKP_SUB_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_trickp_sub, NULL)
+UPIPE_HELPER_VOID(upipe_trickp_sub)
 UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, nb_urefs, max_urefs, blockers, upipe_trickp_sub_process)
 
@@ -139,9 +136,8 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
                                             uint32_t signature,
                                             va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_trickp_sub_alloc_flow(mgr, uprobe, signature,
-                                                      args, &flow_def);
+    struct upipe *upipe = upipe_trickp_sub_alloc_void(mgr, uprobe, signature,
+                                                      args);
     if (unlikely(upipe == NULL))
         return NULL;
     upipe_trickp_sub_init_output(upipe);
@@ -150,21 +146,12 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_trickp_sub *upipe_trickp_sub =
         upipe_trickp_sub_from_upipe(upipe);
     ulist_init(&upipe_trickp_sub->urefs);
-    upipe_trickp_sub->type = UPIPE_TRICKP_SUBPIC;
-    upipe_trickp_sub_store_flow_def(upipe, flow_def);
+    upipe_trickp_sub->type = UPIPE_TRICKP_UNKNOWN;
 
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(mgr);
     upipe_use(upipe_trickp_to_upipe(upipe_trickp));
 
     upipe_throw_ready(upipe);
-    const char *def;
-    if (likely(uref_flow_get_def(flow_def, &def)) &&
-               ubase_ncmp(def, "pic.sub.")) {
-        if (!ubase_ncmp(def, "pic."))
-            upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
-        else
-            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
-    }
     return upipe;
 }
 
@@ -230,6 +217,39 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_trickp_sub_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct upipe_trickp_sub *upipe_trickp_sub =
+        upipe_trickp_sub_from_upipe(upipe);
+    const char *def;
+    if (likely(uref_flow_get_def(flow_def, &def))) {
+        if (!ubase_ncmp(def, "pic.sub."))
+            upipe_trickp_sub->type = UPIPE_TRICKP_SUBPIC;
+        else if (!ubase_ncmp(def, "pic."))
+            upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
+        else if (!ubase_ncmp(def, "sound."))
+            upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
+        else
+            upipe_trickp_sub->type = UPIPE_TRICKP_UNKNOWN;
+    }
+    flow_def = uref_dup(flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    upipe_trickp_sub_store_flow_def(upipe, flow_def);
+    return true;
+}
+
 /** @internal @This processes control commands on an output subpipe of a
  * trickp pipe.
  *
@@ -246,6 +266,10 @@ static bool upipe_trickp_sub_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_trickp_sub_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_trickp_sub_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -287,7 +311,7 @@ static void upipe_trickp_sub_free(struct upipe *upipe)
     upipe_trickp_sub_clean_output(upipe);
     upipe_trickp_sub_clean_sink(upipe);
     upipe_trickp_sub_clean_sub(upipe);
-    upipe_trickp_sub_free_flow(upipe);
+    upipe_trickp_sub_free_void(upipe);
 
     upipe_release(upipe_trickp_to_upipe(upipe_trickp));
 }
@@ -373,8 +397,7 @@ static void upipe_trickp_check_start(struct upipe *upipe)
     }
 
     upipe_trickp->ts_origin = earliest_ts;
-    upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock) +
-                                   UPIPE_TRICKP_PTS_DELAY; //FIXME
+    upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock);
 
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =

@@ -33,7 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pes_encaps.h>
@@ -81,7 +81,7 @@ struct upipe_ts_pese {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pese, upipe, UPIPE_TS_PESE_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_pese, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_pese)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_pese, ubuf_mgr)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_pese, output, flow_def, flow_def_sent)
@@ -98,37 +98,19 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_pese_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
+    struct upipe *upipe = upipe_ts_pese_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    uint8_t pes_id;
-    if (!uref_ts_flow_get_pes_id(flow_def, &pes_id)) {
-        uref_free(flow_def);
-        upipe_ts_pese_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     upipe_ts_pese_init_ubuf_mgr(upipe);
     upipe_ts_pese_init_output(upipe);
-    upipe_ts_pese->pes_id = pes_id;
+    upipe_ts_pese->pes_id = 0;
     upipe_ts_pese->pes_header_size = 0;
-    uref_ts_flow_get_pes_header(flow_def, &upipe_ts_pese->pes_header_size);
     upipe_ts_pese->pes_min_duration = 0;
-    uref_ts_flow_get_pes_min_duration(flow_def,
-                                      &upipe_ts_pese->pes_min_duration);
     upipe_ts_pese->next_pes = NULL;
     upipe_throw_ready(upipe);
-
-    const char *def;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 !uref_flow_set_def_va(flow_def, "block.mpegtspes.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-    upipe_ts_pese_store_flow_def(upipe, flow_def);
     return upipe;
 }
 
@@ -282,11 +264,6 @@ static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_ts_pese_output(upipe, uref, upump);
-        return;
-    }
-
     if (unlikely(upipe_ts_pese->ubuf_mgr == NULL))
         upipe_throw_need_ubuf_mgr(upipe, upipe_ts_pese->flow_def);
     if (unlikely(upipe_ts_pese->ubuf_mgr == NULL)) {
@@ -295,6 +272,42 @@ static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_ts_pese_merge(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_pese_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    const char *def;
+    uint8_t pes_id;
+    if (!uref_flow_get_def(flow_def, &def) ||
+        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+        !uref_ts_flow_get_pes_id(flow_def, &pes_id))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegtspes.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF))))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_pese_store_flow_def(upipe, flow_def_dup);
+    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
+    upipe_ts_pese->pes_id = pes_id;
+    upipe_ts_pese->pes_header_size = 0;
+    uref_ts_flow_get_pes_header(flow_def, &upipe_ts_pese->pes_header_size);
+    upipe_ts_pese->pes_min_duration = 0;
+    uref_ts_flow_get_pes_min_duration(flow_def,
+                                      &upipe_ts_pese->pes_min_duration);
+    return true;
 }
 
 /** @internal @This processes control commands on a ts pese pipe.
@@ -320,6 +333,10 @@ static bool upipe_ts_pese_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_pese_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_pese_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -348,7 +365,7 @@ static void upipe_ts_pese_free(struct upipe *upipe)
 
     upipe_ts_pese_clean_output(upipe);
     upipe_ts_pese_clean_ubuf_mgr(upipe);
-    upipe_ts_pese_free_flow(upipe);
+    upipe_ts_pese_free_void(upipe);
 }
 
 /** module manager static descriptor */

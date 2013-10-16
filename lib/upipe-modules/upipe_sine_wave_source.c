@@ -139,7 +139,7 @@ static struct upipe *upipe_sinesrc_alloc(struct upipe_mgr *mgr,
  *
  * @param upump description structure of the timer
  */
-static void upipe_sinesrc_timer(struct upump *upump)
+static void upipe_sinesrc_idler(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_sinesrc *upipe_sinesrc = upipe_sinesrc_from_upipe(upipe);
@@ -185,8 +185,6 @@ static void upipe_sinesrc_timer(struct upump *upump)
 
     if (upipe_sinesrc->next_pts != UINT64_MAX) {
         uref_clock_set_pts_sys(uref, upipe_sinesrc->next_pts);
-        uref_clock_set_dts_pts_delay(uref, 0);
-        uref_clock_set_cr_dts_delay(uref, 0);
         upipe_sinesrc->next_pts += UPIPE_SINESRC_DURATION;
     }
     upipe_sinesrc_output(upipe, uref, upump);
@@ -284,7 +282,7 @@ static bool upipe_sinesrc_control(struct upipe *upipe,
         upipe_sinesrc_store_flow_def(upipe, flow_def);
 
         struct upump *upump = upump_alloc_idler(upipe_sinesrc->upump_mgr,
-                                                upipe_sinesrc_timer, upipe);
+                                                upipe_sinesrc_idler, upipe);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
             return false;

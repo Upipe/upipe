@@ -37,6 +37,7 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_output.h>
 
 #include <stdint.h>
 #include <stdarg.h>
@@ -95,7 +96,7 @@ enum upipe_command {
     UPIPE_SET_UBUF_MGR,
     /** gets output flow definition (struct uref **) */
     UPIPE_GET_FLOW_DEF,
-    /** sets output flow definition (struct uref *) */
+    /** sets input flow definition (struct uref *) */
     UPIPE_SET_FLOW_DEF,
 
     /*
@@ -256,13 +257,13 @@ static inline struct upipe *upipe_void_alloc(struct upipe_mgr *mgr,
     return upipe_alloc(mgr, uprobe, UPIPE_VOID_SIGNATURE);
 }
 
-/** @This allocates and initializes a pipe which is designed to accept a
- * flow definition.
+/** @This allocates and initializes a pipe which is designed to accept an
+ * output flow definition.
  *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the input
+ * @param flow_def flow definition of the output
  * @return pointer to allocated pipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_flow_alloc(struct upipe_mgr *mgr,
@@ -336,6 +337,33 @@ static inline bool upipe_single(struct upipe *upipe)
 static inline void upipe_set_opaque(struct upipe *upipe, void *opaque)
 {
     upipe->opaque = opaque;
+}
+
+/** @This adds the given probe to the list of probes associated with a pipe.
+ * The new probe will be executed first. It also simulates a ready event
+ * for new ad-hoc probes.
+ *
+ * @param upipe description structure of the pipe
+ * @param uprobe pointer to probe
+ */
+static inline void upipe_add_probe(struct upipe *upipe, struct uprobe *uprobe)
+{
+    uprobe_throw(uprobe, upipe, UPROBE_READY);
+    uprobe->next = upipe->uprobe;
+    upipe->uprobe = uprobe;
+}
+
+/** @This deletes the given probe from the list of probes associated with a
+ * pipe. It is typically used for adhoc probes which delete themselves at
+ * some point.
+ *
+ * @param upipe description structure of the pipe
+ * @param uprobe pointer to probe
+ */
+static inline void upipe_delete_probe(struct upipe *upipe,
+                                      struct uprobe *uprobe)
+{
+    uprobe_delete_probe(&upipe->uprobe, uprobe);
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
@@ -453,7 +481,7 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
                        const char *, uniform resource identifier)
 
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
-                       pipe acting as output)
+                       pipe acting as output (unsafe, use only internally))
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, ubuf_mgr, UBUF_MGR, struct ubuf_mgr *,
                        ubuf manager)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
@@ -544,13 +572,13 @@ static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
     return upipe_void_alloc(sub_mgr, uprobe);
 }
 
-/** @This allocates and initializes a subpipe which is designed to accept a
- * flow definition.
+/** @This allocates and initializes a subpipe which is designed to accept an
+ * output flow definition.
  *
  * @param upipe structure of the super-pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the input
+ * @param flow_def flow definition of the output
  * @return pointer to allocated subpipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
@@ -565,6 +593,147 @@ static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
         return NULL;
     }
     return upipe_flow_alloc(sub_mgr, uprobe, flow_def);
+}
+
+/** @This allocates a new pipe from the given manager, designed to accept no
+ * argument, and sets it as the output of the given pipe. It also attaches a
+ * uprobe output to catch new_flow_def events and forward them to the output
+ * pipe, if the new flow def is handled.
+ *
+ * Please that the output pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * @param upipe description structure of the pipe
+ * @param upipe_mgr manager for the output pipe
+ * @return pointer to allocated subpipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
+                                                    struct upipe_mgr *upipe_mgr,
+                                                    struct uprobe *uprobe)
+{
+    struct uprobe *uprobe_output = uprobe_output_adhoc_alloc(NULL);
+    if (unlikely(uprobe_output == NULL))
+        return NULL;
+
+    struct upipe *output = upipe_void_alloc(upipe_mgr, uprobe);
+    if (unlikely(output == NULL)) {
+        uprobe_output_free(uprobe_output);
+        return NULL;
+    }
+
+    struct uref *flow_def;
+    if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
+                  !upipe_set_flow_def(output, flow_def)) ||
+                 !upipe_set_output(upipe, output))) {
+        uprobe_output_free(uprobe_output);
+        upipe_release(output);
+        return NULL;
+    }
+
+    upipe_add_probe(upipe, uprobe_output);
+    return output;
+}
+
+/** @This allocates a new pipe from the given manager, designed to accept an
+ * output flow definition, and sets it as the output of the given pipe. It also
+ * attaches a uprobe output to catch new_flow_def events and forward them to
+ * the output pipe, if the new flow def is handled.
+ *
+ * Please that the output pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * @param upipe description structure of the pipe
+ * @param upipe_mgr manager for the output pipe
+ * @param flow_def_output flow definition of the output
+ * @return pointer to allocated subpipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
+                                                    struct upipe_mgr *upipe_mgr,
+                                                    struct uprobe *uprobe,
+                                                    struct uref *flow_def_output)
+{
+    struct uprobe *uprobe_output = uprobe_output_adhoc_alloc(NULL);
+    if (unlikely(uprobe_output == NULL))
+        return NULL;
+
+    struct upipe *output = upipe_flow_alloc(upipe_mgr, uprobe, flow_def_output);
+    if (unlikely(output == NULL)) {
+        uprobe_output_free(uprobe_output);
+        return NULL;
+    }
+
+    struct uref *flow_def;
+    if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
+                  !upipe_set_flow_def(output, flow_def)) ||
+                 !upipe_set_output(upipe, output))) {
+        uprobe_output_free(uprobe_output);
+        upipe_release(output);
+        return NULL;
+    }
+
+    upipe_add_probe(upipe, uprobe_output);
+    return output;
+}
+
+/** @This allocates a subpipe from the given super-pipe, and sets it as the
+ * output of the given pipe. It also attaches a uprobe output to catch
+ * new_flow_def events and forward them to the output pipe, if the new
+ * flow def is handled.
+ *
+ * Please that the super-pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * @param upipe description structure of the pipe
+ * @param super_pipe structure of the super-pipe
+ * @param uprobe structure used by the output to raise events (belongs to the
+ * caller and must be kept alive for all the duration of the pipe)
+ * @return pointer to allocated subpipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *
+    upipe_void_alloc_output_sub(struct upipe *upipe, struct upipe *super_pipe,
+                                struct uprobe *uprobe)
+{
+    struct upipe_mgr *sub_mgr;
+    if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
+        /* notify ad-hoc probes that something went wrong so they can
+         * deallocate */
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        return NULL;
+    }
+    return upipe_void_alloc_output(upipe, sub_mgr, uprobe);
+}
+
+/** @This allocates a subpipe from the given super-pipe, with a flow def output
+ * argument, and sets it as the output of the given pipe. It also attaches a
+ * uprobe output to catch new_flow_def events and forward them to the output
+ * pipe, if the new flow def is handled.
+ *
+ * Please that the super-pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * @param upipe description structure of the pipe
+ * @param super_pipe structure of the super-pipe
+ * @param uprobe structure used by the output to raise events (belongs to the
+ * caller and must be kept alive for all the duration of the pipe)
+ * @param flow_def flow definition of the output
+ * @return pointer to allocated subpipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *
+    upipe_flow_alloc_output_sub(struct upipe *upipe, struct upipe *super_pipe,
+                                struct uprobe *uprobe, struct uref *flow_def)
+{
+    struct upipe_mgr *sub_mgr;
+    if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
+        /* notify ad-hoc probes that something went wrong so they can
+         * deallocate */
+        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        return NULL;
+    }
+    return upipe_flow_alloc_output(upipe, sub_mgr, uprobe, flow_def);
 }
 
 /** @internal @This throws generic events with optional arguments.
@@ -869,8 +1038,8 @@ static inline void upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
 }
 
 /** @This throws an event telling that the given uref carries a presentation
- * and/or a decoding timestamp. The uref must at least have k.pts.orig and/or
- * k.dts.orig set. Depending on the module documentation, k.pts and k.dts may
+ * and/or a decoding timestamp. The uref must at least have k.dts.orig set.
+ * Depending on the module documentation, k.dts may
  * also be set. A probe is entitled to adding new attributes such as k.pts.sys
  * and/or k.dts.sys.
  *
@@ -882,17 +1051,22 @@ static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
     upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
-/** @This deletes the given probe from the list of probes associated with a
- * pipe. It is typically used for adhoc probes which delete themselves at
- * some point.
+/** @This throws an event telling that the given uref carries a presentation
+ * and/or a decoding timestamp. The uref must at least have k.pts.orig and/or
+ * k.dts.orig set. Depending on the module documentation, k.pts and k.dts may
+ * also be set. A probe is entitled to adding new attributes such as k.pts.sys
+ * and/or k.dts.sys.
  *
  * @param upipe description structure of the pipe
- * @param uprobe pointer to probe
+ * @param uref uref carrying a presentation and/or a decoding timestamp
  */
-static inline void upipe_delete_probe(struct upipe *upipe,
-                                      struct uprobe *uprobe)
+static inline void upipe_throw_proxy(struct upipe *upipe, struct upipe *subpipe,
+                                     enum uprobe_event event, va_list args)
 {
-    uprobe_delete_probe(&upipe->uprobe, uprobe);
+    if (event != UPROBE_READY && event != UPROBE_DEAD)
+        upipe_throw_va(upipe, event, args);
+    else
+        uprobe_throw_va(upipe->uprobe, subpipe, event, args);
 }
 
 #ifdef __cplusplus

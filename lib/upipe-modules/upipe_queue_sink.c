@@ -36,7 +36,7 @@
 #include <upipe/upump_blocker.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
@@ -85,7 +85,7 @@ struct upipe_qsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_qsink, NULL)
+UPIPE_HELPER_VOID(upipe_qsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_qsink, urefs, nb_urefs, max_urefs, blockers, upipe_qsink_output)
@@ -102,9 +102,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_qsink_alloc_flow(mgr, uprobe, signature, args,
-                                                 &flow_def);
+    struct upipe *upipe = upipe_qsink_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -113,7 +111,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
     upipe_qsink_init_upump(upipe);
     upipe_qsink_init_sink(upipe);
     upipe_qsink->qsrc = NULL;
-    upipe_qsink->flow_def = flow_def;
+    upipe_qsink->flow_def = NULL;
     upipe_qsink->output = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -430,7 +428,7 @@ static void upipe_qsink_free(struct upipe *upipe)
     upipe_qsink_clean_upump(upipe);
     upipe_qsink_clean_upump_mgr(upipe);
     upipe_qsink_clean_sink(upipe);
-    upipe_qsink_free_flow(upipe);
+    upipe_qsink_free_void(upipe);
 }
 
 /** module manager static descriptor */

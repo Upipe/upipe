@@ -263,8 +263,8 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *udpsrc_test = upipe_flow_alloc(&udpsrc_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"), NULL);
+    struct upipe *udpsrc_test = upipe_void_alloc(&udpsrc_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"));
 
 
 	/* udpsrc */
@@ -323,10 +323,10 @@ int main(int argc, char *argv[])
     struct uref *flow_def = uref_block_flow_alloc_def(uref_mgr, "bar");
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr != NULL);
-    upipe_udpsink = upipe_flow_alloc(upipe_udpsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp sink"),
-            flow_def);
+    upipe_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp sink"));
     assert(upipe_udpsink != NULL);
+    assert(upipe_set_flow_def(upipe_udpsink, flow_def));
     assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
     uref_free(flow_def);
 

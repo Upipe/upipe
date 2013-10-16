@@ -93,11 +93,6 @@ static void skip_test_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *buf;
     int size;
 
-    if (unlikely(!uref->ubuf)) {
-        upipe_dbg(upipe, "dropping empty uref ref");
-        goto end;
-    }
-    
     size = -1;
     assert(uref_block_read(uref, 0, &size, &buf));
     assert(!memcmp(buf, TESTSTRSUB, sizeof(TESTSTRSUB)));
@@ -106,7 +101,6 @@ static void skip_test_input(struct upipe *upipe, struct uref *uref,
 
     skip_test->counter++;
 
-end:
     uref_free(uref);
 }
 
@@ -184,9 +178,9 @@ int main(int argc, char **argv)
     /* build skip pipe */
     struct upipe_mgr *upipe_skip_mgr = upipe_skip_mgr_alloc();
     assert(upipe_skip_mgr);
-    struct upipe *skip = upipe_flow_alloc(upipe_skip_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skip"),
-                uref);
+    struct upipe *skip = upipe_void_alloc(upipe_skip_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skip"));
+    assert(upipe_set_flow_def(skip, uref));
     assert(skip);
 
     uref_free(uref);
@@ -195,10 +189,10 @@ int main(int argc, char **argv)
     assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.foo."));
 
     /* skip_test */
-    struct upipe *skip_test = upipe_flow_alloc(&skip_test_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skiptest"),
-            uref);
-    upipe_set_output(skip, skip_test);
+    struct upipe *skip_test = upipe_void_alloc(&skip_test_mgr,
+            uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "skiptest"));
+    assert(skip_test != NULL);
+    assert(upipe_set_output(skip, skip_test));
     upipe_release(skip_test);
     upipe_skip_set_offset(skip, OFFSET);
 

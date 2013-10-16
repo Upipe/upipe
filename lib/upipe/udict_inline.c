@@ -69,10 +69,9 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "f.id", UDICT_TYPE_UNSIGNED },
     { "f.rawdef", UDICT_TYPE_STRING },
     { "f.lang", UDICT_TYPE_STRING },
-    { "f.latency", UDICT_TYPE_UNSIGNED },
 
-    { "k.vbvdelay", UDICT_TYPE_UNSIGNED },
     { "k.duration", UDICT_TYPE_UNSIGNED },
+    { "k.latency", UDICT_TYPE_UNSIGNED },
 
     { "b.end", UDICT_TYPE_VOID },
 
@@ -83,7 +82,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "p.vsizevis", UDICT_TYPE_UNSIGNED },
     { "p.hposition", UDICT_TYPE_UNSIGNED },
     { "p.vposition", UDICT_TYPE_UNSIGNED },
-    { "p.aspect", UDICT_TYPE_RATIONAL },
+    { "p.sar", UDICT_TYPE_RATIONAL },
     { "p.overscan", UDICT_TYPE_VOID },
     { "p.progressive", UDICT_TYPE_VOID },
     { "p.tf", UDICT_TYPE_VOID },

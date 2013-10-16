@@ -165,15 +165,15 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "mp2.sound.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, uref);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
     assert(upipe_mpgaf_mgr != NULL);
-    struct upipe *upipe_mpgaf = upipe_flow_alloc(upipe_mpgaf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"),
-            uref);
+    struct upipe *upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"));
     assert(upipe_mpgaf != NULL);
+    assert(upipe_set_flow_def(upipe_mpgaf, uref));
     assert(upipe_set_output(upipe_mpgaf, upipe_sink));
     uref_free(uref);
 
@@ -214,10 +214,10 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
     assert(uref != NULL);
 
-    upipe_mpgaf = upipe_flow_alloc(upipe_mpgaf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"),
-            uref);
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgaf"));
     assert(upipe_mpgaf != NULL);
+    assert(upipe_set_flow_def(upipe_mpgaf, uref));
     assert(upipe_set_output(upipe_mpgaf, upipe_sink));
     uref_free(uref);
 

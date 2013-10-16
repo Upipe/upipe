@@ -40,7 +40,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_rtp_prepend.h>
@@ -59,7 +59,7 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp3551.h>
 
-#define EXPECTED_FLOW "block."
+#define EXPECTED_FLOW_DEF "block."
 #define OUT_FLOW "block.rtp."
 
 #define DEFAULT_RATE 90000 /* (90kHz, see rfc 2250 and 3551) */
@@ -87,7 +87,7 @@ struct upipe_rtp_prepend {
 };
 
 UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_rtp_prepend, EXPECTED_FLOW)
+UPIPE_HELPER_VOID(upipe_rtp_prepend);
 UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
 
@@ -97,8 +97,8 @@ UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
  * @param uref uref structure
  * @param upump pump that generated the buffer
  */
-static void _upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
+                                    struct upump *upump)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
     struct ubuf *header, *payload;
@@ -107,6 +107,16 @@ static void _upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     uint32_t ts;
     lldiv_t div;
     int size = -1;
+
+    /* check ubuf manager */
+    if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
+        upipe_throw_need_ubuf_mgr(upipe, upipe_rtp_prepend->flow_def);
+        if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
+            upipe_warn(upipe, "ubuf_mgr not set !");
+            uref_free(uref);
+            return;
+        }
+    }
 
     /* timestamp (synced to program clock ref, fallback to system clock ref) */
     if (unlikely(!uref_clock_get_cr_prog(uref, &cr))) {
@@ -148,33 +158,31 @@ static void _upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     upipe_rtp_prepend_output(upipe, uref, upump);
 }
 
-/** @internal @This handles data.
+/** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
  */
-static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+static bool upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
 {
-    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
-
-    /* check ubuf manager */
-    if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_rtp_prepend->flow_def);
-        if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
-            upipe_warn(upipe, "ubuf_mgr not set !");
-            uref_free(uref);
-            return;
-        }
+    if (flow_def == NULL)
+        return false;
+    const char *def;
+    if (!uref_flow_get_def(flow_def, &def) ||
+        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    if (!uref_flow_set_def_va(flow_def_dup, OUT_FLOW"%s",
+                              def + strlen(EXPECTED_FLOW_DEF))) {
+        uref_free(flow_def_dup);
+        return false;
     }
-
-    if (unlikely(!uref->ubuf)) {
-        upipe_rtp_prepend_output(upipe, uref, upump);
-        return;
-    }
-
-    _upipe_rtp_prepend_input(upipe, uref, upump);
+    upipe_rtp_prepend_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This sets the rtp type and clock rate
@@ -246,6 +254,10 @@ static bool upipe_rtp_prepend_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_rtp_prepend_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_rtp_prepend_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_rtp_prepend_get_output(upipe, p);
@@ -287,9 +299,8 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
                                              struct uprobe *uprobe,
                                              uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_rtp_prepend_alloc_flow(mgr, uprobe, signature,
-                                                       args, &flow_def);
+    struct upipe *upipe = upipe_rtp_prepend_alloc_void(mgr, uprobe, signature,
+                                                       args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -304,15 +315,6 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     _upipe_rtp_prepend_set_type(upipe, RTP_TYPE_TS, 0);
 
     upipe_throw_ready(upipe);
-
-    const char *def;
-    if (likely(uref_flow_get_def(flow_def, &def))) {
-        char out_def[strlen(OUT_FLOW)+strlen(def)+1];
-        snprintf(out_def, sizeof(out_def), OUT_FLOW"%s",
-                 def+strlen(EXPECTED_FLOW));
-        uref_flow_set_def(flow_def, out_def);
-        upipe_rtp_prepend_store_flow_def(upipe, flow_def);
-    }
     return upipe;
 }
 
@@ -326,7 +328,7 @@ static void upipe_rtp_prepend_free(struct upipe *upipe)
 
     upipe_rtp_prepend_clean_ubuf_mgr(upipe);
     upipe_rtp_prepend_clean_output(upipe);
-    upipe_rtp_prepend_free_flow(upipe);
+    upipe_rtp_prepend_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_rtp_prepend_mgr = {

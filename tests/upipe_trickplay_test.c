@@ -53,7 +53,6 @@
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
-#define UPIPE_TRICKP_PTS_DELAY (UCLOCK_FREQ / 10)
 
 static unsigned int count_pic = 0;
 static unsigned int count_sound = 0;
@@ -110,9 +109,9 @@ static void trickp_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     uint64_t systime;
     if (uref_clock_get_pts_sys(uref, &systime))
-        *test_pipe->count_p += systime - UPIPE_TRICKP_PTS_DELAY;
+        *test_pipe->count_p += systime;
     if (uref_clock_get_dts_sys(uref, &systime))
-        *test_pipe->count_p += systime - UPIPE_TRICKP_PTS_DELAY;
+        *test_pipe->count_p += systime;
     uref_free(uref);
 }
 
@@ -179,8 +178,9 @@ int main(int argc, char *argv[])
                                                     uref);
     assert(upipe_sink_pic != NULL);
 
-    struct upipe *upipe_trickp_pic = upipe_flow_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp pic"), uref);
+    struct upipe *upipe_trickp_pic = upipe_void_alloc_sub(upipe_trickp,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp pic"));
+    assert(upipe_set_flow_def(upipe_trickp_pic, uref));
     assert(upipe_trickp_pic != NULL);
     uref_free(uref);
     assert(upipe_set_output(upipe_trickp_pic, upipe_sink_pic));
@@ -193,9 +193,10 @@ int main(int argc, char *argv[])
                                                       uref);
     assert(upipe_sink_sound != NULL);
 
-    struct upipe *upipe_trickp_sound = upipe_flow_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp sound"), uref);
+    struct upipe *upipe_trickp_sound = upipe_void_alloc_sub(upipe_trickp,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp sound"));
     assert(upipe_trickp_sound != NULL);
+    assert(upipe_set_flow_def(upipe_trickp_sound, uref));
     uref_free(uref);
     assert(upipe_set_output(upipe_trickp_sound, upipe_sink_sound));
 
@@ -204,12 +205,13 @@ int main(int argc, char *argv[])
     assert(uref_flow_set_def(uref, "pic.sub."));
 
     struct upipe *upipe_sink_subpic = upipe_flow_alloc(&trickp_test_mgr, log,
-                                                    uref);
+                                                       uref);
     assert(upipe_sink_subpic != NULL);
 
-    struct upipe *upipe_trickp_subpic = upipe_flow_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp subpic"), uref);
+    struct upipe *upipe_trickp_subpic = upipe_void_alloc_sub(upipe_trickp,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp subpic"));
     assert(upipe_trickp_subpic != NULL);
+    assert(upipe_set_flow_def(upipe_trickp_subpic, uref));
     uref_free(uref);
     assert(upipe_set_output(upipe_trickp_subpic, upipe_sink_subpic));
 

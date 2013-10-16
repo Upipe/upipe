@@ -177,11 +177,12 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
 
-    upipe_ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
+    upipe_ts_demux = upipe_void_alloc(upipe_ts_demux_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                   "ts demux"), uref);
-    uref_free(uref);
+                                   "ts demux"));
     assert(upipe_ts_demux != NULL);
+    assert(upipe_set_flow_def(upipe_ts_demux, uref));
+    uref_free(uref);
 
     uint8_t *buffer, *payload, *pat_program, *pmt_es;
     int size;

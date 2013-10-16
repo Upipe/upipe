@@ -115,6 +115,28 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This takes data as input.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
+                             struct upump *upump)
+{
+    if (unlikely(uref_flow_get_end(uref))) {
+        uref_free(uref);
+        upipe_throw_source_end(upipe);
+        return;
+    }
+
+    const char *def;
+    if (unlikely(uref_flow_get_def(uref, &def))) {
+        upipe_qsrc_store_flow_def(upipe, uref);
+        return;
+    }
+
+    upipe_qsrc_output(upipe, uref, upump);
+}
+
 /** @internal @This reads data from the queue and outputs it.
  *
  * @param upump description structure of the read watcher
@@ -123,22 +145,8 @@ static void upipe_qsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
-    if (likely(uchain != NULL)) {
-        struct uref *uref = uref_from_uchain(uchain);
-        if (unlikely(uref_flow_get_end(uref))) {
-            uref_free(uref);
-            upipe_throw_source_end(upipe);
-            return;
-        }
-
-        const char *def;
-        if (unlikely(uref_flow_get_def(uref, &def))) {
-            upipe_qsrc_store_flow_def(upipe, uref);
-            return;
-        }
-
-        upipe_qsrc_output(upipe, uref, upump);
-    }
+    if (likely(uchain != NULL))
+        upipe_qsrc_input(upipe, uref_from_uchain(uchain), upump);
 }
 
 /** @internal @This returns the maximum length of the queue.
@@ -261,7 +269,11 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
  */
 static void upipe_qsrc_free(struct upipe *upipe)
 {
-    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
+    struct uqueue *uqueue = upipe_queue(upipe);
+    struct uchain *uchain;
+    while ((uchain = uqueue_pop(uqueue)) != NULL)
+        upipe_qsrc_input(upipe, uref_from_uchain(uchain), NULL);
+
     upipe_notice_va(upipe, "freeing queue %p", upipe);
     upipe_throw_dead(upipe);
 
@@ -269,15 +281,10 @@ static void upipe_qsrc_free(struct upipe *upipe)
     upipe_qsrc_clean_upump_mgr(upipe);
     upipe_qsrc_clean_output(upipe);
 
-    struct uqueue *uqueue = upipe_queue(upipe);
-    struct uchain *uchain;
-    while ((uchain = uqueue_pop(uqueue)) != NULL) {
-        struct uref *uref = uref_from_uchain(uchain);
-        uref_free(uref);
-    }
     uqueue_clean(uqueue);
 
     upipe_clean(upipe);
+    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     free(upipe_qsrc);
 }
 

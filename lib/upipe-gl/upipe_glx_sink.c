@@ -38,10 +38,11 @@
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
@@ -79,6 +80,8 @@ struct upipe_glx_sink {
     /** list of blockers */
     struct uchain blockers;
 
+    /** delay applied to pts attribute when uclock is provided */
+    uint64_t latency;
     /** X display */
     Display *display;
     /** X visual information */
@@ -110,7 +113,7 @@ struct upipe_glx_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe, UPIPE_GLX_SINK_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_glx_sink, NULL)
+UPIPE_HELPER_VOID(upipe_glx_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump_watcher, upump_mgr)
@@ -350,8 +353,8 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
                                           struct uprobe *uprobe,
                                           uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_glx_sink_alloc_flow(mgr, uprobe, signature,
-                                                    args, NULL);
+    struct upipe *upipe = upipe_glx_sink_alloc_void(mgr, uprobe, signature,
+                                                    args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -361,6 +364,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     upipe_glx_sink_init_upump_watcher(upipe);
     upipe_glx_sink_init_sink(upipe);
     upipe_glx_sink_init_uclock(upipe);
+    upipe_glx_sink->latency= 0;
 
     upipe_glx_sink->display = NULL;
     upipe_glx_sink->visual = NULL;
@@ -385,6 +389,7 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
     if (likely(upipe_glx_sink->uclock != NULL)) {
         uint64_t pts = 0;
         if (likely(uref_clock_get_pts_sys(uref, &pts))) {
+            pts += upipe_glx_sink->latency;
             uint64_t now = uclock_now(upipe_glx_sink->uclock);
             if (now < pts) {
                 upipe_glx_sink_wait_upump(upipe, pts - now,
@@ -403,7 +408,7 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
     const uint8_t *data = NULL;
     size_t width, height;
     uref_pic_size(uref, &width, &height, NULL);
-    if(!uref_pic_plane_read(uref, "rgb24", 0, 0, -1, -1, &data)) {
+    if(!uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data)) {
         upipe_err(upipe, "Could not map picture plane");
         uref_free(uref);
         return true;
@@ -412,7 +417,7 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, 
             height, 0, GL_RGB, GL_UNSIGNED_BYTE, 
             data);
-    uref_pic_plane_unmap(uref, "rgb24", 0, 0, -1, -1);
+    uref_pic_plane_unmap(uref, "r8g8b8", 0, 0, -1, -1);
 
     glXMakeCurrent(upipe_glx_sink->display, upipe_glx_sink->window,
                    upipe_glx_sink->glxContext);
@@ -446,11 +451,6 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
 
-    if (unlikely(!uref->ubuf)) { // no ubuf in uref
-        uref_free(uref);
-        return;
-    }
-
     if (!upipe_glx_sink->display) {
         upipe_warn(upipe, "glx context not ready");
         uref_free(uref);
@@ -462,6 +462,38 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
         upipe_glx_sink_hold_sink(upipe, uref);
         upipe_glx_sink_block_sink(upipe, upump);
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, "pic."))
+        return false;
+
+    /* for the moment we only support rgb24 */
+    uint8_t macropixel;
+    if (!uref_pic_flow_get_macropixel(flow_def, &macropixel) ||
+        macropixel != 1 ||
+        !uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8")) {
+        upipe_err(upipe, "incompatible flow definition");
+        uref_dump(flow_def, upipe->uprobe);
+        return false;
+    }
+
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+    struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
+    if (latency > upipe_glx_sink->latency)
+        upipe_glx_sink->latency = latency;
+    return true;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -477,6 +509,10 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
 {
     struct upipe_glx_sink *glx = upipe_glx_sink_from_upipe(upipe);
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_glx_sink_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_glx_sink_get_upump_mgr(upipe, p);
@@ -558,7 +594,7 @@ static void upipe_glx_sink_free(struct upipe *upipe)
     }
     upipe_glx_sink_clean_uclock(upipe);
     upipe_glx_sink_clean_sink(upipe);
-    upipe_glx_sink_free_flow(upipe);
+    upipe_glx_sink_free_void(upipe);
 }
 
 /** module manager static descriptor */

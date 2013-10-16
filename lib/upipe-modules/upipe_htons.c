@@ -36,7 +36,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_htons.h>
@@ -69,7 +69,7 @@ struct upipe_htons {
 };
 
 UPIPE_HELPER_UPIPE(upipe_htons, upipe, UPIPE_HTONS_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_htons, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_htons);
 UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
 
@@ -87,11 +87,6 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     size_t size = 0;
     int remain, bufsize = -1, offset = 0;
     uint8_t *buf = NULL;
-
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_htons_output(upipe, uref, upump);
-        return;
-    }
 
     /* block size */
     if (unlikely(!uref_block_size(uref, &size))) {
@@ -133,6 +128,25 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     upipe_htons_output(upipe, uref, upump);
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_htons_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_htons_store_flow_def(upipe, flow_def_dup);
+    return true;
+}
+
 /** @internal @This processes control commands on a skip pipe.
  *
  * @param upipe description structure of the pipe
@@ -147,6 +161,10 @@ static bool upipe_htons_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_htons_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_htons_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -182,16 +200,13 @@ static struct upipe *upipe_htons_alloc(struct upipe_mgr *mgr,
                                       struct uprobe *uprobe,
                                       uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_htons_alloc_flow(mgr, uprobe, signature, args,
-                                                &flow_def);
+    struct upipe *upipe = upipe_htons_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     upipe_htons_init_output(upipe);
     upipe_htons_init_ubuf_mgr(upipe);
 
-    upipe_htons_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -206,7 +221,7 @@ static void upipe_htons_free(struct upipe *upipe)
 
     upipe_htons_clean_output(upipe);
     upipe_htons_clean_ubuf_mgr(upipe);
-    upipe_htons_free_flow(upipe);
+    upipe_htons_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_htons_mgr = {

@@ -36,10 +36,11 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/uref_mpgv_flow.h>
@@ -89,6 +90,8 @@ struct upipe_mpgvf {
     bool flow_def_sent;
     /** input flow definition packet */
     struct uref *flow_def_input;
+    /** attributes in the sequence header */
+    struct uref *flow_def_attr;
     /** last random access point */
     uint64_t systime_rap;
     /** random access point of the last ref */
@@ -160,12 +163,13 @@ struct upipe_mpgvf {
 static void upipe_mpgvf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mpgvf, upipe, UPIPE_MPGVF_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_mpgvf, UPIPE_MPGVF_EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_mpgvf)
 UPIPE_HELPER_SYNC(upipe_mpgvf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgvf, next_uref, next_uref_size, urefs,
                          upipe_mpgvf_promote_uref)
 
 UPIPE_HELPER_OUTPUT(upipe_mpgvf, output, flow_def, flow_def_sent)
+UPIPE_HELPER_FLOW_DEF(upipe_mpgvf, flow_def_input, flow_def_attr)
 
 /** @internal @This flushes all dates.
  *
@@ -195,9 +199,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_mpgvf_alloc_flow(mgr, uprobe, signature, args,
-                                                 &flow_def);
+    struct upipe *upipe = upipe_mpgvf_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -205,7 +207,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_init_sync(upipe);
     upipe_mpgvf_init_uref_stream(upipe);
     upipe_mpgvf_init_output(upipe);
-    upipe_mpgvf->flow_def_input = flow_def;
+    upipe_mpgvf_init_flow_def(upipe);
     upipe_mpgvf->systime_rap = UINT64_MAX;
     upipe_mpgvf->systime_rap_ref = UINT64_MAX;
     upipe_mpgvf->last_picture_number = 0;
@@ -302,7 +304,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         return false;
     }
 
-    struct uref *flow_def = uref_dup(upipe_mpgvf->flow_def_input);
+    struct uref *flow_def = upipe_mpgvf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
@@ -398,8 +400,8 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             return false;
     }
 
-    ret = ret && uref_pic_set_hsize(flow_def, horizontal);
-    ret = ret && uref_pic_set_vsize(flow_def, vertical);
+    ret = ret && uref_pic_flow_set_hsize(flow_def, horizontal);
+    ret = ret && uref_pic_flow_set_vsize(flow_def, vertical);
     switch (aspect) {
         case MP2VSEQ_ASPECT_SQUARE:
             upipe_mpgvf->sar.num = upipe_mpgvf->sar.den = 1;
@@ -424,7 +426,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             uref_free(flow_def);
             return false;
     }
-    ret = ret && uref_pic_set_aspect(flow_def, upipe_mpgvf->sar);
+    ret = ret && uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar);
     upipe_mpgvf->fps = frame_rate;
     ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
     ret = ret && uref_block_flow_set_cpb_buffer(flow_def,
@@ -453,12 +455,19 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             return false;
         }
 
-        ret = ret && uref_pic_set_hsize_visible(flow_def, display_horizontal);
-        ret = ret && uref_pic_set_vsize_visible(flow_def, display_vertical);
+        ret = ret && uref_pic_flow_set_hsize_visible(flow_def,
+                                                     display_horizontal);
+        ret = ret && uref_pic_flow_set_vsize_visible(flow_def,
+                                                     display_vertical);
     }
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    flow_def = upipe_mpgvf_store_flow_def_attr(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -1033,10 +1042,6 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_mpgvf_output(upipe, uref, upump);
-        return;
-    }
 
     if (unlikely(uref_flow_get_discontinuity(uref))) {
         if (!upipe_mpgvf->next_frame_slice) {
@@ -1055,6 +1060,29 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
 
     upipe_mpgvf_append_uref_stream(upipe, uref);
     upipe_mpgvf_work(upipe, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_mpgvf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, "block."))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    flow_def = upipe_mpgvf_store_flow_def_input(upipe, flow_def_dup);
+    if (flow_def != NULL)
+        upipe_mpgvf_store_flow_def(upipe, flow_def);
+    return true;
 }
 
 /** @This returns the current setting for sequence header insertion.
@@ -1102,6 +1130,10 @@ static bool upipe_mpgvf_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_mpgvf_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_mpgvf_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_mpgvf_get_output(upipe, p);
@@ -1139,10 +1171,9 @@ static void upipe_mpgvf_free(struct upipe *upipe)
 
     upipe_mpgvf_clean_uref_stream(upipe);
     upipe_mpgvf_clean_output(upipe);
+    upipe_mpgvf_clean_flow_def(upipe);
     upipe_mpgvf_clean_sync(upipe);
 
-    if (upipe_mpgvf->flow_def_input != NULL)
-        uref_free(upipe_mpgvf->flow_def_input);
     if (upipe_mpgvf->sequence_header != NULL)
         ubuf_free(upipe_mpgvf->sequence_header);
     if (upipe_mpgvf->sequence_ext != NULL)
@@ -1150,7 +1181,7 @@ static void upipe_mpgvf_free(struct upipe *upipe)
     if (upipe_mpgvf->sequence_display != NULL)
         ubuf_free(upipe_mpgvf->sequence_display);
 
-    upipe_mpgvf_free_flow(upipe);
+    upipe_mpgvf_free_void(upipe);
 }
 
 /** module manager static descriptor */

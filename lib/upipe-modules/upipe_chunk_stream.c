@@ -38,7 +38,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe-modules/upipe_chunk_stream.h>
@@ -54,7 +54,7 @@
 #include <math.h>
 #include <assert.h>
 
-#define EXPECTED_FLOW "block."
+#define EXPECTED_FLOW_DEF "block."
 
 #define DEFAULT_MTU 1460 /* 1500 - 20 - 8 - 12 (eth - ip - udp - rtp) */
 #define DEFAULT_ALIGN 4 /* 2ch s16 packed audio */
@@ -87,7 +87,7 @@ struct upipe_chunk_stream {
 };
 
 UPIPE_HELPER_UPIPE(upipe_chunk_stream, upipe, UPIPE_CHUNK_STREAM_SIGNATURE);
-UPIPE_HELPER_FLOW(upipe_chunk_stream, EXPECTED_FLOW)
+UPIPE_HELPER_VOID(upipe_chunk_stream)
 UPIPE_HELPER_OUTPUT(upipe_chunk_stream, output, flow_def, flow_def_sent);
 UPIPE_HELPER_UREF_STREAM(upipe_chunk_stream, next_uref, next_uref_size, urefs, NULL)
 
@@ -104,11 +104,6 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
                        upipe_chunk_stream_from_upipe(upipe);
     size_t remaining = 0;
 
-    if (unlikely(!uref->ubuf)) {
-        upipe_chunk_stream_output(upipe, uref, upump);
-        return;
-    }
-
     upipe_chunk_stream_append_uref_stream(upipe, uref);
 
     while(upipe_chunk_stream->next_uref
@@ -122,6 +117,26 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
         }
         upipe_chunk_stream_output(upipe, uref, upump);
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_chunk_stream_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_chunk_stream_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This flushes input buffers.
@@ -215,6 +230,10 @@ static bool upipe_chunk_stream_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_chunk_stream_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_chunk_stream_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_chunk_stream_get_output(upipe, p);
@@ -256,9 +275,8 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
                                               struct uprobe *uprobe,
                                               uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_chunk_stream_alloc_flow(mgr,
-                          uprobe, signature, args, &flow_def);
+    struct upipe *upipe = upipe_chunk_stream_alloc_void(mgr,
+                          uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -266,11 +284,6 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
     upipe_chunk_stream_init_output(upipe);
     upipe_chunk_stream_init_uref_stream(upipe);
     upipe_throw_ready(upipe);
-
-    const char *def;
-    if (likely(uref_flow_get_def(flow_def, &def))) {
-        upipe_chunk_stream_store_flow_def(upipe, flow_def);
-    }
     return upipe;
 }
 
@@ -286,7 +299,7 @@ static void upipe_chunk_stream_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
-    upipe_chunk_stream_free_flow(upipe);
+    upipe_chunk_stream_free_void(upipe);
 }
 
 /** module manager static descriptor */

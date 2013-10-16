@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, NULL);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -147,9 +147,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(upipe_probe_uref_mgr != NULL);
-    struct upipe *upipe_probe_uref = upipe_flow_alloc(upipe_probe_uref_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "probe_uref"), uref);
+    struct upipe *upipe_probe_uref = upipe_void_alloc(upipe_probe_uref_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "probe_uref"));
     assert(upipe_probe_uref != NULL);
+    assert(upipe_set_flow_def(upipe_probe_uref, uref));
     assert(upipe_set_output(upipe_probe_uref, upipe_sink));
     uref_free(uref);
 

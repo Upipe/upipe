@@ -88,7 +88,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(0);
+            assert(event & UPROBE_HANDLED_FLAG);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
@@ -116,15 +116,13 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                                                   "src %"PRIu64, id), flow_def);
                 assert(upipe_avfsrc_output != NULL);
                 assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
-                struct uref *flow_def2;
-                assert(upipe_get_flow_def(upipe_avfsrc_output, &flow_def2));
 
-                struct upipe *upipe_sink = upipe_flow_alloc_sub(upipe_avfsink,
+                struct upipe *upipe_sink =
+                    upipe_void_alloc_output_sub(upipe_avfsrc_output,
+                        upipe_avfsink,
                         uprobe_pfx_adhoc_alloc_va(log, UPROBE_LOG_LEVEL,
-                                                  "sink %"PRIu64, id),
-                        flow_def2);
+                                                  "sink %"PRIu64, id));
                 assert(upipe_sink != NULL);
-                assert(upipe_set_output(upipe_avfsrc_output, upipe_sink));
                 upipe_release(upipe_sink);
             }
             return true;

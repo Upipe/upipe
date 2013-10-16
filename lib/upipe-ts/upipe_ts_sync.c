@@ -30,7 +30,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
@@ -82,7 +82,7 @@ struct upipe_ts_sync {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe, UPIPE_TS_SYNC_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_sync, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_sync)
 UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)
 
@@ -100,9 +100,8 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_sync_alloc_flow(mgr, uprobe, signature, args,
-                                                   &flow_def);
+    struct upipe *upipe = upipe_ts_sync_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -114,11 +113,6 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
     upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
     upipe_throw_ready(upipe);
-
-    /* FIXME make it dependant on the output size */
-    if (unlikely(!uref_flow_set_def(flow_def, OUTPUT_FLOW_DEF)))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-    upipe_ts_sync_store_flow_def(upipe, flow_def);
     return upipe;
 }
 
@@ -164,36 +158,6 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
     return true;
 }
 
-/** @internal @This tries to find TS packets in the buffered input urefs.
- *
- * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
- */
-static void upipe_ts_sync_work(struct upipe *upipe, struct upump *upump)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    while (upipe_ts_sync->next_uref != NULL) {
-        size_t offset = 0;
-        bool ret = upipe_ts_sync_check(upipe, &offset);
-        if (offset) {
-            upipe_ts_sync_sync_lost(upipe);
-            upipe_ts_sync_consume_uref_stream(upipe, offset);
-        }
-        if (!ret)
-            break;
-
-        /* upipe_ts_sync_check said there is at least one TS packet there. */
-        upipe_ts_sync_sync_acquired(upipe);
-        struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
-                                                    upipe_ts_sync->ts_size);
-        if (unlikely(output == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            continue;
-        }
-        upipe_ts_sync_output(upipe, output, upump);
-    }
-}
-
 /** @internal @This flushes all input buffers.
  *
  * @param upipe description structure of the pipe
@@ -223,7 +187,7 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
     upipe_ts_sync_init_uref_stream(upipe);
 }
 
-/** @internal @This receives data.
+/** @internal @This tries to find TS packets in the buffered input urefs.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -232,16 +196,57 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
 static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_ts_sync_output(upipe, uref, upump);
-        return;
-    }
-
+    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(uref_flow_get_discontinuity(uref)))
         upipe_ts_sync_flush(upipe, upump);
 
     upipe_ts_sync_append_uref_stream(upipe, uref);
-    upipe_ts_sync_work(upipe, upump);
+
+    while (upipe_ts_sync->next_uref != NULL) {
+        size_t offset = 0;
+        bool ret = upipe_ts_sync_check(upipe, &offset);
+        if (offset) {
+            upipe_ts_sync_sync_lost(upipe);
+            upipe_ts_sync_consume_uref_stream(upipe, offset);
+        }
+        if (!ret)
+            break;
+
+        /* upipe_ts_sync_check said there is at least one TS packet there. */
+        upipe_ts_sync_sync_acquired(upipe);
+        struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
+                                                    upipe_ts_sync->ts_size);
+        if (unlikely(output == NULL)) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            continue;
+        }
+        upipe_ts_sync_output(upipe, output, upump);
+    }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_sync_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    /* FIXME make it dependant on the output size */
+    if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_sync_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This returns the configured size of TS packets.
@@ -327,6 +332,10 @@ static bool upipe_ts_sync_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_sync_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_sync_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_sync_get_output(upipe, p);
@@ -377,7 +386,7 @@ static void upipe_ts_sync_free(struct upipe *upipe)
     upipe_ts_sync_clean_uref_stream(upipe);
     upipe_ts_sync_clean_output(upipe);
     upipe_ts_sync_clean_sync(upipe);
-    upipe_ts_sync_free_flow(upipe);
+    upipe_ts_sync_free_void(upipe);
 }
 
 /** module manager static descriptor */

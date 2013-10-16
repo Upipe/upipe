@@ -178,9 +178,10 @@ int main(int argc, char **argv)
 
     /* build genaux pipe */
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-    struct upipe *genaux = upipe_flow_alloc(upipe_genaux_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "genaux"), uref);
+    struct upipe *genaux = upipe_void_alloc(upipe_genaux_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
+    assert(upipe_set_flow_def(genaux, uref));
     assert(genaux);
     assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
@@ -189,7 +190,7 @@ int main(int argc, char **argv)
     const char *def;
     assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.aux."));
 
-    struct upipe *genaux_test = upipe_flow_alloc(&genaux_test_mgr, log, uref);
+    struct upipe *genaux_test = upipe_void_alloc(&genaux_test_mgr, log);
     assert(genaux_test != NULL);
     assert(upipe_set_output(genaux, genaux_test));
 

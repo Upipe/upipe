@@ -39,12 +39,11 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_sink_delay.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include "upipe_udp.h"
 
@@ -86,9 +85,9 @@ struct upipe_udpsink {
     struct upump *upump;
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
-    /** delay applied to systime attribute when uclock is provided */
-    uint64_t delay;
 
+    /** delay applied to systime attribute when uclock is provided */
+    uint64_t latency;
     /** file descriptor */
     int fd;
     /** file uri */
@@ -107,12 +106,11 @@ struct upipe_udpsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_udpsink, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
-UPIPE_HELPER_SINK_DELAY(upipe_udpsink, delay)
 
 /** @internal @This allocates a file sink pipe.
  *
@@ -126,9 +124,8 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_udpsink_alloc_flow(mgr, uprobe, signature, args,
-                                                   &flow_def);
+    struct upipe *upipe = upipe_udpsink_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -137,14 +134,9 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_upump(upipe);
     upipe_udpsink_init_sink(upipe);
     upipe_udpsink_init_uclock(upipe);
-    upipe_udpsink_init_delay(upipe, SYSTIME_DELAY);
+    upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
-
-    uint64_t latency;
-    if (uref_flow_get_latency(flow_def, &latency))
-        upipe_udpsink_set_delay(upipe, latency);
-    uref_free(flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -196,7 +188,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t now = uclock_now(upipe_udpsink->uclock);
-    systime += upipe_udpsink->delay;
+    systime += upipe_udpsink->latency;
     if (unlikely(now < systime)) {
         upipe_udpsink_wait_upump(upipe, systime - now, upipe_udpsink_watcher);
         return false;
@@ -279,11 +271,6 @@ static void upipe_udpsink_watcher(struct upump *upump)
 static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
     if (!upipe_udpsink_check_sink(upipe)) {
         upipe_udpsink_hold_sink(upipe, uref);
         upipe_udpsink_block_sink(upipe, upump);
@@ -294,6 +281,27 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
          * have been sent. */
         upipe_use(upipe);
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_udpsink_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+    if (latency > upipe_udpsink->latency)
+        upipe_udpsink->latency = latency;
+    return true;
 }
 
 /** @internal @This returns the uri of the currently opened file.
@@ -397,6 +405,10 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_udpsink_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_UPUMP_MGR: {
             struct upump_mgr **p = va_arg(args, struct upump_mgr **);
             return upipe_udpsink_get_upump_mgr(upipe, p);
@@ -416,14 +428,6 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
             return upipe_udpsink_set_uclock(upipe, uclock);
         }
 
-        case UPIPE_SINK_GET_DELAY: {
-            uint64_t *p = va_arg(args, uint64_t *);
-            return upipe_udpsink_get_delay(upipe, p);
-        }
-        case UPIPE_SINK_SET_DELAY: {
-            uint64_t delay = va_arg(args, uint64_t);
-            return upipe_udpsink_set_delay(upipe, delay);
-        }
         case UPIPE_SINK_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_udpsink_get_max_length(upipe, p);
@@ -488,12 +492,11 @@ static void upipe_udpsink_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_udpsink->uri);
-    upipe_udpsink_clean_delay(upipe);
     upipe_udpsink_clean_uclock(upipe);
     upipe_udpsink_clean_upump(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
     upipe_udpsink_clean_sink(upipe);
-    upipe_udpsink_free_flow(upipe);
+    upipe_udpsink_free_void(upipe);
 }
 
 /** module manager static descriptor */

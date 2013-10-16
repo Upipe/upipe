@@ -34,7 +34,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -99,7 +99,7 @@ struct upipe_ts_encaps {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe, UPIPE_TS_ENCAPS_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_encaps, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_encaps)
 UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_encaps, output, flow_def, flow_def_sent)
@@ -116,47 +116,25 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
                                            struct uprobe *uprobe,
                                            uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_encaps_alloc_flow(mgr, uprobe, signature,
-                                                     args, &flow_def);
+    struct upipe *upipe = upipe_ts_encaps_alloc_void(mgr, uprobe, signature,
+                                                     args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    const char *def;
-    uref_flow_get_def(flow_def, &def);
-    bool psi = !ubase_ncmp(def, "block.mpegtspsi.");
-
-    uint64_t pid;
-    uint64_t octetrate, tb_rate;
-    if (unlikely(!uref_block_flow_get_octetrate(flow_def, &octetrate) ||
-                 !octetrate ||
-                 !uref_ts_flow_get_tb_rate(flow_def, &tb_rate) ||
-                 !uref_ts_flow_get_pid(flow_def, &pid) ||
-                 !uref_flow_set_def_va(flow_def, "block.mpegts.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF)))) {
-        uref_free(flow_def);
-        upipe_ts_encaps_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     upipe_ts_encaps_init_output(upipe);
     upipe_ts_encaps_init_uref_mgr(upipe);
     upipe_ts_encaps_init_ubuf_mgr(upipe);
-    upipe_ts_encaps->pid = pid;
-    upipe_ts_encaps->octetrate = octetrate;
-    upipe_ts_encaps->tb_rate = tb_rate;
+    upipe_ts_encaps->pid = 8192;
+    upipe_ts_encaps->octetrate = 0;
+    upipe_ts_encaps->tb_rate = 0;
     upipe_ts_encaps->ts_delay = 0;
-    uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
     upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
-    uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
-    upipe_ts_encaps->psi = psi;
+    upipe_ts_encaps->psi = false;
     upipe_ts_encaps->pcr_interval = 0;
     upipe_ts_encaps->last_cc = 0;
-    upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
-                                     octetrate;
+    upipe_ts_encaps->pcr_tolerance = 0;
     upipe_ts_encaps->next_pcr = UINT64_MAX;
-    upipe_ts_encaps_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -479,10 +457,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
                                   struct upump *upump)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_ts_encaps_output(upipe, uref, upump);
-        return;
-    }
+    assert(upipe_ts_encaps->octetrate);
 
     if (unlikely(upipe_ts_encaps->uref_mgr == NULL))
         upipe_throw_need_uref_mgr(upipe);
@@ -524,6 +499,53 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
 
     upipe_ts_encaps_work(upipe, uref, upump);
 }
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_encaps_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    const char *def;
+    uint64_t pid;
+    uint64_t octetrate, tb_rate;
+    if (!uref_flow_get_def(flow_def, &def) ||
+        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+        !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate ||
+        !uref_ts_flow_get_tb_rate(flow_def, &tb_rate) ||
+        !uref_ts_flow_get_pid(flow_def, &pid))
+        return false;
+
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF))))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_encaps_store_flow_def(upipe, flow_def_dup);
+
+    struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
+    upipe_ts_encaps->psi = !ubase_ncmp(def, "block.mpegtspsi.");
+    upipe_ts_encaps->pid = pid;
+    upipe_ts_encaps->octetrate = octetrate;
+    upipe_ts_encaps->tb_rate = tb_rate;
+    upipe_ts_encaps->ts_delay = 0;
+    uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
+    upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
+    uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
+    upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
+                                     octetrate;
+    return true;
+}
+
+
 
 /** @internal @This returns the currently configured PCR interval.
  *
@@ -588,6 +610,10 @@ static bool upipe_ts_encaps_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_encaps_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_encaps_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_encaps_get_output(upipe, p);
@@ -625,7 +651,7 @@ static void upipe_ts_encaps_free(struct upipe *upipe)
     upipe_ts_encaps_clean_output(upipe);
     upipe_ts_encaps_clean_ubuf_mgr(upipe);
     upipe_ts_encaps_clean_uref_mgr(upipe);
-    upipe_ts_encaps_free_flow(upipe);
+    upipe_ts_encaps_free_void(upipe);
 }
 
 /** module manager static descriptor */

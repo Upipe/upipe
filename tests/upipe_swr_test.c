@@ -119,16 +119,24 @@ int main(int argc, char **argv)
 
     /* alloc swr pipe */
     struct uref *flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
+    assert(flow != NULL);
+    assert(uref_sound_flow_set_rate(flow, 48000));
+    assert(uref_sound_flow_set_channels(flow, 2));
+    struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "pcm_f32.", 2, 2);
+    assert(flow_output != NULL);
+    assert(uref_sound_flow_set_rate(flow_output, 48000));
+    assert(uref_sound_flow_set_channels(flow_output, 2));
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
-        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "swr"), flow);
+        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "swr"), flow_output);
     assert(swr);
+    assert(upipe_set_flow_def(swr, flow));
     assert(upipe_set_ubuf_mgr(swr, block_mgr));
-    assert(upipe_swr_set_fmt(swr, "pcm_f32"));
     uref_free(flow);
+    uref_free(flow_output);
 
     /* /dev/null */
-    struct upipe *null = upipe_flow_alloc(upipe_null_mgr,
-        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"), NULL);
+    struct upipe *null = upipe_void_alloc(upipe_null_mgr,
+        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
     assert(null);
     upipe_null_dump_dict(null, true);
     assert(upipe_set_output(swr, null));

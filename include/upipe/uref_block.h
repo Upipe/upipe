@@ -249,7 +249,7 @@ static inline bool uref_block_iovec_unmap(struct uref *uref,
  * @param ubuf_mgr management structure for the new ubuf
  * @param skip number of octets to skip at the beginning of the buffer
  * (if < 0, extend buffer upwards)
- * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * @param new_size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
  * @return false in case of error
  */

@@ -104,25 +104,22 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
                  * match the pointers. Besides, using @ref upipe_use would  \
                  * make the pipe unkillable. */                             \
                 STRUCTURE->UPIPE = upipe;                                   \
-                uprobe_throw(uprobe->next, upipe, event, args);             \
-                return true;                                                \
+                return false; /* pass the event upstream */                 \
             }                                                               \
             break;                                                          \
         case UPROBE_DEAD:                                                   \
             if (STRUCTURE->UPIPE == upipe) {                                \
                 /* The pipe we're attached to is dying, let's deallocate. */\
-                uprobe_throw(uprobe->next, upipe, event, args);             \
                 upipe_delete_probe(upipe, uprobe);                          \
                 STRUCTURE##_free(uprobe);                                   \
-                return true;                                                \
+                return false; /* pass the event upstream */                 \
             }                                                               \
             break;                                                          \
         case UPROBE_FATAL:                                                  \
             if (STRUCTURE->UPIPE == NULL && upipe == NULL) {                \
                 /* The pipe couldn't be created, let's deallocate. */       \
-                uprobe_throw(uprobe->next, upipe, event, args);             \
                 STRUCTURE##_free(uprobe);                                   \
-                return true;                                                \
+                return false; /* pass the event upstream */                 \
             }                                                               \
             break;                                                          \
         default:                                                            \

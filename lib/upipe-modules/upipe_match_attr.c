@@ -35,7 +35,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_match_attr.h>
 
@@ -75,7 +75,7 @@ struct upipe_match_attr {
 };
 
 UPIPE_HELPER_UPIPE(upipe_match_attr, upipe, UPIPE_MATCH_ATTR_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_match_attr, NULL)
+UPIPE_HELPER_VOID(upipe_match_attr)
 UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
 
 /** @internal @This receives data.
@@ -118,6 +118,24 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_match_attr_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_match_attr_store_flow_def(upipe, flow_def_dup);
+    return true;
+}
+
 /** @internal @This processes control commands on a match_attr pipe.
  *
  * @param upipe description structure of the pipe
@@ -133,6 +151,10 @@ static bool upipe_match_attr_control(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_match_attr_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_match_attr_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -183,9 +205,8 @@ static struct upipe *upipe_match_attr_alloc(struct upipe_mgr *mgr,
                                             struct uprobe *uprobe,
                                             uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_match_attr_alloc_flow(mgr, uprobe, signature,
-                                                      args, &flow_def);
+    struct upipe *upipe = upipe_match_attr_alloc_void(mgr, uprobe, signature,
+                                                      args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -195,7 +216,6 @@ static struct upipe *upipe_match_attr_alloc(struct upipe_mgr *mgr,
     upipe_match_attr->match_uint8_t = NULL;
     upipe_match_attr->match_uint64_t = NULL;
     upipe_match_attr->mode = UPIPE_MATCH_ATTR_NONE;
-    upipe_match_attr_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -209,7 +229,7 @@ static void upipe_match_attr_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_match_attr_clean_output(upipe);
-    upipe_match_attr_free_flow(upipe);
+    upipe_match_attr_free_void(upipe);
 }
 
 /** module manager static descriptor */

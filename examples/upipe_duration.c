@@ -48,6 +48,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/uclock.h>
@@ -116,8 +117,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
-
-            struct upipe *sink = upipe_flow_alloc(&count_mgr, NULL, flow_def);
+            uref_dump(flow_def, upipe->uprobe);
+            struct upipe *sink = upipe_void_alloc(&count_mgr, NULL);
             assert(sink != NULL);
             upipe_set_output(upipe, sink);
             upipe_release(sink);
@@ -194,11 +195,10 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
     upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
-    struct upipe *ts_demux = upipe_flow_alloc(upipe_ts_demux_mgr,
+    struct upipe *ts_demux = upipe_void_alloc_output(upipe_src,
+            upipe_ts_demux_mgr,
             uprobe_pfx_adhoc_alloc(uprobe_split_void, UPROBE_LOG_DEBUG,
-                                   "ts demux"),
-            flow_def);
-    upipe_set_output(upipe_src, ts_demux);
+                                   "ts demux"));
     upipe_release(ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
 

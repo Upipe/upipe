@@ -37,6 +37,24 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/udict.h>
 
+/** @This imports all attributes from a uref into another uref (see also
+ * @ref udict_import).
+ *
+ * @param uref overwritten uref
+ * @param uref_attr uref containing attributes to fetch
+ * @return false in case of error
+ */
+static inline bool uref_attr_import(struct uref *uref, struct uref *uref_attr)
+{
+    if (uref_attr->udict == NULL)
+        return true;
+    if (uref->udict == NULL) {
+        uref->udict = udict_dup(uref_attr->udict);
+        return uref->udict != NULL;
+    }
+    return udict_import(uref->udict, uref_attr->udict);
+}
+
 #define UREF_ATTR_TEMPLATE(utype, ctype)                                    \
 /** @This returns the value of a utype attribute.                           \
  *                                                                          \
@@ -355,6 +373,18 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_STRING, name);                 \
+}                                                                           \
+/** @This compares the desc attribute to a given prefix.                    \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param prefix prefix to match                                            \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                               const char *prefix)          \
+{                                                                           \
+    const char *v;                                                          \
+    return uref_##group##_get_##attr(uref, &v) && !ubase_ncmp(v, prefix);   \
 }
 
 /* @This allows to define accessors for a shorthand string attribute.
@@ -395,6 +425,18 @@ static inline bool uref_##group##_set_##attr(struct uref *uref,             \
 static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This compares the desc attribute to a given prefix.                    \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param prefix prefix to match                                            \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                               const char *prefix)          \
+{                                                                           \
+    const char *v;                                                          \
+    return uref_##group##_get_##attr(uref, &v) && !ubase_ncmp(v, prefix);   \
 }
 
 /* @This allows to define accessors for a string attribute, with a name
@@ -439,6 +481,20 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
                                                 args_decl)                  \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_STRING, format, args);      \
+}                                                                           \
+/** @This compares the desc attribute to a given prefix.                    \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param prefix prefix to match                                            \
+ * @return true if attribute matches                                        \
+ */                                                                         \
+static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
+                                               const char *prefix,          \
+                                               args_decl)                   \
+{                                                                           \
+    const char *v;                                                          \
+    return uref_##group##_get_##attr(uref, &v, args) &&                     \
+           !ubase_ncmp(v, prefix);                                          \
 }
 
 
@@ -640,17 +696,18 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                      uint8_t min, uint8_t max)             \
+                                               uint8_t min, uint8_t max)    \
 {                                                                           \
     uint8_t v;                                                              \
-    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
 }
 
 
@@ -693,17 +750,18 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                      uint8_t min, uint8_t max)             \
+                                               uint8_t min, uint8_t max)    \
 {                                                                           \
     uint8_t v;                                                              \
-    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
 }
  
 
@@ -754,19 +812,20 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
     return uref_attr_delete_va(uref, UDICT_TYPE_SMALL_UNSIGNED,             \
                                format, args);                               \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                  uint8_t min, uint8_t max, args_decl)      \
+                                               uint8_t min, uint8_t max,    \
+                                               args_decl)                   \
 {                                                                           \
     uint8_t v;                                                              \
-    if (!uref_attr_get_small_unsigned_va(uref, &v,                          \
-                                         UDICT_TYPE_SMALL_UNSIGNED,         \
-                                         format, args)) return false;       \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v, args) &&                     \
+           (v >= min) && (v <= max);                                        \
 }
 
 /*
@@ -812,17 +871,18 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                      uint64_t min, uint64_t max)           \
+                                               uint8_t min, uint8_t max)    \
 {                                                                           \
     uint64_t v;                                                             \
-    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
 }
 
 /* @This allows to define accessors for a shorthand unsigned attribute.
@@ -864,17 +924,18 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                      uint64_t min, uint64_t max)           \
+                                               uint8_t min, uint8_t max)    \
 {                                                                           \
     uint64_t v;                                                             \
-    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
 }
 
 
@@ -921,18 +982,20 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref,          \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_UNSIGNED, format, args);    \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                 uint64_t min, uint64_t max, args_decl)     \
+                                               uint8_t min, uint8_t max,    \
+                                               args_decl)                   \
 {                                                                           \
     uint64_t v;                                                             \
-    if (!uref_attr_get_unsigned_va(uref, &v, UDICT_TYPE_UNSIGNED,           \
-                                             format, args)) return false;   \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v, args) &&                     \
+           (v >= min) && (v <= max);                                        \
 }
 
 /* @This allows to define accessors for an unsigned attribute directly in the
@@ -977,17 +1040,18 @@ static inline void uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->member = UINT64_MAX;                                              \
 }                                                                           \
-/** @This compares attribute to given values.                               \
+/** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
+ * @param min minimum value                                                 \
+ * @param max maximum value                                                 \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                      uint64_t min, uint64_t max)           \
+                                               uint8_t min, uint8_t max)    \
 {                                                                           \
     uint64_t v;                                                             \
-    if (!uref_##group##_get_##attr(uref, &v)) return false;                 \
-    return ((v >= min) && (v <= max));                                      \
+    return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
 }
 
 

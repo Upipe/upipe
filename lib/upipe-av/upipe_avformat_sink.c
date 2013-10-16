@@ -42,7 +42,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-av/upipe_avformat_sink.h>
 
@@ -100,6 +100,8 @@ struct upipe_avfsink_sub {
     struct uchain uchain;
     /** libavformat stream ID */
     int id;
+    /** relevant flow definition attributes */
+    struct uref *flow_def_check;
 
     /** buffered urefs */
     struct uchain urefs;
@@ -111,7 +113,8 @@ struct upipe_avfsink_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsink_sub, upipe, UPIPE_AVFSINK_INPUT_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_avfsink_sub, "block.")
+UPIPE_HELPER_VOID(upipe_avfsink_sub)
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avfsink_sub, flow_def_check)
 
 UPIPE_HELPER_SUBPIPE(upipe_avfsink, upipe_avfsink_sub, sub, sub_mgr,
                      subs, uchain)
@@ -135,23 +138,84 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     if (upipe_avfsink->opened)
         return NULL;
 
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_avfsink_sub_alloc_flow(mgr, uprobe, signature,
-                                                       args, &flow_def);
+    struct upipe *upipe = upipe_avfsink_sub_alloc_void(mgr, uprobe, signature,
+                                                       args);
     if (unlikely(upipe == NULL))
         return NULL;
     struct upipe_avfsink_sub *upipe_avfsink_sub =
         upipe_avfsink_sub_from_upipe(upipe);
-    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
+    upipe_avfsink_sub_init_flow_def_check(upipe);
+    upipe_avfsink_sub_init_sub(upipe);
+    upipe_avfsink_sub->id = -1;
+    ulist_init(&upipe_avfsink_sub->urefs);
+    upipe_avfsink_sub->next_dts = UINT64_MAX;
+
+    upipe_use(upipe_avfsink_to_upipe(upipe_avfsink));
+    upipe_throw_ready(upipe);
+    return upipe;
+}
+
+/** @internal @This handles input uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump upump structure
+ */
+static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
+                                    struct upump *upump)
+{
+    struct upipe_avfsink_sub *upipe_avfsink_sub =
+        upipe_avfsink_sub_from_upipe(upipe);
+
+    if (unlikely(uref->ubuf == NULL)) {
+        uref_free(uref);
+        return;
+    }
+
+    uint64_t dts;
+    if (unlikely(!uref_clock_get_dts_prog(uref, &dts))) {
+        upipe_warn_va(upipe, "packet without DTS");
+        uref_free(uref);
+        return;
+    }
+
+    bool was_empty = ulist_empty(&upipe_avfsink_sub->urefs);
+    ulist_add(&upipe_avfsink_sub->urefs, uref_to_uchain(uref));
+    if (was_empty) {
+        upipe_use(upipe);
+        upipe_avfsink_sub->next_dts = dts;
+    }
+
+    struct upipe_avfsink *upipe_avfsink =
+        upipe_avfsink_from_sub_mgr(upipe->mgr);
+    upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+
+    struct upipe_avfsink *upipe_avfsink =
+        upipe_avfsink_from_sub_mgr(upipe->mgr);
+    struct upipe_avfsink_sub *upipe_avfsink_sub =
+        upipe_avfsink_sub_from_upipe(upipe);
+    if (upipe_avfsink->opened && upipe_avfsink_sub->id == -1)
+        return false;
 
     const char *def;
     enum AVCodecID codec_id;
-    if (!uref_flow_get_def(flow_def, &def) ||
+    if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
-        uref_free(flow_def);
-        upipe_avfsink_sub_free_flow(upipe);
-        return NULL;
+        return false;
     }
     uint64_t octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &octetrate);
@@ -162,21 +226,15 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     uint64_t rate, samples;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!uref_pic_flow_get_fps(flow_def, &fps) ||
-                     !uref_pic_get_aspect(flow_def, &sar) ||
-                     !uref_pic_get_hsize(flow_def, &width) ||
-                     !uref_pic_get_vsize(flow_def, &height))) {
-            uref_free(flow_def);
-            upipe_avfsink_sub_free_flow(upipe);
-            return NULL;
-        }
+                     !uref_pic_flow_get_sar(flow_def, &sar) ||
+                     !uref_pic_flow_get_hsize(flow_def, &width) ||
+                     !uref_pic_flow_get_vsize(flow_def, &height)))
+            return false;
     } else {
         if (unlikely(!uref_sound_flow_get_channels(flow_def, &channels) ||
                      !uref_sound_flow_get_rate(flow_def, &rate) ||
-                     !uref_sound_flow_get_samples(flow_def, &samples))) {
-            uref_free(flow_def);
-            upipe_avfsink_sub_free_flow(upipe);
-            return NULL;
-        }
+                     !uref_sound_flow_get_samples(flow_def, &samples)))
+            return false;
     }
 
     uint8_t *extradata_alloc = NULL;
@@ -185,28 +243,76 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     if (uref_flow_get_headers(flow_def, &extradata, &extradata_size)) {
         extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
-            uref_free(flow_def);
-            upipe_avfsink_sub_free_flow(upipe);
-            return NULL;
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
                FF_INPUT_BUFFER_PADDING_SIZE);
     }
-    uref_free(flow_def);
 
-    upipe_avfsink_sub_init_sub(upipe);
-    ulist_init(&upipe_avfsink_sub->urefs);
-    upipe_avfsink_sub->next_dts = UINT64_MAX;
+    /* Extract relevant attributes to flow def check. */
+    struct uref *flow_def_check =
+        upipe_avfsink_sub_alloc_flow_def_check(upipe, flow_def);
+    if (unlikely(flow_def_check == NULL)) {
+        free(extradata_alloc);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
 
-    upipe_use(upipe_avfsink_to_upipe(upipe_avfsink));
-    upipe_throw_ready(upipe);
+    if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
+                 (octetrate &&
+                  !uref_block_flow_set_octetrate(flow_def_check, octetrate)) ||
+                 (extradata_alloc != NULL &&
+                  !uref_flow_set_headers(flow_def_check, extradata,
+                                         extradata_size)))) {
+        free(extradata_alloc);
+        uref_free(flow_def_check);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
+        if (unlikely(!uref_pic_flow_set_fps(flow_def_check, fps) ||
+                     !uref_pic_flow_set_sar(flow_def_check, sar) ||
+                     !uref_pic_flow_set_hsize(flow_def_check, width) ||
+                     !uref_pic_flow_set_vsize(flow_def_check, height))) {
+            free(extradata_alloc);
+            uref_free(flow_def_check);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+    } else {
+        if (unlikely(!uref_sound_flow_set_channels(flow_def_check, channels) ||
+                     !uref_sound_flow_set_rate(flow_def_check, rate) ||
+                     !uref_sound_flow_set_samples(flow_def_check, samples))) {
+            free(extradata_alloc);
+            uref_free(flow_def_check);
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+    }
+
+    if (upipe_avfsink->opened) {
+        /* Die if the attributes changed. */
+        /* NB: this supposes that all attributes are in the udict, and that
+         * the udict is never empty. */
+        bool ret = upipe_avfsink_sub_check_flow_def_check(upipe,
+                                                          flow_def_check);
+        free(extradata_alloc);
+        uref_free(flow_def_check);
+        return ret;
+    }
+
+    /* Open a new avformat stream. */
+    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
+    upipe_avfsink_sub_store_flow_def_check(upipe, flow_def_check);
 
     AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
     if (unlikely(stream == NULL)) {
+        free(extradata_alloc);
         upipe_err_va(upipe, "couldn't allocate stream");
         upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
-        return upipe;
+        return false;
     }
 
     AVCodecContext *codec = stream->codec;
@@ -238,44 +344,7 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
         codec->extradata = extradata_alloc;
     }
 
-    return upipe;
-}
-
-/** @internal @This handles input uref.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump upump structure
- */
-static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
-{
-    struct upipe_avfsink_sub *upipe_avfsink_sub =
-        upipe_avfsink_sub_from_upipe(upipe);
-
-    if (unlikely(uref->ubuf == NULL)) {
-        /* TODO */
-        uref_free(uref);
-        return;
-    }
-
-    uint64_t dts;
-    if (unlikely(!uref_clock_get_dts_prog(uref, &dts))) {
-        upipe_warn_va(upipe, "packet without DTS");
-        uref_free(uref);
-        return;
-    }
-
-    bool was_empty = ulist_empty(&upipe_avfsink_sub->urefs);
-    ulist_add(&upipe_avfsink_sub->urefs, uref_to_uchain(uref));
-    if (was_empty) {
-        upipe_use(upipe);
-        upipe_avfsink_sub->next_dts = dts;
-    }
-
-    struct upipe_avfsink *upipe_avfsink =
-        upipe_avfsink_from_sub_mgr(upipe->mgr);
-    upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump);
+    return true;
 }
 
 /** @internal @This processes control commands on an output subpipe of an
@@ -290,6 +359,10 @@ static bool upipe_avfsink_sub_control(struct upipe *upipe,
                                       enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avfsink_sub_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_avfsink_sub_get_super(upipe, p);
@@ -310,8 +383,9 @@ static void upipe_avfsink_sub_free(struct upipe *upipe)
         upipe_avfsink_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
+    upipe_avfsink_sub_clean_flow_def_check(upipe);
     upipe_avfsink_sub_clean_sub(upipe);
-    upipe_avfsink_sub_free_flow(upipe);
+    upipe_avfsink_sub_free_void(upipe);
 
     upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), NULL);
     upipe_release(upipe_avfsink_to_upipe(upipe_avfsink));
@@ -345,7 +419,8 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_avfsink_alloc_void(mgr, uprobe, signature, args);
+    struct upipe *upipe =
+        upipe_avfsink_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 

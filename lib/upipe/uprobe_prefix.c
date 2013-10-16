@@ -54,26 +54,23 @@ static bool uprobe_pfx_throw(struct uprobe *uprobe, struct upipe *upipe,
                              enum uprobe_event event, va_list args)
 {
     struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
-    switch (event) {
-        case UPROBE_LOG: {
-            enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
-            if (uprobe->next == NULL || uprobe_pfx->min_level > level)
-                return true;
-
-            const char *msg = va_arg(args, const char *);
-            const char *name = likely(uprobe_pfx->name != NULL) ?
-                               uprobe_pfx->name : "unknown";
-            char new_msg[strlen(msg) + +strlen(name) + strlen("[] ") + 1];
-            sprintf(new_msg, "[%s] %s", name, msg);
-            uprobe_throw(uprobe->next, upipe, event, level, new_msg);
-            return true;
-        }
-        default:
-            if (uprobe_pfx->adhoc)
-                return uprobe_pfx_throw_adhoc(uprobe, upipe, event, args);
-            else
-                return false;
+    if (event != UPROBE_LOG) {
+        if (uprobe_pfx->adhoc)
+            return uprobe_pfx_throw_adhoc(uprobe, upipe, event, args);
+        return false;
     }
+
+    enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
+    if (uprobe->next == NULL || uprobe_pfx->min_level > level)
+        return true;
+
+    const char *msg = va_arg(args, const char *);
+    const char *name = likely(uprobe_pfx->name != NULL) ?
+                       uprobe_pfx->name : "unknown";
+    char new_msg[strlen(msg) + +strlen(name) + strlen("[] ") + 1];
+    sprintf(new_msg, "[%s] %s", name, msg);
+    uprobe_throw(uprobe->next, upipe, event, level, new_msg);
+    return true;
 }
 
 /** @This initializes an already allocated uprobe pfx structure.
@@ -108,7 +105,7 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
 
 /** @This cleans a uprobe pfx structure.
  *
- * @param uprobe structure to clean
+ * @param uprobe_pfx structure to clean
  */
 void uprobe_pfx_clean(struct uprobe_pfx *uprobe_pfx)
 {

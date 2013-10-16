@@ -174,15 +174,15 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_flow_alloc(&test_mgr, log, uref);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
-    struct upipe *upipe_mpgvf = upipe_flow_alloc(upipe_mpgvf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgvf"),
-            uref);
+    struct upipe *upipe_mpgvf = upipe_void_alloc(upipe_mpgvf_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgvf"));
     assert(upipe_mpgvf != NULL);
+    assert(upipe_set_flow_def(upipe_mpgvf, uref));
     assert(upipe_set_output(upipe_mpgvf, upipe_sink));
     uref_free(uref);
 

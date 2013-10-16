@@ -82,13 +82,11 @@ enum udict_type {
     UDICT_TYPE_FLOW_RAWDEF,
     /** f.lang */
     UDICT_TYPE_FLOW_LANG,
-    /** f.latency */
-    UDICT_TYPE_FLOW_LATENCY,
 
-    /** k.vbvdelay */
-    UDICT_TYPE_CLOCK_VBVDELAY,
     /** k.duration */
     UDICT_TYPE_CLOCK_DURATION,
+    /** f.latency */
+    UDICT_TYPE_CLOCK_LATENCY,
 
     /** b.end */
     UDICT_TYPE_BLOCK_END,
@@ -107,8 +105,8 @@ enum udict_type {
     UDICT_TYPE_PIC_HPOSITION,
     /** p.vposition */
     UDICT_TYPE_PIC_VPOSITION,
-    /** p.aspect */
-    UDICT_TYPE_PIC_ASPECT,
+    /** p.sar */
+    UDICT_TYPE_PIC_SAR,
     /** p.overscan */
     UDICT_TYPE_PIC_OVERSCAN,
     /** p.progressive */
@@ -773,6 +771,35 @@ static inline void udict_free(struct udict *udict)
     udict->mgr->udict_free(udict);
 }
 
+/** @This imports all attributes from a udict into another udict.
+ *
+ * @param udict overwritten udict
+ * @param udict_attr udict containing attributes to fetch
+ * @return false in case of error
+ */
+static inline bool udict_import(struct udict *udict, struct udict *udict_attr)
+{
+    const char *name = NULL;
+    enum udict_type type = UDICT_TYPE_END;
+    for ( ; ; ) {
+        udict_iterate(udict_attr, &name, &type);
+        if (unlikely(type == UDICT_TYPE_END))
+            break;
+
+        size_t attr_size;
+        const uint8_t *attr = udict_get(udict_attr, name, type, &attr_size);
+        if (unlikely(attr == NULL))
+            return false;
+
+        uint8_t *new_attr = udict_set(udict, name, type, attr_size);
+        if (unlikely(new_attr == NULL))
+            return false;
+
+        memcpy(new_attr, attr, attr_size);
+    }
+    return true;
+}
+
 /** @This allocates a new udict with a given manager, and copies all attributes.
  *
  * @param mgr common management structure
@@ -786,30 +813,11 @@ static inline struct udict *udict_copy(struct udict_mgr *mgr,
     if (unlikely(new_udict == NULL))
         return NULL;
 
-    const char *name = NULL;
-    enum udict_type type = UDICT_TYPE_END;
-
-    for ( ; ; ) {
-        udict_iterate(udict, &name, &type);
-        if (unlikely(type == UDICT_TYPE_END))
-            break;
-
-        size_t attr_size;
-        const uint8_t *attr = udict_get(udict, name, type, &attr_size);
-        if (unlikely(attr == NULL))
-            goto udict_copy_err;
-
-        uint8_t *new_attr = udict_set(new_udict, name, type, attr_size);
-        if (unlikely(new_attr == NULL))
-            goto udict_copy_err;
-
-        memcpy(new_attr, attr, attr_size);
+    if (!udict_import(new_udict, udict)) {
+        udict_free(new_udict);
+        return NULL;
     }
     return new_udict;
-
-udict_copy_err:
-    udict_free(new_udict);
-    return NULL;
 }
 
 /** @This compares two udicts.

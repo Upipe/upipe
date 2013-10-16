@@ -38,7 +38,6 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -214,7 +213,7 @@ struct upipe_ts_mux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_mux, "void.")
+UPIPE_HELPER_VOID(upipe_ts_mux)
 UPIPE_HELPER_UREF_MGR(upipe_ts_mux, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_mux, ubuf_mgr)
 UPIPE_HELPER_BIN(upipe_ts_mux, agg_probe_bin, agg, output)
@@ -268,7 +267,7 @@ struct upipe_ts_mux_program {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_program, upipe, UPIPE_TS_MUX_PROGRAM_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_mux_program, "void.")
+UPIPE_HELPER_VOID(upipe_ts_mux_program)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux, upipe_ts_mux_program, program,
                      program_mgr, programs, uchain)
@@ -322,7 +321,7 @@ struct upipe_ts_mux_input {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_input, upipe, UPIPE_TS_MUX_INPUT_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_mux_input, "block.")
+UPIPE_HELPER_VOID(upipe_ts_mux_input)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
                      input_mgr, inputs, uchain)
@@ -350,165 +349,20 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(
                 upipe_ts_mux_program_to_upipe(program)->mgr);
 
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_mux_input_alloc_flow(mgr, uprobe,
-                                                        signature, args,
-                                                        &flow_def);
+    struct upipe *upipe = upipe_ts_mux_input_alloc_void(mgr, uprobe,
+                                                        signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
-    const char *def;
-    uint64_t octetrate;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 !uref_block_flow_get_octetrate(flow_def, &octetrate) ||
-                 !octetrate)) {
-        uref_free(flow_def);
-        upipe_ts_mux_input_free_flow(upipe);
-        return NULL;
-    }
-    /* Remember that after the first call to uref_*_set_*, def should no longer
-     * be used as it points to data which may have changed location. */
-
-    bool ret = true;
-    uint64_t pes_overhead = 0;
-    enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
-    if (strstr(def, ".pic.") != NULL) {
-        input_type = UPIPE_TS_MUX_INPUT_VIDEO;
-        if (!ubase_ncmp(def, "block.mpeg1video.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_VIDEO_MPEG1);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY);
-        } else if (!ubase_ncmp(def, "block.mpeg2video.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_VIDEO_MPEG2);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY);
-        } else if (!ubase_ncmp(def, "block.mpeg4.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_VIDEO_MPEG4);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY_14496);
-        } else if (!ubase_ncmp(def, "block.h264.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_VIDEO_AVC);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY_14496);
-        }
-        ret = ret && uref_ts_flow_set_pes_id(flow_def,
-                                             PES_STREAM_ID_VIDEO_MPEG);
-
-        uint64_t max_octetrate = octetrate;
-        uref_block_flow_get_max_octetrate(flow_def, &max_octetrate);
-        /* ISO/IEC 13818-1 2.4.2.3 */
-        ret = ret && uref_ts_flow_set_tb_rate(flow_def, max_octetrate * 6 / 5);
-
-        struct urational fps;
-        if (uref_pic_flow_get_fps(flow_def, &fps)) {
-            /* PES header overhead */
-            pes_overhead += PES_HEADER_SIZE_PTSDTS * (fps.num + fps.den - 1) /
-                            fps.den;
-            /* At worst we'll have 183 octets wasted per frame, if all frames
-             * are I-frames or if we don't overlap. This includes PCR overhead.
-             */
-            pes_overhead += TS_SIZE * (fps.num + fps.den - 1) / fps.den;
-        }
-
-    } else if (strstr(def, ".sound.") != NULL) {
-        input_type = UPIPE_TS_MUX_INPUT_AUDIO;
-        if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_AUDIO_MPEG2);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def,
-                                                 PES_STREAM_ID_AUDIO_MPEG);
-        } else if (!ubase_ncmp(def, "block.aac.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_AUDIO_ADTS);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def,
-                                                 PES_STREAM_ID_AUDIO_MPEG);
-        } else if (!ubase_ncmp(def, "block.ac3.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def,
-                                               PMT_STREAMTYPE_PRIVATE_PES);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def,
-                                                 PES_STREAM_ID_PRIVATE_1);
-            uint8_t ac3_descriptor[DESC6A_HEADER_SIZE];
-            desc6a_init(ac3_descriptor);
-            desc_set_length(ac3_descriptor,
-                            DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
-            desc6a_clear_flags(ac3_descriptor);
-            ret = ret && uref_ts_flow_set_descriptors(flow_def, ac3_descriptor,
-                                                      DESC6A_HEADER_SIZE);
-        }
-        ret = ret && uref_ts_flow_set_tb_rate(flow_def, TB_RATE_AUDIO);
-        ret = ret && uref_ts_flow_set_max_delay(flow_def, MAX_DELAY);
-        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
-        if (!uref_ts_flow_get_pes_min_duration(flow_def, &pes_min_duration))
-            ret = ret && uref_ts_flow_set_pes_min_duration(flow_def,
-                                                           pes_min_duration);
-
-        uint64_t rate, samples;
-        if (uref_sound_flow_get_rate(flow_def, &rate) &&
-            uref_sound_flow_get_samples(flow_def, &samples)) {
-            unsigned int nb_frames = 1;
-            while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
-                nb_frames++;
-            samples *= nb_frames;
-            /* PES header overhead */
-            pes_overhead += PES_HEADER_SIZE_PTS * (rate + samples - 1) /
-                            samples;
-            /* TS padding overhead */
-            pes_overhead += TS_SIZE * (rate + samples - 1) / samples;
-        }
-
-    } else if (strstr(def, ".subpic.") != NULL) {
-    }
-
-    uint64_t ts_overhead = TS_HEADER_SIZE *
-        (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
-        (TS_SIZE - TS_HEADER_SIZE);
-    uint64_t ts_delay;
-    if (!uref_ts_flow_get_ts_delay(flow_def, &ts_delay))
-        ret = ret && uref_ts_flow_set_ts_delay(flow_def,
-                (uint64_t)T_STD_TS_BUFFER * UCLOCK_FREQ /
-                (octetrate + pes_overhead + ts_overhead));
-
-    uint64_t pid = 0;
-    if (uref_ts_flow_get_pid(flow_def, &pid) &&
-        upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
-        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                      "PID %"PRIu64" already exists", pid);
-        pid = 0;
-    }
-    if (pid == 0) {
-        do {
-            pid = upipe_ts_mux->pid_auto++;
-        } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                                       pid));
-        if (pid >= MAX_PIDS)
-            ret = false;
-        else
-            ret = ret && uref_ts_flow_set_pid(flow_def, pid);
-    }
-
-    if (unlikely(!ret)) {
-        uref_free(flow_def);
-        upipe_ts_mux_input_free_flow(upipe);
-        return NULL;
-    }
-
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
-    upipe_ts_mux_input->input_type = input_type;
+    upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
     upipe_ts_mux_input->pcr = false;
-    upipe_ts_mux_input->pid = pid;
-    upipe_ts_mux_input->octetrate = octetrate;
+    upipe_ts_mux_input->pid = 8192;
+    upipe_ts_mux_input->octetrate = 0;
     upipe_ts_mux_input->start_cr = UINT64_MAX;
     upipe_ts_mux_input->start_cr_sys = UINT64_MAX;
-    upipe_ts_mux_input->total_octetrate = octetrate +
-                                          pes_overhead + ts_overhead;
+    upipe_ts_mux_input->total_octetrate = 0;
     upipe_ts_mux_input->psig_flow = upipe_ts_mux_input->pes_encaps =
         upipe_ts_mux_input->encaps = NULL;
 
@@ -516,67 +370,35 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_use(upipe_ts_mux_program_to_upipe(program));
     upipe_throw_ready(upipe);
 
-    uref_flow_get_def(flow_def, &def);
-    upipe_notice_va(upipe, "adding %s on PID %"PRIu16" (%"PRIu64" bits/s)",
-                    def, pid, octetrate * 8);
-
     struct upipe_ts_mux_mgr *ts_mux_mgr =
         upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
-    upipe_ts_mux_input->pes_encaps =
-        upipe_flow_alloc(ts_mux_mgr->ts_pese_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
-                                                   UPROBE_LOG_DEBUG,
-                                                   "pes encaps %"PRIu64, pid),
-                         flow_def);
-    struct uref *flow_def_next;
-    /* We do not take into account PES overhead here: the PES header isn't
-     * part of the VBV buffer calculation stuff, and this allows to send the
-     * packets a bit earlier. */
-    if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->pes_encaps,
-                                     &flow_def_next) ||
-                 (upipe_ts_mux_input->encaps =
-                  upipe_flow_alloc(ts_mux_mgr->ts_encaps_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
-                                                   UPROBE_LOG_DEBUG,
-                                                   "encaps %"PRIu64, pid),
-                         flow_def_next)) == NULL)) {
-        uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        return upipe;
-    }
-    upipe_set_output(upipe_ts_mux_input->pes_encaps,
-                     upipe_ts_mux_input->encaps);
-
     struct upipe *join;
-    if (unlikely(!upipe_get_flow_def(upipe_ts_mux_input->encaps,
-                                     &flow_def_next) ||
-                 (join = upipe_flow_alloc_sub(upipe_ts_mux->join,
+    if (unlikely((upipe_ts_mux_input->psig_flow =
+                  upipe_void_alloc_sub(program->program_psig,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
                                                    UPROBE_LOG_DEBUG,
-                                                   "join %"PRIu64, pid),
-                         flow_def_next)) == NULL)) {
-        uref_free(flow_def);
+                                                   "psig flow"))) == NULL ||
+                (upipe_ts_mux_input->pes_encaps =
+                  upipe_void_alloc(ts_mux_mgr->ts_pese_mgr,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "pes encaps"))) == NULL ||
+                 (upipe_ts_mux_input->encaps =
+                  upipe_void_alloc_output(upipe_ts_mux_input->pes_encaps,
+                         ts_mux_mgr->ts_encaps_mgr,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "encaps"))) == NULL ||
+                 (join = upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
+                         upipe_ts_mux->join,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                                                   UPROBE_LOG_DEBUG,
+                                                   "join"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
-    upipe_set_output(upipe_ts_mux_input->encaps, join);
 
     upipe_release(join);
-
-    if (!uref_flow_set_def(flow_def, "void.") ||
-        (upipe_ts_mux_input->psig_flow =
-            upipe_flow_alloc_sub(program->program_psig,
-                 uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
-                                           UPROBE_LOG_DEBUG,
-                                           "psig flow %"PRIu64, pid),
-                 flow_def)) == NULL) {
-        uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
-        return upipe;
-    }
-    uref_free(flow_def);
-
-    upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
     return upipe;
 }
 
@@ -616,6 +438,186 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
     upipe_input(upipe_ts_mux_input->pes_encaps, uref, upump);
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+
+    struct upipe_ts_mux_input *upipe_ts_mux_input =
+        upipe_ts_mux_input_from_upipe(upipe);
+    struct upipe_ts_mux_program *program =
+        upipe_ts_mux_program_from_input_mgr(upipe->mgr);
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(
+                upipe_ts_mux_program_to_upipe(program)->mgr);
+    const char *def;
+    uint64_t octetrate;
+    if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
+        !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate)
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+        return false;
+
+    bool ret = true;
+    uint64_t pes_overhead = 0;
+    enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
+    if (strstr(def, ".pic.") != NULL) {
+        input_type = UPIPE_TS_MUX_INPUT_VIDEO;
+        if (!ubase_ncmp(def, "block.mpeg1video.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG1);
+            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+        } else if (!ubase_ncmp(def, "block.mpeg2video.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG2);
+            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+        } else if (!ubase_ncmp(def, "block.mpeg4.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG4);
+            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup,
+                                                    MAX_DELAY_14496);
+        } else if (!ubase_ncmp(def, "block.h264.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_AVC);
+            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup,
+                                                    MAX_DELAY_14496);
+        }
+        ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
+                                             PES_STREAM_ID_VIDEO_MPEG);
+
+        uint64_t max_octetrate = octetrate;
+        uref_block_flow_get_max_octetrate(flow_def, &max_octetrate);
+        /* ISO/IEC 13818-1 2.4.2.3 */
+        ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup,
+                                              max_octetrate * 6 / 5);
+
+        struct urational fps;
+        if (uref_pic_flow_get_fps(flow_def, &fps)) {
+            /* PES header overhead */
+            pes_overhead += PES_HEADER_SIZE_PTSDTS * (fps.num + fps.den - 1) /
+                            fps.den;
+            /* At worst we'll have 183 octets wasted per frame, if all frames
+             * are I-frames or if we don't overlap. This includes PCR overhead.
+             */
+            pes_overhead += TS_SIZE * (fps.num + fps.den - 1) / fps.den;
+        }
+
+    } else if (strstr(def, ".sound.") != NULL) {
+        input_type = UPIPE_TS_MUX_INPUT_AUDIO;
+        if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_AUDIO_MPEG2);
+            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_AUDIO_MPEG);
+        } else if (!ubase_ncmp(def, "block.aac.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_AUDIO_ADTS);
+            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_AUDIO_MPEG);
+        } else if (!ubase_ncmp(def, "block.ac3.")) {
+            ret = ret &&
+                  uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_PRIVATE_PES);
+            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_PRIVATE_1);
+            uint8_t ac3_descriptor[DESC6A_HEADER_SIZE];
+            desc6a_init(ac3_descriptor);
+            desc_set_length(ac3_descriptor,
+                            DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
+            desc6a_clear_flags(ac3_descriptor);
+            ret = ret && uref_ts_flow_set_descriptors(flow_def_dup,
+                    ac3_descriptor, DESC6A_HEADER_SIZE);
+        }
+        ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO);
+        ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
+        if (!uref_ts_flow_get_pes_min_duration(flow_def_dup, &pes_min_duration))
+            ret = ret && uref_ts_flow_set_pes_min_duration(flow_def_dup,
+                                                           pes_min_duration);
+
+        uint64_t rate, samples;
+        if (uref_sound_flow_get_rate(flow_def, &rate) &&
+            uref_sound_flow_get_samples(flow_def, &samples)) {
+            unsigned int nb_frames = 1;
+            while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
+                nb_frames++;
+            samples *= nb_frames;
+            /* PES header overhead */
+            pes_overhead += PES_HEADER_SIZE_PTS * (rate + samples - 1) /
+                            samples;
+            /* TS padding overhead */
+            pes_overhead += TS_SIZE * (rate + samples - 1) / samples;
+        }
+
+    } else if (strstr(def, ".subpic.") != NULL) {
+        /* TODO */
+    }
+
+    uint64_t ts_overhead = TS_HEADER_SIZE *
+        (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
+        (TS_SIZE - TS_HEADER_SIZE);
+    uint64_t ts_delay;
+    if (!uref_ts_flow_get_ts_delay(flow_def, &ts_delay))
+        ret = ret && uref_ts_flow_set_ts_delay(flow_def_dup,
+                (uint64_t)T_STD_TS_BUFFER * UCLOCK_FREQ /
+                (octetrate + pes_overhead + ts_overhead));
+
+    uint64_t pid = 0;
+    if (uref_ts_flow_get_pid(flow_def, &pid) &&
+        upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
+        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                      "PID %"PRIu64" already exists", pid);
+        pid = 0;
+    }
+    if (pid == 0) {
+        do {
+            pid = upipe_ts_mux->pid_auto++;
+        } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                       pid));
+        if (pid >= MAX_PIDS)
+            ret = false;
+        else
+            ret = ret && uref_ts_flow_set_pid(flow_def_dup, pid);
+    }
+
+    if (unlikely(!ret)) {
+        uref_free(flow_def_dup);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (!upipe_set_flow_def(upipe_ts_mux_input->pes_encaps, flow_def_dup) ||
+        !uref_flow_set_def(flow_def_dup, "void.") ||
+        !upipe_set_flow_def(upipe_ts_mux_input->psig_flow, flow_def_dup)) {
+        uref_free(flow_def_dup);
+        return false;
+    }
+
+    uref_free(flow_def_dup);
+    upipe_ts_mux_input->input_type = input_type;
+    upipe_ts_mux_input->pid = pid;
+    upipe_ts_mux_input->octetrate = octetrate;
+    upipe_ts_mux_input->total_octetrate = octetrate +
+                                          pes_overhead + ts_overhead;
+
+    upipe_notice_va(upipe, "adding %s on PID %"PRIu64" (%"PRIu64" bits/s)",
+                    def, pid, octetrate * 8);
+    upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
+    return true;
+}
+
 /** @internal @This processes control commands on a ts_mux_input
  * pipe.
  *
@@ -628,6 +630,10 @@ static bool upipe_ts_mux_input_control(struct upipe *upipe,
                                        enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_mux_input_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_mux_input_get_super(upipe, p);
@@ -658,7 +664,7 @@ static void upipe_ts_mux_input_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_mux_input_clean_sub(upipe);
-    upipe_ts_mux_input_free_flow(upipe);
+    upipe_ts_mux_input_free_void(upipe);
 
     if (!upipe_single(upipe_ts_mux_program_to_upipe(program)))
         upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
@@ -707,67 +713,18 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_ts_mux->uref_mgr == NULL))
         return NULL;
 
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_mux_program_alloc_flow(mgr, uprobe,
+    struct upipe *upipe = upipe_ts_mux_program_alloc_void(mgr, uprobe,
                                                           signature,
-                                                          args, &flow_def);
+                                                          args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    bool ret = true;
-    uint64_t sid = 0;
-    if (uref_ts_flow_get_sid(flow_def, &sid) &&
-        upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux), sid)) {
-        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                      "SID %"PRIu64" already exists", sid);
-        sid = 0;
-    }
-    if (sid == 0) {
-        do {
-            sid = upipe_ts_mux->sid_auto++;
-        } while (upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                                       sid));
-        if (sid >= MAX_SIDS)
-            ret = false;
-        else
-            ret = ret && uref_ts_flow_set_sid(flow_def, sid);
-    }
-
-    uint64_t pid = 0;
-    if (uref_ts_flow_get_pid(flow_def, &pid) &&
-        upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
-        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                      "PID %"PRIu64" already exists", pid);
-        pid = 0;
-    }
-    if (pid == 0) {
-        do {
-            pid = upipe_ts_mux->pid_auto++;
-        } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                                       pid));
-        if (pid >= MAX_PIDS)
-            ret = false;
-        else
-            ret = ret && uref_ts_flow_set_pid(flow_def, pid);
-    }
-
-    uint64_t octetrate;
-    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
-        ret = ret && uref_block_flow_set_octetrate(flow_def, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_tb_rate(flow_def, TB_RATE_PSI);
-
-    if (unlikely(!ret)) {
-        uref_free(flow_def);
-        upipe_ts_mux_program_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
     upipe_ts_mux_program_init_input_mgr(upipe);
     upipe_ts_mux_program_init_sub_inputs(upipe);
-    upipe_ts_mux_program->sid = sid;
-    upipe_ts_mux_program->pmt_pid = pid;
+    upipe_ts_mux_program->sid = 0;
+    upipe_ts_mux_program->pmt_pid = 8192;
     upipe_ts_mux_program->start_cr = UINT64_MAX;
     upipe_ts_mux_program->start_cr_sys = UINT64_MAX;
     upipe_ts_mux_program->pmt_interval = upipe_ts_mux->pmt_interval;
@@ -780,34 +737,23 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_use(upipe_ts_mux_to_upipe(upipe_ts_mux));
     upipe_throw_ready(upipe);
 
-    upipe_ts_mux_program->program_psig =
-        upipe_flow_alloc_sub(upipe_ts_mux->psig,
-                             uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                    UPROBE_LOG_DEBUG,
-                                                    "psig program"),
-                             flow_def);
-    uref_free(flow_def);
-    if (unlikely(upipe_ts_mux_program->program_psig == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
-        return upipe;
-    }
-
-    if (unlikely(!upipe_get_flow_def(upipe_ts_mux_program->program_psig,
-                                     &flow_def) ||
-                 (upipe_ts_mux_program->pmt_psii =
-                  upipe_flow_alloc_sub(upipe_ts_mux->psii,
+    if (unlikely((upipe_ts_mux_program->program_psig =
+                  upipe_void_alloc_sub(upipe_ts_mux->psig,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "pmt psii"),
-                         flow_def)) == NULL)) {
+                                                UPROBE_LOG_DEBUG,
+                                                "psig program"))) == NULL ||
+                 (upipe_ts_mux_program->pmt_psii =
+                  upipe_void_alloc_output_sub(
+                         upipe_ts_mux_program->program_psig,
+                         upipe_ts_mux->psii,
+                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
+                                                UPROBE_LOG_DEBUG,
+                                                "pmt psii"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
     upipe_ts_psii_sub_set_interval(upipe_ts_mux_program->pmt_psii,
                                    upipe_ts_mux_program->pmt_interval);
-    upipe_set_output(upipe_ts_mux_program->program_psig,
-                     upipe_ts_mux_program->pmt_psii);
-
-    upipe_ts_mux_change(upipe_ts_mux_to_upipe(upipe_ts_mux));
     return upipe;
 }
 
@@ -941,6 +887,90 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
     upipe_input(upipe_ts_mux_program->program_psig, uref, NULL);
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
+                                              struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    struct upipe_ts_mux *upipe_ts_mux =
+        upipe_ts_mux_from_program_mgr(upipe->mgr);
+    if (!uref_flow_match_def(flow_def, "void."))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+        return false;
+
+    bool ret = true;
+    uint64_t sid = 0;
+    if (uref_ts_flow_get_sid(flow_def, &sid) &&
+        upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux), sid)) {
+        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                      "SID %"PRIu64" already exists", sid);
+        sid = 0;
+    }
+    if (sid == 0) {
+        do {
+            sid = upipe_ts_mux->sid_auto++;
+        } while (upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                       sid));
+        if (sid >= MAX_SIDS)
+            ret = false;
+        else
+            ret = ret && uref_ts_flow_set_sid(flow_def_dup, sid);
+    }
+
+    uint64_t pid = 0;
+    if (uref_ts_flow_get_pid(flow_def, &pid) &&
+        upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
+        upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                      "PID %"PRIu64" already exists", pid);
+        pid = 0;
+    }
+    if (pid == 0) {
+        do {
+            pid = upipe_ts_mux->pid_auto++;
+        } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                       pid));
+        if (pid >= MAX_PIDS)
+            ret = false;
+        else
+            ret = ret && uref_ts_flow_set_pid(flow_def_dup, pid);
+    }
+
+    uint64_t octetrate;
+    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
+        ret = ret && uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI);
+    ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI);
+
+    if (unlikely(!ret)) {
+        uref_free(flow_def_dup);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+
+    if (!upipe_set_flow_def(upipe_ts_mux_program->program_psig, flow_def_dup)) {
+        uref_free(flow_def_dup);
+        return false;
+    }
+
+    uref_free(flow_def_dup);
+    upipe_ts_mux_program->sid = sid;
+    upipe_ts_mux_program->pmt_pid = pid;
+
+    upipe_notice_va(upipe, "adding program %"PRIu64" on PID %"PRIu64, sid, pid);
+    upipe_ts_mux_change(upipe_ts_mux_to_upipe(upipe_ts_mux));
+    return ret;
+}
+
 /** @internal @This returns the current PMT interval.
  *
  * @param upipe description structure of the pipe
@@ -1030,6 +1060,10 @@ static bool upipe_ts_mux_program_control(struct upipe *upipe,
                                          va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_mux_program_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_ts_mux_program_get_sub_mgr(upipe, p);
@@ -1091,7 +1125,7 @@ static void upipe_ts_mux_program_free(struct upipe *upipe)
 
     upipe_ts_mux_program_clean_sub_inputs(upipe);
     upipe_ts_mux_program_clean_sub(upipe);
-    upipe_ts_mux_program_free_flow(upipe);
+    upipe_ts_mux_program_free_void(upipe);
 
     if (!upipe_single(upipe_ts_mux_to_upipe(mux)))
         upipe_ts_mux_change(upipe_ts_mux_to_upipe(mux));
@@ -1206,28 +1240,9 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_mux_alloc_flow(mgr, uprobe, signature, args,
-                                                  &flow_def);
+    struct upipe *upipe = upipe_ts_mux_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    bool ret = true;
-    uint64_t tsid = 0;
-    if (!uref_ts_flow_get_tsid(flow_def, &tsid))
-        ret = ret && uref_ts_flow_set_tsid(flow_def, DEFAULT_TSID);
-
-    uint64_t octetrate;
-    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
-        ret = ret && uref_block_flow_set_octetrate(flow_def, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_tb_rate(flow_def, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_pid(flow_def, 0);
-
-    if (unlikely(!ret)) {
-        uref_free(flow_def);
-        upipe_ts_mux_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux_init_uref_mgr(upipe);
@@ -1258,14 +1273,12 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_mux_mgr *ts_mux_mgr =
         upipe_ts_mux_mgr_from_upipe_mgr(upipe->mgr);
-    upipe_ts_mux->psig =
-        upipe_flow_alloc(ts_mux_mgr->ts_psig_mgr,
+    if (unlikely((upipe_ts_mux->psig =
+                  upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "psig"),
-                         flow_def);
-    uref_free(flow_def);
-    if (unlikely(upipe_ts_mux->psig == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_INVALID);
+                                                UPROBE_LOG_DEBUG, "psig")))
+                   == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1282,7 +1295,6 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     struct upipe_ts_mux_mgr *ts_mux_mgr =
         upipe_ts_mux_mgr_from_upipe_mgr(upipe->mgr);
-    struct uref *flow_def;
 
     upipe_ts_mux->join =
         upipe_void_alloc(ts_mux_mgr->ts_join_mgr,
@@ -1290,52 +1302,43 @@ static void upipe_ts_mux_init(struct upipe *upipe)
                                                 UPROBE_LOG_DEBUG, "join"));
     if (unlikely(upipe_ts_mux->join == NULL ||
                  !upipe_set_uref_mgr(upipe_ts_mux->join,
-                                     upipe_ts_mux->uref_mgr) ||
-                 !upipe_get_flow_def(upipe_ts_mux->join, &flow_def))) {
+                                     upipe_ts_mux->uref_mgr))) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
 
     upipe_ts_mux->psii =
-        upipe_flow_alloc(ts_mux_mgr->ts_psii_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "psii"),
-                         flow_def);
-    if (unlikely(upipe_ts_mux->psii == NULL ||
-                 !upipe_get_flow_def(upipe_ts_mux->psii, &flow_def))) {
-        uref_free(flow_def);
+        upipe_void_alloc_output(upipe_ts_mux->join, ts_mux_mgr->ts_psii_mgr,
+                           uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
+                                                  UPROBE_LOG_DEBUG, "psii"));
+    if (unlikely(upipe_ts_mux->psii == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
-    upipe_set_output(upipe_ts_mux->join, upipe_ts_mux->psii);
 
     struct upipe *agg =
-        upipe_flow_alloc(ts_mux_mgr->ts_agg_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->agg_probe,
-                                                UPROBE_LOG_DEBUG, "agg"),
-                         flow_def);
+        upipe_void_alloc_output(upipe_ts_mux->psii, ts_mux_mgr->ts_agg_mgr,
+                           uprobe_pfx_adhoc_alloc(&upipe_ts_mux->agg_probe,
+                                                  UPROBE_LOG_DEBUG, "agg"));
     if (unlikely(agg == NULL)) {
-        uref_free(flow_def);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
-    upipe_set_output(upipe_ts_mux->psii, agg);
     upipe_ts_mux_store_last_subpipe(upipe, agg);
 
     if (unlikely(!upipe_ts_mux_set_mode(upipe_ts_mux->agg,
                                         UPIPE_TS_MUX_MODE_CAPPED) ||
-                 !upipe_get_flow_def(upipe_ts_mux->psig, &flow_def) ||
                  (upipe_ts_mux->pat_psii =
-                  upipe_flow_alloc_sub(upipe_ts_mux->psii,
+                  upipe_void_alloc_output_sub(upipe_ts_mux->psig,
+                         upipe_ts_mux->psii,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "pat psii"),
-                         flow_def)) == NULL)) {
+                                                UPROBE_LOG_DEBUG, "pat psii")))
+                  == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
     }
     upipe_ts_psii_sub_set_interval(upipe_ts_mux->pat_psii,
                                    upipe_ts_mux->pat_interval);
-    upipe_set_output(upipe_ts_mux->psig, upipe_ts_mux->pat_psii);
 }
 
 /** @This calculates the total octetrate used by a stream and updates the
@@ -1468,6 +1471,47 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
         }
     }
     return false;
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    if (!uref_flow_match_def(flow_def, "void."))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+        return false;
+
+    bool ret = true;
+    uint64_t tsid = 0;
+    if (!uref_ts_flow_get_tsid(flow_def, &tsid))
+        ret = ret && uref_ts_flow_set_tsid(flow_def_dup, DEFAULT_TSID);
+
+    uint64_t octetrate;
+    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
+        ret = ret && uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI);
+    ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI);
+    ret = ret && uref_ts_flow_set_pid(flow_def_dup, 0);
+
+    if (unlikely(!ret)) {
+        uref_free(flow_def_dup);
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+
+    ret = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
+    uref_free(flow_def_dup);
+    return ret;
 }
 
 /** @internal @This returns the current conformance mode. It cannot
@@ -1714,6 +1758,10 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
                 upipe_ts_mux_init(upipe);
             return true;
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_mux_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_ts_mux_get_ubuf_mgr(upipe, p);
@@ -1814,12 +1862,13 @@ static void upipe_ts_mux_free(struct upipe *upipe)
         upipe_release(upipe_ts_mux->psig);
     if (upipe_ts_mux->pat_psii != NULL)
         upipe_release(upipe_ts_mux->pat_psii);
+
     upipe_throw_dead(upipe);
     upipe_ts_mux_clean_sub_programs(upipe);
     upipe_ts_mux_clean_bin(upipe);
     upipe_ts_mux_clean_ubuf_mgr(upipe);
     upipe_ts_mux_clean_uref_mgr(upipe);
-    upipe_ts_mux_free_flow(upipe);
+    upipe_ts_mux_free_void(upipe);
 }
 
 /** @This frees a upipe manager.

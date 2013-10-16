@@ -34,6 +34,7 @@
 #include <upipe/uprobe_helper_adhoc.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
+#include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -89,17 +90,17 @@ static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe
 {
     struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
     GLuint texture;
-    struct urational aspect;
+    struct urational sar;
     float scale = 1;
     size_t w = 0, h = 0;
 
     uref_pic_size(uref, &w, &h, NULL);
-    aspect.num = aspect.den = 1;
-    uref_pic_get_aspect(uref, &aspect);
-    if (unlikely(!aspect.num || !aspect.den)) {
-        aspect.num = aspect.den = 1;
+    sar.num = sar.den = 1;
+    uref_pic_flow_get_sar(uref, &sar);
+    if (unlikely(!sar.num || !sar.den)) {
+        sar.num = sar.den = 1;
     }
-    scale = (aspect.num * w)/((float) aspect.den * h);
+    scale = (sar.num * w)/((float) sar.den * h);
 
     upipe_gl_sink_get_texture(upipe, &texture);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

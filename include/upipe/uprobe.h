@@ -47,12 +47,6 @@ struct upipe;
 
 /** common types of events */
 enum uprobe_event {
-    /** a pipe is ready to accept input and respond to control commands
-     * (void) */
-    UPROBE_READY = 0,
-    /** a pipe is about to be destroyed and will no longer accept input
-     * and control commands (void) */
-    UPROBE_DEAD,
     /** something occurred, and the pipe send a textual message
      * (enum uprobe_log_level, const char *) */
     UPROBE_LOG,
@@ -100,6 +94,14 @@ enum uprobe_event {
 
     /** when an event is handled, it is OR-ed with this value */
     UPROBE_HANDLED_FLAG = 0x80000000,
+
+    /* following events have the msb set so that it is always handled */
+    /** a pipe is ready to accept input and respond to control commands
+     * (void) */
+    UPROBE_READY = 0xfffffffe,
+    /** a pipe is about to be destroyed and will no longer accept input
+     * and control commands (void) */
+    UPROBE_DEAD = 0xffffffff
 };
 
 /** @This defines the levels of log messages. */
@@ -119,6 +121,8 @@ enum uprobe_log_level {
 
 /** @This defines the standard error codes. */
 enum uprobe_error_code {
+    /** unknown error */
+    UPROBE_ERR_UNKNOWN,
     /** allocation error */
     UPROBE_ERR_ALLOC,
     /** unable to allocate a upump */
@@ -384,8 +388,6 @@ static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
 /** @This implements the common parts of a plumber probe (catching the
  * new_flow_def event).
  *
- * @param uprobe pointer to the probe
- * @param upipe pointer to the pipe
  * @param event event triggered by the pipe
  * @param args arguments of the event
  * @param flow_def_p filled in with the flow definition uref passed with the
@@ -393,8 +395,7 @@ static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param def_p filled in with the flow definition
  * @return false if the event cannot be handled by a plumber
  */
-static inline bool uprobe_plumber(struct uprobe *uprobe, struct upipe *upipe,
-                                  enum uprobe_event event, va_list args,
+static inline bool uprobe_plumber(enum uprobe_event event, va_list args,
                                   struct uref **flow_def_p, const char **def_p)
 {
     if (event != UPROBE_NEW_FLOW_DEF)

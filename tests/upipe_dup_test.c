@@ -127,10 +127,10 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct upipe *upipe_sink0 = upipe_flow_alloc(&dup_test_mgr, log, NULL);
+    struct upipe *upipe_sink0 = upipe_void_alloc(&dup_test_mgr, log);
     assert(upipe_sink0 != NULL);
 
-    struct upipe *upipe_sink1 = upipe_flow_alloc(&dup_test_mgr, log, NULL);
+    struct upipe *upipe_sink1 = upipe_void_alloc(&dup_test_mgr, log);
     assert(upipe_sink1 != NULL);
 
     uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
@@ -138,9 +138,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
-    struct upipe *upipe_dup = upipe_flow_alloc(upipe_dup_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup"), uref);
+    struct upipe *upipe_dup = upipe_void_alloc(upipe_dup_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
+    assert(upipe_set_flow_def(upipe_dup, uref));
     uref_free(uref);
 
     struct upipe *upipe_dup_output0 = upipe_void_alloc_sub(upipe_dup,

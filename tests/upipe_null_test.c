@@ -89,9 +89,8 @@ int main(int argc, char **argv)
     /* build null pipe */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr);
-    struct upipe *nullpipe = upipe_flow_alloc(upipe_null_mgr,
-                   uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"),
-                   NULL);
+    struct upipe *nullpipe = upipe_void_alloc(upipe_null_mgr,
+               uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
 
     /* Now send uref */

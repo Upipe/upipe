@@ -124,7 +124,6 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
 int main(int argc, char *argv[])
 {
-    struct upipe *upipe_sink = NULL;
     const char *srcpath, *dirpath, *suffix = NULL;
     bool udp = false;
     uint64_t rotate = 0;
@@ -192,26 +191,25 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    struct uref *flow_def;
-    upipe_get_flow_def(upipe_udpsrc, &flow_def);
     if (udp) {
         /* send to udp */
         struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-        upipe_sink = upipe_flow_alloc(upipe_udpsink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udpsink"),
-                flow_def);
+        struct upipe *upipe_sink = upipe_void_alloc_output(upipe_udpsrc,
+                upipe_udpsink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udpsink"));
         upipe_set_upump_mgr(upipe_sink, upump_mgr);
         if (!upipe_udpsink_set_uri(upipe_sink, dirpath, 0)) {
             return EXIT_FAILURE;
         }
+        upipe_release(upipe_sink);
     }
     else 
     {
         /* dup */
         struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
-        struct upipe *upipe_dup = upipe_flow_alloc(upipe_dup_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"), flow_def);
-        upipe_sink = upipe_dup;
+        struct upipe *upipe_dup = upipe_void_alloc_output(upipe_udpsrc,
+                upipe_dup_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"));
 
         struct upipe *upipe_dup_data = upipe_void_alloc_sub(upipe_dup,
                     uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata"));
@@ -219,43 +217,38 @@ int main(int argc, char *argv[])
                     uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux"));
 
         /* data files (multicat sink) */
-        struct upipe *datasink= upipe_flow_alloc(upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"),
-                flow_def);
+        struct upipe *datasink = upipe_void_alloc_output(upipe_dup_data,
+                upipe_multicat_sink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"));
         upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
         upipe_set_upump_mgr(datasink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(datasink, rotate);
         }
         upipe_multicat_sink_set_path(datasink, dirpath, suffix);
-        upipe_set_output(upipe_dup_data, datasink);
         upipe_release(datasink);
 
         /* aux block generation pipe */
         struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
-        struct upipe *genaux = upipe_flow_alloc(upipe_genaux_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"),
-                flow_def);
+        struct upipe *genaux = upipe_void_alloc_output(upipe_dup_aux,
+                upipe_genaux_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"));
         assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
-        upipe_set_output(upipe_dup_aux, genaux);
-        upipe_get_flow_def(genaux, &flow_def);
 
         /* aux files (multicat sink) */
-        struct upipe *auxsink= upipe_flow_alloc(upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"),
-                flow_def);
+        struct upipe *auxsink = upipe_void_alloc_output(genaux,
+                upipe_multicat_sink_mgr,
+                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"));
         upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
         upipe_set_upump_mgr(auxsink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(auxsink, rotate);
         }
         upipe_multicat_sink_set_path(auxsink, dirpath, ".aux");
-        upipe_set_output(genaux, auxsink);
         upipe_release(genaux);
         upipe_release(auxsink);
+        upipe_release(upipe_dup);
     }
-    upipe_set_output(upipe_udpsrc, upipe_sink);
-    upipe_release(upipe_sink);
 
     /* fire loop ! */
     ev_loop(loop, 0);

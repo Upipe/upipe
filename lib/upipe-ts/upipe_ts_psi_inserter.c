@@ -33,7 +33,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -112,7 +112,7 @@ struct upipe_ts_psii {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psii, "block.mpegts.")
+UPIPE_HELPER_VOID(upipe_ts_psii)
 UPIPE_HELPER_UREF_MGR(upipe_ts_psii, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psii, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
@@ -140,7 +140,7 @@ struct upipe_ts_psii_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psii_sub, upipe, UPIPE_TS_PSII_SUB_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_psii_sub, "block.mpegtspsi.")
+UPIPE_HELPER_VOID(upipe_ts_psii_sub)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psii, upipe_ts_psii_sub, sub, sub_mgr,
                      subs, uchain)
@@ -157,9 +157,8 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
                                              struct uprobe *uprobe,
                                              uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_psii_sub_alloc_flow(mgr, uprobe, signature,
-                                                       args, &flow_def);
+    struct upipe *upipe = upipe_ts_psii_sub_alloc_void(mgr, uprobe, signature,
+                                                       args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -170,6 +169,7 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->next_cr = upipe_ts_psii_sub->next_cr_sys = UINT64_MAX;
     ulist_init(&upipe_ts_psii_sub->table);
+    upipe_ts_psii_sub->encaps = NULL;
 
     struct upipe_ts_psii *upipe_ts_psii =
         upipe_ts_psii_from_sub_mgr(upipe->mgr);
@@ -180,12 +180,11 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_psii_mgr *ts_psii_mgr =
         upipe_ts_psii_mgr_from_upipe_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii)->mgr);
 
-    upipe_ts_psii_sub->encaps = upipe_flow_alloc(ts_psii_mgr->ts_encaps_mgr,
+    if (unlikely((upipe_ts_psii_sub->encaps =
+                    upipe_void_alloc(ts_psii_mgr->ts_encaps_mgr,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_psii->probe,
-                                                UPROBE_LOG_DEBUG, "encaps"),
-                         flow_def);
-    uref_free(flow_def);
-    if (unlikely(upipe_ts_psii_sub->encaps == NULL)) {
+                                                UPROBE_LOG_DEBUG,
+                                                "encaps"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
     }
@@ -282,6 +281,25 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
     }
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, "block.mpegtspsi."))
+        return false;
+    struct upipe_ts_psii_sub *upipe_ts_psii_sub =
+        upipe_ts_psii_sub_from_upipe(upipe);
+    return upipe_ts_psii_sub->encaps != NULL &&
+           upipe_set_flow_def(upipe_ts_psii_sub->encaps, flow_def);
+}
+
 /** @internal @This returns the current interval.
  *
  * @param upipe description structure of the pipe
@@ -329,6 +347,10 @@ static bool upipe_ts_psii_sub_control(struct upipe *upipe,
                                       enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psii_sub_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psii_sub_get_super(upipe, p);
@@ -368,7 +390,7 @@ static void upipe_ts_psii_sub_free(struct upipe *upipe)
 
     upipe_ts_psii_sub_clean(upipe);
     upipe_ts_psii_sub_clean_sub(upipe);
-    upipe_ts_psii_sub_free_flow(upipe);
+    upipe_ts_psii_sub_free_void(upipe);
 
     upipe_release(upipe_ts_psii_to_upipe(upipe_ts_psii));
 }
@@ -437,9 +459,8 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_psii_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
+    struct upipe *upipe = upipe_ts_psii_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -449,7 +470,6 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
     upipe_ts_psii_init_output(upipe);
     upipe_ts_psii_init_sub_mgr(upipe);
     upipe_ts_psii_init_sub_subs(upipe);
-    upipe_ts_psii_store_flow_def(upipe, flow_def);
 
     uprobe_init(&upipe_ts_psii->probe, upipe_ts_psii_probe, uprobe);
 
@@ -486,6 +506,28 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_ts_psii_output(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_psii_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, "block.mpegts."))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    upipe_ts_psii_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This sets the output on a pipe.
@@ -542,6 +584,10 @@ static bool upipe_ts_psii_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psii_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_psii_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psii_get_output(upipe, p);
@@ -575,7 +621,7 @@ static void upipe_ts_psii_free(struct upipe *upipe)
     upipe_ts_psii_clean_output(upipe);
     upipe_ts_psii_clean_ubuf_mgr(upipe);
     upipe_ts_psii_clean_uref_mgr(upipe);
-    upipe_ts_psii_free_flow(upipe);
+    upipe_ts_psii_free_void(upipe);
 }
 
 /** @This frees a upipe manager.

@@ -222,18 +222,18 @@ int main(int argc, char **argv)
 
     /* build rtp_prepend pipe */
     struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
-    struct upipe *rtp_prepend = upipe_flow_alloc(upipe_rtp_prepend_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "rtp"),
-            uref);
+    struct upipe *rtp_prepend = upipe_void_alloc(upipe_rtp_prepend_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "rtp"));
     assert(upipe_rtp_prepend_mgr);
+    assert(upipe_set_flow_def(rtp_prepend, uref));
+    uref_free(uref);
     assert(rtp_prepend);
     assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
 
-    struct upipe *rtp_prepend_test = upipe_flow_alloc(&rtp_prepend_test_mgr,
-                                                      log, uref);
+    struct upipe *rtp_prepend_test = upipe_void_alloc(&rtp_prepend_test_mgr,
+                                                      log);
     assert(rtp_prepend_test != NULL);
     assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
-    uref_free(uref);
 
     /* Now send uref */
     for (i=0; i < PACKET_NUM; i++) {

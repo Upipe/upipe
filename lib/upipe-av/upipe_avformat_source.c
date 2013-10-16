@@ -603,8 +603,8 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
     if (codec->bit_rate)
         CHK(uref_block_flow_set_octetrate(flow_def, (codec->bit_rate + 7) / 8))
 
-    CHK(uref_pic_set_hsize(flow_def, codec->width))
-    CHK(uref_pic_set_vsize(flow_def, codec->height))
+    CHK(uref_pic_flow_set_hsize(flow_def, codec->width))
+    CHK(uref_pic_flow_set_vsize(flow_def, codec->height))
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
     if (codec->time_base.den) {
         struct urational fps = { .num = codec->time_base.den,
@@ -616,7 +616,7 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
         struct urational sar = { .num = codec->sample_aspect_ratio.num,
                                  .den = codec->sample_aspect_ratio.den };
         urational_simplify(&sar);
-        CHK(uref_pic_set_aspect(flow_def, sar));
+        CHK(uref_pic_flow_set_sar(flow_def, sar));
     }
     return flow_def;
 }

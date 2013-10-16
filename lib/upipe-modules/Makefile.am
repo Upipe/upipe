@@ -20,6 +20,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_multicat_sink.c \
 	upipe_multicat_probe.c \
 	upipe_probe_uref.c \
+	upipe_nodemux.c \
 	upipe_null.c \
 	upipe_skip.c \
 	upipe_htons.c \

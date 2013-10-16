@@ -73,7 +73,7 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
 
 /** @This cleans a uprobe pfx structure.
  *
- * @param uprobe structure to clean
+ * @param uprobe_pfx structure to clean
  */
 void uprobe_pfx_clean(struct uprobe_pfx *uprobe_pfx);
 

@@ -32,7 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -76,7 +76,7 @@ struct upipe_ts_pmtd {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe, UPIPE_TS_PMTD_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_pmtd, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_pmtd)
 UPIPE_HELPER_OUTPUT(upipe_ts_pmtd, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_pmtd pipe.
@@ -91,15 +91,14 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_pmtd_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
+    struct upipe *upipe = upipe_ts_pmtd_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     upipe_ts_pmtd_init_output(upipe);
-    upipe_ts_pmtd->flow_def_input = flow_def;
+    upipe_ts_pmtd->flow_def_input = NULL;
     upipe_ts_pmtd->pmt = NULL;
     ulist_init(&upipe_ts_pmtd->flows);
     upipe_throw_ready(upipe);
@@ -338,10 +337,13 @@ static uint64_t upipe_ts_pmtd_h264_max_delay(const uint8_t *descl,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
+ * @param upump pump that generated the buffer
  */
-static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
+static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
+                                struct upump *upump)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    assert(upipe_ts_pmtd->flow_def_input != NULL);
     if (upipe_ts_pmtd->pmt != NULL &&
         uref_block_equal(upipe_ts_pmtd->pmt, uref)) {
         /* Identical PMT. */
@@ -491,21 +493,29 @@ static void upipe_ts_pmtd_work(struct upipe *upipe, struct uref *uref)
     upipe_split_throw_update(upipe);
 }
 
-/** @internal @This receives data.
+/** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
  */
-static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+static bool upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
 {
-    if (unlikely(uref->ubuf == NULL)) {
-        uref_free(uref);
-        return;
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
     }
-
-    upipe_ts_pmtd_work(upipe, uref);
+    struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    if (upipe_ts_pmtd->flow_def_input != NULL)
+        uref_free(upipe_ts_pmtd->flow_def_input);
+    upipe_ts_pmtd->flow_def_input = flow_def_dup;
+    return true;
 }
 
 /** @internal @This iterates over flow definitions.
@@ -545,6 +555,10 @@ static bool upipe_ts_pmtd_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_pmtd_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_pmtd_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_pmtd_get_output(upipe, p);
@@ -574,10 +588,11 @@ static void upipe_ts_pmtd_free(struct upipe *upipe)
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     if (upipe_ts_pmtd->pmt != NULL)
         uref_free(upipe_ts_pmtd->pmt);
-    uref_free(upipe_ts_pmtd->flow_def_input);
+    if (upipe_ts_pmtd->flow_def_input != NULL)
+        uref_free(upipe_ts_pmtd->flow_def_input);
     upipe_ts_pmtd_clean_flows(upipe);
     upipe_ts_pmtd_clean_output(upipe);
-    upipe_ts_pmtd_free_flow(upipe);
+    upipe_ts_pmtd_free_void(upipe);
 }
 
 /** module manager static descriptor */

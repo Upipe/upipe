@@ -46,6 +46,7 @@ extern "C" {
 /** @internal flow definition prefix for pic allocator */
 #define UREF_PIC_FLOW_DEF "pic."
 
+/* The following attributes define an ubuf picture manager format. */
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, macropixel, "p.macropixel",
         number of pixels in a macropixel)
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, planes, "p.planes",
@@ -58,6 +59,7 @@ UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, macropixel_size, "p.macropix[%"PRIu8"]",
         size of a compound, uint8_t plane, plane)
 UREF_ATTR_STRING_VA(pic_flow, chroma, "p.chroma[%"PRIu8"]",
         chroma type, uint8_t plane, plane)
+
 UREF_ATTR_RATIONAL(pic_flow, fps, "p.fps", frames per second)
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, hmprepend, "p.hmprepend",
         extra macropixels added before each line)
@@ -70,6 +72,15 @@ UREF_ATTR_SMALL_UNSIGNED(pic_flow, vappend, "p.vappend",
 UREF_ATTR_UNSIGNED(pic_flow, align, "p.align", alignment in octets)
 UREF_ATTR_INT(pic_flow, align_hmoffset, "p.align_hmoffset",
         horizontal offset of the aligned macropixel)
+
+UREF_ATTR_RATIONAL_SH(pic_flow, sar, UDICT_TYPE_PIC_SAR, sample aspect ratio)
+UREF_ATTR_VOID_SH(pic_flow, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
+UREF_ATTR_UNSIGNED_SH(pic_flow, hsize, UDICT_TYPE_PIC_HSIZE, horizontal size)
+UREF_ATTR_UNSIGNED_SH(pic_flow, vsize, UDICT_TYPE_PIC_VSIZE, vertical size)
+UREF_ATTR_UNSIGNED_SH(pic_flow, hsize_visible, UDICT_TYPE_PIC_HSIZE_VISIBLE,
+        horizontal visible size)
+UREF_ATTR_UNSIGNED_SH(pic_flow, vsize_visible, UDICT_TYPE_PIC_VSIZE_VISIBLE,
+        vertical visible size)
 
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.
@@ -148,6 +159,84 @@ static inline bool uref_pic_flow_find_chroma(struct uref *uref,
         }
     }
     return false;
+}
+
+/** @This checks if there is a plane with the given properties.
+ *
+ * @param uref uref control packet
+ * @param hsub horizontal subsampling
+ * @param vsub vertical subsampling
+ * @param macropixel_size size in octets of a compound
+ * @param chroma chroma type
+ * @return false in case of error
+ */
+static inline bool uref_pic_flow_check_chroma(struct uref *uref,
+                                              uint8_t hsub, uint8_t vsub,
+                                              uint8_t macropixel_size,
+                                              const char *chroma)
+{
+    uint8_t plane, hsub2, vsub2, macropixel_size2;
+    return uref_pic_flow_find_chroma(uref, chroma, &plane) &&
+           uref_pic_flow_get_hsubsampling(uref, &hsub2, plane) &&
+           hsub2 == hsub &&
+           uref_pic_flow_get_vsubsampling(uref, &vsub2, plane) &&
+           vsub2 == vsub &&
+           uref_pic_flow_get_macropixel_size(uref, &macropixel_size2, plane) &&
+           macropixel_size2 == macropixel_size;
+}
+
+/** @This copies the attributes defining the ubuf manager format to
+ * another uref.
+ *
+ * @param uref_dst destination uref
+ * @param uref_src source uref
+ * @return false in case of error
+ */
+static inline bool uref_pic_flow_copy_format(struct uref *uref_dst,
+                                             struct uref *uref_src)
+{
+    const char *def;
+    uint8_t planes;
+    if (unlikely(!uref_flow_get_def(uref_src, &def) ||
+                 !uref_flow_set_def(uref_dst, def) ||
+                 !uref_pic_flow_get_planes(uref_src, &planes) ||
+                 !uref_pic_flow_set_planes(uref_dst, planes)))
+        return false;
+
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        const char *chroma;
+        uint8_t var;
+        if (unlikely(!uref_pic_flow_get_chroma(uref_src, &chroma, plane) ||
+                     !uref_pic_flow_set_chroma(uref_dst, chroma, plane) ||
+                     !uref_pic_flow_get_hsubsampling(uref_src, &var, plane) ||
+                     !uref_pic_flow_set_hsubsampling(uref_dst, var, plane) ||
+                     !uref_pic_flow_get_vsubsampling(uref_src, &var, plane) ||
+                     !uref_pic_flow_set_vsubsampling(uref_dst, var, plane) ||
+                     !uref_pic_flow_get_macropixel_size(uref_src, &var,
+                                                        plane) ||
+                     !uref_pic_flow_set_macropixel_size(uref_dst, var, plane)))
+            return false;
+    }
+    return true;
+}
+
+/** @This clears the attributes defining the ubuf_pic manager format.
+ *
+ * @param uref uref control packet
+ */
+static inline void uref_pic_flow_clear_format(struct uref *uref)
+{
+    uint8_t planes;
+    if (unlikely(!uref_pic_flow_get_planes(uref, &planes)))
+        return;
+
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        uref_pic_flow_delete_chroma(uref, plane);
+        uref_pic_flow_delete_hsubsampling(uref, plane);
+        uref_pic_flow_delete_vsubsampling(uref, plane);
+        uref_pic_flow_delete_macropixel_size(uref, plane);
+    }
+    uref_pic_flow_delete_planes(uref);
 }
 
 #ifdef __cplusplus

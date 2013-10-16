@@ -34,7 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_setattr.h>
 
@@ -60,7 +60,7 @@ struct upipe_setattr {
 };
 
 UPIPE_HELPER_UPIPE(upipe_setattr, upipe, UPIPE_SETATTR_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_setattr, NULL)
+UPIPE_HELPER_VOID(upipe_setattr)
 UPIPE_HELPER_OUTPUT(upipe_setattr, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a setattr pipe.
@@ -75,16 +75,14 @@ static struct upipe *upipe_setattr_alloc(struct upipe_mgr *mgr,
                                          struct uprobe *uprobe,
                                          uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_setattr_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
+    struct upipe *upipe = upipe_setattr_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
 
     struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
     upipe_setattr_init_output(upipe);
     upipe_setattr->dict = NULL;
-    upipe_setattr_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -132,6 +130,24 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
     if (upipe_setattr->dict->rap_sys != UINT64_MAX)
         uref->rap_sys = upipe_setattr->dict->rap_sys;
     upipe_setattr_output(upipe, uref, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_setattr_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return false;
+    upipe_setattr_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This returns the current dictionary being set into urefs.
@@ -184,6 +200,10 @@ static bool upipe_setattr_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_setattr_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_setattr_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_setattr_get_output(upipe, p);
@@ -224,7 +244,7 @@ static void upipe_setattr_free(struct upipe *upipe)
     if (upipe_setattr->dict != NULL)
         uref_free(upipe_setattr->dict);
 
-    upipe_setattr_free_flow(upipe);
+    upipe_setattr_free_void(upipe);
 }
 
 /** module manager static descriptor */

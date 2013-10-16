@@ -1,14 +1,14 @@
-Shitty APIs:
- - flow defs
- - uprobe: easier adhoc creation? impossible to chain "generic" common probes. policy for passing probes to subpipes?
-
 Plans for core:
+ - ubuf_mgr_control
+ - check ubuf picture format against flow def
  - ubuf_sound
- - thread pool support in upump-ev
  - rewrite ubuf_mem
- - fast memcpy/memset ?
+ - thread pool support in upump-ev
 
-Other plans:
+Plans for modules:
+ - trickplay support for multiple programs (needed for TS file transcoding)
+ - partial rewrite of TS mux for better scheduling
+ - timestamps on flow definition after demuxes
 
 Bugs documentation:
  - doubly declared functions (due to __attribute__((format)))

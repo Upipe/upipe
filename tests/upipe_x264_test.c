@@ -235,19 +235,25 @@ int main(int argc, char **argv)
     /* send flow definition */
     struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def);
+    assert(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"));
+    assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"));
+    assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"));
+    assert(uref_pic_flow_set_hsize(flow_def, WIDTH));
+    assert(uref_pic_flow_set_vsize(flow_def, HEIGHT));
+    struct urational fps = { .num = 25, .den = 1 };
+    assert(uref_pic_flow_set_fps(flow_def, fps));
 
     /* x264 pipe */
-    struct upipe *x264 = upipe_flow_alloc(upipe_x264_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264"),
-                    flow_def);
-    uref_free(flow_def);
+    struct upipe *x264 = upipe_void_alloc(upipe_x264_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264"));
     assert(x264);
+    assert(upipe_set_flow_def(x264, flow_def));
+    uref_free(flow_def);
     assert(upipe_set_ubuf_mgr(x264, block_mgr));
 
     /* x264_test */
-    struct upipe *x264_test = upipe_flow_alloc(&x264_test_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"),
-                    NULL);
+    struct upipe *x264_test = upipe_void_alloc(&x264_test_mgr,
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"));
     upipe_set_output(x264, x264_test);
     upipe_release(x264_test);
 

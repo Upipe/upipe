@@ -1,8 +1,7 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen
- *          Christophe Massiot
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,49 +24,30 @@
  */
 
 /** @file
- * @short Upipe avcodec decode wrapper module
+ * @short Upipe module creating timestamps for single streams
+ *
+ * This module is used for simple pipelines where only a single elementary
+ * stream is played, and no demux is used. As there is no demux the packets
+ * do not get any timestamp. This module allows to create timestamps so that
+ * the stream can be played.
  */
 
-#ifndef _UPIPE_AV_UPIPE_AVCODEC_DECODE_H_
+#ifndef _UPIPE_MODULES_UPIPE_NODEMUX_H_
 /** @hidden */
-#define _UPIPE_AV_UPIPE_AVCODEC_DECODE_H_
+#define _UPIPE_MODULES_UPIPE_NODEMUX_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
 
-#define UPIPE_AVCDEC_SIGNATURE UBASE_FOURCC('a', 'v', 'c', 'd')
+#define UPIPE_NODEMUX_SIGNATURE UBASE_FOURCC('n','d','m','x')
 
-/** @This extends upipe_command with specific commands for avcodec decode. */
-enum upipe_avcdec_command {
-    UPIPE_AVCDEC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** sets the content of an avcodec option (const char *, const char *) */
-    UPIPE_AVCDEC_SET_OPTION
-};
-
-/** @This sets the content of an avcodec option. It only has effect before the
- * first packet is sent.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option
- * @return false in case of error
- */
-static inline bool upipe_avcdec_set_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char *content)
-{
-    return upipe_control(upipe, UPIPE_AVCDEC_SET_OPTION, UPIPE_AVCDEC_SIGNATURE,
-                         option, content);
-}
-
-/** @This returns the management structure for all avcodec decode pipes.
+/** @This returns the management structure for all nodemux pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_avcdec_mgr_alloc(void);
+struct upipe_mgr *upipe_nodemux_mgr_alloc(void);
 
 #ifdef __cplusplus
 }

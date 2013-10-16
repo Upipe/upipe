@@ -33,7 +33,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -101,7 +101,7 @@ struct upipe_ts_agg {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_agg, upipe, UPIPE_TS_AGG_SIGNATURE)
-UPIPE_HELPER_FLOW(upipe_ts_agg, EXPECTED_FLOW_DEF)
+UPIPE_HELPER_VOID(upipe_ts_agg)
 UPIPE_HELPER_UREF_MGR(upipe_ts_agg, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_agg, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_agg, output, flow_def, flow_def_sent)
@@ -118,17 +118,9 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_ts_agg_alloc_flow(mgr, uprobe, signature,
-                                                  args, &flow_def);
+    struct upipe *upipe = upipe_ts_agg_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
-
-    if (unlikely(!uref_flow_set_def(flow_def, "block.mpegtsaligned."))) {
-        uref_free(flow_def);
-        upipe_ts_agg_free_flow(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     upipe_ts_agg_init_uref_mgr(upipe);
@@ -145,7 +137,6 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg->next_cr_remainder = 0;
     upipe_ts_agg->next_uref = NULL;
     upipe_ts_agg->next_uref_size = 0;
-    upipe_ts_agg_store_flow_def(upipe, flow_def);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -284,10 +275,6 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
-    if (unlikely(uref->ubuf == NULL)) {
-        upipe_ts_agg_output(upipe, uref, upump);
-        return;
-    }
 
     if (unlikely(upipe_ts_agg->padding == NULL))
         upipe_ts_agg_init(upipe);
@@ -378,6 +365,30 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     /* anticipate next packet size and flush now if necessary */
     if (upipe_ts_agg->next_uref_size + TS_SIZE > mtu)
         upipe_ts_agg_complete(upipe, upump);
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return false if the flow definition is not handled
+ */
+static bool upipe_ts_agg_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return false;
+    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+        return false;
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        return false;
+    }
+    if (unlikely(!uref_flow_set_def(flow_def_dup, "block.mpegtsaligned.")))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
+    return true;
 }
 
 /** @internal @This returns the current mux octetrate.
@@ -512,6 +523,10 @@ static bool upipe_ts_agg_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_agg_get_flow_def(upipe, p);
         }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ts_agg_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_agg_get_output(upipe, p);
@@ -579,7 +594,7 @@ static void upipe_ts_agg_free(struct upipe *upipe)
     upipe_ts_agg_clean_output(upipe);
     upipe_ts_agg_clean_ubuf_mgr(upipe);
     upipe_ts_agg_clean_uref_mgr(upipe);
-    upipe_ts_agg_free_flow(upipe);
+    upipe_ts_agg_free_void(upipe);
 }
 
 /** module manager static descriptor */
