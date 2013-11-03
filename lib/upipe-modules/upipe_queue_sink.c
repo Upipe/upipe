@@ -63,11 +63,13 @@ struct upipe_qsink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *upump;
-    /** flow definition */
-    struct uref *flow_def;
 
     /** pseudo-output */
     struct upipe *output;
+    /** flow definition */
+    struct uref *flow_def;
+    /** true if the flow definition has already been sent */
+    bool flow_def_sent;
 
     /** pointer to queue source */
     struct upipe *qsrc;
@@ -112,6 +114,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
     upipe_qsink_init_sink(upipe);
     upipe_qsink->qsrc = NULL;
     upipe_qsink->flow_def = NULL;
+    upipe_qsink->flow_def_sent = false;
     upipe_qsink->output = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -171,6 +174,15 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    if (!upipe_qsink->flow_def_sent && upipe_qsink->flow_def != NULL) {
+        struct uref *flow_def;
+        if ((flow_def = uref_dup(upipe_qsink->flow_def)) == NULL)
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        else {
+            upipe_qsink->flow_def_sent = true;
+            upipe_qsink_input(upipe, flow_def, upump);
+        }
+    }
     if (!upipe_qsink_check_sink(upipe)) {
         upipe_qsink_hold_sink(upipe, uref);
         upipe_qsink_block_sink(upipe, upump);
@@ -238,13 +250,7 @@ static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
     if (upipe_qsink->flow_def != NULL)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink->flow_def = flow_def_dup;
-    if (upipe_qsink->qsrc != NULL) {
-        if ((flow_def_dup = uref_dup(uref)) == NULL) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-            return false;
-        }
-        upipe_qsink_input(upipe, flow_def_dup, NULL);
-    }
+    upipe_qsink->flow_def_sent = false;
     return true;
 }
 
@@ -283,14 +289,7 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
     upipe_use(qsrc);
 
     upipe_notice_va(upipe, "using queue source %p", qsrc);
-    if (upipe_qsink->flow_def != NULL) {
-        /* replay flow definition */
-        struct uref *uref = uref_dup(upipe_qsink->flow_def);
-        if (unlikely(uref == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_qsink_input(upipe, uref, NULL);
-    }
+    upipe_qsink->flow_def_sent = false;
     return true;
 }
 
