@@ -40,6 +40,7 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #include <stdbool.h>
+#include <assert.h>
 
 /** @This declares seven functions dealing with the output of a pipe,
  * and an associated uref which is the flow definition on the output.
@@ -142,6 +143,7 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
+        assert(STRUCTURE->FLOW_DEF != NULL);                                \
         upipe_throw_new_flow_def(upipe, STRUCTURE->FLOW_DEF);               \
         STRUCTURE->FLOW_DEF_SENT = true;                                    \
     }                                                                       \
