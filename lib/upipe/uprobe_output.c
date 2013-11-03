@@ -70,8 +70,15 @@ static bool uprobe_output_throw(struct uprobe *uprobe, struct upipe *upipe,
         return false;
     }
 
+    if (unlikely(output == NULL))
+        return false;
+
     if (unlikely(!upipe_set_flow_def(output, flow_def))) {
         upipe_set_output(upipe, NULL);
+        if (uprobe_output->adhoc) {
+            upipe_delete_probe(upipe, uprobe);
+            uprobe_output_free(uprobe);
+        }
         return false;
     }
     return true;
