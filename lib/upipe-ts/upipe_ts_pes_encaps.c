@@ -182,7 +182,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
         pes_set_headerlength(buffer, header_size - PES_HEADER_SIZE_NOPTS);
         pes_set_dataalignment(buffer);
         if (pts != UINT64_MAX) {
-            pes_set_pts(buffer, (pts / 300) % UINT33_MAX);
+            pes_set_pts(buffer, (pts / CLOCK_SCALE) % UINT33_MAX);
             if (dts != UINT64_MAX &&
                 ((pts / CLOCK_SCALE) % UINT33_MAX) !=
                     ((dts / CLOCK_SCALE) % UINT33_MAX))
@@ -216,11 +216,12 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     bool force = false;
     uint64_t uref_duration = UINT64_MAX;
-    if (!uref_clock_get_duration(uref, &uref_duration))
+    if (!uref_clock_get_duration(uref, &uref_duration) &&
+        upipe_ts_pese->pes_min_duration)
         force = true;
 
     if (upipe_ts_pese->next_pes != NULL) {
-        if (!uref_block_append(upipe_ts_pese->next_pes, uref->ubuf)) {
+        if (unlikely(!uref_block_append(upipe_ts_pese->next_pes, uref->ubuf))) {
             upipe_warn(upipe, "unable to merge a PES");
             upipe_ts_pese_work(upipe, upump);
             upipe_ts_pese->next_pes = uref;
