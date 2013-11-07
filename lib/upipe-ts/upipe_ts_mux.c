@@ -239,6 +239,8 @@ struct upipe_ts_mux_program {
     /** PMT PID */
     uint16_t pmt_pid;
 
+    /** probe for uref_mgr and ubuf_mgr */
+    struct uprobe probe;
     /** pointer to ts_program_psig */
     struct upipe *program_psig;
     /** pointer to ts_psii_sub dealing with PMT */
@@ -309,6 +311,8 @@ struct upipe_ts_mux_input {
     /** start date (system clock), used to bootstrap the PMT */
     uint64_t start_cr_sys;
 
+    /** probe for uref_mgr and ubuf_mgr */
+    struct uprobe probe;
     /** pointer to ts_psig_flow */
     struct upipe *psig_flow;
     /** pointer to ts_pes_encaps */
@@ -330,6 +334,51 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
 /*
  * upipe_ts_mux_input structure handling (derived from upipe structure)
  */
+
+/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
+ * subpipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_mux_input
+ * @param subpipe pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_mux_input_probe(struct uprobe *uprobe,
+                                       struct upipe *subpipe,
+                                       enum uprobe_event event, va_list args)
+{
+    struct upipe_ts_mux_input *upipe_ts_mux_input =
+        container_of(uprobe, struct upipe_ts_mux_input, probe);
+    struct upipe *upipe = upipe_ts_mux_input_to_upipe(upipe_ts_mux_input);
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_input_mgr(upipe->mgr);
+    struct upipe_ts_mux *upipe_ts_mux =
+        upipe_ts_mux_from_program_mgr(
+                upipe_ts_mux_program_to_upipe(upipe_ts_mux_program)->mgr);
+
+    switch (event) {
+        case UPROBE_NEED_UREF_MGR:
+            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
+                upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
+            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
+                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
+            return true;
+        case UPROBE_NEED_UBUF_MGR: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
+                upipe_throw_need_ubuf_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                          flow_def);
+            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
+                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
+            return true;
+        }
+        case UPROBE_NEW_FLOW_DEF:
+            return true;
+        default:
+            return false;
+    }
+}
 
 /** @internal @This allocates an input subpipe of a ts_mux_program subpipe.
  *
@@ -367,6 +416,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         upipe_ts_mux_input->encaps = NULL;
 
     upipe_ts_mux_input_init_sub(upipe);
+    uprobe_init(&upipe_ts_mux_input->probe, upipe_ts_mux_input_probe, uprobe);
     upipe_use(upipe_ts_mux_program_to_upipe(program));
     upipe_throw_ready(upipe);
 
@@ -375,23 +425,23 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     struct upipe *join;
     if (unlikely((upipe_ts_mux_input->psig_flow =
                   upipe_void_alloc_sub(program->program_psig,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "psig flow"))) == NULL ||
                 (upipe_ts_mux_input->pes_encaps =
                   upipe_void_alloc(ts_mux_mgr->ts_pese_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "pes encaps"))) == NULL ||
                  (upipe_ts_mux_input->encaps =
                   upipe_void_alloc_output(upipe_ts_mux_input->pes_encaps,
                          ts_mux_mgr->ts_encaps_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "encaps"))) == NULL ||
                  (join = upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
                          upipe_ts_mux->join,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
                                                    UPROBE_LOG_DEBUG,
                                                    "join"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -694,6 +744,48 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
  * upipe_ts_mux_program structure handling (derived from upipe structure)
  */
 
+/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
+ * subpipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_mux_program
+ * @param subpipe pointer to the subpipe
+ * @param event event triggered by the subpipe
+ * @param args arguments of the event
+ * @return true if the event was caught
+ */
+static bool upipe_ts_mux_program_probe(struct uprobe *uprobe,
+                                       struct upipe *subpipe,
+                                       enum uprobe_event event, va_list args)
+{
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        container_of(uprobe, struct upipe_ts_mux_program, probe);
+    struct upipe *upipe = upipe_ts_mux_program_to_upipe(upipe_ts_mux_program);
+    struct upipe_ts_mux *upipe_ts_mux =
+        upipe_ts_mux_from_program_mgr(upipe->mgr);
+
+    switch (event) {
+        case UPROBE_NEED_UREF_MGR:
+            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
+                upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
+            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
+                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
+            return true;
+        case UPROBE_NEED_UBUF_MGR: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
+                upipe_throw_need_ubuf_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                          flow_def);
+            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
+                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
+            return true;
+        }
+        case UPROBE_NEW_FLOW_DEF:
+            return true;
+        default:
+            return false;
+    }
+}
+
 /** @internal @This allocates a program subpipe of a ts_mux pipe.
  *
  * @param mgr common management structure
@@ -734,19 +826,21 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
          upipe_ts_mux_program->pmt_interval);
 
     upipe_ts_mux_program_init_sub(upipe);
+    uprobe_init(&upipe_ts_mux_program->probe, upipe_ts_mux_program_probe,
+                uprobe);
     upipe_use(upipe_ts_mux_to_upipe(upipe_ts_mux));
     upipe_throw_ready(upipe);
 
     if (unlikely((upipe_ts_mux_program->program_psig =
                   upipe_void_alloc_sub(upipe_ts_mux->psig,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
                                                 UPROBE_LOG_DEBUG,
                                                 "psig program"))) == NULL ||
                  (upipe_ts_mux_program->pmt_psii =
                   upipe_void_alloc_output_sub(
                          upipe_ts_mux_program->program_psig,
                          upipe_ts_mux->psii,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
+                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
                                                 UPROBE_LOG_DEBUG,
                                                 "pmt psii"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
@@ -1154,7 +1248,7 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  */
 
 /** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * psii subpipe.
+ * agg subpipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_mux
  * @param subpipe pointer to the subpipe
@@ -1163,8 +1257,8 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  * @return true if the event was caught
  */
 static bool upipe_ts_mux_agg_probe(struct uprobe *uprobe,
-                                         struct upipe *subpipe,
-                                         enum uprobe_event event, va_list args)
+                                   struct upipe *subpipe,
+                                   enum uprobe_event event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, agg_probe);
