@@ -236,20 +236,6 @@ static bool _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
 #else
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     upipe_x264->sc_latency = sc_latency;
-    struct urational fps;
-    if (likely(uref_pic_flow_get_fps(upipe_x264->flow_def_input, &fps))) {
-        upipe_x264->params.sc.i_buffer_size = sc_latency * fps.num / fps.den /
-                                              UCLOCK_FREQ;
-    }
-    upipe_x264->params.sc.f_speed = 1.0;
-    upipe_x264->params.sc.f_buffer_init = 1.0;
-    upipe_x264->params.sc.b_alt_timer = 1;
-    uint64_t height;
-    if (uref_pic_flow_get_hsize(upipe_x264->flow_def_input, &height) &&
-        height >= 720)
-        upipe_x264->params.sc.max_preset = 7;
-    else
-        upipe_x264->params.sc.max_preset = 10;
     return true;
 #endif
 }
@@ -645,8 +631,25 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
             return false;
         }
         uref_free(flow_def_check);
-    } else
+
+    } else {
+#ifdef HAVE_X264_OBE
+        if (upipe_x264->sc_latency) {
+            upipe_x264->params.sc.i_buffer_size =
+                upipe_x264->sc_latency * fps.num / fps.den / UCLOCK_FREQ;
+            upipe_x264->params.sc.f_speed = 1.0;
+            upipe_x264->params.sc.f_buffer_init = 1.0;
+            upipe_x264->params.sc.b_alt_timer = 1;
+            uint64_t height;
+            if (uref_pic_flow_get_hsize(flow_def, &height) && height >= 720)
+                upipe_x264->params.sc.max_preset = 7;
+            else
+                upipe_x264->params.sc.max_preset = 10;
+        }
+#endif
+
         upipe_x264_store_flow_def_check(upipe, flow_def_check);
+    }
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
