@@ -549,6 +549,11 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
 
     if (upipe_mpgaf->bs_delay)
         uref_clock_set_cr_dts_delay(uref, upipe_mpgaf->bs_delay);
+    else
+        uref_clock_set_cr_dts_delay(uref, 0);
+
+    if (unlikely(!uref_clock_set_duration(uref, duration)))
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
 
     upipe_mpgaf_output(upipe, uref, upump);
 }
