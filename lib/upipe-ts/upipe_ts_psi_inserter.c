@@ -527,6 +527,11 @@ static bool upipe_ts_psii_set_flow_def(struct upipe *upipe,
         return false;
     }
     upipe_ts_psii_store_flow_def(upipe, flow_def_dup);
+    /* Force sending it immediately, because subpipes also send to output
+     * without passing by our helper. */
+    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
+    upipe_ts_psii->flow_def_sent = true;
+    upipe_throw_new_flow_def(upipe, upipe_ts_psii->flow_def);
     return true;
 }
 
