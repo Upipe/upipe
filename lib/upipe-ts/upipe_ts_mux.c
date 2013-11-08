@@ -426,23 +426,23 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     if (unlikely((upipe_ts_mux_input->psig_flow =
                   upipe_void_alloc_sub(program->program_psig,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_DEBUG,
+                                                   UPROBE_LOG_VERBOSE,
                                                    "psig flow"))) == NULL ||
                 (upipe_ts_mux_input->pes_encaps =
                   upipe_void_alloc(ts_mux_mgr->ts_pese_mgr,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_DEBUG,
+                                                   UPROBE_LOG_VERBOSE,
                                                    "pes encaps"))) == NULL ||
                  (upipe_ts_mux_input->encaps =
                   upipe_void_alloc_output(upipe_ts_mux_input->pes_encaps,
                          ts_mux_mgr->ts_encaps_mgr,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_DEBUG,
+                                                   UPROBE_LOG_VERBOSE,
                                                    "encaps"))) == NULL ||
                  (join = upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
                          upipe_ts_mux->join,
                          uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_DEBUG,
+                                                   UPROBE_LOG_VERBOSE,
                                                    "join"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
@@ -663,7 +663,7 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                                           pes_overhead + ts_overhead;
 
     upipe_notice_va(upipe, "adding %s on PID %"PRIu64" (%"PRIu64" bits/s)",
-                    def, pid, octetrate * 8);
+                    def, pid, upipe_ts_mux_input->total_octetrate * 8);
     upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
     return true;
 }
@@ -834,14 +834,14 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     if (unlikely((upipe_ts_mux_program->program_psig =
                   upipe_void_alloc_sub(upipe_ts_mux->psig,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
-                                                UPROBE_LOG_DEBUG,
+                                                UPROBE_LOG_VERBOSE,
                                                 "psig program"))) == NULL ||
                  (upipe_ts_mux_program->pmt_psii =
                   upipe_void_alloc_output_sub(
                          upipe_ts_mux_program->program_psig,
                          upipe_ts_mux->psii,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
-                                                UPROBE_LOG_DEBUG,
+                                                UPROBE_LOG_VERBOSE,
                                                 "pmt psii"))) == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
@@ -1370,7 +1370,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     if (unlikely((upipe_ts_mux->psig =
                   upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "psig")))
+                                                UPROBE_LOG_VERBOSE, "psig")))
                    == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return upipe;
@@ -1393,7 +1393,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     upipe_ts_mux->join =
         upipe_void_alloc(ts_mux_mgr->ts_join_mgr,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "join"));
+                                                UPROBE_LOG_VERBOSE, "join"));
     if (unlikely(upipe_ts_mux->join == NULL ||
                  !upipe_set_uref_mgr(upipe_ts_mux->join,
                                      upipe_ts_mux->uref_mgr))) {
@@ -1404,7 +1404,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     upipe_ts_mux->psii =
         upipe_void_alloc_output(upipe_ts_mux->join, ts_mux_mgr->ts_psii_mgr,
                            uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                  UPROBE_LOG_DEBUG, "psii"));
+                                                  UPROBE_LOG_VERBOSE, "psii"));
     if (unlikely(upipe_ts_mux->psii == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
@@ -1413,7 +1413,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     struct upipe *agg =
         upipe_void_alloc_output(upipe_ts_mux->psii, ts_mux_mgr->ts_agg_mgr,
                            uprobe_pfx_adhoc_alloc(&upipe_ts_mux->agg_probe,
-                                                  UPROBE_LOG_DEBUG, "agg"));
+                                                  UPROBE_LOG_VERBOSE, "agg"));
     if (unlikely(agg == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
@@ -1426,7 +1426,8 @@ static void upipe_ts_mux_init(struct upipe *upipe)
                   upipe_void_alloc_output_sub(upipe_ts_mux->psig,
                          upipe_ts_mux->psii,
                          uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_DEBUG, "pat psii")))
+                                                UPROBE_LOG_VERBOSE,
+                                                "pat psii")))
                   == NULL)) {
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return;
