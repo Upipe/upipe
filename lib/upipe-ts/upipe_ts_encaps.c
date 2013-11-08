@@ -344,17 +344,17 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
             if (likely(output != NULL)) {
                 uref_clock_set_ref(output);
                 uref_clock_set_cr_dts_delay(output,
-                                            end - upipe_ts_encaps->next_pcr +
+                                            dts - upipe_ts_encaps->next_pcr +
                                             upipe_ts_encaps->pcr_tolerance +
                                             upipe_ts_encaps->ts_delay);
-                uref_clock_set_dts_prog(output, end);
+                uref_clock_set_dts_prog(output, dts);
                 uref_clock_rebase_cr_prog(output);
                 if (dts_sys != UINT64_MAX) {
-                    uref_clock_set_dts_sys(output, dts_sys - (dts - end));
+                    uref_clock_set_dts_sys(output, dts_sys);
                     uref_clock_rebase_cr_sys(output);
                 }
                 if (dts_orig != UINT64_MAX) {
-                    uref_clock_set_dts_orig(output, dts_orig - (dts - end));
+                    uref_clock_set_dts_orig(output, dts_orig);
                     uref_clock_rebase_cr_orig(output);
                 }
                 upipe_ts_encaps_output(upipe, output, upump);
