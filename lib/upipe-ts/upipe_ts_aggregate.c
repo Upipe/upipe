@@ -306,7 +306,8 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t dts_sys = UINT64_MAX;
-    if (unlikely(!uref_clock_get_dts_sys(uref, &dts_sys))) {
+    if (unlikely(!uref_clock_get_dts_sys(uref, &dts_sys) &&
+                 upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR)) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
         return;
@@ -314,14 +315,14 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     uint64_t delay = 0;
     uref_clock_get_cr_dts_delay(uref, &delay);
 
-    if (upipe_ts_agg->next_cr_sys == UINT64_MAX)
+    if (upipe_ts_agg->next_cr_sys == UINT64_MAX && dts_sys != UINT64_MAX)
         upipe_ts_agg->next_cr_sys = dts_sys - delay;
 
     /* packet in the past */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
         dts_sys + upipe_ts_agg->interval < upipe_ts_agg->next_cr_sys) {
-        upipe_verbose_va(upipe, "dropping late packet %"PRIu64" %"PRIu64,
-                         dts_sys, dts_sys - delay);
+        upipe_err_va(upipe, "dropping late packet %"PRIu64" %"PRIu64" %"PRIu64,
+                         dts_sys, dts_sys - delay, upipe_ts_agg->next_cr_sys);
         uref_free(uref);
         upipe_ts_agg->dropped++;
         return;
@@ -338,12 +339,15 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
         dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval)
         upipe_ts_agg_complete(upipe, upump);
 
-    /* fix the PCR according to the new output date */
-    upipe_ts_agg_fix_pcr(upipe, uref);
+    if (uref_clock_get_ref(uref)) {
+        /* fix the PCR according to the new output date */
+        upipe_ts_agg_fix_pcr(upipe, uref);
+    }
 
     /* keep or attach incoming packet */
     if (unlikely(upipe_ts_agg->next_uref == NULL)) {
-        uref_clock_set_cr_sys(uref, upipe_ts_agg->next_cr_sys);
+        if (upipe_ts_agg->next_cr_sys != UINT64_MAX)
+            uref_clock_set_cr_sys(uref, upipe_ts_agg->next_cr_sys);
 
         upipe_ts_agg->next_uref = uref;
         upipe_ts_agg->next_uref_size = size;
