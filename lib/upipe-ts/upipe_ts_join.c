@@ -91,6 +91,8 @@ struct upipe_ts_join_sub {
     struct uchain urefs;
     /** next date that is supposed to be dequeued */
     uint64_t next_cr;
+    /** last date that was dequeued */
+    uint64_t last_cr;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -126,7 +128,7 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
         upipe_ts_join_sub_from_upipe(upipe);
     upipe_ts_join_sub_init_sub(upipe);
     ulist_init(&upipe_ts_join_sub->urefs);
-    upipe_ts_join_sub->next_cr = UINT64_MAX;
+    upipe_ts_join_sub->next_cr = upipe_ts_join_sub->last_cr = UINT64_MAX;
     upipe_ts_join_sub->latency = 0;
 
     struct upipe_ts_join *upipe_ts_join =
@@ -328,6 +330,13 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
             if (unlikely(upipe_ts_join->flow_def == NULL))
                 return;
         }
+
+        if (unlikely(input->last_cr != UINT64_MAX &&
+                     input->next_cr < input->last_cr))
+            upipe_warn_va(upipe,
+                          "received a packet in the past (%"PRIu64")",
+                          input->last_cr - input->next_cr);
+        input->last_cr = input->next_cr;
 
         struct uchain *uchain = ulist_pop(&input->urefs);
         struct uref *uref = uref_from_uchain(uchain);
