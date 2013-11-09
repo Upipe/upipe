@@ -320,9 +320,10 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
 
     /* packet in the past */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts_sys + upipe_ts_agg->interval < upipe_ts_agg->next_cr_sys) {
-        upipe_err_va(upipe, "dropping late packet %"PRIu64" %"PRIu64" %"PRIu64,
-                         dts_sys, dts_sys - delay, upipe_ts_agg->next_cr_sys);
+        upipe_ts_agg->next_cr_sys > dts_sys + upipe_ts_agg->interval) {
+        upipe_verbose_va(upipe, "dropping late packet %"PRIu64" > %"PRIu64,
+                         upipe_ts_agg->next_cr_sys,
+                         dts_sys + upipe_ts_agg->interval);
         uref_free(uref);
         upipe_ts_agg->dropped++;
         return;
