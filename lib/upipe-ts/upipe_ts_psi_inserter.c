@@ -127,8 +127,6 @@ struct upipe_ts_psii_sub {
 
     /** latest table */
     struct uchain table;
-    /** date of the next table occurrence */
-    uint64_t next_cr;
     /** date (in system time) of the next table occurrence */
     uint64_t next_cr_sys;
 
@@ -167,7 +165,7 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     upipe_ts_psii_sub_init_sub(upipe);
     upipe_ts_psii_sub->interval = DEFAULT_INTERVAL;
     ulist_init(&upipe_ts_psii_sub->table);
-    upipe_ts_psii_sub->next_cr = upipe_ts_psii_sub->next_cr_sys = UINT64_MAX;
+    upipe_ts_psii_sub->next_cr_sys = UINT64_MAX;
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->encaps = NULL;
 
@@ -222,19 +220,17 @@ static void upipe_ts_psii_sub_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_psii_sub_from_upipe(upipe);
 
     if (uref_block_get_start(uref) || ulist_empty(&upipe_ts_psii_sub->table)) {
+        upipe_dbg(upipe, "new table");
         upipe_ts_psii_sub_clean(upipe);
 
-        uint64_t cr, cr_sys;
-        if (uref_clock_get_cr_sys(uref, &cr) &&
-            uref_clock_get_cr_sys(uref, &cr_sys)) {
-            upipe_ts_psii_sub->next_cr = cr;
+        uint64_t cr_sys;
+        if (uref_clock_get_cr_sys(uref, &cr_sys))
             upipe_ts_psii_sub->next_cr_sys = cr_sys;
-        } else {
+        else
             /* Trigger immediate insertion. */
-            upipe_ts_psii_sub->next_cr = 0;
             upipe_ts_psii_sub->next_cr_sys = 0;
-        }
-    }
+    } else
+        upipe_warn(upipe, "large table");
 
     ulist_add(&upipe_ts_psii_sub->table, uref_to_uchain(uref));
 }
@@ -250,17 +246,13 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
 
-    uint64_t cr = upipe_ts_psii_sub->next_cr;
     uint64_t cr_sys = upipe_ts_psii_sub->next_cr_sys;
     uint64_t delay = 0;
     uref_clock_get_cr_dts_delay(next_uref, &delay);
 
-    if (unlikely(!cr)) {
-        uref_clock_get_cr_prog(next_uref, &cr);
+    if (unlikely(!cr_sys))
         uref_clock_get_cr_sys(next_uref, &cr_sys);
-    }
 
-    upipe_ts_psii_sub->next_cr = cr + upipe_ts_psii_sub->interval;
     upipe_ts_psii_sub->next_cr_sys = cr_sys + upipe_ts_psii_sub->interval;
 
     struct uchain *uchain;
@@ -272,7 +264,6 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
             return;
         }
 
-        uref_clock_set_cr_prog(output, cr);
         uref_clock_set_cr_sys(output, cr_sys);
         /* FIXME */
         uref_clock_set_cr_dts_delay(output,
@@ -329,8 +320,6 @@ static bool _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
         upipe_ts_psii_sub_from_upipe(upipe);
     int64_t diff = interval - upipe_ts_psii_sub->interval;
     upipe_ts_psii_sub->interval = interval;
-    if (upipe_ts_psii_sub->next_cr != UINT64_MAX)
-        upipe_ts_psii_sub->next_cr += diff;
     if (upipe_ts_psii_sub->next_cr_sys != UINT64_MAX)
         upipe_ts_psii_sub->next_cr_sys += diff;
     return true;
@@ -488,8 +477,8 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
 
-    uint64_t dts_sys;
-    if (unlikely(!uref_clock_get_dts_sys(uref, &dts_sys))) {
+    uint64_t cr_sys;
+    if (unlikely(!uref_clock_get_cr_sys(uref, &cr_sys))) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
         return;
@@ -498,10 +487,7 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_psii->subs, uchain) {
         struct upipe_ts_psii_sub *sub = upipe_ts_psii_sub_from_uchain(uchain);
-        /* We only compare to DTS and do not use delay because DTS is the
-         * latest time at which the incoming packet may be muxed, so if we
-         * take into account delay the PSI section may arrive too late. */
-        while (sub->next_cr_sys <= dts_sys)
+        while (sub->next_cr_sys < cr_sys)
             upipe_ts_psii_sub_output(upipe_ts_psii_sub_to_upipe(sub), uref);
     }
 

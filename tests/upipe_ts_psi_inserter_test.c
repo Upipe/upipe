@@ -181,7 +181,6 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     uref_block_set_start(uref);
     uref_clock_set_cr_sys(uref, UCLOCK_FREQ);
-    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
     uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii_sub, uref, NULL);
     assert(!nb_packets);
@@ -190,28 +189,25 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
     uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 3);
-    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 3);
     uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
-    assert(nb_packets == 3);
+    assert(nb_packets == 2);
     nb_packets = 0;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
     uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 4);
-    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 4);
     uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
-    assert(nb_packets == 1);
+    assert(nb_packets == 2);
     nb_packets = 0;
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
     assert(uref != NULL);
     uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 5);
-    uref_clock_set_cr_prog(uref, UCLOCK_FREQ * 5);
     uref_clock_set_cr_dts_delay(uref, 0);
     upipe_input(upipe_ts_psii, uref, NULL);
-    assert(nb_packets == 2);
+    assert(nb_packets == 1);
     nb_packets = 0;
 
     upipe_release(upipe_ts_psii_sub);
