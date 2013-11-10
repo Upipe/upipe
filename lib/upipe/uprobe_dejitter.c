@@ -29,6 +29,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uprobe.h>
@@ -39,6 +40,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
+
+/** max allowed jitter */
+#define MAX_JITTER (UCLOCK_FREQ / 10)
 
 /** @This is a super-set of the uprobe structure with additional local
  * members. */
@@ -86,15 +90,19 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
     if (unlikely(uref == NULL))
         return false;
     uint64_t sys_ref;
-    enum uref_date_type type;
-    uref_clock_get_date_sys(uref, &sys_ref, &type);
-    if (unlikely(type != UREF_DATE_CR))
+    if (unlikely(!uref_clock_get_cr_sys(uref, &sys_ref))) {
+        upipe_warn(upipe, "[dejitter] no clock ref in packet");
         return false;
+    }
 
     int64_t offset = sys_ref - clock_ref;
     lldiv_t q;
 
-    if (discontinuity) {
+    if (unlikely(llabs(offset - uprobe_dejitter->offset) > MAX_JITTER))
+        discontinuity = 1;
+
+    if (unlikely(discontinuity)) {
+        upipe_dbg(upipe, "[dejitter] discontinuity");
         uprobe_dejitter->offset_count = 0;
         uprobe_dejitter->offset = 0;
         uprobe_dejitter->offset_residue = 0;
@@ -111,18 +119,17 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
 
     q = lldiv(uprobe_dejitter->deviation * uprobe_dejitter->deviation_count +
               uprobe_dejitter->deviation_residue +
-              abs(offset - uprobe_dejitter->offset),
+              llabs(offset - uprobe_dejitter->offset),
               uprobe_dejitter->deviation_count + 1);
     uprobe_dejitter->deviation = q.quot;
     uprobe_dejitter->deviation_residue = q.rem;
     if (uprobe_dejitter->deviation_count < uprobe_dejitter->divider)
         uprobe_dejitter->deviation_count++;
 
-#if 0
-    upipe_dbg_va(upipe, "new ref %"PRId64" %u %"PRId64" %u %"PRIu64, offset,
-                 uprobe_dejitter->offset_count, uprobe_dejitter->offset,
-                 uprobe_dejitter->deviation_count, uprobe_dejitter->deviation);
-#endif
+    upipe_verbose_va(upipe, "new ref %"PRId64" %u %"PRId64" %u %"PRIu64, offset,
+                     uprobe_dejitter->offset_count, uprobe_dejitter->offset,
+                     uprobe_dejitter->deviation_count,
+                     uprobe_dejitter->deviation);
     return true;
 }
 

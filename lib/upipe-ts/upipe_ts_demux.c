@@ -1127,6 +1127,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
         upipe_ts_demux_program->last_pcr = pcr_orig;
         upipe_ts_demux_program->timestamp_offset =
             upipe_ts_demux_program->timestamp_highest - pcr_orig;
+        discontinuity = 1;
     }
     upipe_throw_clock_ref(upipe, uref,
                           upipe_ts_demux_program->last_pcr +
