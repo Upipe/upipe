@@ -241,8 +241,11 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
 
         if (unlikely(!validate)) {
             upipe_warn(upipe, "wrong PES timestamp syntax");
+#if 0
+            /* disable this because it is a common syntax error */
             upipe_ts_pesd_flush(upipe);
             return;
+#endif
         }
 
         uint64_t dts_pts_delay = (UINT33_MAX + pts - dts) % UINT33_MAX;
