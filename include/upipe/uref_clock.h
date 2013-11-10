@@ -120,7 +120,7 @@ UREF_CLOCK_SET(orig, pts, PTS)
 /** @This gets the dv date as a PTS.                                        \
  *                                                                          \
  * @param uref uref structure                                               \
- * @param date_p filled in with the date in #UCLOCK_FREQ units              \
+ * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return false in case of failure                                         \
  */                                                                         \
 static inline bool uref_clock_get_pts_##dv(struct uref *uref,               \
@@ -145,7 +145,8 @@ static inline bool uref_clock_get_pts_##dv(struct uref *uref,               \
         case UREF_DATE_PTS:                                                 \
             break;                                                          \
     }                                                                       \
-    *date_p = date;                                                         \
+    if (date_p != NULL)                                                     \
+        *date_p = date;                                                     \
     return true;                                                            \
 }
 
@@ -159,7 +160,7 @@ UREF_CLOCK_GET_PTS(orig)
 /** @This gets the dv date as a DTS.                                        \
  *                                                                          \
  * @param uref uref structure                                               \
- * @param date_p filled in with the date in #UCLOCK_FREQ units              \
+ * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return false in case of failure                                         \
  */                                                                         \
 static inline bool uref_clock_get_dts_##dv(struct uref *uref,               \
@@ -185,7 +186,8 @@ static inline bool uref_clock_get_dts_##dv(struct uref *uref,               \
             date -= delay;                                                  \
             break;                                                          \
     }                                                                       \
-    *date_p = date;                                                         \
+    if (date_p != NULL)                                                     \
+        *date_p = date;                                                     \
     return true;                                                            \
 }
 
@@ -199,7 +201,7 @@ UREF_CLOCK_GET_DTS(orig)
 /** @This gets the dv date as a CR.                                         \
  *                                                                          \
  * @param uref uref structure                                               \
- * @param date_p filled in with the date in #UCLOCK_FREQ units              \
+ * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return false in case of failure                                         \
  */                                                                         \
 static inline bool uref_clock_get_cr_##dv(struct uref *uref,                \
@@ -224,7 +226,8 @@ static inline bool uref_clock_get_cr_##dv(struct uref *uref,                \
         case UREF_DATE_CR:                                                  \
             break;                                                          \
     }                                                                       \
-    *date_p = date;                                                         \
+    if (date_p != NULL)                                                     \
+        *date_p = date;                                                     \
     return true;                                                            \
 }
 
