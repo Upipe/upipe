@@ -273,7 +273,8 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
         upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_ts_psig_flow->flow_def_input);
+    if (upipe_ts_psig_flow->flow_def_input != NULL)
+        uref_free(upipe_ts_psig_flow->flow_def_input);
     upipe_ts_psig_flow_clean_sub(upipe);
     upipe_ts_psig_flow_free_void(upipe);
 
