@@ -160,10 +160,8 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
 
     bool was_empty = ulist_empty(&upipe_ts_join_sub->urefs);
     ulist_add(&upipe_ts_join_sub->urefs, uref_to_uchain(uref));
-    if (was_empty) {
+    if (was_empty)
         upipe_ts_join_sub->next_cr = cr;
-        upipe_use(upipe);
-    }
 
     struct upipe_ts_join *upipe_ts_join =
         upipe_ts_join_from_sub_mgr(upipe->mgr);
@@ -237,8 +235,12 @@ static void upipe_ts_join_sub_free(struct upipe *upipe)
         upipe_ts_join_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
-    upipe_ts_join_sub_clean_sub(upipe);
-    upipe_ts_join_sub_free_void(upipe);
+    struct upipe_ts_join_sub *upipe_ts_join_sub =
+        upipe_ts_join_sub_from_upipe(upipe);
+    if (ulist_empty(&upipe_ts_join_sub->urefs)) {
+        upipe_ts_join_sub_clean_sub(upipe);
+        upipe_ts_join_sub_free_void(upipe);
+    }
 
     upipe_ts_join_mux(upipe_ts_join_to_upipe(upipe_ts_join), NULL);
     upipe_release(upipe_ts_join_to_upipe(upipe_ts_join));
@@ -333,17 +335,21 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
 
         if (unlikely(input->last_cr != UINT64_MAX &&
                      input->next_cr < input->last_cr))
-            upipe_warn_va(upipe,
-                          "received a packet in the past (%"PRIu64")",
-                          input->last_cr - input->next_cr);
+            upipe_warn_va(upipe_ts_join_sub_to_upipe(input),
+                          "received a packet in the past (%"PRIu64" %"PRIu64")",
+                          input->last_cr - input->next_cr, input->next_cr);
         input->last_cr = input->next_cr;
 
         struct uchain *uchain = ulist_pop(&input->urefs);
         struct uref *uref = uref_from_uchain(uchain);
 
         if (ulist_empty(&input->urefs)) {
-            input->next_cr = UINT64_MAX;
-            upipe_release(upipe_ts_join_sub_to_upipe(input));
+            if (urefcount_dead(&input->upipe.refcount)) {
+                upipe_ts_join_sub_clean_sub(upipe_ts_join_sub_to_upipe(input));
+                upipe_ts_join_sub_free_void(upipe_ts_join_sub_to_upipe(input));
+            } else {
+                input->next_cr = UINT64_MAX;
+            }
         } else {
             uchain = ulist_peek(&input->urefs);
             struct uref *next_uref = uref_from_uchain(uchain);
