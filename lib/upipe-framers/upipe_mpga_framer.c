@@ -280,7 +280,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                             header))
         return true; /* not enough data */
 
-    if (likely(mpga_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
+    if (likely(mpga_sync_compare(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
                                        upipe_mpgaf->frame_size_padding :
@@ -312,6 +312,8 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                                 [mpga_get_sampling_freq(header)];
     uint8_t padding = mpga_get_padding(header) ? 1 : 0;
     uint8_t mode = mpga_get_mode(header);
+    bool copyright = mpga_get_copyright(header);
+    bool original = mpga_get_original(header);
     if (mpeg25)
         upipe_mpgaf->samplerate /= 2;
     if (!octetrate)
@@ -362,6 +364,10 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                                                upipe_mpgaf->octetrate);
     ret = ret && uref_block_flow_set_max_octetrate(flow_def,
             (uint64_t)max_octetrate * 1000);
+    if (copyright)
+        ret = ret && uref_flow_set_copyright(flow_def);
+    if (original)
+        ret = ret && uref_flow_set_original(flow_def);
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
