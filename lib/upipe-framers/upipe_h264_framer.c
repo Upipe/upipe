@@ -1070,21 +1070,22 @@ static void upipe_h264f_handle_sei_buffering_period(struct upipe *upipe,
     if (upipe_h264f->hrd) {
         size_t initial_cpb_removal_delay_length =
             upipe_h264f->initial_cpb_removal_delay_length;
-        upipe_h264f->initial_cpb_removal_delay = 0;
-        if (initial_cpb_removal_delay_length > 24) {
-            upipe_h264f_stream_fill_bits(s, 24);
-            upipe_h264f->initial_cpb_removal_delay =
-                ubuf_block_stream_show_bits(s, 24);
-            ubuf_block_stream_skip_bits(s, 24);
+        uint64_t initial_cpb_removal_delay = 0;
+        while (initial_cpb_removal_delay_length > 24) {
             initial_cpb_removal_delay_length -= 24;
-            upipe_h264f->initial_cpb_removal_delay <<=
-                initial_cpb_removal_delay_length;
+            upipe_h264f_stream_fill_bits(s, 24);
+            initial_cpb_removal_delay |=
+                ubuf_block_stream_show_bits(s, 24) <<
+                    initial_cpb_removal_delay_length;
+            ubuf_block_stream_skip_bits(s, 24);
         }
         upipe_h264f_stream_fill_bits(s, initial_cpb_removal_delay_length);
-        upipe_h264f->initial_cpb_removal_delay |=
+        initial_cpb_removal_delay |=
             ubuf_block_stream_show_bits(s, initial_cpb_removal_delay_length);
         ubuf_block_stream_skip_bits(s, initial_cpb_removal_delay_length);
-        upipe_h264f->initial_cpb_removal_delay *= UCLOCK_FREQ / 90000;
+
+        upipe_h264f->initial_cpb_removal_delay = initial_cpb_removal_delay *
+                (UCLOCK_FREQ / 90000);
     }
 }
 
@@ -1300,7 +1301,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
 
     if (upipe_h264f->initial_cpb_removal_delay != INT64_MAX &&
         upipe_h264f->octet_rate > 0) {
-        upipe_h264f->initial_cpb_removal_delay += upipe_h264f->duration;
+        upipe_h264f->initial_cpb_removal_delay += duration;
         upipe_h264f->initial_cpb_removal_delay -=
             upipe_h264f->au_size * UCLOCK_FREQ / upipe_h264f->octet_rate;
 
