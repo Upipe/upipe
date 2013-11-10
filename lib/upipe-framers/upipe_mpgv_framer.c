@@ -877,7 +877,9 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe, struct upump *upump)
 #define SET_DATE(dv)                                                        \
     if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
         uref_clock_set_dts_##dv(uref, date);                                \
-        uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, date + duration);  \
+        if (!uref_clock_get_dts_##dv(&upipe_mpgvf->au_uref_s, NULL))        \
+            uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s,                \
+                                    date + duration);                       \
     } else if (uref_clock_get_dts_##dv(uref, &date))                        \
         uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
     SET_DATE(sys)
