@@ -292,9 +292,11 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     params->p_log_private = upipe;
     params->i_log_level = X264_LOG_DEBUG;
     if (likely(uref_pic_flow_get_fps(upipe_x264->flow_def_input, &fps))) {
+        params->b_vfr_input = 0;
         params->i_fps_num = fps.num;
         params->i_fps_den = fps.den;
-        //params->b_vfr_input = 0;
+        params->i_timebase_num = fps.den;
+        params->i_timebase_den = fps.num;
     }
 
     params->vui.i_sar_width = sar->num;
