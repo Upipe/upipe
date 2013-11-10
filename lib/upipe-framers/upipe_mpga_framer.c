@@ -435,6 +435,10 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         ret = ret && uref_sound_flow_set_rate(flow_def,
                                               upipe_mpgaf->samplerate);
     ret = ret && uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples);
+    if (adts_get_copy(header))
+        ret = ret && uref_flow_set_copyright(flow_def);
+    if (adts_get_home(header))
+        ret = ret && uref_flow_set_original(flow_def);
 
     /* Calculate octetrate assuming the stream is CBR. Do not take SBR into
      * account here, as it would * 2 both the samplerate and the number of
