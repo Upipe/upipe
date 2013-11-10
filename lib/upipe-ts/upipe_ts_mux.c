@@ -617,6 +617,7 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     uint64_t pid = 0;
     if (uref_ts_flow_get_pid(flow_def, &pid) &&
+        pid != upipe_ts_mux_input->pid &&
         upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
         upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
                       "PID %"PRIu64" already exists", pid);
