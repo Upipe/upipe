@@ -9,6 +9,7 @@ myinclude_HEADERS = \
 	upipe_multicat_sink.h \
 	upipe_multicat_probe.h \
 	upipe_probe_uref.h \
+	upipe_noclock.h \
 	upipe_nodemux.h \
 	upipe_null.h \
 	upipe_skip.h \

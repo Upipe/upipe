@@ -46,6 +46,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/upipe.h>
@@ -61,6 +62,7 @@
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
+#include <upipe-modules/upipe_noclock.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -83,6 +85,8 @@ static const char *src_file, *sink_file;
 static struct uref_mgr *uref_mgr;
 static struct ubuf_mgr *ubuf_mgr;
 static struct upump_mgr *upump_mgr;
+
+static struct upipe_mgr *upipe_noclock_mgr;
 
 static struct uprobe *uprobe_ts_log, *log;
 static struct uprobe uprobe_demux_output_s;
@@ -121,29 +125,14 @@ static bool catch_ts_demux_output(struct uprobe *uprobe, struct upipe *upipe,
         return true;
     }
 
-    if (event != UPROBE_NEW_FLOW_DEF)
-        return false;
+    if ((event | UPROBE_HANDLED_FLAG) ==
+            (UPROBE_NEW_FLOW_DEF | UPROBE_HANDLED_FLAG)) {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        upipe_dbg(upipe, "new flow def");
+        uref_dump(flow_def, upipe->uprobe);
+    }
 
-    struct uref *flow_def = va_arg(args, struct uref *);
-    uint64_t flow_id;
-    assert(uref_flow_get_id(flow_def, &flow_id));
-    uint64_t octetrate;
-    assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
-    /* Free the previous output. */
-    assert(upipe_set_output(upipe, NULL));
-
-    struct upipe *upipe_ts_demux_program;
-    assert(upipe_sub_get_super(upipe, &upipe_ts_demux_program));
-    struct upipe *upipe_ts_mux_program;
-    assert(upipe_get_output(upipe_ts_demux_program, &upipe_ts_mux_program));
-
-    struct upipe *mux_input = upipe_void_alloc_output_sub(upipe,
-            upipe_ts_mux_program,
-            uprobe_pfx_adhoc_alloc_va(uprobe_ts_log, UPROBE_LOG_LEVEL,
-                                      "mux input %"PRIu64, flow_id));
-    assert(mux_input != NULL);
-    upipe_release(mux_input);
-    return true;
+    return false;
 }
 
 /** probe to catch events from the TS demux programs */
@@ -179,14 +168,20 @@ static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
                 assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *output = NULL;
+                bool found = false;
                 while (upipe_iterate_sub(upipe, &output)) {
                     struct uref *flow_def2;
                     uint64_t id2;
                     if (upipe_get_flow_def(output, &flow_def2) &&
-                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
-                        /* We already have a output */
-                        return true;
+                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2) {
+                        /* We already have an output. */
+                        found = true;
+                        break;
+                    }
                 }
+                if (found)
+                    continue;
+                upipe_notice_va(upipe, "add flow %"PRIu64, flow_id);
 
                 output = upipe_flow_alloc_sub(upipe,
                     uprobe_pfx_adhoc_alloc_va(&uprobe_demux_output_s,
@@ -194,6 +189,25 @@ static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
                                               "ts demux output %"PRIu64,
                                               flow_id), flow_def);
                 assert(output != NULL);
+                struct upipe *noclock = upipe_void_alloc_output(output,
+                    upipe_noclock_mgr,
+                    uprobe_pfx_adhoc_alloc_va(uprobe_ts_log,
+                                              UPROBE_LOG_LEVEL,
+                                              "noclock %"PRIu64,
+                                              flow_id));
+                assert(noclock != NULL);
+
+                struct upipe *upipe_ts_mux_program;
+                assert(upipe_get_output(upipe, &upipe_ts_mux_program));
+                struct upipe *mux_input = upipe_void_alloc_output_sub(noclock,
+                        upipe_ts_mux_program,
+                        uprobe_pfx_adhoc_alloc_va(uprobe_ts_log,
+                                                  UPROBE_LOG_LEVEL,
+                                                  "mux input %"PRIu64,
+                                                  flow_id));
+                assert(mux_input != NULL);
+                upipe_release(mux_input);
+                upipe_release(noclock);
             }
             return true;
         }
@@ -303,6 +317,9 @@ int main(int argc, char *argv[])
     assert(uprobe_stdio != NULL);
     log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
+
+    upipe_noclock_mgr = upipe_noclock_mgr_alloc();
+    assert(upipe_noclock_mgr != NULL);
 
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();

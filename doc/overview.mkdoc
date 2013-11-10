@@ -93,6 +93,8 @@
         @item @ref upipe_trickp_mgr_alloc @item pipe facilitating trick play operations @item @tt -lupipe-modules
         @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
         @item @ref upipe_setrap_mgr_alloc @item pipe setting attribute k.systime_rap on all incoming buffers @item @tt -lupipe-modules
+        @item @ref upipe_nodemux_mgr_alloc @item pipe creating timestamps for single streamps @item @tt -lupipe-modules
+        @item @ref upipe_noclock_mgr_alloc @item pipe creating system timestamps for off-line streamps @item @tt -lupipe-modules
         @item @ref upipe_genaux_mgr_alloc @item pipe generating multicat-style auxiliary blocks @item @tt -lupipe-modules
         @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe generating multicat-style directories @item @tt -lupipe-modules
         @item @ref upipe_avfsrc_mgr_alloc @item source pipe opening for reading a URL and using libavformat @item @tt -lupipe-av
