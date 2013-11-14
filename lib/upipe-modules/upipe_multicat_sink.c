@@ -123,6 +123,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
     int64_t newidx;
 
     if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
+        upipe_warn(upipe, "uref has no cr_sys, dropping");
         uref_free(uref);
         return;
     }

@@ -160,7 +160,7 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
 
     // Now process frames
     uref_pic_size(uref, &width, &height, NULL);
-    upipe_dbg_va(upipe, "received pic (%dx%d)", width, height);
+    upipe_verbose_va(upipe, "received pic (%dx%d)", width, height);
 
     // Alloc deint buffer
     if (unlikely(!upipe_filter_blend->ubuf_mgr)) {
