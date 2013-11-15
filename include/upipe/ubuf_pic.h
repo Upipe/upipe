@@ -477,6 +477,46 @@ static inline bool ubuf_pic_replace(struct ubuf_mgr *mgr,
     return true;
 }
 
+/** @This clears (part of) the specified plane, depending on plane type
+ * and size (set U/V chroma to 0x80 instead of 0 for instance)
+ *
+ * @param ubuf pointer to ubuf
+ * @param chroma chroma type (see chroma reference)
+ * @param hoffset horizontal offset of the picture area wanted in the whole
+ * picture, negative values start from the end of lines, in pixels (before
+ * dividing by macropixel and hsub)
+ * @param voffset vertical offset of the picture area wanted in the whole
+ * picture, negative values start from the last line, in lines (before dividing
+ * by vsub)
+ * @param hsize number of pixels wanted per line, or -1 for until the end of
+ * the line
+ * @param vsize number of lines wanted in the picture area, or -1 for until the
+ * last line
+ * @return false if chroma not known or in case of error
+ */
+bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
+                          int hoffset, int voffset,
+                          int hsize, int vsize);
+
+/** @This clears (part of) the specified picture, depending on plane type
+ * and size (set U/V chroma to 0x80 instead of 0 for instance)
+ *
+ * @param ubuf pointer to ubuf
+ * @param hoffset horizontal offset of the picture area wanted in the whole
+ * picture, negative values start from the end of lines, in pixels (before
+ * dividing by macropixel and hsub)
+ * @param voffset vertical offset of the picture area wanted in the whole
+ * picture, negative values start from the last line, in lines (before dividing
+ * by vsub)
+ * @param hsize number of pixels wanted per line, or -1 for until the end of
+ * the line
+ * @param vsize number of lines wanted in the picture area, or -1 for until the
+ * last line
+ * @return false if chroma not known or in case of error
+ */
+bool ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
+                                       int hsize, int vsize);
+
 #ifdef __cplusplus
 }
 #endif

@@ -15,6 +15,7 @@ libupipe_la_SOURCES = \
 	udict_inline.c \
 	ubuf_block_mem.c \
 	ubuf_pic_common.c \
+	ubuf_pic.c \
 	ubuf_pic_mem.c \
 	uref_std.c \
 	upump_common.c

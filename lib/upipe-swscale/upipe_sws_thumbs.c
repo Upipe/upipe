@@ -243,10 +243,8 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return;
         }
+        ubuf_pic_clear(ubuf, 0, 0, -1, -1);
         uref_attach_ubuf(gallery, ubuf);
-        /* FIXME clear picture
-        upipe_av_pixfmt_clear_picture(ubuf, 0, 0, -1, -1,
-                                      upipe_sws_thumbs->dstfmt); */
     }
 
     /* map input */

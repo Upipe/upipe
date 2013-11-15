@@ -127,6 +127,7 @@ int main(int argc, char **argv)
     assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
     assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
 
+    assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1));
     fill_in(ubuf1);
 
     assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 2, 1, 1, &r));
