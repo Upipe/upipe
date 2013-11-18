@@ -230,8 +230,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     }
 
     bool ret = true;
-    ret = ret && uref_pic_flow_set_hsize(flow_def_attr, width_aligned);
-    ret = ret && uref_pic_flow_set_vsize(flow_def_attr, height_aligned);
+    ret = ret && uref_pic_flow_set_hsize(flow_def_attr, context->width);
+    ret = ret && uref_pic_flow_set_vsize(flow_def_attr, context->height);
     ret = ret && uref_pic_flow_set_hsize_visible(flow_def_attr, context->width);
     ret = ret && uref_pic_flow_set_vsize_visible(flow_def_attr,
                                                  context->height);
