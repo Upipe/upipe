@@ -36,8 +36,11 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe/uref_attr.h>
 
 #define UPIPE_AVCENC_SIGNATURE UBASE_FOURCC('a', 'v', 'c', 'e')
+
+UREF_ATTR_STRING(avcenc, codec_name, "avcenc.name", avcenc codec name)
 
 /** @This extends upipe_command with specific commands for avcodec encode. */
 enum upipe_avcenc_command {

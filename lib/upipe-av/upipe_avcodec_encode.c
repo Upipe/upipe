@@ -574,7 +574,7 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     AVFrame *frame = upipe_avcenc->frame;
 
     /* FIXME check picture format against flow def */
-    uint64_t hsize, vsize;
+    size_t hsize, vsize;
     if (unlikely(!uref_pic_size(uref, &hsize, &vsize, NULL) ||
                  hsize != context->width || vsize != context->height)) {
         upipe_warn(upipe, "invalid buffer received");
@@ -1156,19 +1156,26 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     }
 
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    const char *def;
+    const char *def, *name;
     enum AVCodecID codec_id;
-    AVCodec *codec;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
-        (codec = avcodec_find_encoder(codec_id)) == NULL ||
-        (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
-        printf("%s %d\n", def, codec_id);
+    AVCodec *codec = NULL;
+
+    if (!uref_avcenc_get_codec_name(flow_def, &name)
+            || !(codec = avcodec_find_encoder_by_name(name))) {
+        if (uref_flow_get_def(flow_def, &def) &&
+                (codec_id = upipe_av_from_flow_def(def + strlen("block.")))) {
+            codec = avcodec_find_encoder(codec_id);
+        }
+    }
+    
+    if ((codec == NULL) ||
+            (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);
         av_free(frame);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }
+
     uref_free(flow_def);
     upipe_avcenc->frame = frame;
     upipe_avcenc->context->codec = codec;
