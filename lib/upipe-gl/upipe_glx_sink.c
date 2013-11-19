@@ -90,8 +90,6 @@ struct upipe_glx_sink {
     Window window;
     /** GLX context */
     GLXContext glxContext;
-    /** GL texture */
-    GLuint texture;
     /** doublebuffer available */
     bool doublebuffered;
     /** X event mask */
@@ -333,7 +331,6 @@ static void upipe_glx_sink_clean_glx(struct upipe *upipe)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
 
-    glDeleteTextures(1, &upipe_glx_sink->texture);
     glXMakeCurrent(upipe_glx_sink->display, None, NULL);
     glXDestroyContext(upipe_glx_sink->display, upipe_glx_sink->glxContext);
     XDestroyWindow(upipe_glx_sink->display, upipe_glx_sink->window);
@@ -404,20 +401,6 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
         } else
             upipe_warn(upipe, "received non-dated buffer");
     }
-
-    const uint8_t *data = NULL;
-    size_t width, height;
-    uref_pic_size(uref, &width, &height, NULL);
-    if(!uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data)) {
-        upipe_err(upipe, "Could not map picture plane");
-        uref_free(uref);
-        return true;
-    }
-    glBindTexture(GL_TEXTURE_2D, upipe_glx_sink->texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, 
-            height, 0, GL_RGB, GL_UNSIGNED_BYTE, 
-            data);
-    uref_pic_plane_unmap(uref, "r8g8b8", 0, 0, -1, -1);
 
     glXMakeCurrent(upipe_glx_sink->display, upipe_glx_sink->window,
                    upipe_glx_sink->glxContext);
@@ -493,6 +476,10 @@ static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
     if (latency > upipe_glx_sink->latency)
         upipe_glx_sink->latency = latency;
+
+    /* throw new flow definition to update probe */
+    upipe_throw_new_flow_def(upipe, flow_def);
+
     return true;
 }
 
@@ -507,7 +494,6 @@ static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
 static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    struct upipe_glx_sink *glx = upipe_glx_sink_from_upipe(upipe);
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -551,26 +537,6 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
             int width = va_arg(args, int);
             int height = va_arg(args, int);
             return upipe_glx_sink_init_glx(upipe, x, y, width, height);
-        }
-        case UPIPE_GL_SINK_GET_TEXTURE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
-            unsigned int *texture_p = va_arg(args, unsigned int*);
-            if (!glx->display) {
-                return false;
-            }
-            *texture_p = (unsigned int) glx->texture;
-            return true;
-        }
-        case UPIPE_GL_SINK_SET_TEXTURE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
-            unsigned int texture = va_arg(args, unsigned int);
-            if (!glx->display) {
-                return false;
-            }
-            glx->texture = (GLuint) texture;
-            return true;
         }
 
         default:

@@ -54,6 +54,10 @@
 struct uprobe_gl_sink_cube {
     /** rotation angle */
     float theta;
+    /** texture */
+    GLuint texture;
+    /** SAR */
+    struct urational sar;
 
     /** pointer to the pipe we're attached to */
     struct upipe *upipe;
@@ -67,11 +71,12 @@ UPROBE_HELPER_UPROBE(uprobe_gl_sink_cube, uprobe);
 UPROBE_HELPER_ADHOC(uprobe_gl_sink_cube, upipe);
 
 /** @internal @This reshapes the gl view upon receiving an Exposure event
+ * @param uprobe description structure of the probe
  * @param upipe description structure of the pipe
  * @param w window width
  * @param h window height
  */
-static void upipe_gl_sink_reshape_cube(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
+static void uprobe_gl_sink_cube_reshape(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
 {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -80,33 +85,50 @@ static void upipe_gl_sink_reshape_cube(struct uprobe *uprobe, struct upipe *upip
     glMatrixMode(GL_MODELVIEW);
 }
 
-/** @internal @This does the actual rendering upon receiving a pic
+/** @internal @This updates the probe with latest flow definition
+ * @param uprobe description structure of the probe
  * @param upipe description structure of the pipe
- * @param w pic width
- * @param h pic height
+ * @param uref uref structure
  */
-static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe,
-                                      struct uref *uref)
+static void uprobe_gl_sink_cube_new_flow(struct uprobe *uprobe,
+                                       struct upipe *upipe, struct uref *uref)
 {
     struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
-    GLuint texture;
-    struct urational sar;
+
+    /* get SAR */
+    cube->sar.num = cube->sar.den = 1;
+    uref_pic_flow_get_sar(uref, &cube->sar);
+    if (unlikely(!cube->sar.num || !cube->sar.den)) {
+        cube->sar.num = cube->sar.den = 1;
+    }
+}
+
+/** @internal @This does the actual rendering upon receiving a pic
+ * @param uprobe description structure of the probe
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ */
+static void uprobe_gl_sink_cube_render(struct uprobe *uprobe,
+                                       struct upipe *upipe, struct uref *uref)
+{
+    struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
     float scale = 1;
     size_t w = 0, h = 0;
 
-    uref_pic_size(uref, &w, &h, NULL);
-    sar.num = sar.den = 1;
-    uref_pic_flow_get_sar(uref, &sar);
-    if (unlikely(!sar.num || !sar.den)) {
-        sar.num = sar.den = 1;
+    /* load image to texture */
+    if (!upipe_gl_texture_load_uref(uref, cube->texture)) {
+        upipe_err(upipe, "Could not map picture plane");
+        uref_free(uref);
+        return;
     }
-    scale = (sar.num * w)/((float) sar.den * h);
 
-    upipe_gl_sink_get_texture(upipe, &texture);
+    uref_pic_size(uref, &w, &h, NULL);
+    scale = (cube->sar.num * w)/((float) cube->sar.den * h);
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_TEXTURE_2D);
     glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindTexture(GL_TEXTURE_2D, cube->texture);
     glLoadIdentity();
     glTranslatef(0, 0, -10);
 
@@ -172,13 +194,14 @@ static void upipe_gl_sink_render_cube(struct uprobe *uprobe, struct upipe *upipe
 }
 
 /** @internal @This does the gl (window-system non-specific) init
+ * @param uprobe description structure of the probe
  * @param upipe description structure of the pipe
  * @param w pic width
  * @param h pic height
  */
-static void upipe_gl_sink_init_cube(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
+static void uprobe_gl_sink_cube_init(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
 {
-    GLuint texture;
+    struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
 
     glClearColor (0.0, 0.0, 0.0, 0.0);
     glShadeModel(GL_FLAT);
@@ -186,9 +209,8 @@ static void upipe_gl_sink_init_cube(struct uprobe *uprobe, struct upipe *upipe, 
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    upipe_gl_sink_set_texture(upipe, texture);
+    glGenTextures(1, &cube->texture);
+    glBindTexture(GL_TEXTURE_2D, cube->texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -208,19 +230,24 @@ static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
                         struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
+        case UPROBE_NEW_FLOW_DEF: {
+            struct uref *uref = va_arg(args, struct uref*);
+            uprobe_gl_sink_cube_new_flow(uprobe, upipe, uref);
+            return true;
+        }
         case UPROBE_GL_SINK_INIT: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
             int w = va_arg(args, int);
             int h = va_arg(args, int);
-            upipe_gl_sink_init_cube(uprobe, upipe, w, h);
+            uprobe_gl_sink_cube_init(uprobe, upipe, w, h);
             return true;
         }
         case UPROBE_GL_SINK_RENDER: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
             struct uref *uref = va_arg(args, struct uref *);
-            upipe_gl_sink_render_cube(uprobe, upipe, uref);
+            uprobe_gl_sink_cube_render(uprobe, upipe, uref);
             return true;
         }
         case UPROBE_GL_SINK_RESHAPE: {
@@ -228,7 +255,7 @@ static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
             int w = va_arg(args, int);
             int h = va_arg(args, int);
-            upipe_gl_sink_reshape_cube(uprobe, upipe, w, h);
+            uprobe_gl_sink_cube_reshape(uprobe, upipe, w, h);
             return true;
         }
         default:
@@ -243,6 +270,7 @@ static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
 static void uprobe_gl_sink_cube_free(struct uprobe *uprobe)
 {
     struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
+    glDeleteTextures(1, &cube->texture);
     uprobe_gl_sink_cube_clean_adhoc(uprobe);
     free(cube);
 }
@@ -263,6 +291,8 @@ struct uprobe *uprobe_gl_sink_cube_alloc(struct uprobe *next)
     struct uprobe *uprobe = &cube->uprobe;
 
     cube->theta = 0;
+    cube->sar.num = cube->sar.den = 1;
+
     uprobe_init(uprobe, uprobe_gl_sink_cube_throw, next);
     uprobe_gl_sink_cube_init_adhoc(uprobe);
     return uprobe;

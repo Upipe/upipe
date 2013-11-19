@@ -2,7 +2,10 @@ if HAVE_GLX
 lib_LTLIBRARIES = libupipe_gl.la
 endif
 
-libupipe_gl_la_SOURCES = upipe_glx_sink.c uprobe_gl_sink_cube.c
+libupipe_gl_la_SOURCES = \
+    upipe_gl_sink_common.c \
+    upipe_glx_sink.c \
+    uprobe_gl_sink_cube.c
 libupipe_gl_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_gl_la_CFLAGS = -Wall $(GLX_CFLAGS)
 libupipe_gl_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(GLX_LIBS)

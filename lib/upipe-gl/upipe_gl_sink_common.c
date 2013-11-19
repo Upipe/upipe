@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -27,46 +27,28 @@
  * @short Upipe GL - common definitions
  */
 
-#ifndef _UPIPE_GL_UPIPE_GL_SINK_COMMON_H_
-/** @hidden */
-#define _UPIPE_GL_UPIPE_GL_SINK_COMMON_H_
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <upipe/upipe.h>
-
-#define UPIPE_GL_SINK_SIGNATURE UBASE_FOURCC('g', 'l', 's', 'k')
-
-/** @This extends uprobe_event with specific events for gl sink. */
-enum uprobe_gl_sink_event {
-    UPROBE_GL_SINK_SENTINEL = UPROBE_LOCAL,
-
-    /** init GL context (int SIGNATURE, int width, int height) */
-    UPROBE_GL_SINK_INIT,
-    /** render GL (int SIGNATURE, struct uref*) */
-    UPROBE_GL_SINK_RENDER,
-    /** reshape GL (int SIGNATURE, int width, int height) */
-    UPROBE_GL_SINK_RESHAPE,
-
-    UPROBE_GL_SINK_LOCAL
-};
-
-/** @This extends upipe_command with specific commands for gl sink. */
-enum upipe_gl_sink_command {
-    UPIPE_GL_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    UPIPE_GL_SINK_CONTROL_LOCAL
-};
+#include <upipe/uref_pic.h>
+#include <upipe-gl/upipe_gl_sink_common.h>
+#include <GL/gl.h>
 
 /** @This loads a uref picture into the specified texture
  * @param uref uref structure describing the picture
  * @param texture GL texture
  * @return false in case of error
  */
-bool upipe_gl_texture_load_uref(struct uref *uref, unsigned int texture);
+bool upipe_gl_texture_load_uref(struct uref *uref, GLuint texture)
+{
+    const uint8_t *data = NULL;
+    size_t width, height;
+    uref_pic_size(uref, &width, &height, NULL);
+    if(!uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data)) {
+        return false;
+    }
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, 
+            height, 0, GL_RGB, GL_UNSIGNED_BYTE, 
+            data);
+    uref_pic_plane_unmap(uref, "r8g8b8", 0, 0, -1, -1);
 
-#ifdef __cplusplus
+    return true;
 }
-#endif
-#endif
