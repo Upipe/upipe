@@ -311,7 +311,6 @@ int main(int argc, char **argv)
     /* block */
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
             UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_PREPEND, UBUF_APPEND,
             UBUF_ALIGN,
             UBUF_ALIGN_OFFSET);
     assert(block_mgr);

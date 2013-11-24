@@ -35,6 +35,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_sink.h>
@@ -57,6 +58,9 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
 
 /** @internal @This is the private context of a trickp pipe. */
 struct upipe_trickp {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uclock structure */
     struct uclock *uclock;
 
@@ -78,6 +82,7 @@ struct upipe_trickp {
 };
 
 UPIPE_HELPER_UPIPE(upipe_trickp, upipe, UPIPE_TRICKP_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_trickp, urefcount, upipe_trickp_free)
 UPIPE_HELPER_VOID(upipe_trickp)
 UPIPE_HELPER_UCLOCK(upipe_trickp, uclock)
 
@@ -91,6 +96,8 @@ enum upipe_trickp_sub_type {
 
 /** @internal @This is the private context of an output of a trickp pipe. */
 struct upipe_trickp_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -117,6 +124,7 @@ struct upipe_trickp_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe, UPIPE_TRICKP_SUB_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_trickp_sub, urefcount, upipe_trickp_sub_free)
 UPIPE_HELPER_VOID(upipe_trickp_sub)
 UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, nb_urefs, max_urefs, blockers, upipe_trickp_sub_process)
@@ -140,6 +148,7 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
                                                       args);
     if (unlikely(upipe == NULL))
         return NULL;
+    upipe_trickp_sub_init_urefcount(upipe);
     upipe_trickp_sub_init_output(upipe);
     upipe_trickp_sub_init_sink(upipe);
     upipe_trickp_sub_init_sub(upipe);
@@ -147,9 +156,6 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
         upipe_trickp_sub_from_upipe(upipe);
     ulist_init(&upipe_trickp_sub->urefs);
     upipe_trickp_sub->type = UPIPE_TRICKP_UNKNOWN;
-
-    struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(mgr);
-    upipe_use(upipe_trickp_to_upipe(upipe_trickp));
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -304,16 +310,13 @@ static bool upipe_trickp_sub_control(struct upipe *upipe,
  */
 static void upipe_trickp_sub_free(struct upipe *upipe)
 {
-    struct upipe_trickp *upipe_trickp =
-        upipe_trickp_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_trickp_sub_clean_output(upipe);
     upipe_trickp_sub_clean_sink(upipe);
     upipe_trickp_sub_clean_sub(upipe);
+    upipe_trickp_sub_clean_urefcount(upipe);
     upipe_trickp_sub_free_void(upipe);
-
-    upipe_release(upipe_trickp_to_upipe(upipe_trickp));
 }
 
 /** @internal @This initializes the output manager for a trickp pipe.
@@ -325,12 +328,11 @@ static void upipe_trickp_init_sub_mgr(struct upipe *upipe)
     struct upipe_trickp *upipe_trickp =
         upipe_trickp_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_trickp->sub_mgr;
+    sub_mgr->refcount = upipe_trickp_to_urefcount(upipe_trickp);
     sub_mgr->signature = UPIPE_TRICKP_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_trickp_sub_alloc;
     sub_mgr->upipe_input = upipe_trickp_sub_input;
     sub_mgr->upipe_control = upipe_trickp_sub_control;
-    sub_mgr->upipe_free = upipe_trickp_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates a trickp pipe.
@@ -348,6 +350,7 @@ static struct upipe *upipe_trickp_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_trickp_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
+    upipe_trickp_init_urefcount(upipe);
     upipe_trickp_init_sub_mgr(upipe);
     upipe_trickp_init_sub_subs(upipe);
     upipe_trickp_init_uclock(upipe);
@@ -524,19 +527,18 @@ static void upipe_trickp_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_trickp_clean_sub_subs(upipe);
     upipe_trickp_clean_uclock(upipe);
+    upipe_trickp_clean_urefcount(upipe);
     upipe_trickp_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_trickp_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TRICKP_SIGNATURE,
 
     .upipe_alloc = upipe_trickp_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_trickp_control,
-    .upipe_free = upipe_trickp_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_trickp_control
 };
 
 /** @This returns the management structure for all trickp pipes.

@@ -44,6 +44,7 @@
 #include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -65,6 +66,9 @@
 
 /** @internal upipe_x264 private structure */
 struct upipe_x264 {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** x264 encoder */
     x264_t *encoder;
     /** x264 params */
@@ -101,6 +105,7 @@ struct upipe_x264 {
 };
 
 UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_x264, urefcount, upipe_x264_free)
 UPIPE_HELPER_VOID(upipe_x264);
 UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr);
 UPIPE_HELPER_UCLOCK(upipe_x264, uclock);
@@ -265,6 +270,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264->sc_latency = 0;
     upipe_x264->x264_ts = 0;
 
+    upipe_x264_init_urefcount(upipe);
     upipe_x264_init_ubuf_mgr(upipe);
     upipe_x264_init_uclock(upipe);
     upipe_x264_init_output(upipe);
@@ -769,18 +775,17 @@ static void upipe_x264_free(struct upipe *upipe)
     upipe_x264_clean_output(upipe);
     upipe_x264_clean_flow_def(upipe);
     upipe_x264_clean_flow_def_check(upipe);
+    upipe_x264_clean_urefcount(upipe);
     upipe_x264_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_x264_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_X264_SIGNATURE,
     .upipe_alloc = upipe_x264_alloc,
     .upipe_input = upipe_x264_input,
-    .upipe_control = upipe_x264_control,
-    .upipe_free = upipe_x264_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_x264_control
 };
 
 /** @This returns the management structure for glx_sink pipes

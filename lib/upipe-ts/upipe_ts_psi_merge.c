@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
@@ -50,6 +51,9 @@
 
 /** @internal @This is the private context of a ts_psim pipe. */
 struct upipe_ts_psim {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -67,9 +71,9 @@ struct upipe_ts_psim {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe, UPIPE_TS_PSIM_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psim, urefcount, upipe_ts_psim_free)
 UPIPE_HELPER_VOID(upipe_ts_psim)
 UPIPE_HELPER_SYNC(upipe_ts_psim, acquired)
-
 UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_psim pipe.
@@ -90,6 +94,7 @@ static struct upipe *upipe_ts_psim_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
+    upipe_ts_psim_init_urefcount(upipe);
     upipe_ts_psim_init_sync(upipe);
     upipe_ts_psim_init_output(upipe);
     upipe_ts_psim->next_uref = NULL;
@@ -302,19 +307,18 @@ static void upipe_ts_psim_free(struct upipe *upipe)
 
     if (upipe_ts_psim->next_uref != NULL)
         uref_free(upipe_ts_psim->next_uref);
+    upipe_ts_psim_clean_urefcount(upipe);
     upipe_ts_psim_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_psim_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PSIM_SIGNATURE,
 
     .upipe_alloc = upipe_ts_psim_alloc,
     .upipe_input = upipe_ts_psim_input,
-    .upipe_control = upipe_ts_psim_control,
-    .upipe_free = upipe_ts_psim_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_psim_control
 };
 
 /** @This returns the management structure for all ts_psim pipes.

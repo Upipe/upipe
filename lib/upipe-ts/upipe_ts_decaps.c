@@ -33,6 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_decaps.h>
@@ -50,6 +51,9 @@
 
 /** @internal @This is the private context of a ts_decaps pipe. */
 struct upipe_ts_decaps {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -65,8 +69,8 @@ struct upipe_ts_decaps {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_decaps, upipe, UPIPE_TS_DECAPS_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_decaps, urefcount, upipe_ts_decaps_free)
 UPIPE_HELPER_VOID(upipe_ts_decaps)
-
 UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_decaps pipe.
@@ -87,6 +91,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
+    upipe_ts_decaps_init_urefcount(upipe);
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
     upipe_throw_ready(upipe);
@@ -277,19 +282,18 @@ static void upipe_ts_decaps_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_decaps_clean_output(upipe);
+    upipe_ts_decaps_clean_urefcount(upipe);
     upipe_ts_decaps_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_decaps_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_DECAPS_SIGNATURE,
 
     .upipe_alloc = upipe_ts_decaps_alloc,
     .upipe_input = upipe_ts_decaps_input,
-    .upipe_control = upipe_ts_decaps_control,
-    .upipe_free = upipe_ts_decaps_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_decaps_control
 };
 
 /** @This returns the management structure for all ts_decaps pipes.

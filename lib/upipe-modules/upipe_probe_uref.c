@@ -34,6 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_probe_uref.h>
@@ -52,6 +53,9 @@
 
 /** upipe_probe_uref structure */ 
 struct upipe_probe_uref {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
@@ -64,6 +68,7 @@ struct upipe_probe_uref {
 };
 
 UPIPE_HELPER_UPIPE(upipe_probe_uref, upipe, UPIPE_PROBE_UREF_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_probe_uref, urefcount, upipe_probe_uref_free)
 UPIPE_HELPER_VOID(upipe_probe_uref)
 UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
 
@@ -149,6 +154,7 @@ static struct upipe *upipe_probe_uref_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    upipe_probe_uref_init_urefcount(upipe);
     upipe_probe_uref_init_output(upipe);
     upipe_throw_ready(upipe);
     return upipe;
@@ -166,14 +172,12 @@ static void upipe_probe_uref_free(struct upipe *upipe)
 }
 
 static struct upipe_mgr upipe_probe_uref_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_PROBE_UREF_SIGNATURE,
 
     .upipe_alloc = upipe_probe_uref_alloc,
     .upipe_input = upipe_probe_uref_input,
-    .upipe_control = upipe_probe_uref_control,
-    .upipe_free = upipe_probe_uref_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_probe_uref_control
 };
 
 /** @This returns the management structure for probe pipes

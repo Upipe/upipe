@@ -39,6 +39,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_nodemux.h>
@@ -53,6 +54,9 @@
 
 /** @internal @This is the private context of a nodemux pipe. */
 struct upipe_nodemux {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -68,6 +72,7 @@ struct upipe_nodemux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_nodemux, upipe, UPIPE_NODEMUX_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_nodemux, urefcount, upipe_nodemux_free)
 UPIPE_HELPER_VOID(upipe_nodemux)
 UPIPE_HELPER_OUTPUT(upipe_nodemux, output, flow_def, flow_def_sent)
 
@@ -89,6 +94,7 @@ static struct upipe *upipe_nodemux_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_nodemux *upipe_nodemux = upipe_nodemux_from_upipe(upipe);
+    upipe_nodemux_init_urefcount(upipe);
     upipe_nodemux_init_output(upipe);
     upipe_nodemux->inited = false;
     upipe_throw_ready(upipe);
@@ -172,19 +178,18 @@ static void upipe_nodemux_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_nodemux_clean_output(upipe);
+    upipe_nodemux_clean_urefcount(upipe);
     upipe_nodemux_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_nodemux_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_NODEMUX_SIGNATURE,
 
     .upipe_alloc = upipe_nodemux_alloc,
     .upipe_input = upipe_nodemux_input,
-    .upipe_control = upipe_nodemux_control,
-    .upipe_free = upipe_nodemux_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_nodemux_control
 };
 
 /** @This returns the management structure for all nodemux pipes.

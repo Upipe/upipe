@@ -31,6 +31,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_check.h>
@@ -53,6 +54,9 @@
 
 /** @internal @This is the private context of a ts_check pipe. */
 struct upipe_ts_check {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -68,6 +72,7 @@ struct upipe_ts_check {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_check, upipe, UPIPE_TS_CHECK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_check, urefcount, upipe_ts_check_free)
 UPIPE_HELPER_VOID(upipe_ts_check)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_check, output, flow_def, flow_def_sent)
@@ -90,6 +95,7 @@ static struct upipe *upipe_ts_check_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
+    upipe_ts_check_init_urefcount(upipe);
     upipe_ts_check_init_output(upipe);
     upipe_ts_check->ts_size = TS_SIZE;
     upipe_throw_ready(upipe);
@@ -278,19 +284,18 @@ static void upipe_ts_check_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_check_clean_output(upipe);
+    upipe_ts_check_clean_urefcount(upipe);
     upipe_ts_check_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_check_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_CHECK_SIGNATURE,
 
     .upipe_alloc = upipe_ts_check_alloc,
     .upipe_input = upipe_ts_check_input,
-    .upipe_control = upipe_ts_check_control,
-    .upipe_free = upipe_ts_check_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_check_control
 };
 
 /** @This returns the management structure for all ts_check pipes.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -49,10 +49,6 @@ struct umem_mgr;
  * @param ubuf_pool_depth maximum number of ubuf structures in the pool
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
- * @param prepend default minimum extra space before buffer (if set to -1, a
- * default sensible value is used)
- * @param append default minimum extra space after buffer (if set to -1, a
- * default sensible value is used)
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -61,7 +57,6 @@ struct umem_mgr;
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          int prepend, int append,
                                           int align, int align_offset);
 
 #ifdef __cplusplus

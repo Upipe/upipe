@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -164,8 +164,8 @@ struct udict {
 /** @This stores common management parameters for a udict pool.
  */
 struct udict_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
 
     /** function to allocate a udict with a given initial size */
     struct udict *(*udict_alloc)(struct udict_mgr *, size_t);
@@ -176,8 +176,6 @@ struct udict_mgr {
 
     /** function to release all buffers kept in pools */
     void (*udict_mgr_vacuum)(struct udict_mgr *);
-    /** function to free the udict manager */
-    void (*udict_mgr_free)(struct udict_mgr *);
 };
 
 /** @This allocates and initializes a new udict.
@@ -889,7 +887,7 @@ static inline void udict_mgr_vacuum(struct udict_mgr *mgr)
  */
 static inline void udict_mgr_use(struct udict_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a udict manager or frees it.
@@ -898,8 +896,7 @@ static inline void udict_mgr_use(struct udict_mgr *mgr)
  */
 static inline void udict_mgr_release(struct udict_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->udict_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

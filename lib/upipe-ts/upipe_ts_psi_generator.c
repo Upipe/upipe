@@ -33,6 +33,7 @@
 #include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -51,6 +52,9 @@
 
 /** @internal @This is the private context of a ts psig pipe. */
 struct upipe_ts_psig {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -77,12 +81,15 @@ struct upipe_ts_psig {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psig, urefcount, upipe_ts_psig_free)
 UPIPE_HELPER_VOID(upipe_ts_psig)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_psig pipe. */
 struct upipe_ts_psig_program {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -116,7 +123,10 @@ struct upipe_ts_psig_program {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe,
+                   UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psig_program, urefcount,
+                       upipe_ts_psig_program_free)
 UPIPE_HELPER_VOID(upipe_ts_psig_program)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, flow_def_sent)
 
@@ -126,6 +136,8 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_psig, upipe_ts_psig_program, program, program_mgr,
 /** @internal @This is the private context of an elementary stream of a
  * ts_psig pipe. */
 struct upipe_ts_psig_flow {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
     /** input flow definition */
@@ -145,6 +157,7 @@ struct upipe_ts_psig_flow {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psig_flow, upipe, UPIPE_TS_PSIG_FLOW_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psig_flow, urefcount, upipe_ts_psig_flow_free)
 UPIPE_HELPER_VOID(upipe_ts_psig_flow)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig_program, upipe_ts_psig_flow, flow, flow_mgr,
@@ -170,6 +183,7 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_psig_flow *upipe_ts_psig_flow =
         upipe_ts_psig_flow_from_upipe(upipe);
+    upipe_ts_psig_flow_init_urefcount(upipe);
     upipe_ts_psig_flow->pid = 8192;
     upipe_ts_psig_flow->stream_type = 0;
     upipe_ts_psig_flow->descriptors = NULL;
@@ -178,10 +192,6 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_flow_init_sub(upipe);
 
     upipe_throw_ready(upipe);
-
-    struct upipe_ts_psig_program *upipe_ts_psig_program =
-        upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
-    upipe_use(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program));
     return upipe;
 }
 
@@ -276,10 +286,9 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
     if (upipe_ts_psig_flow->flow_def_input != NULL)
         uref_free(upipe_ts_psig_flow->flow_def_input);
     upipe_ts_psig_flow_clean_sub(upipe);
-    upipe_ts_psig_flow_free_void(upipe);
-
     upipe_ts_psig_program->pmt_version++;
-    upipe_release(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program));
+    upipe_ts_psig_flow_clean_urefcount(upipe);
+    upipe_ts_psig_flow_free_void(upipe);
 }
 
 /** @internal @This initializes the flow manager for a ts_psig_program pipe.
@@ -291,12 +300,12 @@ static void upipe_ts_psig_program_init_flow_mgr(struct upipe *upipe)
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     struct upipe_mgr *flow_mgr = &upipe_ts_psig_program->flow_mgr;
+    flow_mgr->refcount =
+        upipe_ts_psig_program_to_urefcount(upipe_ts_psig_program);
     flow_mgr->signature = UPIPE_TS_PSIG_FLOW_SIGNATURE;
     flow_mgr->upipe_alloc = upipe_ts_psig_flow_alloc;
     flow_mgr->upipe_input = NULL;
     flow_mgr->upipe_control = upipe_ts_psig_flow_control;
-    flow_mgr->upipe_free = upipe_ts_psig_flow_free;
-    flow_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates a program of a ts_psig pipe.
@@ -319,6 +328,7 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
+    upipe_ts_psig_program_init_urefcount(upipe);
     upipe_ts_psig_program_init_output(upipe);
     upipe_ts_psig_program_init_flow_mgr(upipe);
     upipe_ts_psig_program_init_sub_flows(upipe);
@@ -331,10 +341,6 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_program_init_sub(upipe);
 
     upipe_throw_ready(upipe);
-
-    struct upipe_ts_psig *upipe_ts_psig =
-        upipe_ts_psig_from_program_mgr(upipe->mgr);
-    upipe_use(upipe_ts_psig_to_upipe(upipe_ts_psig));
     return upipe;
 }
 
@@ -612,10 +618,9 @@ static void upipe_ts_psig_program_free(struct upipe *upipe)
     upipe_ts_psig_program_clean_sub_flows(upipe);
     upipe_ts_psig_program_clean_sub(upipe);
     upipe_ts_psig_program_clean_output(upipe);
-    upipe_ts_psig_program_free_void(upipe);
-
     upipe_ts_psig->pat_version++;
-    upipe_release(upipe_ts_psig_to_upipe(upipe_ts_psig));
+    upipe_ts_psig_program_clean_urefcount(upipe);
+    upipe_ts_psig_program_free_void(upipe);
 }
 
 /** @internal @This initializes the program manager for a ts_psig pipe.
@@ -626,12 +631,11 @@ static void upipe_ts_psig_init_program_mgr(struct upipe *upipe)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     struct upipe_mgr *program_mgr = &upipe_ts_psig->program_mgr;
+    program_mgr->refcount = upipe_ts_psig_to_urefcount(upipe_ts_psig);
     program_mgr->signature = UPIPE_TS_PSIG_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_psig_program_alloc;
     program_mgr->upipe_input = upipe_ts_psig_program_input;
     program_mgr->upipe_control = upipe_ts_psig_program_control;
-    program_mgr->upipe_free = upipe_ts_psig_program_free;
-    program_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates a ts_psig pipe.
@@ -652,6 +656,7 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    upipe_ts_psig_init_urefcount(upipe);
     upipe_ts_psig_init_ubuf_mgr(upipe);
     upipe_ts_psig_init_output(upipe);
     upipe_ts_psig_init_program_mgr(upipe);
@@ -884,19 +889,18 @@ static void upipe_ts_psig_free(struct upipe *upipe)
     upipe_ts_psig_clean_sub_programs(upipe);
     upipe_ts_psig_clean_output(upipe);
     upipe_ts_psig_clean_ubuf_mgr(upipe);
+    upipe_ts_psig_clean_urefcount(upipe);
     upipe_ts_psig_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_psig_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PSIG_SIGNATURE,
 
     .upipe_alloc = upipe_ts_psig_alloc,
     .upipe_input = upipe_ts_psig_input,
-    .upipe_control = upipe_ts_psig_control,
-    .upipe_free = upipe_ts_psig_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_psig_control
 };
 
 /** @This returns the management structure for all ts_psig pipes.

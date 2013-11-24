@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -81,8 +81,8 @@ static inline size_t umem_size(struct umem *umem)
 /** @This defines a memory allocator management structure.
  */
 struct umem_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
 
     /** function to allocate a new memory block */
     bool (*umem_alloc)(struct umem_mgr *, struct umem *, size_t);
@@ -93,8 +93,6 @@ struct umem_mgr {
 
     /** function to release all buffers kept in pools */
     void (*umem_mgr_vacuum)(struct umem_mgr *);
-    /** function to free the umem manager */
-    void (*umem_mgr_free)(struct umem_mgr *);
 };
 
 /** @This allocates a new umem buffer space.
@@ -156,7 +154,7 @@ static inline void umem_mgr_vacuum(struct umem_mgr *mgr)
  */
 static inline void umem_mgr_use(struct umem_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a umem manager or frees it.
@@ -165,8 +163,7 @@ static inline void umem_mgr_use(struct umem_mgr *mgr)
  */
 static inline void umem_mgr_release(struct umem_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->umem_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

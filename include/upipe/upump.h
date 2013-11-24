@@ -90,30 +90,12 @@ struct upump {
     void *opaque;
 };
 
-/** @This returns the high-level upump structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the upump
- * @return pointer to the upump structure
- */
-static inline struct upump *upump_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upump, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upump upump structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *upump_to_uchain(struct upump *upump)
-{
-    return &upump->uchain;
-}
+UBASE_FROM_TO(upump, uchain, uchain, uchain)
 
 /** @This stores common management parameters for a given event loop. */
 struct upump_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** structure for double-linked lists - for use by the application only */
     struct uchain uchain;
     /** opaque - for use by the application only */
@@ -136,9 +118,9 @@ struct upump_mgr {
 
     /** function to release all buffers kept in pools */
     void (*upump_mgr_vacuum)(struct upump_mgr *);
-    /** function to free upump manager */
-    void (*upump_mgr_free)(struct upump_mgr *);
 };
+
+UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
 
 /** @internal @This allocates and initializes a pump.
  *
@@ -281,7 +263,7 @@ static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
  */
 static inline void upump_mgr_use(struct upump_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a upump manager of frees it.
@@ -290,9 +272,7 @@ static inline void upump_mgr_use(struct upump_mgr *mgr)
  */
 static inline void upump_mgr_release(struct upump_mgr *mgr)
 {
-    if (unlikely(mgr->upump_mgr_free != NULL &&
-                 urefcount_release(&mgr->refcount)))
-        mgr->upump_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 /** @This gets the opaque member of a upump manager.

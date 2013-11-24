@@ -30,13 +30,13 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_psi_split.h>
-#include <upipe-modules/upipe_proxy.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -51,10 +51,15 @@
 
 /** @internal @This is the private context of a ts_psi_split pipe. */
 struct upipe_ts_psi_split {
-    /** list of subs */
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
+    /** refcount management structure exported to the public structure */
+    struct urefcount urefcount;
+
+    /** list of output subpipes */
     struct uchain subs;
 
-    /** manager to create subs */
+    /** manager to create output subpipes */
     struct upipe_mgr sub_mgr;
 
     /** public upipe structure */
@@ -62,10 +67,19 @@ struct upipe_ts_psi_split {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psi_split, upipe, UPIPE_TS_PSI_SPLIT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psi_split, urefcount,
+                       upipe_ts_psi_split_no_input)
 UPIPE_HELPER_VOID(upipe_ts_psi_split)
+
+UBASE_FROM_TO(upipe_ts_psi_split, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static void upipe_ts_psi_split_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the private context of an output of a ts_psi_split pipe. */
 struct upipe_ts_psi_split_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -80,7 +94,10 @@ struct upipe_ts_psi_split_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_psi_split_sub, upipe, UPIPE_TS_PSI_SPLIT_OUTPUT_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_ts_psi_split_sub, upipe,
+                   UPIPE_TS_PSI_SPLIT_OUTPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psi_split_sub, urefcount,
+                       upipe_ts_psi_split_sub_free)
 UPIPE_HELPER_FLOW(upipe_ts_psi_split_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_ts_psi_split_sub, output, flow_def, flow_def_sent)
 
@@ -106,13 +123,10 @@ static struct upipe *upipe_ts_psi_split_sub_alloc(struct upipe_mgr *mgr,
                                                             args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
+    upipe_ts_psi_split_sub_init_urefcount(upipe);
     upipe_ts_psi_split_sub_init_output(upipe);
     upipe_ts_psi_split_sub_init_sub(upipe);
     upipe_ts_psi_split_sub_store_flow_def(upipe, flow_def);
-
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_sub_mgr(mgr);
-    upipe_use(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -159,15 +173,12 @@ static bool upipe_ts_psi_split_sub_control(struct upipe *upipe,
  */
 static void upipe_ts_psi_split_sub_free(struct upipe *upipe)
 {
-    struct upipe_ts_psi_split *upipe_ts_psi_split =
-        upipe_ts_psi_split_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_ts_psi_split_sub_clean_output(upipe);
     upipe_ts_psi_split_sub_clean_sub(upipe);
+    upipe_ts_psi_split_sub_clean_urefcount(upipe);
     upipe_ts_psi_split_sub_free_flow(upipe);
-
-    upipe_release(upipe_ts_psi_split_to_upipe(upipe_ts_psi_split));
 }
 
 /** @internal @This initializes the output manager for a ts_psi_split pipe.
@@ -179,12 +190,12 @@ static void upipe_ts_psi_split_init_sub_mgr(struct upipe *upipe)
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_ts_psi_split->sub_mgr;
+    sub_mgr->refcount =
+        upipe_ts_psi_split_to_urefcount_real(upipe_ts_psi_split);
     sub_mgr->signature = UPIPE_TS_PSI_SPLIT_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_psi_split_sub_alloc;
     sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_ts_psi_split_sub_control;
-    sub_mgr->upipe_free = upipe_ts_psi_split_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates a ts_psi_split pipe.
@@ -203,6 +214,11 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
                                                         args);
     if (unlikely(upipe == NULL))
         return NULL;
+    struct upipe_ts_psi_split *upipe_ts_psi_split =
+        upipe_ts_psi_split_from_upipe(upipe);
+    upipe_ts_psi_split_init_urefcount(upipe);
+    urefcount_init(upipe_ts_psi_split_to_urefcount_real(upipe_ts_psi_split),
+                   upipe_ts_psi_split_free);
     upipe_ts_psi_split_init_sub_mgr(upipe);
     upipe_ts_psi_split_init_sub_subs(upipe);
     upipe_throw_ready(upipe);
@@ -297,35 +313,41 @@ static bool upipe_ts_psi_split_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
- * @param upipe description structure of the pipe
+ * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_ts_psi_split_free(struct upipe *upipe)
+static void upipe_ts_psi_split_free(struct urefcount *urefcount_real)
 {
+    struct upipe_ts_psi_split *upipe_ts_psi_split =
+        upipe_ts_psi_split_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_psi_split_to_upipe(upipe_ts_psi_split);
     upipe_throw_dead(upipe);
     upipe_ts_psi_split_clean_sub_subs(upipe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_psi_split_clean_urefcount(upipe);
     upipe_ts_psi_split_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_psi_split_no_input(struct upipe *upipe)
+{
+    struct upipe_ts_psi_split *upipe_ts_psi_split =
+        upipe_ts_psi_split_from_upipe(upipe);
+    upipe_ts_psi_split_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+    urefcount_release(upipe_ts_psi_split_to_urefcount_real(upipe_ts_psi_split));
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_psi_split_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PSI_SPLIT_SIGNATURE,
 
     .upipe_alloc = upipe_ts_psi_split_alloc,
     .upipe_input = upipe_ts_psi_split_input,
-    .upipe_control = upipe_ts_psi_split_control,
-    .upipe_free = upipe_ts_psi_split_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_psi_split_control
 };
-
-/** @This is called when the proxy is released.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_psi_split_proxy_released(struct upipe *upipe)
-{
-    upipe_ts_psi_split_throw_sub_subs(upipe, UPROBE_SOURCE_END);
-}
 
 /** @This returns the management structure for all ts_psi_split pipes.
  *
@@ -333,6 +355,5 @@ static void upipe_ts_psi_split_proxy_released(struct upipe *upipe)
  */
 struct upipe_mgr *upipe_ts_psi_split_mgr_alloc(void)
 {
-    return upipe_proxy_mgr_alloc(&upipe_ts_psi_split_mgr,
-                                 upipe_ts_psi_split_proxy_released);
+    return &upipe_ts_psi_split_mgr;
 }

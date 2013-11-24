@@ -38,6 +38,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -58,6 +59,9 @@
 
 /** upipe_sws structure with swscale parameters */ 
 struct upipe_sws {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** input flow */
     struct uref *flow_def_input;
     /** attributes added by the pipe */
@@ -90,6 +94,7 @@ struct upipe_sws {
 };
 
 UPIPE_HELPER_UPIPE(upipe_sws, upipe, UPIPE_SWS_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_sws, urefcount, upipe_sws_free)
 UPIPE_HELPER_FLOW(upipe_sws, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_sws, flow_def_input, flow_def_attr)
@@ -395,6 +400,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
+    upipe_sws_init_urefcount(upipe);
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
     upipe_sws_init_flow_def(upipe);
@@ -421,19 +427,18 @@ static void upipe_sws_free(struct upipe *upipe)
     upipe_sws_clean_output(upipe);
     upipe_sws_clean_flow_def(upipe);
     upipe_sws_clean_ubuf_mgr(upipe);
+    upipe_sws_clean_urefcount(upipe);
     upipe_sws_free_flow(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_sws_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_SWS_SIGNATURE,
 
     .upipe_alloc = upipe_sws_alloc,
     .upipe_input = upipe_sws_input,
-    .upipe_control = upipe_sws_control,
-    .upipe_free = upipe_sws_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_sws_control
 };
 
 /** @This returns the management structure for swscale pipes

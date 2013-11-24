@@ -175,13 +175,11 @@ static void udpsrc_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_udpsrc */
 static struct upipe_mgr udpsrc_test_mgr = {
+    .refcount = NULL,
     .signature = 0,
     .upipe_alloc = udpsrc_test_alloc,
     .upipe_input = udpsrc_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 /* packet generator */
@@ -247,8 +245,7 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, -1,
-                                                         -1, 0);
+                                                         umem_mgr, -1, 0);
     assert(ubuf_mgr != NULL);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);

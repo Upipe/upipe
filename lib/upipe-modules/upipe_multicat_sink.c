@@ -34,11 +34,11 @@
 #include <upipe/uref_clock.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
-#include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe-modules/upipe_multicat_sink.h>
@@ -60,6 +60,9 @@
 
 /** upipe_multicat_sink structure */ 
 struct upipe_multicat_sink {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** input flow */
     struct uref *flow_def;
 
@@ -87,6 +90,7 @@ struct upipe_multicat_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_multicat_sink, upipe, UPIPE_MULTICAT_SINK_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_multicat_sink, urefcount, upipe_multicat_sink_free)
 UPIPE_HELPER_VOID(upipe_multicat_sink)
 
 /** @internal @This generates a path from idx and send set_path to the internal
@@ -430,6 +434,7 @@ static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr,
     struct upipe_multicat_sink *upipe_multicat_sink =
         upipe_multicat_sink_from_upipe(upipe);
     upipe_init(upipe, mgr, uprobe);
+    upipe_multicat_sink_init_urefcount(upipe);
     upipe_multicat_sink->flow_def = NULL;
     upipe_multicat_sink->fsink = NULL;
     upipe_multicat_sink->fsink_mgr = NULL;
@@ -460,18 +465,17 @@ static void upipe_multicat_sink_free(struct upipe *upipe)
 
     free(upipe_multicat_sink->dirpath);
     free(upipe_multicat_sink->suffix);
+    upipe_multicat_sink_clean_urefcount(upipe);
     upipe_multicat_sink_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_multicat_sink_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_MULTICAT_SINK_SIGNATURE,
 
     .upipe_alloc = upipe_multicat_sink_alloc,
     .upipe_input = upipe_multicat_sink_input,
-    .upipe_control = upipe_multicat_sink_control,
-    .upipe_free = upipe_multicat_sink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_multicat_sink_control
 };
 
 /** @This returns the management structure for multicat_sink pipes

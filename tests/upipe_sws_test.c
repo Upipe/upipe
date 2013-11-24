@@ -247,13 +247,11 @@ static void sws_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr sws_test_mgr = {
+    .refcount = NULL,
     .signature = 0,
     .upipe_alloc = sws_test_alloc,
     .upipe_input = sws_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 // DEBUG - from swscale/swscale_unscaled.c

@@ -52,8 +52,8 @@
 /** @This is the low-level shared structure with reference counting, pointing
  * to the actual data. */
 struct ubuf_block_mem_shared {
-    /** refcount management structure */
-    urefcount refcount;
+    /** number of blocks pointing to the memory area */
+    uatomic_uint32_t refcount;
     /** umem structure pointing to buffer */
     struct umem umem;
 };
@@ -67,13 +67,14 @@ struct ubuf_block_mem {
     struct ubuf_block ubuf_block;
 };
 
+UBASE_FROM_TO(ubuf_block_mem, ubuf, ubuf, ubuf_block.ubuf)
+
 /** @This is a super-set of the ubuf_mgr structure with additional local
  * members. */
 struct ubuf_block_mem_mgr {
-    /** extra space added before */
-    size_t prepend;
-    /** extra space added after */
-    size_t append;
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** alignment */
     size_t align;
     /** alignment offset */
@@ -90,55 +91,14 @@ struct ubuf_block_mem_mgr {
     struct ubuf_mgr mgr;
 };
 
+UBASE_FROM_TO(ubuf_block_mem_mgr, ubuf_mgr, ubuf_mgr, mgr)
+UBASE_FROM_TO(ubuf_block_mem_mgr, urefcount, urefcount, urefcount)
+
 /** @hidden */
 static void ubuf_block_mem_free_inner(struct ubuf *ubuf);
 /** @hidden */
 static void
     ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared);
-
-/** @internal @This returns the high-level ubuf structure.
- *
- * @param block_mem pointer to the ubuf_block_mem structure
- * @return pointer to the ubuf structure
- */
-static inline struct ubuf *
-    ubuf_block_mem_to_ubuf(struct ubuf_block_mem *block_mem)
-{
-    return ubuf_block_to_ubuf(&block_mem->ubuf_block);
-}
-
-/** @internal @This returns the private ubuf_block_mem structure.
- *
- * @param ubuf pointer to ubuf
- * @return pointer to the ubuf_block_mem structure
- */
-static inline struct ubuf_block_mem *ubuf_block_mem_from_ubuf(struct ubuf *ubuf)
-{
-    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    return container_of(block, struct ubuf_block_mem, ubuf_block);
-}
-
-/** @internal @This returns the high-level ubuf_mgr structure.
- *
- * @param block_mem_mgr pointer to the ubuf_block_mem_mgr structure
- * @return pointer to the ubuf_mgr structure
- */
-static inline struct ubuf_mgr *
-    ubuf_block_mem_mgr_to_ubuf_mgr(struct ubuf_block_mem_mgr *block_mem_mgr)
-{
-    return &block_mem_mgr->mgr;
-}
-
-/** @internal @This returns the private ubuf_block_mem_mgr structure.
- *
- * @param mgr description structure of the ubuf manager
- * @return pointer to the ubuf_block_mem_mgr structure
- */
-static inline struct ubuf_block_mem_mgr *
-    ubuf_block_mem_mgr_from_ubuf_mgr(struct ubuf_mgr *mgr)
-{
-    return container_of(mgr, struct ubuf_block_mem_mgr, mgr);
-}
 
 /** @This increments the reference count of a shared buffer.
  *
@@ -147,7 +107,7 @@ static inline struct ubuf_block_mem_mgr *
 static inline void ubuf_block_mem_use(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    urefcount_use(&block_mem->shared->refcount);
+    uatomic_fetch_add(&block_mem->shared->refcount, 1);
 }
 
 /** @This checks whether there is only one reference to the shared buffer.
@@ -157,7 +117,7 @@ static inline void ubuf_block_mem_use(struct ubuf *ubuf)
 static inline bool ubuf_block_mem_single(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    return urefcount_single(&block_mem->shared->refcount);
+    return uatomic_load(&block_mem->shared->refcount) == 1;
 }
 
 /** @This returns the shared buffer.
@@ -178,20 +138,6 @@ static inline size_t ubuf_block_mem_size(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
     return umem_size(&block_mem->shared->umem);
-}
-
-/** @This reallocated the shared buffer.
- *
- * @param ubuf pointer to ubuf
- * @param size new size of the buffer
- */
-static inline bool ubuf_block_mem_realloc(struct ubuf *ubuf, size_t size)
-{
-    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    bool ret = umem_realloc(&block_mem->shared->umem, size);
-    if (likely(ret))
-        block_mem->ubuf_block.buffer = ubuf_block_mem_buffer(ubuf);
-    return ret;
 }
 
 /** @internal @This allocates the data structure or fetches it from the pool.
@@ -252,12 +198,11 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
             return NULL;
         }
 
-        urefcount_init(&block_mem->shared->refcount);
+        uatomic_init(&block_mem->shared->refcount, 1);
     } else
-        urefcount_reset(&block_mem->shared->refcount);
+        uatomic_store(&block_mem->shared->refcount, 1);
 
-    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->append +
-                         block_mem_mgr->align;
+    size_t buffer_size = size + block_mem_mgr->align;
     if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
         if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
@@ -268,7 +213,7 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
         return NULL;
     }
 
-    size_t offset = block_mem_mgr->prepend + block_mem_mgr->align;
+    size_t offset = block_mem_mgr->align;
     if (block_mem_mgr->align)
         offset -= ((uintptr_t)ubuf_block_mem_buffer(ubuf) + offset +
                    block_mem_mgr->align_offset) % block_mem_mgr->align;
@@ -338,23 +283,6 @@ static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
     return true;
 }
 
-/** @internal @This extends a block_mem ubuf.
- *
- * @param ubuf pointer to ubuf
- * @param new_size required size of the buffer
- * @return false in case of error, or if the ubuf is shared, or if the operation
- * is not possible
- */
-static bool ubuf_block_mem_extend(struct ubuf *ubuf, int new_size)
-{
-    if (!ubuf_block_mem_single(ubuf))
-        return false;
-    if (unlikely(!ubuf_block_mem_realloc(ubuf, new_size)))
-        return false;
-    ubuf_block_common_set_buffer(ubuf, ubuf_block_mem_buffer(ubuf));
-    return true;
-}
-
 /** @This handles control commands.
  *
  * @param ubuf pointer to ubuf
@@ -373,10 +301,6 @@ static bool ubuf_block_mem_control(struct ubuf *ubuf,
         case UBUF_SINGLE:
             return ubuf_block_mem_single(ubuf);
 
-        case UBUF_EXTEND_BLOCK: {
-            int new_size = va_arg(args, int);
-            return ubuf_block_mem_extend(ubuf, new_size);
-        }
         case UBUF_SPLICE_BLOCK: {
             struct ubuf **new_ubuf_p = va_arg(args, struct ubuf **);
             int offset = va_arg(args, int);
@@ -420,7 +344,7 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
 
     ubuf_block_common_clean(ubuf);
 
-    if (unlikely(urefcount_release(&block_mem->shared->refcount))) {
+    if (unlikely(uatomic_fetch_sub(&block_mem->shared->refcount, 1) == 1)) {
         umem_free(&block_mem->shared->umem);
         if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
                                  block_mem->shared)))
@@ -433,8 +357,8 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
     ubuf_mgr_release(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
 }
 
-/** @This instructs an existing ubuf_block_mem manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
+/** @internal @This instructs an existing ubuf_block_mem manager to release
+ * all structures currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a ubuf manager
  */
@@ -453,20 +377,41 @@ static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
         ubuf_block_mem_shared_free_inner(shared);
 }
 
+/** @This handles manager control commands.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
+                                       enum ubuf_mgr_command command,
+                                       va_list args)
+{
+    switch (command) {
+        case UBUF_MGR_VACUUM: {
+            ubuf_block_mem_mgr_vacuum(mgr);
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 /** @This frees a ubuf manager.
  *
- * @param mgr pointer to a ubuf manager
+ * @param urefcount pointer to urefcount
  */
-static void ubuf_block_mem_mgr_free(struct ubuf_mgr *mgr)
+static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
 {
     struct ubuf_block_mem_mgr *block_mem_mgr =
-        ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    ubuf_block_mem_mgr_vacuum(mgr);
+        ubuf_block_mem_mgr_from_urefcount(urefcount);
+    ubuf_block_mem_mgr_vacuum(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
     ulifo_clean(&block_mem_mgr->ubuf_pool);
     ulifo_clean(&block_mem_mgr->shared_pool);
     umem_mgr_release(block_mem_mgr->umem_mgr);
 
-    urefcount_clean(&block_mem_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(block_mem_mgr);
 }
 
@@ -476,10 +421,6 @@ static void ubuf_block_mem_mgr_free(struct ubuf_mgr *mgr)
  * @param ubuf_pool_depth maximum number of ubuf structures in the pool
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
- * @param prepend default minimum extra space before buffer (if set to -1, a
- * default sensible value is used)
- * @param append default minimum extra space after buffer (if set to -1, a
- * default sensible value is used)
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -488,7 +429,6 @@ static void ubuf_block_mem_mgr_free(struct ubuf_mgr *mgr)
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          int prepend, int append,
                                           int align, int align_offset)
 {
     assert(umem_mgr != NULL);
@@ -508,18 +448,18 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     block_mem_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 
-    block_mem_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
-    block_mem_mgr->append = append >= 0 ? append : UBUF_DEFAULT_APPEND;
     block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     block_mem_mgr->align_offset = align_offset;
 
-    urefcount_init(&block_mem_mgr->mgr.refcount);
+    urefcount_init(ubuf_block_mem_mgr_to_urefcount(block_mem_mgr),
+                   ubuf_block_mem_mgr_free);
+    block_mem_mgr->mgr.refcount =
+        ubuf_block_mem_mgr_to_urefcount(block_mem_mgr);
     block_mem_mgr->mgr.type = UBUF_ALLOC_BLOCK;
     block_mem_mgr->mgr.ubuf_alloc = ubuf_block_mem_alloc;
     block_mem_mgr->mgr.ubuf_control = ubuf_block_mem_control;
     block_mem_mgr->mgr.ubuf_free = ubuf_block_mem_free;
-    block_mem_mgr->mgr.ubuf_mgr_vacuum = ubuf_block_mem_mgr_vacuum;
-    block_mem_mgr->mgr.ubuf_mgr_free = ubuf_block_mem_mgr_free;
+    block_mem_mgr->mgr.ubuf_mgr_control = ubuf_block_mem_mgr_control;
 
     return ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr);
 }

@@ -1,6 +1,5 @@
 myincludedir = $(includedir)/upipe-modules
 myinclude_HEADERS = \
-	upipe_proxy.h \
 	upipe_transfer.h \
 	upipe_dup.h \
 	upipe_file_sink.h \

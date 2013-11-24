@@ -45,50 +45,8 @@ struct upump_blocker_common {
     struct upump_blocker blocker;
 };
 
-/** @This returns the high-level upump_blocker structure.
- *
- * @param common pointer to the upump_blocker_common structure
- * @return pointer to the upump_blocker structure
- */
-static inline struct upump_blocker *
-    upump_blocker_common_to_upump_blocker(struct upump_blocker_common *common)
-{
-    return &common->blocker;
-}
-
-/** @This returns the private upump_blocker_common structure.
- *
- * @param blocker pointer to the upump_blocker structure
- * @return pointer to the upump_blocker_common structure
- */
-static inline struct upump_blocker_common *
-    upump_blocker_common_from_upump_blocker(struct upump_blocker *blocker)
-{
-    return container_of(blocker, struct upump_blocker_common, blocker);
-}
-
-/** @This returns the high-level upump_blocker_common structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upump_blocker_common
- * @return pointer to the upump_blocker_common structure
- */
-static inline struct upump_blocker_common *
-    upump_blocker_common_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upump_blocker_common, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upump_blocker_common upump_blocker_common structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upump_blocker_common_to_uchain(struct upump_blocker_common *common)
-{
-    return &common->uchain;
-}
+UBASE_FROM_TO(upump_blocker_common, upump_blocker, upump_blocker, blocker)
+UBASE_FROM_TO(upump_blocker_common, uchain, uchain, uchain)
 
 /** @This allocates and initializes a blocker.
  *
@@ -273,7 +231,6 @@ void upump_common_mgr_clean(struct upump_mgr *mgr,
     struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
     ulifo_clean(&common_mgr->upump_pool);
     ulifo_clean(&common_mgr->upump_blocker_pool);
-    urefcount_clean(&mgr->refcount);
 }
 
 /** @This initializes the common parts of a upump_common_mgr structure.
@@ -293,7 +250,6 @@ void upump_common_mgr_init(struct upump_mgr *mgr,
                            void (*upump_real_start)(struct upump *),
                            void (*upump_real_stop)(struct upump *))
 {
-    urefcount_init(&mgr->refcount);
     uchain_init(&mgr->uchain);
     mgr->opaque = NULL;
     mgr->upump_start = upump_common_start;

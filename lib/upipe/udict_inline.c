@@ -95,6 +95,9 @@ static const size_t attr_sizes[] = { 0, 0, 0, 0, 1, 1, 1, 8, 8, 16, 8 };
 
 /** super-set of the udict_mgr structure with additional local members */
 struct udict_inline_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** minimum space at allocation */
     size_t min_size;
     /** extra space added when the umem is expanded */
@@ -113,6 +116,9 @@ struct udict_inline_mgr {
     struct udict_mgr mgr;
 };
 
+UBASE_FROM_TO(udict_inline_mgr, udict_mgr, udict_mgr, mgr)
+UBASE_FROM_TO(udict_inline_mgr, urefcount, urefcount, urefcount)
+
 /** super-set of the udict structure with additional local members */
 struct udict_inline {
     /** umem structure pointing to buffer */
@@ -124,45 +130,7 @@ struct udict_inline {
     struct udict udict;
 };
 
-/** @internal @This returns the high-level udict structure.
- *
- * @param inl pointer to the udict_inline structure
- * @return pointer to the udict structure
- */
-static inline struct udict *udict_inline_to_udict(struct udict_inline *inl)
-{
-    return &inl->udict;
-}
-
-/** @internal @This returns the private udict_inline structure.
- *
- * @param mgr description structure of the udict mgr
- * @return pointer to the udict_inline structure
- */
-static inline struct udict_inline *udict_inline_from_udict(struct udict *udict)
-{
-    return container_of(udict, struct udict_inline, udict);
-}
-
-/** @internal @This returns the high-level udict_mgr structure.
- *
- * @param inline_mgr pointer to the udict_inline_mgr structure
- * @return pointer to the udict_mgr structure
- */
-static inline struct udict_mgr *udict_inline_mgr_to_udict_mgr(struct udict_inline_mgr *inline_mgr)
-{
-    return &inline_mgr->mgr;
-}
-
-/** @internal @This returns the private udict_inline_mgr structure.
- *
- * @param mgr description structure of the udict mgr
- * @return pointer to the udict_inline_mgr structure
- */
-static inline struct udict_inline_mgr *udict_inline_mgr_from_udict_mgr(struct udict_mgr *mgr)
-{
-    return container_of(mgr, struct udict_inline_mgr, mgr);
-}
+UBASE_FROM_TO(udict_inline, udict, udict, udict)
 
 /** @This allocates a udict with attributes space.
  *
@@ -619,11 +587,12 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
 
 /** @This frees a udict manager.
  *
- * @param mgr pointer to a udict manager
+ * @param urefcount pointer to urefcount
  */
-static void udict_inline_mgr_free(struct udict_mgr *mgr)
+static void udict_inline_mgr_free(struct urefcount *urefcount)
 {
-    struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
+    struct udict_inline_mgr *inline_mgr =
+        udict_inline_mgr_from_urefcount(urefcount);
 #ifdef STATS
     int i;
     for (i = 0; i < sizeof(inline_shorthands) / sizeof(struct inline_shorthand);
@@ -635,11 +604,11 @@ static void udict_inline_mgr_free(struct udict_mgr *mgr)
     }
 #endif
 
-    udict_inline_mgr_vacuum(mgr);
+    udict_inline_mgr_vacuum(udict_inline_mgr_to_udict_mgr(inline_mgr));
     ulifo_clean(&inline_mgr->udict_pool);
     umem_mgr_release(inline_mgr->umem_mgr);
 
-    urefcount_clean(&inline_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(inline_mgr);
 }
 
@@ -671,12 +640,13 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     inline_mgr->min_size = min_size > 0 ? min_size : UDICT_MIN_SIZE;
     inline_mgr->extra_size = extra_size > 0 ? extra_size : UDICT_EXTRA_SIZE;
 
-    urefcount_init(&inline_mgr->mgr.refcount);
+    urefcount_init(udict_inline_mgr_to_urefcount(inline_mgr),
+                   udict_inline_mgr_free);
+    inline_mgr->mgr.refcount = udict_inline_mgr_to_urefcount(inline_mgr);
     inline_mgr->mgr.udict_alloc = udict_inline_alloc;
     inline_mgr->mgr.udict_control = udict_inline_control;
     inline_mgr->mgr.udict_free = udict_inline_free;
     inline_mgr->mgr.udict_mgr_vacuum = udict_inline_mgr_vacuum;
-    inline_mgr->mgr.udict_mgr_free = udict_inline_mgr_free;
 
 #ifdef STATS
     int i;

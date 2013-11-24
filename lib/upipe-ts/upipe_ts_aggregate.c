@@ -33,6 +33,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -58,6 +59,9 @@
 
 /** @internal @This is the private context of a ts_aggregate pipe. */
 struct upipe_ts_agg {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
@@ -103,6 +107,7 @@ struct upipe_ts_agg {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_agg, upipe, UPIPE_TS_AGG_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_agg, urefcount, upipe_ts_agg_free)
 UPIPE_HELPER_VOID(upipe_ts_agg)
 UPIPE_HELPER_UREF_MGR(upipe_ts_agg, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_agg, ubuf_mgr)
@@ -125,6 +130,7 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
+    upipe_ts_agg_init_urefcount(upipe);
     upipe_ts_agg_init_uref_mgr(upipe);
     upipe_ts_agg_init_ubuf_mgr(upipe);
     upipe_ts_agg_init_output(upipe);
@@ -611,19 +617,18 @@ static void upipe_ts_agg_free(struct upipe *upipe)
     upipe_ts_agg_clean_output(upipe);
     upipe_ts_agg_clean_ubuf_mgr(upipe);
     upipe_ts_agg_clean_uref_mgr(upipe);
+    upipe_ts_agg_clean_urefcount(upipe);
     upipe_ts_agg_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_agg_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_AGG_SIGNATURE,
 
     .upipe_alloc = upipe_ts_agg_alloc,
     .upipe_input = upipe_ts_agg_input,
-    .upipe_control = upipe_ts_agg_control,
-    .upipe_free = upipe_ts_agg_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_agg_control
 };
 
 /** @This returns the management structure for all ts_aggregate pipes.

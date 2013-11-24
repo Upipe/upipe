@@ -57,25 +57,7 @@ struct upump_common {
     struct upump upump;
 };
 
-/** @This returns the high-level upump structure.
- *
- * @param common pointer to the upump_common structure
- * @return pointer to the upump structure
- */
-static inline struct upump *upump_common_to_upump(struct upump_common *common)
-{
-    return &common->upump;
-}
-
-/** @This returns the private upump_common structure.
- *
- * @param upump pointer to the upump structure
- * @return pointer to the upump_common structure
- */
-static inline struct upump_common *upump_common_from_upump(struct upump *upump)
-{
-    return container_of(upump, struct upump_common, upump);
-}
+UBASE_FROM_TO(upump_common, upump, upump, upump)
 
 /** @This allocates and initializes a blocker.
  *
@@ -138,27 +120,7 @@ struct upump_common_mgr {
     struct upump_mgr mgr;
 };
 
-/** @This returns the high-level upump_mgr structure.
- *
- * @param common_mgr pointer to the upump_common_mgr structure
- * @return pointer to the upump_mgr structure
- */
-static inline struct upump_mgr *
-    upump_common_mgr_to_upump_mgr(struct upump_common_mgr *common_mgr)
-{
-    return &common_mgr->mgr;
-}
-
-/** @This returns the private upump_common_mgr structure.
- *
- * @param mgr pointer to the upump_mgr structure
- * @return pointer to the upump_common_mgr structure
- */
-static inline struct upump_common_mgr *
-    upump_common_mgr_from_upump_mgr(struct upump_mgr *mgr)
-{
-    return container_of(mgr, struct upump_common_mgr, mgr);
-}
+UBASE_FROM_TO(upump_common_mgr, upump_mgr, upump_mgr, mgr)
 
 /** @This instructs an existing manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.

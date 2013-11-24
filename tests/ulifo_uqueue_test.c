@@ -30,7 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
+#include <upipe/uatomic.h>
 #include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/upump.h>
@@ -71,7 +71,7 @@ struct thread {
     unsigned int loop;
 };
 
-static urefcount refcount;
+static uatomic_uint32_t refcount;
 static struct ulifo ulifo;
 static struct uqueue uqueue;
 struct elem elems[ULIFO_MAX_DEPTH];
@@ -105,7 +105,7 @@ static void push(struct upump *upump)
     } else if (unlikely(thread->loop >= nb_loops)) {
         /* make it stop */
         upump_stop(upump);
-        urefcount_release(&refcount);
+        uatomic_fetch_sub(&refcount, 1);
     }
 }
 
@@ -148,7 +148,7 @@ static void pop(struct upump *upump)
         if (likely(elem->timeout.tv_nsec))
             assert(!nanosleep(&elem->timeout, NULL));
         ulifo_push(&ulifo, uchain);
-    } else if (likely(urefcount_single(&refcount)))
+    } else if (likely(uatomic_load(&refcount) == 1))
         upump_stop(upump);
 }
 
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
-    urefcount_init(&refcount);
+    uatomic_init(&refcount, 1);
 
     ulifo_init(&ulifo, ULIFO_MAX_DEPTH, ulifo_buffer);
     for (int i = 0; i < ULIFO_MAX_DEPTH; i++) {
@@ -184,9 +184,9 @@ int main(int argc, char **argv)
     struct thread threads[2];
     threads[0].thread = 0;
     threads[1].thread = 1;
-    urefcount_use(&refcount);
+    uatomic_fetch_add(&refcount, 1);
     assert(pthread_create(&threads[0].id, NULL, push_thread, &threads[0]) == 0);
-    urefcount_use(&refcount);
+    uatomic_fetch_add(&refcount, 1);
     assert(pthread_create(&threads[1].id, NULL, push_thread, &threads[1]) == 0);
 
     upump_start(upump);
@@ -199,7 +199,7 @@ int main(int argc, char **argv)
     ulifo_clean(&ulifo);
     uqueue_clean(&uqueue);
 
-    urefcount_clean(&refcount);
+    uatomic_clean(&refcount);
 
     assert(!pthread_join(threads[0].id, NULL));
     assert(!pthread_join(threads[1].id, NULL));

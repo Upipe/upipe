@@ -43,6 +43,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
@@ -54,7 +55,6 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
-#include <upipe-modules/upipe_proxy.h>
 
 #include "upipe_av_internal.h"
 
@@ -81,6 +81,11 @@
 
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsrc {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
+    /** refcount management structure exported to the public structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
 
@@ -111,8 +116,6 @@ struct upipe_avfsrc {
     AVFormatContext *context;
     /** true if the URL has already been probed by avformat */
     bool probed;
-    /** true if the proxy has been released */
-    bool proxy_dead;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -122,16 +125,23 @@ struct upipe_avfsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe, UPIPE_AVFSRC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_avfsrc, urefcount, upipe_avfsrc_no_input)
 UPIPE_HELPER_VOID(upipe_avfsrc)
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
-
 UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
 
+UBASE_FROM_TO(upipe_avfsrc, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static void upipe_avfsrc_free(struct urefcount *urefcount_real);
+
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
 struct upipe_avfsrc_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
     /** libavformat stream ID */
@@ -151,6 +161,7 @@ struct upipe_avfsrc_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe, UPIPE_AVFSRC_OUTPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_avfsrc_sub, urefcount, upipe_avfsrc_sub_free)
 UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr)
@@ -177,15 +188,13 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_avfsrc_sub *upipe_avfsrc_sub =
         upipe_avfsrc_sub_from_upipe(upipe);
+    upipe_avfsrc_sub_init_urefcount(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub_init_output(upipe);
     upipe_avfsrc_sub_init_ubuf_mgr(upipe);
 
     upipe_avfsrc_sub_init_sub(upipe);
 
-    struct upipe_avfsrc *upipe_avfsrc =
-        upipe_avfsrc_from_sub_mgr(upipe->mgr);
-    upipe_use(upipe_avfsrc_to_upipe(upipe_avfsrc));
     upipe_throw_ready(upipe);
 
     uint64_t id;
@@ -196,6 +205,8 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     }
 
     /* check that the ID is not already in use */
+    struct upipe_avfsrc *upipe_avfsrc =
+        upipe_avfsrc_from_sub_mgr(upipe->mgr);
     struct uchain *uchain;
     ulist_foreach(&upipe_avfsrc->subs, uchain) {
         struct upipe_avfsrc_sub *output =
@@ -270,16 +281,13 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
  */
 static void upipe_avfsrc_sub_free(struct upipe *upipe)
 {
-    struct upipe_avfsrc *upipe_avfsrc =
-        upipe_avfsrc_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_avfsrc_sub_clean_ubuf_mgr(upipe);
     upipe_avfsrc_sub_clean_output(upipe);
     upipe_avfsrc_sub_clean_sub(upipe);
+    upipe_avfsrc_sub_clean_urefcount(upipe);
     upipe_avfsrc_sub_free_flow(upipe);
-
-    upipe_release(upipe_avfsrc_to_upipe(upipe_avfsrc));
 }
 
 /** @internal @This initializes the output manager for an avfsrc pipe.
@@ -290,12 +298,11 @@ static void upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_avfsrc->sub_mgr;
+    sub_mgr->refcount = upipe_avfsrc_to_urefcount_real(upipe_avfsrc);
     sub_mgr->signature = UPIPE_AVFSRC_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_avfsrc_sub_alloc;
     sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_avfsrc_sub_control;
-    sub_mgr->upipe_free = upipe_avfsrc_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates an avfsrc pipe.
@@ -315,6 +322,9 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    upipe_avfsrc_init_urefcount(upipe);
+    urefcount_init(upipe_avfsrc_to_urefcount_real(upipe_avfsrc),
+                   upipe_avfsrc_free);
     upipe_avfsrc_init_sub_mgr(upipe);
     upipe_avfsrc_init_sub_subs(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
@@ -331,7 +341,6 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
     upipe_avfsrc->probed = false;
-    upipe_avfsrc->proxy_dead = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -757,8 +766,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
 static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (upipe_avfsrc->proxy_dead)
-        return false;
 
     AVFormatContext *context = upipe_avfsrc->context;
     if (context == NULL)
@@ -1051,11 +1058,13 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
- * @param upipe description structure of the pipe
+ * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_avfsrc_free(struct upipe *upipe)
+static void upipe_avfsrc_free(struct urefcount *urefcount_real)
 {
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    struct upipe_avfsrc *upipe_avfsrc =
+        upipe_avfsrc_from_urefcount(urefcount_real);
+    struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe_avfsrc_clean_sub_subs(upipe);
 
     upipe_avfsrc_abort_av_deal(upipe);
@@ -1079,32 +1088,32 @@ static void upipe_avfsrc_free(struct upipe *upipe)
     upipe_avfsrc_clean_upump(upipe);
     upipe_avfsrc_clean_upump_mgr(upipe);
     upipe_avfsrc_clean_uref_mgr(upipe);
+    urefcount_clean(urefcount_real);
+    upipe_avfsrc_clean_urefcount(upipe);
     upipe_avfsrc_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_no_input(struct upipe *upipe)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+    upipe_split_throw_update(upipe);
+    urefcount_release(upipe_avfsrc_to_urefcount_real(upipe_avfsrc));
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_avfsrc_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_AVFSRC_SIGNATURE,
 
     .upipe_alloc = upipe_avfsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_avfsrc_control,
-    .upipe_free = upipe_avfsrc_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_avfsrc_control
 };
-
-/** @This is called when the proxy is released.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_proxy_released(struct upipe *upipe)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    upipe_avfsrc->proxy_dead = true;
-    upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
-    upipe_split_throw_update(upipe);
-}
 
 /** @This returns the management structure for all avformat sources.
  *
@@ -1112,6 +1121,5 @@ static void upipe_avfsrc_proxy_released(struct upipe *upipe)
  */
 struct upipe_mgr *upipe_avfsrc_mgr_alloc(void)
 {
-    return upipe_proxy_mgr_alloc(&upipe_avfsrc_mgr,
-                                 upipe_avfsrc_proxy_released);
+    return &upipe_avfsrc_mgr;
 }

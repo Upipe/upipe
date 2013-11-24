@@ -113,11 +113,13 @@ struct uref {
     uint64_t priv;
 };
 
+UBASE_FROM_TO(uref, uchain, uchain, uchain)
+
 /** @This stores common management parameters for a uref pool.
  */
 struct uref_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** minimum size of a control uref */
     size_t control_attr_size;
     /** udict manager */
@@ -130,8 +132,6 @@ struct uref_mgr {
 
     /** function to release all buffers kept in pools */
     void (*uref_mgr_vacuum)(struct uref_mgr *);
-    /** function to free the uref manager */
-    void (*uref_mgr_free)(struct uref_mgr *);
 };
 
 /** @This frees a uref and other sub-structures.
@@ -275,26 +275,6 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     return ubuf;
 }
 
-/** @This returns the high-level uref structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the uref
- * @return pointer to the uref structure
- */
-static inline struct uref *uref_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct uref, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param uref uref structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *uref_to_uchain(struct uref *uref)
-{
-    return &uref->uchain;
-}
-
 /** @This instructs an existing uref manager to release all structures currently
  * kept in pools. It is intended as a debug tool only.
  *
@@ -311,7 +291,7 @@ static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
  */
 static inline void uref_mgr_use(struct uref_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a uref manager or frees it.
@@ -320,8 +300,7 @@ static inline void uref_mgr_use(struct uref_mgr *mgr)
  */
 static inline void uref_mgr_release(struct uref_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->uref_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

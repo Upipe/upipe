@@ -36,6 +36,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -81,6 +82,9 @@ static const struct urational frame_rate_from_code[] = {
 
 /** @internal @This is the private context of an mpgvf pipe. */
 struct upipe_mpgvf {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /* output stuff */
     /** pipe acting as output */
     struct upipe *output;
@@ -163,6 +167,7 @@ struct upipe_mpgvf {
 static void upipe_mpgvf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mpgvf, upipe, UPIPE_MPGVF_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_mpgvf, urefcount, upipe_mpgvf_free)
 UPIPE_HELPER_VOID(upipe_mpgvf)
 UPIPE_HELPER_SYNC(upipe_mpgvf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgvf, next_uref, next_uref_size, urefs,
@@ -204,6 +209,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    upipe_mpgvf_init_urefcount(upipe);
     upipe_mpgvf_init_sync(upipe);
     upipe_mpgvf_init_uref_stream(upipe);
     upipe_mpgvf_init_output(upipe);
@@ -1183,19 +1189,18 @@ static void upipe_mpgvf_free(struct upipe *upipe)
     if (upipe_mpgvf->sequence_display != NULL)
         ubuf_free(upipe_mpgvf->sequence_display);
 
+    upipe_mpgvf_clean_urefcount(upipe);
     upipe_mpgvf_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_mpgvf_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_MPGVF_SIGNATURE,
 
     .upipe_alloc = upipe_mpgvf_alloc,
     .upipe_input = upipe_mpgvf_input,
-    .upipe_control = upipe_mpgvf_control,
-    .upipe_free = upipe_mpgvf_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_mpgvf_control
 };
 
 /** @This returns the management structure for all mpgvf pipes.

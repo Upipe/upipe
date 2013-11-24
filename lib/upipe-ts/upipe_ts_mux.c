@@ -38,6 +38,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -106,6 +107,9 @@
 
 /** @internal @This is the private context of a ts_mux manager. */
 struct upipe_ts_mux_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pointer to ts_join manager */
     struct upipe_mgr *ts_join_mgr;
     /** pointer to ts_agg manager */
@@ -129,30 +133,14 @@ struct upipe_ts_mux_mgr {
     struct upipe_mgr mgr;
 };
 
-/** @internal @This returns the high-level upipe_mgr structure.
- *
- * @param ts_mux_mgr pointer to the upipe_ts_mux_mgr structure
- * @return pointer to the upipe_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_ts_mux_mgr_to_upipe_mgr(struct upipe_ts_mux_mgr *ts_mux_mgr)
-{
-    return &ts_mux_mgr->mgr;
-}
-
-/** @internal @This returns the private upipe_ts_mux_mgr structure.
- *
- * @param mgr description structure of the upipe manager
- * @return pointer to the upipe_ts_mux_mgr structure
- */
-static inline struct upipe_ts_mux_mgr *
-    upipe_ts_mux_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
-{
-    return container_of(mgr, struct upipe_ts_mux_mgr, mgr);
-}
+UBASE_FROM_TO(upipe_ts_mux_mgr, upipe_mgr, upipe_mgr, mgr)
+UBASE_FROM_TO(upipe_ts_mux_mgr, urefcount, urefcount, urefcount)
 
 /** @internal @This is the private context of a ts_mux pipe. */
 struct upipe_ts_mux {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
@@ -211,6 +199,7 @@ struct upipe_ts_mux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_mux, urefcount, upipe_ts_mux_free)
 UPIPE_HELPER_VOID(upipe_ts_mux)
 UPIPE_HELPER_UREF_MGR(upipe_ts_mux, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_mux, ubuf_mgr)
@@ -229,6 +218,8 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid);
 
 /** @internal @This is the private context of a program of a ts_mux pipe. */
 struct upipe_ts_mux_program {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -265,6 +256,8 @@ struct upipe_ts_mux_program {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_program, upipe, UPIPE_TS_MUX_PROGRAM_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_program, urefcount,
+                       upipe_ts_mux_program_free)
 UPIPE_HELPER_VOID(upipe_ts_mux_program)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux, upipe_ts_mux_program, program,
@@ -288,6 +281,8 @@ enum upipe_ts_mux_input_type {
 /** @internal @This is the private context of an output of a ts_mux_program
  * subpipe. */
 struct upipe_ts_mux_input {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -319,6 +314,7 @@ struct upipe_ts_mux_input {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_input, upipe, UPIPE_TS_MUX_INPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount, upipe_ts_mux_input_free)
 UPIPE_HELPER_VOID(upipe_ts_mux_input)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
@@ -399,6 +395,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
+    upipe_ts_mux_input_init_urefcount(upipe);
     upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->pid = 8192;
@@ -410,7 +407,6 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_mux_input_init_sub(upipe);
     uprobe_init(&upipe_ts_mux_input->probe, upipe_ts_mux_input_probe, uprobe);
-    upipe_use(upipe_ts_mux_program_to_upipe(program));
     upipe_throw_ready(upipe);
 
     struct upipe_ts_mux_mgr *ts_mux_mgr =
@@ -705,11 +701,10 @@ static void upipe_ts_mux_input_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_mux_input_clean_sub(upipe);
-    upipe_ts_mux_input_free_void(upipe);
-
     if (!upipe_single(upipe_ts_mux_program_to_upipe(program)))
         upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
-    upipe_release(upipe_ts_mux_program_to_upipe(program));
+    upipe_ts_mux_input_clean_urefcount(upipe);
+    upipe_ts_mux_input_free_void(upipe);
 }
 
 /** @internal @This initializes the output manager for a ts_mux_program
@@ -722,12 +717,11 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
     struct upipe_ts_mux_program *program =
         upipe_ts_mux_program_from_upipe(upipe);
     struct upipe_mgr *input_mgr = &program->input_mgr;
+    input_mgr->refcount = upipe_ts_mux_program_to_urefcount(program);
     input_mgr->signature = UPIPE_TS_MUX_INPUT_SIGNATURE;
     input_mgr->upipe_alloc = upipe_ts_mux_input_alloc;
     input_mgr->upipe_input = upipe_ts_mux_input_input;
     input_mgr->upipe_control = upipe_ts_mux_input_control;
-    input_mgr->upipe_free = upipe_ts_mux_input_free;
-    input_mgr->upipe_mgr_free = NULL;
 }
 
 
@@ -804,6 +798,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
+    upipe_ts_mux_program_init_urefcount(upipe);
     upipe_ts_mux_program_init_input_mgr(upipe);
     upipe_ts_mux_program_init_sub_inputs(upipe);
     upipe_ts_mux_program->sid = 0;
@@ -818,7 +813,6 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_program_init_sub(upipe);
     uprobe_init(&upipe_ts_mux_program->probe, upipe_ts_mux_program_probe,
                 uprobe);
-    upipe_use(upipe_ts_mux_to_upipe(upipe_ts_mux));
     upipe_throw_ready(upipe);
 
     if (unlikely((upipe_ts_mux_program->program_psig =
@@ -1205,11 +1199,11 @@ static void upipe_ts_mux_program_free(struct upipe *upipe)
 
     upipe_ts_mux_program_clean_sub_inputs(upipe);
     upipe_ts_mux_program_clean_sub(upipe);
-    upipe_ts_mux_program_free_void(upipe);
-
     if (!upipe_single(upipe_ts_mux_to_upipe(mux)))
         upipe_ts_mux_change(upipe_ts_mux_to_upipe(mux));
-    upipe_release(upipe_ts_mux_to_upipe(mux));
+
+    upipe_ts_mux_program_clean_urefcount(upipe);
+    upipe_ts_mux_program_free_void(upipe);
 }
 
 /** @internal @This initializes the program manager for a ts_mux pipe.
@@ -1220,12 +1214,11 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     struct upipe_mgr *program_mgr = &upipe_ts_mux->program_mgr;
+    program_mgr->refcount = upipe_ts_mux_to_urefcount(upipe_ts_mux);
     program_mgr->signature = UPIPE_TS_MUX_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_mux_program_alloc;
     program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_mux_program_control;
-    program_mgr->upipe_free = upipe_ts_mux_program_free;
-    program_mgr->upipe_mgr_free = NULL;
 }
 
 
@@ -1325,6 +1318,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux_init_urefcount(upipe);
     upipe_ts_mux_init_uref_mgr(upipe);
     upipe_ts_mux_init_ubuf_mgr(upipe);
     upipe_ts_mux_init_bin(upipe);
@@ -1944,17 +1938,18 @@ static void upipe_ts_mux_free(struct upipe *upipe)
     upipe_ts_mux_clean_bin(upipe);
     upipe_ts_mux_clean_ubuf_mgr(upipe);
     upipe_ts_mux_clean_uref_mgr(upipe);
+    upipe_ts_mux_clean_urefcount(upipe);
     upipe_ts_mux_free_void(upipe);
 }
 
 /** @This frees a upipe manager.
  *
- * @param mgr pointer to manager
+ * @param urefcount pointer to urefcount structure
  */
-static void upipe_ts_mux_mgr_free(struct upipe_mgr *mgr)
+static void upipe_ts_mux_mgr_free(struct urefcount *urefcount)
 {
     struct upipe_ts_mux_mgr *ts_mux_mgr =
-        upipe_ts_mux_mgr_from_upipe_mgr(mgr);
+        upipe_ts_mux_mgr_from_urefcount(urefcount);
     if (ts_mux_mgr->ts_join_mgr != NULL)
         upipe_mgr_release(ts_mux_mgr->ts_join_mgr);
     if (ts_mux_mgr->ts_agg_mgr != NULL)
@@ -1968,7 +1963,7 @@ static void upipe_ts_mux_mgr_free(struct upipe_mgr *mgr)
     if (ts_mux_mgr->ts_psii_mgr != NULL)
         upipe_mgr_release(ts_mux_mgr->ts_psii_mgr);
 
-    urefcount_clean(&ts_mux_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(ts_mux_mgr);
 }
 
@@ -1990,13 +1985,13 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
     ts_mux_mgr->ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     ts_mux_mgr->ts_psii_mgr = upipe_ts_psii_mgr_alloc();
 
+    urefcount_init(upipe_ts_mux_mgr_to_urefcount(ts_mux_mgr),
+                   upipe_ts_mux_mgr_free);
+    ts_mux_mgr->mgr.refcount = upipe_ts_mux_mgr_to_urefcount(ts_mux_mgr);
     ts_mux_mgr->mgr.signature = UPIPE_TS_MUX_SIGNATURE;
     ts_mux_mgr->mgr.upipe_alloc = upipe_ts_mux_alloc;
     ts_mux_mgr->mgr.upipe_input = NULL;
     ts_mux_mgr->mgr.upipe_control = upipe_ts_mux_control;
-    ts_mux_mgr->mgr.upipe_free = upipe_ts_mux_free;
-    ts_mux_mgr->mgr.upipe_mgr_free = upipe_ts_mux_mgr_free;
-    urefcount_init(&ts_mux_mgr->mgr.refcount);
     return upipe_ts_mux_mgr_to_upipe_mgr(ts_mux_mgr);
 }
 
@@ -2013,7 +2008,7 @@ bool upipe_ts_mux_mgr_control_va(struct upipe_mgr *mgr,
                                  va_list args)
 {
     struct upipe_ts_mux_mgr *ts_mux_mgr = upipe_ts_mux_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_mux_mgr->mgr.refcount));
+    assert(urefcount_single(&ts_mux_mgr->urefcount));
 
     switch (command) {
 #define GET_SET_MGR(name, NAME)                                             \

@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
@@ -57,6 +58,9 @@
 
 /** @internal @This is the private context of a ts_pmtd pipe. */
 struct upipe_ts_pmtd {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition */
@@ -76,6 +80,7 @@ struct upipe_ts_pmtd {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe, UPIPE_TS_PMTD_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_pmtd, urefcount, upipe_ts_pmtd_free)
 UPIPE_HELPER_VOID(upipe_ts_pmtd)
 UPIPE_HELPER_OUTPUT(upipe_ts_pmtd, output, flow_def, flow_def_sent)
 
@@ -97,6 +102,7 @@ static struct upipe *upipe_ts_pmtd_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
+    upipe_ts_pmtd_init_urefcount(upipe);
     upipe_ts_pmtd_init_output(upipe);
     upipe_ts_pmtd->flow_def_input = NULL;
     upipe_ts_pmtd->pmt = NULL;
@@ -592,19 +598,18 @@ static void upipe_ts_pmtd_free(struct upipe *upipe)
         uref_free(upipe_ts_pmtd->flow_def_input);
     upipe_ts_pmtd_clean_flows(upipe);
     upipe_ts_pmtd_clean_output(upipe);
+    upipe_ts_pmtd_clean_urefcount(upipe);
     upipe_ts_pmtd_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_pmtd_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PMTD_SIGNATURE,
 
     .upipe_alloc = upipe_ts_pmtd_alloc,
     .upipe_input = upipe_ts_pmtd_input,
-    .upipe_control = upipe_ts_pmtd_control,
-    .upipe_free = upipe_ts_pmtd_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_pmtd_control
 };
 
 /** @This returns the management structure for all ts_pmtd pipes.

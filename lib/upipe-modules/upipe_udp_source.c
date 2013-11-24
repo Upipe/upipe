@@ -39,6 +39,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -72,6 +73,9 @@
 
 /** @internal @This is the private context of a udp socket source pipe. */
 struct upipe_udpsrc {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
 
@@ -103,6 +107,7 @@ struct upipe_udpsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsrc, upipe, UPIPE_UDPSRC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_udpsrc, urefcount, upipe_udpsrc_free)
 UPIPE_HELPER_VOID(upipe_udpsrc)
 UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr)
 
@@ -128,6 +133,7 @@ static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
 {
     struct upipe *upipe = upipe_udpsrc_alloc_void(mgr, uprobe, signature, args);
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
+    upipe_udpsrc_init_urefcount(upipe);
     upipe_udpsrc_init_uref_mgr(upipe);
     upipe_udpsrc_init_ubuf_mgr(upipe);
     upipe_udpsrc_init_output(upipe);
@@ -427,19 +433,18 @@ static void upipe_udpsrc_free(struct upipe *upipe)
     upipe_udpsrc_clean_output(upipe);
     upipe_udpsrc_clean_ubuf_mgr(upipe);
     upipe_udpsrc_clean_uref_mgr(upipe);
+    upipe_udpsrc_clean_urefcount(upipe);
     upipe_udpsrc_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_udpsrc_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_UDPSRC_SIGNATURE,
 
     .upipe_alloc = upipe_udpsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_udpsrc_control,
-    .upipe_free = upipe_udpsrc_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_udpsrc_control
 };
 
 /** @This returns the management structure for all udp socket sources

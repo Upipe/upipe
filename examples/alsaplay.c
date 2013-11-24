@@ -198,8 +198,7 @@ int main(int argc, char **argv)
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH,
                                                    udict_mgr, 0);
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                         UBUF_POOL_DEPTH, umem_mgr,
-                                         -1, -1, -1, 0);
+                                         UBUF_POOL_DEPTH, umem_mgr, -1, 0);
 
     /* log probes */
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout, loglevel);

@@ -34,6 +34,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -59,6 +60,9 @@
 
 /** @internal @This is the private context of a ts_encaps pipe. */
 struct upipe_ts_encaps {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
@@ -99,6 +103,7 @@ struct upipe_ts_encaps {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe, UPIPE_TS_ENCAPS_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_encaps, urefcount, upipe_ts_encaps_free)
 UPIPE_HELPER_VOID(upipe_ts_encaps)
 UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr)
@@ -122,6 +127,7 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
+    upipe_ts_encaps_init_urefcount(upipe);
     upipe_ts_encaps_init_output(upipe);
     upipe_ts_encaps_init_uref_mgr(upipe);
     upipe_ts_encaps_init_ubuf_mgr(upipe);
@@ -656,19 +662,18 @@ static void upipe_ts_encaps_free(struct upipe *upipe)
     upipe_ts_encaps_clean_output(upipe);
     upipe_ts_encaps_clean_ubuf_mgr(upipe);
     upipe_ts_encaps_clean_uref_mgr(upipe);
+    upipe_ts_encaps_clean_urefcount(upipe);
     upipe_ts_encaps_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_encaps_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_ENCAPS_SIGNATURE,
 
     .upipe_alloc = upipe_ts_encaps_alloc,
     .upipe_input = upipe_ts_encaps_input,
-    .upipe_control = upipe_ts_encaps_control,
-    .upipe_free = upipe_ts_encaps_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_encaps_control
 };
 
 /** @This returns the management structure for all ts_encaps pipes.

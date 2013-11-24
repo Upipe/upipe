@@ -40,6 +40,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -66,6 +67,9 @@
 
 /** upipe_rtp_prepend structure */ 
 struct upipe_rtp_prepend {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** output pipe */
@@ -87,6 +91,7 @@ struct upipe_rtp_prepend {
 };
 
 UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_rtp_prepend, urefcount, upipe_rtp_prepend_free)
 UPIPE_HELPER_VOID(upipe_rtp_prepend);
 UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
@@ -306,6 +311,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
         upipe_rtp_prepend_from_upipe(upipe);
+    upipe_rtp_prepend_init_urefcount(upipe);
     upipe_rtp_prepend_init_ubuf_mgr(upipe);
     upipe_rtp_prepend_init_output(upipe);
 
@@ -328,21 +334,20 @@ static void upipe_rtp_prepend_free(struct upipe *upipe)
 
     upipe_rtp_prepend_clean_ubuf_mgr(upipe);
     upipe_rtp_prepend_clean_output(upipe);
+    upipe_rtp_prepend_clean_urefcount(upipe);
     upipe_rtp_prepend_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_rtp_prepend_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_RTP_PREPEND_SIGNATURE,
 
     .upipe_alloc = upipe_rtp_prepend_alloc,
     .upipe_input = upipe_rtp_prepend_input,
-    .upipe_control = upipe_rtp_prepend_control,
-    .upipe_free = upipe_rtp_prepend_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_rtp_prepend_control
 };
 
-/** @This returns the management structure for rtp_prepend pipes
+/** @This returns the management structure for rtp_prepend pipes.
  *
  * @return pointer to manager
  */

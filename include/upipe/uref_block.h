@@ -157,14 +157,6 @@ static inline bool uref_block_resize(struct uref *uref, int skip, int new_size)
     return ubuf_block_resize(uref->ubuf, skip, new_size);
 }
 
-/** @see ubuf_block_extend */
-static inline bool uref_block_extend(struct uref *uref, int prepend, int append)
-{
-    if (uref->ubuf == NULL)
-        return false;
-    return ubuf_block_extend(uref->ubuf, prepend, append);
-}
-
 /** @see ubuf_block_splice */
 static inline struct uref *uref_block_splice(struct uref *uref, int offset,
                                              int size)

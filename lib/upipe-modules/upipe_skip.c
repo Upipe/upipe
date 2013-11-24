@@ -37,6 +37,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_skip.h>
@@ -56,6 +57,9 @@
 
 /** upipe_skip structure */ 
 struct upipe_skip {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** skip offset */
     size_t offset;
 
@@ -71,6 +75,7 @@ struct upipe_skip {
 };
 
 UPIPE_HELPER_UPIPE(upipe_skip, upipe, UPIPE_SKIP_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_skip, urefcount, upipe_skip_free)
 UPIPE_HELPER_VOID(upipe_skip);
 UPIPE_HELPER_OUTPUT(upipe_skip, output, flow_def, flow_def_sent);
 
@@ -177,6 +182,7 @@ static struct upipe *upipe_skip_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
+    upipe_skip_init_urefcount(upipe);
     upipe_skip_init_output(upipe);
 
     upipe_skip->offset = 0;
@@ -195,18 +201,17 @@ static void upipe_skip_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_skip_clean_output(upipe);
+    upipe_skip_clean_urefcount(upipe);
     upipe_skip_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_skip_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_SKIP_SIGNATURE,
 
     .upipe_alloc = upipe_skip_alloc,
     .upipe_input = upipe_skip_input,
-    .upipe_control = upipe_skip_control,
-    .upipe_free = upipe_skip_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_skip_control
 };
 
 /** @This returns the management structure for skip pipes

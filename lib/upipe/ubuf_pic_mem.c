@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,7 +57,7 @@
  * to the actual data. */
 struct ubuf_pic_mem_shared {
     /** refcount management structure */
-    urefcount refcount;
+    uatomic_uint32_t refcount;
     /** umem structure pointing to buffer */
     struct umem umem;
 };
@@ -77,9 +77,14 @@ struct ubuf_pic_mem {
     struct ubuf_pic_common ubuf_pic_common;
 };
 
+UBASE_FROM_TO(ubuf_pic_mem, ubuf, ubuf, ubuf_pic_common.ubuf)
+
 /** @This is a super-set of the ubuf_mgr structure with additional local
  * members. */
 struct ubuf_pic_mem_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** extra macropixels added before lines */
     size_t hmprepend;
     /** extra macropixels added after lines */
@@ -104,52 +109,13 @@ struct ubuf_pic_mem_mgr {
     struct ubuf_pic_common_mgr common_mgr;
 };
 
+UBASE_FROM_TO(ubuf_pic_mem_mgr, ubuf_mgr, ubuf_mgr, common_mgr.mgr)
+UBASE_FROM_TO(ubuf_pic_mem_mgr, urefcount, urefcount, urefcount)
+
 /** @hidden */
 static void ubuf_pic_mem_free_inner(struct ubuf *ubuf);
 /** @hidden */
 static void ubuf_pic_mem_shared_free_inner(struct ubuf_pic_mem_shared *shared);
-
-/** @internal @This returns the high-level ubuf structure.
- *
- * @param pic pointer to the ubuf_pic_mem structure
- * @return pointer to the ubuf structure
- */
-static inline struct ubuf *ubuf_pic_mem_to_ubuf(struct ubuf_pic_mem *pic)
-{
-    return ubuf_pic_common_to_ubuf(&pic->ubuf_pic_common);
-}
-
-/** @internal @This returns the private ubuf_pic_mem structure.
- *
- * @param mgr description structure of the ubuf mgr
- * @return pointer to the ubuf_pic_mem structure
- */
-static inline struct ubuf_pic_mem *ubuf_pic_mem_from_ubuf(struct ubuf *ubuf)
-{
-    struct ubuf_pic_common *common = ubuf_pic_common_from_ubuf(ubuf);
-    return container_of(common, struct ubuf_pic_mem, ubuf_pic_common);
-}
-
-/** @internal @This returns the high-level ubuf_mgr structure.
- *
- * @param pic_mgr pointer to the ubuf_pic_mem_mgr structure
- * @return pointer to the ubuf_mgr structure
- */
-static inline struct ubuf_mgr *ubuf_pic_mem_mgr_to_ubuf_mgr(struct ubuf_pic_mem_mgr *pic_mgr)
-{
-    return ubuf_pic_common_mgr_to_ubuf_mgr(&pic_mgr->common_mgr);
-}
-
-/** @internal @This returns the private ubuf_pic_mem_mgr structure.
- *
- * @param mgr description structure of the ubuf manager
- * @return pointer to the ubuf_pic_mem_mgr structure
- */
-static inline struct ubuf_pic_mem_mgr *ubuf_pic_mem_mgr_from_ubuf_mgr(struct ubuf_mgr *mgr)
-{
-    struct ubuf_pic_common_mgr *common_mgr = ubuf_pic_common_mgr_from_ubuf_mgr(mgr);
-    return container_of(common_mgr, struct ubuf_pic_mem_mgr, common_mgr);
-}
 
 /** @This increments the reference count of a shared buffer.
  *
@@ -158,7 +124,7 @@ static inline struct ubuf_pic_mem_mgr *ubuf_pic_mem_mgr_from_ubuf_mgr(struct ubu
 static inline void ubuf_pic_mem_use(struct ubuf *ubuf)
 {
     struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
-    urefcount_use(&pic->shared->refcount);
+    uatomic_fetch_add(&pic->shared->refcount, 1);
 }
 
 /** @This checks whether there is only one reference to the shared buffer.
@@ -168,7 +134,7 @@ static inline void ubuf_pic_mem_use(struct ubuf *ubuf)
 static inline bool ubuf_pic_mem_single(struct ubuf *ubuf)
 {
     struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
-    return urefcount_single(&pic->shared->refcount);
+    return uatomic_load(&pic->shared->refcount) == 1;
 }
 
 /** @This returns the shared buffer.
@@ -242,9 +208,9 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
             return NULL;
         }
 
-        urefcount_init(&pic->shared->refcount);
+        uatomic_init(&pic->shared->refcount, 1);
     } else
-        urefcount_reset(&pic->shared->refcount);
+        uatomic_store(&pic->shared->refcount, 1);
 
     size_t hmsize = hsize / pic_mgr->common_mgr.macropixel;
     size_t buffer_size = 0;
@@ -471,7 +437,7 @@ static void ubuf_pic_mem_free(struct ubuf *ubuf)
     assert(uatomic_load(&pic->readers) == 0);
 #endif
 
-    if (unlikely(urefcount_release(&pic->shared->refcount))) {
+    if (unlikely(uatomic_fetch_sub(&pic->shared->refcount, 1) == 1)) {
         umem_free(&pic->shared->umem);
         if (unlikely(!ulifo_push(&pic_mgr->shared_pool, pic->shared)))
             ubuf_pic_mem_shared_free_inner(pic->shared);
@@ -483,8 +449,8 @@ static void ubuf_pic_mem_free(struct ubuf *ubuf)
     ubuf_mgr_release(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
 }
 
-/** @This instructs an existing ubuf pic manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
+/** @internal @This instructs an existing ubuf pic manager to release all
+ * structures currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a ubuf manager
  */
@@ -501,20 +467,43 @@ static void ubuf_pic_mem_mgr_vacuum(struct ubuf_mgr *mgr)
         ubuf_pic_mem_shared_free_inner(shared);
 }
 
+/** @This handles manager control commands.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return false in case of error
+ */
+static bool ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
+                                     enum ubuf_mgr_command command,
+                                     va_list args)
+{
+    switch (command) {
+        case UBUF_MGR_VACUUM: {
+            ubuf_pic_mem_mgr_vacuum(mgr);
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 /** @This frees a ubuf manager.
  *
- * @param mgr pointer to a ubuf manager
+ * @param urefcount pointer to urefcount
  */
-static void ubuf_pic_mem_mgr_free(struct ubuf_mgr *mgr)
+static void ubuf_pic_mem_mgr_free(struct urefcount *urefcount)
 {
-    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    ubuf_pic_mem_mgr_vacuum(mgr);
+    struct ubuf_pic_mem_mgr *pic_mgr =
+        ubuf_pic_mem_mgr_from_urefcount(urefcount);
+    ubuf_pic_mem_mgr_vacuum(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
     ulifo_clean(&pic_mgr->ubuf_pool);
     ulifo_clean(&pic_mgr->shared_pool);
     umem_mgr_release(pic_mgr->umem_mgr);
 
-    ubuf_pic_common_mgr_clean(mgr);
+    ubuf_pic_common_mgr_clean(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
 
+    urefcount_clean(urefcount);
     free(pic_mgr);
 }
 
@@ -578,12 +567,15 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     pic_mgr->align = align >= 0 ? align : UBUF_DEFAULT_ALIGN;
     pic_mgr->align_hmoffset = align_hmoffset;
 
+    urefcount_init(ubuf_pic_mem_mgr_to_urefcount(pic_mgr),
+                   ubuf_pic_mem_mgr_free);
+    pic_mgr->common_mgr.mgr.refcount = ubuf_pic_mem_mgr_to_urefcount(pic_mgr);
+
     mgr->type = UBUF_ALLOC_PICTURE;
     mgr->ubuf_alloc = ubuf_pic_mem_alloc;
     mgr->ubuf_control = ubuf_pic_mem_control;
     mgr->ubuf_free = ubuf_pic_mem_free;
-    mgr->ubuf_mgr_vacuum = ubuf_pic_mem_mgr_vacuum;
-    mgr->ubuf_mgr_free = ubuf_pic_mem_mgr_free;
+    mgr->ubuf_mgr_control = ubuf_pic_mem_mgr_control;
 
     return mgr;
 }

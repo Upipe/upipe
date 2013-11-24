@@ -39,6 +39,7 @@
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -51,6 +52,9 @@
 
 /** @internal upipe_filter_blend private structure */
 struct upipe_filter_blend {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -65,6 +69,7 @@ struct upipe_filter_blend {
 };
 
 UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_filter_blend, urefcount, upipe_filter_blend_free)
 UPIPE_HELPER_VOID(upipe_filter_blend)
 UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, output_flow, output_flow_sent)
@@ -86,6 +91,7 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    upipe_filter_blend_init_urefcount(upipe);
     upipe_filter_blend_init_ubuf_mgr(upipe);
     upipe_filter_blend_init_output(upipe);
     upipe_throw_ready(upipe);
@@ -284,18 +290,18 @@ static void upipe_filter_blend_free(struct upipe *upipe)
 
     upipe_filter_blend_clean_ubuf_mgr(upipe);
     upipe_filter_blend_clean_output(upipe);
+    upipe_filter_blend_clean_urefcount(upipe);
     upipe_filter_blend_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_filter_blend_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_FILTER_BLEND_SIGNATURE,
+
     .upipe_alloc = upipe_filter_blend_alloc,
     .upipe_input = upipe_filter_blend_input,
-    .upipe_control = upipe_filter_blend_control,
-    .upipe_free = upipe_filter_blend_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_filter_blend_control
 };
 
 /** @This returns the management structure for glx_sink pipes

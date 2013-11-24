@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
@@ -51,6 +52,9 @@
 
 /** @internal @This is the private context of a ts_patd pipe. */
 struct upipe_ts_patd {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition */
@@ -76,6 +80,7 @@ struct upipe_ts_patd {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe, UPIPE_TS_PATD_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_patd, urefcount, upipe_ts_patd_free)
 UPIPE_HELPER_VOID(upipe_ts_patd)
 UPIPE_HELPER_OUTPUT(upipe_ts_patd, output, flow_def, flow_def_sent)
 
@@ -97,6 +102,7 @@ static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
+    upipe_ts_patd_init_urefcount(upipe);
     upipe_ts_patd_init_output(upipe);
     upipe_ts_patd->flow_def_input = NULL;
     upipe_ts_psid_table_init(upipe_ts_patd->pat);
@@ -522,19 +528,18 @@ static void upipe_ts_patd_free(struct upipe *upipe)
     upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
     upipe_ts_patd_clean_programs(upipe);
     upipe_ts_patd_clean_output(upipe);
+    upipe_ts_patd_clean_urefcount(upipe);
     upipe_ts_patd_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_patd_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PATD_SIGNATURE,
 
     .upipe_alloc = upipe_ts_patd_alloc,
     .upipe_input = upipe_ts_patd_input,
-    .upipe_control = upipe_ts_patd_control,
-    .upipe_free = upipe_ts_patd_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_patd_control
 };
 
 /** @This returns the management structure for all ts_patd pipes.

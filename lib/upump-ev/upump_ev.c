@@ -41,6 +41,9 @@
 /** @This stores management parameters and local structures.
  */
 struct upump_ev_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ev private structure */
     struct ev_loop *ev_loop;
     /** upump pool */
@@ -51,6 +54,9 @@ struct upump_ev_mgr {
     /** common structure */
     struct upump_common_mgr common_mgr;
 };
+
+UBASE_FROM_TO(upump_ev_mgr, upump_mgr, upump_mgr, common_mgr.mgr)
+UBASE_FROM_TO(upump_ev_mgr, urefcount, urefcount, urefcount)
 
 /** @This stores local structures.
  */
@@ -69,47 +75,7 @@ struct upump_ev {
     struct upump_common common;
 };
 
-/** @internal @This returns the high-level upump_mgr structure.
- *
- * @param ev_mgr pointer to the upump_ev_mgr structure
- * @return pointer to the upump_mgr structure
- */
-static inline struct upump_mgr *upump_ev_mgr_to_upump_mgr(struct upump_ev_mgr *ev_mgr)
-{
-    return upump_common_mgr_to_upump_mgr(&ev_mgr->common_mgr);
-}
-
-/** @internal @This returns the private upump_ev_mgr structure.
- *
- * @param mgr pointer to the upump_mgr structure
- * @return pointer to the upump_ev_mgr structure
- */
-static inline struct upump_ev_mgr *upump_ev_mgr_from_upump_mgr(struct upump_mgr *mgr)
-{
-    struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
-    return container_of(common_mgr, struct upump_ev_mgr, common_mgr);
-}
-
-/** @internal @This returns the high-level upump structure.
- *
- * @param ev pointer to the upump_ev structure
- * @return pointer to the upump structure
- */
-static inline struct upump *upump_ev_to_upump(struct upump_ev *upump_ev)
-{
-    return upump_common_to_upump(&upump_ev->common);
-}
-
-/** @internal @This returns the private upump_ev structure.
- *
- * @param mgr pointer to the upump structure
- * @return pointer to the upump_ev structure
- */
-static inline struct upump_ev *upump_ev_from_upump(struct upump *upump)
-{
-    struct upump_common *common = upump_common_from_upump(upump);
-    return container_of(common, struct upump_ev, common);
-}
+UBASE_FROM_TO(upump_ev, upump, upump, common.upump)
 
 /** @This dispatches an event to a pump for type ev_io.
  *
@@ -301,12 +267,13 @@ static void upump_ev_mgr_vacuum(struct upump_mgr *mgr)
 
 /** @This frees a upump manager.
  *
- * @param mgr pointer to upump manager
+ * @param urefcount pointer to urefcount
  */
-static void upump_ev_mgr_free(struct upump_mgr *mgr)
+static void upump_ev_mgr_free(struct urefcount *urefcount)
 {
-    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
-    upump_common_mgr_clean(mgr, upump_ev_free_inner);
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_urefcount(urefcount);
+    upump_common_mgr_clean(upump_ev_mgr_to_upump_mgr(ev_mgr),
+                           upump_ev_free_inner);
     free(ev_mgr);
 }
 
@@ -335,9 +302,10 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
                           upump_ev_real_start, upump_ev_real_stop);
 
     ev_mgr->ev_loop = ev_loop;
+    urefcount_init(upump_ev_mgr_to_urefcount(ev_mgr), upump_ev_mgr_free);
+    ev_mgr->common_mgr.mgr.refcount = upump_ev_mgr_to_urefcount(ev_mgr);
     ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
     ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
     ev_mgr->common_mgr.mgr.upump_mgr_vacuum = upump_ev_mgr_vacuum;
-    ev_mgr->common_mgr.mgr.upump_mgr_free = upump_ev_mgr_free;
     return mgr;
 }

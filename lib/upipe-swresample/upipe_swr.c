@@ -36,6 +36,7 @@
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -58,6 +59,9 @@
 
 /** upipe_swr structure with swresample parameters */ 
 struct upipe_swr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** input flow */
     struct uref *flow_def_input;
     /** attributes added by the pipe */
@@ -87,6 +91,7 @@ struct upipe_swr {
 };
 
 UPIPE_HELPER_UPIPE(upipe_swr, upipe, UPIPE_SWR_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_swr, urefcount, upipe_swr_free)
 UPIPE_HELPER_FLOW(upipe_swr, UREF_SOUND_FLOW_DEF);
 UPIPE_HELPER_OUTPUT(upipe_swr, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_swr, flow_def_input, flow_def_attr)
@@ -309,9 +314,12 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
 
     if (swr_init(upipe_swr->swr) < 0) {
         upipe_err_va(upipe, "failed to init swresample with format %s", def);
-        return false;
+        uref_free(flow_def);
+        upipe_swr_free_flow(upipe);
+        return NULL;
     }
 
+    upipe_swr_init_urefcount(upipe);
     upipe_swr_init_ubuf_mgr(upipe);
     upipe_swr_init_output(upipe);
     upipe_swr_init_flow_def(upipe);
@@ -335,19 +343,18 @@ static void upipe_swr_free(struct upipe *upipe)
     upipe_swr_clean_output(upipe);
     upipe_swr_clean_flow_def(upipe);
     upipe_swr_clean_ubuf_mgr(upipe);
+    upipe_swr_clean_urefcount(upipe);
     upipe_swr_free_flow(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_swr_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_SWR_SIGNATURE,
 
     .upipe_alloc = upipe_swr_alloc,
     .upipe_input = upipe_swr_input,
-    .upipe_control = upipe_swr_control,
-    .upipe_free = upipe_swr_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_swr_control
 };
 
 /** @This returns the management structure for swresample pipes

@@ -88,7 +88,6 @@
         @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
         @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
-        @item @ref upipe_proxy_mgr_alloc @item pipe acting as a proxy in front of a split pipe @item @tt -lupipe-modules
         @item @ref upipe_xfer_mgr_alloc (also note @ref upipe_xfer_alloc) @item pipe manager allowing to attach another pipe to a given upump_mgr running in a different thread @item @tt -lupipe-modules
         @item @ref upipe_trickp_mgr_alloc @item pipe facilitating trick play operations @item @tt -lupipe-modules
         @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules

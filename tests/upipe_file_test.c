@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, -1,
+                                                         umem_mgr,
                                                          -1, 0);
     assert(ubuf_mgr != NULL);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,

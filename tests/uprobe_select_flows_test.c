@@ -77,9 +77,23 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 struct test_sub {
+    struct urefcount urefcount;
     uint64_t flow_id;
     struct upipe upipe;
 };
+
+/** helper phony pipe to test uprobe_select_flows */
+static void test_sub_free(struct urefcount *urefcount)
+{
+    struct test_sub *test_sub = container_of(urefcount, struct test_sub,
+                                             urefcount);
+    struct upipe *upipe = &test_sub->upipe;
+    upipe_throw_dead(upipe);
+    assert(test_sub->flow_id != UINT64_MAX);
+    del_flows -= test_sub->flow_id;
+    upipe_clean(upipe);
+    free(test_sub);
+}
 
 /** helper phony pipe to test uprobe_select_flows */
 static struct upipe *test_sub_alloc(struct upipe_mgr *mgr,
@@ -95,30 +109,19 @@ static struct upipe *test_sub_alloc(struct upipe_mgr *mgr,
     struct test_sub *test_sub = malloc(sizeof(struct test_sub));
     assert(test_sub != NULL);
     upipe_init(&test_sub->upipe, mgr, uprobe);
+    urefcount_init(&test_sub->urefcount, test_sub_free);
+    test_sub->upipe.refcount = &test_sub->urefcount;
     test_sub->flow_id = flow_id;
     upipe_throw_ready(&test_sub->upipe);
     return &test_sub->upipe;
 }
 
 /** helper phony pipe to test uprobe_select_flows */
-static void test_sub_free(struct upipe *upipe)
-{
-    struct test_sub *test_sub = container_of(upipe, struct test_sub, upipe);
-    upipe_throw_dead(upipe);
-    assert(test_sub->flow_id != UINT64_MAX);
-    del_flows -= test_sub->flow_id;
-    upipe_clean(upipe);
-    free(test_sub);
-}
-
-/** helper phony pipe to test uprobe_select_flows */
 static struct upipe_mgr test_sub_mgr = {
+    .refcount = NULL,
     .upipe_alloc = test_sub_alloc,
     .upipe_input = NULL,
-    .upipe_control = NULL,
-    .upipe_free = test_sub_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 /** helper phony pipe to test uprobe_select_flows */
@@ -127,6 +130,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
+    upipe->refcount = NULL;
     ulist_init(&flow_defs);
     return upipe;
 }
@@ -170,12 +174,10 @@ static void test_free(struct upipe *upipe)
 
 /** helper phony pipe to test uprobe_select_flows */
 static struct upipe_mgr test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = NULL,
     .upipe_input = NULL,
-    .upipe_control = test_control,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = test_control
 };
 
 int main(int argc, char **argv)

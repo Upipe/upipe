@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,29 +33,15 @@
 
 /** @This defines the private data structures of the umem alloc manager. */
 struct umem_alloc_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** common management structure */
     struct umem_mgr mgr;
 };
 
-/** @internal @This returns the high-level umem_mgr structure.
- *
- * @param alloc_mgr pointer to the umem_alloc_mgr structure
- * @return pointer to the umem_mgr structure
- */
-static inline struct umem_mgr *umem_alloc_mgr_to_umem_mgr(struct umem_alloc_mgr *alloc_mgr)
-{
-    return &alloc_mgr->mgr;
-}
-
-/** @internal @This returns the private umem_alloc_mgr structure.
- *
- * @param mgr description structure of the umem mgr
- * @return pointer to the umem_alloc_mgr structure
- */
-static inline struct umem_alloc_mgr *umem_alloc_mgr_from_umem_mgr(struct umem_mgr *mgr)
-{
-    return container_of(mgr, struct umem_alloc_mgr, mgr);
-}
+UBASE_FROM_TO(umem_alloc_mgr, umem_mgr, umem_mgr, mgr)
+UBASE_FROM_TO(umem_alloc_mgr, urefcount, urefcount, urefcount)
 
 /** @This allocates a new umem buffer space.
  *
@@ -113,12 +99,12 @@ static void umem_alloc_free(struct umem *umem)
 
 /** @This frees a umem manager.
  *
- * @param mgr pointer to umem manager
+ * @param urefcont pointer to urefcount
  */
-static void umem_alloc_mgr_free(struct umem_mgr *mgr)
+static void umem_alloc_mgr_free(struct urefcount *urefcount)
 {
-    struct umem_alloc_mgr *alloc_mgr = umem_alloc_mgr_from_umem_mgr(mgr);
-    urefcount_clean(&alloc_mgr->mgr.refcount);
+    struct umem_alloc_mgr *alloc_mgr = umem_alloc_mgr_from_urefcount(urefcount);
+    urefcount_clean(urefcount);
     free(alloc_mgr);
 }
 
@@ -133,12 +119,12 @@ struct umem_mgr *umem_alloc_mgr_alloc(void)
     if (unlikely(alloc_mgr == NULL))
         return NULL;
 
-    urefcount_init(&alloc_mgr->mgr.refcount);
+    urefcount_init(umem_alloc_mgr_to_urefcount(alloc_mgr), umem_alloc_mgr_free);
+    alloc_mgr->mgr.refcount = umem_alloc_mgr_to_urefcount(alloc_mgr);
     alloc_mgr->mgr.umem_alloc = umem_alloc_alloc;
     alloc_mgr->mgr.umem_realloc = umem_alloc_realloc;
     alloc_mgr->mgr.umem_free = umem_alloc_free;
     alloc_mgr->mgr.umem_mgr_vacuum = NULL;
-    alloc_mgr->mgr.umem_mgr_free = umem_alloc_mgr_free;
 
     return umem_alloc_mgr_to_umem_mgr(alloc_mgr);
 }

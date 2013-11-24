@@ -203,13 +203,11 @@ static void avcdec_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_avcdec */
 static struct upipe_mgr avcdec_test_mgr = {
+    .refcount = NULL,
     .signature = 0,
     .upipe_alloc = avcdec_test_alloc,
     .upipe_input = avcdec_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 /** nullpipe (/dev/null) */
@@ -242,11 +240,10 @@ static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump 
 
 /** nullpipe (/dev/null) */
 static struct upipe_mgr nullpipe_mgr = {
+    .refcount = NULL,
     .upipe_alloc = nullpipe_alloc,
     .upipe_input = nullpipe_input,
     .upipe_control = NULL,
-    .upipe_free = nullpipe_free,
-    .upipe_mgr_free = NULL
 };
 
 /** Fetch video packets using avformat and send them to avcdec pipe.
@@ -387,7 +384,6 @@ int main (int argc, char **argv)
     /* block */
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
             UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_PREPEND, UBUF_APPEND,
             UBUF_ALIGN,
             UBUF_ALIGN_OFFSET);
     assert(block_mgr);
@@ -478,15 +474,13 @@ int main (int argc, char **argv)
     upipe_get_flow_def(avcdec, &flowdef);
 
     // test pipe
-    struct upipe *avcdec_test = upipe_flow_alloc(&avcdec_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdec_test"),
-            flowdef);
+    struct upipe *avcdec_test = upipe_void_alloc(&avcdec_test_mgr,
+            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "avcdec_test"));
     assert(upipe_set_output(avcdec, avcdec_test));
     
     // null pipe
-    struct upipe *nullpipe = upipe_flow_alloc(&nullpipe_mgr,
-                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"),
-                flowdef);
+    struct upipe *nullpipe = upipe_void_alloc(&nullpipe_mgr,
+                uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "devnull"));
 
     if (!pgm_prefix) {
         assert(upipe_set_output(avcdec, nullpipe));
@@ -566,7 +560,7 @@ int main (int argc, char **argv)
     // Close avformat
     avformat_close_input(&mainthread.avfctx);
 
-    upipe_release(nullpipe);
+    nullpipe_free(nullpipe);
     avcdec_test_free(avcdec_test);
     upipe_mgr_release(upipe_avcdec_mgr);
 	upump_free(write_pump);

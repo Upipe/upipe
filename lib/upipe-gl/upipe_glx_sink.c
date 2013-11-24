@@ -42,6 +42,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
@@ -69,6 +70,9 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
 static void upipe_glx_sink_write_watcher(struct upump *upump);
 
 struct upipe_glx_sink {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
     /** temporary uref storage */
@@ -111,6 +115,7 @@ struct upipe_glx_sink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_glx_sink, upipe, UPIPE_GLX_SINK_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_glx_sink, urefcount, upipe_glx_sink_free)
 UPIPE_HELPER_VOID(upipe_glx_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
@@ -356,6 +361,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
+    upipe_glx_sink_init_urefcount(upipe);
     upipe_glx_sink_init_upump_mgr(upipe);
     upipe_glx_sink_init_upump(upipe);
     upipe_glx_sink_init_upump_watcher(upipe);
@@ -560,19 +566,18 @@ static void upipe_glx_sink_free(struct upipe *upipe)
     }
     upipe_glx_sink_clean_uclock(upipe);
     upipe_glx_sink_clean_sink(upipe);
+    upipe_glx_sink_clean_urefcount(upipe);
     upipe_glx_sink_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_glx_sink_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_GLX_SINK_SIGNATURE,
 
     .upipe_alloc = upipe_glx_sink_alloc,
     .upipe_input = upipe_glx_sink_input,
-    .upipe_control = upipe_glx_sink_control,
-    .upipe_free = upipe_glx_sink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_glx_sink_control
 };
 
 /** @This returns the management structure for glx_sink pipes

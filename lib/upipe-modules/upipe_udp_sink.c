@@ -39,6 +39,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
@@ -76,6 +77,9 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 
 /** @internal @This is the private context of a udp sink pipe. */
 struct upipe_udpsink {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** write watcher */
@@ -108,6 +112,7 @@ struct upipe_udpsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
@@ -132,6 +137,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
     upipe_udpsink_init_upump(upipe);
     upipe_udpsink_init_sink(upipe);
@@ -196,8 +202,10 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
         upipe_udpsink_wait_upump(upipe, systime - now, upipe_udpsink_watcher);
         return false;
     } else if (now > systime + SYSTIME_TOLERANCE)
-        upipe_warn_va(upipe, "outputting late packet %"PRIu64" ms",
-                      (now - systime) / 27000);
+        upipe_warn_va(upipe,
+                      "outputting late packet %"PRIu64" ms, latency %"PRIu64" ms",
+                      (now - systime) / (UCLOCK_FREQ / 1000),
+                      upipe_udpsink->latency / (UCLOCK_FREQ / 1000));
 
 write_buffer:
     for ( ; ; ) {
@@ -520,19 +528,18 @@ static void upipe_udpsink_free(struct upipe *upipe)
     upipe_udpsink_clean_upump(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
     upipe_udpsink_clean_sink(upipe);
+    upipe_udpsink_clean_urefcount(upipe);
     upipe_udpsink_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_udpsink_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_UDPSINK_SIGNATURE,
 
     .upipe_alloc = upipe_udpsink_alloc,
     .upipe_input = upipe_udpsink_input,
-    .upipe_control = upipe_udpsink_control,
-    .upipe_free = upipe_udpsink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_udpsink_control
 };
 
 /** @This returns the management structure for all udp sink pipes.

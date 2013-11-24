@@ -38,6 +38,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -77,6 +78,9 @@ static const char get_request_format[] =
 
 /** @internal @This is the private context of a http source pipe. */
 struct upipe_http_src {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
 
@@ -116,6 +120,7 @@ struct upipe_http_src {
 };
 
 UPIPE_HELPER_UPIPE(upipe_http_src, upipe, UPIPE_HTTP_SRC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_http_src, urefcount, upipe_http_src_free)
 UPIPE_HELPER_VOID(upipe_http_src)
 UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr)
 
@@ -142,6 +147,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_http_src_alloc_void(mgr, uprobe, signature,
                                                     args);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    upipe_http_src_init_urefcount(upipe);
     upipe_http_src_init_uref_mgr(upipe);
     upipe_http_src_init_ubuf_mgr(upipe);
     upipe_http_src_init_output(upipe);
@@ -605,19 +611,18 @@ static void upipe_http_src_free(struct upipe *upipe)
     upipe_http_src_clean_output(upipe);
     upipe_http_src_clean_ubuf_mgr(upipe);
     upipe_http_src_clean_uref_mgr(upipe);
+    upipe_http_src_clean_urefcount(upipe);
     upipe_http_src_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_http_src_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_HTTP_SRC_SIGNATURE,
 
     .upipe_alloc = upipe_http_src_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_http_src_control,
-    .upipe_free = upipe_http_src_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_http_src_control
 };
 
 /** @This returns the management structure for all http source pipes.

@@ -44,6 +44,9 @@
 
 /** super-set of the uclock structure with additional local members */
 struct uclock_std {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** flags at the creation of this clock */
     enum uclock_std_flags flags;
 #ifdef __MACH__
@@ -55,25 +58,8 @@ struct uclock_std {
     struct uclock uclock;
 };
 
-/** @internal @This returns the high-level uclock structure.
- *
- * @param uclock_std pointer to the struct uclock_std structure
- * @return pointer to the struct uclock structure
- */
-static inline struct uclock *uclock_std_to_uclock(struct uclock_std *uclock_std)
-{
-    return &uclock_std->uclock;
-}
-
-/** @internal @This returns the private struct uclock_std structure.
- *
- * @param uclock description structure of the struct uclock
- * @return pointer to the struct uclock_std structure
- */
-static inline struct uclock_std *uclock_std_from_uclock(struct uclock *uclock)
-{
-    return container_of(uclock, struct uclock_std, uclock);
-}
+UBASE_FROM_TO(uclock_std, uclock, uclock, uclock)
+UBASE_FROM_TO(uclock_std, urefcount, urefcount, urefcount)
 
 /** @This returns the current system time.
  *
@@ -104,15 +90,15 @@ static uint64_t uclock_std_now(struct uclock *uclock)
 
 /** @This frees a uclock.
  *
- * @param uclock pointer to uclock
+ * @param urefcount pointer to urefcount
  */
-static void uclock_std_free(struct uclock *uclock)
+static void uclock_std_free(struct urefcount *urefcount)
 {
-    struct uclock_std *uclock_std = uclock_std_from_uclock(uclock);
+    struct uclock_std *uclock_std = uclock_std_from_urefcount(urefcount);
 #ifdef __MACH__
     mach_port_deallocate(mach_task_self(), uclock_std->cclock);
 #endif
-    urefcount_clean(&uclock_std->uclock.refcount);
+    urefcount_clean(urefcount);
     free(uclock_std);
 }
 
@@ -144,9 +130,9 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
     if (unlikely(uclock_std == NULL))
         return NULL;
     uclock_std->flags = flags;
-    urefcount_init(&uclock_std->uclock.refcount);
+    urefcount_init(uclock_std_to_urefcount(uclock_std), uclock_std_free);
+    uclock_std->uclock.refcount = uclock_std_to_urefcount(uclock_std);
     uclock_std->uclock.uclock_now = uclock_std_now;
-    uclock_std->uclock.uclock_free = uclock_std_free;
 #ifdef __MACH__
     memcpy(&uclock_std->cclock, &cclock, sizeof(cclock));
 #endif

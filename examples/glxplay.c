@@ -657,7 +657,7 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 
     /* input blocks */
     glxplayer->block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_SHARED_POOL_DEPTH, umem_mgr, -1, -1, -1, 0);
+            UBUF_SHARED_POOL_DEPTH, umem_mgr, -1, 0);
     if (unlikely(glxplayer->block_mgr == NULL))
         goto fail_block_mgr;
 

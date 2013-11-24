@@ -35,6 +35,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_multicat_probe.h>
@@ -53,6 +54,9 @@
 
 /** upipe_multicat_probe structure */ 
 struct upipe_multicat_probe {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
@@ -70,6 +74,8 @@ struct upipe_multicat_probe {
 };
 
 UPIPE_HELPER_UPIPE(upipe_multicat_probe, upipe, UPIPE_MULTICAT_PROBE_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_multicat_probe, urefcount,
+                       upipe_multicat_probe_free)
 UPIPE_HELPER_VOID(upipe_multicat_probe)
 UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, flow_def_sent);
 
@@ -213,6 +219,7 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr,
 
     struct upipe_multicat_probe *upipe_multicat_probe =
         upipe_multicat_probe_from_upipe(upipe);
+    upipe_multicat_probe_init_urefcount(upipe);
     upipe_multicat_probe_init_output(upipe);
     upipe_multicat_probe->rotate = UPIPE_MULTICAT_PROBE_DEF_ROTATE;
     upipe_multicat_probe->idx = 0;
@@ -229,18 +236,17 @@ static void upipe_multicat_probe_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_multicat_probe_clean_output(upipe);
+    upipe_multicat_probe_clean_urefcount(upipe);
     upipe_multicat_probe_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_multicat_probe_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_MULTICAT_PROBE_SIGNATURE,
 
     .upipe_alloc = upipe_multicat_probe_alloc,
     .upipe_input = upipe_multicat_probe_input,
-    .upipe_control = upipe_multicat_probe_control,
-    .upipe_free = upipe_multicat_probe_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_multicat_probe_control
 };
 
 /** @This returns the management structure for multicat_probe pipes

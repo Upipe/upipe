@@ -53,10 +53,10 @@
 
 #include <ev.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 1
-#define UPUMP_POOL 1
-#define UPUMP_BLOCKER_POOL 1
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
+#define UPUMP_POOL 0
+#define UPUMP_BLOCKER_POOL 0
 #define QUEUE_LENGTH 6
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
@@ -126,12 +126,10 @@ static void queue_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_qsrc */
 static struct upipe_mgr queue_test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = queue_test_alloc,
     .upipe_input = queue_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 int main(int argc, char *argv[])

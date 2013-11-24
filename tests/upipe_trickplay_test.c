@@ -125,12 +125,10 @@ static void trickp_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_trickp */
 static struct upipe_mgr trickp_test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = trickp_test_alloc,
     .upipe_input = trickp_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 /** helper uclock to test upipe_trickp */
@@ -158,17 +156,16 @@ int main(int argc, char *argv[])
     struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
     assert(log != NULL);
 
-    struct uclock *uclock = malloc(sizeof(struct uclock));
-    urefcount_init(&uclock->refcount);
-    uclock->uclock_now = now;
-    uclock->uclock_free = NULL;
+    struct uclock uclock;
+    uclock.refcount = NULL;
+    uclock.uclock_now = now;
 
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     assert(upipe_trickp_mgr != NULL);
     struct upipe *upipe_trickp = upipe_void_alloc(upipe_trickp_mgr,
             uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "trickp"));
     assert(upipe_trickp != NULL);
-    assert(upipe_set_uclock(upipe_trickp, uclock));
+    assert(upipe_set_uclock(upipe_trickp, &uclock));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
@@ -267,6 +264,5 @@ int main(int argc, char *argv[])
 
     uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
-    free(uclock);
     return 0;
 }

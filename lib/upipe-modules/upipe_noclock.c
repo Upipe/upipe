@@ -41,6 +41,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_noclock.h>
@@ -52,6 +53,9 @@
 
 /** @internal @This is the private context of a noclock pipe. */
 struct upipe_noclock {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -64,6 +68,7 @@ struct upipe_noclock {
 };
 
 UPIPE_HELPER_UPIPE(upipe_noclock, upipe, UPIPE_NOCLOCK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_noclock, urefcount, upipe_noclock_free)
 UPIPE_HELPER_VOID(upipe_noclock)
 UPIPE_HELPER_OUTPUT(upipe_noclock, output, flow_def, flow_def_sent)
 
@@ -84,6 +89,7 @@ static struct upipe *upipe_noclock_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    upipe_noclock_init_urefcount(upipe);
     upipe_noclock_init_output(upipe);
     upipe_throw_ready(upipe);
     return upipe;
@@ -165,19 +171,18 @@ static void upipe_noclock_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_noclock_clean_output(upipe);
+    upipe_noclock_clean_urefcount(upipe);
     upipe_noclock_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_noclock_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_NOCLOCK_SIGNATURE,
 
     .upipe_alloc = upipe_noclock_alloc,
     .upipe_input = upipe_noclock_input,
-    .upipe_control = upipe_noclock_control,
-    .upipe_free = upipe_noclock_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_noclock_control
 };
 
 /** @This returns the management structure for all noclock pipes.

@@ -34,6 +34,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_setrap.h>
@@ -45,6 +46,9 @@
 
 /** @internal @This is the private context of a setrap pipe. */
 struct upipe_setrap {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -60,6 +64,7 @@ struct upipe_setrap {
 };
 
 UPIPE_HELPER_UPIPE(upipe_setrap, upipe, UPIPE_SETRAP_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_setrap, urefcount, upipe_setrap_free)
 UPIPE_HELPER_VOID(upipe_setrap)
 UPIPE_HELPER_OUTPUT(upipe_setrap, output, flow_def, flow_def_sent)
 
@@ -80,6 +85,7 @@ static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
+    upipe_setrap_init_urefcount(upipe);
     upipe_setrap_init_output(upipe);
     upipe_setrap->systime_rap = UINT64_MAX;
     upipe_throw_ready(upipe);
@@ -200,19 +206,18 @@ static void upipe_setrap_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_setrap_clean_output(upipe);
+    upipe_setrap_clean_urefcount(upipe);
     upipe_setrap_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_setrap_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_SETRAP_SIGNATURE,
 
     .upipe_alloc = upipe_setrap_alloc,
     .upipe_input = upipe_setrap_input,
-    .upipe_control = upipe_setrap_control,
-    .upipe_free = upipe_setrap_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_setrap_control
 };
 
 /** @This returns the management structure for all setrap pipes.

@@ -32,6 +32,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -54,6 +55,9 @@ static void upipe_ts_join_build_flow_def(struct upipe *upipe);
 
 /** @internal @This is the private context of a ts join pipe. */
 struct upipe_ts_join {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
 
@@ -78,12 +82,15 @@ struct upipe_ts_join {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_join, upipe, UPIPE_TS_JOIN_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_join, urefcount, upipe_ts_join_free)
 UPIPE_HELPER_VOID(upipe_ts_join)
 UPIPE_HELPER_UREF_MGR(upipe_ts_join, uref_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_join, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of an input of a ts_join pipe. */
 struct upipe_ts_join_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -102,6 +109,7 @@ struct upipe_ts_join_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_join_sub, upipe, UPIPE_TS_JOIN_INPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_join_sub, urefcount, upipe_ts_join_sub_dead)
 UPIPE_HELPER_VOID(upipe_ts_join_sub)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_join, upipe_ts_join_sub, sub, sub_mgr,
@@ -129,14 +137,11 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
+    upipe_ts_join_sub_init_urefcount(upipe);
     upipe_ts_join_sub_init_sub(upipe);
     ulist_init(&upipe_ts_join_sub->urefs);
     upipe_ts_join_sub->next_cr = upipe_ts_join_sub->last_cr = UINT64_MAX;
     upipe_ts_join_sub->latency = 0;
-
-    struct upipe_ts_join *upipe_ts_join =
-        upipe_ts_join_from_sub_mgr(upipe->mgr);
-    upipe_use(upipe_ts_join_to_upipe(upipe_ts_join));
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -228,25 +233,24 @@ static bool upipe_ts_join_sub_control(struct upipe *upipe,
     }
 }
 
-/** @This frees a upipe.
+/** @This marks an input subpipe as dead.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_join_sub_free(struct upipe *upipe)
+static void upipe_ts_join_sub_dead(struct upipe *upipe)
 {
-    struct upipe_ts_join *upipe_ts_join =
-        upipe_ts_join_from_sub_mgr(upipe->mgr);
-    upipe_throw_dead(upipe);
-
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
+    struct upipe_ts_join *upipe_ts_join =
+        upipe_ts_join_from_sub_mgr(upipe->mgr);
+
     if (ulist_empty(&upipe_ts_join_sub->urefs)) {
+        upipe_throw_dead(upipe);
         upipe_ts_join_sub_clean_sub(upipe);
+        upipe_ts_join_sub_clean_urefcount(upipe);
         upipe_ts_join_sub_free_void(upipe);
     }
-
     upipe_ts_join_mux(upipe_ts_join_to_upipe(upipe_ts_join), NULL);
-    upipe_release(upipe_ts_join_to_upipe(upipe_ts_join));
 }
 
 /** @internal @This initializes the input manager for a ts_join pipe.
@@ -257,12 +261,11 @@ static void upipe_ts_join_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_ts_join->sub_mgr;
+    sub_mgr->refcount = upipe_ts_join_to_urefcount(upipe_ts_join);
     sub_mgr->signature = UPIPE_TS_JOIN_INPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_join_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_join_sub_input;
     sub_mgr->upipe_control = upipe_ts_join_sub_control;
-    sub_mgr->upipe_free = upipe_ts_join_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates a ts_join pipe.
@@ -282,6 +285,7 @@ static struct upipe *upipe_ts_join_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    upipe_ts_join_init_urefcount(upipe);
     upipe_ts_join_init_uref_mgr(upipe);
     upipe_ts_join_init_output(upipe);
     upipe_ts_join_init_sub_mgr(upipe);
@@ -347,8 +351,10 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
         struct uref *uref = uref_from_uchain(uchain);
 
         if (ulist_empty(&input->urefs)) {
-            if (urefcount_dead(&input->upipe.refcount)) {
+            if (upipe_dead(upipe_ts_join_sub_to_upipe(input))) {
+                upipe_throw_dead(upipe_ts_join_sub_to_upipe(input));
                 upipe_ts_join_sub_clean_sub(upipe_ts_join_sub_to_upipe(input));
+                upipe_ts_join_sub_clean_urefcount(upipe_ts_join_sub_to_upipe(input));
                 upipe_ts_join_sub_free_void(upipe_ts_join_sub_to_upipe(input));
             } else {
                 input->next_cr = UINT64_MAX;
@@ -477,22 +483,22 @@ static bool upipe_ts_join_control(struct upipe *upipe,
 static void upipe_ts_join_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
+
     upipe_ts_join_clean_sub_subs(upipe);
     upipe_ts_join_clean_output(upipe);
     upipe_ts_join_clean_uref_mgr(upipe);
+    upipe_ts_join_clean_urefcount(upipe);
     upipe_ts_join_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_join_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_JOIN_SIGNATURE,
 
     .upipe_alloc = upipe_ts_join_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_ts_join_control,
-    .upipe_free = upipe_ts_join_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_join_control
 };
 
 /** @This returns the management structure for all ts_join pipes.

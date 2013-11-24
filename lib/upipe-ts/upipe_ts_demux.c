@@ -47,6 +47,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_bin.h>
@@ -55,7 +56,6 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_setrap.h>
-#include <upipe-modules/upipe_proxy.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_split.h>
@@ -100,6 +100,9 @@
 
 /** @internal @This is the private context of a ts_demux manager. */
 struct upipe_ts_demux_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pointer to null manager */
     struct upipe_mgr *null_mgr;
     /** pointer to setrap manager */
@@ -141,33 +144,19 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr mgr;
 };
 
-/** @internal @This returns the high-level upipe_mgr structure.
- *
- * @param ts_demux_mgr pointer to the upipe_ts_demux_mgr structure
- * @return pointer to the upipe_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_ts_demux_mgr_to_upipe_mgr(struct upipe_ts_demux_mgr *ts_demux_mgr)
-{
-    return &ts_demux_mgr->mgr;
-}
-
-/** @internal @This returns the private upipe_ts_demux_mgr structure.
- *
- * @param mgr description structure of the upipe manager
- * @return pointer to the upipe_ts_demux_mgr structure
- */
-static inline struct upipe_ts_demux_mgr *
-    upipe_ts_demux_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
-{
-    return container_of(mgr, struct upipe_ts_demux_mgr, mgr);
-}
+UBASE_FROM_TO(upipe_ts_demux_mgr, upipe_mgr, upipe_mgr, mgr)
+UBASE_FROM_TO(upipe_ts_demux_mgr, urefcount, urefcount, urefcount)
 
 /** @hidden */
 struct upipe_ts_demux_psi_pid;
 
 /** @internal @This is the private context of a ts_demux pipe. */
 struct upipe_ts_demux {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
+    /** refcount management structure exported to the public structure */
+    struct urefcount urefcount;
+
     /** probe for the last subpipe */
     struct uprobe last_subpipe_probe;
     /** pointer to the last subpipe */
@@ -219,20 +208,28 @@ struct upipe_ts_demux {
 
     /** manager to create programs */
     struct upipe_mgr program_mgr;
-    /** pointer to proxy manager, proxying program_mgr */
-    struct upipe_mgr *program_proxy_mgr;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_demux, upipe, UPIPE_TS_DEMUX_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_demux, urefcount, upipe_ts_demux_no_input)
 UPIPE_HELPER_VOID(upipe_ts_demux)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
 UPIPE_HELPER_BIN(upipe_ts_demux, last_subpipe_probe, last_subpipe, output)
 
+UBASE_FROM_TO(upipe_ts_demux, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static void upipe_ts_demux_free(struct urefcount *urefcount_real);
+
 /** @internal @This is the private context of a program of a ts_demux pipe. */
 struct upipe_ts_demux_program {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
+    /** refcount management structure exported to the public structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -287,16 +284,27 @@ struct upipe_ts_demux_program {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe, UPIPE_TS_DEMUX_PROGRAM_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe,
+                   UPIPE_TS_DEMUX_PROGRAM_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_program, urefcount,
+                       upipe_ts_demux_program_no_input)
 UPIPE_HELPER_FLOW(upipe_ts_demux_program, "void.")
-UPIPE_HELPER_BIN(upipe_ts_demux_program, last_subpipe_probe, last_subpipe, output)
+UPIPE_HELPER_BIN(upipe_ts_demux_program, last_subpipe_probe, last_subpipe,
+                 output)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux, upipe_ts_demux_program, program,
                      program_mgr, programs, uchain)
 
+UBASE_FROM_TO(upipe_ts_demux_program, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static void upipe_ts_demux_program_free(struct urefcount *urefcount_real);
+
 /** @internal @This is the private context of an output of a ts_demux_program
  * subpipe. */
 struct upipe_ts_demux_output {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -328,7 +336,10 @@ struct upipe_ts_demux_output {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe, UPIPE_TS_DEMUX_OUTPUT_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe,
+                   UPIPE_TS_DEMUX_OUTPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_output, urefcount,
+                       upipe_ts_demux_output_free)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
 UPIPE_HELPER_BIN(upipe_ts_demux_output, last_subpipe_probe, last_subpipe,
                  output)
@@ -355,27 +366,7 @@ struct upipe_ts_demux_psi_pid {
     unsigned int refcount;
 };
 
-/** @internal @This returns the uchain for chaining PIDs.
- *
- * @param psi_pid pointer to the upipe_ts_demux_psi_pid structure
- * @return pointer to uchain
- */
-static inline struct uchain *
-    upipe_ts_demux_psi_pid_to_uchain(struct upipe_ts_demux_psi_pid *psi_pid)
-{
-    return &psi_pid->uchain;
-}
-
-/** @internal @This returns the upipe_ts_demux_psi_pid structure.
- *
- * @param uchain pointer to uchain
- * @return pointer to the upipe_ts_demux_psi_pid structure
- */
-static inline struct upipe_ts_demux_psi_pid *
-    upipe_ts_demux_psi_pid_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_ts_demux_psi_pid, uchain);
-}
+UBASE_FROM_TO(upipe_ts_demux_psi_pid, uchain, uchain, uchain)
 
 /** @internal @This allocates and initializes a new PID-specific
  * substructure.
@@ -748,6 +739,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
+    upipe_ts_demux_output_init_urefcount(upipe);
     upipe_ts_demux_output_init_bin(upipe);
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
@@ -758,10 +750,6 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_output_probe, NULL);
 
     upipe_ts_demux_output_init_sub(upipe);
-
-    struct upipe_ts_demux_program *program =
-        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
-    upipe_use(upipe_ts_demux_program_to_upipe(program));
     upipe_throw_ready(upipe);
 
     const char *def;
@@ -775,6 +763,8 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(
                 upipe_ts_demux_program_to_upipe(program)->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
@@ -850,9 +840,7 @@ static bool upipe_ts_demux_output_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
-            upipe_ts_demux_output_get_super(upipe, p);
-            upipe_proxy_throw_get_proxy(*p, p);
-            return true;
+            return upipe_ts_demux_output_get_super(upipe, p);
         }
 
         default:
@@ -879,10 +867,9 @@ static void upipe_ts_demux_output_free(struct upipe *upipe)
 
     upipe_ts_demux_output_clean_bin(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
-    upipe_ts_demux_output_free_flow(upipe);
-
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
-    upipe_release(upipe_ts_demux_program_to_upipe(program));
+    upipe_ts_demux_output_clean_urefcount(upipe);
+    upipe_ts_demux_output_free_flow(upipe);
 }
 
 /** @internal @This initializes the output manager for a ts_demux_program
@@ -895,12 +882,11 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
     struct upipe_ts_demux_program *program =
         upipe_ts_demux_program_from_upipe(upipe);
     struct upipe_mgr *output_mgr = &program->output_mgr;
+    output_mgr->refcount = upipe_ts_demux_program_to_urefcount_real(program);
     output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_output_control;
-    output_mgr->upipe_free = upipe_ts_demux_output_free;
-    output_mgr->upipe_mgr_free = NULL;
 }
 
 
@@ -1256,6 +1242,8 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
+    upipe_ts_demux_program_init_urefcount(upipe);
+    urefcount_init(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program), upipe_ts_demux_program_free);
     upipe_ts_demux_program_init_bin(upipe);
     upipe_ts_demux_program_init_output_mgr(upipe);
     upipe_ts_demux_program_init_sub_outputs(upipe);
@@ -1278,11 +1266,9 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_program_pcr_probe, NULL);
 
     upipe_ts_demux_program_init_sub(upipe);
-
-    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
-    upipe_use(upipe_ts_demux_to_upipe(demux));
     upipe_throw_ready(upipe);
 
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     const uint8_t *filter, *mask;
     size_t size;
     const char *def;
@@ -1349,9 +1335,7 @@ static bool upipe_ts_demux_program_control(struct upipe *upipe,
         }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
-            upipe_ts_demux_program_get_super(upipe, p);
-            upipe_proxy_throw_get_proxy(*p, p);
-            return true;
+            return upipe_ts_demux_program_get_super(upipe, p);
         }
 
         default:
@@ -1361,12 +1345,14 @@ static bool upipe_ts_demux_program_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
- * @param upipe description structure of the pipe
+ * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_ts_demux_program_free(struct upipe *upipe)
+static void upipe_ts_demux_program_free(struct urefcount *urefcount_real)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
-        upipe_ts_demux_program_from_upipe(upipe);
+        upipe_ts_demux_program_from_urefcount_real(urefcount_real);
+    struct upipe *upipe =
+        upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
     struct upipe_ts_demux *demux =
         upipe_ts_demux_from_program_mgr(upipe->mgr);
 
@@ -1384,16 +1370,16 @@ static void upipe_ts_demux_program_free(struct upipe *upipe)
         uref_free(upipe_ts_demux_program->flow_def_input);
     upipe_ts_demux_program_clean_sub_outputs(upipe);
     upipe_ts_demux_program_clean_sub(upipe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_demux_program_clean_urefcount(upipe);
     upipe_ts_demux_program_free_flow(upipe);
-
-    upipe_release(upipe_ts_demux_to_upipe(demux));
 }
 
-/** @This is called when the proxy is released.
+/** @This is called when there is no external reference to the pipe anymore.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_program_proxy_released(struct upipe *upipe)
+static void upipe_ts_demux_program_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
@@ -1409,6 +1395,7 @@ static void upipe_ts_demux_program_proxy_released(struct upipe *upipe)
     }
     upipe_ts_demux_program_store_last_subpipe(upipe, NULL);
     upipe_split_throw_update(upipe);
+    urefcount_release(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program));
 }
 
 /** @internal @This initializes the program manager for a ts_demux pipe.
@@ -1419,12 +1406,11 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     struct upipe_mgr *program_mgr = &upipe_ts_demux->program_mgr;
+    program_mgr->refcount = upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     program_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
     program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_demux_program_control;
-    program_mgr->upipe_free = upipe_ts_demux_program_free;
-    program_mgr->upipe_mgr_free = NULL;
 }
 
 
@@ -1736,17 +1722,12 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    upipe_ts_demux_init_urefcount(upipe);
+    urefcount_init(upipe_ts_demux_to_urefcount_real(upipe_ts_demux),
+                   upipe_ts_demux_free);
     upipe_ts_demux_init_bin(upipe);
     upipe_ts_demux_init_program_mgr(upipe);
     upipe_ts_demux_init_sub_programs(upipe);
-    upipe_ts_demux->program_proxy_mgr =
-        upipe_proxy_mgr_alloc(&upipe_ts_demux->program_mgr,
-                              upipe_ts_demux_program_proxy_released);
-    if (unlikely(upipe_ts_demux->program_proxy_mgr == NULL)) {
-        upipe_ts_demux_clean_sub_programs(upipe);
-        upipe_ts_demux_free_void(upipe);
-        return NULL;
-    }
 
     upipe_ts_demux_init_sync(upipe);
     upipe_ts_demux->input = upipe_ts_demux->split = upipe_ts_demux->setrap =
@@ -2001,10 +1982,7 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            struct upipe_ts_demux *upipe_ts_demux =
-                upipe_ts_demux_from_upipe(upipe);
-            *p = upipe_ts_demux->program_proxy_mgr;
-            return true;
+            return upipe_ts_demux_get_sub_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -2033,11 +2011,13 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
- * @param upipe description structure of the pipe
+ * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_ts_demux_free(struct upipe *upipe)
+static void upipe_ts_demux_free(struct urefcount *urefcount_real)
 {
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    struct upipe_ts_demux *upipe_ts_demux =
+        upipe_ts_demux_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
     if (upipe_ts_demux->input != NULL)
         upipe_release(upipe_ts_demux->input);
     if (upipe_ts_demux->split != NULL)
@@ -2053,18 +2033,19 @@ static void upipe_ts_demux_free(struct upipe *upipe)
     upipe_ts_demux_clean_bin(upipe);
 
     upipe_throw_dead(upipe);
-    upipe_mgr_release(upipe_ts_demux->program_proxy_mgr);
     uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux_clean_sub_programs(upipe);
     upipe_ts_demux_clean_sync(upipe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_demux_clean_urefcount(upipe);
     upipe_ts_demux_free_void(upipe);
 }
 
-/** @This is called when the proxy is released.
+/** @This is called when there is no external to the pipe anymore.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_proxy_released(struct upipe *upipe)
+static void upipe_ts_demux_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     upipe_ts_demux_throw_sub_programs(upipe, UPROBE_SOURCE_END);
@@ -2079,16 +2060,17 @@ static void upipe_ts_demux_proxy_released(struct upipe *upipe)
     }
     upipe_ts_demux_store_last_subpipe(upipe, NULL);
     upipe_split_throw_update(upipe);
+    urefcount_release(upipe_ts_demux_to_urefcount_real(upipe_ts_demux));
 }
 
 /** @This frees a upipe manager.
  *
- * @param mgr pointer to manager
+ * @param urefcount pointer to urefcount structure
  */
-static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
+static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
-        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
+        upipe_ts_demux_mgr_from_urefcount(urefcount);
     if (ts_demux_mgr->null_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->null_mgr);
     if (ts_demux_mgr->setrap_mgr != NULL)
@@ -2118,7 +2100,7 @@ static void upipe_ts_demux_mgr_free(struct upipe_mgr *mgr)
     if (ts_demux_mgr->h264f_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->h264f_mgr);
 
-    urefcount_clean(&ts_demux_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(ts_demux_mgr);
 }
 
@@ -2150,15 +2132,14 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
 
+    urefcount_init(upipe_ts_demux_mgr_to_urefcount(ts_demux_mgr),
+                   upipe_ts_demux_mgr_free);
+    ts_demux_mgr->mgr.refcount = upipe_ts_demux_mgr_to_urefcount(ts_demux_mgr);
     ts_demux_mgr->mgr.signature = UPIPE_TS_DEMUX_SIGNATURE;
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;
     ts_demux_mgr->mgr.upipe_input = upipe_ts_demux_input;
     ts_demux_mgr->mgr.upipe_control = upipe_ts_demux_control;
-    ts_demux_mgr->mgr.upipe_free = upipe_ts_demux_free;
-    ts_demux_mgr->mgr.upipe_mgr_free = upipe_ts_demux_mgr_free;
-    urefcount_init(&ts_demux_mgr->mgr.refcount);
-    return upipe_proxy_mgr_alloc(upipe_ts_demux_mgr_to_upipe_mgr(ts_demux_mgr),
-                                 upipe_ts_demux_proxy_released);
+    return upipe_ts_demux_mgr_to_upipe_mgr(ts_demux_mgr);
 }
 
 /** @This processes control commands on a ts_demux manager. This may only be
@@ -2174,8 +2155,8 @@ bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
                                    va_list args)
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
-        upipe_ts_demux_mgr_from_upipe_mgr(upipe_proxy_mgr_get_super_mgr(mgr));
-    assert(urefcount_single(&ts_demux_mgr->mgr.refcount));
+        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
+    assert(urefcount_single(&ts_demux_mgr->urefcount));
 
     switch (command) {
 #define GET_SET_MGR(name, NAME)                                             \

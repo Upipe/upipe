@@ -37,6 +37,7 @@
 #include <upipe/ubuf_block_stream.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -80,6 +81,9 @@ static const struct urational sar_from_idc[] = {
 
 /** @internal @This is the private context of an h264f pipe. */
 struct upipe_h264f {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /* output stuff */
     /** pipe acting as output */
     struct upipe *output;
@@ -209,6 +213,7 @@ struct upipe_h264f {
 static void upipe_h264f_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_h264f, upipe, UPIPE_H264F_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_h264f, urefcount, upipe_h264f_free)
 UPIPE_HELPER_VOID(upipe_h264f)
 UPIPE_HELPER_SYNC(upipe_h264f, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
@@ -271,6 +276,7 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    upipe_h264f_init_urefcount(upipe);
     upipe_h264f_init_sync(upipe);
     upipe_h264f_init_uref_stream(upipe);
     upipe_h264f_init_output(upipe);
@@ -1736,19 +1742,18 @@ static void upipe_h264f_free(struct upipe *upipe)
         if (upipe_h264f->pps[i] != NULL)
             ubuf_free(upipe_h264f->pps[i]);
 
+    upipe_h264f_clean_urefcount(upipe);
     upipe_h264f_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_h264f_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_H264F_SIGNATURE,
 
     .upipe_alloc = upipe_h264f_alloc,
     .upipe_input = upipe_h264f_input,
-    .upipe_control = upipe_h264f_control,
-    .upipe_free = upipe_h264f_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_h264f_control
 };
 
 /** @This returns the management structure for all h264f pipes.

@@ -145,8 +145,8 @@ enum upipe_command {
 
 /** @This stores common parameters for upipe structures. */
 struct upipe {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** structure for double-linked lists - for use by the application only */
     struct uchain uchain;
     /** opaque - for use by the application only */
@@ -158,10 +158,19 @@ struct upipe {
     struct upipe_mgr *mgr;
 };
 
+UBASE_FROM_TO(upipe, uchain, uchain, uchain)
+
+/** @This defines standard commands which upipe managers may implement. */
+enum upipe_mgr_command {
+    /** non-standard manager commands implemented by a module type can start
+     * from there (first arg = signature) */
+    UPIPE_MGR_CONTROL_LOCAL = 0x8000
+};
+
 /** @This stores common management parameters for a pipe type. */
 struct upipe_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** signature of the pipe allocator */
     unsigned int signature;
 
@@ -174,11 +183,11 @@ struct upipe_mgr {
     /** control function for standard or local commands - all parameters
      * belong to the caller */
     bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
-    /** function to free the pipe */
-    void (*upipe_free)(struct upipe *);
 
-    /** function to free the upipe manager */
-    void (*upipe_mgr_free)(struct upipe_mgr *);
+    /** control function for standard or local manager commands - all parameters
+     * belong to the caller */
+    void (*upipe_mgr_control)(struct upipe_mgr *, enum upipe_mgr_command,
+                              va_list);
 };
 
 /** @This increments the reference count of a upipe manager.
@@ -187,8 +196,7 @@ struct upipe_mgr {
  */
 static inline void upipe_mgr_use(struct upipe_mgr *mgr)
 {
-    if (mgr->upipe_mgr_free != NULL)
-        urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a upipe manager or frees it.
@@ -197,8 +205,7 @@ static inline void upipe_mgr_use(struct upipe_mgr *mgr)
  */
 static inline void upipe_mgr_release(struct upipe_mgr *mgr)
 {
-    if (mgr->upipe_mgr_free != NULL && urefcount_release(&mgr->refcount))
-        mgr->upipe_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 /** @internal @This allocates and initializes a pipe.
@@ -283,10 +290,10 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
                               struct uprobe *uprobe)
 {
     assert(upipe != NULL);
-    urefcount_init(&upipe->refcount);
     uchain_init(&upipe->uchain);
     upipe->opaque = NULL;
     upipe->uprobe = uprobe;
+    upipe->refcount = NULL;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
 }
@@ -297,8 +304,7 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
  */
 static inline void upipe_use(struct upipe *upipe)
 {
-    if (upipe->mgr->upipe_free != NULL)
-        urefcount_use(&upipe->refcount);
+    urefcount_use(upipe->refcount);
 }
 
 /** @This decrements the reference count of a upipe or frees it.
@@ -307,8 +313,7 @@ static inline void upipe_use(struct upipe *upipe)
  */
 static inline void upipe_release(struct upipe *upipe)
 {
-    if (upipe->mgr->upipe_free != NULL && urefcount_release(&upipe->refcount))
-        upipe->mgr->upipe_free(upipe);
+    urefcount_release(upipe->refcount);
 }
 
 /** @This checks if the pipe has more than one reference.
@@ -318,7 +323,17 @@ static inline void upipe_release(struct upipe *upipe)
  */
 static inline bool upipe_single(struct upipe *upipe)
 {
-    return upipe->mgr->upipe_free != NULL && urefcount_single(&upipe->refcount);
+    return urefcount_single(upipe->refcount);
+}
+
+/** @This checks if the pipe has no more references.
+ *
+ * @param upipe pointer to upipe
+ * @return true if there is no reference to the pipe
+ */
+static inline bool upipe_dead(struct upipe *upipe)
+{
+    return urefcount_dead(upipe->refcount);
 }
 
 /** @This gets the opaque member of a pipe.
@@ -436,7 +451,6 @@ static inline bool upipe_control(struct upipe *upipe,
 static inline void upipe_clean(struct upipe *upipe)
 {
     assert(upipe != NULL);
-    urefcount_clean(&upipe->refcount);
     upipe_mgr_release(upipe->mgr);
 }
 
@@ -772,17 +786,6 @@ static inline void upipe_throw_ready(struct upipe *upipe)
     upipe_throw(upipe, UPROBE_READY);
 }
 
-/** @This throws a dead event. This event is thrown whenever a
- * pipe is about to be destroyed and will no longer accept input and
- * control commands.
- *
- * @param upipe description structure of the pipe
- */
-static inline void upipe_throw_dead(struct upipe *upipe)
-{
-    upipe_throw(upipe, UPROBE_DEAD);
-}
-
 /** @internal @This throws a log event. This event is thrown whenever a pipe
  * wants to send a textual message.
  *
@@ -914,6 +917,17 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  */
 #define upipe_throw_error(upipe, errcode)                                   \
     uprobe_throw_error((upipe)->uprobe, upipe, errcode)
+
+/** @This throws a dead event. This event is thrown whenever a
+ * pipe is about to be destroyed and will no longer accept input and
+ * control commands.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_dead(struct upipe *upipe)
+{
+    upipe_throw(upipe, UPROBE_DEAD);
+}
 
 /** @This throws a source end event. This event is thrown when a pipe is unable
  * to read from an input because the end of file was reached, or because an

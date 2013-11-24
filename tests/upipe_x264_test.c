@@ -140,12 +140,11 @@ static void x264_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_x264 */
 static struct upipe_mgr x264_test_mgr = {
+    .refcount = NULL,
     .signature = 0,
     .upipe_alloc = x264_test_alloc,
     .upipe_input = x264_test_input,
     .upipe_control = NULL,
-    .upipe_free = x264_test_free,
-    .upipe_mgr_free = NULL
 };
 
 
@@ -224,7 +223,6 @@ int main(int argc, char **argv)
     /* block */
     struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
             UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_PREPEND, UBUF_APPEND,
             UBUF_ALIGN,
             UBUF_ALIGN_OFFSET);
     assert(block_mgr);
@@ -255,7 +253,6 @@ int main(int argc, char **argv)
     struct upipe *x264_test = upipe_void_alloc(&x264_test_mgr,
                     uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"));
     upipe_set_output(x264, x264_test);
-    upipe_release(x264_test);
 
     /* test controls */
     assert(upipe_x264_set_default_preset(x264, "placebo", "film"));
@@ -276,8 +273,9 @@ int main(int argc, char **argv)
         upipe_input(x264, pic, NULL);
     }
 
-    /* release pipce */
+    /* release pipes */
     upipe_release(x264);
+    x264_test_free(x264_test);
 
     /* clean everything */
     upipe_mgr_release(upipe_x264_mgr); // noop

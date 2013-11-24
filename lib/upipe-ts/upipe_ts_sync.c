@@ -30,6 +30,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -57,6 +58,9 @@
 
 /** @internal @This is the private context of a ts_sync pipe. */
 struct upipe_ts_sync {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -82,6 +86,7 @@ struct upipe_ts_sync {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_sync, upipe, UPIPE_TS_SYNC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_sync, urefcount, upipe_ts_sync_free)
 UPIPE_HELPER_VOID(upipe_ts_sync)
 UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)
@@ -106,6 +111,7 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
+    upipe_ts_sync_init_urefcount(upipe);
     upipe_ts_sync_init_sync(upipe);
     upipe_ts_sync_init_output(upipe);
     upipe_ts_sync->ts_size = TS_SIZE;
@@ -386,19 +392,18 @@ static void upipe_ts_sync_free(struct upipe *upipe)
     upipe_ts_sync_clean_uref_stream(upipe);
     upipe_ts_sync_clean_output(upipe);
     upipe_ts_sync_clean_sync(upipe);
+    upipe_ts_sync_clean_urefcount(upipe);
     upipe_ts_sync_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_sync_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_SYNC_SIGNATURE,
 
     .upipe_alloc = upipe_ts_sync_alloc,
     .upipe_input = upipe_ts_sync_input,
-    .upipe_control = upipe_ts_sync_control,
-    .upipe_free = upipe_ts_sync_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_sync_control
 };
 
 /** @This returns the management structure for all ts_sync pipes.

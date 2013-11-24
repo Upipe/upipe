@@ -8,7 +8,7 @@ libupipe_gl_la_SOURCES = \
     uprobe_gl_sink_cube.c
 libupipe_gl_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_gl_la_CFLAGS = -Wall $(GLX_CFLAGS)
-libupipe_gl_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(GLX_LIBS)
+libupipe_gl_la_LIBADD = $(GLX_LIBS)
 libupipe_gl_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig

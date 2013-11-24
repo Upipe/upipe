@@ -24,9 +24,8 @@
  */
 
 /** @file
- * @short Upipe module - acts as a xfer to another module
- * This is particularly helpful for split pipe, where you would need a xfer
- * as an input pipe, to detect end of streams.
+ * @short Upipe module allowing to transfer other pipes to a remote event loop
+ * This is particularly helpful for multithreaded applications.
  */
 
 #include <upipe/ubase.h>
@@ -37,6 +36,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe-modules/upipe_transfer.h>
 
 #include <stdlib.h>
@@ -52,6 +52,9 @@
 
 /** @internal @This is the private context of a xfer pipe manager. */
 struct upipe_xfer_mgr {
+    /** real refcount management structure */
+    struct urefcount urefcount;
+
     /** watcher */
     struct upump *upump;
     /** remote upump_mgr */
@@ -68,27 +71,8 @@ struct upipe_xfer_mgr {
     uint8_t extra[];
 };
 
-/** @internal @This returns the high-level upipe_mgr structure.
- *
- * @param xfer_mgr pointer to the upipe_xfer_mgr structure
- * @return pointer to the upipe_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_xfer_mgr_to_upipe_mgr(struct upipe_xfer_mgr *xfer_mgr)
-{
-    return &xfer_mgr->mgr;
-}
-
-/** @internal @This returns the private upipe_xfer_mgr structure.
- *
- * @param mgr description structure of the upipe manager
- * @return pointer to the upipe_xfer_mgr structure
- */
-static inline struct upipe_xfer_mgr *
-    upipe_xfer_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
-{
-    return container_of(mgr, struct upipe_xfer_mgr, mgr);
-}
+UBASE_FROM_TO(upipe_xfer_mgr, upipe_mgr, upipe_mgr, mgr)
+UBASE_FROM_TO(upipe_xfer_mgr, urefcount, urefcount, urefcount)
 
 /** @This represents types of commands to send to the remote upump_mgr.
  */
@@ -124,28 +108,7 @@ struct upipe_xfer_msg {
     void *arg;
 };
 
-/** @This returns the high-level upipe_xfer_msg structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * upipe_xfer_msg
- * @return pointer to the upipe_xfer_msg structure
- */
-static inline struct upipe_xfer_msg *
-    upipe_xfer_msg_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upipe_xfer_msg, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upipe_xfer_msg upipe_xfer_msg structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upipe_xfer_msg_to_uchain(struct upipe_xfer_msg *msg)
-{
-    return &msg->uchain;
-}
+UBASE_FROM_TO(upipe_xfer_msg, uchain, uchain, uchain)
 
 /** @This allocates and initializes a message structure.
  *
@@ -179,6 +142,9 @@ static void upipe_xfer_msg_free(struct upipe_mgr *mgr,
 
 /** @internal @This is the private context of a xfer pipe. */
 struct upipe_xfer {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pointer to the remote pipe (must not be used directly because
      * it is running in another event loop) */
     struct upipe *upipe_remote;
@@ -188,6 +154,7 @@ struct upipe_xfer {
 };
 
 UPIPE_HELPER_UPIPE(upipe_xfer, upipe, UPIPE_XFER_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_xfer, urefcount, upipe_xfer_free)
 
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
@@ -225,6 +192,7 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
 
     struct upipe *upipe = upipe_xfer_to_upipe(upipe_xfer);
     upipe_init(upipe, mgr, uprobe);
+    upipe_xfer_init_urefcount(upipe);
     upipe_xfer->upipe_remote = upipe_remote;
     upipe_throw_ready(upipe);
     return upipe;
@@ -277,6 +245,7 @@ static void upipe_xfer_free(struct upipe *upipe)
         upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
 
     upipe_throw_dead(upipe);
+    upipe_xfer_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_xfer);
 }
@@ -296,12 +265,11 @@ void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr)
         free(msg);
 }
 
-/** @internal @This detaches the upipe_xfer_mgr, and eventually frees all
- * data structures.
+/** @internal @This frees a upipe manager.
  *
  * @param mgr pointer to a upipe manager
  */
-static void upipe_xfer_mgr_detach(struct upipe_mgr *mgr)
+static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     upump_stop(xfer_mgr->upump);
@@ -309,20 +277,7 @@ static void upipe_xfer_mgr_detach(struct upipe_mgr *mgr)
     upump_mgr_release(xfer_mgr->upump_mgr);
     uqueue_clean(&xfer_mgr->uqueue);
     upipe_xfer_mgr_vacuum(mgr);
-    urefcount_clean(&xfer_mgr->mgr.refcount);
     free(xfer_mgr);
-}
-
-/** @This frees a upipe manager. Real deallocation is only performed after
- * detach. This call is thread-safe and may be performed from any thread.
- *
- * @param mgr xfer_mgr structure
- */
-static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
-{
-    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    assert(xfer_mgr->upump_mgr != NULL);
-    upipe_xfer_mgr_send(mgr, UPIPE_XFER_DETACH, NULL, NULL);
 }
 
 /** @This is called by the remote upump manager to receive messages.
@@ -355,7 +310,7 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
             break;
         case UPIPE_XFER_DETACH:
             upipe_xfer_msg_free(mgr, msg);
-            upipe_xfer_mgr_detach(mgr);
+            upipe_xfer_mgr_free(mgr);
             return;
     }
 
@@ -391,6 +346,21 @@ static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
     return true;
 }
 
+/** @This detaches a upipe manager. Real deallocation is only performed after
+ * detach. This call is thread-safe and may be performed from any thread.
+ *
+ * @param urefcount pointer to urefcount structure
+ */
+static void upipe_xfer_mgr_detach(struct urefcount *urefcount)
+{
+    struct upipe_xfer_mgr *xfer_mgr =
+        upipe_xfer_mgr_from_urefcount(urefcount);
+    assert(xfer_mgr->upump_mgr != NULL);
+    upipe_xfer_mgr_send(upipe_xfer_mgr_to_upipe_mgr(xfer_mgr),
+                        UPIPE_XFER_DETACH, NULL, NULL);
+    urefcount_clean(urefcount);
+}
+
 /** @This returns a management structure for xfer pipes. You would need one
  * management structure per target event loop (upump manager). The management
  * structure can be allocated in any thread, but must be attached in the
@@ -421,13 +391,13 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
                xfer_mgr->extra + uqueue_sizeof(queue_length));
 
     struct upipe_mgr *mgr = upipe_xfer_mgr_to_upipe_mgr(xfer_mgr);
-    urefcount_init(&mgr->refcount);
+    urefcount_init(upipe_xfer_mgr_to_urefcount(xfer_mgr),
+                   upipe_xfer_mgr_detach);
+    mgr->refcount = upipe_xfer_mgr_to_urefcount(xfer_mgr);
     mgr->signature = UPIPE_XFER_SIGNATURE;
     mgr->upipe_alloc = _upipe_xfer_alloc;
     mgr->upipe_input =  NULL;
     mgr->upipe_control = upipe_xfer_control;
-    mgr->upipe_free = upipe_xfer_free;
-    mgr->upipe_mgr_free = upipe_xfer_mgr_free;
     return mgr;
 }
 

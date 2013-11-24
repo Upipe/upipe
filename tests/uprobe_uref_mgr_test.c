@@ -90,12 +90,10 @@ static void uprobe_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test uprobe_uref_mgr */
 static struct upipe_mgr uprobe_test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = uprobe_test_alloc,
     .upipe_input = NULL,
-    .upipe_control = uprobe_test_control,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = uprobe_test_control
 };
 
 int main(int argc, char **argv)

@@ -100,12 +100,10 @@ static void dup_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr dup_test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = dup_test_alloc,
     .upipe_input = dup_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 int main(int argc, char *argv[])

@@ -42,7 +42,6 @@
 
 #define UBUF_POOL_DEPTH     1
 #define UBUF_PREPEND        32
-#define UBUF_APPEND         32
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_OFFSET   0
 #define UBUF_SIZE           188
@@ -53,7 +52,6 @@ int main(int argc, char **argv)
     assert(umem_mgr != NULL);
     struct ubuf_mgr *mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
-                                                    UBUF_PREPEND, UBUF_APPEND,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(mgr != NULL);
@@ -87,40 +85,8 @@ int main(int argc, char **argv)
     assert(*r == 43);
     assert(ubuf_block_unmap(ubuf1, 42));
 
-    /* test ubuf_block_mem_extend (prepend) */
-    assert(ubuf_block_extend(ubuf1, UBUF_PREPEND, 0));
-    wanted = -1;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
-    assert(wanted == UBUF_SIZE + UBUF_PREPEND);
-    assert(r[UBUF_PREPEND] == 1);
-    assert(r[UBUF_SIZE + UBUF_PREPEND - 1] == UBUF_SIZE);
-    assert(ubuf_block_unmap(ubuf1, 0));
-
-    wanted = 1;
-    assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
-    assert(wanted == 1);
-    w[0] = 0xAB;
-    assert(ubuf_block_unmap(ubuf1, 0));
-
-    /* test ubuf_block_mem_extend (append) */
-    assert(ubuf_block_extend(ubuf1, 0, 2 * UBUF_APPEND));
-    wanted = -1;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
-    assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);
-    assert(r[UBUF_PREPEND] == 1);
-    assert(r[UBUF_SIZE + UBUF_PREPEND - 1] == UBUF_SIZE);
-    assert(ubuf_block_unmap(ubuf1, 0));
-
-    wanted = -1;
-    assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
-    assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);
-    w[UBUF_SIZE + 3 * UBUF_PREPEND - 1] = 0xAB;
-    assert(ubuf_block_unmap(ubuf1, 0));
-
-    assert(!ubuf_block_extend(ubuf1, UBUF_PREPEND, 0));
-
     /* test ubuf_block_merge */
-    assert(ubuf_block_merge(mgr, &ubuf1, -UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
+    assert(ubuf_block_merge(mgr, &ubuf1, -2 * UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
     wanted = -1;
     assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);

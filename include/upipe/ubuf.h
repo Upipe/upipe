@@ -54,6 +54,8 @@ struct ubuf {
     struct ubuf_mgr *mgr;
 };
 
+UBASE_FROM_TO(ubuf, uchain, uchain, uchain)
+
 /** @This is a simple signature to make sure the ubuf_alloc internal API
  * is used properly. */
 enum ubuf_alloc_type {
@@ -108,8 +110,6 @@ enum ubuf_command {
     /*
      * Resize commands
      */
-    /** extend block ubuf (int) */
-    UBUF_EXTEND_BLOCK,
     /** duplicates and resize block ubuf (struct ubuf **, int) */
     UBUF_SPLICE_BLOCK,
     /** resize picture ubuf (int, int, int, int) */
@@ -126,11 +126,21 @@ enum ubuf_command {
     UBUF_CONTROL_LOCAL = 0x8000
 };
 
+/** @This defines standard manger commands which ubuf managers may implement. */
+enum ubuf_mgr_command {
+    /** release all buffers kept in pools (void) */
+    UBUF_MGR_VACUUM,
+
+    /** non-standard commands implemented by a ubuf manager can start from
+     * there */
+    UBUF_MGR_CONTROL_LOCAL = 0x8000
+};
+
 /** @This stores common management parameters for a ubuf pool.
  */
 struct ubuf_mgr {
-    /** refcount management structure */
-    urefcount refcount;
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** type of allocator */
     enum ubuf_alloc_type type;
 
@@ -143,10 +153,8 @@ struct ubuf_mgr {
     /** function to free a ubuf */
     void (*ubuf_free)(struct ubuf *);
 
-    /** function to release all buffers kept in pools */
-    void (*ubuf_mgr_vacuum)(struct ubuf_mgr *);
-    /** function to free the ubuf manager */
-    void (*ubuf_mgr_free)(struct ubuf_mgr *);
+    /** manager control function for standard or local commands */
+    bool (*ubuf_mgr_control)(struct ubuf_mgr *, enum ubuf_mgr_command, va_list);
 };
 
 /** @internal @This returns a new ubuf. Optional ubuf manager
@@ -210,24 +218,22 @@ static inline void ubuf_free(struct ubuf *ubuf)
     ubuf->mgr->ubuf_free(ubuf);
 }
 
-/** @This returns the high-level ubuf structure.
+/** @internal @This sends a manager control command to the ubuf manager.
  *
- * @param uchain pointer to the uchain structure wrapped into the ubuf
- * @return pointer to the ubuf structure
+ * @param mgr pointer to ubuf manager
+ * @param command control command to send, followed by optional read or write
+ * parameters
+ * @return false in case of error
  */
-static inline struct ubuf *ubuf_from_uchain(struct uchain *uchain)
+static inline bool ubuf_mgr_control(struct ubuf_mgr *mgr,
+                                    enum ubuf_command command, ...)
 {
-    return container_of(uchain, struct ubuf, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param ubuf ubuf structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *ubuf_to_uchain(struct ubuf *ubuf)
-{
-    return &ubuf->uchain;
+    bool ret;
+    va_list args;
+    va_start(args, command);
+    ret = mgr->ubuf_mgr_control(mgr, command, args);
+    va_end(args);
+    return ret;
 }
 
 /** @This instructs an existing ubuf manager to release all structures currently
@@ -237,7 +243,7 @@ static inline struct uchain *ubuf_to_uchain(struct ubuf *ubuf)
  */
 static inline void ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
 {
-    mgr->ubuf_mgr_vacuum(mgr);
+    ubuf_mgr_control(mgr, UBUF_MGR_VACUUM);
 }
 
 /** @This increments the reference count of a ubuf manager.
@@ -246,7 +252,7 @@ static inline void ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
  */
 static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
 {
-    urefcount_use(&mgr->refcount);
+    urefcount_use(mgr->refcount);
 }
 
 /** @This decrements the reference count of a ubuf manager or frees it.
@@ -255,8 +261,7 @@ static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
  */
 static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
 {
-    if (unlikely(urefcount_release(&mgr->refcount)))
-        mgr->ubuf_mgr_free(mgr);
+    urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

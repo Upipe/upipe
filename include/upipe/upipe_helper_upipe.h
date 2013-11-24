@@ -60,7 +60,7 @@ extern "C" {
  * Returns a pointer to the private upipe_foo structure.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param UPIPE name of the @tt{struct upipe} field of
  * your private upipe structure
  * @param SIGNATURE signature of the manager of the upipe

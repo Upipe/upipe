@@ -72,6 +72,7 @@
 #define UPUMP_BLOCKER_POOL 10
 
 static uint64_t duration = 0;
+static struct upipe *sink;
 
 /** helper phony pipe to count pictures */
 static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
@@ -102,12 +103,10 @@ static void count_free(struct upipe *upipe)
 
 /** helper phony pipe to count pictures */
 static struct upipe_mgr count_mgr = {
+    .refcount = NULL,
     .upipe_alloc = count_alloc,
     .upipe_input = count_input,
-    .upipe_control = NULL,
-    .upipe_free = count_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 /** catch callback (demux subpipes for flows) */
@@ -118,10 +117,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             uref_dump(flow_def, upipe->uprobe);
-            struct upipe *sink = upipe_void_alloc(&count_mgr, NULL);
-            assert(sink != NULL);
             upipe_set_output(upipe, sink);
-            upipe_release(sink);
             return true;
         }
         default:
@@ -151,7 +147,7 @@ int main(int argc, char **argv)
     udict_mgr_release(udict_mgr);
     struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                          UBUF_SHARED_POOL_DEPTH, umem_mgr,
-                                         -1, -1, -1, 0);
+                                         -1, 0);
     umem_mgr_release(umem_mgr);
 
     /* probes */
@@ -174,6 +170,9 @@ int main(int argc, char **argv)
                              "auto");
 
     /* pipes */
+    sink = upipe_void_alloc(&count_mgr, NULL);
+    assert(sink != NULL);
+
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     struct upipe *upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
                    uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "fsrc"));
@@ -206,6 +205,7 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     upipe_release(upipe_src);
+    count_free(sink);
 
     uprobe_selflow_free(uprobe_split_void);
     uprobe_selflow_free(uprobe_split_pic);

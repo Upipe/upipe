@@ -73,25 +73,7 @@ struct ubuf_block {
     struct ubuf ubuf;
 };
 
-/** @internal @This returns the high-level ubuf structure.
- *
- * @param common pointer to the ubuf_block structure
- * @return pointer to the ubuf structure
- */
-static inline struct ubuf *ubuf_block_to_ubuf(struct ubuf_block *block)
-{
-    return &block->ubuf;
-}
-
-/** @internal @This returns the private ubuf_block structure.
- *
- * @param ubuf pointer to ubuf
- * @return pointer to the ubuf_block structure
- */
-static inline struct ubuf_block *ubuf_block_from_ubuf(struct ubuf *ubuf)
-{
-    return container_of(ubuf, struct ubuf_block, ubuf);
-}
+UBASE_FROM_TO(ubuf_block, ubuf, ubuf, ubuf)
 
 /** @This returns a new ubuf from a block allocator. This function shall not
  * create a segmented block.
@@ -494,48 +476,6 @@ static inline bool ubuf_block_resize(struct ubuf *ubuf, int offset,
 
     if (offset > 0)
         return ubuf_block_delete(ubuf, 0, offset);
-    return true;
-}
-
-/** @This extends a block ubuf, if possible. This will only work if
- * the relevant low-level buffers are not shared with other ubuf and
- * the block manager allows to grow the buffer (ie. prepend/append have been
- * correctly specified at allocation, or reallocation is allowed)
- *
- * Should this fail, @ref ubuf_block_merge may be used to achieve the same
- * goal with an extra buffer copy.
- *
- * @param ubuf pointer to ubuf
- * @param prepend number of octets to prepend
- * @param append number of octets to append
- * @return false in case of error, or if the ubuf is shared, or if the operation
- * is not possible
- */
-static inline bool ubuf_block_extend(struct ubuf *ubuf, int prepend, int append)
-{
-    assert(prepend >= 0);
-    assert(append >= 0);
-    if (ubuf->mgr->type != UBUF_ALLOC_BLOCK || !ubuf_control(ubuf, UBUF_SINGLE))
-        return false;
-
-    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (prepend > block->offset)
-        return false;
-    if (append) {
-        int offset = block->total_size - 1;
-        struct ubuf *last_ubuf = offset != -1 ?
-                                 ubuf_block_get(ubuf, &offset, NULL) : ubuf;
-        struct ubuf_block *last_block = ubuf_block_from_ubuf(last_ubuf);
-        if (unlikely(!ubuf_control(last_ubuf, UBUF_EXTEND_BLOCK,
-                                   last_block->offset + last_block->size +
-                                   append)))
-            return false;
-        last_block->size += append;
-    }
-    block->offset -= prepend;
-    block->size += prepend;
-    block->total_size += prepend + append;
-    block->cached_offset += prepend;
     return true;
 }
 

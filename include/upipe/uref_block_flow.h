@@ -50,10 +50,6 @@ UREF_ATTR_UNSIGNED(block_flow, max_octetrate, "b.max_octetrate",
         maximum octets per second for profile/level)
 UREF_ATTR_UNSIGNED(block_flow, cpb_buffer, "b.cpb_buffer",
         size of coded picture buffer in octets)
-UREF_ATTR_UNSIGNED(block_flow, prepend, "b.prepend",
-        extra octets added before buffer)
-UREF_ATTR_UNSIGNED(block_flow, append, "b.append",
-        extra octets added after buffer)
 UREF_ATTR_UNSIGNED(block_flow, align, "b.align", alignment in octets)
 UREF_ATTR_INT(block_flow, align_offset, "b.align_offset",
         offset of the aligned octet)

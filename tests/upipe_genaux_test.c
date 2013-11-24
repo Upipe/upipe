@@ -55,8 +55,6 @@
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     5
-#define UBUF_PREPEND        0
-#define UBUF_APPEND         0
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_OFFSET   0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
@@ -126,14 +124,12 @@ static void genaux_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_dup */
 static struct upipe_mgr genaux_test_mgr = {
+    .refcount = NULL,
     .signature = 0,
 
     .upipe_alloc = genaux_test_alloc,
     .upipe_input = genaux_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 
@@ -158,7 +154,6 @@ int main(int argc, char **argv)
     /* block */
     ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
-                                                    UBUF_PREPEND, UBUF_APPEND,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(ubuf_mgr);

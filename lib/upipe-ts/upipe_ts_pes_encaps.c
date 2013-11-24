@@ -33,6 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -56,6 +57,9 @@
 
 /** @internal @This is the private context of a ts_pese pipe. */
 struct upipe_ts_pese {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -81,6 +85,7 @@ struct upipe_ts_pese {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_pese, upipe, UPIPE_TS_PESE_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_pese, urefcount, upipe_ts_pese_free)
 UPIPE_HELPER_VOID(upipe_ts_pese)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_pese, ubuf_mgr)
 
@@ -104,6 +109,7 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
+    upipe_ts_pese_init_urefcount(upipe);
     upipe_ts_pese_init_ubuf_mgr(upipe);
     upipe_ts_pese_init_output(upipe);
     upipe_ts_pese->pes_id = 0;
@@ -366,19 +372,18 @@ static void upipe_ts_pese_free(struct upipe *upipe)
 
     upipe_ts_pese_clean_output(upipe);
     upipe_ts_pese_clean_ubuf_mgr(upipe);
+    upipe_ts_pese_clean_urefcount(upipe);
     upipe_ts_pese_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_pese_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_TS_PESE_SIGNATURE,
 
     .upipe_alloc = upipe_ts_pese_alloc,
     .upipe_input = upipe_ts_pese_input,
-    .upipe_control = upipe_ts_pese_control,
-    .upipe_free = upipe_ts_pese_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_ts_pese_control
 };
 
 /** @This returns the management structure for all ts_pese pipes.

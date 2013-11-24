@@ -55,14 +55,31 @@ static bool transferred = false;
 static bool got_uri = false;
 
 /** helper phony pipe */
+struct test_pipe {
+    struct urefcount urefcount;
+    struct upipe upipe;
+};
+
+/** helper phony pipe */
+static void test_free(struct urefcount *urefcount)
+{
+    struct test_pipe *test_pipe =
+        container_of(urefcount, struct test_pipe, urefcount);
+    urefcount_clean(&test_pipe->urefcount);
+    free(test_pipe);
+}
+
+/** helper phony pipe */
 static struct upipe *test_alloc(struct upipe_mgr *mgr,
                                 struct uprobe *uprobe, uint32_t signature,
                                 va_list args)
 {
-    struct upipe *upipe = malloc(sizeof(struct upipe));
-    assert(upipe != NULL);
-    upipe_init(upipe, mgr, uprobe);
-    return upipe;
+    struct test_pipe *test_pipe = malloc(sizeof(struct test_pipe));
+    assert(test_pipe != NULL);
+    upipe_init(&test_pipe->upipe, mgr, uprobe);
+    urefcount_init(&test_pipe->urefcount, test_free);
+    test_pipe->upipe.refcount = &test_pipe->urefcount;
+    return &test_pipe->upipe;
 }
 
 /** helper phony pipe */
@@ -88,19 +105,11 @@ static bool test_control(struct upipe *upipe, enum upipe_command command,
 }
 
 /** helper phony pipe */
-static void test_free(struct upipe *upipe)
-{
-    free(upipe);
-}
-
-/** helper phony pipe */
 static struct upipe_mgr test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = test_alloc,
     .upipe_input = NULL,
-    .upipe_control = test_control,
-    .upipe_free = test_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = test_control
 };
 
 static void *thread(void *_upipe_xfer_mgr)

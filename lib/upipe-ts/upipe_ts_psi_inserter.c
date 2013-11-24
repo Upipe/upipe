@@ -33,6 +33,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -55,6 +56,9 @@
 
 /** @internal @This is the private context of a ts_psii manager. */
 struct upipe_ts_psii_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** pointer to ts_encaps manager */
     struct upipe_mgr *ts_encaps_mgr;
 
@@ -62,30 +66,14 @@ struct upipe_ts_psii_mgr {
     struct upipe_mgr mgr;
 };
 
-/** @internal @This returns the high-level upipe_mgr structure.
- *
- * @param ts_psii_mgr pointer to the upipe_ts_psii_mgr structure
- * @return pointer to the upipe_mgr structure
- */
-static inline struct upipe_mgr *
-    upipe_ts_psii_mgr_to_upipe_mgr(struct upipe_ts_psii_mgr *ts_psii_mgr)
-{
-    return &ts_psii_mgr->mgr;
-}
-
-/** @internal @This returns the private upipe_ts_psii_mgr structure.
- *
- * @param mgr description structure of the upipe manager
- * @return pointer to the upipe_ts_psii_mgr structure
- */
-static inline struct upipe_ts_psii_mgr *
-    upipe_ts_psii_mgr_from_upipe_mgr(struct upipe_mgr *mgr)
-{
-    return container_of(mgr, struct upipe_ts_psii_mgr, mgr);
-}
+UBASE_FROM_TO(upipe_ts_psii_mgr, upipe_mgr, upipe_mgr, mgr)
+UBASE_FROM_TO(upipe_ts_psii_mgr, urefcount, urefcount, urefcount)
 
 /** @internal @This is the private context of a ts psii pipe. */
 struct upipe_ts_psii {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
@@ -112,6 +100,7 @@ struct upipe_ts_psii {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psii, urefcount, upipe_ts_psii_free)
 UPIPE_HELPER_VOID(upipe_ts_psii)
 UPIPE_HELPER_UREF_MGR(upipe_ts_psii, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psii, ubuf_mgr)
@@ -119,6 +108,8 @@ UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_psii pipe. */
 struct upipe_ts_psii_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
 
@@ -138,6 +129,7 @@ struct upipe_ts_psii_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psii_sub, upipe, UPIPE_TS_PSII_SUB_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psii_sub, urefcount, upipe_ts_psii_sub_free)
 UPIPE_HELPER_VOID(upipe_ts_psii_sub)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psii, upipe_ts_psii_sub, sub, sub_mgr,
@@ -162,6 +154,7 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
+    upipe_ts_psii_sub_init_urefcount(upipe);
     upipe_ts_psii_sub_init_sub(upipe);
     upipe_ts_psii_sub->interval = DEFAULT_INTERVAL;
     ulist_init(&upipe_ts_psii_sub->table);
@@ -169,12 +162,10 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->encaps = NULL;
 
-    struct upipe_ts_psii *upipe_ts_psii =
-        upipe_ts_psii_from_sub_mgr(upipe->mgr);
-    upipe_use(upipe_ts_psii_to_upipe(upipe_ts_psii));
-
     upipe_throw_ready(upipe);
 
+    struct upipe_ts_psii *upipe_ts_psii =
+        upipe_ts_psii_from_sub_mgr(upipe->mgr);
     struct upipe_ts_psii_mgr *ts_psii_mgr =
         upipe_ts_psii_mgr_from_upipe_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii)->mgr);
 
@@ -371,17 +362,14 @@ static void upipe_ts_psii_sub_free(struct upipe *upipe)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
-    struct upipe_ts_psii *upipe_ts_psii =
-        upipe_ts_psii_from_sub_mgr(upipe->mgr);
 
     upipe_release(upipe_ts_psii_sub->encaps);
     upipe_throw_dead(upipe);
 
     upipe_ts_psii_sub_clean(upipe);
     upipe_ts_psii_sub_clean_sub(upipe);
+    upipe_ts_psii_sub_clean_urefcount(upipe);
     upipe_ts_psii_sub_free_void(upipe);
-
-    upipe_release(upipe_ts_psii_to_upipe(upipe_ts_psii));
 }
 
 /** @internal @This initializes the sub manager for a ts_psii pipe.
@@ -392,12 +380,11 @@ static void upipe_ts_psii_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_ts_psii->sub_mgr;
+    sub_mgr->refcount = upipe_ts_psii_to_urefcount(upipe_ts_psii);
     sub_mgr->signature = UPIPE_TS_PSII_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_psii_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_psii_sub_input;
     sub_mgr->upipe_control = upipe_ts_psii_sub_control;
-    sub_mgr->upipe_free = upipe_ts_psii_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
@@ -454,6 +441,7 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
+    upipe_ts_psii_init_urefcount(upipe);
     upipe_ts_psii_init_uref_mgr(upipe);
     upipe_ts_psii_init_ubuf_mgr(upipe);
     upipe_ts_psii_init_output(upipe);
@@ -612,21 +600,22 @@ static void upipe_ts_psii_free(struct upipe *upipe)
     upipe_ts_psii_clean_output(upipe);
     upipe_ts_psii_clean_ubuf_mgr(upipe);
     upipe_ts_psii_clean_uref_mgr(upipe);
+    upipe_ts_psii_clean_urefcount(upipe);
     upipe_ts_psii_free_void(upipe);
 }
 
 /** @This frees a upipe manager.
  *
- * @param mgr pointer to manager
+ * @param urefcount pointer to urefcount structure
  */
-static void upipe_ts_psii_mgr_free(struct upipe_mgr *mgr)
+static void upipe_ts_psii_mgr_free(struct urefcount *urefcount)
 {
     struct upipe_ts_psii_mgr *ts_psii_mgr =
-        upipe_ts_psii_mgr_from_upipe_mgr(mgr);
+        upipe_ts_psii_mgr_from_urefcount(urefcount);
     if (ts_psii_mgr->ts_encaps_mgr != NULL)
         upipe_mgr_release(ts_psii_mgr->ts_encaps_mgr);
 
-    urefcount_clean(&ts_psii_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(ts_psii_mgr);
 }
 
@@ -643,13 +632,13 @@ struct upipe_mgr *upipe_ts_psii_mgr_alloc(void)
 
     ts_psii_mgr->ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
 
+    urefcount_init(upipe_ts_psii_mgr_to_urefcount(ts_psii_mgr),
+                   upipe_ts_psii_mgr_free);
+    ts_psii_mgr->mgr.refcount = upipe_ts_psii_mgr_to_urefcount(ts_psii_mgr);
     ts_psii_mgr->mgr.signature = UPIPE_TS_PSII_SIGNATURE;
     ts_psii_mgr->mgr.upipe_alloc = upipe_ts_psii_alloc;
     ts_psii_mgr->mgr.upipe_input = upipe_ts_psii_input;
     ts_psii_mgr->mgr.upipe_control = upipe_ts_psii_control;
-    ts_psii_mgr->mgr.upipe_free = upipe_ts_psii_free;
-    ts_psii_mgr->mgr.upipe_mgr_free = upipe_ts_psii_mgr_free;
-    urefcount_init(&ts_psii_mgr->mgr.refcount);
     return upipe_ts_psii_mgr_to_upipe_mgr(ts_psii_mgr);
 }
 
@@ -666,7 +655,7 @@ bool upipe_ts_psii_mgr_control_va(struct upipe_mgr *mgr,
                                   va_list args)
 {
     struct upipe_ts_psii_mgr *ts_psii_mgr = upipe_ts_psii_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_psii_mgr->mgr.refcount));
+    assert(urefcount_single(&ts_psii_mgr->urefcount));
 
     switch (command) {
 #define GET_SET_MGR(name, NAME)                                             \

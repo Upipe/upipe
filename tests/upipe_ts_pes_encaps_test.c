@@ -154,12 +154,10 @@ static void ts_test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_ts_pese */
 static struct upipe_mgr ts_test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = ts_test_alloc,
     .upipe_input = ts_test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 int main(int argc, char *argv[])
@@ -174,8 +172,7 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, -1,
-                                                         -1, 0);
+                                                         umem_mgr, -1, 0);
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);

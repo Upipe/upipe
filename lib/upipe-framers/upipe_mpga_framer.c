@@ -37,6 +37,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -98,6 +99,9 @@ static const unsigned int adts_samplerate_table[16] = {
 
 /** @internal @This is the private context of an mpgaf pipe. */
 struct upipe_mpgaf {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /* output stuff */
     /** pipe acting as output */
     struct upipe *output;
@@ -161,6 +165,7 @@ struct upipe_mpgaf {
 static void upipe_mpgaf_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_mpgaf, upipe, UPIPE_MPGAF_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_mpgaf, urefcount, upipe_mpgaf_free)
 UPIPE_HELPER_VOID(upipe_mpgaf)
 UPIPE_HELPER_SYNC(upipe_mpgaf, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_mpgaf, next_uref, next_uref_size, urefs,
@@ -202,6 +207,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    upipe_mpgaf_init_urefcount(upipe);
     upipe_mpgaf_init_sync(upipe);
     upipe_mpgaf_init_uref_stream(upipe);
     upipe_mpgaf_init_output(upipe);
@@ -734,19 +740,18 @@ static void upipe_mpgaf_free(struct upipe *upipe)
     upipe_mpgaf_clean_flow_def(upipe);
     upipe_mpgaf_clean_sync(upipe);
 
+    upipe_mpgaf_clean_urefcount(upipe);
     upipe_mpgaf_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_mpgaf_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_MPGAF_SIGNATURE,
 
     .upipe_alloc = upipe_mpgaf_alloc,
     .upipe_input = upipe_mpgaf_input,
-    .upipe_control = upipe_mpgaf_control,
-    .upipe_free = upipe_mpgaf_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_mpgaf_control
 };
 
 /** @This returns the management structure for all mpgaf pipes.

@@ -36,13 +36,13 @@
 #include <upipe/upump_blocker.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
-#include <upipe-modules/upipe_proxy.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -59,6 +59,9 @@ static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
 
 /** @This is the private context of a queue sink pipe. */
 struct upipe_qsink {
+    /** refcount management structure exported to the public structure */
+    struct urefcount urefcount;
+
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** write watcher */
@@ -87,10 +90,14 @@ struct upipe_qsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_qsink, urefcount, upipe_qsink_no_input)
 UPIPE_HELPER_VOID(upipe_qsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_qsink, urefs, nb_urefs, max_urefs, blockers, upipe_qsink_output)
+
+/** @hidden */
+static void upipe_qsink_free(struct upipe *upipe);
 
 /** @internal @This allocates a queue sink pipe.
  *
@@ -109,6 +116,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    upipe_qsink_init_urefcount(upipe);
     upipe_qsink_init_upump_mgr(upipe);
     upipe_qsink_init_upump(upipe);
     upipe_qsink_init_sink(upipe);
@@ -144,11 +152,10 @@ static void upipe_qsink_watcher(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     if (upipe_qsink_output_sink(upipe)) {
         upump_stop(upump);
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_qsink_input. */
-        upipe_release(upipe);
     }
     upipe_qsink_unblock_sink(upipe);
+    if (upipe_dead(upipe) && upipe_qsink_check_sink(upipe))
+        upipe_qsink_free(upipe);
 }
 
 /** @internal @This receives data.
@@ -191,9 +198,6 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         upipe_qsink_block_sink(upipe, upump);
         if (upipe_qsink->upump != NULL)
             upump_start(upipe_qsink->upump);
-        /* Increment upipe refcount to avoid disappearing before all packets
-         * have been sent. */
-        upipe_use(upipe);
     }
 }
 
@@ -427,7 +431,33 @@ static void upipe_qsink_free(struct upipe *upipe)
     upipe_qsink_clean_upump(upipe);
     upipe_qsink_clean_upump_mgr(upipe);
     upipe_qsink_clean_sink(upipe);
+    upipe_qsink_clean_urefcount(upipe);
     upipe_qsink_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_qsink_no_input(struct upipe *upipe)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    if (upipe_qsink->qsrc == NULL || upipe_qsink->flow_def == NULL) {
+        upipe_qsink_free(upipe);
+        return;
+    }
+
+    /* play flow end */
+    struct uref *uref = uref_dup(upipe_qsink->flow_def);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_qsink_free(upipe);
+        return;
+    }
+    uref_flow_set_end(uref);
+    upipe_qsink_input(upipe, uref, NULL);
+    if (upipe_qsink_check_sink(upipe))
+        upipe_qsink_free(upipe);
 }
 
 /** module manager static descriptor */
@@ -436,31 +466,8 @@ static struct upipe_mgr upipe_qsink_mgr = {
 
     .upipe_alloc = upipe_qsink_alloc,
     .upipe_input = upipe_qsink_input,
-    .upipe_control = upipe_qsink_control,
-    .upipe_free = upipe_qsink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_qsink_control
 };
-
-/** @This is called when the proxy is released.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_qsink_proxy_released(struct upipe *upipe)
-{
-    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (upipe_qsink->qsrc == NULL || upipe_qsink->flow_def == NULL)
-        return;
-
-    /* play flow end */
-    struct uref *uref = uref_dup(upipe_qsink->flow_def);
-    if (unlikely(uref == NULL))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-    else {
-        uref_flow_set_end(uref);
-        upipe_qsink_input(upipe, uref, NULL);
-    }
-}
 
 /** @This returns the management structure for all queue sink pipes.
  *
@@ -468,5 +475,5 @@ static void upipe_qsink_proxy_released(struct upipe *upipe)
  */
 struct upipe_mgr *upipe_qsink_mgr_alloc(void)
 {
-    return upipe_proxy_mgr_alloc(&upipe_qsink_mgr, upipe_qsink_proxy_released);
+    return &upipe_qsink_mgr;
 }

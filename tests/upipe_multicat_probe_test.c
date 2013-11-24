@@ -123,12 +123,10 @@ static void test_free(struct upipe *upipe)
 
 /** helper phony pipe to test upipe_multicat_probe */
 static struct upipe_mgr test_mgr = {
+    .refcount = NULL,
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 int main(int argc, char *argv[])

@@ -39,6 +39,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -57,6 +58,9 @@
 
 /** upipe_genaux structure */ 
 struct upipe_genaux {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** output pipe */
@@ -74,6 +78,7 @@ struct upipe_genaux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free)
 UPIPE_HELPER_VOID(upipe_genaux);
 UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr);
 UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
@@ -244,6 +249,7 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    upipe_genaux_init_urefcount(upipe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
     upipe_genaux->getattr = uref_clock_get_cr_sys;
@@ -263,19 +269,17 @@ static void upipe_genaux_free(struct upipe *upipe)
 
     upipe_genaux_clean_ubuf_mgr(upipe);
     upipe_genaux_clean_output(upipe);
-
+    upipe_genaux_clean_urefcount(upipe);
     upipe_genaux_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_genaux_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_GENAUX_SIGNATURE,
 
     .upipe_alloc = upipe_genaux_alloc,
     .upipe_input = upipe_genaux_input,
-    .upipe_control = upipe_genaux_control,
-    .upipe_free = upipe_genaux_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_genaux_control
 };
 
 /** @This returns the management structure for genaux pipes

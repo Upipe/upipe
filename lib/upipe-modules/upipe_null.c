@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe-modules/upipe_null.h>
 
@@ -51,6 +52,9 @@
 
 /** upipe_null structure */
 struct upipe_null {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** dump dict */
     bool dump;
     /** counter */
@@ -60,6 +64,7 @@ struct upipe_null {
 };
 
 UPIPE_HELPER_UPIPE(upipe_null, upipe, UPIPE_NULL_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_null, urefcount, upipe_null_free)
 UPIPE_HELPER_VOID(upipe_null);
 
 /** @internal @This allocates a null pipe.
@@ -79,6 +84,7 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
+    upipe_null_init_urefcount(upipe);
     upipe_null->dump = false;
     upipe_null->counter = 0;
     upipe_throw_ready(&upipe_null->upipe);
@@ -135,17 +141,18 @@ static void upipe_null_free(struct upipe *upipe)
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_warn_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
     upipe_throw_dead(upipe);
+    upipe_null_clean_urefcount(upipe);
     upipe_null_free_void(upipe);
 }
 
 /** upipe_null (/dev/null) */
 static struct upipe_mgr upipe_null_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_NULL_SIGNATURE,
+
     .upipe_alloc = upipe_null_alloc,
     .upipe_input = upipe_null_input,
-    .upipe_control = upipe_null_control,
-    .upipe_free = upipe_null_free,
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_null_control
 };
 
 /** @This returns the management structure for null pipes

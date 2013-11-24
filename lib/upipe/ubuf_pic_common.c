@@ -370,7 +370,6 @@ void ubuf_pic_common_mgr_clean(struct ubuf_mgr *mgr)
         free(pic_mgr->planes[plane]);
     }
     free(pic_mgr->planes);
-    urefcount_clean(&mgr->refcount);
 }
 
 /** @This allocates a new instance of the ubuf manager for picture formats.
@@ -388,7 +387,6 @@ void ubuf_pic_common_mgr_init(struct ubuf_mgr *mgr, uint8_t macropixel)
     pic_mgr->macropixel = macropixel;
     pic_mgr->nb_planes = 0;
     pic_mgr->planes = NULL;
-    urefcount_init(&mgr->refcount);
 }
 
 /** @This adds a new plane to a ubuf manager for picture formats.
@@ -408,7 +406,7 @@ bool ubuf_pic_common_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
     assert(hsub);
     assert(vsub);
     assert(macropixel_size);
-    assert(urefcount_single(&mgr->refcount));
+    assert(mgr->refcount == NULL || urefcount_single(mgr->refcount));
 
     struct ubuf_pic_common_mgr *pic_mgr =
         ubuf_pic_common_mgr_from_ubuf_mgr(mgr);

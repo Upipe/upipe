@@ -33,6 +33,7 @@
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
@@ -47,6 +48,9 @@
 
 /** @internal @This is the private context of a queue source pipe. */
 struct upipe_qsrc {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
@@ -67,6 +71,7 @@ struct upipe_qsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsrc, upipe_queue.upipe, UPIPE_QSRC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_qsrc, urefcount, upipe_qsrc_free)
 
 UPIPE_HELPER_OUTPUT(upipe_qsrc, output, flow_def, flow_def_sent)
 
@@ -104,6 +109,7 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
+    upipe_qsrc_init_urefcount(upipe);
     upipe_qsrc_init_output(upipe);
     upipe_qsrc_init_upump_mgr(upipe);
     upipe_qsrc_init_upump(upipe);
@@ -283,6 +289,7 @@ static void upipe_qsrc_free(struct upipe *upipe)
 
     uqueue_clean(uqueue);
 
+    upipe_qsrc_clean_urefcount(upipe);
     upipe_clean(upipe);
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     free(upipe_qsrc);
@@ -290,14 +297,12 @@ static void upipe_qsrc_free(struct upipe *upipe)
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_qsrc_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_QSRC_SIGNATURE,
 
     .upipe_alloc = _upipe_qsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_qsrc_control,
-    .upipe_free = upipe_qsrc_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_qsrc_control
 };
 
 /** @This returns the management structure for all queue source pipes.

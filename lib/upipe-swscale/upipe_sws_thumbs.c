@@ -37,6 +37,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -63,6 +64,9 @@ struct picsize {
 
 /** upipe_sws_thumbs structure with swscale parameters */ 
 struct upipe_sws_thumbs {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** input flow */
     struct uref *flow_def_input;
     /** attributes added by the pipe */
@@ -108,6 +112,7 @@ struct upipe_sws_thumbs {
 };
 
 UPIPE_HELPER_UPIPE(upipe_sws_thumbs, upipe, UPIPE_SWS_THUMBS_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_sws_thumbs, urefcount, upipe_sws_thumbs_free)
 UPIPE_HELPER_FLOW(upipe_sws_thumbs, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, output_flow, output_flow_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_sws_thumbs, flow_def_input, flow_def_attr)
@@ -560,6 +565,7 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
+    upipe_sws_thumbs_init_urefcount(upipe);
     upipe_sws_thumbs_init_ubuf_mgr(upipe);
     upipe_sws_thumbs_init_output(upipe);
     upipe_sws_thumbs_init_flow_def(upipe);
@@ -589,7 +595,8 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_sws_thumbs_free(struct upipe *upipe)
 {
-    struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
+    struct upipe_sws_thumbs *upipe_sws_thumbs =
+        upipe_sws_thumbs_from_upipe(upipe);
     if (likely(upipe_sws_thumbs->convert_ctx)) {
         sws_freeContext(upipe_sws_thumbs->convert_ctx);
     }
@@ -604,20 +611,18 @@ static void upipe_sws_thumbs_free(struct upipe *upipe)
     upipe_sws_thumbs_clean_output(upipe);
     upipe_sws_thumbs_clean_flow_def(upipe);
     upipe_sws_thumbs_clean_ubuf_mgr(upipe);
-
+    upipe_sws_thumbs_clean_urefcount(upipe);
     upipe_sws_thumbs_free_flow(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_sws_thumbs_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_SWS_THUMBS_SIGNATURE,
 
     .upipe_alloc = upipe_sws_thumbs_alloc,
     .upipe_input = upipe_sws_thumbs_input,
-    .upipe_control = upipe_sws_thumbs_control,
-    .upipe_free = upipe_sws_thumbs_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_sws_thumbs_control
 };
 
 /** @This returns the management structure for swscale pipes

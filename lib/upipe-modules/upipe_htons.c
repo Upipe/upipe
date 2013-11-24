@@ -36,6 +36,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -54,6 +55,9 @@
 
 /** upipe_htons structure */ 
 struct upipe_htons {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -69,6 +73,7 @@ struct upipe_htons {
 };
 
 UPIPE_HELPER_UPIPE(upipe_htons, upipe, UPIPE_HTONS_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_htons, urefcount, upipe_htons_free)
 UPIPE_HELPER_VOID(upipe_htons);
 UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
@@ -204,6 +209,7 @@ static struct upipe *upipe_htons_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    upipe_htons_init_urefcount(upipe);
     upipe_htons_init_output(upipe);
     upipe_htons_init_ubuf_mgr(upipe);
 
@@ -221,18 +227,17 @@ static void upipe_htons_free(struct upipe *upipe)
 
     upipe_htons_clean_output(upipe);
     upipe_htons_clean_ubuf_mgr(upipe);
+    upipe_htons_clean_urefcount(upipe);
     upipe_htons_free_void(upipe);
 }
 
 static struct upipe_mgr upipe_htons_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_HTONS_SIGNATURE,
 
     .upipe_alloc = upipe_htons_alloc,
     .upipe_input = upipe_htons_input,
-    .upipe_control = upipe_htons_control,
-    .upipe_free = upipe_htons_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_htons_control
 };
 
 /** @This returns the management structure for skip pipes

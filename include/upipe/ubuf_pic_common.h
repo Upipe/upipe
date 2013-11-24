@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -104,45 +104,8 @@ struct ubuf_pic_common_mgr {
     struct ubuf_mgr mgr;
 };
 
-/** @This returns the high-level ubuf structure.
- *
- * @param common pointer to the ubuf_pic_common structure
- * @return pointer to the ubuf structure
- */
-static inline struct ubuf *ubuf_pic_common_to_ubuf(struct ubuf_pic_common *common)
-{
-    return &common->ubuf;
-}
-
-/** @This returns the private ubuf_pic_common structure.
- *
- * @param ubuf pointer to ubuf
- * @return pointer to the ubuf_pic_common structure
- */
-static inline struct ubuf_pic_common *ubuf_pic_common_from_ubuf(struct ubuf *ubuf)
-{
-    return container_of(ubuf, struct ubuf_pic_common, ubuf);
-}
-
-/** @internal @This returns the high-level ubuf_mgr structure.
- *
- * @param pic_mgr pointer to the ubuf_pic_common_mgr structure
- * @return pointer to the ubuf_mgr structure
- */
-static inline struct ubuf_mgr *ubuf_pic_common_mgr_to_ubuf_mgr(struct ubuf_pic_common_mgr *pic_mgr)
-{
-    return &pic_mgr->mgr;
-}
-
-/** @internal @This returns the private ubuf_pic_common_mgr structure.
- *
- * @param mgr description structure of the ubuf manager
- * @return pointer to the ubuf_pic_common_mgr structure
- */
-static inline struct ubuf_pic_common_mgr *ubuf_pic_common_mgr_from_ubuf_mgr(struct ubuf_mgr *mgr)
-{
-    return container_of(mgr, struct ubuf_pic_common_mgr, mgr);
-}
+UBASE_FROM_TO(ubuf_pic_common, ubuf, ubuf, ubuf)
+UBASE_FROM_TO(ubuf_pic_common_mgr, ubuf_mgr, ubuf_mgr, mgr)
 
 /** @internal @This returns the plane number corresponding to a chroma.
  *

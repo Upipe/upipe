@@ -67,6 +67,37 @@ extern "C" {
         (type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
+/** @This declares two functions dealing with substructures included into a
+ * larger structure.
+ *
+ * @param STRUCTURE name of the larger structure
+ * @param SUBSTRUCT name of the smaller substructure
+ * @param SUBNAME name to use for the functions
+ * (STRUCTURE##_{to,from}_##SUBNAME)
+ * @param SUB name of the @tt{struct SUBSTRUCT} field of @tt{struct STRUCTURE}
+ */
+#define UBASE_FROM_TO(STRUCTURE, SUBSTRUCT, SUBNAME, SUB)                   \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param STRUCTURE pointer to struct STRUCTURE                             \
+ * @return pointer to struct SUBSTRUCT                                      \
+ */                                                                         \
+static inline struct SUBSTRUCT *                                            \
+    STRUCTURE##_to_##SUBNAME(struct STRUCTURE *s)                           \
+{                                                                           \
+    return &s->SUB;                                                         \
+}                                                                           \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param sub pointer to struct SUBSTRUCT                                   \
+ * @return pointer to struct STRUCTURE                                      \
+ */                                                                         \
+static inline struct STRUCTURE *                                            \
+    STRUCTURE##_from_##SUBNAME(struct SUBSTRUCT *sub)                       \
+{                                                                           \
+    return container_of(sub, struct STRUCTURE, SUB);                        \
+}
+
 /** @internal @This is a helper to simplify printf-style functions. */
 #define UBASE_VARARG(command)                                               \
     size_t len;                                                             \

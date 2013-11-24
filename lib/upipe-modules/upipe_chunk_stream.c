@@ -38,6 +38,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -61,6 +62,9 @@
 
 /** upipe_chunk_stream structure */ 
 struct upipe_chunk_stream {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
@@ -87,6 +91,7 @@ struct upipe_chunk_stream {
 };
 
 UPIPE_HELPER_UPIPE(upipe_chunk_stream, upipe, UPIPE_CHUNK_STREAM_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_chunk_stream, urefcount, upipe_chunk_stream_free)
 UPIPE_HELPER_VOID(upipe_chunk_stream)
 UPIPE_HELPER_OUTPUT(upipe_chunk_stream, output, flow_def, flow_def_sent);
 UPIPE_HELPER_UREF_STREAM(upipe_chunk_stream, next_uref, next_uref_size, urefs, NULL)
@@ -281,6 +286,7 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     _upipe_chunk_stream_set_mtu(upipe, DEFAULT_MTU, DEFAULT_ALIGN);
+    upipe_chunk_stream_init_urefcount(upipe);
     upipe_chunk_stream_init_output(upipe);
     upipe_chunk_stream_init_uref_stream(upipe);
     upipe_throw_ready(upipe);
@@ -294,27 +300,26 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
 static void upipe_chunk_stream_free(struct upipe *upipe)
 {
     upipe_chunk_stream_flush(upipe, NULL);
-    upipe_chunk_stream_clean_uref_stream(upipe);
-    upipe_chunk_stream_clean_output(upipe);
 
     upipe_throw_dead(upipe);
 
+    upipe_chunk_stream_clean_uref_stream(upipe);
+    upipe_chunk_stream_clean_output(upipe);
+    upipe_chunk_stream_clean_urefcount(upipe);
     upipe_chunk_stream_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_chunk_stream_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_CHUNK_STREAM_SIGNATURE,
 
     .upipe_alloc = upipe_chunk_stream_alloc,
     .upipe_input = upipe_chunk_stream_input,
-    .upipe_control = upipe_chunk_stream_control,
-    .upipe_free = upipe_chunk_stream_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_chunk_stream_control
 };
 
-/** @This returns the management structure for chunk_stream pipes
+/** @This returns the management structure for chunk_stream pipes.
  *
  * @return pointer to manager
  */

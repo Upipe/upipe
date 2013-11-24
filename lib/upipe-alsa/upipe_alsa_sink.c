@@ -40,6 +40,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
@@ -83,6 +84,9 @@ static void upipe_alsink_timer(struct upump *upump);
 
 /** @internal @This is the private context of a file sink pipe. */
 struct upipe_alsink {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** write watcher */
@@ -123,6 +127,7 @@ struct upipe_alsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_alsink, upipe, UPIPE_ALSINK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_alsink, urefcount, upipe_alsink_free)
 UPIPE_HELPER_VOID(upipe_alsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_alsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_alsink, upump, upump_mgr)
@@ -146,6 +151,7 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    upipe_alsink_init_urefcount(upipe);
     upipe_alsink_init_upump_mgr(upipe);
     upipe_alsink_init_upump(upipe);
     upipe_alsink_init_sink(upipe);
@@ -771,20 +777,18 @@ static void upipe_alsink_free(struct upipe *upipe)
     upipe_alsink_clean_upump(upipe);
     upipe_alsink_clean_upump_mgr(upipe);
     upipe_alsink_clean_sink(upipe);
-
+    upipe_alsink_clean_urefcount(upipe);
     upipe_alsink_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_alsink_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_ALSINK_SIGNATURE,
 
     .upipe_alloc = upipe_alsink_alloc,
     .upipe_input = upipe_alsink_input,
-    .upipe_control = upipe_alsink_control,
-    .upipe_free = upipe_alsink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_alsink_control
 };
 
 /** @This returns the management structure for all file sink pipes.

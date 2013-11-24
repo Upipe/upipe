@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,46 +38,68 @@ extern "C" {
 #include <upipe/uatomic.h>
 
 #include <stdbool.h>
+#include <assert.h>
 
-/** @This contains the number of pointers to the parent object. */
-typedef uatomic_uint32_t urefcount;
+/** @hidden */
+struct urefcount;
+
+/** @This is a function pointer freeing a structure. */
+typedef void (*urefcount_cb)(struct urefcount *);
+
+/** @This defines an object with reference counting. */
+struct urefcount {
+    /** number of pointers to the parent object */
+    uatomic_uint32_t refcount;
+    /** function called when the refcount goes down to 0 */
+    urefcount_cb cb;
+};
 
 /** @This initializes a urefcount. It must be executed before any other
  * call to the refcount structure.
  *
  * @param refcount pointer to a urefcount structure
+ * @param cb function called when the refcount goes down to 0 (may be NULL)
  */
-static inline void urefcount_init(urefcount *refcount)
+static inline void urefcount_init(struct urefcount *refcount, urefcount_cb cb)
 {
-    uatomic_init(refcount, 1);
+    assert(refcount != NULL);
+    uatomic_init(&refcount->refcount, 1);
+    refcount->cb = cb;
 }
 
 /** @This resets a urefcount to 1.
  *
  * @param refcount pointer to a urefcount structure
  */
-static inline void urefcount_reset(urefcount *refcount)
+static inline void urefcount_reset(struct urefcount *refcount)
 {
-    uatomic_store(refcount, 1);
+    assert(refcount != NULL);
+    uatomic_store(&refcount->refcount, 1);
 }
 
 /** @This increments a reference counter.
  *
  * @param refcount pointer to a urefcount structure
  */
-static inline void urefcount_use(urefcount *refcount)
+static inline void urefcount_use(struct urefcount *refcount)
 {
-    uatomic_fetch_add(refcount, 1);
+    if (refcount != NULL && refcount->cb != NULL)
+        uatomic_fetch_add(&refcount->refcount, 1);
 }
 
-/** @This decrements a reference counter.
+/** @This decrements a reference counter, and possibly frees the object if
+ * the refcount goes down to 0.
  *
  * @param refcount pointer to a urefcount structure
- * @return true if there is no longer a reference to the object
  */
-static inline bool urefcount_release(urefcount *refcount)
+static inline void urefcount_release(struct urefcount *refcount)
 {
-    return uatomic_fetch_sub(refcount, 1) == 1;
+    if (refcount != NULL && refcount->cb != NULL &&
+        uatomic_fetch_sub(&refcount->refcount, 1) == 1) {
+        urefcount_cb cb = refcount->cb;
+        refcount->cb = NULL; /* avoid triggering it twice */
+        cb(refcount);
+    }
 }
 
 /** @This checks for more than one reference.
@@ -85,9 +107,10 @@ static inline bool urefcount_release(urefcount *refcount)
  * @param refcount pointer to a urefcount structure
  * @return true if there is only one reference to the object
  */
-static inline bool urefcount_single(urefcount *refcount)
+static inline bool urefcount_single(struct urefcount *refcount)
 {
-    return uatomic_load(refcount) == 1;
+    assert(refcount != NULL);
+    return uatomic_load(&refcount->refcount) == 1;
 }
 
 /** @This checks for no reference.
@@ -95,18 +118,20 @@ static inline bool urefcount_single(urefcount *refcount)
  * @param refcount pointer to a urefcount structure
  * @return true if there is no reference to the object
  */
-static inline bool urefcount_dead(urefcount *refcount)
+static inline bool urefcount_dead(struct urefcount *refcount)
 {
-    return uatomic_load(refcount) == 0;
+    assert(refcount != NULL);
+    return uatomic_load(&refcount->refcount) == 0;
 }
 
 /** @This cleans up the urefcount structure.
  *
  * @param refcount pointer to a urefcount structure
  */
-static inline void urefcount_clean(urefcount *refcount)
+static inline void urefcount_clean(struct urefcount *refcount)
 {
-    uatomic_clean(refcount);
+    assert(refcount != NULL);
+    uatomic_clean(&refcount->refcount);
 }
 
 #ifdef __cplusplus

@@ -41,6 +41,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -66,6 +67,9 @@
 
 /** @internal @This is the private context of an avformat source pipe. */
 struct upipe_avfsink {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** list of subs */
     struct uchain subs;
 
@@ -93,11 +97,14 @@ struct upipe_avfsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsink, upipe, UPIPE_AVFSINK_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_avfsink, urefcount, upipe_avfsink_free)
 UPIPE_HELPER_VOID(upipe_avfsink)
 
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
 struct upipe_avfsink_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
     /** libavformat stream ID */
@@ -115,6 +122,7 @@ struct upipe_avfsink_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avfsink_sub, upipe, UPIPE_AVFSINK_INPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_avfsink_sub, urefcount, upipe_avfsink_sub_free)
 UPIPE_HELPER_VOID(upipe_avfsink_sub)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avfsink_sub, flow_def_check)
 
@@ -146,13 +154,13 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_avfsink_sub *upipe_avfsink_sub =
         upipe_avfsink_sub_from_upipe(upipe);
+    upipe_avfsink_sub_init_urefcount(upipe);
     upipe_avfsink_sub_init_flow_def_check(upipe);
     upipe_avfsink_sub_init_sub(upipe);
     upipe_avfsink_sub->id = -1;
     ulist_init(&upipe_avfsink_sub->urefs);
     upipe_avfsink_sub->next_dts = UINT64_MAX;
 
-    upipe_use(upipe_avfsink_to_upipe(upipe_avfsink));
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -392,10 +400,9 @@ static void upipe_avfsink_sub_free(struct upipe *upipe)
 
     upipe_avfsink_sub_clean_flow_def_check(upipe);
     upipe_avfsink_sub_clean_sub(upipe);
-    upipe_avfsink_sub_free_void(upipe);
-
     upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), NULL);
-    upipe_release(upipe_avfsink_to_upipe(upipe_avfsink));
+    upipe_avfsink_sub_clean_urefcount(upipe);
+    upipe_avfsink_sub_free_void(upipe);
 }
 
 /** @internal @This initializes the output manager for an avfsink pipe.
@@ -406,12 +413,11 @@ static void upipe_avfsink_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_avfsink->sub_mgr;
+    sub_mgr->refcount = upipe_avfsink_to_urefcount(upipe_avfsink);
     sub_mgr->signature = UPIPE_AVFSINK_INPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_avfsink_sub_alloc;
     sub_mgr->upipe_input = upipe_avfsink_sub_input;
     sub_mgr->upipe_control = upipe_avfsink_sub_control;
-    sub_mgr->upipe_free = upipe_avfsink_sub_free;
-    sub_mgr->upipe_mgr_free = NULL;
 }
 
 /** @internal @This allocates an avfsink pipe.
@@ -432,6 +438,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    upipe_avfsink_init_urefcount(upipe);
     upipe_avfsink_init_sub_mgr(upipe);
     upipe_avfsink_init_sub_subs(upipe);
 
@@ -849,19 +856,18 @@ static void upipe_avfsink_free(struct upipe *upipe)
 
     av_dict_free(&upipe_avfsink->options);
 
+    upipe_avfsink_clean_urefcount(upipe);
     upipe_avfsink_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_avfsink_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_AVFSINK_SIGNATURE,
 
     .upipe_alloc = upipe_avfsink_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_avfsink_control,
-    .upipe_free = upipe_avfsink_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_avfsink_control
 };
 
 /** @This returns the management structure for all avformat sinks.

@@ -40,6 +40,8 @@
 /** @This is a super-set of the uref_mgr structure with additional local
  * members */
 struct uref_std_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
     /** uref pool */
     struct ulifo uref_pool;
 
@@ -47,25 +49,8 @@ struct uref_std_mgr {
     struct uref_mgr mgr;
 };
 
-/** @internal @This returns the high-level uref_mgr structure.
- *
- * @param std_mgr pointer to the uref_std_mgr structure
- * @return pointer to the uref_mgr structure
- */
-static inline struct uref_mgr *uref_std_mgr_to_uref_mgr(struct uref_std_mgr *std_mgr)
-{
-    return &std_mgr->mgr;
-}
-
-/** @internal @This returns the private uref_std_mgr structure.
- *
- * @param mgr description structure of the uref mgr
- * @return pointer to the uref_std_mgr structure
- */
-static inline struct uref_std_mgr *uref_std_mgr_from_uref_mgr(struct uref_mgr *mgr)
-{
-    return container_of(mgr, struct uref_std_mgr, mgr);
-}
+UBASE_FROM_TO(uref_std_mgr, uref_mgr, uref_mgr, mgr)
+UBASE_FROM_TO(uref_std_mgr, urefcount, urefcount, urefcount)
 
 /** @This allocates a uref.
  *
@@ -127,16 +112,17 @@ static void uref_std_mgr_vacuum(struct uref_mgr *mgr)
 
 /** @This frees a uref manager.
  *
- * @param mgr pointer to a uref manager
+ * @param urefcount pointer to a urefcount
  */
-static void uref_std_mgr_free(struct uref_mgr *mgr)
+static void uref_std_mgr_free(struct urefcount *urefcount)
 {
-    struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
+    struct uref_std_mgr *std_mgr = uref_std_mgr_from_urefcount(urefcount);
+    struct uref_mgr *mgr = uref_std_mgr_to_uref_mgr(std_mgr);
     uref_std_mgr_vacuum(mgr);
     ulifo_clean(&std_mgr->uref_pool);
     udict_mgr_release(mgr->udict_mgr);
 
-    urefcount_clean(&std_mgr->mgr.refcount);
+    urefcount_clean(urefcount);
     free(std_mgr);
 }
 
@@ -166,11 +152,11 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     std_mgr->mgr.udict_mgr = udict_mgr;
     udict_mgr_use(udict_mgr);
 
-    urefcount_init(&std_mgr->mgr.refcount);
+    urefcount_init(uref_std_mgr_to_urefcount(std_mgr), uref_std_mgr_free);
+    std_mgr->mgr.refcount = uref_std_mgr_to_urefcount(std_mgr);
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_free = uref_std_free;
     std_mgr->mgr.uref_mgr_vacuum = uref_std_mgr_vacuum;
-    std_mgr->mgr.uref_mgr_free = uref_std_mgr_free;
     
     return uref_std_mgr_to_uref_mgr(std_mgr);
 }
