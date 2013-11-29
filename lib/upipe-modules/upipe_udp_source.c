@@ -274,7 +274,7 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     }
 
     upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri,
-            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
+            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp, NULL, NULL);
     if (unlikely(upipe_udpsrc->fd == -1)) {
         upipe_err_va(upipe, "can't open udp socket %s (%m)", uri);
         return false;

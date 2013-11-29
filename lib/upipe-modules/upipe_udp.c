@@ -53,6 +53,53 @@ union sockaddru
     struct sockaddr_in6 sin6;
 };
 
+/** @internal @This fills ipv4/udp headers for RAW sockets
+ *
+ * @param upipe description structure of the pipe
+ * @param dgram raw datagram
+ * @param ipsrc source ip address
+ * @param ipdst destination ip address
+ * @param portsrc source port address
+ * @param portdst destination port address
+ * @param ttl datagram time-to-live
+ * @param tos type of service
+ * @param payload length
+ */
+static void upipe_udp_raw_fill_headers(struct upipe *upipe,
+                                       uint8_t *header,
+                                       in_addr_t ipsrc, in_addr_t ipdst,
+                                       uint16_t portsrc, uint16_t portdst,
+                                       uint8_t ttl, uint8_t tos, uint16_t len)
+{
+    ip_set_version(header, 4);
+    ip_set_ihl(header, 5);
+    ip_set_tos(header, tos);
+    ip_set_len(header, len + UDP_HEADER_SIZE + IP_HEADER_MINSIZE);
+    ip_set_id(header, 0);
+    ip_set_flag_reserved(header, 0);
+    ip_set_flag_mf(header, 0);
+    ip_set_flag_df(header, 0);
+    ip_set_frag_offset(header, 0);
+    ip_set_ttl(header, ttl);
+    ip_set_proto(header, IPPROTO_UDP);
+    ip_set_cksum(header, 0);
+    ip_set_srcaddr(header, ntohl(ipsrc));
+    ip_set_dstaddr(header, ntohl(ipdst));
+
+    header += IP_HEADER_MINSIZE;
+    udp_set_srcport(header, portsrc);
+    udp_set_dstport(header, portdst);
+    udp_set_len(header, len + UDP_HEADER_SIZE);
+    udp_set_cksum(header, 0);
+}
+
+void udp_raw_set_len(uint8_t *raw_header, uint16_t len)
+{
+    ip_set_len(raw_header, len + UDP_HEADER_SIZE + IP_HEADER_MINSIZE);
+    raw_header += IP_HEADER_MINSIZE;
+    udp_set_len(raw_header, len + UDP_HEADER_SIZE);
+}
+
 /** @internal @This returns the index of an interface
  *
  * @param upipe description structure of the pipe
@@ -245,9 +292,14 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
  * @param connect_port connect port
  * @param weight weight (UNUSED)
  * @param use_tcp Set this to open a tcp socket (instead of udp)
+ * @param use_raw open RAW socket (udp)
+ * @param raw_header user-provided buffer for RAW header (ip+udp)
+ * @return socket fd, or -1 in case of error
  */
-int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16_t bind_port,
-                uint16_t connect_port, unsigned int *weight, bool *use_tcp)
+int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
+                          uint16_t bind_port, uint16_t connect_port,
+                          unsigned int *weight, bool *use_tcp,
+                          bool *use_raw, uint8_t *raw_header)
 {
     union sockaddru bind_addr, connect_addr;
     int fd, i;
@@ -256,8 +308,11 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     char *token2 = NULL;
     int bind_if_index = 0, connect_if_index = 0;
     in_addr_t if_addr = INADDR_ANY;
+    in_addr_t src_addr = INADDR_ANY;
+    uint16_t src_port = 4242;
     int tos = 0;
     bool b_tcp;
+    bool b_raw;
     int family;
     socklen_t sockaddr_len;
 
@@ -271,6 +326,10 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
         use_tcp = &b_tcp;
     }
     *use_tcp = false;
+    if (use_raw == NULL) {
+        use_raw = &b_raw;
+    }
+    *use_raw = false;
 
     token2 = strrchr(uri, ',');
     if (token2) {
@@ -329,6 +388,15 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
                     strtol(ARG_OPTION("ifindex="), NULL, 0);
             } else if (IS_OPTION("ifaddr=")) {
                 if_addr = inet_addr(ARG_OPTION("ifaddr="));
+            } else if (IS_OPTION("srcaddr=")) {
+                #ifdef __APPLE__
+                    upipe_warn(upipe, "not supported on Darwin");
+                    return -1;
+                #endif
+                src_addr = inet_addr(ARG_OPTION("srcaddr="));
+                *use_raw = true;
+            } else if (IS_OPTION("srcport=")) {
+                src_port = strtol(ARG_OPTION("srcport="), NULL, 0);
             } else if (IS_OPTION("ttl=")) {
                 ttl = strtol(ARG_OPTION("ttl="), NULL, 0);
             } else if (IS_OPTION("tos=")) {
@@ -341,6 +409,11 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
 #undef IS_OPTION
 #undef ARG_OPTION
         } while ((token2 = strchr(token2, '/')) != NULL);
+    }
+
+    if (unlikely(*use_tcp && *use_raw)) {
+        upipe_warn(upipe, "RAW sockets not implemented for tcp");
+        return -1;
     }
 
     free(uri);
@@ -371,9 +444,21 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl, uint16
     if (connect_if_index) bind_if_index = connect_if_index;
     else connect_if_index = bind_if_index;
 
+    /* RAW header */
+    if (*use_raw && raw_header) {
+        upipe_udp_raw_fill_headers(upipe, raw_header,
+                src_addr, connect_addr.sin.sin_addr.s_addr, src_port,
+                ntohs(connect_addr.sin.sin_port), ttl, tos, 0);
+    }
+
+
     /* Socket configuration */
-    if ((fd = socket(family, *use_tcp ? SOCK_STREAM : SOCK_DGRAM,
-                         0)) < 0) {
+    int sock_type = SOCK_DGRAM;
+    if (*use_tcp) sock_type = SOCK_STREAM;
+    if (*use_raw) sock_type = SOCK_RAW;
+    int sock_proto = (*use_raw ? IPPROTO_RAW : 0);
+
+    if ((fd = socket(family, sock_type, sock_proto)) < 0) {
         upipe_err_va(upipe, "unable to open socket (%m)");
         return -1;
     }

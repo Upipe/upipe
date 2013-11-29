@@ -77,7 +77,7 @@ static void upipe_udpsink_watcher(struct upump *upump);
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump *upump);
 
-/** @internal @This is the private context of a file sink pipe. */
+/** @internal @This is the private context of a udp sink pipe. */
 struct upipe_udpsink {
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -90,7 +90,7 @@ struct upipe_udpsink {
     uint64_t latency;
     /** file descriptor */
     int fd;
-    /** file uri */
+    /** socket uri */
     char *uri;
     /** temporary uref storage */
     struct uchain urefs;
@@ -100,6 +100,11 @@ struct upipe_udpsink {
     unsigned int max_urefs;
     /** list of blockers */
     struct uchain blockers;
+
+    /** RAW sockets */
+    bool raw;
+    /** RAW header */
+    uint8_t raw_header[RAW_HEADER_SIZE];
 
     /** public upipe structure */
     struct upipe upipe;
@@ -112,7 +117,7 @@ UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
 
-/** @internal @This allocates a file sink pipe.
+/** @internal @This allocates a udp sink pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -137,6 +142,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
+    upipe_udpsink->raw = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -160,7 +166,7 @@ static void upipe_udpsink_poll(struct upipe *upipe)
     }
 }
 
-/** @internal @This outputs data to the file sink.
+/** @internal @This outputs data to the udp sink.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -174,7 +180,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         uref_free(uref);
-        upipe_warn(upipe, "received a buffer before opening a file");
+        upipe_warn(upipe, "received a buffer before opening a socket");
         return true;
     }
 
@@ -198,6 +204,12 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 
 write_buffer:
     for ( ; ; ) {
+        size_t payload_len = 0;
+        if (unlikely(!uref_block_size(uref, &payload_len))) {
+            upipe_warn(upipe, "cannot read ubuf size");
+            return false;
+        }
+
         int iovec_count = uref_block_iovec_count(uref, 0, -1);
         if (unlikely(iovec_count == -1)) {
             uref_free(uref);
@@ -209,14 +221,27 @@ write_buffer:
             break;
         }
 
-        struct iovec iovecs[iovec_count];
+        if (upipe_udpsink->raw) {
+            iovec_count++;
+        }
+
+        struct iovec iovecs_s[iovec_count];
+        struct iovec *iovecs = iovecs_s;
+
+        if (upipe_udpsink->raw) {
+            udp_raw_set_len(upipe_udpsink->raw_header, payload_len);
+            iovecs[0].iov_base = upipe_udpsink->raw_header;
+            iovecs[0].iov_len = RAW_HEADER_SIZE;
+            iovecs++;
+        }
+
         if (unlikely(!uref_block_iovec_read(uref, 0, -1, iovecs))) {
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             break;
         }
 
-        ssize_t ret = writev(upipe_udpsink->fd, iovecs, iovec_count);
+        ssize_t ret = writev(upipe_udpsink->fd, iovecs_s, iovec_count);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
@@ -304,10 +329,10 @@ static bool upipe_udpsink_set_flow_def(struct upipe *upipe,
     return true;
 }
 
-/** @internal @This returns the uri of the currently opened file.
+/** @internal @This returns the uri of the currently opened socket.
  *
  * @param upipe description structure of the pipe
- * @param uri_p filled in with the uri of the file
+ * @param uri_p filled in with the uri of the socket
  * @return false in case of error
  */
 static bool _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
@@ -318,11 +343,11 @@ static bool _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
     return true;
 }
 
-/** @internal @This asks to open the given file.
+/** @internal @This asks to open the given socket.
  *
  * @param upipe description structure of the pipe
- * @param uri relative or absolute uri of the file
- * @param mode mode of opening the file
+ * @param uri relative or absolute uri of the socket
+ * @param mode mode of opening the socket
  * @return false in case of error
  */
 static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
@@ -333,7 +358,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
 
     if (unlikely(upipe_udpsink->fd != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
-            upipe_notice_va(upipe, "closing file %s", upipe_udpsink->uri);
+            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
         close(upipe_udpsink->fd);
     }
     free(upipe_udpsink->uri);
@@ -359,7 +384,9 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
             return false;
     }
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
-            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp);
+            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
+            &upipe_udpsink->raw, upipe_udpsink->raw_header);
+
     if (unlikely(upipe_udpsink->fd == -1)) {
         upipe_err_va(upipe, "can't open uri %s (%s)", uri, mode_desc);
         return false;
@@ -394,7 +421,7 @@ static bool upipe_udpsink_flush(struct upipe *upipe)
     return true;
 }
 
-/** @internal @This processes control commands on a file sink pipe.
+/** @internal @This processes control commands on a udp sink pipe.
  *
  * @param upipe description structure of the pipe
  * @param command type of command to process
@@ -457,7 +484,7 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
     }
 }
 
-/** @internal @This processes control commands on a file sink pipe, and
+/** @internal @This processes control commands on a udp sink pipe, and
  * checks the status of the pipe afterwards.
  *
  * @param upipe description structure of the pipe
@@ -486,7 +513,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     if (likely(upipe_udpsink->fd != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
-            upipe_notice_va(upipe, "closing file %s", upipe_udpsink->uri);
+            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
         close(upipe_udpsink->fd);
     }
     upipe_throw_dead(upipe);
@@ -511,7 +538,7 @@ static struct upipe_mgr upipe_udpsink_mgr = {
     .upipe_mgr_free = NULL
 };
 
-/** @This returns the management structure for all file sink pipes.
+/** @This returns the management structure for all udp sink pipes.
  *
  * @return pointer to manager
  */
