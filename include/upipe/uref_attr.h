@@ -879,7 +879,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                               uint8_t min, uint8_t max)    \
+                                               uint64_t min, uint64_t max)  \
 {                                                                           \
     uint64_t v;                                                             \
     return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
@@ -932,7 +932,7 @@ static inline bool uref_##group##_delete_##attr(struct uref *uref)          \
  * @return true if attribute matches                                        \
  */                                                                         \
 static inline bool uref_##group##_match_##attr(struct uref  *uref,          \
-                                               uint8_t min, uint8_t max)    \
+                                               uint64_t min, uint64_t max)  \
 {                                                                           \
     uint64_t v;                                                             \
     return uref_##group##_get_##attr(uref, &v) && (v >= min) && (v <= max); \
