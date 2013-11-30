@@ -283,6 +283,29 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
     return true;
 }
 
+/** @internal @This is a helper for @ref upipe_udp_open_socket.
+ *
+ * @param psz_string option string
+ * @return duplicated string
+ */
+static char *config_stropt(char *psz_string)
+{
+    char *ret, *tmp;
+    if (!psz_string || strlen(psz_string) == 0)
+        return NULL;
+    ret = tmp = strdup(psz_string);
+    while (*tmp) {
+        if (*tmp == '_')
+            *tmp = ' ';
+        if (*tmp == '/') {
+            *tmp = '\0';
+            break;
+        }
+        tmp++;
+    }
+    return ret;
+}
+
 /** @internal @This parses _uri and opens IPv4 & IPv6 sockets
  *
  * @param upipe description structure of the pipe
@@ -387,13 +410,17 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 bind_if_index = connect_if_index =
                     strtol(ARG_OPTION("ifindex="), NULL, 0);
             } else if (IS_OPTION("ifaddr=")) {
-                if_addr = inet_addr(ARG_OPTION("ifaddr="));
+                char *option = config_stropt(ARG_OPTION("ifaddr="));
+                if_addr = inet_addr(option);
+                free( option );
             } else if (IS_OPTION("srcaddr=")) {
                 #ifdef __APPLE__
                     upipe_warn(upipe, "not supported on Darwin");
                     return -1;
                 #endif
-                src_addr = inet_addr(ARG_OPTION("srcaddr="));
+                char *option = config_stropt(ARG_OPTION("srcaddr="));
+                src_addr = inet_addr(option);
+                free(option);
                 *use_raw = true;
             } else if (IS_OPTION("srcport=")) {
                 src_port = strtol(ARG_OPTION("srcport="), NULL, 0);
