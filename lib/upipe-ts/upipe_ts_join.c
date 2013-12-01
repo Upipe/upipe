@@ -24,6 +24,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block_flow.h>
@@ -45,6 +46,8 @@
 
 /** we only accept blocks containing exactly one TS packet */
 #define EXPECTED_FLOW_DEF "block.mpegts."
+/** tolerance for the earliness of input packets */
+#define CR_TOLERANCE (UCLOCK_FREQ / 1000)
 
 /** @hidden */
 static void upipe_ts_join_build_flow_def(struct upipe *upipe);
@@ -334,7 +337,7 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
         }
 
         if (unlikely(input->last_cr != UINT64_MAX &&
-                     input->next_cr < input->last_cr))
+                     input->next_cr + CR_TOLERANCE < input->last_cr))
             upipe_warn_va(upipe_ts_join_sub_to_upipe(input),
                           "received a packet in the past (%"PRIu64" %"PRIu64")",
                           input->last_cr - input->next_cr, input->next_cr);
