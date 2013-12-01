@@ -40,8 +40,11 @@ Another key design choice is the separation of data processing from decision
 taking. "Pipes" are not supposed to make any decision (such as selecting this
 elementary stream or decoding to 720x576), and whenever an action is necessary,
 an event is sent to "probes" provided by the application, which would typically
-send a control command to the pipe. Upipe's standard distribution will
-include standard probes for the simpler cases, but an application is always
-free to override their behaviour and take different decisions.
+send a control command to the pipe, or dynamically create (recreate) a part of
+the pipeline by allocating new pipes.
+
+Upipe's standard distribution will include standard probes for the simpler
+cases, but an application is always free to override their behaviour and take
+different decisions.
 
 @end section
