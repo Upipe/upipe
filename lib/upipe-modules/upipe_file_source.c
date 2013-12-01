@@ -198,11 +198,9 @@ static void upipe_fsrc_worker(struct upump *upump)
     }
     if (unlikely(ret == 0)) {
         uref_free(uref);
-        if (upipe_fsrc->regular_file) {
-            upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
-            upipe_fsrc_set_upump(upipe, NULL);
-            upipe_throw_source_end(upipe);
-        }
+        upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
+        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_throw_source_end(upipe);
         return;
     }
     if (unlikely(upipe_fsrc->uclock != NULL))
