@@ -60,9 +60,6 @@
 #include <errno.h>
 #include <assert.h>
 
-/** default delay to use compared to the theorical reception time of the
- * packet */
-#define SYSTIME_DELAY        (UCLOCK_FREQ / 100)
 /** tolerance for late packets */
 #define SYSTIME_TOLERANCE (UCLOCK_FREQ / 100)
 /** expected flow definition on all flows */
