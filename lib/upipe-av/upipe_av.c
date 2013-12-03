@@ -58,10 +58,6 @@ static void upipe_av_vlog(void *avcl, int level,
                           const char *fmt, va_list args)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_ERROR;
-    char string[1024], *end = NULL;
-    /* static variable (persistent integer as required
-     * for av_log_format_line) */
-    static int print_prefix = 1;
 
     switch(level) {
         case AV_LOG_PANIC:
@@ -84,13 +80,16 @@ static void upipe_av_vlog(void *avcl, int level,
     }
 
     assert(logprobe);
-    av_log_format_line(avcl, level, fmt, args,
-                       string, sizeof(string), &print_prefix);
-    end = string + strlen(string) - 1;
-    if (isspace(*end)) {
-        *end = '\0';
+    size_t len = vsnprintf(NULL, 0, fmt, args);
+    if (len > 0) {
+        char string[len + 1];
+        vsnprintf(string, len + 1, fmt, args);
+        char *end = string + len - 1;
+        if (isspace(*end)) {
+            *end = '\0';
+        }
+        uprobe_log(logprobe, NULL, loglevel, string);
     }
-    uprobe_log(logprobe, NULL, loglevel, string);
 }
 
 /** @This initializes non-reentrant parts of avcodec and avformat. Call it

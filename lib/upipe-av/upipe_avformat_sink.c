@@ -704,13 +704,15 @@ static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(format == NULL))
         return false;
 
-    int error = avformat_alloc_output_context2(&upipe_avfsink->context,
-                                               format, NULL, uri);
-    if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "can't open URI %s (%s)", uri, buf);
+    upipe_avfsink->context = avformat_alloc_context();
+    if (unlikely(upipe_avfsink->context == NULL)) {
+        upipe_err_va(upipe, "can't allocate context (URI %s)", uri);
         return false;
     }
+    upipe_avfsink->context->oformat = format;
+    strncpy(upipe_avfsink->context->filename, uri,
+            sizeof(upipe_avfsink->context->filename));
+    upipe_avfsink->context->filename[sizeof(upipe_avfsink->context->filename) - 1] = '\0';
 
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;
