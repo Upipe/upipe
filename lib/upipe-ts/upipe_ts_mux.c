@@ -991,7 +991,7 @@ static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
 
     bool ret = true;
     uint64_t sid = 0;
-    if (uref_ts_flow_get_sid(flow_def, &sid) &&
+    if (uref_flow_get_id(flow_def, &sid) &&
         upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux), sid)) {
         upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
                       "SID %"PRIu64" already exists", sid);
@@ -1005,7 +1005,7 @@ static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
         if (sid >= MAX_SIDS)
             ret = false;
         else
-            ret = ret && uref_ts_flow_set_sid(flow_def_dup, sid);
+            ret = ret && uref_flow_set_id(flow_def_dup, sid);
     }
 
     uint64_t pid = 0;
@@ -1570,8 +1570,8 @@ static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
 
     bool ret = true;
     uint64_t tsid = 0;
-    if (!uref_ts_flow_get_tsid(flow_def, &tsid))
-        ret = ret && uref_ts_flow_set_tsid(flow_def_dup, DEFAULT_TSID);
+    if (!uref_flow_get_id(flow_def, &tsid))
+        ret = ret && uref_flow_set_id(flow_def_dup, DEFAULT_TSID);
 
     uint64_t octetrate;
     if (!uref_block_flow_get_octetrate(flow_def, &octetrate))

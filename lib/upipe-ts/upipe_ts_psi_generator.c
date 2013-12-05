@@ -462,7 +462,7 @@ static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
         return false;
     uint64_t program_number, pid;
     if (!uref_flow_match_def(flow_def, "void.") ||
-        !uref_ts_flow_get_sid(flow_def, &program_number) ||
+        !uref_flow_get_id(flow_def, &program_number) ||
         !uref_ts_flow_get_pid(flow_def, &pid))
         return false;
     const uint8_t *descriptors = NULL;
@@ -804,7 +804,7 @@ static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
         return false;
     uint64_t tsid;
     if (!uref_flow_match_def(flow_def, "void.") ||
-        !uref_ts_flow_get_tsid(flow_def, &tsid))
+        !uref_flow_get_id(flow_def, &tsid))
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
