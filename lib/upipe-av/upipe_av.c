@@ -80,7 +80,10 @@ static void upipe_av_vlog(void *avcl, int level,
     }
 
     assert(logprobe);
-    size_t len = vsnprintf(NULL, 0, fmt, args);
+    va_list args_copy;
+    va_copy(args_copy, args);
+    size_t len = vsnprintf(NULL, 0, fmt, args_copy);
+    va_end(args_copy);
     if (len > 0) {
         char string[len + 1];
         vsnprintf(string, len + 1, fmt, args);
