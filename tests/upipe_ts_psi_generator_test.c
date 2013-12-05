@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "void."));
-    assert(uref_ts_flow_set_tsid(uref, 42));
+    assert(uref_flow_set_id(uref, 42));
 
     struct upipe_mgr *upipe_ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     assert(upipe_ts_psig_mgr != NULL);
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "void."));
-    assert(uref_ts_flow_set_sid(uref, 1));
+    assert(uref_flow_set_id(uref, 1));
     assert(uref_ts_flow_set_pid(uref, 66));
     struct upipe *upipe_ts_psig_program1 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     assert(upipe_set_output(upipe_ts_psig_program1, upipe_sink));
     assert(upipe_ts_psig_program_set_pcr_pid(upipe_ts_psig_program1, 67));
 
-    assert(uref_ts_flow_set_sid(uref, 2));
+    assert(uref_flow_set_id(uref, 2));
     assert(uref_ts_flow_set_pid(uref, 1500));
     struct upipe *upipe_ts_psig_program2 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
