@@ -45,18 +45,16 @@
       @table 3
 
         @item name @item type @item description
-        @item systime @item unsigned @item reception or emission time of the uref in system clock
-        @item systime_rap @item unsigned @item reception time in system clock of the last random access point, allowing to decode the current uref
-        @item pts @item unsigned @item presentation timestamp in Upipe clock
-        @item pts_orig @item unsigned @item presentation timestamp in stream clock
-        @item pts_sys @item unsigned @item presentation timestamp in system clock
-        @item dts @item unsigned @item decoding timestamp in Upipe clock
-        @item dts_orig @item unsigned @item decoding timestamp in stream clock
-        @item dts_sys @item unsigned @item decoding timestamp in system clock
-        @item vbv_delay @item unsigned @item delay before the reception or the write of an access unit, and its decoding timestamp (in 27 MHz units)
+        @item rap_sys @item unsigned @item reception time in system clock of the last random access point, allowing to decode the current uref
+        @item date_prog @item uref_date @item timestamp in program clock
+        @item date_orig @item uref_date @item timestamp in stream clock
+        @item date_sys @item uref_date @item timestamp in system clock
+        @item dts_pts_delay @item unsigned @item delay before the decoding of an access unit, and its presentation timestamp (in 27 MHz units)
+        @item cr_dts_delay @item unsigned @item delay before the reception or emission of an access unit, and its decoding timestamp (in 27 MHz units)
         @item duration @item unsigned @item duration of the presentation of an access unit
         @item index_rap @item small_unsigned @item offset in number of access units since the last random access point
         @item rate @item rational @item playing rate (1 being normal play, < 1 slow motion, > 1 fast forward)
+        @item ref @item boolean @item flag indicating that the packet carries a clock reference
 
       @end table
 
@@ -73,9 +71,12 @@
         @item error @item void @item flag indicating that this uref carries an unrecoverable error
         @item def @item string @item definition of the flow (see next chapter)
         @item raw_def @item string @item real definition of the flow, used internally by some modules
-        @item program @item string @item list of program numbers carrying this flow, separated by commas
+        @item id @item unsigned @item ID of the flow (unique for a given split pipe)
         @item lang @item string @item ISO-639 language
         @item lowdelay @item void @item flag indicating that the flow definition can be decoded with low latency
+        @item copyright @item void @item flag indicating that the content is copyrighted
+        @item original @item void @item flag indicating whether the content is a original work or a copy
+        @item headers @item opaque @item codec-specific global headers
 
       @end table
 
@@ -117,14 +118,8 @@
 
         @item name @item type @item description
         @item number @item unsigned @item picture number from the beginning of the flow
-        @item hsize @item unsigned @item horizontal size
-        @item vsize @item unsigned @item vertical size
-        @item hsize_visible @item unsigned @item horizontal visible size
-        @item vsize_visible @item unsigned @item vertical visible size
         @item hposition @item unsigned @item horizontal position of a subpicture
         @item vposition @item unsigned @item vertical position of a subpicture
-        @item aspect @item rational @item sample aspect ratio
-        @item overscan @item void @item flag present in case of overscan
         @item progressive @item void @item flag present for progressive pictures
         @item tf @item void @item top field present
         @item bf @item void @item bottom field present
@@ -152,6 +147,12 @@
         @item vappend @item small_unsigned @item extra lines added after buffer
         @item align @item unsigned @item alignment in octets
         @item align_hmoffset @item int @item horizontal offset of the aligned macropixel
+        @item sar @item rational @item sample aspect ratio
+        @item overscan @item void @item flag present in case of overscan
+        @item hsize @item unsigned @item horizontal size
+        @item vsize @item unsigned @item vertical size
+        @item hsize_visible @item unsigned @item horizontal visible size
+        @item vsize_visible @item unsigned @item vertical visible size
 
       @end table
 
@@ -214,8 +215,8 @@
       @item mpegtspes @item MPEG PES packets (ISO/IEC 13818-1)
       @item mpeg2video @item MPEG-2 video elementary stream (ISO/IEC 13818-2)
       @item h264 @item MPEG-4 AVC video elementary stream (ISO/IEC 14496-10)
-      @item pic @item indicates that the content is raw video (can also be after a video codec)
-      @item sound @item indicates that the content is raw, packed audio (can also be after an audio codec)
+      @item pic @item indicates that the content is raw video (should also be after a video codec)
+      @item sound @item indicates that the content is raw, packed audio (should also be after an audio codec)
 
     @end table
 

@@ -25,10 +25,10 @@ Upipe has the following optional dependencies:
 @item @url http://dist.schmorp.de/libev/ libev library and headers
       (only required for the optional libupump-ev library), tested with 4.11.
 @item @url http://www.nongnu.org/mkdoc/ mkdoc to compile the documentation
-@item @url http://ffmpeg.org/ or @url http://libav.org libraries and headers
+@item @url http://ffmpeg.org/ or @url http://libav.org/ libraries and headers
       for upipe-av and upipe-sws.
-      Tested with libav v9.7 (should work with libav from v0.8.7), and
-      ffmpeg 0.11.1 up to 1.2.1 (although our code seems leaky with v1.2+,
+      Tested with libav v9.10, and
+      ffmpeg 1.1 up to 2.1.1 (although our code seems leaky with v1.2+,
       work in progress).
       FFmpeg/libav needs to be configured with --enable-pic --enable-shared.
 @item perl is needed in the build process of upipe-av 
