@@ -27,7 +27,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -201,8 +200,7 @@ int main(int argc, char **argv)
                                          UBUF_POOL_DEPTH, umem_mgr, -1, 0);
 
     /* log probes */
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout, loglevel);
-    logger = uprobe_log_alloc(uprobe_stdio, loglevel);
+    logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
 
     /* source probe */
     struct uprobe uprobe_src;
@@ -277,8 +275,7 @@ int main(int argc, char **argv)
     ubuf_mgr_release(block_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(logger);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     ev_default_destroy();
 

@@ -49,7 +49,6 @@ pkginclude_HEADERS = \
 	uprobe_dejitter.h \
 	uprobe_helper_adhoc.h \
 	uprobe_helper_uprobe.h \
-	uprobe_log.h \
 	uprobe_output.h \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \

@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -46,7 +45,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
@@ -74,7 +72,7 @@
 static struct upipe *upipe_ts_demux;
 static struct upipe *upipe_ts_demux_output_pmt = NULL;
 static struct upipe *upipe_ts_demux_output_video = NULL;
-static struct uprobe *uprobe_ts_log;
+static struct uprobe *logger;
 static uint64_t wanted_flow_id;
 static bool expect_new_flow_def = false;
 
@@ -115,7 +113,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     }
                     upipe_ts_demux_output_pmt =
                         upipe_flow_alloc_sub(upipe_ts_demux,
-                            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
                                                    "ts demux pmt"),
                             flow_def);
                     assert(upipe_ts_demux_output_pmt != NULL);
@@ -124,7 +122,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                         upipe_release(upipe_ts_demux_output_video);
                     upipe_ts_demux_output_video =
                         upipe_flow_alloc_sub(upipe_ts_demux_output_pmt,
-                            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
                                                    "ts demux video"),
                             flow_def);
                     assert(upipe_ts_demux_output_video != NULL);
@@ -156,13 +154,7 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
-    uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
-    assert(uprobe_ts_log != NULL);
+    logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
@@ -177,7 +169,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
 
     upipe_ts_demux = upipe_void_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
                                    "ts demux"));
     assert(upipe_ts_demux != NULL);
     assert(upipe_set_flow_def(upipe_ts_demux, uref));
@@ -401,9 +393,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
-    uprobe_ts_log_free(uprobe_ts_log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     return 0;
 }

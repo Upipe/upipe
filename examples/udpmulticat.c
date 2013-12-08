@@ -54,7 +54,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -170,8 +169,6 @@ int main(int argc, char *argv[])
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout, loglevel);
-    struct uprobe *uprobe_log = uprobe_log_alloc(uprobe_stdio,
-                                                 UPROBE_LOG_DEBUG);
 
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
@@ -180,7 +177,7 @@ int main(int argc, char *argv[])
     /* udp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udp source"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "udp source"));
     upipe_set_upump_mgr(upipe_udpsrc, upump_mgr);
     upipe_set_uref_mgr(upipe_udpsrc, uref_mgr);
     upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
@@ -195,7 +192,7 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
         struct upipe *upipe_sink = upipe_void_alloc_output(upipe_udpsrc,
                 upipe_udpsink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "udpsink"));
+                uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "udpsink"));
         upipe_set_upump_mgr(upipe_sink, upump_mgr);
         if (!upipe_udpsink_set_uri(upipe_sink, dirpath, 0)) {
             return EXIT_FAILURE;
@@ -208,17 +205,17 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
         struct upipe *upipe_dup = upipe_void_alloc_output(upipe_udpsrc,
                 upipe_dup_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dup"));
+                uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "dup"));
 
         struct upipe *upipe_dup_data = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupdata"));
+                    uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "dupdata"));
         struct upipe *upipe_dup_aux = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "dupaux"));
+                    uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "dupaux"));
 
         /* data files (multicat sink) */
         struct upipe *datasink = upipe_void_alloc_output(upipe_dup_data,
                 upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "datasink"));
+                uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "datasink"));
         upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
         upipe_set_upump_mgr(datasink, upump_mgr);
         if (rotate) {
@@ -231,13 +228,13 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
         struct upipe *genaux = upipe_void_alloc_output(upipe_dup_aux,
                 upipe_genaux_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "genaux"));
+                uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "genaux"));
         assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
         /* aux files (multicat sink) */
         struct upipe *auxsink = upipe_void_alloc_output(genaux,
                 upipe_multicat_sink_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_log, loglevel, "auxsink"));
+                uprobe_pfx_adhoc_alloc(uprobe_stdio, loglevel, "auxsink"));
         upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
         upipe_set_upump_mgr(auxsink, upump_mgr);
         if (rotate) {
@@ -254,7 +251,6 @@ int main(int argc, char *argv[])
 
     /* should never be here for the moment. todo: sighandler.
      * release everything */
-    uprobe_log_free(uprobe_log);
     uprobe_stdio_free(uprobe_stdio);
 
     upump_mgr_release(upump_mgr);

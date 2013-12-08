@@ -28,7 +28,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -93,10 +92,8 @@ int main(int argc, char **argv)
     /* upipe env */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
-    struct uprobe *logger = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
     assert(logger != NULL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -156,8 +153,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(null_mgr); // noop
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr);
-    uprobe_log_free(logger);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     return 0;

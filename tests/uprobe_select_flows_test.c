@@ -33,7 +33,6 @@
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
@@ -193,15 +192,13 @@ int main(int argc, char **argv)
 
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_DEBUG);
-    assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
-    assert(log != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_DEBUG);
+    assert(logger != NULL);
 
     /* programs */
 
-    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(log, log,
+    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(logger, logger,
                                                  UPROBE_SELFLOW_VOID, "auto");
     assert(uprobe_selflow != NULL);
     struct upipe *upipe = test_alloc(&test_mgr, uprobe_selflow);
@@ -286,7 +283,7 @@ int main(int argc, char **argv)
 
     /* pictures */
 
-    uprobe_selflow = uprobe_selflow_alloc(log, log, UPROBE_SELFLOW_PIC, "auto");
+    uprobe_selflow = uprobe_selflow_alloc(logger, logger, UPROBE_SELFLOW_PIC, "auto");
     assert(uprobe_selflow != NULL);
     upipe->uprobe = uprobe_selflow;
 
@@ -411,8 +408,7 @@ int main(int argc, char **argv)
     test_free(upipe);
 
     uprobe_selflow_free(uprobe_selflow);
-    uprobe_log_free(log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

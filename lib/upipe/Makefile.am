@@ -11,7 +11,6 @@ libupipe_la_SOURCES = \
 	udict_inline.c \
 	uref_std.c \
 	uprobe_dejitter.c \
-	uprobe_log.c \
 	uprobe_prefix.c \
 	uprobe_output.c \
 	uprobe_select_flows.c \

@@ -35,7 +35,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -153,7 +152,6 @@ int main(int argc, char **argv)
     /* probes */
     struct uprobe *uprobe;
     uprobe = uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_DEBUG);
-    uprobe = uprobe_log_alloc(uprobe, UPROBE_LOG_DEBUG);
     uprobe = uprobe_uref_mgr_alloc(uprobe, uref_mgr);
     uprobe = uprobe_upump_mgr_alloc(uprobe, upump_mgr);
     uref_mgr_release(uref_mgr);
@@ -211,7 +209,6 @@ int main(int argc, char **argv)
     uprobe_selflow_free(uprobe_split_pic);
     uprobe = uprobe_upump_mgr_free(uprobe);
     uprobe = uprobe_uref_mgr_free(uprobe);
-    uprobe = uprobe_log_free(uprobe);
     uprobe_stdio_free(uprobe);
 
     ev_default_destroy();

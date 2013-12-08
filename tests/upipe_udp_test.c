@@ -33,7 +33,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -257,18 +256,16 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
 
     struct upipe *udpsrc_test = upipe_void_alloc(&udpsrc_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udpsrc_test"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udpsrc_test"));
 
 
 	/* udpsrc */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp source"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udp source"));
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
@@ -321,7 +318,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr != NULL);
     upipe_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "udp sink"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udp sink"));
     assert(upipe_udpsink != NULL);
     assert(upipe_set_flow_def(upipe_udpsink, flow_def));
     assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
@@ -359,7 +356,6 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
 
 	freeaddrinfo(servinfo);

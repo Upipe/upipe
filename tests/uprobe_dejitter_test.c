@@ -32,7 +32,6 @@
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
@@ -80,13 +79,11 @@ int main(int argc, char **argv)
 
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_DEBUG);
-    assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
-    assert(log != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_DEBUG);
+    assert(logger != NULL);
 
-    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(log, 10);
+    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, 10);
     assert(uprobe_dejitter != NULL);
 
     struct upipe test_pipe;
@@ -140,8 +137,7 @@ int main(int argc, char **argv)
 
     uref_free(uref);
     uprobe_dejitter_free(uprobe_dejitter);
-    uprobe_log_free(log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

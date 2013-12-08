@@ -78,7 +78,6 @@ graph {flow: east}
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -686,10 +685,6 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     if (unlikely(uprobe == NULL))
         goto fail_stdio;
     glxplayer->uprobe_logger = uprobe;
-    uprobe = uprobe_log_alloc(glxplayer->uprobe_logger, glxplayer->loglevel);
-    if (unlikely(uprobe == NULL))
-        goto fail_log;
-    glxplayer->uprobe_logger = uprobe;
     uprobe = uprobe_uref_mgr_alloc(glxplayer->uprobe_logger,
                                    uref_mgr);
     if (unlikely(uprobe == NULL))
@@ -789,8 +784,6 @@ fail_pipe_mgrs:
         upipe_mgr_release(glxplayer->upipe_null_mgr);
     glxplayer->uprobe_logger = uprobe_uref_mgr_free(glxplayer->uprobe_logger);
 fail_probe_uref_mgr:
-    glxplayer->uprobe_logger = uprobe_log_free(glxplayer->uprobe_logger);
-fail_log:
     glxplayer->uprobe_logger = uprobe_stdio_free(glxplayer->uprobe_logger);
 fail_stdio:
     ubuf_mgr_release(glxplayer->rgb_mgr);
@@ -997,7 +990,6 @@ void upipe_glxplayer_free(struct upipe_glxplayer *glxplayer)
     upipe_mgr_release(glxplayer->upipe_trickp_mgr);
     upipe_mgr_release(glxplayer->upipe_avcdec_mgr);
     glxplayer->uprobe_logger = uprobe_uref_mgr_free(glxplayer->uprobe_logger);
-    glxplayer->uprobe_logger = uprobe_log_free(glxplayer->uprobe_logger);
     glxplayer->uprobe_logger = uprobe_stdio_free(glxplayer->uprobe_logger);
     ubuf_mgr_release(glxplayer->rgb_mgr);
     ubuf_mgr_release(glxplayer->yuv_mgr);

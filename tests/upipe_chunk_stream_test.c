@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -155,21 +154,19 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
 
     /* flow def */
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&chunk_test_mgr, log);
+    struct upipe *upipe_sink = upipe_void_alloc(&chunk_test_mgr, uprobe_stdio);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_chunk_stream_mgr = upipe_chunk_stream_mgr_alloc();
     assert(upipe_chunk_stream_mgr != NULL);
     struct upipe *upipe_chunk_stream = upipe_void_alloc(upipe_chunk_stream_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "chunk"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "chunk"));
     assert(upipe_chunk_stream != NULL);
     assert(upipe_set_flow_def(upipe_chunk_stream, uref));
     assert(upipe_set_output(upipe_chunk_stream, upipe_sink));
@@ -213,7 +210,6 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
 
     return 0;

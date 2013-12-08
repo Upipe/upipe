@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -366,8 +365,6 @@ int main(int argc, char **argv)
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
 
@@ -378,7 +375,7 @@ int main(int argc, char **argv)
     assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
 
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws"),
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sws"),
             output_flow); 
     assert(sws != NULL);
     assert(upipe_set_flow_def(sws, pic_flow));
@@ -388,9 +385,9 @@ int main(int argc, char **argv)
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_void_alloc(&sws_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sws_test"));
-    uprobe_dbg_va(log, NULL, "Pipe addr: sws:\t %p", sws);
-    uprobe_dbg_va(log, NULL, "Pipe addr: sws_test: %p", sws_test);
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sws_test"));
+    uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws:\t %p", sws);
+    uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
@@ -401,9 +398,9 @@ int main(int argc, char **argv)
     upipe_input(sws, pic, NULL);
 
     assert(sws_test_from_upipe(sws_test)->pic);
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, log));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, log));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, log));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, uprobe_stdio));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, uprobe_stdio));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, uprobe_stdio));
 
     /* release urefs */
     uref_free(uref1);
@@ -416,7 +413,6 @@ int main(int argc, char **argv)
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr); 
-    uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);

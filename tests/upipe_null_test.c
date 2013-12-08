@@ -28,7 +28,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -80,17 +79,15 @@ int main(int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_DEBUG);
-    assert(uprobe_stdio != NULL);
-    struct uprobe *uprobe_log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
-    assert(uprobe_log != NULL);
+    struct uprobe *logger= uprobe_stdio_alloc(&uprobe, stdout,
+                                                  UPROBE_LOG_DEBUG);
+    assert(logger != NULL);
 
     /* build null pipe */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr);
     struct upipe *nullpipe = upipe_void_alloc(upipe_null_mgr,
-               uprobe_pfx_adhoc_alloc(uprobe_log, UPROBE_LOG_LEVEL, "null"));
+               uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
 
     /* Now send uref */
@@ -111,8 +108,7 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_log_free(uprobe_log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     return 0;
 }

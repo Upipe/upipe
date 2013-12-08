@@ -26,7 +26,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -282,7 +281,6 @@ int main(int argc, char **argv)
 
     /* default probe */
     logger = uprobe_stdio_alloc(NULL, logstream, loglevel);
-    logger = uprobe_log_alloc(logger, UPROBE_LOG_DEBUG);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     uref_mgr_release(uref_mgr);
@@ -349,7 +347,6 @@ int main(int argc, char **argv)
     uprobe_selflow_free(uprobe_selflow);
     logger = uprobe_upump_mgr_free(logger);
     logger = uprobe_uref_mgr_free(logger);
-    logger = uprobe_log_free(logger);
     uprobe_stdio_free(logger);
 
     upipe_mgr_release(upipe_avcdec_mgr);

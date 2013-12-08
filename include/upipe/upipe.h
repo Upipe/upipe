@@ -38,6 +38,7 @@ extern "C" {
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/udict_dump.h>
 
 #include <stdint.h>
 #include <stdarg.h>
@@ -776,16 +777,6 @@ static inline void upipe_throw(struct upipe *upipe,
     va_end(args);
 }
 
-/** @This throws a ready event. This event is thrown whenever a
- * pipe is ready to accept input or respond to control commands.
- *
- * @param upipe description structure of the pipe
- */
-static inline void upipe_throw_ready(struct upipe *upipe)
-{
-    upipe_throw(upipe, UPROBE_READY);
-}
-
 /** @internal @This throws a log event. This event is thrown whenever a pipe
  * wants to send a textual message.
  *
@@ -918,6 +909,17 @@ static inline void upipe_verbose_va(struct upipe *upipe,
 #define upipe_throw_error(upipe, errcode)                                   \
     uprobe_throw_error((upipe)->uprobe, upipe, errcode)
 
+/** @This throws a ready event. This event is thrown whenever a
+ * pipe is ready to accept input or respond to control commands.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_throw_ready(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw ready event");
+    upipe_throw(upipe, UPROBE_READY);
+}
+
 /** @This throws a dead event. This event is thrown whenever a
  * pipe is about to be destroyed and will no longer accept input and
  * control commands.
@@ -926,6 +928,7 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  */
 static inline void upipe_throw_dead(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw dead event");
     upipe_throw(upipe, UPROBE_DEAD);
 }
 
@@ -937,6 +940,7 @@ static inline void upipe_throw_dead(struct upipe *upipe)
  */
 static inline void upipe_throw_source_end(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw source end");
     upipe_throw(upipe, UPROBE_SOURCE_END);
 }
 
@@ -947,6 +951,7 @@ static inline void upipe_throw_source_end(struct upipe *upipe)
  */
 static inline void upipe_throw_sink_end(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw sink end");
     upipe_throw(upipe, UPROBE_SINK_END);
 }
 
@@ -956,6 +961,7 @@ static inline void upipe_throw_sink_end(struct upipe *upipe)
  */
 static inline void upipe_throw_need_uref_mgr(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw need uref mgr");
     upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
 }
 
@@ -965,6 +971,7 @@ static inline void upipe_throw_need_uref_mgr(struct upipe *upipe)
  */
 static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw need upump mgr");
     upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
 }
 
@@ -974,6 +981,7 @@ static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
  */
 static inline void upipe_throw_need_uclock(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw need uclock");
     upipe_throw(upipe, UPROBE_NEED_UCLOCK);
 }
 
@@ -985,6 +993,12 @@ static inline void upipe_throw_need_uclock(struct upipe *upipe)
 static inline void upipe_throw_new_flow_def(struct upipe *upipe,
                                             struct uref *flow_def)
 {
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw new flow def (NULL)");
+    else {
+        upipe_dbg(upipe, "throw new flow def");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
     upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
 }
 
@@ -996,6 +1010,12 @@ static inline void upipe_throw_new_flow_def(struct upipe *upipe,
 static inline void upipe_throw_need_ubuf_mgr(struct upipe *upipe,
                                              struct uref *flow_def)
 {
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
+    else {
+        upipe_dbg(upipe, "throw need ubuf mgr");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
     upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
 }
 
@@ -1016,6 +1036,7 @@ static inline void upipe_throw_new_rap(struct upipe *upipe, struct uref *uref)
  */
 static inline void upipe_split_throw_update(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw split update");
     upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
 }
 
@@ -1025,6 +1046,7 @@ static inline void upipe_split_throw_update(struct upipe *upipe)
  */
 static inline void upipe_throw_sync_acquired(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw sync acquired");
     upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
 }
 
@@ -1035,6 +1057,7 @@ static inline void upipe_throw_sync_acquired(struct upipe *upipe)
  */
 static inline void upipe_throw_sync_lost(struct upipe *upipe)
 {
+    upipe_dbg(upipe, "throw sync lost");
     upipe_throw(upipe, UPROBE_SYNC_LOST);
 }
 

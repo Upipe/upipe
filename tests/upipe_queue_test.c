@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -151,20 +150,18 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
 
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&queue_test_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "sink"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     assert(upipe_qsrc_mgr != NULL);
     struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "queue source"),
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "queue source"),
             QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
@@ -173,7 +170,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
     upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "queue sink"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "queue sink"));
     assert(upipe_qsink != NULL);
     assert(upipe_set_flow_def(upipe_qsink, uref));
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
@@ -207,7 +204,6 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
 
     ev_default_destroy();

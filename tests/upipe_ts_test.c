@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -50,7 +49,6 @@
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uprobe_ts_log.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
@@ -88,7 +86,7 @@ static struct upump_mgr *upump_mgr;
 
 static struct upipe_mgr *upipe_noclock_mgr;
 
-static struct uprobe *uprobe_ts_log, *log;
+static struct uprobe *logger;
 static struct uprobe uprobe_demux_output_s;
 static struct uprobe uprobe_demux_program_s;
 
@@ -155,7 +153,7 @@ static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
 
             struct upipe *mux_program = upipe_void_alloc_output_sub(upipe,
                     upipe_ts_mux,
-                    uprobe_pfx_adhoc_alloc_va(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                    uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
                                            "ts mux program %"PRIu64, flow_id));
             assert(mux_program != NULL);
             upipe_release(mux_program);
@@ -191,7 +189,7 @@ static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
                 assert(output != NULL);
                 struct upipe *noclock = upipe_void_alloc_output(output,
                     upipe_noclock_mgr,
-                    uprobe_pfx_adhoc_alloc_va(uprobe_ts_log,
+                    uprobe_pfx_adhoc_alloc_va(logger,
                                               UPROBE_LOG_LEVEL,
                                               "noclock %"PRIu64,
                                               flow_id));
@@ -201,7 +199,7 @@ static bool catch_ts_demux_program(struct uprobe *uprobe, struct upipe *upipe,
                 assert(upipe_get_output(upipe, &upipe_ts_mux_program));
                 struct upipe *mux_input = upipe_void_alloc_output_sub(noclock,
                         upipe_ts_mux_program,
-                        uprobe_pfx_adhoc_alloc_va(uprobe_ts_log,
+                        uprobe_pfx_adhoc_alloc_va(logger,
                                                   UPROBE_LOG_LEVEL,
                                                   "mux input %"PRIu64,
                                                   flow_id));
@@ -230,7 +228,7 @@ static bool catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
 
             struct upipe *upipe_ts_mux = upipe_void_alloc_output(upipe,
                     upipe_ts_mux_mgr,
-                    uprobe_pfx_adhoc_alloc(uprobe_ts_log, UPROBE_LOG_LEVEL,
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
                                            "ts mux"));
             assert(upipe_ts_mux != NULL);
             upipe_mgr_release(upipe_ts_mux_mgr);
@@ -244,7 +242,7 @@ static bool catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
             assert(upipe_fsink_mgr != NULL);
             struct upipe *upipe_fsink = upipe_void_alloc_output(upipe_ts_mux,
                     upipe_fsink_mgr,
-                    uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file sink"));
+                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "file sink"));
             assert(upipe_fsink != NULL);
             upipe_mgr_release(upipe_fsink_mgr);
             assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
@@ -312,11 +310,8 @@ int main(int argc, char *argv[])
 
     struct uprobe uprobe_s;
     uprobe_init(&uprobe_s, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe_s, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
-    log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
+    logger = uprobe_stdio_alloc(&uprobe_s, stdout, UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
 
     upipe_noclock_mgr = upipe_noclock_mgr_alloc();
     assert(upipe_noclock_mgr != NULL);
@@ -325,7 +320,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "file source"));
+            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
@@ -334,12 +329,10 @@ int main(int argc, char *argv[])
     assert(upipe_set_uri(upipe_fsrc, src_file));
 
     /* TS demux */
-    uprobe_ts_log = uprobe_ts_log_alloc(log, UPROBE_LOG_DEBUG);
-    assert(uprobe_ts_log != NULL);
-    uprobe_init(&uprobe_demux_output_s, catch_ts_demux_output, uprobe_ts_log);
-    uprobe_init(&uprobe_demux_program_s, catch_ts_demux_program, uprobe_ts_log);
+    uprobe_init(&uprobe_demux_output_s, catch_ts_demux_output, logger);
+    uprobe_init(&uprobe_demux_program_s, catch_ts_demux_program, logger);
     struct uprobe uprobe_ts_demux_s;
-    uprobe_init(&uprobe_ts_demux_s, catch_ts_demux, uprobe_ts_log);
+    uprobe_init(&uprobe_ts_demux_s, catch_ts_demux, logger);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
@@ -379,9 +372,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
-    uprobe_ts_log_free(uprobe_ts_log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_stdio_free(logger);
 
     ev_default_destroy();
     return 0;

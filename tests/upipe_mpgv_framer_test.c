@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -164,20 +163,18 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, uprobe_stdio);
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
     struct upipe *upipe_mpgvf = upipe_void_alloc(upipe_mpgvf_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "mpgvf"));
+            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "mpgvf"));
     assert(upipe_mpgvf != NULL);
     assert(upipe_set_flow_def(upipe_mpgvf, uref));
     assert(upipe_set_output(upipe_mpgvf, upipe_sink));
@@ -274,7 +271,6 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
     uprobe_stdio_free(uprobe_stdio);
 
     return 0;

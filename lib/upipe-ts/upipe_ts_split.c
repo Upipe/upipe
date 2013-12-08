@@ -285,12 +285,14 @@ static void upipe_ts_split_pid_check(struct upipe *upipe, uint16_t pid)
     if (!ulist_empty(&upipe_ts_split->pids[pid].subs)) {
         if (!upipe_ts_split->pids[pid].set) {
             upipe_ts_split->pids[pid].set = true;
+            upipe_dbg_va(upipe, "throw ts split add pid %"PRIu16, pid);
             upipe_throw(upipe, UPROBE_TS_SPLIT_ADD_PID,
                         UPIPE_TS_SPLIT_SIGNATURE, (unsigned int)pid);
         }
     } else {
         if (upipe_ts_split->pids[pid].set) {
             upipe_ts_split->pids[pid].set = false;
+            upipe_dbg_va(upipe, "throw ts split del pid %"PRIu16, pid);
             upipe_throw(upipe, UPROBE_TS_SPLIT_DEL_PID,
                         UPIPE_TS_SPLIT_SIGNATURE, (unsigned int)pid);
         }

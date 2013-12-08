@@ -5,10 +5,8 @@ dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
 	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
-	uprobe_log_test.sh \
 	upipe_file_test.sh \
 	upipe_multicat_test.sh \
-	uprobe_ts_log_test.sh \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
@@ -16,14 +14,11 @@ dist_check_DATA = \
 	valgrind_osx.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
-	uprobe_prefix_test.txt \
-	uprobe_log_test.txt \
-	uprobe_ts_log_test.txt
+	uprobe_prefix_test.txt
 
 check_PROGRAMS = \
 	uprobe_stdio_test \
 	uprobe_prefix_test \
-	uprobe_log_test \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
 	uprobe_uref_mgr_test \
@@ -57,7 +52,6 @@ TESTS = \
 	uref_std_test \
 	uprobe_stdio_test.sh \
 	uprobe_prefix_test.sh \
-	uprobe_log_test.sh \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
 	uprobe_uref_mgr_test \
@@ -136,7 +130,6 @@ endif
 
 if HAVE_BITSTREAM
 check_PROGRAMS += \
-	uprobe_ts_log_test \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
@@ -159,7 +152,6 @@ check_PROGRAMS += \
 	upipe_a52_framer_test \
 	upipe_rtp_prepend_test
 TESTS += \
-	uprobe_ts_log_test.sh \
 	upipe_ts_sync_test \
 	upipe_ts_check_test \
 	upipe_ts_split_test \
@@ -232,7 +224,6 @@ upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscal
 upipe_swr_test_CFLAGS = $(SWRESAMPLE_CFLAGS)
 upipe_swr_test_LDADD = $(LDADD) $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swr.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
-uprobe_ts_log_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
