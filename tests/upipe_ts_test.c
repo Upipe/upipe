@@ -96,7 +96,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     switch (event) {
         default:
-            assert(event & UPROBE_HANDLED_FLAG);
+            assert(0);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
@@ -121,13 +121,6 @@ static bool catch_ts_demux_output(struct uprobe *uprobe, struct upipe *upipe,
     if (event == UPROBE_SOURCE_END) {
         upipe_release(upipe);
         return true;
-    }
-
-    if ((event | UPROBE_HANDLED_FLAG) ==
-            (UPROBE_NEW_FLOW_DEF | UPROBE_HANDLED_FLAG)) {
-        struct uref *flow_def = va_arg(args, struct uref *);
-        upipe_dbg(upipe, "new flow def");
-        uref_dump(flow_def, upipe->uprobe);
     }
 
     return false;

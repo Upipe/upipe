@@ -110,9 +110,10 @@ static bool STRUCTURE##_throw_adhoc(struct uprobe *uprobe,                  \
         case UPROBE_DEAD:                                                   \
             if (STRUCTURE->UPIPE == upipe) {                                \
                 /* The pipe we're attached to is dying, let's deallocate. */\
+                uprobe_throw(uprobe->next, upipe, event, args);             \
                 upipe_delete_probe(upipe, uprobe);                          \
                 STRUCTURE##_free(uprobe);                                   \
-                return false; /* pass the event upstream */                 \
+                return true; /* we already forwarded the event */           \
             }                                                               \
             break;                                                          \
         case UPROBE_FATAL:                                                  \

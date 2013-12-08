@@ -69,7 +69,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
 {
     switch (event) {
         default:
-            assert(event & UPROBE_HANDLED_FLAG);
+            assert(0);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

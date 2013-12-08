@@ -117,7 +117,7 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, 
         case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
         default:
-            assert(event & UPROBE_HANDLED_FLAG);
+            assert(0);
             break;
     }
     return true;

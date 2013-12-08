@@ -57,6 +57,12 @@ enum uprobe_event {
     /** an error occurred, data may be lost (enum uprobe_error_code); the
      * module probably needs to be reinitialized */
     UPROBE_ERROR,
+    /** a pipe is ready to accept input and respond to control commands
+     * (void) */
+    UPROBE_READY,
+    /** a pipe is about to be destroyed and will no longer accept input
+     * and control commands (void) */
+    UPROBE_DEAD,
     /** unable to read from a source because the end of file was reached, or
      * the component disappeared, or because of an error (void) */
     UPROBE_SOURCE_END,
@@ -90,18 +96,7 @@ enum uprobe_event {
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */
-    UPROBE_LOCAL = 0x8000,
-
-    /** when an event is handled, it is OR-ed with this value */
-    UPROBE_HANDLED_FLAG = 0x80000000,
-
-    /* following events have the msb set so that it is always handled */
-    /** a pipe is ready to accept input and respond to control commands
-     * (void) */
-    UPROBE_READY = 0xfffffffe,
-    /** a pipe is about to be destroyed and will no longer accept input
-     * and control commands (void) */
-    UPROBE_DEAD = 0xffffffff
+    UPROBE_LOCAL = 0x8000
 };
 
 /** @This defines the levels of log messages. */
@@ -181,7 +176,7 @@ static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
         /* in case our probe deletes itself */
         struct uprobe *next = uprobe->next;
         if (uprobe->uthrow(uprobe, upipe, event, args_copy))
-            event |= UPROBE_HANDLED_FLAG;
+            next = NULL;
         va_end(args_copy);
         uprobe = next;
     }

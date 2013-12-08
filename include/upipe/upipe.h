@@ -1088,22 +1088,21 @@ static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
     upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
-/** @This throws an event telling that the given uref carries a presentation
- * and/or a decoding timestamp. The uref must at least have k.pts.orig and/or
- * k.dts.orig set. Depending on the module documentation, k.pts and k.dts may
- * also be set. A probe is entitled to adding new attributes such as k.pts.sys
- * and/or k.dts.sys.
+/** @This catches an event coming from an inner pipe, and rethrows is as if
+ * it were sent by the outermost pipe.
  *
- * @param upipe description structure of the pipe
- * @param uref uref carrying a presentation and/or a decoding timestamp
+ * @param upipe pointer to outermost pipe
+ * @param inner pointer to inner pipe
+ * @param event event thrown
+ * @param args optional arguments of the event
  */
-static inline void upipe_throw_proxy(struct upipe *upipe, struct upipe *subpipe,
+static inline void upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
                                      enum uprobe_event event, va_list args)
 {
     if (event != UPROBE_READY && event != UPROBE_DEAD)
         upipe_throw_va(upipe, event, args);
     else
-        uprobe_throw_va(upipe->uprobe, subpipe, event, args);
+        uprobe_throw_va(upipe->uprobe, inner, event, args);
 }
 
 #ifdef __cplusplus
