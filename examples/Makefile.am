@@ -26,19 +26,23 @@ noinst_PROGRAMS += udpmulticat
 
 if HAVE_BITSTREAM
 noinst_PROGRAMS += upipe_duration extract_pic
+endif
 
+if HAVE_AVFORMAT
+
+if HAVE_BITSTREAM
 if HAVE_GLX
 noinst_PROGRAMS += glxplay
+endif
 endif
 
 if HAVE_ALSA
 noinst_PROGRAMS += alsaplay
 endif
-endif
 
-if HAVE_AVFORMAT
 if HAVE_X264
 #noinst_PROGRAMS += transcode_video
 endif
+
 endif
 endif
