@@ -98,8 +98,10 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
     int64_t offset = sys_ref - clock_ref;
     lldiv_t q;
 
-    if (unlikely(llabs(offset - uprobe_dejitter->offset) > MAX_JITTER))
+    if (unlikely(llabs(offset - uprobe_dejitter->offset) > MAX_JITTER)) {
+        upipe_dbg_va(upipe, "[dejitter] max jitter reached (%"PRId64")", offset - uprobe_dejitter->offset);
         discontinuity = 1;
+    }
 
     if (unlikely(discontinuity)) {
         upipe_dbg(upipe, "[dejitter] discontinuity");

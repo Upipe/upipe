@@ -340,8 +340,12 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         while (upipe_ts_encaps->next_pcr <=
                    begin - upipe_ts_encaps->pcr_tolerance -
                    upipe_ts_encaps->ts_delay) {
-            struct uref *output = upipe_ts_encaps_pad_pcr(upipe,
-                                              upipe_ts_encaps->next_pcr);
+            struct uref *output =
+                upipe_ts_encaps_pad_pcr(upipe,
+                                        dts_prog - dts_sys +
+                                        upipe_ts_encaps->next_pcr -
+                                        upipe_ts_encaps->pcr_tolerance -
+                                        upipe_ts_encaps->ts_delay);
             if (likely(output != NULL)) {
                 uref_clock_set_ref(output);
                 uref_clock_set_cr_dts_delay(output,
@@ -364,9 +368,8 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
     }
 
     bool random = uref_flow_get_random(uref);
-    if (unlikely(upipe_ts_encaps->next_pcr != UINT64_MAX &&
-                 (random || upipe_ts_encaps->next_pcr == 0)))
-        /* Insert PCR on key frames and on PCR interval change */
+    if (unlikely(upipe_ts_encaps->next_pcr == 0))
+        /* Insert on PCR interval change */
         upipe_ts_encaps->next_pcr = begin;
 
     /* Find out how many TS packets */
@@ -390,12 +393,12 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
     int i;
     for (i = nb_ts - 1; i >= 0; i--) {
         uint64_t muxdate = end - i * duration / nb_ts;
-        bool pcr = upipe_ts_encaps->next_pcr <=
-                       muxdate + upipe_ts_encaps->pcr_tolerance;
-
+        uint64_t pcr = upipe_ts_encaps->next_pcr <=
+                       muxdate + upipe_ts_encaps->pcr_tolerance ?
+                       (dts_prog + muxdate - dts_sys -
+                        upipe_ts_encaps->ts_delay) : 0;
         struct uref *output =
-            upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1,
-                                   pcr ? (dts_prog - (dts_sys - muxdate)) : 0,
+            upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1, pcr,
                                    random, discontinuity);
         if (unlikely(output == NULL))
             /* This can happen if the last packet was only planned to contain
@@ -412,6 +415,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
             output_delay = 0;
         } else
             output_delay = output_dts - muxdate;
+
         uref_clock_set_cr_dts_delay(output,
                                     output_delay + upipe_ts_encaps->ts_delay);
 
@@ -435,13 +439,12 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         if (pcr) {
             uref_clock_set_ref(output);
             upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
+            nb_pcr--;
         }
 
         upipe_ts_encaps_output(upipe, output, upump);
         random = false;
         discontinuity = false;
-        if (pcr)
-            nb_pcr--;
     }
 
     if (uref_block_size(uref, &size) && size)
