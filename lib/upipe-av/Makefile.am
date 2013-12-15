@@ -9,6 +9,7 @@ libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_
 libupipe_av_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(builddir)
 libupipe_av_la_CFLAGS = -Wall @AVFORMAT_CFLAGS@
 libupipe_av_la_LIBADD = @AVFORMAT_LIBS@ $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+libupipe_av_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc

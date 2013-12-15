@@ -26,6 +26,7 @@ libupipe_ts_la_SOURCES = \
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_ts_la_CFLAGS = -Wall
 libupipe_ts_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+libupipe_ts_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_ts.pc

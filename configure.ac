@@ -22,7 +22,7 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 AM_PROG_LIBTOOL
-LT_INIT
+LT_INIT([win32-dll])
 
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
