@@ -22,7 +22,6 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
-AM_PROG_LIBTOOL
 LT_INIT([win32-dll])
 
 # Checks for libraries.
@@ -66,7 +65,6 @@ AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
-AC_C_CONST
 AC_C_INLINE
 AC_TYPE_INT64_T
 AC_TYPE_SIZE_T
