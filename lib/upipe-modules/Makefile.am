@@ -38,7 +38,7 @@ endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_CFLAGS = -Wall
-libupipe_modules_la_LIBADD = -lm
+libupipe_modules_la_LIBADD = -lm $(top_builddir)/lib/upipe/libupipe.la
 libupipe_modules_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
