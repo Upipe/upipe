@@ -406,7 +406,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     /* flow definition */
     struct uref *flow_def_attr = upipe_avcenc_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def_attr == NULL)) {
-        free(avpkt.data);
+        av_free_packet(&avpkt);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -439,7 +439,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
     if (!ret) {
         uref_free(flow_def_attr);
-        free(avpkt.data);
+        av_free_packet(&avpkt);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -448,7 +448,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
         if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
             uref_free(flow_def_attr);
-            free(avpkt.data);
+            av_free_packet(&avpkt);
             upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
             return false;
         }
@@ -467,7 +467,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
     if (unlikely(ubuf == NULL)) {
-        free(avpkt.data);
+        av_free_packet(&avpkt);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
@@ -476,13 +476,13 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uint8_t *buf;
     if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buf))) {
         ubuf_free(ubuf);
-        free(avpkt.data);
+        av_free_packet(&avpkt);
         upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
         return false;
     }
     memcpy(buf, avpkt.data, size);
     ubuf_block_unmap(ubuf, 0);
-    free(avpkt.data);
+    av_free_packet(&avpkt);
 
     /* find uref corresponding to avpkt */
     struct uchain *uchain;
