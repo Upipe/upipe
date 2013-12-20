@@ -429,6 +429,10 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                 context->frame_size / context->sample_rate;
             upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
         }
+
+        if (codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0) {
+            uref_sound_flow_set_samples(flow_def_attr, context->frame_size);
+        }
     }
     struct urational fps;
     if (uref_pic_flow_get_fps(upipe_avcenc->flow_def_input, &fps) &&
