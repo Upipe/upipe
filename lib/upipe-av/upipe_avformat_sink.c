@@ -73,6 +73,8 @@ struct upipe_avfsink {
     char *uri;
     /** MIME type */
     char *mime;
+    /** format name */
+    char *format;
 
     /** avformat options */
     AVDictionary *options;
@@ -315,6 +317,11 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         return false;
     }
 
+    const char *lang;
+    if (uref_flow_get_lang(flow_def, &lang) && lang) {
+        av_dict_set(&stream->metadata, "language", lang, 0);
+    }
+
     AVCodecContext *codec = stream->codec;
     codec->bit_rate = octetrate * 8;
     codec->codec_tag =
@@ -430,6 +437,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
 
     upipe_avfsink->uri = NULL;
     upipe_avfsink->mime = NULL;
+    upipe_avfsink->format = NULL;
 
     upipe_avfsink->options = NULL;
     upipe_avfsink->context = NULL;
@@ -655,6 +663,42 @@ static bool _upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
     return true;
 }
 
+/** @internal @This returns the currently configured format name.
+ *
+ * @param upipe description structure of the pipe
+ * @param format_p filled in with the currently configured format name
+ * @return false in case of error
+ */
+static bool _upipe_avfsink_get_format(struct upipe *upipe, const char **format_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    assert(format_p != NULL);
+    *format_p = upipe_avfsink->format;
+    return true;
+}
+
+/** @internal @This sets the format name. It only takes effect after the next
+ * call to @ref upipe_set_uri.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format name
+ * @return false in case of error
+ */
+static bool _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    free(upipe_avfsink->format);
+    if (format != NULL) {
+        upipe_avfsink->format = strdup(format);
+        if (upipe_avfsink->format == NULL) {
+            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            return false;
+        }
+    } else
+        upipe_avfsink->format = NULL;
+    return true;
+}
+
 /** @internal @This returns the currently opened URI.
  *
  * @param upipe description structure of the pipe
@@ -697,10 +741,7 @@ static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         return true;
 
     AVOutputFormat *format = NULL;
-    if (upipe_avfsink->mime != NULL)
-        format = av_guess_format(NULL, NULL, upipe_avfsink->mime);
-    if (format == NULL)
-        format = av_guess_format(NULL, uri, NULL);
+    format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
     if (unlikely(format == NULL))
         return false;
 
@@ -765,6 +806,19 @@ static bool upipe_avfsink_control(struct upipe *upipe,
             const char *mime = va_arg(args, const char *);
             return _upipe_avfsink_set_mime(upipe, mime);
         }
+        case UPIPE_AVFSINK_GET_FORMAT: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            const char **format_p = va_arg(args, const char **);
+            return _upipe_avfsink_get_format(upipe, format_p);
+        }
+        case UPIPE_AVFSINK_SET_FORMAT: {
+            unsigned int signature = va_arg(args, unsigned int);
+            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            const char *format = va_arg(args, const char *);
+            return _upipe_avfsink_set_format(upipe, format);
+        }
+
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_avfsink_get_uri(upipe, uri_p);
@@ -789,6 +843,9 @@ static void upipe_avfsink_free(struct upipe *upipe)
 
     upipe_avfsink_set_uri(upipe, NULL);
     upipe_throw_dead(upipe);
+
+    free(upipe_avfsink->mime);
+    free(upipe_avfsink->format);
 
     av_dict_free(&upipe_avfsink->options);
 

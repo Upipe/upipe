@@ -51,7 +51,11 @@ enum upipe_avfsink_command {
     /** returns the currently configured MIME type (const char **) */
     UPIPE_AVFSINK_GET_MIME,
     /** sets the MIME type (const char *) */
-    UPIPE_AVFSINK_SET_MIME
+    UPIPE_AVFSINK_SET_MIME,
+    /** returns the currently configured format name (const char **) */
+    UPIPE_AVFSINK_GET_FORMAT,
+    /** sets the format name (const char *) */
+    UPIPE_AVFSINK_SET_FORMAT,
 };
 
 /** @This returns the management structure for all avformat sinks.
@@ -116,6 +120,32 @@ static inline bool upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_MIME, UPIPE_AVFSINK_SIGNATURE,
                          mime);
+}
+
+/** @This returns the currently configured format.
+ *
+ * @param upipe description structure of the pipe
+ * @param format_p filled in with the currently configured format name
+ * @return false in case of error
+ */
+static inline bool upipe_avfsink_get_format(struct upipe *upipe,
+                                          const char **format_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_GET_FORMAT, UPIPE_AVFSINK_SIGNATURE,
+                         format_p);
+}
+
+/** @This sets the format. It only takes effect after the next call to
+ * @ref upipe_set_uri.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format name
+ * @return false in case of error
+ */
+static inline bool upipe_avfsink_set_format(struct upipe *upipe, const char *format)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_SET_FORMAT, UPIPE_AVFSINK_SIGNATURE,
+                         format);
 }
 
 #ifdef __cplusplus
