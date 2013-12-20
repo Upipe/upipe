@@ -1,0 +1,458 @@
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ *
+ * Authors: Benjamin Cohen
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject
+ * to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
+
+ /*
+
+([qsrc][encoder]{label: x264\navcenc}[fsink]) {border-style: dashed; flow: west}
+[] -- stream --> [avfsrc] --> [avcdec] --> [qsink] --> {flow: south; end: east}
+[qsrc] --> [encoder] --> [fsink] -- file --> {flow: west}[]
+
+ */
+
+#include <upipe/ulist.h>
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_log.h>
+#include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
+#include <upipe/umem.h>
+#include <upipe/umem_alloc.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
+#include <upipe/uref.h>
+#include <upipe/uref_std.h>
+#include <upipe/uref_block.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_sound_flow.h>
+#include <upipe/uref_block_flow.h>
+#include <upipe/ubuf.h>
+#include <upipe/ubuf_block.h>
+#include <upipe/ubuf_block_mem.h>
+#include <upipe/ubuf_pic.h>
+#include <upipe/ubuf_pic_mem.h>
+#include <upipe/uref_dump.h>
+#include <upipe/upump.h>
+#include <upump-ev/upump_ev.h>
+#include <upipe/upipe.h>
+#include <upipe-av/uref_av_flow.h>
+#include <upipe-av/upipe_av.h>
+#include <upipe-av/upipe_avformat_source.h>
+#include <upipe-av/upipe_avformat_sink.h>
+#include <upipe-av/upipe_avcodec_decode.h>
+#include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe-swresample/upipe_swr.h>
+
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <inttypes.h>
+#include <assert.h>
+
+#include <ev.h>
+
+#define UDICT_POOL_DEPTH    10
+#define UREF_POOL_DEPTH     10
+#define UBUF_POOL_DEPTH     10
+#define UBUF_PREPEND        0
+#define UBUF_APPEND         0
+#define UBUF_ALIGN          32
+#define UBUF_ALIGN_OFFSET   0
+#define UPUMP_POOL          5
+#define UPUMP_BLOCKER_POOL  5
+#define READ_SIZE           4096
+#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+
+#define SAMPLERATE 48000 /* FIXME, fix upipe-swresample */
+
+struct es_conf {
+    struct uchain uchain;
+    uint64_t id;
+    const char *codec;
+    struct udict *options;
+};
+
+enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
+struct uref_mgr *uref_mgr;
+struct ubuf_mgr *block_mgr;
+struct ubuf_mgr *yuv_mgr;
+
+struct upipe_mgr *upipe_avcdec_mgr;
+struct upipe_mgr *upipe_avcenc_mgr;
+struct upipe_mgr *upipe_swr_mgr;
+
+static struct uprobe *logger;
+static struct upipe *avfsrc;
+static struct upipe *avfsink;
+struct uchain eslist;
+
+static void usage(const char *argv0) {
+    fprintf(stderr, "Usage: %s [-d] [-m <mime>] [-f <format>] [-p <pid> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "   -f: output format name\n");
+    fprintf(stderr, "   -m: output mime type\n");
+    fprintf(stderr, "   -p: add stream with id\n");
+    fprintf(stderr, "   -c: stream encoder\n");
+    fprintf(stderr, "   -o: encoder option (key=value)\n");
+    exit(EXIT_FAILURE);
+}
+
+/* exit on error */
+static inline void check_exit(bool cond, const char *str)
+{
+    if (cond) return;
+
+    fprintf(stderr, "%s", str);
+    exit(EXIT_FAILURE);
+}
+
+/* return es configuration from uchain */
+static inline struct es_conf *es_conf_from_uchain(struct uchain *uchain)
+{
+    return container_of(uchain, struct es_conf, uchain);
+}
+
+/* return es configuration from id */
+struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
+{
+    struct uchain *uchain;
+    ulist_foreach (list, uchain) {
+        struct es_conf *conf = es_conf_from_uchain(uchain);
+        if (conf->id == id) {
+            return conf;
+        }
+    }
+    return NULL;
+}
+
+/* iterate in es configuration options */
+bool es_conf_iterate(struct es_conf *conf, const char **key,
+                     const char **value, enum udict_type *type)
+{
+    bool ret = udict_iterate(conf->options, key, type);
+    if (*type == UDICT_TYPE_END || !ret) {
+        return false;
+    }
+    return udict_get_string(conf->options, value, *type, *key);
+}
+
+/* allocate es configuration */
+struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
+                              uint64_t id, struct uchain *list)
+{
+    struct es_conf *conf = malloc(sizeof(struct es_conf));
+    memset(conf, 0, sizeof(struct es_conf));
+    uchain_init(&conf->uchain);
+    if (list) {
+        ulist_add(list, &conf->uchain);
+    }
+
+    conf->options = udict_alloc(mgr, 0);
+    conf->id = id;
+    return conf;
+}
+
+/* add option to es configuration */
+bool es_conf_add_option(struct es_conf *conf, const char *key,
+                                              const char *value)
+{
+    assert(conf);
+    return udict_set_string(conf->options, value, UDICT_TYPE_STRING, key);
+}
+
+/* add option to es configuration */
+static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
+{
+    const char *key = str;
+    char *value = strchr(str, '=');
+    if (!value) {
+        value = str + strlen(str);
+    } else {
+        *value = '\0';
+        value++;
+    }
+    return es_conf_add_option(conf, key, value);
+}
+
+/* main uprobe */
+static bool catch(struct uprobe *uprobe, struct upipe *upipe,
+                  enum uprobe_event event, va_list args)
+{
+    switch (event) {
+        default:
+            break;
+
+        case UPROBE_SOURCE_END:
+            upipe_release(upipe);
+            return true;
+    }
+    return false;
+}
+
+/* catch demux events */
+static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
+                  enum uprobe_event event, va_list args)
+{
+    if (event != UPROBE_SPLIT_UPDATE) {
+        return false;
+    }
+
+    /* iterate through flow list */
+    struct uref *flow_def = NULL;
+    while (upipe_split_iterate(upipe, &flow_def)) {
+        const char *def = "(none)";
+        uref_flow_get_def(flow_def, &def);
+        if (ubase_ncmp(def, "block.")) {
+            upipe_warn_va(upipe, "flow def %s is not supported", def);
+            break;
+        }
+
+        /* flow */
+        uint64_t id = 0;
+        uref_flow_get_id(flow_def, &id);
+        upipe_notice_va(upipe, "New flow %"PRIu64" (%s)", id, def);
+        uref_dump(flow_def, upipe->uprobe);
+
+        /* demux output */
+        struct upipe *avfsrc_output =
+            upipe_flow_alloc_sub(avfsrc,
+                    uprobe_pfx_adhoc_alloc_va(logger, loglevel,
+                        "src %"PRIu64, id), flow_def);
+        assert(avfsrc_output != NULL);
+        upipe_set_ubuf_mgr(avfsrc_output, block_mgr);
+
+        struct upipe *incoming = avfsrc_output;
+
+        /* transcode stream if specified by user */
+        struct es_conf *conf = es_conf_from_id(&eslist, id);
+        if (conf && conf->codec) {
+            /* decoder */
+            struct upipe *decoder = upipe_void_alloc_output(avfsrc_output,
+                upipe_avcdec_mgr, uprobe_pfx_adhoc_alloc_va(logger,
+                                       loglevel, "dec %"PRIu64, id));
+            upipe_release(decoder);
+            incoming = decoder;
+            
+            /* stream type */
+            if (strstr(def, ".pic.")) {
+                upipe_set_ubuf_mgr(decoder, yuv_mgr);
+            } else if (strstr(def, ".sound.")) {
+                upipe_set_ubuf_mgr(decoder, block_mgr);
+
+                /* resample */
+                struct uref *flow = uref_sound_flow_alloc_def(uref_mgr,
+                                                              "pcm_s16.", 2, 0);
+                uref_sound_flow_set_rate(flow, SAMPLERATE);
+                struct upipe *swr = upipe_flow_alloc_output(decoder,
+                        upipe_swr_mgr, uprobe_pfx_adhoc_alloc_va(logger,
+                            loglevel, "swr %"PRIu64, id), flow);
+                upipe_release(swr);
+                uref_free(flow);
+                upipe_set_ubuf_mgr(swr, block_mgr);
+                incoming = swr;
+            } else {
+                upipe_err_va(upipe, "stream type unsupported %"PRIu64" (%s)",
+                             id, def);
+                exit(EXIT_FAILURE);
+            }
+
+            /* encoder */
+            struct uref *flow = uref_block_flow_alloc_def(uref_mgr, "");
+            uref_avcenc_set_codec_name(flow, conf->codec);
+            struct upipe *encoder = upipe_flow_alloc_output(incoming,
+                upipe_avcenc_mgr, uprobe_pfx_adhoc_alloc_va(logger,
+                    loglevel, "enc %"PRIu64, id), flow);
+            upipe_release(encoder);
+            uref_free(flow);
+            upipe_set_ubuf_mgr(encoder, block_mgr);
+            if (strstr(def, ".pic.")) {
+                upipe_avcenc_set_option(encoder, "threads", "0");
+            }
+
+            /* encoder options */
+            const char *key = NULL, *value = NULL;
+            enum udict_type type = UDICT_TYPE_END;
+            while (es_conf_iterate(conf, &key, &value, &type)) {
+                upipe_dbg_va(encoder, "%s option: %s=%s",
+                        conf->codec, key, value);
+                if (!upipe_avcenc_set_option(encoder, key, value))
+                    upipe_warn_va(encoder, "option %s unknown", key);
+            }
+
+            incoming = encoder;
+        }
+
+        /* mux input */
+        struct upipe *sink =
+            upipe_void_alloc_output_sub(incoming, avfsink,
+                    uprobe_pfx_adhoc_alloc_va(logger, loglevel,
+                        "sink %"PRIu64, id));
+        if (unlikely(!sink)) {
+            upipe_err_va(upipe,
+                    "could not allocate mux input for %"PRIu64" (%s)",
+                    id, def);
+            upipe_release(avfsrc_output);
+            break;
+        }
+        upipe_release(sink);
+    }
+
+    return true;
+}
+
+int main(int argc, char *argv[])
+{
+    int opt;
+    const char *src_url, *sink_url;
+    const char *mime = NULL, *format = NULL;
+    struct es_conf *es_cur = NULL;
+
+    /* upipe env (udict, umem) */
+    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
+                                                         umem_mgr, -1, -1);
+
+    /* int es list */
+    ulist_init(&eslist);
+
+    /* parse options */
+    while ((opt = getopt(argc, argv, "dm:f:p:c:o:")) != -1) {
+        switch(opt) {
+            case 'd':
+                if (loglevel > 0) loglevel--;
+                break;
+            case 'm':
+                mime = optarg;
+                break;
+            case 'f':
+                format = optarg;
+                break;
+
+            case 'p': {
+                uint64_t pid = strtoull(optarg, NULL, 0);
+                es_cur = es_conf_alloc(udict_mgr, pid, &eslist);
+                break;
+            }
+            case 'c': {
+                check_exit(es_cur, "no stream id specified\n");
+                es_cur->codec = optarg;
+                break;
+            }
+            case 'o': {
+                check_exit(es_cur, "no stream id specified\n");
+                es_conf_add_option_parse(es_cur, optarg);
+                break;
+            }
+
+            default:
+                usage(argv[0]);
+                break;
+        }
+    }
+    if (argc - optind < 2) {
+        usage(argv[0]);
+    }
+    src_url = argv[optind++];
+    sink_url = argv[optind++];
+
+    /* upipe env */
+    struct ev_loop *loop = ev_default_loop(0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+                                                   0);
+    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
+                                        UBUF_POOL_DEPTH, umem_mgr,
+                                        -1, -1, -1, 0);
+    yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
+                                     umem_mgr, 1,
+                                     UBUF_PREPEND, UBUF_APPEND,
+                                     UBUF_PREPEND, UBUF_APPEND,
+                                     UBUF_ALIGN, UBUF_ALIGN_OFFSET);
+    /* planar YUV (I420) */
+    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "y8", 1, 1, 1);
+    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "u8", 2, 2, 1);
+    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "v8", 2, 2, 1);
+
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
+    struct uclock *uclock = uclock_std_alloc(0);
+    struct uprobe uprobe, uprobe_demux_s;
+    uprobe_init(&uprobe, catch, NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     loglevel);
+    logger = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
+    uprobe_init(&uprobe_demux_s, catch_demux, logger);
+
+    upipe_av_init(false, logger);
+
+    /* pipe managers */
+    struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
+    struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
+    upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
+    upipe_swr_mgr = upipe_swr_mgr_alloc();
+
+    /* avformat sink */
+    avfsink = upipe_void_alloc(upipe_avfsink_mgr,
+        uprobe_pfx_adhoc_alloc(logger, loglevel, "avfsink"));
+    upipe_set_uclock(avfsink, uclock);
+
+    upipe_avfsink_set_mime(avfsink, mime);
+    upipe_avfsink_set_format(avfsink, format);
+    if (unlikely(!upipe_set_uri(avfsink, sink_url))) {
+        fprintf(stderr, "error: could not open dest uri\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* avformat source */
+    avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
+        uprobe_pfx_adhoc_alloc(&uprobe_demux_s, loglevel, "avfsrc"));
+    upipe_set_upump_mgr(avfsrc, upump_mgr);
+    upipe_set_uref_mgr(avfsrc, uref_mgr);
+    upipe_set_uclock(avfsrc, uclock);
+    upipe_set_uri(avfsrc, src_url);
+
+    /* fire */
+    ev_loop(loop, 0);
+
+    upipe_mgr_release(upipe_avfsrc_mgr); /* nop */
+
+    upipe_release(avfsink);
+    upipe_mgr_release(upipe_avfsink_mgr); /* nop */
+
+    upipe_av_clean();
+
+    upump_mgr_release(upump_mgr);
+    uref_mgr_release(uref_mgr);
+    udict_mgr_release(udict_mgr);
+    umem_mgr_release(umem_mgr);
+    ubuf_mgr_release(block_mgr);
+    uclock_release(uclock);
+    uprobe_log_free(logger);
+    uprobe_stdio_free(uprobe_stdio);
+
+    ev_default_destroy();
+    return 0;
+}
