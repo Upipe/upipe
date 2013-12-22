@@ -234,8 +234,12 @@ write_buffer:
             return true;
         }
 
-        uref_free(uref);
-        break;
+        size_t uref_size;
+        if (uref_block_size(uref, &uref_size) && uref_size == ret) {
+            uref_free(uref);
+            break;
+        }
+        uref_block_resize(uref, ret, -1);
     }
     return true;
 }
