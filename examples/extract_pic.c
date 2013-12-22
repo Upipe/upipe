@@ -107,7 +107,7 @@ const char *srcpath, *dstpath;
 struct upipe *upipe_source;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] <source> <destination>\n", argv0);
     fprintf(stderr, "   -d: force debug log level\n");
     fprintf(stderr, "   -q: quieter log\n");
     exit(EXIT_FAILURE);
