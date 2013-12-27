@@ -18,6 +18,7 @@ dist_check_DATA = \
 
 check_PROGRAMS = \
 	uprobe_stdio_test \
+	uprobe_output_test \
 	uprobe_prefix_test \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
@@ -51,6 +52,7 @@ TESTS = \
 	ubuf_pic_mem_test \
 	uref_std_test \
 	uprobe_stdio_test.sh \
+	uprobe_output_test \
 	uprobe_prefix_test.sh \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
