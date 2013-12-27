@@ -145,7 +145,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!ubuf)) {
         uref_block_unmap(uref, 0);
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -212,7 +212,7 @@ static bool upipe_swr_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 

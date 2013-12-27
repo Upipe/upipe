@@ -80,11 +80,13 @@ static inline void urefcount_reset(struct urefcount *refcount)
 /** @This increments a reference counter.
  *
  * @param refcount pointer to a urefcount structure
+ * @return same pointer to a urefcount structure
  */
-static inline void urefcount_use(struct urefcount *refcount)
+static inline struct urefcount *urefcount_use(struct urefcount *refcount)
 {
     if (refcount != NULL && refcount->cb != NULL)
         uatomic_fetch_add(&refcount->refcount, 1);
+    return refcount;
 }
 
 /** @This decrements a reference counter, and possibly frees the object if

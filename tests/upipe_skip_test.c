@@ -124,7 +124,7 @@ static struct upipe_mgr skip_test_mgr = {
 
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -134,7 +134,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
             assert(0);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -174,7 +174,8 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_skip_mgr = upipe_skip_mgr_alloc();
     assert(upipe_skip_mgr);
     struct upipe *skip = upipe_void_alloc(upipe_skip_mgr,
-                uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "skip"));
+                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                                 "skip"));
     assert(upipe_set_flow_def(skip, uref));
     assert(skip);
 
@@ -185,7 +186,8 @@ int main(int argc, char **argv)
 
     /* skip_test */
     struct upipe *skip_test = upipe_void_alloc(&skip_test_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "skiptest"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "skiptest"));
     assert(skip_test != NULL);
     assert(upipe_set_output(skip, skip_test));
     upipe_release(skip_test);
@@ -211,7 +213,8 @@ int main(int argc, char **argv)
     ubuf_mgr_release(block_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

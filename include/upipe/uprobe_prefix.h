@@ -47,11 +47,6 @@ struct uprobe_pfx {
     /** minimum level of messages to pass-through */
     enum uprobe_log_level min_level;
 
-    /** true if we are in ad-hoc mode */
-    bool adhoc;
-    /** in ad-hoc mode, pointer to the pipe we're attached to */
-    struct upipe *adhoc_pipe;
-
     /** structure exported to modules */
     struct uprobe uprobe;
 };
@@ -100,38 +95,6 @@ struct uprobe *uprobe_pfx_alloc(struct uprobe *next,
 struct uprobe *uprobe_pfx_alloc_va(struct uprobe *next,
                                    enum uprobe_log_level min_level,
                                    const char *format, ...);
-
-/** @This allocates a new uprobe pfx structure in ad-hoc mode (will be
- * deallocated when the pipe dies).
- *
- * @param next next probe to test if this one doesn't catch the event
- * @param min_level minimum level of passed-through messages
- * @param name name of the pipe (informative)
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_pfx_adhoc_alloc(struct uprobe *next,
-                                      enum uprobe_log_level min_level,
-                                      const char *name);
-
-/** @This allocates a new uprobe pfx structure in ad-hoc mode (will be
- * deallocated when the pipe dies), with printf-style name generation.
- *
- * @param next next probe to test if this one doesn't catch the event
- * @param min_level minimum level of passed-through messages
- * @param format printf-style format for the name, followed by optional
- * arguments
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_pfx_adhoc_alloc_va(struct uprobe *next,
-                                         enum uprobe_log_level min_level,
-                                         const char *format, ...);
-
-/** @This frees a uprobe pfx structure.
- *
- * @param uprobe uprobe structure to free
- * @return next probe
- */
-struct uprobe *uprobe_pfx_free(struct uprobe *uprobe);
 
 #ifdef __cplusplus
 }

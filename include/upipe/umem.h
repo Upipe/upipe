@@ -151,10 +151,13 @@ static inline void umem_mgr_vacuum(struct umem_mgr *mgr)
 /** @This increments the reference count of a umem manager.
  *
  * @param mgr pointer to umem manager
+ * @return same pointer to umem manager
  */
-static inline void umem_mgr_use(struct umem_mgr *mgr)
+static inline struct umem_mgr *umem_mgr_use(struct umem_mgr *mgr)
 {
+    assert(mgr != NULL);
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a umem manager or frees it.
@@ -163,7 +166,8 @@ static inline void umem_mgr_use(struct umem_mgr *mgr)
  */
 static inline void umem_mgr_release(struct umem_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

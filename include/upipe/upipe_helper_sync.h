@@ -55,12 +55,12 @@ extern "C" {
  * Initializes the acquired field.
  *
  * @item @code
- *  void upipe_foo_sync_lost(struct upipe_foo *s)
+ *  enum ubase_err upipe_foo_sync_lost(struct upipe_foo *s)
  * @end code
  * Throws the @ref UPROBE_SYNC_LOST event, if it hasn't been thrown before.
  *
  * @item @code
- *  void upipe_foo_sync_acquired(struct upipe_foo *s)
+ *  enum ubase_err upipe_foo_sync_acquired(struct upipe_foo *s)
  * @end code
  * Throws the @ref UPROBE_SYNC_ACQUIRED event, if it hasn't been thrown before.
  *
@@ -89,26 +89,28 @@ static void STRUCTURE##_init_sync(struct upipe *upipe)                      \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_sync_lost(struct upipe *upipe)                      \
+static enum ubase_err STRUCTURE##_sync_lost(struct upipe *upipe)            \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (STRUCTURE->ACQUIRED) {                                              \
         STRUCTURE->ACQUIRED = false;                                        \
-        upipe_throw_sync_lost(upipe);                                       \
+        return upipe_throw_sync_lost(upipe);                                \
     }                                                                       \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sends the sync_acquired event if it has not already     \
  * been sent.                                                               \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_sync_acquired(struct upipe *upipe)                  \
+static enum ubase_err STRUCTURE##_sync_acquired(struct upipe *upipe)        \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (!STRUCTURE->ACQUIRED) {                                             \
         STRUCTURE->ACQUIRED = true;                                         \
-        upipe_throw_sync_acquired(upipe);                                   \
+        return upipe_throw_sync_acquired(upipe);                            \
     }                                                                       \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

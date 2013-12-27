@@ -58,8 +58,8 @@
 static unsigned int pipe_counter = 0, probe_counter = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -132,7 +132,8 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -143,7 +144,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(upipe_probe_uref_mgr != NULL);
     struct upipe *upipe_probe_uref = upipe_void_alloc(upipe_probe_uref_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "probe_uref"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "probe_uref"));
     assert(upipe_probe_uref != NULL);
     assert(upipe_set_flow_def(upipe_probe_uref, uref));
     assert(upipe_set_output(upipe_probe_uref, upipe_sink));
@@ -165,7 +167,8 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

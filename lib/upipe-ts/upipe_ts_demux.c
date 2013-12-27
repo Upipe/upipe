@@ -26,17 +26,18 @@
  * until ts_psi_split
  * @item output source pipe, which is returned to the application, and
  * represents an elementary stream; it sets up the ts_decaps, pes_decaps and
- * framer subpipes
+ * framer inner pipes
  * @item program split pipe, which is returned to the application, and
- * represents a program; it sets up the ts_split_output and ts_pmtd subpipes
+ * represents a program; it sets up the ts_split_output and ts_pmtd inner pipes
  * @item demux sink pipe which sets up the ts_split, ts_patd and optional input
- * synchronizer subpipes
+ * synchronizer inner pipes
  */
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
@@ -157,30 +158,30 @@ struct upipe_ts_demux {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
-    /** probe for the last subpipe */
-    struct uprobe last_subpipe_probe;
-    /** pointer to the last subpipe */
-    struct upipe *last_subpipe;
-    /** pointer to the output of the last subpipe */
+    /** probe for the last inner pipe */
+    struct uprobe last_inner_probe;
+    /** pointer to the last inner pipe */
+    struct upipe *last_inner;
+    /** pointer to the output of the last inner pipe */
     struct upipe *output;
 
-    /** pointer to null subpipe */
+    /** pointer to null inner pipe */
     struct upipe *null;
 
-    /** pointer to input subpipe */
+    /** pointer to input inner pipe */
     struct upipe *input;
     /** true if we have thrown the sync_acquired event */
     bool acquired;
     /** flow definition of the input */
     struct uref *flow_def_input;
 
-    /** pointer to setrap subpipe */
+    /** pointer to setrap inner pipe */
     struct upipe *setrap;
-    /** pointer to ts_split subpipe */
+    /** pointer to ts_split inner pipe */
     struct upipe *split;
     /** psi_pid structure for PAT */
     struct upipe_ts_demux_psi_pid *psi_pid_pat;
-    /** ts_psi_split_output subpipe for PAT */
+    /** ts_psi_split_output inner pipe for PAT */
     struct upipe *psi_split_output_pat;
 
     /** list of PIDs carrying PSI */
@@ -192,15 +193,17 @@ struct upipe_ts_demux {
     /** current conformance */
     enum upipe_ts_conformance conformance;
 
-    /** probe to get new flow events from subpipes created by psi_pid objects */
+    /** probe to get new flow events from inner pipes created by psi_pid
+     * objects */
     struct uprobe psi_pid_plumber;
-    /** probe to get events from ts_psim subpipes created by psi_pid objects */
+    /** probe to get events from ts_psim inner pipes created by psi_pid
+     * objects */
     struct uprobe psim_probe;
-    /** probe to get events from ts_patd subpipe */
+    /** probe to get events from ts_patd inner pipe */
     struct uprobe patd_probe;
-    /** probe to get events from ts_sync or ts_check subpipe */
+    /** probe to get events from ts_sync or ts_check inner pipe */
     struct uprobe input_probe;
-    /** probe to get events from ts_split subpipe */
+    /** probe to get events from ts_split inner pipe */
     struct uprobe split_probe;
 
     /** list of programs */
@@ -217,7 +220,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_demux, upipe, UPIPE_TS_DEMUX_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux, urefcount, upipe_ts_demux_no_input)
 UPIPE_HELPER_VOID(upipe_ts_demux)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
-UPIPE_HELPER_BIN(upipe_ts_demux, last_subpipe_probe, last_subpipe, output)
+UPIPE_HELPER_BIN(upipe_ts_demux, last_inner_probe, last_inner, output)
 
 UBASE_FROM_TO(upipe_ts_demux, urefcount, urefcount_real, urefcount_real)
 
@@ -233,18 +236,18 @@ struct upipe_ts_demux_program {
     /** structure for double-linked lists */
     struct uchain uchain;
 
-    /** probe for the last subpipe */
-    struct uprobe last_subpipe_probe;
-    /** pointer to the last subpipe */
-    struct upipe *last_subpipe;
-    /** pointer to the output of the last subpipe */
+    /** probe for the last inner pipe */
+    struct uprobe last_inner_probe;
+    /** pointer to the last inner pipe */
+    struct upipe *last_inner;
+    /** pointer to the output of the last inner pipe */
     struct upipe *output;
 
     /** flow definition of the input */
     struct uref *flow_def_input;
     /** program number */
     uint64_t program;
-    /** ts_psi_split_output subpipe */
+    /** ts_psi_split_output inner pipe */
     struct upipe *psi_split_output;
     /** pointer to psi_pid structure */
     struct upipe_ts_demux_psi_pid *psi_pid;
@@ -257,7 +260,7 @@ struct upipe_ts_demux_program {
     uint64_t pmt_pid;
     /** PCR PID */
     uint16_t pcr_pid;
-    /** PCR ts_split output subpipe */
+    /** PCR ts_split output inner pipe */
     struct upipe *pcr_split_output;
 
     /** offset between MPEG timestamps and Upipe timestamps */
@@ -267,11 +270,11 @@ struct upipe_ts_demux_program {
     /** highest Upipe timestamp given to a frame */
     uint64_t timestamp_highest;
 
-    /** probe to get events from subpipes */
+    /** probe to get events from inner pipes */
     struct uprobe plumber;
-    /** probe to get events from ts_pmtd subpipe */
+    /** probe to get events from ts_pmtd inner pipe */
     struct uprobe pmtd_probe;
-    /** probe to get events from PCR ts_decaps subpipe */
+    /** probe to get events from PCR ts_decaps inner pipe */
     struct uprobe pcr_probe;
 
     /** list of outputs */
@@ -289,7 +292,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_demux_program, upipe,
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_program, urefcount,
                        upipe_ts_demux_program_no_input)
 UPIPE_HELPER_FLOW(upipe_ts_demux_program, "void.")
-UPIPE_HELPER_BIN(upipe_ts_demux_program, last_subpipe_probe, last_subpipe,
+UPIPE_HELPER_BIN(upipe_ts_demux_program, last_inner_probe, last_inner,
                  output)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux, upipe_ts_demux_program, program,
@@ -301,8 +304,10 @@ UBASE_FROM_TO(upipe_ts_demux_program, urefcount, urefcount_real, urefcount_real)
 static void upipe_ts_demux_program_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the private context of an output of a ts_demux_program
- * subpipe. */
+ * inner pipe. */
 struct upipe_ts_demux_output {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
     /** refcount management structure */
     struct urefcount urefcount;
     /** structure for double-linked lists */
@@ -312,9 +317,9 @@ struct upipe_ts_demux_output {
     uint64_t pid;
     /** true if the output is used for PCR */
     bool pcr;
-    /** ts_split_output subpipe */
+    /** ts_split_output inner pipe */
     struct upipe *split_output;
-    /** setrap subpipe */
+    /** setrap inner pipe */
     struct upipe *setrap;
     /** systime of the last random-access frame */
     uint64_t systime_random;
@@ -322,14 +327,14 @@ struct upipe_ts_demux_output {
     /** maximum retention time in the pipeline */
     uint64_t max_delay;
 
-    /** probe to get events from subpipes */
+    /** probe to get events from inner pipes */
     struct uprobe probe;
 
-    /** probe for the last subpipe */
-    struct uprobe last_subpipe_probe;
-    /** pointer to the last subpipe */
-    struct upipe *last_subpipe;
-    /** pointer to the output of the last subpipe */
+    /** probe for the last inner pipe */
+    struct uprobe last_inner_probe;
+    /** pointer to the last inner pipe */
+    struct upipe *last_inner;
+    /** pointer to the output of the last inner pipe */
     struct upipe *output;
 
     /** public upipe structure */
@@ -339,13 +344,18 @@ struct upipe_ts_demux_output {
 UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe,
                    UPIPE_TS_DEMUX_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_output, urefcount,
-                       upipe_ts_demux_output_free)
+                       upipe_ts_demux_output_no_input)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
-UPIPE_HELPER_BIN(upipe_ts_demux_output, last_subpipe_probe, last_subpipe,
+UPIPE_HELPER_BIN(upipe_ts_demux_output, last_inner_probe, last_inner,
                  output)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux_program, upipe_ts_demux_output, output,
                      output_mgr, outputs, uchain)
+
+UBASE_FROM_TO(upipe_ts_demux_output, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static void upipe_ts_demux_output_free(struct urefcount *urefcount_real);
 
 
 /*
@@ -358,9 +368,9 @@ struct upipe_ts_demux_psi_pid {
     struct uchain uchain;
     /** PID */
     uint16_t pid;
-    /** pointer to psi_split subpipe */
+    /** pointer to psi_split inner pipe */
     struct upipe *psi_split;
-    /** pointer to split_output subpipe */
+    /** pointer to split_output inner pipe */
     struct upipe *split_output;
     /** reference count */
     unsigned int refcount;
@@ -384,20 +394,21 @@ static struct upipe_ts_demux_psi_pid *
     struct upipe_ts_demux_psi_pid *psi_pid =
         malloc(sizeof(struct upipe_ts_demux_psi_pid));
     if (unlikely(psi_pid == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
     psi_pid->pid = pid;
 
-    /* set PID filter on ts_split subpipe */
+    /* set PID filter on ts_split inner pipe */
     if (unlikely((psi_pid->psi_split =
                       upipe_void_alloc(ts_demux_mgr->ts_psi_split_mgr,
-                                       uprobe_pfx_adhoc_alloc_va(upipe->uprobe,
+                                       uprobe_pfx_alloc_va(
+                                               uprobe_use(upipe->uprobe),
                                                UPROBE_LOG_VERBOSE,
                                                "psi split %"PRIu16,
                                                pid))) == NULL)) {
         free(psi_pid);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -416,9 +427,10 @@ static struct upipe_ts_demux_psi_pid *
     uref_flow_set_def(flow_def, "block.mpegts.mpegtspsi.");
     psi_pid->split_output =
         upipe_flow_alloc_sub(upipe_ts_demux->split,
-                             uprobe_pfx_adhoc_alloc_va(
-                                 &upipe_ts_demux->psi_pid_plumber,
-                                 UPROBE_LOG_VERBOSE, "split output %"PRIu16, pid),
+                             uprobe_pfx_alloc_va(
+                                 uprobe_output_alloc(uprobe_use(&upipe_ts_demux->psi_pid_plumber)),
+                                 UPROBE_LOG_VERBOSE,
+                                 "split output %"PRIu16, pid),
                              flow_def);
     uref_free(flow_def);
     if (unlikely(psi_pid->split_output == NULL)) {
@@ -512,18 +524,18 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
 /** @hidden */
 static void upipe_ts_demux_program_check_pcr(struct upipe *upipe);
 
-/** @internal @This catches clock_ref events coming from output subpipes.
+/** @internal @This catches clock_ref events coming from output inner pipes.
  *
  * @param upipe description structure of the pipe
- * @param upipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static void upipe_ts_demux_output_clock_ref(struct upipe *upipe,
-                                            struct upipe *subpipe,
-                                            enum uprobe_event event,
-                                            va_list args)
+static enum ubase_err upipe_ts_demux_output_clock_ref(struct upipe *upipe,
+                                                      struct upipe *inner,
+                                                      enum uprobe_event event,
+                                                      va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -538,19 +550,21 @@ static void upipe_ts_demux_output_clock_ref(struct upipe *upipe,
                 upipe_ts_demux_program_to_upipe(program),
                 uref, pcr_orig, discontinuity);
     }
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This catches clock_ts events coming from output subpipes.
+/** @internal @This catches clock_ts events coming from output inner pipes.
  *
  * @param upipe description structure of the pipe
- * @param upipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
+ * @return an error code
  */
-static void upipe_ts_demux_output_clock_ts(struct upipe *upipe,
-                                           struct upipe *subpipe,
-                                           enum uprobe_event event,
-                                           va_list args)
+static enum ubase_err upipe_ts_demux_output_clock_ts(struct upipe *upipe,
+                                                     struct upipe *inner,
+                                                     enum uprobe_event event,
+                                                     va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -575,20 +589,21 @@ static void upipe_ts_demux_output_clock_ts(struct upipe *upipe,
             upipe_warn_va(upipe, "too long delay for PTS (%"PRIu64")", delta);
     }
 
-    upipe_throw(upipe, event, uref);
+    return upipe_throw(upipe, event, uref);
 }
 
-/** @internal @This catches new_flow_def events coming from output subpipes.
+/** @internal @This catches new_flow_def events coming from output inner pipes.
  *
  * @param upipe description structure of the pipe
- * @param upipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
+ * @return an error code
  */
-static void upipe_ts_demux_output_plumber(struct upipe *upipe,
-                                          struct upipe *subpipe,
-                                          enum uprobe_event event,
-                                          va_list args)
+static enum ubase_err upipe_ts_demux_output_plumber(struct upipe *upipe,
+                                                    struct upipe *inner,
+                                                    enum uprobe_event event,
+                                                    va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -601,101 +616,96 @@ static void upipe_ts_demux_output_plumber(struct upipe *upipe,
 
     struct uref *flow_def;
     const char *def;
-    if (!uprobe_plumber(event, args, &flow_def, &def)) {
-        upipe_throw_proxy(upipe, subpipe, event, args);
-        return;
-    }
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return upipe_throw_proxy(upipe, inner, event, args);
 
     if (!ubase_ncmp(def, "block.mpegts.")) {
-        /* allocate ts_decaps subpipe */
+        /* allocate ts_decaps inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->ts_decaps_mgr,
-                       uprobe_pfx_adhoc_alloc(&upipe_ts_demux_output->probe,
-                                              UPROBE_LOG_VERBOSE, "decaps"));
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_decaps_mgr,
+                   uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_demux_output->probe)),
+                                    UPROBE_LOG_VERBOSE, "decaps"));
         if (unlikely(output == NULL)) {
             upipe_release(upipe_ts_demux_output->setrap);
             upipe_ts_demux_output->setrap = NULL;
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        } else
-            upipe_release(output);
-        return;
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_release(output);
+        return UBASE_ERR_NONE;
     }
 
     if (!ubase_ncmp(def, "block.mpegtspes.")) {
-        /* allocate ts_pesd subpipe */
+        /* allocate ts_pesd inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->ts_pesd_mgr,
-                       uprobe_pfx_adhoc_alloc(&upipe_ts_demux_output->probe,
-                                              UPROBE_LOG_VERBOSE, "pesd"));
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_pesd_mgr,
+                   uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_demux_output->probe)),
+                                    UPROBE_LOG_VERBOSE, "pesd"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_release(output);
-        return;
+            return UBASE_ERR_ALLOC;
+        upipe_release(output);
+        return UBASE_ERR_NONE;
     }
 
     if ((!ubase_ncmp(def, "block.mp2.") ||
          !ubase_ncmp(def, "block.aac.")) &&
         ts_demux_mgr->mpgaf_mgr != NULL) {
-        /* allocate mpgaf subpipe */
+        /* allocate mpgaf inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->mpgaf_mgr,
-                uprobe_pfx_adhoc_alloc(
-                    &upipe_ts_demux_output->last_subpipe_probe,
+            upipe_void_alloc_output(inner, ts_demux_mgr->mpgaf_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "mpgaf"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_ts_demux_output_store_last_subpipe(upipe, output);
-        return;
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
     }
 
     if ((!ubase_ncmp(def, "block.mpeg2video.") ||
          !ubase_ncmp(def, "block.mpeg1video.")) &&
         ts_demux_mgr->mpgvf_mgr != NULL) {
-        /* allocate mpgvf subpipe */
+        /* allocate mpgvf inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->mpgvf_mgr,
-                uprobe_pfx_adhoc_alloc(
-                    &upipe_ts_demux_output->last_subpipe_probe,
+            upipe_void_alloc_output(inner, ts_demux_mgr->mpgvf_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "mpgvf"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_ts_demux_output_store_last_subpipe(upipe, output);
-        return;
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
     }
 
     if (!ubase_ncmp(def, "block.h264.") &&
         ts_demux_mgr->h264f_mgr != NULL) {
-        /* allocate mpgvf subpipe */
+        /* allocate mpgvf inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->h264f_mgr,
-                uprobe_pfx_adhoc_alloc(
-                    &upipe_ts_demux_output->last_subpipe_probe,
+            upipe_void_alloc_output(inner, ts_demux_mgr->h264f_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "h264f"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_ts_demux_output_store_last_subpipe(upipe, output);
-        return;
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
     }
 
     upipe_warn_va(upipe, "unknown output flow definition: %s", def);
+    return UBASE_ERR_UNHANDLED;
 }
 
-/** @internal @This catches events coming from output subpipes.
+/** @internal @This catches events coming from output inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux_output
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_output_probe(struct uprobe *uprobe,
-                                        struct upipe *subpipe,
-                                        enum uprobe_event event,
-                                        va_list args)
+static enum ubase_err upipe_ts_demux_output_probe(struct uprobe *uprobe,
+                                                  struct upipe *inner,
+                                                  enum uprobe_event event,
+                                                  va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         container_of(uprobe, struct upipe_ts_demux_output, probe);
@@ -703,19 +713,14 @@ static bool upipe_ts_demux_output_probe(struct uprobe *uprobe,
 
     switch (event) {
         case UPROBE_CLOCK_REF:
-            upipe_ts_demux_output_clock_ref(upipe, subpipe, event, args);
-            break;
+            return upipe_ts_demux_output_clock_ref(upipe, inner, event, args);
         case UPROBE_CLOCK_TS:
-            upipe_ts_demux_output_clock_ts(upipe, subpipe, event, args);
-            break;
+            return upipe_ts_demux_output_clock_ts(upipe, inner, event, args);
         case UPROBE_NEW_FLOW_DEF:
-            upipe_ts_demux_output_plumber(upipe, subpipe, event, args);
-            break;
+            return upipe_ts_demux_output_plumber(upipe, inner, event, args);
         default:
-            upipe_throw_proxy(upipe, subpipe, event, args);
-            break;
+            return upipe_throw_proxy(upipe, inner, event, args);
     }
-    return true;
 }
 
 /** @internal @This allocates an output subpipe of a ts_demux_program subpipe.
@@ -740,7 +745,9 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
     upipe_ts_demux_output_init_urefcount(upipe);
-    upipe_ts_demux_output_init_bin(upipe);
+    urefcount_init(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output), upipe_ts_demux_output_free);
+    upipe_ts_demux_output_init_bin(upipe,
+            upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output));
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
     upipe_ts_demux_output->setrap = NULL;
@@ -748,6 +755,8 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_demux_output->max_delay);
     uprobe_init(&upipe_ts_demux_output->probe,
                 upipe_ts_demux_output_probe, NULL);
+    upipe_ts_demux_output->probe.refcount =
+        upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output);
 
     upipe_ts_demux_output_init_sub(upipe);
     upipe_throw_ready(upipe);
@@ -759,7 +768,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                  !uref_flow_set_def(flow_def, def) ||
                  !uref_flow_delete_raw_def(flow_def))) {
         uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
@@ -769,22 +778,23 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                 upipe_ts_demux_program_to_upipe(program)->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
-    /* set up split_output and set rap subpipes */
+    /* set up split_output and set rap inner pipes */
     if (unlikely((upipe_ts_demux_output->split_output =
-                    upipe_flow_alloc_sub(demux->split,
-                                         uprobe_pfx_adhoc_alloc_va(
-                                             &upipe_ts_demux_output->probe,
-                                             UPROBE_LOG_VERBOSE,
-                                             "split output %"PRIu64,
-                                             upipe_ts_demux_output->pid),
-                                         flow_def)) == NULL ||
+                    upipe_flow_alloc_sub(
+                        demux->split,
+                        uprobe_pfx_alloc_va(
+                            uprobe_output_alloc(uprobe_use(&upipe_ts_demux_output->probe)),
+                            UPROBE_LOG_VERBOSE,
+                            "split output %"PRIu64, upipe_ts_demux_output->pid),
+                        flow_def)) == NULL ||
                  (upipe_ts_demux_output->setrap =
                     upipe_void_alloc_output(upipe_ts_demux_output->split_output,
                                ts_demux_mgr->setrap_mgr,
-                               uprobe_pfx_adhoc_alloc(
-                                   &upipe_ts_demux_output->probe,
-                                   UPROBE_LOG_VERBOSE, "setrap"))) == NULL))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                               uprobe_pfx_alloc_va(
+                                   uprobe_use(&upipe_ts_demux_output->probe),
+                                   UPROBE_LOG_VERBOSE, "setrap %"PRIu64,
+                                   upipe_ts_demux_output->pid))) == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
     uref_free(flow_def);
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
@@ -806,7 +816,7 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
     if (likely(upipe_ts_demux_output->setrap != NULL)) {
         flow_def = uref_dup(flow_def);
         if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
 
@@ -815,7 +825,7 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
                      !uref_flow_set_def(flow_def, def) ||
                      !uref_flow_delete_raw_def(flow_def))) {
             uref_free(flow_def);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
 
@@ -850,9 +860,26 @@ static bool upipe_ts_demux_output_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
+ * @param urefcount_real pointer to urefcount_real structure
+ */
+static void upipe_ts_demux_output_free(struct urefcount *urefcount_real)
+{
+    struct upipe_ts_demux_output *upipe_ts_demux_output =
+        upipe_ts_demux_output_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
+
+    upipe_throw_dead(upipe);
+    uprobe_clean(&upipe_ts_demux_output->probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_demux_output_clean_urefcount(upipe);
+    upipe_ts_demux_output_free_flow(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_demux_output_free(struct upipe *upipe)
+static void upipe_ts_demux_output_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -863,13 +890,10 @@ static void upipe_ts_demux_output_free(struct upipe *upipe)
         upipe_release(upipe_ts_demux_output->split_output);
     if (upipe_ts_demux_output->setrap != NULL)
         upipe_release(upipe_ts_demux_output->setrap);
-    upipe_throw_dead(upipe);
-
     upipe_ts_demux_output_clean_bin(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
-    upipe_ts_demux_output_clean_urefcount(upipe);
-    upipe_ts_demux_output_free_flow(upipe);
+    urefcount_release(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output));
 }
 
 /** @internal @This initializes the output manager for a ts_demux_program
@@ -894,17 +918,18 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
  * upipe_ts_demux_program structure handling (derived from upipe structure)
  */
 
-/** @internal @This catches need_output events coming from program subpipes.
+/** @internal @This catches need_output events coming from program inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux_program
- * @param upipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
+ * @return an error code
  */
-static bool upipe_ts_demux_program_plumber(struct uprobe *uprobe,
-                                           struct upipe *subpipe,
-                                           enum uprobe_event event,
-                                           va_list args)
+static enum ubase_err upipe_ts_demux_program_plumber(struct uprobe *uprobe,
+                                                     struct upipe *inner,
+                                                     enum uprobe_event event,
+                                                     va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, plumber);
@@ -916,40 +941,37 @@ static bool upipe_ts_demux_program_plumber(struct uprobe *uprobe,
 
     struct uref *flow_def;
     const char *def;
-    if (!uprobe_plumber(event, args, &flow_def, &def)) {
-        upipe_throw_proxy(upipe, subpipe, event, args);
-        return true;
-    }
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return upipe_throw_proxy(upipe, inner, event, args);
 
     if (!ubase_ncmp(def, "block.mpegtspsi.mpegtspmt.")) {
-        /* allocate ts_pmtd subpipe */
+        /* allocate ts_pmtd inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->ts_pmtd_mgr,
-                             uprobe_pfx_adhoc_alloc(
-                                 &upipe_ts_demux_program->pmtd_probe,
-                                 UPROBE_LOG_VERBOSE, "pmtd"));
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_pmtd_mgr,
+                         uprobe_pfx_alloc(
+                             uprobe_use(&upipe_ts_demux_program->pmtd_probe),
+                             UPROBE_LOG_VERBOSE, "pmtd"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_ts_demux_program_store_last_subpipe(upipe, output);
-        return true;
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_program_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
     }
 
     upipe_warn_va(upipe, "unknown program flow definition: %s", def);
-    return true;
+    return UBASE_ERR_UNHANDLED;
 }
 
-/** @internal @This catches new_flow_def events coming from pmtd subpipe.
+/** @internal @This catches new_flow_def events coming from pmtd inner pipe.
  *
  * @param upipe description structure of the pipe
- * @param pmtd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param pmtd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
+ * @return an error code
  */
-static void upipe_ts_demux_program_pmtd_new_flow_def(struct upipe *upipe,
-                                                     struct upipe *pmtd,
-                                                     enum uprobe_event event,
-                                                     va_list args)
+static enum ubase_err upipe_ts_demux_program_pmtd_new_flow_def(
+        struct upipe *upipe, struct upipe *pmtd, enum uprobe_event event,
+        va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
@@ -958,7 +980,7 @@ static void upipe_ts_demux_program_pmtd_new_flow_def(struct upipe *upipe,
     uint64_t pmtd_pcrpid;
 
     if (!uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid))
-        return;
+        return UBASE_ERR_INVALID;
     if (upipe_ts_demux_program->pcr_pid != pmtd_pcrpid) {
         if (upipe_ts_demux_program->pcr_split_output != NULL) {
             upipe_release(upipe_ts_demux_program->pcr_split_output);
@@ -970,19 +992,19 @@ static void upipe_ts_demux_program_pmtd_new_flow_def(struct upipe *upipe,
     }
 
     upipe_throw_new_flow_def(upipe, uref);
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This catches split_update events coming from pmtd subpipe.
+/** @internal @This catches split_update events coming from pmtd inner pipe.
  *
  * @param upipe description structure of the pipe
- * @param pmtd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param pmtd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
+ * @return an error code
  */
-static void upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
-                                               struct upipe *pmtd,
-                                               enum uprobe_event event,
-                                               va_list args)
+static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
+        struct upipe *pmtd, enum uprobe_event event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
@@ -1015,20 +1037,21 @@ static void upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
     }
     if (output != NULL)
         upipe_release(upipe_ts_demux_output_to_upipe(output));
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This catches events coming from pmtd subpipe.
+/** @internal @This catches events coming from pmtd inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux_program
- * @param pmtd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param pmtd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
-                                              struct upipe *pmtd,
-                                              enum uprobe_event event,
-                                              va_list args)
+static enum ubase_err upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
+                                                        struct upipe *pmtd,
+                                                        enum uprobe_event event,
+                                                        va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, pmtd_probe);
@@ -1041,49 +1064,44 @@ static bool upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
             uint64_t systime;
             if (uref_clock_get_rap_sys(uref, &systime))
                 upipe_ts_demux_program->systime_pmt = systime;
-            break;
+            return UBASE_ERR_NONE;
         }
         case UPROBE_NEW_FLOW_DEF:
-            upipe_ts_demux_program_pmtd_new_flow_def(upipe, pmtd, event, args);
-            break;
+            return upipe_ts_demux_program_pmtd_new_flow_def(upipe, pmtd, event,
+                                                            args);
         case UPROBE_SPLIT_UPDATE:
-            upipe_ts_demux_program_pmtd_update(upipe, pmtd, event, args);
-            break;
+            return upipe_ts_demux_program_pmtd_update(upipe, pmtd, event, args);
         default:
-            upipe_throw_proxy(upipe, pmtd, event, args);
-            break;
+            return upipe_throw_proxy(upipe, pmtd, event, args);
     }
-    return true;
 }
 
-/** @internal @This catches events coming from PCR ts_decaps subpipe.
+/** @internal @This catches events coming from PCR ts_decaps inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux_program
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
-                                             struct upipe *subpipe,
-                                             enum uprobe_event event,
-                                             va_list args)
+static enum ubase_err upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
+                                                       struct upipe *inner,
+                                                       enum uprobe_event event,
+                                                       va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, pcr_probe);
     struct upipe *upipe =
         upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
 
-    if (event != UPROBE_CLOCK_REF) {
-        upipe_throw_proxy(upipe, subpipe, event, args);
-        return true;
-    }
+    if (event != UPROBE_CLOCK_REF)
+        return UBASE_ERR_UNHANDLED;
 
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t pcr_orig = va_arg(args, uint64_t);
     int discontinuity = va_arg(args, int);
     upipe_ts_demux_program_handle_pcr(upipe, uref, pcr_orig, discontinuity);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This handles PCRs coming from clock_ref events.
@@ -1135,7 +1153,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
         /* this is also valid for the packet we are processing */
         uref_clock_set_rap_sys(uref, upipe_ts_demux_program->systime_pcr);
         if (!ret)
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
 }
 
@@ -1143,10 +1161,12 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
  * carrying the PCR, and otherwise allocates/deallocates one.
  *
  * @param upipe description structure of the pipe
- * @return true if there is already a ts_decaps on the PCR PID
  */
 static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
 {
+    if (upipe_dead(upipe))
+        return;
+
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
@@ -1183,29 +1203,29 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                                        upipe_ts_demux_program->pcr_pid))) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     upipe_ts_demux_program->pcr_split_output =
         upipe_flow_alloc_sub(demux->split,
-                             uprobe_pfx_adhoc_alloc_va(
-                                 upipe_ts_demux_to_upipe(demux)->uprobe,
-                                 UPROBE_LOG_VERBOSE, "split output PCR %"PRIu64,
-                                 upipe_ts_demux_program->pcr_pid),
-                             flow_def);
+                     uprobe_pfx_alloc_va(
+                         uprobe_output_alloc(uprobe_use(upipe_ts_demux_to_upipe(demux)->uprobe)),
+                         UPROBE_LOG_VERBOSE, "split output PCR %"PRIu64,
+                         upipe_ts_demux_program->pcr_pid),
+                     flow_def);
     uref_free(flow_def);
     if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL ||
                  !upipe_get_flow_def(upipe_ts_demux_program->pcr_split_output,
                                      &flow_def))) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
     struct upipe *decaps =
         upipe_void_alloc_output(upipe_ts_demux_program->pcr_split_output,
                            ts_demux_mgr->ts_decaps_mgr,
-                           uprobe_pfx_adhoc_alloc_va(
-                             &upipe_ts_demux_program->pcr_probe,
+                           uprobe_pfx_alloc_va(
+                             uprobe_use(&upipe_ts_demux_program->pcr_probe),
                              UPROBE_LOG_VERBOSE,
                              "decaps PCR %"PRIu64,
                              upipe_ts_demux_program->pcr_pid));
@@ -1215,7 +1235,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
             upipe_release(decaps);
         upipe_release(upipe_ts_demux_program->pcr_split_output);
         upipe_ts_demux_program->pcr_split_output = NULL;
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     upipe_release(decaps);
@@ -1244,7 +1264,8 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_program_from_upipe(upipe);
     upipe_ts_demux_program_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program), upipe_ts_demux_program_free);
-    upipe_ts_demux_program_init_bin(upipe);
+    upipe_ts_demux_program_init_bin(upipe,
+            upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program));
     upipe_ts_demux_program_init_output_mgr(upipe);
     upipe_ts_demux_program_init_sub_outputs(upipe);
     upipe_ts_demux_program->flow_def_input = flow_def;
@@ -1259,11 +1280,17 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program->last_pcr = TS_CLOCK_MAX;
     uprobe_init(&upipe_ts_demux_program->plumber,
                 upipe_ts_demux_program_plumber, NULL);
+    upipe_ts_demux_program->plumber.refcount =
+        upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program);
     uprobe_init(&upipe_ts_demux_program->pmtd_probe,
                 upipe_ts_demux_program_pmtd_probe,
-                &upipe_ts_demux_program->last_subpipe_probe);
+                &upipe_ts_demux_program->last_inner_probe);
+    upipe_ts_demux_program->pmtd_probe.refcount =
+        upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program);
     uprobe_init(&upipe_ts_demux_program->pcr_probe,
                 upipe_ts_demux_program_pcr_probe, NULL);
+    upipe_ts_demux_program->pcr_probe.refcount =
+        upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program);
 
     upipe_ts_demux_program_init_sub(upipe);
     upipe_throw_ready(upipe);
@@ -1291,14 +1318,14 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                           upipe_ts_demux_program->pmt_pid)) == NULL)) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
     upipe_ts_demux_program->psi_split_output =
         upipe_flow_alloc_sub(upipe_ts_demux_program->psi_pid->psi_split,
-                             uprobe_pfx_adhoc_alloc(
-                                 &upipe_ts_demux_program->plumber,
+                             uprobe_pfx_alloc(
+                                 uprobe_output_alloc(uprobe_use(&upipe_ts_demux_program->plumber)),
                                  UPROBE_LOG_VERBOSE, "psi_split output"),
                              flow_def);
     uref_free(flow_def);
@@ -1306,7 +1333,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
                                        upipe_ts_demux_program->psi_pid);
         upipe_ts_demux_program->psi_pid = NULL;
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1353,24 +1380,16 @@ static void upipe_ts_demux_program_free(struct urefcount *urefcount_real)
         upipe_ts_demux_program_from_urefcount_real(urefcount_real);
     struct upipe *upipe =
         upipe_ts_demux_program_to_upipe(upipe_ts_demux_program);
-    struct upipe_ts_demux *demux =
-        upipe_ts_demux_from_program_mgr(upipe->mgr);
 
-    if (upipe_ts_demux_program->psi_split_output != NULL) {
-        upipe_release(upipe_ts_demux_program->psi_split_output);
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                       upipe_ts_demux_program->psi_pid);
-    }
-    if (upipe_ts_demux_program->pcr_split_output != NULL)
-        upipe_release(upipe_ts_demux_program->pcr_split_output);
-    upipe_ts_demux_program_clean_bin(upipe);
     upipe_throw_dead(upipe);
 
+    uprobe_clean(&upipe_ts_demux_program->plumber);
+    uprobe_clean(&upipe_ts_demux_program->pmtd_probe);
+    uprobe_clean(&upipe_ts_demux_program->pcr_probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_demux_program_clean_sub_outputs(upipe);
     if (upipe_ts_demux_program->flow_def_input != NULL)
         uref_free(upipe_ts_demux_program->flow_def_input);
-    upipe_ts_demux_program_clean_sub_outputs(upipe);
-    upipe_ts_demux_program_clean_sub(upipe);
-    urefcount_clean(urefcount_real);
     upipe_ts_demux_program_clean_urefcount(upipe);
     upipe_ts_demux_program_free_flow(upipe);
 }
@@ -1393,8 +1412,18 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
                                        upipe_ts_demux_program->psi_pid);
         upipe_ts_demux_program->psi_split_output = NULL;
     }
-    upipe_ts_demux_program_store_last_subpipe(upipe, NULL);
+    upipe_ts_demux_program_store_last_inner(upipe, NULL);
     upipe_split_throw_update(upipe);
+
+    if (upipe_ts_demux_program->psi_split_output != NULL) {
+        upipe_release(upipe_ts_demux_program->psi_split_output);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
+                                       upipe_ts_demux_program->psi_pid);
+    }
+    if (upipe_ts_demux_program->pcr_split_output != NULL)
+        upipe_release(upipe_ts_demux_program->pcr_split_output);
+    upipe_ts_demux_program_clean_bin(upipe);
+    upipe_ts_demux_program_clean_sub(upipe);
     urefcount_release(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program));
 }
 
@@ -1418,19 +1447,19 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
  * upipe_ts_demux structure handling (derived from upipe structure)
  */
 
-/** @internal @This catches need_output events coming from subpipes created by
- * psi_pid objects.
+/** @internal @This catches need_output events coming from inner pipes created
+ * by psi_pid objects.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
-                                           struct upipe *subpipe,
-                                           enum uprobe_event event,
-                                           va_list args)
+static enum ubase_err upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
+                                                     struct upipe *inner,
+                                                     enum uprobe_event event,
+                                                     va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, psi_pid_plumber);
@@ -1440,52 +1469,50 @@ static bool upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
 
     struct uref *flow_def;
     const char *def;
-    if (!uprobe_plumber(event, args, &flow_def, &def)) {
-        upipe_throw_proxy(upipe, subpipe, event, args);
-        return true;
-    }
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return upipe_throw_proxy(upipe, inner, event, args);
 
     if (!ubase_ncmp(def, "block.mpegts.")) {
-        /* allocate ts_decaps subpipe */
+        /* allocate ts_decaps inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->ts_decaps_mgr,
-                    uprobe_pfx_adhoc_alloc(&upipe_ts_demux->psi_pid_plumber,
-                                           UPROBE_LOG_VERBOSE, "decaps"));
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_decaps_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_demux->psi_pid_plumber)),
+                                 UPROBE_LOG_VERBOSE, "decaps"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_release(output);
-        return true;
+            return UBASE_ERR_ALLOC;
+        upipe_release(output);
+        return UBASE_ERR_NONE;
     }
 
     if (!ubase_ncmp(def, "block.mpegtspsi.")) {
-        /* allocate ts_psim subpipe */
+        /* allocate ts_psim inner */
         struct upipe *output =
-            upipe_void_alloc_output(subpipe, ts_demux_mgr->ts_psim_mgr,
-                    uprobe_pfx_adhoc_alloc(&upipe_ts_demux->psim_probe,
-                                           UPROBE_LOG_VERBOSE, "psim"));
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_psim_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_demux->psim_probe)),
+                                 UPROBE_LOG_VERBOSE, "psim"));
         if (unlikely(output == NULL))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
-        else
-            upipe_release(output);
-        return true;
+            return UBASE_ERR_ALLOC;
+        upipe_release(output);
+        return UBASE_ERR_NONE;
     }
 
     upipe_warn_va(upipe, "unknown psi_pid flow definition: %s", def);
-    return true;
+    return UBASE_ERR_UNHANDLED;
 }
 
-/** @internal @This catches the new_flow_def events coming from psim subpipes.
+/** @internal @This catches the new_flow_def events coming from psim inner
+ * pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param psim pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param psim pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_psim_probe(struct uprobe *uprobe,
-                                      struct upipe *psim,
-                                      enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_demux_psim_probe(struct uprobe *uprobe,
+                                                struct upipe *psim,
+                                                enum uprobe_event event,
+                                                va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, psim_probe);
@@ -1494,34 +1521,31 @@ static bool upipe_ts_demux_psim_probe(struct uprobe *uprobe,
     switch (event) {
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
-            uprobe_throw_va(upipe->uprobe, psim, event, args);
-            return true;
+            return uprobe_throw_va(upipe->uprobe, psim, event, args);
         default:
             break;
     }
 
     struct uref *flow_def;
     const char *def;
-    if (!uprobe_plumber(event, args, &flow_def, &def)) {
-        upipe_throw_proxy(upipe, psim, event, args);
-        return true;
-    }
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return upipe_throw_proxy(upipe, psim, event, args);
 
     uint64_t pid;
     if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid))) {
         upipe_warn(upipe, "invalid flow definition");
-        return true;
+        return UBASE_ERR_INVALID;
     }
 
     struct upipe_ts_demux_psi_pid *psi_pid =
         upipe_ts_demux_psi_pid_find(upipe, pid);
     if (unlikely(psi_pid == NULL)) {
         upipe_warn_va(upipe, "unknown PSI PID %"PRIu64, pid);
-        return true;
+        return UBASE_ERR_INVALID;
     }
 
     upipe_set_output(psim, psi_pid->psi_split);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This tries to guess the conformance of the stream from the
@@ -1548,17 +1572,18 @@ static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
     }
 }
 
-/** @internal @This catches new_rap events coming from patd subpipe.
+/** @internal @This catches new_rap events coming from patd inner pipe.
  *
  * @param upipe description structure of the pipe
- * @param patd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param patd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static void upipe_ts_demux_patd_new_rap(struct upipe *upipe,
-                                        struct upipe *patd,
-                                        enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_demux_patd_new_rap(struct upipe *upipe,
+                                                  struct upipe *patd,
+                                                  enum uprobe_event event,
+                                                  va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
@@ -1566,23 +1591,26 @@ static void upipe_ts_demux_patd_new_rap(struct upipe *upipe,
     assert(uref != NULL);
 
     uint64_t systime_rap;
-    if (likely(uref_clock_get_rap_sys(uref, &systime_rap)))
-        if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap,
-                                           systime_rap)))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+    if (unlikely(!uref_clock_get_rap_sys(uref, &systime_rap)))
+        return UBASE_ERR_INVALID;
+    if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap,
+                                       systime_rap)))
+        return UBASE_ERR_UNKNOWN;
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This catches update events coming from patd subpipe.
+/** @internal @This catches update events coming from patd inner pipe.
  *
  * @param upipe description structure of the pipe
- * @param patd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param patd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static void upipe_ts_demux_patd_update(struct upipe *upipe, struct upipe *patd,
-                                       enum uprobe_event event,
-                                       va_list args)
+static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
+                                                 struct upipe *patd,
+                                                 enum uprobe_event event,
+                                                 va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
@@ -1616,20 +1644,21 @@ static void upipe_ts_demux_patd_update(struct upipe *upipe, struct upipe *patd,
         upipe_release(upipe_ts_demux_program_to_upipe(program));
 
     /* send the event upstream */
-    upipe_split_throw_update(upipe);
+    return upipe_split_throw_update(upipe);
 }
 
-/** @internal @This catches events coming from patd subpipe.
+/** @internal @This catches events coming from patd inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param patd pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param patd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
-                                      struct upipe *patd,
-                                      enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_demux_patd_probe(struct uprobe *uprobe,
+                                                struct upipe *patd,
+                                                enum uprobe_event event,
+                                                va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, patd_probe);
@@ -1637,29 +1666,26 @@ static bool upipe_ts_demux_patd_probe(struct uprobe *uprobe,
 
     switch (event) {
         case UPROBE_NEW_RAP:
-            upipe_ts_demux_patd_new_rap(upipe, patd, event, args);
-            break;
+            return upipe_ts_demux_patd_new_rap(upipe, patd, event, args);
         case UPROBE_SPLIT_UPDATE:
-            upipe_ts_demux_patd_update(upipe, patd, event, args);
-            break;
+            return upipe_ts_demux_patd_update(upipe, patd, event, args);
         default:
-            upipe_throw_proxy(upipe, patd, event, args);
-            break;
+            return upipe_throw_proxy(upipe, patd, event, args);
     }
-    return true;
 }
 
-/** @internal @This catches events coming from sync or check subpipe.
+/** @internal @This catches events coming from sync or check inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_input_probe(struct uprobe *uprobe,
-                                       struct upipe *subpipe,
-                                       enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_demux_input_probe(struct uprobe *uprobe,
+                                                 struct upipe *inner,
+                                                 enum uprobe_event event,
+                                                 va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, input_probe);
@@ -1667,29 +1693,26 @@ static bool upipe_ts_demux_input_probe(struct uprobe *uprobe,
 
     switch (event) {
         case UPROBE_SYNC_ACQUIRED:
-            upipe_ts_demux_sync_acquired(upipe);
-            break;
+            return upipe_ts_demux_sync_acquired(upipe);
         case UPROBE_SYNC_LOST:
-            upipe_ts_demux_sync_lost(upipe);
-            break;
+            return upipe_ts_demux_sync_lost(upipe);
         default:
-            upipe_throw_proxy(upipe, subpipe, event, args);
-            break;
+            return upipe_throw_proxy(upipe, inner, event, args);
     }
-    return true;
 }
 
-/** @internal @This catches events coming from split subpipe.
+/** @internal @This catches events coming from split inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param subpipe pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_demux_split_probe(struct uprobe *uprobe,
-                                       struct upipe *subpipe,
-                                       enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_demux_split_probe(struct uprobe *uprobe,
+                                                 struct upipe *subpipe,
+                                                 enum uprobe_event event,
+                                                 va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, split_probe);
@@ -1699,10 +1722,8 @@ static bool upipe_ts_demux_split_probe(struct uprobe *uprobe,
         case UPROBE_TS_SPLIT_ADD_PID:
         case UPROBE_TS_SPLIT_DEL_PID:
         default:
-            upipe_throw_proxy(upipe, subpipe, event, args);
-            break;
+            return upipe_throw_proxy(upipe, subpipe, event, args);
     }
-    return true;
 }
 
 /** @internal @This allocates a ts_demux pipe.
@@ -1725,7 +1746,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_to_urefcount_real(upipe_ts_demux),
                    upipe_ts_demux_free);
-    upipe_ts_demux_init_bin(upipe);
+    upipe_ts_demux_init_bin(upipe,
+            upipe_ts_demux_to_urefcount_real(upipe_ts_demux));
     upipe_ts_demux_init_program_mgr(upipe);
     upipe_ts_demux_init_sub_programs(upipe);
 
@@ -1742,12 +1764,22 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
 
     uprobe_init(&upipe_ts_demux->psi_pid_plumber,
                 upipe_ts_demux_psi_pid_plumber, NULL);
+    upipe_ts_demux->psi_pid_plumber.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->psim_probe, upipe_ts_demux_psim_probe, NULL);
+    upipe_ts_demux->psim_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->patd_probe,
-                upipe_ts_demux_patd_probe, &upipe_ts_demux->last_subpipe_probe);
+                upipe_ts_demux_patd_probe, &upipe_ts_demux->last_inner_probe);
+    upipe_ts_demux->patd_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->input_probe,
                 upipe_ts_demux_input_probe, NULL);
+    upipe_ts_demux->input_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->split_probe, upipe_ts_demux_split_probe, NULL);
+    upipe_ts_demux->split_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
 
     upipe_throw_ready(upipe);
     upipe_ts_demux_sync_lost(upipe);
@@ -1804,21 +1836,19 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
     bool ret;
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF_SYNC)) {
         if (!ubase_ncmp(def, EXPECTED_FLOW_DEF_CHECK))
-            /* allocate ts_check subpipe */
+            /* allocate ts_check inner pipe */
             upipe_ts_demux->input =
                 upipe_void_alloc(ts_demux_mgr->ts_check_mgr,
-                                 uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                                        UPROBE_LOG_VERBOSE,
-                                                        "check"));
+                     uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
+                                      UPROBE_LOG_VERBOSE, "check"));
         else
-            /* allocate ts_sync subpipe */
+            /* allocate ts_sync inner pipe */
             upipe_ts_demux->input =
                 upipe_void_alloc(ts_demux_mgr->ts_sync_mgr,
-                                 uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                                        UPROBE_LOG_VERBOSE,
-                                                        "sync"));
+                     uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
+                                      UPROBE_LOG_VERBOSE, "sync"));
         if (unlikely(upipe_ts_demux->input == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         ret = upipe_set_flow_def(upipe_ts_demux->input, flow_def);
@@ -1827,19 +1857,19 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
         upipe_ts_demux->setrap =
             upipe_void_alloc_output(upipe_ts_demux->input,
                          ts_demux_mgr->setrap_mgr,
-                         uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                                UPROBE_LOG_VERBOSE, "setrap"));
+                         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
+                                          UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else {
         upipe_ts_demux->setrap =
             upipe_void_alloc(ts_demux_mgr->setrap_mgr,
-                         uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                                UPROBE_LOG_VERBOSE, "setrap"));
+                             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
+                                              UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         ret = upipe_set_flow_def(upipe_ts_demux->setrap, flow_def);
@@ -1852,27 +1882,27 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
 
     upipe_ts_demux->split =
         upipe_void_alloc_output(upipe_ts_demux->setrap,
-                           ts_demux_mgr->ts_split_mgr,
-                           uprobe_pfx_adhoc_alloc(&upipe_ts_demux->split_probe,
-                                                  UPROBE_LOG_VERBOSE, "split"));
+                   ts_demux_mgr->ts_split_mgr,
+                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->split_probe),
+                                    UPROBE_LOG_VERBOSE, "split"));
     if (unlikely(upipe_ts_demux->split == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
     upipe_ts_demux->null =
         upipe_void_alloc(ts_demux_mgr->null_mgr,
-                         uprobe_pfx_adhoc_alloc(upipe->uprobe,
-                                                UPROBE_LOG_NOTICE, "null"));
+                         uprobe_pfx_alloc(uprobe_use(upipe->uprobe),
+                                          UPROBE_LOG_NOTICE, "null"));
     if (unlikely(upipe_ts_demux->null == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
-    /* get psi_split subpipe */
+    /* get psi_split inner pipe */
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, 0);
     if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -1896,12 +1926,12 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                  (upipe_ts_demux->psi_split_output_pat =
                       upipe_flow_alloc_sub(
                           upipe_ts_demux->psi_pid_pat->psi_split,
-                          uprobe_pfx_adhoc_alloc(upipe->uprobe,
+                          uprobe_pfx_alloc(uprobe_use(upipe->uprobe),
                               UPROBE_LOG_VERBOSE, "psi_split output"),
                           flow_def)) == NULL)) {
         if (flow_def != NULL)
             uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     uref_free(flow_def);
@@ -1910,14 +1940,14 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
     /* allocate PAT decoder */
     struct upipe *patd =
         upipe_void_alloc_output(upipe_ts_demux->psi_split_output_pat,
-                           ts_demux_mgr->ts_patd_mgr,
-                           uprobe_pfx_adhoc_alloc(&upipe_ts_demux->patd_probe,
-                                                  UPROBE_LOG_VERBOSE, "patd"));
+                   ts_demux_mgr->ts_patd_mgr,
+                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->patd_probe),
+                                    UPROBE_LOG_VERBOSE, "patd"));
     if (unlikely(patd == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
-    upipe_ts_demux_store_last_subpipe(upipe, patd);
+    upipe_ts_demux_store_last_inner(upipe, patd);
     return true;
 }
 
@@ -2018,21 +2048,12 @@ static void upipe_ts_demux_free(struct urefcount *urefcount_real)
     struct upipe_ts_demux *upipe_ts_demux =
         upipe_ts_demux_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
-    if (upipe_ts_demux->input != NULL)
-        upipe_release(upipe_ts_demux->input);
-    if (upipe_ts_demux->split != NULL)
-        upipe_release(upipe_ts_demux->split);
-    if (upipe_ts_demux->setrap != NULL)
-        upipe_release(upipe_ts_demux->setrap);
-    if (upipe_ts_demux->null != NULL)
-        upipe_release(upipe_ts_demux->null);
-    if (upipe_ts_demux->psi_split_output_pat != NULL)
-        upipe_release(upipe_ts_demux->psi_split_output_pat);
-    if (upipe_ts_demux->psi_pid_pat != NULL)
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
-    upipe_ts_demux_clean_bin(upipe);
-
     upipe_throw_dead(upipe);
+    uprobe_clean(&upipe_ts_demux->psi_pid_plumber);
+    uprobe_clean(&upipe_ts_demux->psim_probe);
+    uprobe_clean(&upipe_ts_demux->patd_probe);
+    uprobe_clean(&upipe_ts_demux->input_probe);
+    uprobe_clean(&upipe_ts_demux->split_probe);
     uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux_clean_sub_programs(upipe);
     upipe_ts_demux_clean_sync(upipe);
@@ -2058,8 +2079,22 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
         upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
         upipe_ts_demux->psi_pid_pat = NULL;
     }
-    upipe_ts_demux_store_last_subpipe(upipe, NULL);
+    upipe_ts_demux_store_last_inner(upipe, NULL);
     upipe_split_throw_update(upipe);
+
+    if (upipe_ts_demux->input != NULL)
+        upipe_release(upipe_ts_demux->input);
+    if (upipe_ts_demux->split != NULL)
+        upipe_release(upipe_ts_demux->split);
+    if (upipe_ts_demux->setrap != NULL)
+        upipe_release(upipe_ts_demux->setrap);
+    if (upipe_ts_demux->null != NULL)
+        upipe_release(upipe_ts_demux->null);
+    if (upipe_ts_demux->psi_split_output_pat != NULL)
+        upipe_release(upipe_ts_demux->psi_split_output_pat);
+    if (upipe_ts_demux->psi_pid_pat != NULL)
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
+    upipe_ts_demux_clean_bin(upipe);
     urefcount_release(upipe_ts_demux_to_urefcount_real(upipe_ts_demux));
 }
 

@@ -60,8 +60,8 @@
 #define FRAMES_LIMIT        100
 
 /** definition of our uprobe */
-bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event,
-           va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -76,7 +76,7 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event,
             assert(0);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 struct uref_mgr *uref_mgr;
@@ -122,7 +122,8 @@ int main(int argc, char **argv)
     assert(uref_sound_flow_set_rate(flow_output, 48000));
     assert(uref_sound_flow_set_channels(flow_output, 2));
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
-        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "swr"), flow_output);
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "swr"),
+        flow_output);
     assert(swr);
     assert(upipe_set_flow_def(swr, flow));
     assert(upipe_set_ubuf_mgr(swr, block_mgr));
@@ -131,7 +132,7 @@ int main(int argc, char **argv)
 
     /* /dev/null */
     struct upipe *null = upipe_void_alloc(upipe_null_mgr,
-        uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "null"));
     assert(null);
     upipe_null_dump_dict(null, true);
     assert(upipe_set_output(swr, null));
@@ -162,5 +163,7 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
+    return 0;
 }

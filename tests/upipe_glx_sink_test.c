@@ -93,8 +93,8 @@ static void keyhandler(struct upipe *upipe, unsigned long key)
 }
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -111,7 +111,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 static void idler_cb(struct upump *upump)
@@ -191,7 +191,8 @@ int main(int argc, char **argv)
     struct upipe_mgr *glx_mgr = upipe_glx_sink_mgr_alloc();
     for (i=0; i < SINK_NUM; i++) {
         glx_sink[i] = upipe_void_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
-                uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL, "glx %d", i)));
+                uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                                    "glx %d", i)));
         assert(glx_sink[i]);
         assert(upipe_set_flow_def(glx_sink[i], flow_def));
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
@@ -221,7 +222,8 @@ int main(int argc, char **argv)
     upipe_mgr_release(glx_mgr); // noop
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     return 0;

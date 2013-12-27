@@ -184,7 +184,7 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
     if (!upipe_qsink->flow_def_sent && upipe_qsink->flow_def != NULL) {
         struct uref *flow_def;
         if ((flow_def = uref_dup(upipe_qsink->flow_def)) == NULL)
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         else {
             upipe_qsink->flow_def_sent = true;
             upipe_qsink_input(upipe, flow_def, upump);
@@ -248,7 +248,7 @@ static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
         return false;
     struct uref *flow_def_dup = NULL;
     if ((flow_def_dup = uref_dup(uref)) == NULL) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (upipe_qsink->flow_def != NULL)
@@ -400,7 +400,7 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
                                     upipe_qsink_watcher, upipe);
         if (unlikely(upump == NULL)) {
             upipe_err_va(upipe, "can't create watcher");
-            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return false;
         }
         upipe_qsink_set_upump(upipe, upump);
@@ -450,7 +450,7 @@ static void upipe_qsink_no_input(struct upipe *upipe)
     /* play flow end */
     struct uref *uref = uref_dup(upipe_qsink->flow_def);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         upipe_qsink_free(upipe);
         return;
     }

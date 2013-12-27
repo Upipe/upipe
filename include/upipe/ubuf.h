@@ -41,6 +41,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <assert.h>
 
 /** @hidden */
 struct ubuf_mgr;
@@ -249,10 +250,13 @@ static inline void ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
 /** @This increments the reference count of a ubuf manager.
  *
  * @param mgr pointer to ubuf manager
+ * @return same pointer to ubuf manager
  */
-static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
+static inline struct ubuf_mgr *ubuf_mgr_use(struct ubuf_mgr *mgr)
 {
+    assert(mgr != NULL);
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a ubuf manager or frees it.
@@ -261,7 +265,8 @@ static inline void ubuf_mgr_use(struct ubuf_mgr *mgr)
  */
 static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

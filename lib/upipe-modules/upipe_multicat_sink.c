@@ -158,10 +158,10 @@ static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
         return false;
     }
     fsink = upipe_void_alloc(upipe_multicat_sink->fsink_mgr,
-                             uprobe_pfx_adhoc_alloc_va(upipe->uprobe,
-                                               UPROBE_LOG_NOTICE, "fsink"));
+                             uprobe_pfx_alloc_va(uprobe_use(upipe->uprobe),
+                                                 UPROBE_LOG_NOTICE, "fsink"));
     if (unlikely(!fsink)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (upipe_multicat_sink->flow_def != NULL &&

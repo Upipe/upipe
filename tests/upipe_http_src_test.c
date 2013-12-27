@@ -67,8 +67,8 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -80,7 +80,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SOURCE_END:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char *argv[])
@@ -119,12 +119,14 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "null"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "null"));
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
     assert(upipe_http_src_mgr != NULL);
     struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "http"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "http"));
     assert(upipe_http_src != NULL);
     assert(upipe_set_upump_mgr(upipe_http_src, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_http_src, uref_mgr));
@@ -147,7 +149,8 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     ev_default_destroy();
     return 0;

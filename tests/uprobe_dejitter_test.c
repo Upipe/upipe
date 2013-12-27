@@ -52,8 +52,8 @@
 #define UREF_POOL_DEPTH 0
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -63,7 +63,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -83,7 +83,8 @@ int main(int argc, char **argv)
                                                UPROBE_LOG_DEBUG);
     assert(logger != NULL);
 
-    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, 10);
+    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(logger),
+                                                           10);
     assert(uprobe_dejitter != NULL);
 
     struct upipe test_pipe;
@@ -136,8 +137,9 @@ int main(int argc, char **argv)
     /* 416 = due to previous deviation */
 
     uref_free(uref);
-    uprobe_dejitter_free(uprobe_dejitter);
-    uprobe_stdio_free(logger);
+    uprobe_release(uprobe_dejitter);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

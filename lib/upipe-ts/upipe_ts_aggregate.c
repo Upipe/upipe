@@ -164,7 +164,7 @@ static void upipe_ts_agg_init(struct upipe *upipe)
 
     upipe_ts_agg->padding = ubuf_block_alloc(upipe_ts_agg->ubuf_mgr, TS_SIZE);
     if (unlikely(upipe_ts_agg->padding == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -227,7 +227,7 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
         struct ubuf *ubuf = ubuf_dup(upipe_ts_agg->padding);
         if (unlikely(ubuf == NULL)) {
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
@@ -256,7 +256,7 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
                                      ts_header))) {
         uref_free(uref);
         upipe_warn_va(upipe, "couldn't read TS header from aggregate");
-        upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return;
     }
 
@@ -303,7 +303,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
                  upipe_ts_agg->octetrate == 0)) {
         uref_free(uref);
         upipe_warn(upipe, "invalid mux octetrate");
-        upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return;
     }
 
@@ -405,11 +405,11 @@ static bool upipe_ts_agg_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (unlikely(!uref_flow_set_def(flow_def_dup, "block.mpegtsaligned.")))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
     return true;
 }

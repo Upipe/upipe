@@ -33,8 +33,8 @@
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_dejitter.h>
+#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
 
 #include <stdlib.h>
@@ -44,43 +44,18 @@
 /** max allowed jitter */
 #define MAX_JITTER (UCLOCK_FREQ / 10)
 
-/** @This is a super-set of the uprobe structure with additional local
- * members. */
-struct uprobe_dejitter {
-    /** number of references to average */
-    unsigned int divider;
-
-    /** number of references received for offset calculaton */
-    unsigned int offset_count;
-    /** offset between stream clock and system clock */
-    int64_t offset;
-    /** residue */
-    int64_t offset_residue;
-
-    /** number of references received for deviation calculaton */
-    unsigned int deviation_count;
-    /** average absolute deviation */
-    uint64_t deviation;
-    /** residue */
-    uint64_t deviation_residue;
-
-    /** structure exported to modules */
-    struct uprobe uprobe;
-};
-
-UPROBE_HELPER_UPROBE(uprobe_dejitter, uprobe)
-
 /** @internal @This catches clock_ref events thrown by pipes.
  *
  * @param uprobe pointer to probe
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
-static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
-                                      struct upipe *upipe,
-                                      enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_dejitter_clock_ref(struct uprobe *uprobe,
+                                                struct upipe *upipe,
+                                                enum uprobe_event event,
+                                                va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
@@ -88,18 +63,19 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
     uint64_t clock_ref = va_arg(args, uint64_t);
     int discontinuity = va_arg(args, int);
     if (unlikely(uref == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t sys_ref;
     if (unlikely(!uref_clock_get_cr_sys(uref, &sys_ref))) {
         upipe_warn(upipe, "[dejitter] no clock ref in packet");
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     int64_t offset = sys_ref - clock_ref;
     lldiv_t q;
 
     if (unlikely(llabs(offset - uprobe_dejitter->offset) > MAX_JITTER)) {
-        upipe_dbg_va(upipe, "[dejitter] max jitter reached (%"PRId64")", offset - uprobe_dejitter->offset);
+        upipe_dbg_va(upipe, "[dejitter] max jitter reached (%"PRId64")",
+                     offset - uprobe_dejitter->offset);
         discontinuity = 1;
     }
 
@@ -132,7 +108,7 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
                      uprobe_dejitter->offset_count, uprobe_dejitter->offset,
                      uprobe_dejitter->deviation_count,
                      uprobe_dejitter->deviation);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches clock_ts events thrown by pipes.
@@ -141,28 +117,29 @@ static bool uprobe_dejitter_clock_ref(struct uprobe *uprobe,
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
-static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
-                                     enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_dejitter_clock_ts(struct uprobe *uprobe,
+                                               struct upipe *upipe,
+                                               enum uprobe_event event,
+                                               va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
     struct uref *uref = va_arg(args, struct uref *);
     if (unlikely(uref == NULL || !uprobe_dejitter->offset_count))
-        return false;
+        return UBASE_ERR_INVALID;
 
     uint64_t date;
     enum uref_date_type type;
     uref_clock_get_date_prog(uref, &date, &type);
     if (type == UREF_DATE_NONE)
-        return true;
+        return UBASE_ERR_INVALID;
 
     uref_clock_set_date_sys(uref,
             date + uprobe_dejitter->offset + uprobe_dejitter->deviation,
             type);
-
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches events thrown by pipes.
@@ -171,31 +148,34 @@ static bool uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
-static bool uprobe_dejitter_throw(struct uprobe *uprobe, struct upipe *upipe,
-                                  enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_dejitter_throw(struct uprobe *uprobe,
+                                            struct upipe *upipe,
+                                            enum uprobe_event event,
+                                            va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
-    if (!uprobe_dejitter->divider)
-        return false;
 
-    switch (event) {
-        case UPROBE_CLOCK_REF:
-            return uprobe_dejitter_clock_ref(uprobe, upipe, event, args);
-        case UPROBE_CLOCK_TS:
-            return uprobe_dejitter_clock_ts(uprobe, upipe, event, args);
-        default:
-            return false;
+    if (uprobe_dejitter->divider) {
+        switch (event) {
+            case UPROBE_CLOCK_REF:
+                return uprobe_dejitter_clock_ref(uprobe, upipe, event, args);
+            case UPROBE_CLOCK_TS:
+                return uprobe_dejitter_clock_ts(uprobe, upipe, event, args);
+            default:
+                break;
+        }
     }
+
+    return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
 /** @This sets a different divider. If set to 0, dejittering is disabled.
  *
  * @param uprobe pointer to probe
  * @param divider number of reference clocks to keep for dejittering
- * @return pointer to uprobe, or NULL in case of error
  */
 void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider)
 {
@@ -210,35 +190,36 @@ void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider)
     uprobe_dejitter->deviation_residue = 0;
 }
 
-/** @This allocates a new uprobe_dejitter structure.
+/** @This initializes an already allocated uprobe_dejitter structure.
  *
+ * @param uprobe_pfx pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
  * @param divider number of reference clocks to keep for dejittering
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_dejitter_alloc(struct uprobe *next,
-                                     unsigned int divider)
+struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
+                                    struct uprobe *next, unsigned int divider)
 {
-    struct uprobe_dejitter *uprobe_dejitter =
-        malloc(sizeof(struct uprobe_dejitter));
-    if (unlikely(uprobe_dejitter == NULL))
-        return NULL;
+    assert(uprobe_dejitter != NULL);
     struct uprobe *uprobe = uprobe_dejitter_to_uprobe(uprobe_dejitter);
     uprobe_dejitter_set(uprobe, divider);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
 }
 
-/** @This frees a uprobe_dejitter structure.
+/** @This cleans a uprobe_dejitter structure.
  *
- * @param uprobe structure to free
- * @return next probe
+ * @param uprobe_dejitter structure to clean
  */
-struct uprobe *uprobe_dejitter_free(struct uprobe *uprobe)
+void uprobe_dejitter_clean(struct uprobe_dejitter *uprobe_dejitter)
 {
-    struct uprobe *next = uprobe->next;
-    struct uprobe_dejitter *uprobe_dejitter =
-        uprobe_dejitter_from_uprobe(uprobe);
-    free(uprobe_dejitter);
-    return next;
+    assert(uprobe_dejitter != NULL);
+    struct uprobe *uprobe = uprobe_dejitter_to_uprobe(uprobe_dejitter);
+    uprobe_clean(uprobe);
 }
+
+#define ARGS_DECL struct uprobe *next, unsigned int divider
+#define ARGS next, divider
+UPROBE_HELPER_ALLOC(uprobe_dejitter)
+#undef ARGS
+#undef ARGS_DECL

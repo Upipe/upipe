@@ -56,7 +56,7 @@ make check
 
 Upipe is a set of developement headers for pipes and librares for
 applications, and thus runs inside an application. Simple examples
-are however provided in the tests/ directory.
+are however provided in the tests/ and examples/ directories.
 
 @end section
 

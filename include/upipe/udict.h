@@ -884,10 +884,13 @@ static inline void udict_mgr_vacuum(struct udict_mgr *mgr)
 /** @This increments the reference count of a udict manager.
  *
  * @param mgr pointer to udict manager
+ * @return same pointer to udict manager
  */
-static inline void udict_mgr_use(struct udict_mgr *mgr)
+static inline struct udict_mgr *udict_mgr_use(struct udict_mgr *mgr)
 {
+    assert(mgr != NULL);
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a udict manager or frees it.
@@ -896,7 +899,8 @@ static inline void udict_mgr_use(struct udict_mgr *mgr)
  */
 static inline void udict_mgr_release(struct udict_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 #ifdef __cplusplus

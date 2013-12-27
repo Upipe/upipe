@@ -103,8 +103,7 @@ int main(int argc, char **argv)
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     struct uprobe *uprobe = uprobe_uref_mgr_alloc(NULL, uref_mgr);
@@ -112,8 +111,6 @@ int main(int argc, char **argv)
 
     struct upipe *upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
-
-    uprobe_uref_mgr_free(uprobe);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

@@ -175,7 +175,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
                                        output_hsize, output_vsize);
     if (unlikely(ubuf == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -235,7 +235,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
         sar.den *= input_vsize * output_hsize;
         urational_simplify(&sar);
         if (unlikely(!uref_pic_flow_set_sar(uref, sar)))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
     upipe_sws_output(upipe, uref, upump);
 }
@@ -266,7 +266,7 @@ static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -282,7 +282,7 @@ static bool upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         sar.den *= input_vsize * output_hsize;
         urational_simplify(&sar);
         if (unlikely(!uref_pic_flow_set_sar(flow_def, sar)))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
     flow_def = upipe_sws_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL)

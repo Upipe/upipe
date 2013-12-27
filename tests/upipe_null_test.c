@@ -49,7 +49,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -60,7 +60,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
             assert(0);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -79,15 +79,15 @@ int main(int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger= uprobe_stdio_alloc(&uprobe, stdout,
-                                                  UPROBE_LOG_DEBUG);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_DEBUG);
     assert(logger != NULL);
 
     /* build null pipe */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr);
     struct upipe *nullpipe = upipe_void_alloc(upipe_null_mgr,
-               uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "null"));
+               uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
 
     /* Now send uref */
@@ -108,7 +108,8 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

@@ -159,7 +159,7 @@ static void upipe_sinesrc_idler(struct upump *upump)
     struct uref *uref = uref_block_alloc(upipe_sinesrc->uref_mgr,
                                          upipe_sinesrc->ubuf_mgr, size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -167,7 +167,7 @@ static void upipe_sinesrc_idler(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     assert(read_size == size);
@@ -281,7 +281,7 @@ static bool upipe_sinesrc_control(struct upipe *upipe,
             uref_sound_flow_alloc_def(upipe_sinesrc->uref_mgr, "pcm_s16le.",
                                       1, 2);
         if (flow_def == NULL) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         uref_sound_flow_set_rate(flow_def, UPIPE_SINESRC_RATE);
@@ -290,7 +290,7 @@ static bool upipe_sinesrc_control(struct upipe *upipe,
         struct upump *upump = upump_alloc_idler(upipe_sinesrc->upump_mgr,
                                                 upipe_sinesrc_idler, upipe);
         if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return false;
         }
         upipe_sinesrc_set_upump(upipe, upump);

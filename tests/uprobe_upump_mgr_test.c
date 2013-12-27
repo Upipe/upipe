@@ -100,12 +100,11 @@ int main(int argc, char **argv)
 
     struct uprobe *uprobe = uprobe_upump_mgr_alloc(NULL, upump_mgr);
     assert(uprobe != NULL);
+    upump_mgr_release(upump_mgr);
 
     struct upipe *upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
-    uprobe_upump_mgr_free(uprobe);
-
-    upump_mgr_release(upump_mgr);
+    ev_default_destroy();
     return 0;
 }

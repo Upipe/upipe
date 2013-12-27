@@ -445,13 +445,13 @@ static void upipe_ts_join_build_flow_def(struct upipe *upipe)
     struct uref *flow_def =
         uref_block_flow_alloc_def(upipe_ts_join->uref_mgr, "mpegts.");
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
     if (upipe_ts_join->latency)
         if (!uref_clock_set_latency(flow_def, upipe_ts_join->latency))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_join_store_flow_def(upipe, flow_def);
 }
 

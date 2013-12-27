@@ -116,7 +116,7 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
     uint8_t word;
     if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     assert(size == 1);
@@ -145,7 +145,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
     size_t size;
     if (unlikely(!uref_block_size(uref, &size))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -154,7 +154,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
                                                 upipe_ts_check->ts_size);
         if (unlikely(output == NULL)) {
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         if (!upipe_ts_check_check(upipe, output, upump)) {
@@ -184,12 +184,12 @@ static bool upipe_ts_check_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     /* FIXME make it dependant on the output size */
     if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_check_store_flow_def(upipe, flow_def_dup);
     return true;
 }

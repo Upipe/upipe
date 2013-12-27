@@ -36,6 +36,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
@@ -56,6 +57,9 @@
 
 /** @internal @This is the private context of an a52f pipe. */
 struct upipe_a52f {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /* output stuff */
     /** pipe acting as output */
     struct upipe *output;
@@ -115,6 +119,7 @@ struct upipe_a52f {
 static void upipe_a52f_promote_uref(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_a52f, upipe, UPIPE_A52F_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_a52f, urefcount, upipe_a52f_free)
 UPIPE_HELPER_VOID(upipe_a52f)
 UPIPE_HELPER_SYNC(upipe_a52f, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_a52f, next_uref, next_uref_size, urefs,
@@ -156,6 +161,7 @@ static struct upipe *upipe_a52f_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
+    upipe_a52f_init_urefcount(upipe);
     upipe_a52f_init_sync(upipe);
     upipe_a52f_init_uref_stream(upipe);
     upipe_a52f_init_output(upipe);
@@ -243,7 +249,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
 
     struct uref *flow_def = upipe_a52f_alloc_flow_def_attr(upipe);
     if (unlikely(!flow_def)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -251,7 +257,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_a52f_store_flow_def(upipe, flow_def);
@@ -282,7 +288,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe) {
     
     struct uref *flow_def = upipe_a52f_alloc_flow_def_attr(upipe);
     if (unlikely(!flow_def)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -292,7 +298,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe) {
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_a52f_store_flow_def(upipe, flow_def);
@@ -342,7 +348,7 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump *upump)
     struct uref *uref = upipe_a52f_extract_uref_stream(upipe,
             upipe_a52f->next_frame_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -480,7 +486,7 @@ static bool upipe_a52f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_a52f_store_flow_def_input(upipe, flow_def_dup);
@@ -534,19 +540,18 @@ static void upipe_a52f_free(struct upipe *upipe)
     upipe_a52f_clean_flow_def(upipe);
     upipe_a52f_clean_sync(upipe);
 
+    upipe_a52f_clean_urefcount(upipe);
     upipe_a52f_free_void(upipe);
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_a52f_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_A52F_SIGNATURE,
 
     .upipe_alloc = upipe_a52f_alloc,
     .upipe_input = upipe_a52f_input,
-    .upipe_control = upipe_a52f_control,
-    .upipe_free = upipe_a52f_free,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = upipe_a52f_control
 };
 
 /** @This returns the management structure for all a52f pipes.

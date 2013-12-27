@@ -102,8 +102,8 @@ struct upipe *upipe_udpsink;
 static int counter = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -115,7 +115,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** phony pipe to test upipe_udpsrc */
@@ -239,11 +239,9 @@ int main(int argc, char *argv[])
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                                         UBUF_POOL_DEPTH,
+    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                                          umem_mgr, -1, 0);
     assert(ubuf_mgr != NULL);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
@@ -258,14 +256,16 @@ int main(int argc, char *argv[])
     assert(uprobe_stdio != NULL);
 
     struct upipe *udpsrc_test = upipe_void_alloc(&udpsrc_test_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udpsrc_test"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "udpsrc_test"));
 
 
 	/* udpsrc */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udp source"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "udp source"));
     assert(upipe_udpsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
@@ -296,7 +296,7 @@ int main(int argc, char *argv[])
 	assert(getaddrinfo("127.0.0.1", port_str, &hints, &servinfo) == 0);
 	for (p = servinfo; p != NULL; p = p->ai_next) {
 		if (( sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-		continue;
+	        continue;
 		}
 		break;
 	}
@@ -318,7 +318,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr != NULL);
     upipe_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "udp sink"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "udp sink"));
     assert(upipe_udpsink != NULL);
     assert(upipe_set_flow_def(upipe_udpsink, flow_def));
     assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
@@ -356,7 +357,8 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
 	freeaddrinfo(servinfo);
 

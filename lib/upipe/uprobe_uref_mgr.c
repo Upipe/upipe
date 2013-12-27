@@ -30,25 +30,13 @@
 #include <upipe/ubase.h>
 #include <upipe/uref.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-
-/** @This is a super-set of the uprobe structure with additional local
- * members. */
-struct uprobe_uref_mgr {
-    /** pointer to uref_mgr to provide */
-    struct uref_mgr *uref_mgr;
-
-    /** structure exported to modules */
-    struct uprobe uprobe;
-};
-
-UPROBE_HELPER_UPROBE(uprobe_uref_mgr, uprobe)
 
 /** @internal @This catches events thrown by pipes.
  *
@@ -58,36 +46,33 @@ UPROBE_HELPER_UPROBE(uprobe_uref_mgr, uprobe)
  * @param args optional event-specific parameters
  * @return true if the event was caught and handled
  */
-static bool uprobe_uref_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
-                                  enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_uref_mgr_throw(struct uprobe *uprobe,
+                                            struct upipe *upipe,
+                                            enum uprobe_event event,
+                                            va_list args)
 {
     struct uprobe_uref_mgr *uprobe_uref_mgr =
         uprobe_uref_mgr_from_uprobe(uprobe);
+    if (event != UPROBE_NEED_UREF_MGR || uprobe_uref_mgr->uref_mgr == NULL)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
-    if (event == UPROBE_NEED_UREF_MGR && uprobe_uref_mgr->uref_mgr != NULL) {
-        if (unlikely(!upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr))) {
-            upipe_warn(upipe, "probe couldn't set uref manager");
-            return false;
-        }
-        return true;
-    }
-
-    return false;
+    if (unlikely(!upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr)))
+        upipe_warn(upipe, "probe couldn't set uref manager");
+    return UBASE_ERR_NONE;
 }
 
-/** @This allocates a new uprobe_uref_mgr structure.
+/** @This initializes an already allocated uprobe_uref_mgr structure.
  *
+ * @param uprobe_uref_mgr pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
  * @param uref_mgr uref manager to provide to pipes
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_uref_mgr_alloc(struct uprobe *next,
+struct uprobe *uprobe_uref_mgr_init(struct uprobe_uref_mgr *uprobe_uref_mgr,
+                                     struct uprobe *next,
                                      struct uref_mgr *uref_mgr)
 {
-    struct uprobe_uref_mgr *uprobe_uref_mgr =
-        malloc(sizeof(struct uprobe_uref_mgr));
-    if (unlikely(uprobe_uref_mgr == NULL))
-        return NULL;
+    assert(uprobe_uref_mgr != NULL);
     struct uprobe *uprobe = uprobe_uref_mgr_to_uprobe(uprobe_uref_mgr);
     uprobe_uref_mgr->uref_mgr = uref_mgr;
     if (uref_mgr != NULL)
@@ -96,20 +81,23 @@ struct uprobe *uprobe_uref_mgr_alloc(struct uprobe *next,
     return uprobe;
 }
 
-/** @This frees a uprobe_uref_mgr structure.
+/** @This cleans a uprobe_uref_mgr structure.
  *
- * @param uprobe structure to free
- * @return next probe
+ * @param uprobe_uref_mgr structure to clean
  */
-struct uprobe *uprobe_uref_mgr_free(struct uprobe *uprobe)
+void uprobe_uref_mgr_clean(struct uprobe_uref_mgr *uprobe_uref_mgr)
 {
-    struct uprobe *next = uprobe->next;
-    struct uprobe_uref_mgr *uprobe_uref_mgr =
-        uprobe_uref_mgr_from_uprobe(uprobe);
+    assert(uprobe_uref_mgr != NULL);
+    struct uprobe *uprobe = uprobe_uref_mgr_to_uprobe(uprobe_uref_mgr);
     uref_mgr_release(uprobe_uref_mgr->uref_mgr);
-    free(uprobe_uref_mgr);
-    return next;
+    uprobe_clean(uprobe);
 }
+
+#define ARGS_DECL struct uprobe *next, struct uref_mgr *uref_mgr
+#define ARGS next, uref_mgr
+UPROBE_HELPER_ALLOC(uprobe_uref_mgr)
+#undef ARGS
+#undef ARGS_DECL
 
 /** @This changes the uref_mgr set by this probe.
  *
@@ -126,3 +114,4 @@ void uprobe_uref_mgr_set(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
     if (uref_mgr != NULL)
         uref_mgr_use(uref_mgr);
 }
+

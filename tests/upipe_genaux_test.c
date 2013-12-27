@@ -59,7 +59,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -70,7 +70,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         case UPROBE_DEAD:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** phony pipe to test upipe_genaux */
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
     /* build genaux pipe */
     struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
     struct upipe *genaux = upipe_void_alloc(upipe_genaux_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "genaux"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
     assert(upipe_set_flow_def(genaux, uref));
     assert(genaux);
@@ -182,7 +182,8 @@ int main(int argc, char **argv)
     const char *def;
     assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.aux."));
 
-    struct upipe *genaux_test = upipe_void_alloc(&genaux_test_mgr, logger);
+    struct upipe *genaux_test = upipe_void_alloc(&genaux_test_mgr,
+                                                 uprobe_use(logger));
     assert(genaux_test != NULL);
     assert(upipe_set_output(genaux, genaux_test));
 
@@ -218,7 +219,8 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

@@ -70,8 +70,8 @@ static size_t total_size = 0;
 static size_t header_size = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -82,7 +82,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_ts_pese */
@@ -178,7 +178,8 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -189,8 +190,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_pese_mgr = upipe_ts_pese_mgr_alloc();
     assert(upipe_ts_pese_mgr != NULL);
     struct upipe *upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
-                                   "ts pese"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts pese"));
     assert(upipe_ts_pese != NULL);
     assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
@@ -221,8 +222,8 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
     assert(uref_ts_flow_set_pes_header(uref, 45));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
-                                   "ts pese"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts pese"));
     assert(upipe_ts_pese != NULL);
     assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
@@ -242,7 +243,7 @@ int main(int argc, char *argv[])
     stream_id = PES_STREAM_ID_PRIVATE_2;
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
     assert(upipe_set_flow_def(upipe_ts_pese, uref));
@@ -264,7 +265,7 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pes_id(uref, stream_id));
     assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
     assert(upipe_set_flow_def(upipe_ts_pese, uref));
@@ -298,7 +299,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
 
     return 0;
 }

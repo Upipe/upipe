@@ -26,6 +26,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -49,6 +50,7 @@
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_probe_uref.h>
+#include <upipe-modules/upipe_null.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
@@ -104,6 +106,7 @@ struct uref_mgr *uref_mgr;
 const char *srcpath, *dstpath;
 
 struct upipe *upipe_source;
+struct upipe *upipe_null;
 
 static void usage(const char *argv0) {
     fprintf(stderr, "Usage: %s [-d] [-q] <source> <destination>\n", argv0);
@@ -113,15 +116,18 @@ static void usage(const char *argv0) {
 }
 
 /** catch probes from probe_uref */
-static bool uref_catch(struct uprobe *uprobe, struct upipe *upipe,
-                       enum uprobe_event event, va_list args)
+static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                 enum uprobe_event event, va_list args)
 {
-    if (event <= UPROBE_LOCAL)
-        return false;
+    if (event != UPROBE_PROBE_UREF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
-    unsigned int signature = va_arg(args, unsigned int);
-    if (signature != UPIPE_PROBE_UREF_SIGNATURE || event != UPROBE_PROBE_UREF)
-        return false;
+    va_list args_copy;
+    va_copy(args_copy, args);
+    unsigned int signature = va_arg(args_copy, unsigned int);
+    va_end(args_copy);
+    if (signature != UPIPE_PROBE_UREF_SIGNATURE)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     if (upipe_source != NULL) {
         /* release the source to exit */
@@ -129,17 +135,17 @@ static bool uref_catch(struct uprobe *uprobe, struct upipe *upipe,
         upipe_source = NULL;
     } else {
         /* second (or after) frame, do not output them */
-        upipe_set_output(upipe, NULL);
+        upipe_set_output(upipe, upipe_null);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** split callback */
-static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
-                         enum uprobe_event event, va_list args)
+static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                   enum uprobe_event event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct uref *flow_def = va_arg(args, struct uref *);
 
@@ -151,7 +157,7 @@ static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                  !uref_pic_flow_get_sar(flow_def, &sar))) {
         upipe_err_va(upipe, "incompatible flow def");
         upipe_release(upipe_source);
-        return true;
+        return UBASE_ERR_UNHANDLED;
     }
     wanted_hsize = hsize * sar.num / sar.den;
     progressive = uref_pic_get_progressive(flow_def);
@@ -163,7 +169,9 @@ static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
         uref_pic_set_progressive(flow_def2);
         struct upipe *deint = upipe_void_alloc_output(upipe,
                 upipe_filter_blend_mgr,
-                uprobe_pfx_adhoc_alloc(logger, loglevel, "deint"));
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                                 loglevel, "deint"));
+        assert(deint != NULL);
         upipe_release(upipe);
         upipe_set_ubuf_mgr(deint, yuv_mgr);
         upipe = deint;
@@ -172,7 +180,9 @@ static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     if (wanted_hsize != hsize) {
         uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
         struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr,
-                uprobe_pfx_adhoc_alloc_va(logger, loglevel, "sws"), flow_def2);
+                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                    loglevel, "sws"), flow_def2);
+        assert(sws != NULL);
         upipe_release(upipe);
         if (sws == NULL) {
             upipe_err_va(upipe, "incompatible flow def");
@@ -187,7 +197,9 @@ static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     uref_pic_flow_clear_format(flow_def2);
     uref_flow_set_def(flow_def2, "block.mjpeg.pic.");
     struct upipe *jpegenc = upipe_flow_alloc_output(upipe, upipe_avcenc_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "jpeg"), flow_def2);
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                loglevel, "jpeg"), flow_def2);
+    assert(jpegenc != NULL);
     upipe_release(upipe);
     upipe_avcenc_set_option(jpegenc, "qmax", "2");
     upipe_set_ubuf_mgr(jpegenc, block_mgr);
@@ -195,40 +207,44 @@ static bool avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
 
     struct upipe *urefprobe = upipe_void_alloc_output(upipe,
             upipe_probe_uref_mgr,
-            uprobe_pfx_adhoc_alloc_va(&uprobe_uref, loglevel, "urefprobe"));
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_uref)),
+                                loglevel, "urefprobe"));
+    assert(urefprobe != NULL);
     upipe_release(upipe);
     upipe = urefprobe;
 
     struct upipe *fsink = upipe_void_alloc_output(upipe, upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger,
+            uprobe_pfx_alloc_va(uprobe_use(logger),
             ((loglevel > UPROBE_LOG_DEBUG) ? UPROBE_LOG_WARNING : loglevel),
             "jpegsink"));
+    assert(fsink != NULL);
     upipe_release(upipe);
     upipe_fsink_set_path(fsink, dstpath, UPIPE_FSINK_OVERWRITE);
     upipe = fsink;
 
     uref_free(flow_def2);
     upipe_release(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** split callback */
-static bool split_catch(struct uprobe *uprobe, struct upipe *upipe,
-                        enum uprobe_event event, va_list args)
+static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-            uprobe_pfx_adhoc_alloc_va(&uprobe_avcdec, loglevel, "avcdec"));
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
+                                loglevel, "avcdec"));
     if (avcdec == NULL) {
         upipe_err_va(upipe, "incompatible flow def");
         upipe_release(upipe_source);
-        return true;
+        return UBASE_ERR_UNHANDLED;
     }
     upipe_set_ubuf_mgr(avcdec, yuv_mgr);
     upipe_release(avcdec);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -288,22 +304,14 @@ int main(int argc, char **argv)
 
     /* split probe */
     struct uprobe uprobe_catch;
-    uprobe_init(&uprobe_catch, split_catch, logger);
-    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(logger,
-                                                         &uprobe_catch,
-                                                         UPROBE_SELFLOW_PIC,
-                                                         "auto");
-    struct uprobe *uprobe_selprog = uprobe_selflow_alloc(logger,
-                                                         uprobe_selflow,
-                                                         UPROBE_SELFLOW_VOID,
-                                                         "auto");
+    uprobe_init(&uprobe_catch, split_catch, uprobe_use(logger));
 
     /* other probes */
-    uprobe_init(&uprobe_avcdec, avcdec_catch, logger);
-    uprobe_init(&uprobe_uref, uref_catch, logger);
+    uprobe_init(&uprobe_avcdec, avcdec_catch, uprobe_use(logger));
+    uprobe_init(&uprobe_uref, uref_catch, uprobe_use(logger));
 
     /* upipe-av */
-    upipe_av_init(true, logger);
+    upipe_av_init(true, uprobe_use(logger));
 
     /* global pipe managers */
     upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
@@ -313,10 +321,19 @@ int main(int argc, char **argv)
     upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
 
+    /* null */
+    struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
+    upipe_null = upipe_void_alloc(upipe_null_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "null"));
+    assert(upipe_null != NULL);
+    upipe_mgr_release(upipe_null_mgr);
+
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     upipe_source = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_adhoc_alloc(logger, loglevel, "fsrc"));
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                             loglevel, "fsrc"));
+    assert(upipe_source != NULL);
     upipe_mgr_release(upipe_fsrc_mgr);
     upipe_set_upump_mgr(upipe_source, upump_mgr);
     upipe_set_ubuf_mgr(upipe_source, block_mgr);
@@ -333,7 +350,13 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_h264f_mgr);
     struct upipe *ts_demux = upipe_void_alloc_output(upipe_source,
             upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_selprog, loglevel, "tsdemux"));
+            uprobe_pfx_alloc(
+                uprobe_selflow_alloc(uprobe_use(logger),
+                    uprobe_selflow_alloc(uprobe_use(logger), &uprobe_catch,
+                        UPROBE_SELFLOW_PIC, "auto"),
+                    UPROBE_SELFLOW_VOID, "auto"),
+                 loglevel, "tsdemux"));
+    assert(ts_demux != NULL);
     upipe_mgr_release(upipe_ts_demux_mgr);
     upipe_release(ts_demux);
 
@@ -343,11 +366,11 @@ int main(int argc, char **argv)
     /* release everyhing */
     if (upipe_source != NULL)
         upipe_release(upipe_source);
-    uprobe_selflow_free(uprobe_selprog);
-    uprobe_selflow_free(uprobe_selflow);
-    logger = uprobe_upump_mgr_free(logger);
-    logger = uprobe_uref_mgr_free(logger);
-    uprobe_stdio_free(logger);
+    upipe_release(upipe_null);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe_catch);
+    uprobe_clean(&uprobe_avcdec);
+    uprobe_clean(&uprobe_uref);
 
     upipe_mgr_release(upipe_avcdec_mgr);
     upipe_mgr_release(upipe_avcenc_mgr);

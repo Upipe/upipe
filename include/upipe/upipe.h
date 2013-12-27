@@ -37,7 +37,6 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/udict_dump.h>
 
 #include <stdint.h>
@@ -194,10 +193,13 @@ struct upipe_mgr {
 /** @This increments the reference count of a upipe manager.
  *
  * @param mgr pointer to upipe manager
+ * @return same pointer to upipe manager
  */
-static inline void upipe_mgr_use(struct upipe_mgr *mgr)
+static inline struct upipe_mgr *upipe_mgr_use(struct upipe_mgr *mgr)
 {
+    assert(mgr != NULL);
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a upipe manager or frees it.
@@ -206,10 +208,14 @@ static inline void upipe_mgr_use(struct upipe_mgr *mgr)
  */
 static inline void upipe_mgr_release(struct upipe_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 /** @internal @This allocates and initializes a pipe.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
@@ -224,14 +230,15 @@ static inline struct upipe *upipe_alloc_va(struct upipe_mgr *mgr,
 {
     struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
-        /* notify ad-hoc probes that something went wrong so they can
-         * deallocate */
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        uprobe_release(uprobe);
     return upipe;
 }
 
 /** @internal @This allocates and initializes a pipe with a variable list of
  * arguments.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
@@ -254,6 +261,9 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
 /** @This allocates and initializes a pipe which is designed to accept no
  * argument.
  *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
+ *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
@@ -267,6 +277,9 @@ static inline struct upipe *upipe_void_alloc(struct upipe_mgr *mgr,
 
 /** @This allocates and initializes a pipe which is designed to accept an
  * output flow definition.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param mgr management structure for this pipe type
  * @param uprobe structure used to raise events (belongs to the caller and
@@ -282,6 +295,9 @@ static inline struct upipe *upipe_flow_alloc(struct upipe_mgr *mgr,
 }
 
 /** @This initializes the public members of a pipe.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param mgr management structure for this pipe type
@@ -302,10 +318,13 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
 /** @This increments the reference count of a upipe.
  *
  * @param upipe pointer to upipe
+ * @return same pointer to upipe
  */
-static inline void upipe_use(struct upipe *upipe)
+static inline struct upipe *upipe_use(struct upipe *upipe)
 {
+    assert(upipe != NULL);
     urefcount_use(upipe->refcount);
+    return upipe;
 }
 
 /** @This decrements the reference count of a upipe or frees it.
@@ -314,7 +333,8 @@ static inline void upipe_use(struct upipe *upipe)
  */
 static inline void upipe_release(struct upipe *upipe)
 {
-    urefcount_release(upipe->refcount);
+    if (upipe != NULL)
+        urefcount_release(upipe->refcount);
 }
 
 /** @This checks if the pipe has more than one reference.
@@ -324,6 +344,7 @@ static inline void upipe_release(struct upipe *upipe)
  */
 static inline bool upipe_single(struct upipe *upipe)
 {
+    assert(upipe != NULL);
     return urefcount_single(upipe->refcount);
 }
 
@@ -334,6 +355,7 @@ static inline bool upipe_single(struct upipe *upipe)
  */
 static inline bool upipe_dead(struct upipe *upipe)
 {
+    assert(upipe != NULL);
     return urefcount_dead(upipe->refcount);
 }
 
@@ -355,31 +377,36 @@ static inline void upipe_set_opaque(struct upipe *upipe, void *opaque)
     upipe->opaque = opaque;
 }
 
-/** @This adds the given probe to the list of probes associated with a pipe.
- * The new probe will be executed first. It also simulates a ready event
- * for new ad-hoc probes.
+/** @This adds the given probe to the LIFO of probes associated with a pipe.
+ * The new probe will be executed first.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param uprobe pointer to probe
  */
-static inline void upipe_add_probe(struct upipe *upipe, struct uprobe *uprobe)
+static inline void upipe_push_probe(struct upipe *upipe, struct uprobe *uprobe)
 {
-    uprobe_throw(uprobe, upipe, UPROBE_READY);
     uprobe->next = upipe->uprobe;
     upipe->uprobe = uprobe;
 }
 
-/** @This deletes the given probe from the list of probes associated with a
- * pipe. It is typically used for adhoc probes which delete themselves at
- * some point.
+/** @This deletes the first probe from the LIFO of probes associated with a
+ * pipe, and returns it so it can be released.
+ *
+ * Please note that this function does not _release() the popped probe, so it
+ * must be done by the caller.
  *
  * @param upipe description structure of the pipe
- * @param uprobe pointer to probe
+ * @return uprobe pointer to popped probe
  */
-static inline void upipe_delete_probe(struct upipe *upipe,
-                                      struct uprobe *uprobe)
+static inline struct uprobe *upipe_pop_probe(struct upipe *upipe)
 {
-    uprobe_delete_probe(&upipe->uprobe, uprobe);
+    struct uprobe *uprobe = upipe->uprobe;
+    if (uprobe != NULL)
+        upipe->uprobe = uprobe->next;
+    return uprobe;
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
@@ -452,6 +479,7 @@ static inline bool upipe_control(struct upipe *upipe,
 static inline void upipe_clean(struct upipe *upipe)
 {
     assert(upipe != NULL);
+    uprobe_release(upipe->uprobe);
     upipe_mgr_release(upipe->mgr);
 }
 
@@ -569,6 +597,9 @@ static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
 /** @This allocates and initializes a subpipe which is designed to accept no
  * argument.
  *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
+ *
  * @param upipe structure of the super-pipe
  * @param uprobe structure used to raise events (belongs to the caller and
  * must be kept alive for all the duration of the pipe)
@@ -579,9 +610,7 @@ static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
 {
     struct upipe_mgr *sub_mgr;
     if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
-        /* notify ad-hoc probes that something went wrong so they can
-         * deallocate */
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        uprobe_release(uprobe);
         return NULL;
     }
     return upipe_void_alloc(sub_mgr, uprobe);
@@ -589,6 +618,9 @@ static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
 
 /** @This allocates and initializes a subpipe which is designed to accept an
  * output flow definition.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe structure of the super-pipe
  * @param uprobe structure used to raise events (belongs to the caller and
@@ -602,21 +634,20 @@ static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
 {
     struct upipe_mgr *sub_mgr;
     if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
-        /* notify ad-hoc probes that something went wrong so they can
-         * deallocate */
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        uprobe_release(uprobe);
         return NULL;
     }
     return upipe_flow_alloc(sub_mgr, uprobe, flow_def);
 }
 
 /** @This allocates a new pipe from the given manager, designed to accept no
- * argument, and sets it as the output of the given pipe. It also attaches a
- * uprobe output to catch new_flow_def events and forward them to the output
- * pipe, if the new flow def is handled.
+ * argument, and sets it as the output of the given pipe.
  *
- * Please that the output pipe must accept @ref upipe_set_flow_def control
+ * Please note that the output pipe must accept @ref upipe_set_flow_def control
  * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param upipe_mgr manager for the output pipe
@@ -627,13 +658,9 @@ static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
                                                     struct upipe_mgr *upipe_mgr,
                                                     struct uprobe *uprobe)
 {
-    struct uprobe *uprobe_output = uprobe_output_adhoc_alloc(NULL);
-    if (unlikely(uprobe_output == NULL))
-        return NULL;
-
     struct upipe *output = upipe_void_alloc(upipe_mgr, uprobe);
     if (unlikely(output == NULL)) {
-        uprobe_output_free(uprobe_output);
+        uprobe_release(uprobe);
         return NULL;
     }
 
@@ -641,22 +668,21 @@ static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
     if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
                   !upipe_set_flow_def(output, flow_def)) ||
                  !upipe_set_output(upipe, output))) {
-        uprobe_output_free(uprobe_output);
         upipe_release(output);
         return NULL;
     }
 
-    upipe_add_probe(upipe, uprobe_output);
     return output;
 }
 
 /** @This allocates a new pipe from the given manager, designed to accept an
- * output flow definition, and sets it as the output of the given pipe. It also
- * attaches a uprobe output to catch new_flow_def events and forward them to
- * the output pipe, if the new flow def is handled.
+ * output flow definition, and sets it as the output of the given pipe.
  *
- * Please that the output pipe must accept @ref upipe_set_flow_def control
+ * Please note that the output pipe must accept @ref upipe_set_flow_def control
  * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param upipe_mgr manager for the output pipe
@@ -669,13 +695,9 @@ static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
                                                     struct uprobe *uprobe,
                                                     struct uref *flow_def_output)
 {
-    struct uprobe *uprobe_output = uprobe_output_adhoc_alloc(NULL);
-    if (unlikely(uprobe_output == NULL))
-        return NULL;
-
     struct upipe *output = upipe_flow_alloc(upipe_mgr, uprobe, flow_def_output);
     if (unlikely(output == NULL)) {
-        uprobe_output_free(uprobe_output);
+        uprobe_release(uprobe);
         return NULL;
     }
 
@@ -683,12 +705,10 @@ static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
     if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
                   !upipe_set_flow_def(output, flow_def)) ||
                  !upipe_set_output(upipe, output))) {
-        uprobe_output_free(uprobe_output);
         upipe_release(output);
         return NULL;
     }
 
-    upipe_add_probe(upipe, uprobe_output);
     return output;
 }
 
@@ -697,8 +717,11 @@ static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
  * new_flow_def events and forward them to the output pipe, if the new
  * flow def is handled.
  *
- * Please that the super-pipe must accept @ref upipe_set_flow_def control
+ * Please note that the super-pipe must accept @ref upipe_set_flow_def control
  * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param super_pipe structure of the super-pipe
@@ -713,9 +736,7 @@ static inline struct upipe *
 {
     struct upipe_mgr *sub_mgr;
     if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
-        /* notify ad-hoc probes that something went wrong so they can
-         * deallocate */
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        uprobe_release(uprobe);
         return NULL;
     }
     return upipe_void_alloc_output(upipe, sub_mgr, uprobe);
@@ -726,8 +747,11 @@ static inline struct upipe *
  * uprobe output to catch new_flow_def events and forward them to the output
  * pipe, if the new flow def is handled.
  *
- * Please that the super-pipe must accept @ref upipe_set_flow_def control
+ * Please note that the super-pipe must accept @ref upipe_set_flow_def control
  * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
  *
  * @param upipe description structure of the pipe
  * @param super_pipe structure of the super-pipe
@@ -743,9 +767,7 @@ static inline struct upipe *
 {
     struct upipe_mgr *sub_mgr;
     if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
-        /* notify ad-hoc probes that something went wrong so they can
-         * deallocate */
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
+        uprobe_release(uprobe);
         return NULL;
     }
     return upipe_flow_alloc_output(upipe, sub_mgr, uprobe, flow_def);
@@ -756,25 +778,29 @@ static inline struct upipe *
  * @param upipe description structure of the pipe
  * @param event event to throw
  * @param args arguments
+ * @return an error code
  */
-static inline void upipe_throw_va(struct upipe *upipe,
-                                  enum uprobe_event event, va_list args)
+static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
+                                            enum uprobe_event event,
+                                            va_list args)
 {
-    uprobe_throw_va(upipe->uprobe, upipe, event, args);
+    return uprobe_throw_va(upipe->uprobe, upipe, event, args);
 }
 
 /** @internal @This throws generic events with optional arguments.
  *
  * @param upipe description structure of the pipe
  * @param event event to throw, followed by arguments
+ * @return an error code
  */
-static inline void upipe_throw(struct upipe *upipe,
-                               enum uprobe_event event, ...)
+static inline enum ubase_err upipe_throw(struct upipe *upipe,
+                                         enum uprobe_event event, ...)
 {
     va_list args;
     va_start(args, event);
-    upipe_throw_va(upipe, event, args);
+    enum ubase_err err = upipe_throw_va(upipe, event, args);
     va_end(args);
+    return err;
 }
 
 /** @internal @This throws a log event. This event is thrown whenever a pipe
@@ -897,6 +923,7 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param errcode error code
+ * @return an error code
  */
 #define upipe_throw_fatal(upipe, errcode)                                   \
     uprobe_throw_fatal((upipe)->uprobe, upipe, errcode)
@@ -905,6 +932,7 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param errcode error code
+ * @return an error code
  */
 #define upipe_throw_error(upipe, errcode)                                   \
     uprobe_throw_error((upipe)->uprobe, upipe, errcode)
@@ -913,11 +941,12 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  * pipe is ready to accept input or respond to control commands.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_ready(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_ready(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw ready event");
-    upipe_throw(upipe, UPROBE_READY);
+    return upipe_throw(upipe, UPROBE_READY);
 }
 
 /** @This throws a dead event. This event is thrown whenever a
@@ -925,11 +954,12 @@ static inline void upipe_throw_ready(struct upipe *upipe)
  * control commands.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_dead(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_dead(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw dead event");
-    upipe_throw(upipe, UPROBE_DEAD);
+    return upipe_throw(upipe, UPROBE_DEAD);
 }
 
 /** @This throws a source end event. This event is thrown when a pipe is unable
@@ -937,61 +967,67 @@ static inline void upipe_throw_dead(struct upipe *upipe)
  * error occurred.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_source_end(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_source_end(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw source end");
-    upipe_throw(upipe, UPROBE_SOURCE_END);
+    return upipe_throw(upipe, UPROBE_SOURCE_END);
 }
 
 /** @This throws a sink end event. This event is thrown when a pipe is unable
  * to write to an output because the disk is full, or another error occurred.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_sink_end(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sink end");
-    upipe_throw(upipe, UPROBE_SINK_END);
+    return upipe_throw(upipe, UPROBE_SINK_END);
 }
 
 /** @This throws an event asking for a uref manager.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_need_uref_mgr(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw need uref mgr");
-    upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
+    return upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
 }
 
 /** @This throws an event asking for a upump manager.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_need_upump_mgr(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw need upump mgr");
-    upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
+    return upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
 }
 
 /** @This throws an event asking for a uclock.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_need_uclock(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw need uclock");
-    upipe_throw(upipe, UPROBE_NEED_UCLOCK);
+    return upipe_throw(upipe, UPROBE_NEED_UCLOCK);
 }
 
 /** @This throws an event declaring a new flow definition on the output.
  *
  * @param upipe description structure of the pipe
  * @param flow_def definition for this flow
+ * @return an error code
  */
-static inline void upipe_throw_new_flow_def(struct upipe *upipe,
-                                            struct uref *flow_def)
+static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
 {
     if (flow_def == NULL || flow_def->udict == NULL)
         upipe_dbg(upipe, "throw new flow def (NULL)");
@@ -999,16 +1035,17 @@ static inline void upipe_throw_new_flow_def(struct upipe *upipe,
         upipe_dbg(upipe, "throw new flow def");
         udict_dump(flow_def->udict, upipe->uprobe);
     }
-    upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
+    return upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
 }
 
 /** @This throws an event asking for a ubuf manager.
  *
  * @param upipe description structure of the pipe
  * @param flow_def definition for this flow
+ * @return an error code
  */
-static inline void upipe_throw_need_ubuf_mgr(struct upipe *upipe,
-                                             struct uref *flow_def)
+static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
+                                                       struct uref *flow_def)
 {
     if (flow_def == NULL || flow_def->udict == NULL)
         upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
@@ -1016,49 +1053,54 @@ static inline void upipe_throw_need_ubuf_mgr(struct upipe *upipe,
         upipe_dbg(upipe, "throw need ubuf mgr");
         udict_dump(flow_def->udict, upipe->uprobe);
     }
-    upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
+    return upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
 }
 
 /** @This throws an event declaring a new random access point in the input.
  *
  * @param upipe description structure of the pipe
  * @param uref uref containing the random access point
+ * @return an error code
  */
-static inline void upipe_throw_new_rap(struct upipe *upipe, struct uref *uref)
+static inline enum ubase_err upipe_throw_new_rap(struct upipe *upipe,
+                                                 struct uref *uref)
 {
-    upipe_throw(upipe, UPROBE_NEW_RAP, uref);
+    return upipe_throw(upipe, UPROBE_NEW_RAP, uref);
 }
 
 /** @This throws an update event. This event is thrown whenever a split pipe
  * declares a new output flow list.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_split_throw_update(struct upipe *upipe)
+static inline enum ubase_err upipe_split_throw_update(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw split update");
-    upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
+    return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
 }
 
 /** @This throws an event telling that a pipe synchronized on its input.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_sync_acquired(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_sync_acquired(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sync acquired");
-    upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
+    return upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
 }
 
 /** @This throws an event telling that a pipe lost synchronization with its
  * input.
  *
  * @param upipe description structure of the pipe
+ * @return an error code
  */
-static inline void upipe_throw_sync_lost(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_sync_lost(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sync lost");
-    upipe_throw(upipe, UPROBE_SYNC_LOST);
+    return upipe_throw(upipe, UPROBE_SYNC_LOST);
 }
 
 /** @This throws an event telling that the given uref carries a clock reference.
@@ -1067,11 +1109,14 @@ static inline void upipe_throw_sync_lost(struct upipe *upipe)
  * @param uref uref carrying a clock reference
  * @param clock_ref clock reference, in 27 MHz scale
  * @param discontinuity 1 if there is a suspicion of discontinuity
+ * @return an error code
  */
-static inline void upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
-                                         uint64_t clock_ref, int discontinuity)
+static inline enum ubase_err upipe_throw_clock_ref(struct upipe *upipe,
+                                                   struct uref *uref,
+                                                   uint64_t clock_ref,
+                                                   int discontinuity)
 {
-    upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
+    return upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
 }
 
 /** @This throws an event telling that the given uref carries a presentation
@@ -1082,10 +1127,12 @@ static inline void upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref carrying a presentation and/or a decoding timestamp
+ * @return an error code
  */
-static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
+static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
+                                                  struct uref *uref)
 {
-    upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
+    return upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
 /** @This catches an event coming from an inner pipe, and rethrows is as if
@@ -1095,14 +1142,17 @@ static inline void upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
  * @param inner pointer to inner pipe
  * @param event event thrown
  * @param args optional arguments of the event
+ * @return an error code
  */
-static inline void upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
-                                     enum uprobe_event event, va_list args)
+static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
+                                               struct upipe *inner,
+                                               enum uprobe_event event,
+                                               va_list args)
 {
     if (event != UPROBE_READY && event != UPROBE_DEAD)
-        upipe_throw_va(upipe, event, args);
+        return upipe_throw_va(upipe, event, args);
     else
-        uprobe_throw_va(upipe->uprobe, inner, event, args);
+        return uprobe_throw_va(upipe->uprobe, inner, event, args);
 }
 
 #ifdef __cplusplus

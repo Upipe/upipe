@@ -258,7 +258,7 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
                             upump);
                 else {
                     uref_free(uref);
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                     return;
                 }
             }

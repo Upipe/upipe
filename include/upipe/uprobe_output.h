@@ -40,13 +40,8 @@ extern "C" {
 #include <stdbool.h>
 
 /** @This is a super-set of the uprobe structure with additional local
- * members. */
+ * members (or not). */
 struct uprobe_output {
-    /** true if we are in ad-hoc mode */
-    bool adhoc;
-    /** in ad-hoc mode, pointer to the pipe we're attached to */
-    struct upipe *adhoc_pipe;
-
     /** structure exported to modules */
     struct uprobe uprobe;
 };
@@ -64,7 +59,7 @@ struct uprobe *uprobe_output_init(struct uprobe_output *uprobe_output,
 
 /** @This cleans a uprobe output structure.
  *
- * @param uprobe structure to clean
+ * @param uprobe_output structure to clean
  */
 void uprobe_output_clean(struct uprobe_output *uprobe_output);
 
@@ -74,21 +69,6 @@ void uprobe_output_clean(struct uprobe_output *uprobe_output);
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_output_alloc(struct uprobe *next);
-
-/** @This allocates a new uprobe output structure in ad-hoc mode (will be
- * deallocated when the pipe dies).
- *
- * @param next next probe to test if this one doesn't catch the event
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_output_adhoc_alloc(struct uprobe *next);
-
-/** @This frees a uprobe output structure.
- *
- * @param uprobe uprobe structure to free
- * @return next probe
- */
-struct uprobe *uprobe_output_free(struct uprobe *uprobe);
 
 #ifdef __cplusplus
 }

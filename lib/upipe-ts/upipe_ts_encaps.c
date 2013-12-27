@@ -158,7 +158,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
                                            upipe_ts_encaps->ubuf_mgr,
                                            TS_SIZE);
     if (unlikely(output == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -166,7 +166,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
     int size = -1;
     if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
         uref_free(output);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -224,7 +224,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
                                            upipe_ts_encaps->ubuf_mgr,
                                            header_size);
     if (unlikely(output == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -232,7 +232,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
     int size = -1;
     if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
         uref_free(output);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -267,7 +267,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (payload != NULL)
             ubuf_free(payload);
         uref_free(output);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
@@ -279,7 +279,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (unlikely(padding == NULL ||
                      !ubuf_block_write(padding, 0, &size, &buffer))) {
             uref_free(output);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return NULL;
         }
         memset(buffer, 0xff, size);
@@ -288,7 +288,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (unlikely(!uref_block_append(output, padding))) {
             ubuf_free(padding);
             uref_free(output);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return NULL;
         }
     }
@@ -492,7 +492,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buffer))) {
             ubuf_free(ubuf);
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         assert(size == 1);
@@ -503,7 +503,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(!uref_block_append(uref, section))) {
             ubuf_free(section);
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
     }
@@ -534,12 +534,12 @@ static bool upipe_ts_encaps_set_flow_def(struct upipe *upipe,
 
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_encaps_store_flow_def(upipe, flow_def_dup);
 
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);

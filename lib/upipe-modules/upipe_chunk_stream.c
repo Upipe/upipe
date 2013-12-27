@@ -117,7 +117,7 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
         uref = upipe_chunk_stream_extract_uref_stream(upipe, 
                                     upipe_chunk_stream->size);
         if (unlikely(!uref)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         upipe_chunk_stream_output(upipe, uref, upump);
@@ -167,7 +167,7 @@ static void upipe_chunk_stream_flush(struct upipe *upipe, struct upump *upump)
 
         uref = upipe_chunk_stream_extract_uref_stream(upipe, size);
         if (unlikely(!uref)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         

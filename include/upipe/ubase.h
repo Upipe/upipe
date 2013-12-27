@@ -146,6 +146,28 @@ static inline void uchain_init(struct uchain *uchain)
 
 #endif
 
+/** @This defines the standard error codes. */
+enum ubase_err {
+    /** no error */
+    UBASE_ERR_NONE = 0,
+    /** unknown error */
+    UBASE_ERR_UNKNOWN,
+    /** allocation error */
+    UBASE_ERR_ALLOC,
+    /** unable to allocate a upump */
+    UBASE_ERR_UPUMP,
+    /** unhandled command or event */
+    UBASE_ERR_UNHANDLED,
+    /** invalid argument */
+    UBASE_ERR_INVALID,
+    /** error in external library */
+    UBASE_ERR_EXTERNAL,
+
+    /** non-standard error codes implemented by a module type can start from
+     * there (first arg = signature) */
+    UBASE_ERR_LOCAL = 0x8000
+};
+
 /** @This returns the greatest common denominator between two positive integers.
  *
  * @param a first integer (not null)

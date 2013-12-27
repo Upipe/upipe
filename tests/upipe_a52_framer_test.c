@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -67,12 +66,12 @@
 static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
-            assert(event & UPROBE_HANDLED_FLAG);
+            assert(0);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
@@ -85,7 +84,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_a52f */
@@ -140,10 +139,7 @@ static void test_free(struct upipe *upipe)
 static struct upipe_mgr test_mgr = {
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
-    .upipe_control = NULL,
-    .upipe_free = NULL,
-
-    .upipe_mgr_free = NULL
+    .upipe_control = NULL
 };
 
 int main(int argc, char *argv[])
@@ -158,28 +154,27 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, -1,
-                                                         -1, 0);
+                                                         umem_mgr, -1, 0);
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
-    struct uprobe *log = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_LEVEL);
-    assert(log != NULL);
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, log);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
     assert(upipe_a52f_mgr != NULL);
     struct upipe *upipe_a52f = upipe_void_alloc(upipe_a52f_mgr,
-            uprobe_pfx_adhoc_alloc(log, UPROBE_LOG_LEVEL, "a52f"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                             UPROBE_LOG_LEVEL, "a52f"));
     assert(upipe_a52f != NULL);
     assert(upipe_set_flow_def(upipe_a52f, uref));
     assert(upipe_set_output(upipe_a52f, upipe_sink));
@@ -223,8 +218,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_log_free(log);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

@@ -42,7 +42,8 @@ int main(int argc, char **argv)
     struct uprobe *uprobe2 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_DEBUG);
     assert(uprobe2 != NULL);
 
-    struct uprobe *uprobe1 = uprobe_pfx_alloc(uprobe2, UPROBE_LOG_DEBUG, "pfx");
+    struct uprobe *uprobe1 = uprobe_pfx_alloc(uprobe_use(uprobe2),
+                                              UPROBE_LOG_DEBUG, "pfx");
     assert(uprobe1 != NULL);
 
     uprobe_err(uprobe1, NULL, "This is an error");
@@ -50,14 +51,15 @@ int main(int argc, char **argv)
                    0x42);
     uprobe_notice(uprobe1, NULL, "This is a notice");
     uprobe_dbg(uprobe1, NULL, "This is a debug");
-    uprobe_pfx_free(uprobe1);
+    uprobe_release(uprobe1);
 
-    uprobe1 = uprobe_pfx_alloc_va(uprobe2, UPROBE_LOG_ERROR, "pfx[%d]", 2);
+    uprobe1 = uprobe_pfx_alloc_va(uprobe_use(uprobe2),
+                                  UPROBE_LOG_ERROR, "pfx[%d]", 2);
     assert(uprobe1 != NULL);
     uprobe_err_va(uprobe1, NULL, "This is another error with %d", 0x43);
     uprobe_warn(uprobe1, NULL, "This is a warning that you shouldn't see");
-    uprobe_pfx_free(uprobe1);
+    uprobe_release(uprobe1);
 
-    uprobe_stdio_free(uprobe2);
+    uprobe_release(uprobe2);
     return 0;
 }

@@ -60,8 +60,8 @@ static uint64_t add_flows, del_flows;
 static struct uchain flow_defs;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -72,7 +72,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SPLIT_UPDATE:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 struct test_sub {
@@ -198,10 +198,11 @@ int main(int argc, char **argv)
 
     /* programs */
 
-    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(logger, logger,
+    struct uprobe *uprobe_selflow = uprobe_selflow_alloc(uprobe_use(logger),
+                                                 uprobe_use(logger),
                                                  UPROBE_SELFLOW_VOID, "auto");
     assert(uprobe_selflow != NULL);
-    struct upipe *upipe = test_alloc(&test_mgr, uprobe_selflow);
+    struct upipe *upipe = test_alloc(&test_mgr, uprobe_use(uprobe_selflow));
 
     struct uref *flow_def;
     const char *flows;
@@ -279,13 +280,14 @@ int main(int argc, char **argv)
     uprobe_selflow_get(uprobe_selflow, &flows);
     assert(!strcmp(flows, "auto"));
 
-    uprobe_selflow_free(uprobe_selflow);
+    uprobe_release(uprobe_selflow);
+    uprobe_release(upipe->uprobe);
 
     /* pictures */
 
-    uprobe_selflow = uprobe_selflow_alloc(logger, logger, UPROBE_SELFLOW_PIC, "auto");
+    uprobe_selflow = uprobe_selflow_alloc(uprobe_use(logger), uprobe_use(logger), UPROBE_SELFLOW_PIC, "auto");
     assert(uprobe_selflow != NULL);
-    upipe->uprobe = uprobe_selflow;
+    upipe->uprobe = uprobe_use(uprobe_selflow);
 
     flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
     assert(flow_def != NULL);
@@ -407,8 +409,9 @@ int main(int argc, char **argv)
 
     test_free(upipe);
 
-    uprobe_selflow_free(uprobe_selflow);
-    uprobe_stdio_free(logger);
+    uprobe_release(uprobe_selflow);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

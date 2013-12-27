@@ -109,19 +109,16 @@ static struct upipe_mgr count_mgr = {
 };
 
 /** catch callback (demux subpipes for flows) */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
-    switch (event) {
-        case UPROBE_NEW_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            uref_dump(flow_def, upipe->uprobe);
-            upipe_set_output(upipe, sink);
-            return true;
-        }
-        default:
-            return false;
-    }
+    if (event != UPROBE_NEW_FLOW_DEF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct uref *flow_def = va_arg(args, struct uref *);
+    uref_dump(flow_def, upipe->uprobe);
+    upipe_set_output(upipe, sink);
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -158,14 +155,7 @@ int main(int argc, char **argv)
     upump_mgr_release(upump_mgr);
 
     struct uprobe uprobe_split_s;
-    uprobe_init(&uprobe_split_s, catch, uprobe);
-    struct uprobe *uprobe_split = &uprobe_split_s;
-    struct uprobe *uprobe_split_pic =
-        uprobe_selflow_alloc(uprobe, uprobe_split,
-                             UPROBE_SELFLOW_PIC, "auto");
-    struct uprobe *uprobe_split_void =
-        uprobe_selflow_alloc(uprobe, uprobe_split_pic, UPROBE_SELFLOW_VOID,
-                             "auto");
+    uprobe_init(&uprobe_split_s, catch, uprobe_use(uprobe));
 
     /* pipes */
     sink = upipe_void_alloc(&count_mgr, NULL);
@@ -173,7 +163,8 @@ int main(int argc, char **argv)
 
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     struct upipe *upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
-                   uprobe_pfx_adhoc_alloc(uprobe, UPROBE_LOG_DEBUG, "fsrc"));
+                   uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG,
+                                    "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
     upipe_set_ubuf_mgr(upipe_src, block_mgr);
     ubuf_mgr_release(block_mgr);
@@ -194,8 +185,13 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_h264f_mgr);
     struct upipe *ts_demux = upipe_void_alloc_output(upipe_src,
             upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_split_void, UPROBE_LOG_DEBUG,
-                                   "ts demux"));
+            uprobe_pfx_alloc(
+                uprobe_selflow_alloc(uprobe_use(uprobe),
+                    uprobe_selflow_alloc(uprobe_use(uprobe),
+                        uprobe_use(&uprobe_split_s),
+                        UPROBE_SELFLOW_PIC, "auto"),
+                    UPROBE_SELFLOW_VOID, "auto"),
+                UPROBE_LOG_DEBUG, "ts demux"));
     upipe_release(ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
 
@@ -205,11 +201,8 @@ int main(int argc, char **argv)
     upipe_release(upipe_src);
     count_free(sink);
 
-    uprobe_selflow_free(uprobe_split_void);
-    uprobe_selflow_free(uprobe_split_pic);
-    uprobe = uprobe_upump_mgr_free(uprobe);
-    uprobe = uprobe_uref_mgr_free(uprobe);
-    uprobe_stdio_free(uprobe);
+    uprobe_release(uprobe);
+    uprobe_clean(&uprobe_split_s);
 
     ev_default_destroy();
     printf("%.2f\n", (double)duration / UCLOCK_FREQ);

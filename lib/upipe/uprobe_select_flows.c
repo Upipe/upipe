@@ -46,17 +46,18 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <assert.h>
 
-#define STRINGIFY(x) #x
-#define UINT64_MAX_STR STRINGIFY(UINT64_MAX)
-
 /** @This is a super-set of the uprobe structure with additional local
  * members. */
 struct uprobe_selflow {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** type of flows to filter */
     enum uprobe_selflow_type type;
     /** probe to give to subpipes */
@@ -76,6 +77,7 @@ struct uprobe_selflow {
 };
 
 UPROBE_HELPER_UPROBE(uprobe_selflow, uprobe)
+UBASE_FROM_TO(uprobe_selflow, urefcount, urefcount, urefcount)
 
 /** @This defines a potential subpipe. */
 struct uprobe_selflow_sub {
@@ -95,28 +97,7 @@ struct uprobe_selflow_sub {
     struct upipe *subpipe;
 };
 
-/** @This returns the high-level uprobe_selflow_sub structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the
- * uprobe_selflow_sub
- * @return pointer to the uprobe_selflow_sub structure
- */
-static inline struct uprobe_selflow_sub *
-    uprobe_selflow_sub_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct uprobe_selflow_sub, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param uprobe_selflow_sub uprobe_selflow_sub structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    uprobe_selflow_sub_to_uchain(struct uprobe_selflow_sub *s)
-{
-    return &s->uchain;
-}
+UBASE_FROM_TO(uprobe_selflow_sub, uchain, uchain, uchain)
 
 /** @internal @This checks if a flow definition matches our flow type.
  *
@@ -194,37 +175,37 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
  * @param uprobe pointer to probe
  * @param flows comma-separated list of flows to select, terminated by a
  * comma, or "auto" to automatically select the first flow, or "all"
+ * @return an error code
  */
-static void uprobe_selflow_set_internal(struct uprobe *uprobe,
-                                        const char *flows)
+static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
+                                                  const char *flows)
 {
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     free(uprobe_selflow->flows);
     uprobe_selflow->flows = strdup(flows);
-    if (unlikely(uprobe_selflow->flows == NULL)) {
-        uprobe_throw_fatal(uprobe, NULL, UPROBE_ERR_ALLOC);
-        return;
-    }
+    if (unlikely(uprobe_selflow->flows == NULL))
+        return UBASE_ERR_ALLOC;
 
+    enum ubase_err error = UBASE_ERR_NONE;
     struct uchain *uchain;
     ulist_foreach (&uprobe_selflow->subs, uchain) {
         struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
         if (uprobe_selflow_check(uprobe, sub->flow_id, sub->flow_def)) {
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(sub->split_pipe,
-                    uprobe_pfx_adhoc_alloc_va(uprobe_selflow->subprobe,
-                                              UPROBE_LOG_DEBUG,
-                                              "flow %"PRIu64, sub->flow_id),
+                    uprobe_pfx_alloc_va(uprobe_use(uprobe_selflow->subprobe),
+                                        UPROBE_LOG_DEBUG,
+                                        "flow %"PRIu64, sub->flow_id),
                     sub->flow_def);
                 if (unlikely(sub->subpipe == NULL))
-                    uprobe_throw_fatal(uprobe, sub->split_pipe,
-                                       UPROBE_ERR_ALLOC);
+                    error = UBASE_ERR_ALLOC;
             }
         } else if (sub->subpipe != NULL) {
             upipe_release(sub->subpipe);
             sub->subpipe = NULL;
         }
     }
+    return error;
 }
 
 /** @internal @This sets the flows to select, with printf-style syntax.
@@ -232,8 +213,8 @@ static void uprobe_selflow_set_internal(struct uprobe *uprobe,
  * @param uprobe pointer to probe
  * @param format of the syntax, followed by optional arguments
  */
-static void uprobe_selflow_set_internal_va(struct uprobe *uprobe,
-                                           const char *format, ...)
+static enum ubase_err uprobe_selflow_set_internal_va(struct uprobe *uprobe,
+                                                     const char *format, ...)
 {
     UBASE_VARARG(uprobe_selflow_set_internal(uprobe, string))
 }
@@ -243,28 +224,26 @@ static void uprobe_selflow_set_internal_va(struct uprobe *uprobe,
  *
  * @param uprobe pointer to probe
  */
-static void uprobe_selflow_check_auto(struct uprobe *uprobe)
+static enum ubase_err uprobe_selflow_check_auto(struct uprobe *uprobe)
 {
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     struct uchain *uchain;
     ulist_foreach (&uprobe_selflow->subs, uchain) {
         struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
-        if (sub->subpipe) {
-            uprobe_selflow_set_internal_va(uprobe, "%"PRIu64",", sub->flow_id);
-            return;
-        }
+        if (sub->subpipe)
+            return uprobe_selflow_set_internal_va(uprobe, "%"PRIu64",",
+                                                  sub->flow_id);
     }
 
     /* no sub selected - find a flow */
     uchain = ulist_peek(&uprobe_selflow->subs);
     if (uchain == NULL) {
         uprobe_selflow->has_selection = false;
-        uprobe_selflow_set_internal(uprobe, "auto");
-        return;
+        return uprobe_selflow_set_internal(uprobe, "auto");
     }
 
     struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
-    uprobe_selflow_set_internal_va(uprobe, "%"PRIu64",", sub->flow_id);
+    return uprobe_selflow_set_internal_va(uprobe, "%"PRIu64",", sub->flow_id);
 }
 
 /** @internal @This catches events thrown by pipes.
@@ -273,17 +252,20 @@ static void uprobe_selflow_check_auto(struct uprobe *uprobe)
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
-static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
-                                 enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
+                                           struct upipe *upipe,
+                                           enum uprobe_event event,
+                                           va_list args)
 {
     if (event != UPROBE_SPLIT_UPDATE)
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     bool need_update = false;
 
+    enum ubase_err error = UBASE_ERR_NONE;
     /* Iterate over existing flows. */
     struct uref *flow_def = NULL;
     while (upipe_split_iterate(upipe, &flow_def)) {
@@ -312,10 +294,8 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
         if (sub == NULL) {
             /* Create a sub. */
             sub = malloc(sizeof(struct uprobe_selflow_sub));
-            if (unlikely(sub == NULL)) {
-                uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
-                return false;
-            }
+            if (unlikely(sub == NULL))
+                return UBASE_ERR_ALLOC;
 
             uchain_init(&sub->uchain);
             sub->uprobe_selflow = uprobe_selflow;
@@ -331,10 +311,8 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
 
         need_update = true;
         sub->flow_def = uref_dup(flow_def);
-        if (unlikely(sub->flow_def == NULL)) {
-            uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
-            return false;
-        }
+        if (unlikely(sub->flow_def == NULL))
+            return UBASE_ERR_ALLOC;
 
         if (!strcmp(uprobe_selflow->flows, "auto")) {
             uprobe_selflow->has_selection = true;
@@ -343,12 +321,12 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
         } else if (uprobe_selflow_check(uprobe, flow_id, sub->flow_def)) {
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(upipe,
-                    uprobe_pfx_adhoc_alloc_va(uprobe_selflow->subprobe,
-                                              UPROBE_LOG_DEBUG,
-                                              "flow %"PRIu64, flow_id),
+                    uprobe_pfx_alloc_va(uprobe_use(uprobe_selflow->subprobe),
+                                        UPROBE_LOG_DEBUG,
+                                        "flow %"PRIu64, flow_id),
                     sub->flow_def);
                 if (unlikely(sub->subpipe == NULL))
-                    uprobe_throw_fatal(uprobe, upipe, UPROBE_ERR_ALLOC);
+                    error = UBASE_ERR_ALLOC;
             }
         } else if (sub->subpipe != NULL) {
             upipe_release(sub->subpipe);
@@ -386,9 +364,22 @@ static bool uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
 
     if (need_update && uprobe_selflow->auto_cfg)
         uprobe_selflow_check_auto(uprobe);
+    return error;
+}
 
-    /* always return false so the event may be handled by someone else too */
-    return false;
+/** @internal @This frees a uprobe_selflow structure.
+ *
+ * @param urefcount pointer to urefcount structure
+ */
+static void uprobe_selflow_free(struct urefcount *urefcount)
+{
+    struct uprobe_selflow *uprobe_selflow =
+        uprobe_selflow_from_urefcount(urefcount);
+    assert(ulist_empty(&uprobe_selflow->subs));
+    free(uprobe_selflow->flows);
+    uprobe_release(uprobe_selflow->subprobe);
+    uprobe_clean(uprobe_selflow_to_uprobe(uprobe_selflow));
+    free(uprobe_selflow);
 }
 
 /** @This allocates a new uprobe_selflow structure.
@@ -419,22 +410,10 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
     uprobe_selflow->flows = NULL;
     ulist_init(&uprobe_selflow->subs);
     uprobe_selflow_set(uprobe, flows);
+    urefcount_init(uprobe_selflow_to_urefcount(uprobe_selflow),
+                   uprobe_selflow_free);
+    uprobe->refcount = uprobe_selflow_to_urefcount(uprobe_selflow);
     return uprobe;
-}
-
-/** @This frees a uprobe_selflow structure.
- *
- * @param uprobe structure to free
- * @return next probe
- */
-struct uprobe *uprobe_selflow_free(struct uprobe *uprobe)
-{
-    struct uprobe *next = uprobe->next;
-    struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
-    assert(ulist_empty(&uprobe_selflow->subs));
-    free(uprobe_selflow->flows);
-    free(uprobe_selflow);
-    return next;
 }
 
 /** @This returns the flows selected by this probe.
@@ -455,16 +434,17 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p)
  * @param flows comma-separated list of flows or attribute/value pairs
  * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
  * automatically select the first flow, or "all"
+ * @return an error code
  */
-void uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
+enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
 {
     struct uprobe_selflow *uprobe_selflow =
         uprobe_selflow_from_uprobe(uprobe);
     uprobe_selflow->auto_cfg = !strcmp(flows, "auto");
     if (!uprobe_selflow->auto_cfg || !uprobe_selflow->has_selection)
-        uprobe_selflow_set_internal(uprobe, flows);
+        return uprobe_selflow_set_internal(uprobe, flows);
     else
-        uprobe_selflow_check_auto(uprobe);
+        return uprobe_selflow_check_auto(uprobe);
 }
 
 /** @This changes the flows selected by this probe, with printf-style
@@ -473,7 +453,8 @@ void uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
  * @param uprobe pointer to probe
  * @param format format of the syntax, followed by optional arguments
  */
-void uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...)
+enum ubase_err uprobe_selflow_set_va(struct uprobe *uprobe,
+                                     const char *format, ...)
 {
     UBASE_VARARG(uprobe_selflow_set(uprobe, string))
 }

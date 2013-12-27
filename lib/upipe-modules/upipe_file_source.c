@@ -165,7 +165,7 @@ static void upipe_fsrc_worker(struct upump *upump)
                                          upipe_fsrc->ubuf_mgr,
                                          upipe_fsrc->read_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -173,7 +173,7 @@ static void upipe_fsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     assert(read_size == upipe_fsrc->read_size);
@@ -262,7 +262,7 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
                                                           NULL);
         if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         upipe_fsrc_store_flow_def(upipe, flow_def);
@@ -292,7 +292,7 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
     if (unlikely(upipe_fsrc->path == NULL)) {
         close(upipe_fsrc->fd);
         upipe_fsrc->fd = -1;
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_notice_va(upipe, "opening file %s", upipe_fsrc->path);
@@ -471,7 +471,7 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
                                         upipe_fsrc_worker, upipe,
                                         upipe_fsrc->fd);
         if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return false;
         }
         upipe_fsrc_set_upump(upipe, upump);

@@ -38,6 +38,7 @@ extern "C" {
 #include <upipe/urefcount.h>
 
 #include <stdint.h>
+#include <assert.h>
 
 #define UCLOCK_FREQ UINT64_C(27000000)
 
@@ -63,10 +64,13 @@ static inline uint64_t uclock_now(struct uclock *uclock)
 /** @This increments the reference count of a uclock.
  *
  * @param uclock pointer to uclock
+ * @return same pointer to uclock
  */
-static inline void uclock_use(struct uclock *uclock)
+static inline struct uclock *uclock_use(struct uclock *uclock)
 {
+    assert(uclock != NULL);
     urefcount_use(uclock->refcount);
+    return uclock;
 }
 
 /** @This decrements the reference count of a uclock or frees it.
@@ -75,7 +79,8 @@ static inline void uclock_use(struct uclock *uclock)
  */
 static inline void uclock_release(struct uclock *uclock)
 {
-    urefcount_release(uclock->refcount);
+    if (uclock != NULL)
+        urefcount_release(uclock->refcount);
 }
 
 #ifdef __cplusplus

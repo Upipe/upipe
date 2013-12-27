@@ -46,12 +46,12 @@ int main(int argc, char **argv)
                    0x42);
     uprobe_notice(uprobe1, NULL, "This is a notice");
     uprobe_dbg(uprobe1, NULL, "This is a debug");
-    uprobe_stdio_free(uprobe1);
+    uprobe_release(uprobe1);
 
     struct uprobe *uprobe2 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_ERROR);
     assert(uprobe2 != NULL);
     uprobe_err_va(uprobe2, NULL, "This is another error with %d", 0x43);
     uprobe_warn(uprobe2, NULL, "This is a warning that you shouldn't see");
-    uprobe_stdio_free(uprobe2);
+    uprobe_release(uprobe2);
     return 0;
 }

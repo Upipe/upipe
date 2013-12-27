@@ -58,8 +58,8 @@ static unsigned int count_sound = 0;
 static unsigned int count_subpic = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -71,7 +71,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SOURCE_END:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_trickp */
@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     assert(upipe_trickp_mgr != NULL);
     struct upipe *upipe_trickp = upipe_void_alloc(upipe_trickp_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "trickp"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp"));
     assert(upipe_trickp != NULL);
     assert(upipe_set_uclock(upipe_trickp, &uclock));
 
@@ -168,12 +168,12 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "pic."));
 
-    struct upipe *upipe_sink_pic = upipe_flow_alloc(&trickp_test_mgr, logger,
-                                                    uref);
+    struct upipe *upipe_sink_pic = upipe_flow_alloc(&trickp_test_mgr,
+                                                    uprobe_use(logger), uref);
     assert(upipe_sink_pic != NULL);
 
     struct upipe *upipe_trickp_pic = upipe_void_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "trickp pic"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp pic"));
     assert(upipe_set_flow_def(upipe_trickp_pic, uref));
     assert(upipe_trickp_pic != NULL);
     uref_free(uref);
@@ -183,12 +183,12 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "block.pcm_s16le.sound."));
 
-    struct upipe *upipe_sink_sound = upipe_flow_alloc(&trickp_test_mgr, logger,
-                                                      uref);
+    struct upipe *upipe_sink_sound = upipe_flow_alloc(&trickp_test_mgr,
+                                                      uprobe_use(logger), uref);
     assert(upipe_sink_sound != NULL);
 
     struct upipe *upipe_trickp_sound = upipe_void_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "trickp sound"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp sound"));
     assert(upipe_trickp_sound != NULL);
     assert(upipe_set_flow_def(upipe_trickp_sound, uref));
     uref_free(uref);
@@ -198,12 +198,13 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     assert(uref_flow_set_def(uref, "pic.sub."));
 
-    struct upipe *upipe_sink_subpic = upipe_flow_alloc(&trickp_test_mgr, logger,
+    struct upipe *upipe_sink_subpic = upipe_flow_alloc(&trickp_test_mgr,
+                                                       uprobe_use(logger),
                                                        uref);
     assert(upipe_sink_subpic != NULL);
 
     struct upipe *upipe_trickp_subpic = upipe_void_alloc_sub(upipe_trickp,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "trickp subpic"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp subpic"));
     assert(upipe_trickp_subpic != NULL);
     assert(upipe_set_flow_def(upipe_trickp_subpic, uref));
     uref_free(uref);
@@ -259,6 +260,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
     return 0;
 }

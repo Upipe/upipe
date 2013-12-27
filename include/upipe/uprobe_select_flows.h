@@ -40,6 +40,7 @@
 extern "C" {
 #endif
 
+#include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 
 /** @This defines types of flows to select from. */
@@ -69,13 +70,6 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
                                     enum uprobe_selflow_type type,
                                     const char *flows);
 
-/** @This frees a uprobe_selflow structure.
- *
- * @param uprobe structure to free
- * @return next probe
- */
-struct uprobe *uprobe_selflow_free(struct uprobe *uprobe);
-
 /** @This returns the flows selected by this probe.
  *
  * @param uprobe pointer to probe
@@ -90,16 +84,19 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p);
  * @param flows comma-separated list of flows or attribute/value pairs
  * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
  * automatically select the first flow, or "all"
+ * @return an error code
  */
-void uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
+enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
 
 /** @This changes the flows selected by this probe, with printf-style
  * syntax.
  *
  * @param uprobe pointer to probe
  * @param format format of the syntax, followed by optional arguments
+ * @return an error code
  */
-void uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...);
+enum ubase_err uprobe_selflow_set_va(struct uprobe *uprobe,
+                                     const char *format, ...);
 
 #ifdef __cplusplus
 }

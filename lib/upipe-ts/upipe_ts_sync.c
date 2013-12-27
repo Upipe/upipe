@@ -182,7 +182,7 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
             struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
                                                         upipe_ts_sync->ts_size);
             if (unlikely(output == NULL)) {
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 continue;
             }
             upipe_ts_sync_output(upipe, output, upump);
@@ -223,7 +223,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
         struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
                                                     upipe_ts_sync->ts_size);
         if (unlikely(output == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
         }
         upipe_ts_sync_output(upipe, output, upump);
@@ -245,12 +245,12 @@ static bool upipe_ts_sync_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     /* FIXME make it dependant on the output size */
     if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_sync_store_flow_def(upipe, flow_def_dup);
     return true;
 }

@@ -36,7 +36,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_log.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -198,8 +198,8 @@ static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
 }
 
 /* main uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -207,17 +207,17 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
         case UPROBE_SOURCE_END:
             upipe_release(upipe);
-            return true;
+            return UBASE_ERR_NONE;
     }
-    return false;
+    return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
 /* catch demux events */
-static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
 {
     if (event != UPROBE_SPLIT_UPDATE) {
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
     }
 
     /* iterate through flow list */
@@ -239,8 +239,8 @@ static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
         /* demux output */
         struct upipe *avfsrc_output =
             upipe_flow_alloc_sub(avfsrc,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel,
-                        "src %"PRIu64, id), flow_def);
+                    uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                        loglevel, "src %"PRIu64, id), flow_def);
         assert(avfsrc_output != NULL);
         upipe_set_ubuf_mgr(avfsrc_output, block_mgr);
 
@@ -251,8 +251,9 @@ static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
         if (conf && conf->codec) {
             /* decoder */
             struct upipe *decoder = upipe_void_alloc_output(avfsrc_output,
-                upipe_avcdec_mgr, uprobe_pfx_adhoc_alloc_va(logger,
-                                       loglevel, "dec %"PRIu64, id));
+                upipe_avcdec_mgr,
+                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                    loglevel, "dec %"PRIu64, id));
             upipe_release(decoder);
             incoming = decoder;
             
@@ -267,8 +268,9 @@ static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                                                               "pcm_s16.", 2, 0);
                 uref_sound_flow_set_rate(flow, SAMPLERATE);
                 struct upipe *swr = upipe_flow_alloc_output(decoder,
-                        upipe_swr_mgr, uprobe_pfx_adhoc_alloc_va(logger,
-                            loglevel, "swr %"PRIu64, id), flow);
+                        upipe_swr_mgr,
+                        uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                            loglevel, "swr %"PRIu64, id), flow);
                 upipe_release(swr);
                 uref_free(flow);
                 upipe_set_ubuf_mgr(swr, block_mgr);
@@ -283,8 +285,9 @@ static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *flow = uref_block_flow_alloc_def(uref_mgr, "");
             uref_avcenc_set_codec_name(flow, conf->codec);
             struct upipe *encoder = upipe_flow_alloc_output(incoming,
-                upipe_avcenc_mgr, uprobe_pfx_adhoc_alloc_va(logger,
-                    loglevel, "enc %"PRIu64, id), flow);
+                upipe_avcenc_mgr,
+                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                    loglevel, "enc %"PRIu64, id), flow);
             upipe_release(encoder);
             uref_free(flow);
             upipe_set_ubuf_mgr(encoder, block_mgr);
@@ -308,7 +311,7 @@ static bool catch_demux(struct uprobe *uprobe, struct upipe *upipe,
         /* mux input */
         struct upipe *sink =
             upipe_void_alloc_output_sub(incoming, avfsink,
-                    uprobe_pfx_adhoc_alloc_va(logger, loglevel,
+                    uprobe_pfx_alloc_va(uprobe_use(logger), loglevel,
                         "sink %"PRIu64, id));
         if (unlikely(!sink)) {
             upipe_err_va(upipe,
@@ -380,11 +383,9 @@ int main(int argc, char *argv[])
 
     /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                        UBUF_POOL_DEPTH, umem_mgr,
-                                        -1, -1, -1, 0);
+                                         UBUF_POOL_DEPTH, umem_mgr, -1, 0);
     yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                      umem_mgr, 1,
                                      UBUF_PREPEND, UBUF_APPEND,
@@ -400,12 +401,10 @@ int main(int argc, char *argv[])
     struct uclock *uclock = uclock_std_alloc(0);
     struct uprobe uprobe, uprobe_demux_s;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     loglevel);
-    logger = uprobe_log_alloc(uprobe_stdio, UPROBE_LOG_DEBUG);
-    uprobe_init(&uprobe_demux_s, catch_demux, logger);
+    logger = uprobe_stdio_alloc(uprobe_use(&uprobe), stdout, loglevel);
+    uprobe_init(&uprobe_demux_s, catch_demux, uprobe_use(logger));
 
-    upipe_av_init(false, logger);
+    upipe_av_init(false, uprobe_use(logger));
 
     /* pipe managers */
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
@@ -416,7 +415,7 @@ int main(int argc, char *argv[])
 
     /* avformat sink */
     avfsink = upipe_void_alloc(upipe_avfsink_mgr,
-        uprobe_pfx_adhoc_alloc(logger, loglevel, "avfsink"));
+        uprobe_pfx_alloc(uprobe_use(logger), loglevel, "avfsink"));
     upipe_set_uclock(avfsink, uclock);
 
     upipe_avfsink_set_mime(avfsink, mime);
@@ -428,7 +427,7 @@ int main(int argc, char *argv[])
 
     /* avformat source */
     avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
-        uprobe_pfx_adhoc_alloc(&uprobe_demux_s, loglevel, "avfsrc"));
+        uprobe_pfx_alloc(uprobe_use(&uprobe_demux_s), loglevel, "avfsrc"));
     upipe_set_upump_mgr(avfsrc, upump_mgr);
     upipe_set_uref_mgr(avfsrc, uref_mgr);
     upipe_set_uclock(avfsrc, uclock);
@@ -450,8 +449,9 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     ubuf_mgr_release(block_mgr);
     uclock_release(uclock);
-    uprobe_log_free(logger);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
+    uprobe_clean(&uprobe_demux_s);
 
     ev_default_destroy();
     return 0;

@@ -235,7 +235,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
         upipe_sws_thumbs->gallery = uref_dup(uref);
         gallery = upipe_sws_thumbs->gallery;
         if (unlikely(!gallery)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
             return;
         }
@@ -245,7 +245,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
         if (unlikely(!ubuf)) {
             uref_free(gallery);
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         ubuf_pic_clear(ubuf, 0, 0, -1, -1);
@@ -366,7 +366,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
     upipe_sws_thumbs->thumbnum = realloc(upipe_sws_thumbs->thumbnum,
                                  sizeof(struct picsize));
     if (unlikely(!upipe_sws_thumbs->thumbsize || !upipe_sws_thumbs->thumbnum)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_sws_thumbs->thumbsize->hsize = hsize;
@@ -381,7 +381,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
 
     struct uref *flow = uref_dup(upipe_sws_thumbs->flow_def_attr);
     if (unlikely(!flow)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     uref_pic_flow_set_hsize(flow, hsize * cols);
@@ -455,7 +455,7 @@ static bool upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 

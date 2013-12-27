@@ -33,6 +33,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -82,8 +83,8 @@ static void usage(const char *argv0) {
 }
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -111,26 +112,28 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
                 struct upipe *upipe_avfsrc_output =
                     upipe_flow_alloc_sub(upipe_avfsrc,
-                        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                                  "src %"PRIu64, id), flow_def);
+                        uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                            UPROBE_LOG_LEVEL,
+                                            "src %"PRIu64, id), flow_def);
                 assert(upipe_avfsrc_output != NULL);
                 assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
 
                 struct upipe *upipe_sink =
                     upipe_void_alloc_output_sub(upipe_avfsrc_output,
                         upipe_avfsink,
-                        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                                  "sink %"PRIu64, id));
+                        uprobe_pfx_alloc_va(uprobe_use(logger),
+                                            UPROBE_LOG_LEVEL,
+                                            "sink %"PRIu64, id));
                 assert(upipe_sink != NULL);
                 upipe_release(upipe_sink);
             }
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPROBE_SOURCE_END:
             upipe_release(upipe);
-            return true;
+            return UBASE_ERR_NONE;
     }
-    return false;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char *argv[])
@@ -166,12 +169,12 @@ int main(int argc, char *argv[])
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
 
-    assert(upipe_av_init(false, logger));
+    assert(upipe_av_init(false, uprobe_use(logger)));
 
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     assert(upipe_avfsink_mgr != NULL);
     upipe_avfsink = upipe_void_alloc(upipe_avfsink_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "avfsink"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsink"));
     assert(upipe_avfsink != NULL);
 #if 0
     if (delay) {
@@ -184,7 +187,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
     upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "avfsrc"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsrc"));
     assert(upipe_avfsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
     assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
@@ -211,7 +214,8 @@ int main(int argc, char *argv[])
 #if 0
     uclock_release(uclock);
 #endif
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     ev_default_destroy();
     return 0;

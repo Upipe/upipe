@@ -65,7 +65,8 @@
 #define PACKET_NUM 42
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -76,7 +77,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** phony pipe to test upipe_rtp_prepend */
@@ -215,7 +216,8 @@ int main(int argc, char **argv)
     /* build rtp_prepend pipe */
     struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
     struct upipe *rtp_prepend = upipe_void_alloc(upipe_rtp_prepend_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "rtp"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "rtp"));
     assert(upipe_rtp_prepend_mgr);
     assert(upipe_set_flow_def(rtp_prepend, uref));
     uref_free(uref);
@@ -223,7 +225,7 @@ int main(int argc, char **argv)
     assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
 
     struct upipe *rtp_prepend_test = upipe_void_alloc(&rtp_prepend_test_mgr,
-                                                      uprobe_stdio);
+                                                      uprobe_use(uprobe_stdio));
     assert(rtp_prepend_test != NULL);
     assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
 
@@ -245,7 +247,8 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

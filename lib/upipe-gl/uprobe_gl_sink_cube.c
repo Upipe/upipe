@@ -31,7 +31,7 @@
 #include <upipe/uprobe.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_helper_adhoc.h>
+#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -49,7 +49,7 @@
 #include <GL/glu.h>
 
 /** @This is a super-set of the uprobe structure with additional
- * local members. It is an adhoc probe.
+ * local members.
  */
 struct uprobe_gl_sink_cube {
     /** rotation angle */
@@ -59,16 +59,11 @@ struct uprobe_gl_sink_cube {
     /** SAR */
     struct urational sar;
 
-    /** pointer to the pipe we're attached to */
-    struct upipe *upipe;
     /** structure exported to modules */
     struct uprobe uprobe;
 };
 
-static void uprobe_gl_sink_cube_free(struct uprobe *uprobe);
-
 UPROBE_HELPER_UPROBE(uprobe_gl_sink_cube, uprobe);
-UPROBE_HELPER_ADHOC(uprobe_gl_sink_cube, upipe);
 
 /** @internal @This reshapes the gl view upon receiving an Exposure event
  * @param uprobe description structure of the probe
@@ -199,7 +194,7 @@ static void uprobe_gl_sink_cube_render(struct uprobe *uprobe,
  * @param w pic width
  * @param h pic height
  */
-static void uprobe_gl_sink_cube_init(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
+static void uprobe_gl_sink_cube_init2(struct uprobe *uprobe, struct upipe *upipe, int w, int h)
 {
     struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
 
@@ -224,31 +219,31 @@ static void uprobe_gl_sink_cube_init(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true for gl (init, render, reshape)  events
+ * @return an error code
  */
-static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
+static enum ubase_err uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
                         struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref*);
             uprobe_gl_sink_cube_new_flow(uprobe, upipe, uref);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPROBE_GL_SINK_INIT: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
             int w = va_arg(args, int);
             int h = va_arg(args, int);
-            uprobe_gl_sink_cube_init(uprobe, upipe, w, h);
-            return true;
+            uprobe_gl_sink_cube_init2(uprobe, upipe, w, h);
+            return UBASE_ERR_NONE;
         }
         case UPROBE_GL_SINK_RENDER: {
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_GL_SINK_SIGNATURE);
             struct uref *uref = va_arg(args, struct uref *);
             uprobe_gl_sink_cube_render(uprobe, upipe, uref);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPROBE_GL_SINK_RESHAPE: {
             unsigned int signature = va_arg(args, unsigned int);
@@ -256,46 +251,45 @@ static bool uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
             int w = va_arg(args, int);
             int h = va_arg(args, int);
             uprobe_gl_sink_cube_reshape(uprobe, upipe, w, h);
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return uprobe_gl_sink_cube_throw_adhoc(uprobe, upipe, event, args);
+            return uprobe_throw_next(uprobe, upipe, event, args);
     }
 }
 
-/** @This frees a uprobe_gl_sink_cube structure.
+/** @internal @This initializes a new uprobe_gl_sink_cube structure.
  *
- * @param uprobe structure to free
- */
-static void uprobe_gl_sink_cube_free(struct uprobe *uprobe)
-{
-    struct uprobe_gl_sink_cube *cube = uprobe_gl_sink_cube_from_uprobe(uprobe);
-    glDeleteTextures(1, &cube->texture);
-    uprobe_gl_sink_cube_clean_adhoc(uprobe);
-    free(cube);
-}
-
-/** @This allocates a new uprobe_gl_sink_cube structure in ad-hoc mode (will be
- * deallocated when the pipe dies).
- *
+ * @param cube pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_gl_sink_cube_alloc(struct uprobe *next)
+static struct uprobe *uprobe_gl_sink_cube_init(struct uprobe_gl_sink_cube *cube,
+                                               struct uprobe *next)
 {
-    struct uprobe_gl_sink_cube *cube = malloc(sizeof(struct uprobe_gl_sink_cube));
-    if (unlikely(cube == NULL)) {
-        uprobe_throw_fatal(next, NULL, UPROBE_ERR_ALLOC);
-        return next;
-    }
+    assert(cube != NULL);
     struct uprobe *uprobe = &cube->uprobe;
 
     cube->theta = 0;
     cube->sar.num = cube->sar.den = 1;
 
     uprobe_init(uprobe, uprobe_gl_sink_cube_throw, next);
-    uprobe_gl_sink_cube_init_adhoc(uprobe);
     return uprobe;
 }
 
+/** @internal @This cleans up a uprobe_gl_sink_cube structure.
+ *
+ * @param cube structure to free
+ */
+static void uprobe_gl_sink_cube_clean(struct uprobe_gl_sink_cube *cube)
+{
+    glDeleteTextures(1, &cube->texture);
+    struct uprobe *uprobe = &cube->uprobe;
+    uprobe_clean(uprobe);
+}
 
+#define ARGS_DECL struct uprobe *next
+#define ARGS next
+UPROBE_HELPER_ALLOC(uprobe_gl_sink_cube)
+#undef ARGS
+#undef ARGS_DECL

@@ -301,7 +301,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -377,12 +377,12 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_mpgaf_store_flow_def(upipe, flow_def);
@@ -420,7 +420,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -474,12 +474,12 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     if (unlikely(!ret)) {
         uref_free(flow_def);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_mpgaf_store_flow_def(upipe, flow_def);
@@ -537,7 +537,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
     struct uref *uref = upipe_mpgaf_extract_uref_stream(upipe,
             upipe_mpgaf->next_frame_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -571,7 +571,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
         uref_clock_set_cr_dts_delay(uref, 0);
 
     if (unlikely(!uref_clock_set_duration(uref, duration)))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
     upipe_mpgaf_output(upipe, uref, upump);
 }
@@ -685,7 +685,7 @@ static bool upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_mpgaf_store_flow_def_input(upipe, flow_def_dup);

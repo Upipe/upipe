@@ -173,8 +173,8 @@ static void fill_pic(struct uref *uref, int counter)
 }
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -185,7 +185,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -240,7 +240,8 @@ int main(int argc, char **argv)
 
     /* x264 pipe */
     struct upipe *x264 = upipe_void_alloc(upipe_x264_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264"));
+                    uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                                     "x264"));
     assert(x264);
     assert(upipe_set_flow_def(x264, flow_def));
     uref_free(flow_def);
@@ -248,7 +249,8 @@ int main(int argc, char **argv)
 
     /* x264_test */
     struct upipe *x264_test = upipe_void_alloc(&x264_test_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "x264_test"));
+                    uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                                     "x264_test"));
     upipe_set_output(x264, x264_test);
 
     /* test controls */
@@ -279,7 +281,8 @@ int main(int argc, char **argv)
     ubuf_mgr_release(pic_mgr);
     ubuf_mgr_release(block_mgr);
     uref_mgr_release(uref_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 

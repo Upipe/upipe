@@ -259,7 +259,7 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                    upipe_qsrc->upump_mgr,
                                    upipe_qsrc_worker, upipe);
         if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return false;
         } 
         upipe_qsrc_set_upump(upipe, upump);

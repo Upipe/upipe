@@ -79,9 +79,6 @@ struct upipe_ts_psii {
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
-    /** probe for uref_mgr and ubuf_mgr */
-    struct uprobe probe;
-
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -108,6 +105,8 @@ UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_psii pipe. */
 struct upipe_ts_psii_sub {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
     /** refcount management structure */
     struct urefcount urefcount;
     /** structure for double-linked lists */
@@ -121,6 +120,8 @@ struct upipe_ts_psii_sub {
     /** date (in system time) of the next table occurrence */
     uint64_t next_cr_sys;
 
+    /** probe for uref_mgr and ubuf_mgr */
+    struct uprobe probe;
     /** pointer to ts_encaps pipe */
     struct upipe *encaps;
 
@@ -129,11 +130,60 @@ struct upipe_ts_psii_sub {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_psii_sub, upipe, UPIPE_TS_PSII_SUB_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_ts_psii_sub, urefcount, upipe_ts_psii_sub_free)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_psii_sub, urefcount, upipe_ts_psii_sub_no_input)
 UPIPE_HELPER_VOID(upipe_ts_psii_sub)
+
+UBASE_FROM_TO(upipe_ts_psii_sub, urefcount, urefcount_real, urefcount_real)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psii, upipe_ts_psii_sub, sub, sub_mgr,
                      subs, uchain)
+
+/** @hidden */
+static void upipe_ts_psii_sub_free(struct urefcount *urefcount_real);
+
+/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
+ * inner pipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_psii
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
+                                              struct upipe *inner,
+                                              enum uprobe_event event,
+                                              va_list args)
+{
+    struct upipe_ts_psii_sub *upipe_ts_psii_sub =
+        container_of(uprobe, struct upipe_ts_psii_sub, probe);
+    struct upipe *upipe = upipe_ts_psii_sub_to_upipe(upipe_ts_psii_sub);
+    struct upipe_ts_psii *upipe_ts_psii =
+        upipe_ts_psii_from_sub_mgr(upipe->mgr);
+
+    switch (event) {
+        case UPROBE_NEED_UREF_MGR:
+            if (unlikely(upipe_ts_psii->uref_mgr == NULL))
+                upipe_throw_need_uref_mgr(upipe);
+            if (likely(upipe_ts_psii->uref_mgr != NULL)) {
+                upipe_set_uref_mgr(inner, upipe_ts_psii->uref_mgr);
+                return UBASE_ERR_NONE;
+            }
+            return UBASE_ERR_UNHANDLED;
+        case UPROBE_NEED_UBUF_MGR: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            if (unlikely(upipe_ts_psii->ubuf_mgr == NULL))
+                upipe_throw_need_ubuf_mgr(upipe, flow_def);
+            if (likely(upipe_ts_psii->ubuf_mgr != NULL)) {
+                upipe_set_ubuf_mgr(inner, upipe_ts_psii->ubuf_mgr);
+                return UBASE_ERR_NONE;
+            }
+            return UBASE_ERR_UNHANDLED;
+        }
+        default:
+            return upipe_throw_proxy(upipe, inner, event, args);
+    }
+}
 
 /** @internal @This allocates an input subpipe of a ts_psii pipe.
  *
@@ -155,12 +205,18 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
     upipe_ts_psii_sub_init_urefcount(upipe);
+    urefcount_init(upipe_ts_psii_sub_to_urefcount_real(upipe_ts_psii_sub),
+                   upipe_ts_psii_sub_free);
     upipe_ts_psii_sub_init_sub(upipe);
     upipe_ts_psii_sub->interval = DEFAULT_INTERVAL;
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->next_cr_sys = UINT64_MAX;
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->encaps = NULL;
+
+    uprobe_init(&upipe_ts_psii_sub->probe, upipe_ts_psii_sub_probe, NULL);
+    upipe_ts_psii_sub->probe.refcount =
+        upipe_ts_psii_sub_to_urefcount_real(upipe_ts_psii_sub);
 
     upipe_throw_ready(upipe);
 
@@ -171,10 +227,10 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
 
     if (unlikely((upipe_ts_psii_sub->encaps =
                     upipe_void_alloc(ts_psii_mgr->ts_encaps_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_psii->probe,
-                                                UPROBE_LOG_DEBUG,
-                                                "encaps"))) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                         uprobe_pfx_alloc(uprobe_use(&upipe_ts_psii_sub->probe),
+                                          UPROBE_LOG_DEBUG,
+                                          "encaps"))) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
     if (likely(upipe_ts_psii->output != NULL))
@@ -251,7 +307,7 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
         struct uref *uref = uref_from_uchain(uchain);
         struct uref *output = uref_dup(uref);
         if (unlikely(output == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
@@ -356,20 +412,36 @@ static bool upipe_ts_psii_sub_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
+ * @param urefcount_real pointer to urefcount_real structure
+ */
+static void upipe_ts_psii_sub_free(struct urefcount *urefcount_real)
+{
+    struct upipe_ts_psii_sub *upipe_ts_psii_sub =
+        upipe_ts_psii_sub_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_psii_sub_to_upipe(upipe_ts_psii_sub);
+
+    upipe_throw_dead(upipe);
+
+    uprobe_clean(&upipe_ts_psii_sub->probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_psii_sub_clean_urefcount(upipe);
+    upipe_ts_psii_sub_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_psii_sub_free(struct upipe *upipe)
+static void upipe_ts_psii_sub_no_input(struct upipe *upipe)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
 
     upipe_release(upipe_ts_psii_sub->encaps);
-    upipe_throw_dead(upipe);
 
     upipe_ts_psii_sub_clean(upipe);
     upipe_ts_psii_sub_clean_sub(upipe);
-    upipe_ts_psii_sub_clean_urefcount(upipe);
-    upipe_ts_psii_sub_free_void(upipe);
+    urefcount_release(upipe_ts_psii_sub_to_urefcount_real(upipe_ts_psii_sub));
 }
 
 /** @internal @This initializes the sub manager for a ts_psii pipe.
@@ -385,42 +457,6 @@ static void upipe_ts_psii_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_ts_psii_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_psii_sub_input;
     sub_mgr->upipe_control = upipe_ts_psii_sub_control;
-}
-
-/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * subpipes.
- *
- * @param uprobe pointer to the probe in upipe_ts_psii
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
- * @param args arguments of the event
- * @return true if the event was caught
- */
-static bool upipe_ts_psii_probe(struct uprobe *uprobe, struct upipe *subpipe,
-                               enum uprobe_event event, va_list args)
-{
-    struct upipe_ts_psii *upipe_ts_psii =
-        container_of(uprobe, struct upipe_ts_psii, probe);
-    struct upipe *upipe = upipe_ts_psii_to_upipe(upipe_ts_psii);
-
-    switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (upipe_ts_psii->uref_mgr == NULL)
-                upipe_throw_need_uref_mgr(upipe);
-            if (upipe_ts_psii->uref_mgr != NULL)
-                upipe_set_uref_mgr(subpipe, upipe_ts_psii->uref_mgr);
-            return true;
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (upipe_ts_psii->ubuf_mgr == NULL)
-                upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (upipe_ts_psii->ubuf_mgr != NULL)
-                upipe_set_ubuf_mgr(subpipe, upipe_ts_psii->ubuf_mgr);
-            return true;
-        }
-        default:
-            return false;
-    }
 }
 
 /** @internal @This allocates a ts_psii pipe.
@@ -440,15 +476,12 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
     upipe_ts_psii_init_urefcount(upipe);
     upipe_ts_psii_init_uref_mgr(upipe);
     upipe_ts_psii_init_ubuf_mgr(upipe);
     upipe_ts_psii_init_output(upipe);
     upipe_ts_psii_init_sub_mgr(upipe);
     upipe_ts_psii_init_sub_subs(upipe);
-
-    uprobe_init(&upipe_ts_psii->probe, upipe_ts_psii_probe, uprobe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -497,7 +530,7 @@ static bool upipe_ts_psii_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_ts_psii_store_flow_def(upipe, flow_def_dup);

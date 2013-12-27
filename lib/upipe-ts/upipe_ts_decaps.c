@@ -114,7 +114,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     bool transporterror = ts_get_transporterror(ts_header);
@@ -132,7 +132,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
         uint8_t af_length;
         if (unlikely(!uref_block_extract(uref, 0, 1, &af_length))) {
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
@@ -147,7 +147,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             uint8_t af_header;
             if (unlikely(!uref_block_extract(uref, 1, 1, &af_header))) {
                 uref_free(uref);
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
             }
 
@@ -163,7 +163,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                         TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2);
                 if (unlikely(pcr == NULL)) {
                     uref_free(uref);
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                     return;
                 }
                 uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
@@ -206,7 +206,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
         uref_block_set_start(uref);
     if (unlikely((transporterror && !uref_flow_set_error(uref)))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -230,12 +230,12 @@ static bool upipe_ts_decaps_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_decaps_store_flow_def(upipe, flow_def_dup);
     return true;
 }

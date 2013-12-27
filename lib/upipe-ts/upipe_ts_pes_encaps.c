@@ -161,7 +161,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
     struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_pese->ubuf_mgr, header_size);
     if (unlikely(ubuf == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -170,7 +170,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
     if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
         uref_free(uref);
         ubuf_free(ubuf);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -202,7 +202,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
     if (unlikely(!uref_block_append(uref, payload))) {
         uref_free(uref);
         ubuf_free(payload);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -300,12 +300,12 @@ static bool upipe_ts_pese_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegtspes.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_pese_store_flow_def(upipe, flow_def_dup);
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     upipe_ts_pese->pes_id = pes_id;

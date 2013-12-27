@@ -67,8 +67,8 @@ static struct upipe *upipe_qsink;
 static uint8_t counter = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -84,7 +84,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(upipe);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_qsrc */
@@ -155,14 +155,15 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&queue_test_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sink"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     assert(upipe_qsrc_mgr != NULL);
     struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "queue source"),
-            QUEUE_LENGTH);
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
     assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
     assert(upipe_set_output(upipe_qsrc, upipe_sink));
@@ -170,7 +171,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
     upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "queue sink"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "queue sink"));
     assert(upipe_qsink != NULL);
     assert(upipe_set_flow_def(upipe_qsink, uref));
     assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
@@ -204,7 +206,8 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     ev_default_destroy();
     return 0;

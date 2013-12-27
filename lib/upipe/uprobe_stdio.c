@@ -24,13 +24,13 @@
  */
 
 /** @file
- * @short probe outputting all print events to stdio
+ * @short probe outputting all log events to stdio
  */
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
 
 #include <stdlib.h>
@@ -38,69 +38,53 @@
 #include <string.h>
 #include <stdarg.h>
 
-/** @This is a super-set of the uprobe structure with additional local
- * members. */
-struct uprobe_stdio {
-    /** file stream to write to */
-    FILE *stream;
-    /** minimum level of printed messages */
-    enum uprobe_log_level min_level;
-
-    /** structure exported to modules */
-    struct uprobe uprobe;
-};
-
-UPROBE_HELPER_UPROBE(uprobe_stdio, uprobe)
-
 /** @internal @This catches events thrown by pipes.
  *
  * @param uprobe pointer to probe
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return always false
+ * @return an error code
  */
-static bool uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
-                               enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_stdio_throw(struct uprobe *uprobe,
+                                         struct upipe *upipe,
+                                         enum uprobe_event event, va_list args)
 {
     struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
+    if (event != UPROBE_LOG)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
-    switch (event) {
-        case UPROBE_LOG: {
-            enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
-            if (uprobe_stdio->min_level > level)
-                return true;
-            const char *level_name;
-            switch (level) {
-                case UPROBE_LOG_VERBOSE: level_name = "verbose"; break;
-                case UPROBE_LOG_DEBUG: level_name = "debug"; break;
-                case UPROBE_LOG_NOTICE: level_name = "notice"; break;
-                case UPROBE_LOG_WARNING: level_name = "warning"; break;
-                case UPROBE_LOG_ERROR: level_name = "error"; break;
-                default: level_name = "unknown"; break;
-            }
-
-            const char *msg = va_arg(args, const char *);
-            fprintf(uprobe_stdio->stream, "%s: %s\n", level_name, msg);
-            return true;
-        }
-        default:
-            return false;
+    enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
+    if (uprobe_stdio->min_level > level)
+        return UBASE_ERR_NONE;
+    const char *level_name;
+    switch (level) {
+        case UPROBE_LOG_VERBOSE: level_name = "verbose"; break;
+        case UPROBE_LOG_DEBUG: level_name = "debug"; break;
+        case UPROBE_LOG_NOTICE: level_name = "notice"; break;
+        case UPROBE_LOG_WARNING: level_name = "warning"; break;
+        case UPROBE_LOG_ERROR: level_name = "error"; break;
+        default: level_name = "unknown"; break;
     }
+
+    const char *msg = va_arg(args, const char *);
+    fprintf(uprobe_stdio->stream, "%s: %s\n", level_name, msg);
+    return UBASE_ERR_NONE;
 }
 
-/** @This allocates a new uprobe stdio structure.
+/** @This initializes an already allocated uprobe_stdio structure.
  *
+ * @param uprobe_stdio pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
+ * @param stream stdio stream to which to log the messages
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
-                                  enum uprobe_log_level min_level)
+struct uprobe *uprobe_stdio_init(struct uprobe_stdio *uprobe_stdio,
+                                 struct uprobe *next, FILE *stream,
+                                 enum uprobe_log_level min_level)
 {
-    struct uprobe_stdio *uprobe_stdio = malloc(sizeof(struct uprobe_stdio));
-    if (unlikely(uprobe_stdio == NULL))
-        return NULL;
+    assert(uprobe_stdio != NULL);
     struct uprobe *uprobe = uprobe_stdio_to_uprobe(uprobe_stdio);
     uprobe_stdio->stream = stream;
     uprobe_stdio->min_level = min_level;
@@ -108,15 +92,19 @@ struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
     return uprobe;
 }
 
-/** @This frees a uprobe stdio structure.
+/** @This cleans a uprobe_stdio structure.
  *
- * @param uprobe structure to free
- * @return next probe
+ * @param uprobe_stdio structure to clean
  */
-struct uprobe *uprobe_stdio_free(struct uprobe *uprobe)
+void uprobe_stdio_clean(struct uprobe_stdio *uprobe_stdio)
 {
-    struct uprobe *next = uprobe->next;
-    struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
-    free(uprobe_stdio);
-    return next;
+    assert(uprobe_stdio != NULL);
+    struct uprobe *uprobe = uprobe_stdio_to_uprobe(uprobe_stdio);
+    uprobe_clean(uprobe);
 }
+
+#define ARGS_DECL struct uprobe *next, FILE *stream, enum uprobe_log_level min_level
+#define ARGS next, stream, min_level
+UPROBE_HELPER_ALLOC(uprobe_stdio)
+#undef ARGS
+#undef ARGS_DECL

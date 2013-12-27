@@ -176,7 +176,7 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     assert(upipe_filter_blend->ubuf_mgr);
     ubuf_deint = ubuf_pic_alloc(upipe_filter_blend->ubuf_mgr, width, height);
     if (unlikely(!ubuf_deint)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         goto error;
     }
 
@@ -233,7 +233,7 @@ static bool upipe_filter_blend_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_filter_blend_store_flow_def(upipe, flow_def_dup);

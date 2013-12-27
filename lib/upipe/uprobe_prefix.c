@@ -30,17 +30,12 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_helper_adhoc.h>
+#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
 
 #include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
-
-/** @hidden */
-struct uprobe *uprobe_pfx_free(struct uprobe *uprobe);
-
-UPROBE_HELPER_ADHOC(uprobe_pfx, adhoc_pipe)
 
 /** @internal @This catches events thrown by pipes.
  *
@@ -48,32 +43,29 @@ UPROBE_HELPER_ADHOC(uprobe_pfx, adhoc_pipe)
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true for log events
+ * @return an error code
  */
-static bool uprobe_pfx_throw(struct uprobe *uprobe, struct upipe *upipe,
-                             enum uprobe_event event, va_list args)
+static enum ubase_err uprobe_pfx_throw(struct uprobe *uprobe,
+                                       struct upipe *upipe,
+                                       enum uprobe_event event, va_list args)
 {
     struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
-    if (event != UPROBE_LOG) {
-        if (uprobe_pfx->adhoc)
-            return uprobe_pfx_throw_adhoc(uprobe, upipe, event, args);
-        return false;
-    }
+    if (event != UPROBE_LOG)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
     if (uprobe->next == NULL || uprobe_pfx->min_level > level)
-        return true;
+        return UBASE_ERR_NONE;
 
     const char *msg = va_arg(args, const char *);
     const char *name = likely(uprobe_pfx->name != NULL) ?
                        uprobe_pfx->name : "unknown";
     char new_msg[strlen(msg) + +strlen(name) + strlen("[] ") + 1];
     sprintf(new_msg, "[%s] %s", name, msg);
-    uprobe_throw(uprobe->next, upipe, event, level, new_msg);
-    return true;
+    return uprobe_throw(uprobe->next, upipe, event, level, new_msg);
 }
 
-/** @This initializes an already allocated uprobe pfx structure.
+/** @This initializes an already allocated uprobe_pfx structure.
  *
  * @param uprobe_pfx pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
@@ -93,45 +85,34 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
         if (unlikely(uprobe_pfx->name == NULL)) {
             uprobe_throw(next, NULL, UPROBE_LOG, UPROBE_LOG_ERROR,
                          "allocation error in uprobe_pfx_init");
-            uprobe_throw(next, NULL, UPROBE_FATAL, UPROBE_ERR_ALLOC);
+            uprobe_throw(next, NULL, UPROBE_FATAL, UBASE_ERR_ALLOC);
         }
     } else
         uprobe_pfx->name = NULL;
     uprobe_pfx->min_level = min_level;
-    uprobe_pfx->adhoc = false;
     uprobe_init(uprobe, uprobe_pfx_throw, next);
     return uprobe;
 }
 
-/** @This cleans a uprobe pfx structure.
+/** @This cleans a uprobe_pfx structure.
  *
  * @param uprobe_pfx structure to clean
  */
 void uprobe_pfx_clean(struct uprobe_pfx *uprobe_pfx)
 {
+    assert(uprobe_pfx != NULL);
+    struct uprobe *uprobe = uprobe_pfx_to_uprobe(uprobe_pfx);
     free(uprobe_pfx->name);
-    if (uprobe_pfx->adhoc)
-        uprobe_pfx_clean_adhoc(&uprobe_pfx->uprobe);
+    uprobe_clean(uprobe);
 }
 
-/** @This allocates a new uprobe pfx structure.
- *
- * @param next next probe to test if this one doesn't catch the event
- * @param min_level minimum level of passed-through messages
- * @param name name of the pipe (informative)
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_pfx_alloc(struct uprobe *next,
-                                enum uprobe_log_level min_level,
-                                const char *name)
-{
-    struct uprobe_pfx *uprobe_pfx = malloc(sizeof(struct uprobe_pfx));
-    if (unlikely(uprobe_pfx == NULL))
-        return NULL;
-    return uprobe_pfx_init(uprobe_pfx, next, min_level, name);
-}
+#define ARGS_DECL struct uprobe *next, enum uprobe_log_level min_level, const char *name
+#define ARGS next, min_level, name
+UPROBE_HELPER_ALLOC(uprobe_pfx)
+#undef ARGS
+#undef ARGS_DECL
 
-/** @This allocates a new uprobe pfx structure, with printf-style name
+/** @This allocates a new uprobe_pfx structure, with printf-style name
  * generation.
  *
  * @param next next probe to test if this one doesn't catch the event
@@ -145,59 +126,4 @@ struct uprobe *uprobe_pfx_alloc_va(struct uprobe *next,
                                    const char *format, ...)
 {
     UBASE_VARARG(uprobe_pfx_alloc(next, min_level, string))
-}
-
-/** @This allocates a new uprobe pfx structure in ad-hoc mode (will be
- * deallocated when the pipe dies).
- *
- * @param next next probe to test if this one doesn't catch the event
- * @param min_level minimum level of passed-through messages
- * @param name name of the pipe (informative)
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_pfx_adhoc_alloc(struct uprobe *next,
-                                      enum uprobe_log_level min_level,
-                                      const char *name)
-{
-    struct uprobe *uprobe = uprobe_pfx_alloc(next, min_level, name);
-    if (unlikely(uprobe == NULL)) {
-        uprobe_throw_fatal(next, NULL, UPROBE_ERR_ALLOC);
-        /* we still return the next probe so that the pipe still has a
-         * probe hierarchy */
-        return next;
-    }
-    struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
-    uprobe_pfx->adhoc = true;
-    uprobe_pfx_init_adhoc(uprobe);
-    return uprobe;
-}
-
-/** @This allocates a new uprobe pfx structure in ad-hoc mode (will be
- * deallocated when the pipe dies), with printf-style name generation.
- *
- * @param next next probe to test if this one doesn't catch the event
- * @param min_level minimum level of passed-through messages
- * @param format printf-style format for the name, followed by optional
- * arguments
- * @return pointer to uprobe, or NULL in case of error
- */
-struct uprobe *uprobe_pfx_adhoc_alloc_va(struct uprobe *next,
-                                         enum uprobe_log_level min_level,
-                                         const char *format, ...)
-{
-    UBASE_VARARG(uprobe_pfx_adhoc_alloc(next, min_level, string))
-}
-
-/** @This frees a uprobe pfx structure.
- *
- * @param uprobe structure to free
- * @return next probe
- */
-struct uprobe *uprobe_pfx_free(struct uprobe *uprobe)
-{
-    struct uprobe *next = uprobe->next;
-    struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
-    uprobe_pfx_clean(uprobe_pfx);
-    free(uprobe_pfx);
-    return next;
 }

@@ -42,13 +42,13 @@ extern "C" {
 #include <stdbool.h>
 
 /** @This declares five functions dealing with specials pipes called "bins",
- * which internally implement a sub-pipeline to handle a given task. It also
- * acts as a proxy to the last element of the sub-pipeline.
+ * which internally implement an inner pipeline to handle a given task. It also
+ * acts as a proxy to the last element of the inner pipeline.
  *
  * You must add three members to your private upipe structure, for instance:
  * @code
- *  struct uprobe last_subpipe_probe;
- *  struct upipe *last_subpipe;
+ *  struct uprobe last_inner_probe;
+ *  struct upipe *last_inner;
  *  struct upipe *output;
  * @end code
  *
@@ -57,23 +57,23 @@ extern "C" {
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  bool upipe_foo_probe_bin(struct uprobe *uprobe, struct upipe *subpipe,
- *                           enum uprobe_event event, va_list args)
+ *  enum ubase_err upipe_foo_probe_bin(struct uprobe *uprobe,
+ *                                     struct upipe *inner,
+ *                                     enum uprobe_event event, va_list args)
  * @end @code
- * Probe to set on the last subpipe. It attaches all events (proxy) to the bin
- * pipe. The @tt {struct uprobe} member is set to point to this probe during
+ * Probe to set on the last inner pipe. It attaches all events (proxy) to the
+ * bin pipe. The @tt {struct uprobe} member is set to point to this probe during
  * init.
  *
  * @item @code
- *  void upipe_foo_init_bin(struct upipe *upipe)
+ *  void upipe_foo_init_bin(struct upipe *upipe, struct urefcount *refcount)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  void upipe_foo_store_last_subpipe(struct upipe *upipe,
- *                                    struct upipe *subpipe)
+ *  void upipe_foo_store_last_inner(struct upipe *upipe, struct upipe *inner)
  * @end code
- * Called whenever you change the last subpipe of this bin.
+ * Called whenever you change the last inner pipe of this bin.
  *
  * @item @code
  *  bool upipe_foo_control_bin(struct upipe *upipe, enum upipe_command command,
@@ -89,67 +89,68 @@ extern "C" {
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
- * @param LAST_SUBPIPE_PROBE name of the @tt {struct uprobe} field of
+ * @param LAST_INNER_PROBE name of the @tt {struct uprobe} field of
  * your private upipe structure
- * @param LAST_SUBPIPE name of the @tt{struct upipe *} field of
- * your private upipe structure, pointing to the last subpipe of the bin
+ * @param LAST_INNER name of the @tt{struct upipe *} field of
+ * your private upipe structure, pointing to the last inner pipe of the bin
  * @param OUTPUT name of the @tt{struct upipe *} field of
  * your private upipe structure, pointing to the output of the bin
  */
-#define UPIPE_HELPER_BIN(STRUCTURE, LAST_SUBPIPE_PROBE, LAST_SUBPIPE,       \
-                         OUTPUT)                                            \
-/** @internal @This catches events coming from the last subpipe, and        \
+#define UPIPE_HELPER_BIN(STRUCTURE, LAST_INNER_PROBE, LAST_INNER, OUTPUT)   \
+/** @internal @This catches events coming from the last inner pipe, and     \
  * attaches them to the bin pipe.                                           \
  *                                                                          \
  * @param uprobe pointer to the probe in STRUCTURE                          \
- * @param upipe pointer to the subpipe                                      \
- * @param event event triggered by the subpipe                              \
+ * @param inner pointer to the inner pipe                                   \
+ * @param event event triggered by the inner pipe                           \
  * @param args arguments of the event                                       \
- * @return always true                                                      \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_probe_bin(struct uprobe *uprobe,                    \
-                                  struct upipe *subpipe,                    \
-                                  enum uprobe_event event, va_list args)    \
+static enum ubase_err STRUCTURE##_probe_bin(struct uprobe *uprobe,          \
+                                            struct upipe *inner,            \
+                                            enum uprobe_event event,        \
+                                            va_list args)                   \
 {                                                                           \
-    if (event == UPROBE_READY || event == UPROBE_DEAD)                      \
-        return true;                                                        \
     struct STRUCTURE *s = container_of(uprobe, struct STRUCTURE,            \
-                                       LAST_SUBPIPE_PROBE);                 \
+                                       LAST_INNER_PROBE);                   \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
-    upipe_throw_va(upipe, event, args);                                     \
-    return true;                                                            \
+    return upipe_throw_proxy(upipe, inner, event, args);                    \
 }                                                                           \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
+ * @param refcount refcount to pass to the inner probe                      \
  */                                                                         \
-static void STRUCTURE##_init_bin(struct upipe *upipe)                       \
+static void STRUCTURE##_init_bin(struct upipe *upipe,                       \
+                                 struct urefcount *refcount)                \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    uprobe_init(&s->LAST_SUBPIPE_PROBE, STRUCTURE##_probe_bin, NULL);       \
-    s->LAST_SUBPIPE = NULL;                                                 \
+    uprobe_init(&s->LAST_INNER_PROBE, STRUCTURE##_probe_bin, NULL);         \
+    s->LAST_INNER_PROBE.refcount = refcount;                                \
+    s->LAST_INNER = NULL;                                                   \
     s->OUTPUT = NULL;                                                       \
 }                                                                           \
-/** @internal @This stores the last subpipe, while releasing the previous   \
- * one, and setting the output.                                             \
+/** @internal @This stores the last inner pipe, while releasing the         \
+ * previous one, and setting the output.                                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param last_subpipe last subpipe                                         \
+ * @param last_inner last inner pipe                                        \
  */                                                                         \
-static void STRUCTURE##_store_last_subpipe(struct upipe *upipe,             \
-                                           struct upipe *last_subpipe)      \
+static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
+                                         struct upipe *last_inner)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (s->LAST_SUBPIPE != NULL)                                            \
-        upipe_release(s->LAST_SUBPIPE);                                     \
-    s->LAST_SUBPIPE = last_subpipe;                                         \
-    if (last_subpipe != NULL && s->OUTPUT != NULL)                          \
-        upipe_set_output(last_subpipe, s->OUTPUT);                          \
+    if (s->LAST_INNER != NULL)                                              \
+        upipe_release(s->LAST_INNER);                                       \
+    s->LAST_INNER = last_inner;                                             \
+    if (last_inner != NULL && s->OUTPUT != NULL)                            \
+        upipe_set_output(last_inner, s->OUTPUT);                            \
 }                                                                           \
 /** @internal @This handles the control commands.                           \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param p filled in with the flow definition (to use on the output)       \
+ * @param command control command                                           \
+ * @param args optional control command arguments                           \
  * @return false in case of error                                           \
  */                                                                         \
 static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
@@ -170,8 +171,8 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
                 s->OUTPUT = NULL;                                           \
             }                                                               \
                                                                             \
-            if (unlikely(s->LAST_SUBPIPE != NULL &&                         \
-                         !upipe_set_output(s->LAST_SUBPIPE, output)))       \
+            if (unlikely(s->LAST_INNER != NULL &&                           \
+                         !upipe_set_output(s->LAST_INNER, output)))         \
                 return false;                                               \
             s->OUTPUT = output;                                             \
             if (likely(output != NULL))                                     \
@@ -179,9 +180,9 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
             return true;                                                    \
         }                                                                   \
         default:                                                            \
-            if (s->LAST_SUBPIPE == NULL)                                    \
+            if (s->LAST_INNER == NULL)                                      \
                 return false;                                               \
-            return upipe_control_va(s->LAST_SUBPIPE, command, args);        \
+            return upipe_control_va(s->LAST_INNER, command, args);          \
     }                                                                       \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -191,8 +192,8 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
 static void STRUCTURE##_clean_bin(struct upipe *upipe)                      \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->LAST_SUBPIPE != NULL))                                    \
-        upipe_release(s->LAST_SUBPIPE);                                     \
+    if (likely(s->LAST_INNER != NULL))                                    \
+        upipe_release(s->LAST_INNER);                                     \
     if (likely(s->OUTPUT != NULL))                                          \
         upipe_release(s->OUTPUT);                                           \
 }

@@ -26,6 +26,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
@@ -138,6 +139,8 @@ UBASE_FROM_TO(upipe_ts_mux_mgr, urefcount, urefcount, urefcount)
 
 /** @internal @This is the private context of a ts_mux pipe. */
 struct upipe_ts_mux {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
     /** refcount management structure */
     struct urefcount urefcount;
 
@@ -148,15 +151,15 @@ struct upipe_ts_mux {
 
     /** probe for uref_mgr and ubuf_mgr */
     struct uprobe probe;
-    /** pointer to ts_join subpipe */
+    /** pointer to ts_join inner pipe */
     struct upipe *join;
-    /** pointer to ts_psii subpipe */
+    /** pointer to ts_psii inner pipe */
     struct upipe *psii;
-    /** bin probe for the ts_agg subpipe */
+    /** bin probe for the ts_agg inner pipe */
     struct uprobe agg_probe_bin;
-    /** probe for the ts_agg subpipe */
+    /** probe for the ts_agg inner pipe */
     struct uprobe agg_probe;
-    /** pointer to ts_agg subpipe (last subpipe for the bin) */
+    /** pointer to ts_agg inner pipe (last inner pipe for the bin) */
     struct upipe *agg;
     /** pipe acting as output */
     struct upipe *output;
@@ -199,12 +202,20 @@ struct upipe_ts_mux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_ts_mux, urefcount, upipe_ts_mux_free)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_mux, urefcount, upipe_ts_mux_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux)
 UPIPE_HELPER_UREF_MGR(upipe_ts_mux, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_mux, ubuf_mgr)
 UPIPE_HELPER_BIN(upipe_ts_mux, agg_probe_bin, agg, output)
 
+UBASE_FROM_TO(upipe_ts_mux, urefcount, urefcount_real, urefcount_real)
+
+/** @hidden */
+static enum ubase_err upipe_ts_mux_handle_probes(struct upipe *outer,
+                                                 struct upipe *upipe,
+                                                 struct upipe *inner,
+                                                 enum uprobe_event event,
+                                                 va_list args);
 /** @hidden */
 static void upipe_ts_mux_update(struct upipe *upipe);
 /** @hidden */
@@ -215,9 +226,13 @@ static void upipe_ts_mux_start(struct upipe *upipe);
 static bool upipe_ts_mux_find_sid(struct upipe *upipe, uint16_t sid);
 /** @hidden */
 static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid);
+/** @hidden */
+static void upipe_ts_mux_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the private context of a program of a ts_mux pipe. */
 struct upipe_ts_mux_program {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
     /** refcount management structure */
     struct urefcount urefcount;
     /** structure for double-linked lists */
@@ -257,8 +272,10 @@ struct upipe_ts_mux_program {
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_program, upipe, UPIPE_TS_MUX_PROGRAM_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_program, urefcount,
-                       upipe_ts_mux_program_free)
+                       upipe_ts_mux_program_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_program)
+
+UBASE_FROM_TO(upipe_ts_mux_program, urefcount, urefcount_real, urefcount_real)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux, upipe_ts_mux_program, program,
                      program_mgr, programs, uchain)
@@ -267,6 +284,8 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_mux, upipe_ts_mux_program, program,
 static void upipe_ts_mux_program_change(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_mux_program_start(struct upipe *upipe);
+/** @hidden */
+static void upipe_ts_mux_program_free(struct urefcount *urefcount_real);
 
 /** @internal @This defines the role of an input wrt. PCR management. */
 enum upipe_ts_mux_input_type {
@@ -281,6 +300,8 @@ enum upipe_ts_mux_input_type {
 /** @internal @This is the private context of an output of a ts_mux_program
  * subpipe. */
 struct upipe_ts_mux_input {
+    /** real refcount management structure */
+    struct urefcount urefcount_real;
     /** refcount management structure */
     struct urefcount urefcount;
     /** structure for double-linked lists */
@@ -314,11 +335,17 @@ struct upipe_ts_mux_input {
 };
 
 UPIPE_HELPER_UPIPE(upipe_ts_mux_input, upipe, UPIPE_TS_MUX_INPUT_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount, upipe_ts_mux_input_free)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount,
+                       upipe_ts_mux_input_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_input)
+
+UBASE_FROM_TO(upipe_ts_mux_input, urefcount, urefcount_real, urefcount_real)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
                      input_mgr, inputs, uchain)
+
+/** @hidden */
+static void upipe_ts_mux_input_free(struct urefcount *urefcount_real);
 
 
 /*
@@ -326,17 +353,18 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
  */
 
 /** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * subpipes.
+ * inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_mux_input
- * @param subpipe pointer to the subpipe
+ * @param inner pointer to the inner pipe
  * @param event event triggered by the subpipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_mux_input_probe(struct uprobe *uprobe,
-                                       struct upipe *subpipe,
-                                       enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_mux_input_probe(struct uprobe *uprobe,
+                                               struct upipe *inner,
+                                               enum uprobe_event event,
+                                               va_list args)
 {
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         container_of(uprobe, struct upipe_ts_mux_input, probe);
@@ -347,27 +375,11 @@ static bool upipe_ts_mux_input_probe(struct uprobe *uprobe,
         upipe_ts_mux_from_program_mgr(
                 upipe_ts_mux_program_to_upipe(upipe_ts_mux_program)->mgr);
 
-    switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
-            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
-                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
-            return true;
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                                          flow_def);
-            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
-                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
-            return true;
-        }
-        case UPROBE_NEW_FLOW_DEF:
-            return true;
-        default:
-            return false;
-    }
+    if (event == UPROBE_NEW_FLOW_DEF)
+        return UBASE_ERR_UNHANDLED;
+    return upipe_ts_mux_handle_probes(upipe,
+                                      upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                      inner, event, args);
 }
 
 /** @internal @This allocates an input subpipe of a ts_mux_program subpipe.
@@ -396,6 +408,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
     upipe_ts_mux_input_init_urefcount(upipe);
+    urefcount_init(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input),
+                   upipe_ts_mux_input_free);
     upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->pid = 8192;
@@ -406,7 +420,9 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         upipe_ts_mux_input->encaps = NULL;
 
     upipe_ts_mux_input_init_sub(upipe);
-    uprobe_init(&upipe_ts_mux_input->probe, upipe_ts_mux_input_probe, uprobe);
+    uprobe_init(&upipe_ts_mux_input->probe, upipe_ts_mux_input_probe, NULL);
+    upipe_ts_mux_input->probe.refcount =
+        upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input);
     upipe_throw_ready(upipe);
 
     struct upipe_ts_mux_mgr *ts_mux_mgr =
@@ -414,26 +430,26 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     struct upipe *join;
     if (unlikely((upipe_ts_mux_input->psig_flow =
                   upipe_void_alloc_sub(program->program_psig,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_VERBOSE,
-                                                   "psig flow"))) == NULL ||
+                         uprobe_pfx_alloc_va(
+                             uprobe_use(&upipe_ts_mux_input->probe),
+                             UPROBE_LOG_VERBOSE, "psig flow"))) == NULL ||
                 (upipe_ts_mux_input->pes_encaps =
                   upipe_void_alloc(ts_mux_mgr->ts_pese_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_VERBOSE,
-                                                   "pes encaps"))) == NULL ||
+                         uprobe_pfx_alloc_va(
+                             uprobe_output_alloc(uprobe_use(&upipe_ts_mux_input->probe)),
+                             UPROBE_LOG_VERBOSE, "pes encaps"))) == NULL ||
                  (upipe_ts_mux_input->encaps =
                   upipe_void_alloc_output(upipe_ts_mux_input->pes_encaps,
                          ts_mux_mgr->ts_encaps_mgr,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_VERBOSE,
-                                                   "encaps"))) == NULL ||
+                         uprobe_pfx_alloc_va(
+                             uprobe_output_alloc(uprobe_use(&upipe_ts_mux_input->probe)),
+                             UPROBE_LOG_VERBOSE, "encaps"))) == NULL ||
                  (join = upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
                          upipe_ts_mux->join,
-                         uprobe_pfx_adhoc_alloc_va(&upipe_ts_mux_input->probe,
-                                                   UPROBE_LOG_VERBOSE,
-                                                   "join"))) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                         uprobe_pfx_alloc_va(
+                             uprobe_use(&upipe_ts_mux_input->probe),
+                             UPROBE_LOG_VERBOSE, "join"))) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
@@ -632,7 +648,7 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (!upipe_set_flow_def(upipe_ts_mux_input->pes_encaps, flow_def_dup) ||
@@ -683,9 +699,27 @@ static bool upipe_ts_mux_input_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
+ * @param urefcount_real pointer to urefcount_real structure
+ */
+static void upipe_ts_mux_input_free(struct urefcount *urefcount_real)
+{
+    struct upipe_ts_mux_input *upipe_ts_mux_input =
+        upipe_ts_mux_input_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_mux_input_to_upipe(upipe_ts_mux_input);
+
+    upipe_throw_dead(upipe);
+
+    uprobe_clean(&upipe_ts_mux_input->probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_mux_input_clean_urefcount(upipe);
+    upipe_ts_mux_input_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_mux_input_free(struct upipe *upipe)
+static void upipe_ts_mux_input_no_input(struct upipe *upipe)
 {
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
@@ -698,13 +732,11 @@ static void upipe_ts_mux_input_free(struct upipe *upipe)
         upipe_release(upipe_ts_mux_input->pes_encaps);
     if (upipe_ts_mux_input->encaps != NULL)
         upipe_release(upipe_ts_mux_input->encaps);
-    upipe_throw_dead(upipe);
 
     upipe_ts_mux_input_clean_sub(upipe);
     if (!upipe_single(upipe_ts_mux_program_to_upipe(program)))
         upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
-    upipe_ts_mux_input_clean_urefcount(upipe);
-    upipe_ts_mux_input_free_void(upipe);
+    urefcount_release(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input));
 }
 
 /** @internal @This initializes the output manager for a ts_mux_program
@@ -730,17 +762,18 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
  */
 
 /** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * subpipes.
+ * inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_mux_program
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
  * @return true if the event was caught
  */
-static bool upipe_ts_mux_program_probe(struct uprobe *uprobe,
-                                       struct upipe *subpipe,
-                                       enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_mux_program_probe(struct uprobe *uprobe,
+                                                 struct upipe *inner,
+                                                 enum uprobe_event event,
+                                                 va_list args)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         container_of(uprobe, struct upipe_ts_mux_program, probe);
@@ -748,27 +781,11 @@ static bool upipe_ts_mux_program_probe(struct uprobe *uprobe,
     struct upipe_ts_mux *upipe_ts_mux =
         upipe_ts_mux_from_program_mgr(upipe->mgr);
 
-    switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
-            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
-                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
-            return true;
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux),
-                                          flow_def);
-            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
-                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
-            return true;
-        }
-        case UPROBE_NEW_FLOW_DEF:
-            return true;
-        default:
-            return false;
-    }
+    if (event == UPROBE_NEW_FLOW_DEF)
+        return UBASE_ERR_UNHANDLED;
+    return upipe_ts_mux_handle_probes(upipe,
+                                      upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                      inner, event, args);
 }
 
 /** @internal @This allocates a program subpipe of a ts_mux pipe.
@@ -799,6 +816,8 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
     upipe_ts_mux_program_init_urefcount(upipe);
+    urefcount_init(upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program),
+                   upipe_ts_mux_program_free);
     upipe_ts_mux_program_init_input_mgr(upipe);
     upipe_ts_mux_program_init_sub_inputs(upipe);
     upipe_ts_mux_program->sid = 0;
@@ -811,23 +830,24 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
          upipe_ts_mux_program->pmt_interval);
 
     upipe_ts_mux_program_init_sub(upipe);
-    uprobe_init(&upipe_ts_mux_program->probe, upipe_ts_mux_program_probe,
-                uprobe);
+    uprobe_init(&upipe_ts_mux_program->probe, upipe_ts_mux_program_probe, NULL);
+    upipe_ts_mux_program->probe.refcount =
+        upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program);
     upipe_throw_ready(upipe);
 
     if (unlikely((upipe_ts_mux_program->program_psig =
                   upipe_void_alloc_sub(upipe_ts_mux->psig,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
-                                                UPROBE_LOG_VERBOSE,
-                                                "psig program"))) == NULL ||
+                         uprobe_pfx_alloc(
+                             uprobe_output_alloc(uprobe_use(&upipe_ts_mux_program->probe)),
+                             UPROBE_LOG_VERBOSE, "psig program"))) == NULL ||
                  (upipe_ts_mux_program->pmt_psii =
                   upipe_void_alloc_output_sub(
                          upipe_ts_mux_program->program_psig,
                          upipe_ts_mux->psii,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux_program->probe,
-                                                UPROBE_LOG_VERBOSE,
-                                                "pmt psii"))) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                         uprobe_pfx_alloc(
+                             uprobe_use(&upipe_ts_mux_program->probe),
+                             UPROBE_LOG_VERBOSE, "pmt psii"))) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
     upipe_ts_psii_sub_set_interval(upipe_ts_mux_program->pmt_psii,
@@ -949,7 +969,7 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
     /* Build a new PMT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -1027,7 +1047,7 @@ static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
 
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -1183,9 +1203,27 @@ static bool upipe_ts_mux_program_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
+ * @param urefcount_real pointer to urefcount_real structure
+ */
+static void upipe_ts_mux_program_free(struct urefcount *urefcount_real)
+{
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_mux_program_to_upipe(upipe_ts_mux_program);
+
+    upipe_throw_dead(upipe);
+
+    uprobe_clean(&upipe_ts_mux_program->probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_mux_program_clean_urefcount(upipe);
+    upipe_ts_mux_program_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_mux_program_free(struct upipe *upipe)
+static void upipe_ts_mux_program_no_input(struct upipe *upipe)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1195,15 +1233,12 @@ static void upipe_ts_mux_program_free(struct upipe *upipe)
         upipe_release(upipe_ts_mux_program->program_psig);
     if (upipe_ts_mux_program->pmt_psii != NULL)
         upipe_release(upipe_ts_mux_program->pmt_psii);
-    upipe_throw_dead(upipe);
 
     upipe_ts_mux_program_clean_sub_inputs(upipe);
     upipe_ts_mux_program_clean_sub(upipe);
     if (!upipe_single(upipe_ts_mux_to_upipe(mux)))
         upipe_ts_mux_change(upipe_ts_mux_to_upipe(mux));
-
-    upipe_ts_mux_program_clean_urefcount(upipe);
-    upipe_ts_mux_program_free_void(upipe);
+    urefcount_release(upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program));
 }
 
 /** @internal @This initializes the program manager for a ts_mux pipe.
@@ -1226,79 +1261,90 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  * upipe_ts_mux structure handling (derived from upipe structure)
  */
 
-/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * agg subpipe.
+/** @internal @This handles the need_uref_mgr and need_ubuf_mgr events from
+ * inner pipes.
  *
- * @param uprobe pointer to the probe in upipe_ts_mux
- * @param subpipe pointer to the subpipe
- * @param event event triggered by the subpipe
+ * @param outer pointer to the outer subpipe
+ * @param upipe pointer to ts mux pipe
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
  * @param args arguments of the event
  * @return true if the event was caught
  */
-static bool upipe_ts_mux_agg_probe(struct uprobe *uprobe,
-                                   struct upipe *subpipe,
-                                   enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_mux_handle_probes(struct upipe *outer,
+                                                 struct upipe *upipe,
+                                                 struct upipe *inner,
+                                                 enum uprobe_event event,
+                                                 va_list args)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+
+    switch (event) {
+        case UPROBE_NEED_UREF_MGR:
+            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
+                upipe_throw_need_uref_mgr(upipe);
+            if (likely(upipe_ts_mux->uref_mgr != NULL)) {
+                upipe_set_uref_mgr(inner, upipe_ts_mux->uref_mgr);
+                return UBASE_ERR_NONE;
+            }
+            return UBASE_ERR_UNHANDLED;
+
+        case UPROBE_NEED_UBUF_MGR: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
+                upipe_throw_need_ubuf_mgr(upipe, flow_def);
+            if (likely(upipe_ts_mux->ubuf_mgr != NULL)) {
+                upipe_set_ubuf_mgr(inner, upipe_ts_mux->ubuf_mgr);
+                return UBASE_ERR_NONE;
+            }
+            return UBASE_ERR_UNHANDLED;
+        }
+        default:
+            return upipe_throw_proxy(outer, inner, event, args);
+    }
+}
+
+/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
+ * agg inner pipe.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_mux
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_mux_agg_probe(struct uprobe *uprobe,
+                                             struct upipe *inner,
+                                             enum uprobe_event event,
+                                             va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, agg_probe);
     struct upipe *upipe = upipe_ts_mux_to_upipe(upipe_ts_mux);
 
-    switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
-                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
-            return true;
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
-                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
-            return true;
-        }
-        default:
-            return false;
-    }
+    return upipe_ts_mux_handle_probes(upipe, upipe, inner, event, args);
 }
 
 /** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * subpipes.
+ * inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_mux
- * @param subpipe pointer to the subpipe
+ * @param inner pointer to the inner pipe
  * @param event event triggered by the subpipe
  * @param args arguments of the event
- * @return true if the event was caught
+ * @return an error code
  */
-static bool upipe_ts_mux_probe(struct uprobe *uprobe, struct upipe *subpipe,
-                               enum uprobe_event event, va_list args)
+static enum ubase_err upipe_ts_mux_probe(struct uprobe *uprobe,
+                                         struct upipe *inner,
+                                         enum uprobe_event event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, probe);
     struct upipe *upipe = upipe_ts_mux_to_upipe(upipe_ts_mux);
 
-    switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            if (unlikely(upipe_ts_mux->uref_mgr != NULL))
-                upipe_set_uref_mgr(subpipe, upipe_ts_mux->uref_mgr);
-            return true;
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (unlikely(upipe_ts_mux->ubuf_mgr != NULL))
-                upipe_set_ubuf_mgr(subpipe, upipe_ts_mux->ubuf_mgr);
-            return true;
-        }
-        case UPROBE_NEW_FLOW_DEF:
-            return true;
-        default:
-            return false;
-    }
+    if (event == UPROBE_NEW_FLOW_DEF)
+        return UBASE_ERR_UNHANDLED;
+    return upipe_ts_mux_handle_probes(upipe, upipe, inner, event, args);
 }
 
 /** @internal @This allocates a ts_mux pipe.
@@ -1319,9 +1365,11 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux_init_urefcount(upipe);
+    urefcount_init(upipe_ts_mux_to_urefcount_real(upipe_ts_mux),
+                   upipe_ts_mux_free);
     upipe_ts_mux_init_uref_mgr(upipe);
     upipe_ts_mux_init_ubuf_mgr(upipe);
-    upipe_ts_mux_init_bin(upipe);
+    upipe_ts_mux_init_bin(upipe, upipe_ts_mux_to_urefcount_real(upipe_ts_mux));
     upipe_ts_mux_init_program_mgr(upipe);
     upipe_ts_mux_init_sub_programs(upipe);
     upipe_ts_mux->psig = upipe_ts_mux->join = upipe_ts_mux->pat_psii = NULL;
@@ -1338,9 +1386,12 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
          upipe_ts_mux->pat_interval);
     upipe_ts_mux->octetrate_auto = true;
 
-    uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, uprobe);
+    uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, NULL);
+    upipe_ts_mux->probe.refcount = upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
     uprobe_init(&upipe_ts_mux->agg_probe, upipe_ts_mux_agg_probe,
                 &upipe_ts_mux->agg_probe_bin);
+    upipe_ts_mux->agg_probe.refcount =
+        upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
 
     upipe_throw_ready(upipe);
 
@@ -1348,10 +1399,10 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
         upipe_ts_mux_mgr_from_upipe_mgr(upipe->mgr);
     if (unlikely((upipe_ts_mux->psig =
                   upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_VERBOSE, "psig")))
-                   == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                         uprobe_pfx_alloc(
+                             uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
+                             UPROBE_LOG_VERBOSE, "psig"))) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
@@ -1371,44 +1422,44 @@ static void upipe_ts_mux_init(struct upipe *upipe)
 
     upipe_ts_mux->join =
         upipe_void_alloc(ts_mux_mgr->ts_join_mgr,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_VERBOSE, "join"));
+             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
+                              UPROBE_LOG_VERBOSE, "join"));
     if (unlikely(upipe_ts_mux->join == NULL ||
                  !upipe_set_uref_mgr(upipe_ts_mux->join,
                                      upipe_ts_mux->uref_mgr))) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
     upipe_ts_mux->psii =
         upipe_void_alloc_output(upipe_ts_mux->join, ts_mux_mgr->ts_psii_mgr,
-                           uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                  UPROBE_LOG_VERBOSE, "psii"));
+              uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
+                               UPROBE_LOG_VERBOSE, "psii"));
     if (unlikely(upipe_ts_mux->psii == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
     struct upipe *agg =
         upipe_void_alloc_output(upipe_ts_mux->psii, ts_mux_mgr->ts_agg_mgr,
-                           uprobe_pfx_adhoc_alloc(&upipe_ts_mux->agg_probe,
-                                                  UPROBE_LOG_VERBOSE, "agg"));
+                           uprobe_pfx_alloc(
+                               uprobe_use(&upipe_ts_mux->agg_probe),
+                               UPROBE_LOG_VERBOSE, "agg"));
     if (unlikely(agg == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    upipe_ts_mux_store_last_subpipe(upipe, agg);
+    upipe_ts_mux_store_last_inner(upipe, agg);
 
     if (unlikely(!upipe_ts_mux_set_mode(upipe_ts_mux->agg,
                                         UPIPE_TS_MUX_MODE_CAPPED) ||
                  (upipe_ts_mux->pat_psii =
                   upipe_void_alloc_output_sub(upipe_ts_mux->psig,
                          upipe_ts_mux->psii,
-                         uprobe_pfx_adhoc_alloc(&upipe_ts_mux->probe,
-                                                UPROBE_LOG_VERBOSE,
-                                                "pat psii")))
+                         uprobe_pfx_alloc(uprobe_use(&upipe_ts_mux->probe),
+                                          UPROBE_LOG_VERBOSE, "pat psii")))
                   == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     upipe_ts_psii_sub_set_interval(upipe_ts_mux->pat_psii,
@@ -1416,7 +1467,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
 }
 
 /** @This calculates the total octetrate used by a stream and updates the
- * aggregate subpipe.
+ * aggregate inner pipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -1479,7 +1530,7 @@ static void upipe_ts_mux_start(struct upipe *upipe)
     /* Build a new PAT. */
     struct uref *uref = uref_alloc(upipe_ts_mux->uref_mgr);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -1575,7 +1626,7 @@ static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
 
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -1919,9 +1970,30 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
 
 /** @This frees a upipe.
  *
+ * @param urefcount_real pointer to urefcount_real structure
+ */
+static void upipe_ts_mux_free(struct urefcount *urefcount_real)
+{
+    struct upipe_ts_mux *upipe_ts_mux =
+        upipe_ts_mux_from_urefcount_real(urefcount_real);
+    struct upipe *upipe = upipe_ts_mux_to_upipe(upipe_ts_mux);
+
+    upipe_throw_dead(upipe);
+
+    uprobe_clean(&upipe_ts_mux->probe);
+    uprobe_clean(&upipe_ts_mux->agg_probe);
+    urefcount_clean(urefcount_real);
+    upipe_ts_mux_clean_ubuf_mgr(upipe);
+    upipe_ts_mux_clean_uref_mgr(upipe);
+    upipe_ts_mux_clean_urefcount(upipe);
+    upipe_ts_mux_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_mux_free(struct upipe *upipe)
+static void upipe_ts_mux_no_input(struct upipe *upipe)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     if (upipe_ts_mux->psii != NULL)
@@ -1933,13 +2005,9 @@ static void upipe_ts_mux_free(struct upipe *upipe)
     if (upipe_ts_mux->pat_psii != NULL)
         upipe_release(upipe_ts_mux->pat_psii);
 
-    upipe_throw_dead(upipe);
     upipe_ts_mux_clean_sub_programs(upipe);
     upipe_ts_mux_clean_bin(upipe);
-    upipe_ts_mux_clean_ubuf_mgr(upipe);
-    upipe_ts_mux_clean_uref_mgr(upipe);
-    upipe_ts_mux_clean_urefcount(upipe);
-    upipe_ts_mux_free_void(upipe);
+    urefcount_release(upipe_ts_mux_to_urefcount_real(upipe_ts_mux));
 }
 
 /** @This frees a upipe manager.

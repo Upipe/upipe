@@ -116,7 +116,7 @@ static void STRUCTURE##_append_sound_stream(struct upipe *upipe,            \
     size_t size;                                                            \
     if (unlikely(!uref_block_size(uref, &size))) {                          \
         uref_free(uref);                                                    \
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);                         \
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                          \
         return;                                                             \
     }                                                                       \
     if (STRUCTURE->NEXT_UREF == NULL) {                                     \
@@ -128,7 +128,7 @@ static void STRUCTURE##_append_sound_stream(struct upipe *upipe,            \
     if (unlikely(!uref_block_append(STRUCTURE->NEXT_UREF, ubuf))) {         \
         uref_free(uref);                                                    \
         ubuf_free(ubuf);                                                    \
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);                         \
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                          \
         return;                                                             \
     }                                                                       \
     uref_attr_set_priv(uref, size);                                         \

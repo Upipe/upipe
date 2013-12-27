@@ -30,6 +30,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -105,7 +106,7 @@ struct thread {
 };
 
 /** definition of our uprobe */
-bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -120,11 +121,11 @@ bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, 
             assert(0);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** definition of our uprobe */
-bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
+static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
                   enum uprobe_event event, va_list args)
 {
     struct uref *flow = NULL;
@@ -134,7 +135,7 @@ bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     struct upump_mgr *upump_mgr = NULL;
 
     if (event != UPROBE_NEW_FLOW_DEF) {
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
     }
 
     upipe_get_flow_def(upipe, &flow);
@@ -153,8 +154,8 @@ bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
 
     /* decoder */
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                  "avcdec %"PRId64, num));
+        uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                            "avcdec %"PRId64, num));
     assert(avcdec);
     assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
     if (upump_mgr) {
@@ -164,13 +165,13 @@ bool catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
 
     /* /dev/null */
     struct upipe *null = upipe_void_alloc(upipe_null_mgr,
-        uprobe_pfx_adhoc_alloc_va(logger, UPROBE_LOG_LEVEL,
-                                  "null %"PRId64, num));
+        uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                            "null %"PRId64, num));
     assert(null);
     upipe_null_dump_dict(null, true);
     upipe_set_output(avcdec, null);
     upipe_release(null);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /* fill picture with some stuff */
@@ -207,8 +208,8 @@ struct upipe *build_pipeline(const char *codec_def,
 
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
-        uprobe_pfx_adhoc_alloc_va(&uprobe_avcenc_s, UPROBE_LOG_LEVEL,
-                                  "avcenc %d", num), output_flow);
+        uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_avcenc_s),
+                            UPROBE_LOG_LEVEL, "avcenc %d", num), output_flow);
     uref_free(output_flow);
     assert(avcenc);
     assert(upipe_set_flow_def(avcenc, flow_def));
@@ -330,11 +331,11 @@ int main(int argc, char **argv)
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
 
-    uprobe_init(&uprobe_avcenc_s, catch_avcenc, logger);
+    uprobe_init(&uprobe_avcenc_s, catch_avcenc, uprobe_use(logger));
 
 
     /* init upipe_av */
-    assert(upipe_av_init(false, logger));
+    assert(upipe_av_init(false, uprobe_use(logger)));
 
     /* global managers */
     assert(upipe_avcdec_mgr = upipe_avcdec_mgr_alloc());
@@ -411,8 +412,10 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(logger);
     upipe_av_clean();
+    uprobe_release(logger);
+    uprobe_clean(&uprobe_avcenc_s);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

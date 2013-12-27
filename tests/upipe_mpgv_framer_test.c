@@ -66,8 +66,8 @@
 static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -80,7 +80,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_mpgvf */
@@ -168,13 +168,15 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
     assert(upipe_mpgvf_mgr != NULL);
     struct upipe *upipe_mpgvf = upipe_void_alloc(upipe_mpgvf_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "mpgvf"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgvf"));
     assert(upipe_mpgvf != NULL);
     assert(upipe_set_flow_def(upipe_mpgvf, uref));
     assert(upipe_set_output(upipe_mpgvf, upipe_sink));
@@ -271,7 +273,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

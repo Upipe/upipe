@@ -107,8 +107,10 @@ bool upipe_av_init(bool init_avcodec_only, struct uprobe *uprobe)
 {
     avcodec_only = init_avcodec_only;
 
-    if (unlikely(!udeal_init(&upipe_av_deal)))
+    if (unlikely(!udeal_init(&upipe_av_deal))) {
+        uprobe_release(uprobe);
         return false;
+    }
 
     if (unlikely(avcodec_only)) {
         avcodec_register_all();
@@ -132,4 +134,6 @@ void upipe_av_clean(void)
     if (likely(!avcodec_only))
         avformat_network_deinit();
     udeal_clean(&upipe_av_deal);
+    if (logprobe)
+        uprobe_release(logprobe);
 }

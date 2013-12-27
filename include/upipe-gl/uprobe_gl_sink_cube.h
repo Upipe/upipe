@@ -37,8 +37,9 @@ extern "C" {
 #include <upipe/upipe.h>
 #include <upipe-gl/upipe_gl_sink_common.h>
 
-/** @This allocates an adhoc gl_sink_cube uprobe to take care of the
+/** @This allocates a gl_sink_cube uprobe to take care of the
  * GL cube animation.
+ *
  * @param next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */

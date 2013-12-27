@@ -350,7 +350,7 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     uint16_t pid = ts_get_pid(ts_header);
@@ -373,7 +373,7 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
                         new_uref, upump);
             else {
                 uref_free(uref);
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
             }
         }

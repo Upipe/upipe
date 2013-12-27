@@ -543,7 +543,7 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -554,7 +554,7 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
                                       upipe_h264f->au_last_nal_start_size +
                                       H264SPS_HEADER_SIZE - 4);
     if (unlikely(!ret)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     uint32_t sps_id = upipe_h264f_stream_ue(s);
@@ -590,7 +590,7 @@ static void upipe_h264f_handle_sps_ext(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -632,7 +632,7 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
                                           upipe_h264f->au_size -
                                             upipe_h264f->au_last_nal_offset);
     if (unlikely(ubuf == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -676,7 +676,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
 
     struct uref *flow_def = upipe_h264f_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -1007,7 +1007,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     ubuf_block_stream_clean(s);
     flow_def = upipe_h264f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_h264f_store_flow_def(upipe, flow_def);
@@ -1197,7 +1197,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     struct uref *uref = upipe_h264f_extract_uref_stream(upipe,
                                                         upipe_h264f->au_size);
     if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -1334,7 +1334,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
 
     if (unlikely(!ret)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     if (unlikely(upipe_h264f->flow_def == NULL)) {
@@ -1672,7 +1672,7 @@ static bool upipe_h264f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_h264f_store_flow_def_input(upipe, flow_def_dup);

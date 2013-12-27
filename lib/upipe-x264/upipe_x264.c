@@ -327,12 +327,12 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     /* flow definition */
     struct uref *flow_def_attr = upipe_x264_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def_attr == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
     if (unlikely(!uref_flow_set_def(flow_def_attr, OUT_FLOW))) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     /* set octetrate for CBR streams */
@@ -530,7 +530,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     /* alloc ubuf, map, copy, unmap */
     ubuf_block = ubuf_block_alloc(upipe_x264->ubuf_mgr, size);
     if (unlikely(ubuf_block == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     ubuf_block_write(ubuf_block, 0, &size, &buf);
@@ -610,7 +610,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_check =
         upipe_x264_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -624,7 +624,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
     if (unlikely(!uref_pic_flow_copy_format(flow_def_check, flow_def) ||
                  !uref_pic_flow_set_fps(flow_def_check, fps))) {
         uref_free(flow_def_check);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -661,7 +661,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_x264_store_flow_def_input(upipe, flow_def);

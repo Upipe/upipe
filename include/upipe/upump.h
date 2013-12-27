@@ -41,6 +41,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <assert.h>
 
 /** @hidden */
 struct upump_mgr;
@@ -260,10 +261,13 @@ static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
 /** @This increments the reference count of a upump manager.
  *
  * @param mgr pointer to upump manager
+ * @return same pointer to upump manager
  */
-static inline void upump_mgr_use(struct upump_mgr *mgr)
+static inline struct upump_mgr *upump_mgr_use(struct upump_mgr *mgr)
 {
+    assert(mgr != NULL);
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a upump manager of frees it.
@@ -272,7 +276,8 @@ static inline void upump_mgr_use(struct upump_mgr *mgr)
  */
 static inline void upump_mgr_release(struct upump_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 /** @This gets the opaque member of a upump manager.

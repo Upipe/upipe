@@ -242,7 +242,7 @@ static void upipe_xfer_free(struct upipe *upipe)
     struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
     if (unlikely(!upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_RELEASE,
                                       upipe_xfer->upipe_remote, NULL)))
-        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
 
     upipe_throw_dead(upipe);
     upipe_xfer_clean_urefcount(upipe);

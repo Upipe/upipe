@@ -39,6 +39,7 @@ extern "C" {
 
 #include <stdbool.h>
 #include <stdarg.h>
+#include <assert.h>
 
 /** @hidden */
 struct uprobe;
@@ -50,11 +51,11 @@ enum uprobe_event {
     /** something occurred, and the pipe send a textual message
      * (enum uprobe_log_level, const char *) */
     UPROBE_LOG,
-    /** a fatal error occurred, data may be lost (enum uprobe_error_code);
+    /** a fatal error occurred, data may be lost (enum ubase_err);
      * from now on the behaviour of the pipe is undefined, except
      * @ref upipe_release */
     UPROBE_FATAL,
-    /** an error occurred, data may be lost (enum uprobe_error_code); the
+    /** an error occurred, data may be lost (enum ubase_err); the
      * module probably needs to be reinitialized */
     UPROBE_ERROR,
     /** a pipe is ready to accept input and respond to control commands
@@ -114,50 +115,98 @@ enum uprobe_log_level {
     UPROBE_LOG_ERROR
 };
 
-/** @This defines the standard error codes. */
-enum uprobe_error_code {
-    /** unknown error */
-    UPROBE_ERR_UNKNOWN,
-    /** allocation error */
-    UPROBE_ERR_ALLOC,
-    /** unable to allocate a upump */
-    UPROBE_ERR_UPUMP,
-    /** invalid argument */
-    UPROBE_ERR_INVALID,
-    /** error in external library */
-    UPROBE_ERR_EXTERNAL,
-
-    /** non-standard error codes implemented by a module type can start from
-     * there (first arg = signature) */
-    UPROBE_ERR_LOCAL = 0x8000
-};
-
-/** @This is the call-back type for uprobe events; it returns true if the
- * event was handled. */
-typedef bool (*uprobe_throw_func)(struct uprobe *, struct upipe *,
-                                  enum uprobe_event, va_list);
+/** @This is the call-back type for uprobe events. */
+typedef enum ubase_err (*uprobe_throw_func)(struct uprobe *, struct upipe *,
+                                            enum uprobe_event, va_list);
 
 /** @This is a structure passed to a module upon initializing a new pipe. */
 struct uprobe {
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
+
     /** function to throw events */
-    uprobe_throw_func uthrow;
-    /** next probe to test if this one doesn't catch the event */
+    uprobe_throw_func uprobe_throw;
+    /** pointer to next probe, to be used by the uprobe_throw function */
     struct uprobe *next;
 };
 
+/** @This increments the reference count of a uprobe.
+ *
+ * @param uprobe pointer to uprobe
+ * @return same pointer to uprobe
+ */
+static inline struct uprobe *uprobe_use(struct uprobe *uprobe)
+{
+    assert(uprobe != NULL);
+    urefcount_use(uprobe->refcount);
+    return uprobe;
+}
+
+/** @This decrements the reference count of a uprobe or frees it.
+ *
+ * @param uprobe pointer to uprobe
+ */
+static inline void uprobe_release(struct uprobe *uprobe)
+{
+    if (uprobe != NULL)
+        urefcount_release(uprobe->refcount);
+}
+
+/** @This checks if the probe has more than one reference.
+ *
+ * @param uprobe pointer to uprobe
+ * @return true if there is only one reference to the probe
+ */
+static inline bool uprobe_single(struct uprobe *uprobe)
+{
+    assert(uprobe != NULL);
+    return urefcount_single(uprobe->refcount);
+}
+
+/** @This checks if the probe has no more references.
+ *
+ * @param uprobe pointer to uprobe
+ * @return true if there is no reference to the probe
+ */
+static inline bool uprobe_dead(struct uprobe *uprobe)
+{
+    assert(uprobe != NULL);
+    return urefcount_dead(uprobe->refcount);
+}
+
 /** @This initializes a uprobe structure. It is typically called by the
- * application or a pipe creating sub-pipes (on a structure already
+ * application or a pipe creating inner pipes (on a structure already
  * allocated by the master object).
  *
+ * Please note that this function does not _use() the next probe, so if you
+ * want to reuse an existing probe, you have to use it first.
+ *
  * @param uprobe pointer to probe
- * @param uthrow function which will be called when an event is thrown
+ * @param uprobe_throw function which will be called when an event is thrown
  * @param next next probe to test if this one doesn't catch the event
  */
-static inline void uprobe_init(struct uprobe *uprobe, uprobe_throw_func uthrow,
+static inline void uprobe_init(struct uprobe *uprobe,
+                               uprobe_throw_func uprobe_throw,
                                struct uprobe *next)
 {
-    uprobe->uthrow = uthrow;
+    assert(uprobe != NULL);
+    uprobe->refcount = NULL;
+    uprobe->uprobe_throw = uprobe_throw;
     uprobe->next = next;
+}
+
+/** @This cleans up a uprobe structure. It is typically called by the
+ * application or a pipe creating inner pipes (on a structure already
+ * allocated by the master object).
+ *
+ * @This releases the next probe.
+ *
+ * @param uprobe pointer to probe
+ */
+static inline void uprobe_clean(struct uprobe *uprobe)
+{
+    assert(uprobe != NULL);
+    uprobe_release(uprobe->next);
 }
 
 /** @internal @This throws generic events with optional arguments.
@@ -166,20 +215,16 @@ static inline void uprobe_init(struct uprobe *uprobe, uprobe_throw_func uthrow,
  * @param upipe description structure of the pipe
  * @param event event to throw
  * @param args list of arguments
+ * @return an error code
  */
-static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
-                                   enum uprobe_event event, va_list args)
+static inline enum ubase_err uprobe_throw_va(struct uprobe *uprobe,
+                                             struct upipe *upipe,
+                                             enum uprobe_event event,
+                                             va_list args)
 {
-    while (likely(uprobe != NULL)) {
-        va_list args_copy;
-        va_copy(args_copy, args);
-        /* in case our probe deletes itself */
-        struct uprobe *next = uprobe->next;
-        if (uprobe->uthrow(uprobe, upipe, event, args_copy))
-            next = NULL;
-        va_end(args_copy);
-        uprobe = next;
-    }
+    if (unlikely(uprobe == NULL))
+        return UBASE_ERR_UNHANDLED;
+    return uprobe->uprobe_throw(uprobe, upipe, event, args);
 }
 
 /** @internal @This throws generic events with optional arguments.
@@ -187,31 +232,33 @@ static inline void uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param uprobe pointer to probe hierarchy
  * @param upipe description structure of the pipe
  * @param event event to throw, followed with optional arguments
+ * @return an error code
  */
-static inline void uprobe_throw(struct uprobe *uprobe, struct upipe *upipe,
-                                enum uprobe_event event, ...)
+static inline enum ubase_err uprobe_throw(struct uprobe *uprobe,
+                                          struct upipe *upipe,
+                                          enum uprobe_event event, ...)
 {
     va_list args;
     va_start(args, event);
-    uprobe_throw_va(uprobe, upipe, event, args);
+    enum ubase_err err = uprobe_throw_va(uprobe, upipe, event, args);
     va_end(args);
+    return err;
 }
 
-/** @internal @This deletes the given probe from a list of probes.
+/** @This propagates an unhandled event to the next probe.
  *
- * @param uprobe reference to probe hierarchy
- * @param deleted probe to delete
+ * @param uprobe pointer to probe hierarchy
+ * @param upipe description structure of the pipe
+ * @param event event to throw
+ * @param args list of arguments
+ * @return an error code
  */
-static inline void uprobe_delete_probe(struct uprobe **uprobe_p,
-                                       struct uprobe *deleted)
+static inline enum ubase_err uprobe_throw_next(struct uprobe *uprobe,
+                                               struct upipe *upipe,
+                                               enum uprobe_event event,
+                                               va_list args)
 {
-    while (likely(*uprobe_p != NULL)) {
-        if (*uprobe_p == deleted) {
-            *uprobe_p = deleted->next;
-            break;
-        }
-        uprobe_p = &(*uprobe_p)->next;
-    }
+    return uprobe_throw_va(uprobe->next, upipe, event, args);
 }
 
 /** @internal @This throws a log event. This event is thrown whenever a pipe

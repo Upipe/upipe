@@ -54,8 +54,8 @@
 static int counter = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -67,7 +67,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SOURCE_END:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_dup */
@@ -122,10 +122,12 @@ int main(int argc, char *argv[])
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
 
-    struct upipe *upipe_sink0 = upipe_void_alloc(&dup_test_mgr, logger);
+    struct upipe *upipe_sink0 = upipe_void_alloc(&dup_test_mgr,
+                                                 uprobe_use(logger));
     assert(upipe_sink0 != NULL);
 
-    struct upipe *upipe_sink1 = upipe_void_alloc(&dup_test_mgr, logger);
+    struct upipe *upipe_sink1 = upipe_void_alloc(&dup_test_mgr,
+                                                 uprobe_use(logger));
     assert(upipe_sink1 != NULL);
 
     uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
@@ -134,13 +136,14 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
     assert(upipe_dup_mgr != NULL);
     struct upipe *upipe_dup = upipe_void_alloc(upipe_dup_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "dup"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
     assert(upipe_set_flow_def(upipe_dup, uref));
     uref_free(uref);
 
     struct upipe *upipe_dup_output0 = upipe_void_alloc_sub(upipe_dup,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL, "dup output 0"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "dup output 0"));
     assert(upipe_dup_output0 != NULL);
     assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
 
@@ -151,8 +154,8 @@ int main(int argc, char *argv[])
     counter = 0;
 
     struct upipe *upipe_dup_output1 = upipe_void_alloc_sub(upipe_dup,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
-                                   "dup output 1"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "dup output 1"));
     assert(upipe_dup_output1 != NULL);
     assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
     assert(counter == 0);
@@ -174,6 +177,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
     return 0;
 }

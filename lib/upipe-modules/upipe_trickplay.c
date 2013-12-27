@@ -249,7 +249,7 @@ static bool upipe_trickp_sub_set_flow_def(struct upipe *upipe,
     }
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_trickp_sub_store_flow_def(upipe, flow_def);

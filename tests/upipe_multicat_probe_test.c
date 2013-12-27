@@ -61,8 +61,8 @@
 static unsigned int pipe_counter = 0, probe_counter = 0;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -85,7 +85,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
 
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_multicat_probe */
@@ -144,7 +144,8 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -155,7 +156,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_multicat_probe_mgr = upipe_multicat_probe_mgr_alloc();
     assert(upipe_multicat_probe_mgr != NULL);
     struct upipe *upipe_multicat_probe = upipe_void_alloc(upipe_multicat_probe_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "multicat_probe"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "multicat_probe"));
     assert(upipe_multicat_probe != NULL);
     assert(upipe_set_flow_def(upipe_multicat_probe, uref));
     assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
@@ -180,7 +182,8 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

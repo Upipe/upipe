@@ -288,10 +288,12 @@ static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
 /** @This increments the reference count of a uref manager.
  *
  * @param mgr pointer to uref manager
+ * @return same pointer to uref manager
  */
-static inline void uref_mgr_use(struct uref_mgr *mgr)
+static inline struct uref_mgr *uref_mgr_use(struct uref_mgr *mgr)
 {
     urefcount_use(mgr->refcount);
+    return mgr;
 }
 
 /** @This decrements the reference count of a uref manager or frees it.

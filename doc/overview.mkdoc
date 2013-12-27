@@ -122,8 +122,7 @@
 
         @item @ref uprobe_stdio_alloc @item print all log messages to a file stream @item @tt -lupipe
         @item @ref uprobe_pfx_alloc @item prefix all log messages with the given name @item @tt -lupipe
-        @item @ref uprobe_log_alloc @item log all received events, for debug purposes @item @tt -lupipe
-        @item @ref uprobe_ts_log_alloc @item log TS-related received events, for debug purposes @item @tt -lupipe-ts
+        @item @ref uprobe_output_alloc @item forward flow definition changes to the output pipe @item @tt -lupipe
         @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
@@ -169,7 +168,7 @@
         @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
         @item @ref #UPIPE_HELPER_BIN @item helper for bin pipes (that incorporate a sub-pipeline of several pipes)
         @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
-        @item @ref #UPROBE_HELPER_ADHOC @item helper for automatic allocation and deallocation of probes bound to a single pipe
+        @item @ref #UPROBE_HELPER_ALLOC @item helper providing easy probe allocation and deallocation
 
       @end table
 

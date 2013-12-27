@@ -126,6 +126,6 @@ int main(int argc, char **argv)
     udict_mgr_release(mgr);
 
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe);
+    uprobe_release(uprobe);
     return 0;
 }

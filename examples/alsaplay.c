@@ -27,6 +27,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -80,55 +81,56 @@ struct upump_mgr *upump_mgr;
 struct uclock *uclock;
 bool inited = false;
 
-static bool catch_src(struct uprobe *uprobe, struct upipe *upipe,
-                      enum uprobe_event event, va_list args)
+static enum ubase_err catch_src(struct uprobe *uprobe, struct upipe *upipe,
+                                enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END:
             upipe_release(upipe);
-            return true;
+            return UBASE_ERR_NONE;
         default:
-            return false;
+            return uprobe_throw_next(uprobe, upipe, event, args);
     }
 }
 
-static bool catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
-                        enum uprobe_event event, va_list args)
+static enum ubase_err catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
 {
     struct uref *flow_def;
     const char *def;
     if (!uprobe_plumber(event, args, &flow_def, &def))
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     upipe_dbg_va(upipe, "framer flow def:");
     uref_dump(flow_def, upipe->uprobe);
 
     if (inited)
-        return true;
+        return UBASE_ERR_NONE;
     inited = true;
     if (ubase_ncmp(def, "block.mp2.sound.") &&
         ubase_ncmp(def, "block.mp3.sound.") &&
         ubase_ncmp(def, "block.aac.sound.")) {
         upipe_warn_va(upipe, "flow def %s is not supported", def);
-        return false;
+        return UBASE_ERR_UNHANDLED;
     }
 
     /* avcdec */
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-            uprobe_pfx_adhoc_alloc_va(&uprobe_avcdec, loglevel, "avcdec"));
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
+                                loglevel, "avcdec"));
     upipe_set_ubuf_mgr(avcdec, block_mgr);
     upipe_release(avcdec);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
-static bool catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
-                         enum uprobe_event event, va_list args)
+static enum ubase_err catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
+                                   enum uprobe_event event, va_list args)
 {
     struct uref *flow_def;
     const char *def;
     if (!uprobe_plumber(event, args, &flow_def, &def))
-        return false;
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     upipe_dbg_va(upipe, "avcdec flow def:");
     uref_dump(flow_def, upipe->uprobe);
@@ -136,18 +138,19 @@ static bool catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     /* trick play */
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp"));
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "trickp"));
     upipe_mgr_release(upipe_trickp_mgr);
     upipe_set_uclock(trickp, uclock);
     struct upipe *trickp_audio = upipe_void_alloc_output_sub(upipe, trickp,
-            uprobe_pfx_adhoc_alloc_va(logger, loglevel, "trickp audio"));
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                loglevel, "trickp audio"));
     upipe_release(trickp);
 
     /* alsa sink */
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
     struct upipe *alsink = upipe_void_alloc_output(trickp_audio,
                     upipe_alsink_mgr,
-                    uprobe_pfx_adhoc_alloc(logger, loglevel, "alsink"));
+                    uprobe_pfx_alloc(uprobe_use(logger), loglevel, "alsink"));
     if (alsink == NULL) {
         assert(0);
     }
@@ -204,20 +207,20 @@ int main(int argc, char **argv)
 
     /* source probe */
     struct uprobe uprobe_src;
-    uprobe_init(&uprobe_src, catch_src, logger);
+    uprobe_init(&uprobe_src, catch_src, uprobe_use(logger));
 
     /* framer probe */
     struct uprobe uprobe_mpgaf;
-    uprobe_init(&uprobe_mpgaf, catch_mpgaf, logger);
+    uprobe_init(&uprobe_mpgaf, catch_mpgaf, uprobe_use(logger));
 
     /* avcdec probe */
-    uprobe_init(&uprobe_avcdec, catch_avcdec, logger);
+    uprobe_init(&uprobe_avcdec, catch_avcdec, uprobe_use(logger));
 
     /* uclock */
     uclock = uclock_std_alloc(0);
 
     /* upipe-av */
-    upipe_av_init(true, logger);
+    upipe_av_init(true, uprobe_use(logger));
 
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
@@ -225,7 +228,8 @@ int main(int argc, char **argv)
         exit(1);
 
     struct upipe *upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
-                uprobe_pfx_adhoc_alloc(&uprobe_src, loglevel, "fsrc"));
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src)),
+                                 loglevel, "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
     if (unlikely(upipe_src == NULL))
         exit(1);
@@ -243,7 +247,8 @@ int main(int argc, char **argv)
 
     struct upipe *upipe_nodemux = upipe_void_alloc_output(upipe_src,
                 upipe_nodemux_mgr,
-                uprobe_pfx_adhoc_alloc(logger, loglevel, "nodemux"));
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                                 loglevel, "nodemux"));
     if (upipe_nodemux == NULL)
         exit(1);
     upipe_mgr_release(upipe_nodemux_mgr);
@@ -255,7 +260,8 @@ int main(int argc, char **argv)
 
     struct upipe *upipe_mpgaf = upipe_void_alloc_output(upipe_nodemux,
                 upipe_mpgaf_mgr,
-                uprobe_pfx_adhoc_alloc(&uprobe_mpgaf, loglevel, "mpgaf"));
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_mpgaf)),
+                                 loglevel, "mpgaf"));
     if (upipe_mpgaf == NULL)
         exit(1);
     upipe_mgr_release(upipe_mpgaf_mgr);
@@ -275,7 +281,10 @@ int main(int argc, char **argv)
     ubuf_mgr_release(block_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe_src);
+    uprobe_clean(&uprobe_mpgaf);
+    uprobe_clean(&uprobe_avcdec);
 
     ev_default_destroy();
 

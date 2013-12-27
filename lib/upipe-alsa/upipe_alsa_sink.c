@@ -335,7 +335,7 @@ static bool upipe_alsink_recover(struct upipe *upipe, int err)
     if (val < 0 && val != -EAGAIN) {
         upipe_err_va(upipe, "cannot recover playback stream: %s",
                      snd_strerror(val));
-        upipe_throw_error(upipe, UPROBE_ERR_EXTERNAL);
+        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
     return true;
@@ -693,7 +693,7 @@ static bool upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_alsink->uri = strdup(uri);
     if (unlikely(upipe_alsink->uri == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     return true;

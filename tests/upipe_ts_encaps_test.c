@@ -78,8 +78,8 @@ static bool psi = false;
 static bool psi_first = false;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -226,7 +226,8 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -239,8 +240,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     assert(upipe_ts_encaps_mgr != NULL);
     struct upipe *upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
-                                   "ts encaps"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts encaps"));
     assert(upipe_ts_encaps != NULL);
     assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
@@ -287,7 +288,7 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts encaps"));
     assert(upipe_ts_encaps != NULL);
     assert(upipe_set_flow_def(upipe_ts_encaps, uref));
@@ -327,8 +328,8 @@ int main(int argc, char *argv[])
     assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL,
-                                   "ts encaps"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts encaps"));
     assert(upipe_ts_encaps != NULL);
     assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
@@ -365,7 +366,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

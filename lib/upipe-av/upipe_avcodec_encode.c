@@ -215,7 +215,7 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
         upipe_av_strerror(err, buf);
         upipe_warn_va(upipe, "could not open codec (%s)", buf);
-        upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
     upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name, 
@@ -284,7 +284,7 @@ static void upipe_avcenc_start_av_deal(struct upipe *upipe)
                                   upipe_avcenc_cb_av_deal, upipe);
     if (unlikely(!upump_av_deal)) {
         upipe_err(upipe, "can't create dealer");
-        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return;
     }
     upipe_avcenc->upump_av_deal = upump_av_deal;
@@ -346,14 +346,14 @@ static void upipe_avcenc_close(struct upipe *upipe)
                     upipe_avcenc_encode_audio(upipe, uref, NULL);
                 else {
                     ubuf_free(ubuf);
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 }
             } else {
                 ubuf_free(ubuf);
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             }
         } else
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
 
     if (context->codec->capabilities & CODEC_CAP_DELAY) {
@@ -416,7 +416,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     struct uref *flow_def_attr = upipe_avcenc_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def_attr == NULL)) {
         av_free_packet(&avpkt);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -453,7 +453,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     if (!ret) {
         uref_free(flow_def_attr);
         av_free_packet(&avpkt);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -462,7 +462,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
             uref_free(flow_def_attr);
             av_free_packet(&avpkt);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     }
@@ -481,7 +481,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
     if (unlikely(ubuf == NULL)) {
         av_free_packet(&avpkt);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -490,7 +490,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buf))) {
         ubuf_free(ubuf);
         av_free_packet(&avpkt);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     memcpy(buf, avpkt.data, size);
@@ -616,7 +616,7 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     frame->pts = upipe_avcenc->avcpts++;
     if (unlikely(!uref_avcenc_set_priv(uref, frame->pts))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -701,7 +701,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     uint8_t *buf = malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(buf == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -723,7 +723,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     frame->pts = upipe_avcenc->avcpts++;
     if (unlikely(!uref_avcenc_set_priv(uref, frame->pts))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -823,13 +823,13 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_check =
         upipe_avcenc_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
     if (unlikely(!uref_flow_set_def(flow_def_check, def))) {
         uref_free(flow_def_check);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -851,7 +851,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
                      !uref_pic_flow_set_vsize(flow_def_check, vsize) ||
                      !uref_pic_flow_set_fps(flow_def_check, fps))) {
             uref_free(flow_def_check);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else {
@@ -868,7 +868,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
                      !uref_sound_flow_set_channels(flow_def_check, channels) ||
                      !uref_sound_flow_set_rate(flow_def_check, rate))) {
             uref_free(flow_def_check);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     }
@@ -1009,7 +1009,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     flow_def = upipe_avcenc_store_flow_def_input(upipe, flow_def);

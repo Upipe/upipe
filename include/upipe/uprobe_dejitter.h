@@ -35,14 +35,51 @@ extern "C" {
 #endif
 
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_helper_uprobe.h>
 
-/** @This sets a different divider. If set to 0, dejittering is disabled.
+#include <stdint.h>
+
+/** @This is a super-set of the uprobe structure with additional local
+ * members. */
+struct uprobe_dejitter {
+    /** number of references to average */
+    unsigned int divider;
+
+    /** number of references received for offset calculaton */
+    unsigned int offset_count;
+    /** offset between stream clock and system clock */
+    int64_t offset;
+    /** residue */
+    int64_t offset_residue;
+
+    /** number of references received for deviation calculaton */
+    unsigned int deviation_count;
+    /** average absolute deviation */
+    uint64_t deviation;
+    /** residue */
+    uint64_t deviation_residue;
+
+    /** structure exported to modules */
+    struct uprobe uprobe;
+};
+
+UPROBE_HELPER_UPROBE(uprobe_dejitter, uprobe)
+
+/** @This initializes an already allocated uprobe_dejitter structure.
  *
- * @param uprobe pointer to probe
+ * @param uprobe_pfx pointer to the already allocated structure
+ * @param next next probe to test if this one doesn't catch the event
  * @param divider number of reference clocks to keep for dejittering
  * @return pointer to uprobe, or NULL in case of error
  */
-void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider);
+struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
+                                    struct uprobe *next, unsigned int divider);
+
+/** @This cleans a uprobe_dejitter structure.
+ *
+ * @param uprobe_dejitter structure to clean
+ */
+void uprobe_dejitter_clean(struct uprobe_dejitter *uprobe_dejitter);
 
 /** @This allocates a new uprobe_dejitter structure.
  *
@@ -50,15 +87,14 @@ void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider);
  * @param divider number of reference clocks to keep for dejittering
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_dejitter_alloc(struct uprobe *next,
-                                     unsigned int divider);
+struct uprobe *uprobe_dejitter_alloc(struct uprobe *next, unsigned int divider);
 
-/** @This frees a uprobe_dejitter structure.
+/** @This sets a different divider. If set to 0, dejittering is disabled.
  *
- * @param uprobe structure to free
- * @return next probe
+ * @param uprobe pointer to probe
+ * @param divider number of reference clocks to keep for dejittering
  */
-struct uprobe *uprobe_dejitter_free(struct uprobe *uprobe);
+void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider);
 
 #ifdef __cplusplus
 }

@@ -134,7 +134,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     /* alloc header */
     header = ubuf_block_alloc(upipe_rtp_prepend->ubuf_mgr, RTP_HEADER_SIZE);
     if (unlikely(!header)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         uref_free(uref);
         return;
     }

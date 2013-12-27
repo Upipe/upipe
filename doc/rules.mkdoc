@@ -45,7 +45,9 @@
 
       @item A @ref uprobe shall not send control commands upon receiving a log event.
 
-      @item All parameters to a @ref uprobe belong to the caller pipe, and should not be kept by the probe.
+      @item The next probe pointer passed upon initializing a new probe belongs to the new probe, and should not be reused by the called unless @ref uprobe_use is called.
+
+      @item All parameters sent to the uprobe_throw function declared by probes belong to the calling pipe and should not be stored by the callees.
 
     @end list
 

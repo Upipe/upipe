@@ -29,7 +29,7 @@
  * used by a player.
  * It must be given a specific probe at allocation to catch GL events
  * (init, render, reshape) defined in <upipe-gl/upipe_gl_sink_common.h>.
- * Application developers can either use a predefined adhoc probe or use
+ * Application developers can either use a predefined probe or use
  * their own probe structure.
  * uprobe_gl_sink_cube is currently provided as an example.
  * Please read tests/upipe_glx_sink_test.c. You can also read

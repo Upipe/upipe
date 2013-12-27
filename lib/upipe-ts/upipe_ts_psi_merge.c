@@ -134,7 +134,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
             upipe_ts_psim_flush(upipe);
             if (ubuf != NULL)
                 ubuf_free(ubuf);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else {
@@ -147,7 +147,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
 
         upipe_ts_psim->next_uref = uref_dup(uref);
         if (unlikely(upipe_ts_psim->next_uref == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     }
@@ -254,7 +254,7 @@ static bool upipe_ts_psim_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_ts_psim_store_flow_def(upipe, flow_def_dup);

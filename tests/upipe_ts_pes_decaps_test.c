@@ -71,8 +71,8 @@ static bool expect_lost = false;
 static bool expect_acquired = true;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -102,7 +102,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** helper phony pipe to test upipe_ts_pesd */
@@ -164,7 +164,8 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr, uprobe_stdio);
+    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
+                                                uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -174,7 +175,8 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
     assert(upipe_ts_pesd_mgr != NULL);
     struct upipe *upipe_ts_pesd = upipe_void_alloc(upipe_ts_pesd_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "ts pesd"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts pesd"));
     assert(upipe_ts_pesd != NULL);
     assert(upipe_set_flow_def(upipe_ts_pesd, uref));
     assert(upipe_set_output(upipe_ts_pesd, upipe_sink));
@@ -294,7 +296,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

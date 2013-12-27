@@ -104,7 +104,7 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     if (!uref_block_write(uref, 0, &bufsize, &buf) || ((uintptr_t)buf & 1)) {
         ubuf = ubuf_block_copy(upipe_htons->ubuf_mgr, uref->ubuf, 0, size);
         if (unlikely(!ubuf)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
             return;
         uref_attach_ubuf(uref, ubuf);

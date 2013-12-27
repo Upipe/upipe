@@ -234,7 +234,7 @@ static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
 #define UPIPE_TS_PMTD_PEEK_END(upipe, pmt, offset)                          \
     }                                                                       \
     if (unlikely(offset + PMT_ES_SIZE <= size - PSI_CRC_SIZE)) {            \
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);                         \
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                         \
     }                                                                       \
 
 /** @internal @This validates the next PMT.
@@ -383,7 +383,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     if (!compare) {
         struct uref *flow_def = uref_dup(upipe_ts_pmtd->flow_def_input);
         if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
             return;
         }
@@ -391,7 +391,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                      !uref_ts_flow_set_pcr_pid(flow_def, pcrpid) ||
                      !uref_ts_flow_set_descriptors(flow_def, header_desc,
                                                    header_desclength)))
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         upipe_ts_pmtd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
         upipe_throw_new_flow_def(upipe, flow_def);
@@ -419,7 +419,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                                                            desclength) ||
                              !uref_ts_flow_set_max_delay(flow_def,
                                 MAX_DELAY_STILL)))
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -434,7 +434,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                                                            desclength) ||
                              !uref_ts_flow_set_max_delay(flow_def,
                                  MAX_DELAY_STILL)))
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -448,7 +448,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                              !uref_ts_flow_set_descriptors(flow_def, desc,
                                                            desclength) ||
                              !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -461,7 +461,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                              !uref_ts_flow_set_descriptors(flow_def, desc,
                                                            desclength) ||
                              !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -474,7 +474,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                              !uref_ts_flow_set_max_delay(flow_def,
                                 upipe_ts_pmtd_h264_max_delay(desc,
                                     desclength))))
-                    upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -485,7 +485,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                 break;
         }
     } else
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
     UPIPE_TS_PMTD_PEEK_UNMAP(upipe, uref, offset, es, desc, desclength)
 
@@ -514,7 +514,7 @@ static bool upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);

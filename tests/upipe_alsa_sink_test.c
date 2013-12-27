@@ -28,6 +28,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -60,7 +61,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -70,7 +71,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event 
             assert(0);
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char **argv)
@@ -110,7 +111,8 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_sinesrc_mgr = upipe_sinesrc_mgr_alloc();
     assert(upipe_sinesrc_mgr != NULL);
     struct upipe *sinesrc = upipe_void_alloc(upipe_sinesrc_mgr,
-               uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sinesrc"));
+               uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+                                UPROBE_LOG_LEVEL, "sinesrc"));
     assert(sinesrc != NULL);
     assert(upipe_set_uref_mgr(sinesrc, uref_mgr));
     assert(upipe_set_ubuf_mgr(sinesrc, ubuf_mgr));
@@ -121,7 +123,8 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
     assert(upipe_alsink_mgr != NULL);
     struct upipe *alsink = upipe_void_alloc_output(sinesrc, upipe_alsink_mgr,
-               uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "alsink"));
+               uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                                "alsink"));
     assert(alsink != NULL);
     assert(upipe_set_uclock(alsink, uclock));
     assert(upipe_set_upump_mgr(alsink, upump_mgr));
@@ -140,7 +143,8 @@ int main(int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
 
     ev_default_destroy();
     return 0;

@@ -374,7 +374,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
                                          PSI_MAX_SIZE + PSI_HEADER_SIZE);
     if (unlikely(ubuf == NULL)) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -383,7 +383,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
         ubuf_free(ubuf);
         uref_free(uref);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
@@ -401,7 +401,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
                upipe_ts_psig_program->descriptors_size);
         if (!descs_validate(descs)) {
             upipe_warn(upipe, "invalid PMT descriptor loop");
-            upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+            upipe_throw_error(upipe, UBASE_ERR_INVALID);
         }
     }
 
@@ -421,7 +421,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
                      !pmt_validate_es(buffer, es,
                                       upipe_ts_psig_flow->descriptors_size))) {
             upipe_warn(upipe, "PMT too large");
-            upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+            upipe_throw_error(upipe, UBASE_ERR_INVALID);
             break;
         }
 
@@ -435,7 +435,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
                    upipe_ts_psig_flow->descriptors_size);
             if (!descs_validate(descs)) {
                 upipe_warn(upipe, "invalid ES descriptor loop");
-                upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+                upipe_throw_error(upipe, UBASE_ERR_INVALID);
             }
         }
         j++;
@@ -485,13 +485,13 @@ static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
                 descriptors_size))) {
         struct uref *flow_def_dup;
         if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         if (unlikely(!uref_flow_set_def(flow_def_dup,
                                         "block.mpegtspsi.mpegtspmt."))) {
             uref_free(flow_def);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
 
@@ -696,7 +696,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
     do {
         if (unlikely(nb_sections >= PSI_TABLE_MAX_SECTIONS)) {
             upipe_warn(upipe, "PAT too large");
-            upipe_throw_error(upipe, UPROBE_ERR_INVALID);
+            upipe_throw_error(upipe, UBASE_ERR_INVALID);
             break;
         }
 
@@ -704,7 +704,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
                                              PSI_MAX_SIZE + PSI_HEADER_SIZE);
         if (unlikely(ubuf == NULL)) {
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
@@ -713,7 +713,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
             ubuf_free(ubuf);
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
@@ -768,7 +768,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             if (last)
                 uref_free(uref);
             ubuf_free(ubuf);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
         }
 
@@ -784,7 +784,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             output = uref_dup(uref);
             if (unlikely(output == NULL)) {
                 ubuf_free(ubuf);
-                upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 continue;
             }
         }
@@ -813,12 +813,12 @@ static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
         return false;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (unlikely(!uref_flow_set_def(flow_def_dup,
                                     "block.mpegtspsi.mpegtspat.")))
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_psig_store_flow_def(upipe, flow_def_dup);
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);

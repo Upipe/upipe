@@ -70,8 +70,8 @@
 #define DSTSIZE             16
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -82,7 +82,7 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF:
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 enum plane_action {
@@ -375,7 +375,7 @@ int main(int argc, char **argv)
     assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
 
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sws"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sws"),
             output_flow); 
     assert(sws != NULL);
     assert(upipe_set_flow_def(sws, pic_flow));
@@ -385,7 +385,8 @@ int main(int argc, char **argv)
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_void_alloc(&sws_test_mgr,
-            uprobe_pfx_adhoc_alloc(uprobe_stdio, UPROBE_LOG_LEVEL, "sws_test"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "sws_test"));
     uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws:\t %p", sws);
     uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
@@ -413,7 +414,8 @@ int main(int argc, char **argv)
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr); 
-    uprobe_stdio_free(uprobe_stdio);
+    uprobe_release(uprobe_stdio);
+    uprobe_clean(&uprobe);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 

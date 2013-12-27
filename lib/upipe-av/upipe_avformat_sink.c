@@ -253,7 +253,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (uref_flow_get_headers(flow_def, &extradata, &extradata_size)) {
         extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
@@ -266,7 +266,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         upipe_avfsink_sub_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
         free(extradata_alloc);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
@@ -278,7 +278,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                                          extradata_size)))) {
         free(extradata_alloc);
         uref_free(flow_def_check);
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
@@ -288,7 +288,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                      !uref_pic_flow_set_vsize(flow_def_check, height))) {
             free(extradata_alloc);
             uref_free(flow_def_check);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else {
@@ -297,7 +297,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                      !uref_sound_flow_set_samples(flow_def_check, samples))) {
             free(extradata_alloc);
             uref_free(flow_def_check);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     }
@@ -321,7 +321,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (unlikely(stream == NULL)) {
         free(extradata_alloc);
         upipe_err_va(upipe, "couldn't allocate stream");
-        upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
 
@@ -503,7 +503,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
                     upipe_av_strerror(error, buf);
                     upipe_err_va(upipe, "couldn't open file %s (%s)",
                                  upipe_avfsink->context->filename, buf);
-                    upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+                    upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
                     return;
                 }
             }
@@ -515,7 +515,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
             if (unlikely(error < 0)) {
                 upipe_av_strerror(error, buf);
                 upipe_err_va(upipe, "couldn't write header (%s)", buf);
-                upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+                upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
                 return;
             }
             AVDictionaryEntry *e = NULL;
@@ -573,7 +573,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
         avpkt.data = malloc(avpkt.size);
         if (unlikely(avpkt.data == NULL)) {
             uref_free(uref);
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         uref_block_extract(uref, 0, avpkt.size, avpkt.data); 
@@ -662,7 +662,7 @@ static bool _upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
     if (mime != NULL) {
         upipe_avfsink->mime = strdup(mime);
         if (upipe_avfsink->mime == NULL) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else
@@ -698,7 +698,7 @@ static bool _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
     if (format != NULL) {
         upipe_avfsink->format = strdup(format);
         if (upipe_avfsink->format == NULL) {
-            upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
     } else

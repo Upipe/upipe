@@ -77,8 +77,8 @@ static uint64_t wanted_flow_id;
 static bool expect_new_flow_def = false;
 
 /** definition of our uprobe */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                  enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch (event) {
         default:
@@ -113,8 +113,8 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                     }
                     upipe_ts_demux_output_pmt =
                         upipe_flow_alloc_sub(upipe_ts_demux,
-                            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
-                                                   "ts demux pmt"),
+                            uprobe_pfx_alloc(uprobe_use(logger),
+                                             UPROBE_LOG_LEVEL, "ts demux pmt"),
                             flow_def);
                     assert(upipe_ts_demux_output_pmt != NULL);
                 } else if (!ubase_ncmp(def, "block.mpeg2video")) {
@@ -122,8 +122,9 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
                         upipe_release(upipe_ts_demux_output_video);
                     upipe_ts_demux_output_video =
                         upipe_flow_alloc_sub(upipe_ts_demux_output_pmt,
-                            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
-                                                   "ts demux video"),
+                            uprobe_pfx_alloc(uprobe_use(logger),
+                                             UPROBE_LOG_LEVEL,
+                                             "ts demux video"),
                             flow_def);
                     assert(upipe_ts_demux_output_video != NULL);
                 }
@@ -131,11 +132,12 @@ static bool catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
         case UPROBE_NEW_FLOW_DEF:
+                                  printf("meuh\n");
             assert(expect_new_flow_def);
             expect_new_flow_def = false;
             break;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 int main(int argc, char *argv[])
@@ -169,8 +171,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
 
     upipe_ts_demux = upipe_void_alloc(upipe_ts_demux_mgr,
-            uprobe_pfx_adhoc_alloc(logger, UPROBE_LOG_LEVEL,
-                                   "ts demux"));
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "ts demux"));
     assert(upipe_ts_demux != NULL);
     assert(upipe_set_flow_def(upipe_ts_demux, uref));
     uref_free(uref);
@@ -379,6 +380,7 @@ int main(int argc, char *argv[])
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
     expect_new_flow_def = true;
+    printf("coin\n");
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 
@@ -393,7 +395,8 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_stdio_free(logger);
+    uprobe_release(logger);
+    uprobe_clean(&uprobe);
 
     return 0;
 }

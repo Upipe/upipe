@@ -47,7 +47,7 @@ pkginclude_HEADERS = \
 	upipe_helper_void.h \
 	uprobe.h \
 	uprobe_dejitter.h \
-	uprobe_helper_adhoc.h \
+	uprobe_helper_alloc.h \
 	uprobe_helper_uprobe.h \
 	uprobe_output.h \
 	uprobe_prefix.h \
