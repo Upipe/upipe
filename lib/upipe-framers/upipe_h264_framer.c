@@ -1662,23 +1662,24 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_h264f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_h264f_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
-    if (!uref_flow_match_def(flow_def, "block."))
-        return false;
+        return UBASE_ERR_INVALID;
+    if (unlikely(!uref_flow_match_def(flow_def, "block.")))
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_h264f_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_h264f_store_flow_def(upipe, flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a h264f pipe.
@@ -1686,10 +1687,11 @@ static bool upipe_h264f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_h264f_control(struct upipe *upipe,
-                                enum upipe_command command, va_list args)
+static enum ubase_err upipe_h264f_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -1709,7 +1711,7 @@ static bool upipe_h264f_control(struct upipe *upipe,
             return upipe_h264f_set_output(upipe, output);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1753,7 +1755,10 @@ static struct upipe_mgr upipe_h264f_mgr = {
 
     .upipe_alloc = upipe_h264f_alloc,
     .upipe_input = upipe_h264f_input,
-    .upipe_control = upipe_h264f_control
+    .upipe_control = upipe_h264f_control,
+
+    .upipe_mgr_control = NULL
+
 };
 
 /** @This returns the management structure for all h264f pipes.

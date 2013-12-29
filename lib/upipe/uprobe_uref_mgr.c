@@ -56,7 +56,8 @@ static enum ubase_err uprobe_uref_mgr_throw(struct uprobe *uprobe,
     if (event != UPROBE_NEED_UREF_MGR || uprobe_uref_mgr->uref_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    if (unlikely(!upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr)))
+    if (unlikely(upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr) !=
+                 UBASE_ERR_NONE))
         upipe_warn(upipe, "probe couldn't set uref manager");
     return UBASE_ERR_NONE;
 }

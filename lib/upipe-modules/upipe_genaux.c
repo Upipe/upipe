@@ -127,56 +127,56 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_genaux_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
                                       struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
     if (unlikely(!uref_flow_set_def(flow_def_dup, "block.aux.")))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_genaux_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the get callback to fetch the u64 opaque with.
  *
  * @param upipe description structure of the pipe
  * @param get callback
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_genaux_set_getattr(struct upipe *upipe,
+static inline enum ubase_err _upipe_genaux_set_getattr(struct upipe *upipe,
                             bool (*get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     upipe_genaux->getattr = get;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This gets the get callback to fetch the u64 opaque with.
  *
  * @param upipe description structure of the pipe
  * @param get callback pointer
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_genaux_get_getattr(struct upipe *upipe,
+static inline enum ubase_err _upipe_genaux_get_getattr(struct upipe *upipe,
                             bool (**get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     *get = upipe_genaux->getattr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a genaux pipe.
@@ -184,9 +184,9 @@ static inline bool _upipe_genaux_get_getattr(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_genaux_control(struct upipe *upipe,
+static enum ubase_err upipe_genaux_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
@@ -216,19 +216,17 @@ static bool upipe_genaux_control(struct upipe *upipe,
         }
 
         case UPIPE_GENAUX_SET_GETATTR: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GENAUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_set_getattr(upipe,
                        va_arg(args, bool (*)(struct uref*, uint64_t*)));
         }
         case UPIPE_GENAUX_GET_GETATTR: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GENAUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_get_getattr(upipe,
                        va_arg(args, bool (**)(struct uref*, uint64_t*)));
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -279,7 +277,9 @@ static struct upipe_mgr upipe_genaux_mgr = {
 
     .upipe_alloc = upipe_genaux_alloc,
     .upipe_input = upipe_genaux_input,
-    .upipe_control = upipe_genaux_control
+    .upipe_control = upipe_genaux_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for genaux pipes

@@ -151,14 +151,14 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "setattr"));
     assert(upipe_setattr != NULL);
-    assert(upipe_set_flow_def(upipe_setattr, uref));
-    assert(upipe_set_output(upipe_setattr, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_setattr, uref));
+    ubase_assert(upipe_set_output(upipe_setattr, upipe_sink));
     uref_free(uref);
 
     struct uref *dict = uref_alloc(uref_mgr);
     assert(uref_test_set_1(dict, "test"));
     assert(uref_test_set_2(dict, 42));
-    assert(upipe_setattr_set_dict(upipe_setattr, dict));
+    ubase_assert(upipe_setattr_set_dict(upipe_setattr, dict));
     uref_free(dict);
 
     uref = uref_alloc(uref_mgr);

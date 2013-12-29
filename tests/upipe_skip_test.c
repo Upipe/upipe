@@ -176,11 +176,11 @@ int main(int argc, char **argv)
     struct upipe *skip = upipe_void_alloc(upipe_skip_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                  "skip"));
-    assert(upipe_set_flow_def(skip, uref));
+    ubase_assert(upipe_set_flow_def(skip, uref));
     assert(skip);
 
     uref_free(uref);
-    assert(upipe_get_flow_def(skip, &uref));
+    ubase_assert(upipe_get_flow_def(skip, &uref));
     const char *def;
     assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.foo."));
 
@@ -189,9 +189,9 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "skiptest"));
     assert(skip_test != NULL);
-    assert(upipe_set_output(skip, skip_test));
+    ubase_assert(upipe_set_output(skip, skip_test));
     upipe_release(skip_test);
-    upipe_skip_set_offset(skip, OFFSET);
+    ubase_assert(upipe_skip_set_offset(skip, OFFSET));
 
     /* Now send uref */
     for (i=0; i < ITERATIONS; i++) {

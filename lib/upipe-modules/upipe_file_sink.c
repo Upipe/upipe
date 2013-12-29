@@ -292,34 +292,36 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_fsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_fsink_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (!uref_flow_match_def(flow_def, UPIPE_FSINK_EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
     if (latency > upipe_fsink->latency)
         upipe_fsink->latency = latency;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the path of the currently opened file.
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsink_get_path(struct upipe *upipe, const char **path_p)
+static enum ubase_err _upipe_fsink_get_path(struct upipe *upipe,
+                                            const char **path_p)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     assert(path_p != NULL);
     *path_p = upipe_fsink->path;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given file.
@@ -327,10 +329,11 @@ static bool _upipe_fsink_get_path(struct upipe *upipe, const char **path_p)
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the file
  * @param mode mode of opening the file
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
-                                  enum upipe_fsink_mode mode)
+static enum ubase_err _upipe_fsink_set_path(struct upipe *upipe,
+                                            const char *path,
+                                            enum upipe_fsink_mode mode)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
 
@@ -347,12 +350,12 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         upipe_release(upipe);
 
     if (unlikely(path == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_fsink->upump_mgr == NULL) {
         upipe_throw_need_upump_mgr(upipe);
         if (unlikely(upipe_fsink->upump_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     const char *mode_desc = NULL; /* hush gcc */
@@ -375,13 +378,13 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
             break;
         default:
             upipe_err_va(upipe, "invalid mode %d", mode);
-            return false;
+            return UBASE_ERR_INVALID;
     }
     upipe_fsink->fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC | flags,
                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (unlikely(upipe_fsink->fd == -1)) {
         upipe_err_va(upipe, "can't open file %s (%s)", path, mode_desc);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     switch (mode) {
         /* O_APPEND seeks on each write, so use this instead */
@@ -390,7 +393,7 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
                 upipe_err_va(upipe, "can't append to file %s (%s)", path, mode_desc);
                 close(upipe_fsink->fd);
                 upipe_fsink->fd = -1;
-                return false;
+                return UBASE_ERR_EXTERNAL;
             }
             break;
         default:
@@ -402,23 +405,23 @@ static bool _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         close(upipe_fsink->fd);
         upipe_fsink->fd = -1;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (!upipe_fsink_check_sink(upipe))
         /* Use again the pipe that we previously released. */
         upipe_use(upipe);
     upipe_notice_va(upipe, "opening file %s in %s mode",
                     upipe_fsink->path, mode_desc);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This flushes all currently held buffers, and unblocks the
  * sources.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_fsink_flush(struct upipe *upipe)
+static enum ubase_err upipe_fsink_flush(struct upipe *upipe)
 {
     if (upipe_fsink_flush_sink(upipe)) {
         upipe_fsink_set_upump(upipe, NULL);
@@ -426,7 +429,7 @@ static bool upipe_fsink_flush(struct upipe *upipe)
          * used in @ref upipe_fsink_input. */
         upipe_release(upipe);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file sink pipe.
@@ -434,9 +437,9 @@ static bool upipe_fsink_flush(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsink_control(struct upipe *upipe,
+static enum ubase_err  _upipe_fsink_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
@@ -473,14 +476,12 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         }
 
         case UPIPE_FSINK_GET_PATH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
             const char **path_p = va_arg(args, const char **);
             return _upipe_fsink_get_path(upipe, path_p);
         }
         case UPIPE_FSINK_SET_PATH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
             const char *path = va_arg(args, const char *);
             enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
             return _upipe_fsink_set_path(upipe, path, mode);
@@ -488,7 +489,7 @@ static bool _upipe_fsink_control(struct upipe *upipe,
         case UPIPE_SINK_FLUSH:
             return upipe_fsink_flush(upipe);
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -498,18 +499,18 @@ static bool _upipe_fsink_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_fsink_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err upipe_fsink_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
-    if (unlikely(!_upipe_fsink_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_fsink_control(upipe, command, args));
 
     if (unlikely(!upipe_fsink_check_sink(upipe)))
         upipe_fsink_poll(upipe);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -542,7 +543,9 @@ static struct upipe_mgr upipe_fsink_mgr = {
 
     .upipe_alloc = upipe_fsink_alloc,
     .upipe_input = upipe_fsink_input,
-    .upipe_control = upipe_fsink_control
+    .upipe_control = upipe_fsink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all file sink pipes.

@@ -236,37 +236,37 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_ts_sync_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_sync_set_flow_def(struct upipe *upipe,
                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     /* FIXME make it dependant on the output size */
     if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_sync_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the configured size of TS packets.
  *
  * @param upipe description structure of the pipe
  * @param size_p filled in with the configured size, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_sync_get_size(struct upipe *upipe, int *size_p)
+static enum ubase_err _upipe_ts_sync_get_size(struct upipe *upipe, int *size_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     assert(size_p != NULL);
     *size_p = upipe_ts_sync->ts_size;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the configured size of TS packets. Common values are:
@@ -279,16 +279,16 @@ static bool _upipe_ts_sync_get_size(struct upipe *upipe, int *size_p)
  *
  * @param upipe description structure of the pipe
  * @param size configured size, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_sync_set_size(struct upipe *upipe, int size)
+static enum ubase_err _upipe_ts_sync_set_size(struct upipe *upipe, int size)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (size < 0)
-        return false;
+        return UBASE_ERR_INVALID;
     upipe_ts_sync->ts_size = size;
     /* FIXME change flow definition */
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the configured number of packets to synchronize
@@ -296,14 +296,14 @@ static bool _upipe_ts_sync_set_size(struct upipe *upipe, int size)
  *
  * @param upipe description structure of the pipe
  * @param sync_p filled in with number of packets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
+static enum ubase_err _upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     assert(sync_p != NULL);
     *sync_p = upipe_ts_sync->ts_sync;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the configured number of packets to synchronize with.
@@ -312,15 +312,15 @@ static bool _upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
  *
  * @param upipe description structure of the pipe
  * @param sync number of packets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
+static enum ubase_err _upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (sync < DEFAULT_TS_SYNC)
-        return false;
+        return UBASE_ERR_INVALID;
     upipe_ts_sync->ts_sync = sync;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts sync pipe.
@@ -328,10 +328,11 @@ static bool _upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_sync_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_sync_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -352,31 +353,29 @@ static bool upipe_ts_sync_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_SYNC_GET_SIZE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
             int *size_p = va_arg(args, int *);
             return _upipe_ts_sync_get_size(upipe, size_p);
         }
         case UPIPE_TS_SYNC_SET_SIZE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
             int size = va_arg(args, int);
             return _upipe_ts_sync_set_size(upipe, size);
         }
         case UPIPE_TS_SYNC_GET_SYNC: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
             unsigned int signature = va_arg(args, unsigned int);
             assert(signature == UPIPE_TS_SYNC_SIGNATURE);
             int *sync_p = va_arg(args, int *);
             return _upipe_ts_sync_get_sync(upipe, sync_p);
         }
         case UPIPE_TS_SYNC_SET_SYNC: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
             int sync = va_arg(args, int);
             return _upipe_ts_sync_set_sync(upipe, sync);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -403,7 +402,9 @@ static struct upipe_mgr upipe_ts_sync_mgr = {
 
     .upipe_alloc = upipe_ts_sync_alloc,
     .upipe_input = upipe_ts_sync_input,
-    .upipe_control = upipe_ts_sync_control
+    .upipe_control = upipe_ts_sync_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_sync pipes.

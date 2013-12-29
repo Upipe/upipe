@@ -147,10 +147,10 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "match_attr"));
     assert(upipe_match_attr != NULL);
-    assert(upipe_set_flow_def(upipe_match_attr, uref));
-    assert(upipe_match_attr_set_uint64_t(upipe_match_attr, uref_test_match_foo));
-    assert(upipe_match_attr_set_boundaries(upipe_match_attr, MIN, MAX));
-    assert(upipe_set_output(upipe_match_attr, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_match_attr, uref));
+    ubase_assert(upipe_match_attr_set_uint64_t(upipe_match_attr, uref_test_match_foo));
+    ubase_assert(upipe_match_attr_set_boundaries(upipe_match_attr, MIN, MAX));
+    ubase_assert(upipe_set_output(upipe_match_attr, upipe_sink));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);

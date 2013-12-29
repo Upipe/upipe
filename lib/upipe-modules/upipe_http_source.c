@@ -269,14 +269,15 @@ static void upipe_http_src_worker(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param url_p filled in with the url of the http
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_http_src_get_uri(struct upipe *upipe, const char **url_p)
+static enum ubase_err upipe_http_src_get_uri(struct upipe *upipe,
+                                             const char **url_p)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     assert(url_p != NULL);
     *url_p = upipe_http_src->url;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given http (real code here).
@@ -369,10 +370,11 @@ static int upipe_http_src_open_url(struct upipe *upipe, const char *url)
 }
 
 /** @internal @This builds and sends a GET request
+ *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_http_src_send_request(struct upipe *upipe)
+static enum ubase_err upipe_http_src_send_request(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     const char *url = upipe_http_src->url;
@@ -392,26 +394,27 @@ static bool upipe_http_src_send_request(struct upipe *upipe)
             case EWOULDBLOCK:
 #endif
                 /* try again later */
-                return false;
+                return UBASE_ERR_EXTERNAL;
 
             case EBADF:
             case EINVAL:
             default:
                 upipe_err_va(upipe, "error sending request (%s)", strerror(errno));
-                return false;
+                return UBASE_ERR_EXTERNAL;
         }
     }
     
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given http.
  *
  * @param upipe description structure of the pipe
  * @param url relative or absolute url of the http
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
+static enum ubase_err upipe_http_src_set_uri(struct upipe *upipe,
+                                             const char *url)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
@@ -426,19 +429,19 @@ static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
     upipe_http_src_set_upump_read(upipe, NULL);
 
     if (unlikely(url == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_http_src->uref_mgr == NULL) {
         upipe_throw_need_uref_mgr(upipe);
         if (unlikely(upipe_http_src->uref_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
     if (upipe_http_src->flow_def == NULL) {
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_http_src->uref_mgr,
                                                           NULL);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         upipe_http_src_store_flow_def(upipe, flow_def);
     }
@@ -447,14 +450,14 @@ static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
     if (upipe_http_src->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_http_src->flow_def);
         if (unlikely(upipe_http_src->ubuf_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     /* now call real code */
     upipe_http_src->fd = upipe_http_src_open_url(upipe ,url);
     if (unlikely(upipe_http_src->fd < 0)) {
         upipe_err_va(upipe, "can't open url %s", url);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     /* keep url in memory */
@@ -463,17 +466,19 @@ static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
         close(upipe_http_src->fd);
         upipe_http_src->fd = -1;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_notice_va(upipe, "opening url %s", upipe_http_src->url);
 
-    if (unlikely(!upipe_http_src_send_request(upipe))) {
+    enum ubase_err err;
+    if (unlikely((err = upipe_http_src_send_request(upipe)) !=
+                 UBASE_ERR_NONE)) {
         /* FIXME: build write pump */
         close(upipe_http_src->fd);
         upipe_http_src->fd = -1;
-        return false;
+        return err;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a http source pipe.
@@ -481,10 +486,11 @@ static bool upipe_http_src_set_uri(struct upipe *upipe, const char *url)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err _upipe_http_src_control(struct upipe *upipe,
+                                              enum upipe_command command,
+                                              va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -553,7 +559,7 @@ static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command comm
             return upipe_http_src_set_uri(upipe, uri);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -563,13 +569,12 @@ static bool _upipe_http_src_control(struct upipe *upipe, enum upipe_command comm
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_http_src_control(struct upipe *upipe, enum upipe_command command,
+static enum ubase_err upipe_http_src_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    if (unlikely(!_upipe_http_src_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_http_src_control(upipe, command, args));
 
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     if (upipe_http_src->upump_mgr != NULL && upipe_http_src->fd != -1 &&
@@ -580,13 +585,13 @@ static bool upipe_http_src_control(struct upipe *upipe, enum upipe_command comma
                                                   upipe_http_src->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_http_src_set_upump_read(upipe, upump);
         upump_start(upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -622,7 +627,9 @@ static struct upipe_mgr upipe_http_src_mgr = {
 
     .upipe_alloc = upipe_http_src_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_http_src_control
+    .upipe_control = upipe_http_src_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all http source pipes.

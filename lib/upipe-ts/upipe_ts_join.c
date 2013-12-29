@@ -180,15 +180,15 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
                                            struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
@@ -204,7 +204,7 @@ static bool upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
             upipe_ts_join_build_flow_def(upipe_ts_join_to_upipe(upipe_ts_join));
         }
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a subpipe of a ts_join
@@ -215,8 +215,9 @@ static bool upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_ts_join_sub_control(struct upipe *upipe,
-                                      enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_join_sub_control(struct upipe *upipe,
+                                                enum upipe_command command,
+                                                va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -229,7 +230,7 @@ static bool upipe_ts_join_sub_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -266,6 +267,7 @@ static void upipe_ts_join_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_ts_join_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_join_sub_input;
     sub_mgr->upipe_control = upipe_ts_join_sub_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a ts_join pipe.
@@ -373,15 +375,16 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param p filled in with the flow definition
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_join_get_flow_def(struct upipe *upipe, struct uref **p)
+static enum ubase_err _upipe_ts_join_get_flow_def(struct upipe *upipe,
+                                                  struct uref **p)
 {
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     if (unlikely(upipe_ts_join->uref_mgr == NULL))
         upipe_throw_need_uref_mgr(upipe);
     if (unlikely(upipe_ts_join->flow_def == NULL))
-        return false;
+        return UBASE_ERR_UNHANDLED;
     return upipe_ts_join_get_flow_def(upipe, p);
 }
 
@@ -390,11 +393,11 @@ static bool _upipe_ts_join_get_flow_def(struct upipe *upipe, struct uref **p)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_join_control(struct upipe *upipe,
-                                   enum upipe_command command,
-                                   va_list args)
+static enum ubase_err _upipe_ts_join_control(struct upipe *upipe,
+                                             enum upipe_command command,
+                                             va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -428,7 +431,7 @@ static bool _upipe_ts_join_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -460,20 +463,19 @@ static void upipe_ts_join_build_flow_def(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_join_control(struct upipe *upipe,
-                                  enum upipe_command command,
-                                  va_list args)
+static enum ubase_err upipe_ts_join_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
-    if (unlikely(!_upipe_ts_join_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_ts_join_control(upipe, command, args))
 
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     if (upipe_ts_join->flow_def == NULL)
         upipe_ts_join_build_flow_def(upipe);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -498,7 +500,9 @@ static struct upipe_mgr upipe_ts_join_mgr = {
 
     .upipe_alloc = upipe_ts_join_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_ts_join_control
+    .upipe_control = upipe_ts_join_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_join pipes.

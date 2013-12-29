@@ -170,8 +170,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "chunk"));
     assert(upipe_chunk_stream != NULL);
-    assert(upipe_set_flow_def(upipe_chunk_stream, uref));
-    assert(upipe_set_output(upipe_chunk_stream, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_chunk_stream, uref));
+    ubase_assert(upipe_set_output(upipe_chunk_stream, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;
@@ -179,8 +179,8 @@ int main(int argc, char *argv[])
     unsigned int mtu = 0, align = 0;
 
     printf("mtu %d align %d real_mtu %d\n", MTU, ALIGN, REAL_MTU);
-    assert(upipe_chunk_stream_set_mtu(upipe_chunk_stream, MTU, ALIGN));
-    assert(upipe_chunk_stream_get_mtu(upipe_chunk_stream, &mtu, &align));
+    ubase_assert(upipe_chunk_stream_set_mtu(upipe_chunk_stream, MTU, ALIGN));
+    ubase_assert(upipe_chunk_stream_get_mtu(upipe_chunk_stream, &mtu, &align));
     assert(mtu == MTU);
     assert(align == ALIGN);
 

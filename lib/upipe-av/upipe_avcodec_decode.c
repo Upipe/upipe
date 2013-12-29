@@ -1082,13 +1082,13 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
-                                      struct uref *flow_def)
+static enum ubase_err upipe_avcdec_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     const char *def;
     enum AVCodecID codec_id;
@@ -1098,7 +1098,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
                  !(codec_id =
                      upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW_DEF))) ||
                  (codec = avcodec_find_decoder(codec_id)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
 
@@ -1109,7 +1109,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
         extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
@@ -1122,7 +1122,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
     if (unlikely(flow_def_check == NULL)) {
         free(extradata_alloc);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
@@ -1132,7 +1132,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
         free(extradata_alloc);
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     if (upipe_avcdec->context != NULL) {
@@ -1142,7 +1142,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
          * the udict is never empty. */
         if (!upipe_avcdec_check_flow_def_check(upipe, flow_def_check)) {
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_BUSY;
         }
         uref_free(flow_def_check);
     } else {
@@ -1151,7 +1151,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
             free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-            return false;
+            return UBASE_ERR_EXTERNAL;
         }
 
         upipe_avcdec->context->codec = codec;
@@ -1166,7 +1166,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_avcdec_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL)
@@ -1175,7 +1175,7 @@ static bool upipe_avcdec_set_flow_def(struct upipe *upipe,
     upipe_avcdec->input_latency = 0;
     uref_clock_get_latency(upipe_avcdec->flow_def_input,
                            &upipe_avcdec->input_latency);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This checks some option compatibility (kinda kludgy ...).
@@ -1209,18 +1209,19 @@ static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL to delete it
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avcdec_set_option(struct upipe *upipe, const char *option,
-                                     const char *content)
+static enum ubase_err _upipe_avcdec_set_option(struct upipe *upipe,
+                                               const char *option,
+                                               const char *content)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     if (upipe_avcdec->context == NULL || avcodec_is_open(upipe_avcdec->context))
-        return false;
+        return UBASE_ERR_BUSY;
     assert(option != NULL);
     if (unlikely(!upipe_avcdec_check_option(upipe, option, content))) {
         upipe_err_va(upipe, "can't set option %s:%s", option, content);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     int error = av_opt_set(upipe_avcdec->context, option, content,
                            AV_OPT_SEARCH_CHILDREN);
@@ -1228,9 +1229,9 @@ static bool _upipe_avcdec_set_option(struct upipe *upipe, const char *option,
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
                      buf);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -1239,10 +1240,11 @@ static bool _upipe_avcdec_set_option(struct upipe *upipe, const char *option,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avcdec_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_avcdec_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         /* generic linear stuff */
@@ -1282,15 +1284,14 @@ static bool upipe_avcdec_control(struct upipe *upipe,
         }
 
         case UPIPE_AVCDEC_SET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVCDEC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCDEC_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_avcdec_set_option(upipe, option, content);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1376,7 +1377,9 @@ static struct upipe_mgr upipe_avcdec_mgr = {
 
     .upipe_alloc = upipe_avcdec_alloc,
     .upipe_input = upipe_avcdec_input,
-    .upipe_control = upipe_avcdec_control
+    .upipe_control = upipe_avcdec_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for avcodec decoders.

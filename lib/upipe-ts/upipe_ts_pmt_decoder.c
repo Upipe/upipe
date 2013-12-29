@@ -503,34 +503,35 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     if (upipe_ts_pmtd->flow_def_input != NULL)
         uref_free(upipe_ts_pmtd->flow_def_input);
     upipe_ts_pmtd->flow_def_input = flow_def_dup;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This iterates over flow definitions.
  *
  * @param upipe description structure of the pipe
  * @param p filled in with the next flow definition, initialize with NULL
- * @return false when no more flow definition is available
+ * @return an error code
  */
-static bool upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
+static enum ubase_err upipe_ts_pmtd_iterate(struct upipe *upipe,
+                                            struct uref **p)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     assert(p != NULL);
@@ -539,10 +540,12 @@ static bool upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
         uchain = uref_to_uchain(*p);
     else
         uchain = &upipe_ts_pmtd->flows;
-    if (ulist_is_last(&upipe_ts_pmtd->flows, uchain))
-        return false;
+    if (ulist_is_last(&upipe_ts_pmtd->flows, uchain)) {
+        *p = NULL;
+        return UBASE_ERR_NONE;
+    }
     *p = uref_from_uchain(uchain->next);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -550,11 +553,11 @@ static bool upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_pmtd_control(struct upipe *upipe,
-                                  enum upipe_command command,
-                                  va_list args)
+static enum ubase_err upipe_ts_pmtd_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -579,7 +582,7 @@ static bool upipe_ts_pmtd_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -609,7 +612,9 @@ static struct upipe_mgr upipe_ts_pmtd_mgr = {
 
     .upipe_alloc = upipe_ts_pmtd_alloc,
     .upipe_input = upipe_ts_pmtd_input,
-    .upipe_control = upipe_ts_pmtd_control
+    .upipe_control = upipe_ts_pmtd_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_pmtd pipes.

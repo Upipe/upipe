@@ -71,10 +71,10 @@ struct upipe_mgr *upipe_fsink_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_fsink_get_path(struct upipe *upipe,
-                                        const char **path_p)
+static inline enum ubase_err upipe_fsink_get_path(struct upipe *upipe,
+                                                  const char **path_p)
 {
     return upipe_control(upipe, UPIPE_FSINK_GET_PATH, UPIPE_FSINK_SIGNATURE,
                          path_p);
@@ -85,10 +85,11 @@ static inline bool upipe_fsink_get_path(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the file
  * @param mode mode of opening the file
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_fsink_set_path(struct upipe *upipe, const char *path,
-                                        enum upipe_fsink_mode mode)
+static inline enum ubase_err upipe_fsink_set_path(struct upipe *upipe,
+                                                  const char *path,
+                                                  enum upipe_fsink_mode mode)
 {
     return upipe_control(upipe, UPIPE_FSINK_SET_PATH, UPIPE_FSINK_SIGNATURE,
                          path, mode);

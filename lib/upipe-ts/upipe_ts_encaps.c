@@ -515,13 +515,13 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_encaps_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_encaps_set_flow_def(struct upipe *upipe,
                                          struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     const char *def;
     uint64_t pid;
     uint64_t octetrate, tb_rate;
@@ -530,12 +530,12 @@ static bool upipe_ts_encaps_set_flow_def(struct upipe *upipe,
         !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate ||
         !uref_ts_flow_get_tb_rate(flow_def, &tb_rate) ||
         !uref_ts_flow_get_pid(flow_def, &pid))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
                                        def + strlen(EXPECTED_FLOW_DEF))))
@@ -553,24 +553,22 @@ static bool upipe_ts_encaps_set_flow_def(struct upipe *upipe,
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
     upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
                                      octetrate;
-    return true;
+    return UBASE_ERR_NONE;
 }
-
-
 
 /** @internal @This returns the currently configured PCR interval.
  *
  * @param upipe description structure of the pipe
  * @param pcr_interval_p filled in with the PCR interval
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
+static enum ubase_err upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
                                             uint64_t *pcr_interval_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     assert(pcr_interval_p != NULL);
     *pcr_interval_p = upipe_ts_encaps->pcr_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PCR interval. To cancel insertion of PCRs, set it
@@ -578,15 +576,15 @@ static bool upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param pcr_interval new PCR interval
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
+static enum ubase_err upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
                                             uint64_t pcr_interval)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     upipe_ts_encaps->pcr_interval = pcr_interval;
     upipe_ts_encaps->next_pcr = pcr_interval ? 0 : UINT64_MAX;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts encaps pipe.
@@ -594,9 +592,9 @@ static bool upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_encaps_control(struct upipe *upipe,
+static enum ubase_err upipe_ts_encaps_control(struct upipe *upipe,
                                     enum upipe_command command, va_list args)
 {
     switch (command) {
@@ -635,19 +633,17 @@ static bool upipe_ts_encaps_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_MUX_GET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *pcr_interval_p = va_arg(args, uint64_t *);
             return upipe_ts_encaps_get_pcr_interval(upipe, pcr_interval_p);
         }
         case UPIPE_TS_MUX_SET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t pcr_interval = va_arg(args, uint64_t);
             return upipe_ts_encaps_set_pcr_interval(upipe, pcr_interval);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -673,7 +669,9 @@ static struct upipe_mgr upipe_ts_encaps_mgr = {
 
     .upipe_alloc = upipe_ts_encaps_alloc,
     .upipe_input = upipe_ts_encaps_input,
-    .upipe_control = upipe_ts_encaps_control
+    .upipe_control = upipe_ts_encaps_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_encaps pipes.

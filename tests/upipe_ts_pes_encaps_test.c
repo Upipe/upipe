@@ -193,10 +193,10 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts pese"));
     assert(upipe_ts_pese != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pese, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_pese, upipe_sink));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
     assert(uref != NULL);
@@ -225,10 +225,10 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts pese"));
     assert(upipe_ts_pese != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pese, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_pese, upipe_sink));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
@@ -246,10 +246,10 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pese, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_pese, upipe_sink));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);
@@ -268,10 +268,10 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pese, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_pese, upipe_sink));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12);

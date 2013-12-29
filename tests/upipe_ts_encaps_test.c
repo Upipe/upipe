@@ -243,11 +243,11 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts encaps"));
     assert(upipe_ts_encaps != NULL);
-    assert(upipe_set_flow_def(upipe_ts_encaps, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
+    ubase_assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uint8_t *buffer;
     int size;
@@ -291,12 +291,12 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts encaps"));
     assert(upipe_ts_encaps != NULL);
-    assert(upipe_set_flow_def(upipe_ts_encaps, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
-    assert(upipe_ts_mux_set_pcr_interval(upipe_ts_encaps, UCLOCK_FREQ / 5));
-    assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
+    ubase_assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
+    ubase_assert(upipe_ts_mux_set_pcr_interval(upipe_ts_encaps, UCLOCK_FREQ / 5));
+    ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
     assert(uref != NULL);
@@ -331,11 +331,11 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts encaps"));
     assert(upipe_ts_encaps != NULL);
-    assert(upipe_set_flow_def(upipe_ts_encaps, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
+    ubase_assert(upipe_set_uref_mgr(upipe_ts_encaps, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1024);
     assert(uref != NULL);

@@ -144,10 +144,11 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_dup_output_control(struct upipe *upipe,
-                                     enum upipe_command command, va_list args)
+static enum ubase_err upipe_dup_output_control(struct upipe *upipe,
+                                               enum upipe_command command,
+                                               va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -168,7 +169,7 @@ static bool upipe_dup_output_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -202,6 +203,7 @@ static void upipe_dup_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_dup_output_alloc;
     sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_dup_output_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a dup pipe.
@@ -267,15 +269,16 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def new flow definition
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_dup_set_flow_def(struct upipe *upipe,
+                                             struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
 
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     if (upipe_dup->flow_def != NULL)
@@ -289,12 +292,12 @@ static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         flow_def_dup = uref_dup(flow_def);
         if (unlikely(flow_def_dup == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         upipe_dup_output_store_flow_def(
                 upipe_dup_output_to_upipe(upipe_dup_output), flow_def_dup);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a dup pipe.
@@ -302,10 +305,11 @@ static bool upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_dup_control(struct upipe *upipe,
-                              enum upipe_command command, va_list args)
+static enum ubase_err upipe_dup_control(struct upipe *upipe,
+                                        enum upipe_command command,
+                                        va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -322,7 +326,7 @@ static bool upipe_dup_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -361,7 +365,9 @@ static struct upipe_mgr upipe_dup_mgr = {
 
     .upipe_alloc = upipe_dup_alloc,
     .upipe_input = upipe_dup_input,
-    .upipe_control = upipe_dup_control
+    .upipe_control = upipe_dup_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all dup pipes.

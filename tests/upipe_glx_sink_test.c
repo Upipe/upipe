@@ -194,7 +194,7 @@ int main(int argc, char **argv)
                 uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                     "glx %d", i)));
         assert(glx_sink[i]);
-        assert(upipe_set_flow_def(glx_sink[i], flow_def));
+        ubase_assert(upipe_set_flow_def(glx_sink[i], flow_def));
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
         upipe_set_upump_mgr(glx_sink[i], upump_mgr);
     }

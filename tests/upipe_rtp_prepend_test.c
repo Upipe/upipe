@@ -219,15 +219,15 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "rtp"));
     assert(upipe_rtp_prepend_mgr);
-    assert(upipe_set_flow_def(rtp_prepend, uref));
+    ubase_assert(upipe_set_flow_def(rtp_prepend, uref));
     uref_free(uref);
     assert(rtp_prepend);
-    assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(rtp_prepend, ubuf_mgr));
 
     struct upipe *rtp_prepend_test = upipe_void_alloc(&rtp_prepend_test_mgr,
                                                       uprobe_use(uprobe_stdio));
     assert(rtp_prepend_test != NULL);
-    assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
+    ubase_assert(upipe_set_output(rtp_prepend, rtp_prepend_test));
 
     /* Now send uref */
     for (i=0; i < PACKET_NUM; i++) {

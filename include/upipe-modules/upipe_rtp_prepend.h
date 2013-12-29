@@ -55,10 +55,11 @@ enum upipe_rtp_prepend_command {
  * @param upipe description structure of the pipe
  * @param type_p rtp type
  * @param clockrate_p rtp timestamp clock rate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_rtp_prepend_get_type(struct upipe *upipe,
-                               uint8_t *type_p, uint32_t *clockrate_p)
+static inline enum ubase_err upipe_rtp_prepend_get_type(struct upipe *upipe,
+                                                        uint8_t *type_p,
+                                                        uint32_t *clockrate_p)
 {
     return upipe_control(upipe, UPIPE_RTP_PREPEND_GET_TYPE,
                          UPIPE_RTP_PREPEND_SIGNATURE, type_p, clockrate_p);
@@ -70,10 +71,11 @@ static inline bool upipe_rtp_prepend_get_type(struct upipe *upipe,
  * @param type rtp payload type
  * @param clockrate rtp timestamp and clock rate (optional, set
  * according to rfc 3551 if null)
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_rtp_prepend_set_type(struct upipe *upipe,
-                               uint8_t type, uint32_t clockrate)
+static inline enum ubase_err upipe_rtp_prepend_set_type(struct upipe *upipe,
+                                                        uint8_t type,
+                                                        uint32_t clockrate)
 {
     return upipe_control(upipe, UPIPE_RTP_PREPEND_SET_TYPE,
                          UPIPE_RTP_PREPEND_SIGNATURE, type, clockrate);

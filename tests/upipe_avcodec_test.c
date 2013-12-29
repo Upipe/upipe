@@ -157,9 +157,9 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
         uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
                             "avcdec %"PRId64, num));
     assert(avcdec);
-    assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
     if (upump_mgr) {
-        assert(upipe_set_upump_mgr(avcdec, upump_mgr));
+        ubase_assert(upipe_set_upump_mgr(avcdec, upump_mgr));
     }
     upipe_release(avcdec);
 
@@ -212,10 +212,10 @@ struct upipe *build_pipeline(const char *codec_def,
                             UPROBE_LOG_LEVEL, "avcenc %d", num), output_flow);
     uref_free(output_flow);
     assert(avcenc);
-    assert(upipe_set_flow_def(avcenc, flow_def));
-    assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
+    ubase_assert(upipe_set_flow_def(avcenc, flow_def));
+    ubase_assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
     if (upump_mgr) {
-        assert(upipe_set_upump_mgr(avcenc, upump_mgr));
+        ubase_assert(upipe_set_upump_mgr(avcenc, upump_mgr));
     }
 
     return avcenc;

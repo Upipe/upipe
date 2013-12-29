@@ -178,8 +178,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "mpgvf"));
     assert(upipe_mpgvf != NULL);
-    assert(upipe_set_flow_def(upipe_mpgvf, uref));
-    assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgvf, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;

@@ -112,23 +112,24 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_null_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_null_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
-            return true;
+            return UBASE_ERR_NONE;
+
         case UPIPE_NULL_DUMP_DICT: {
-            int signature = va_arg(args, int);
-            assert (signature == UPIPE_NULL_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_NULL_SIGNATURE)
             upipe_null->dump = (va_arg(args, int) == 1 ? true : false);
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -152,7 +153,9 @@ static struct upipe_mgr upipe_null_mgr = {
 
     .upipe_alloc = upipe_null_alloc,
     .upipe_input = upipe_null_input,
-    .upipe_control = upipe_null_control
+    .upipe_control = upipe_null_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for null pipes

@@ -57,7 +57,8 @@ static enum ubase_err uprobe_upump_mgr_throw(struct uprobe *uprobe,
     if (event != UPROBE_NEED_UPUMP_MGR || uprobe_upump_mgr->upump_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    if (unlikely(!upipe_set_upump_mgr(upipe, uprobe_upump_mgr->upump_mgr)))
+    if (unlikely(upipe_set_upump_mgr(upipe, uprobe_upump_mgr->upump_mgr) !=
+                 UBASE_ERR_NONE))
         upipe_warn(upipe, "probe couldn't set upump manager");
     return UBASE_ERR_NONE;
 }

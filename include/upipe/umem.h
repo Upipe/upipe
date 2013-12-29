@@ -144,6 +144,7 @@ static inline void umem_free(struct umem *umem)
  */
 static inline void umem_mgr_vacuum(struct umem_mgr *mgr)
 {
+    assert(mgr != NULL);
     if (likely(mgr->umem_mgr_vacuum != NULL))
         mgr->umem_mgr_vacuum(mgr);
 }
@@ -155,7 +156,8 @@ static inline void umem_mgr_vacuum(struct umem_mgr *mgr)
  */
 static inline struct umem_mgr *umem_mgr_use(struct umem_mgr *mgr)
 {
-    assert(mgr != NULL);
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }

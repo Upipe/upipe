@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts split"));
     assert(upipe_ts_split != NULL);
-    assert(upipe_set_flow_def(upipe_ts_split, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_split, uref));
 
     assert(uref_ts_flow_set_pid(uref, 68));
     struct upipe *upipe_sink68 = upipe_flow_alloc(&ts_test_mgr,
@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts split output 68"), uref);
     assert(upipe_ts_split_output68 != NULL);
-    assert(upipe_set_output(upipe_ts_split_output68, upipe_sink68));
+    ubase_assert(upipe_set_output(upipe_ts_split_output68, upipe_sink68));
 
     assert(uref_ts_flow_set_pid(uref, 69));
     struct upipe *upipe_sink69 = upipe_flow_alloc(&ts_test_mgr,
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts split output 69"), uref);
     assert(upipe_ts_split_output69 != NULL);
-    assert(upipe_set_output(upipe_ts_split_output69, upipe_sink69));
+    ubase_assert(upipe_set_output(upipe_ts_split_output69, upipe_sink69));
     uref_free(uref);
 
     uint8_t *buffer;

@@ -125,8 +125,8 @@ int main(int argc, char **argv)
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "swr"),
         flow_output);
     assert(swr);
-    assert(upipe_set_flow_def(swr, flow));
-    assert(upipe_set_ubuf_mgr(swr, block_mgr));
+    ubase_assert(upipe_set_flow_def(swr, flow));
+    ubase_assert(upipe_set_ubuf_mgr(swr, block_mgr));
     uref_free(flow);
     uref_free(flow_output);
 
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "null"));
     assert(null);
     upipe_null_dump_dict(null, true);
-    assert(upipe_set_output(swr, null));
+    ubase_assert(upipe_set_output(swr, null));
     upipe_release(null);
 
     struct uref *sound;

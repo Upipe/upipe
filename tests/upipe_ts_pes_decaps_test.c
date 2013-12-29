@@ -178,8 +178,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts pesd"));
     assert(upipe_ts_pesd != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pesd, uref));
-    assert(upipe_set_output(upipe_ts_pesd, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pesd, uref));
+    ubase_assert(upipe_set_output(upipe_ts_pesd, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;

@@ -301,7 +301,7 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             while (es_conf_iterate(conf, &key, &value, &type)) {
                 upipe_dbg_va(encoder, "%s option: %s=%s",
                         conf->codec, key, value);
-                if (!upipe_avcenc_set_option(encoder, key, value))
+                if (!ubase_err_check(upipe_avcenc_set_option(encoder, key, value)))
                     upipe_warn_va(encoder, "option %s unknown", key);
             }
 
@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
 
     upipe_avfsink_set_mime(avfsink, mime);
     upipe_avfsink_set_format(avfsink, format);
-    if (unlikely(!upipe_set_uri(avfsink, sink_url))) {
+    if (unlikely(!ubase_err_check(upipe_set_uri(avfsink, sink_url)))) {
         fprintf(stderr, "error: could not open dest uri\n");
         exit(EXIT_FAILURE);
     }

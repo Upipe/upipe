@@ -220,23 +220,24 @@ static void upipe_fsrc_worker(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_fsrc_get_uri(struct upipe *upipe, const char **path_p)
+static enum ubase_err upipe_fsrc_get_uri(struct upipe *upipe,
+                                         const char **path_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(path_p != NULL);
     *path_p = upipe_fsrc->path;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given file.
  *
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the file
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
+static enum ubase_err upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
 
@@ -251,19 +252,19 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
     upipe_fsrc_set_upump(upipe, NULL);
 
     if (unlikely(path == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_fsrc->uref_mgr == NULL) {
         upipe_throw_need_uref_mgr(upipe);
         if (unlikely(upipe_fsrc->uref_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
     if (upipe_fsrc->flow_def == NULL) {
         struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
                                                           NULL);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         upipe_fsrc_store_flow_def(upipe, flow_def);
     }
@@ -272,20 +273,20 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
     if (upipe_fsrc->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_fsrc->flow_def);
         if (unlikely(upipe_fsrc->ubuf_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     struct stat st;
     if (unlikely(stat(path, &st) == -1)) {
         upipe_err_va(upipe, "can't stat file %s (%m)", path);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
     upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (unlikely(upipe_fsrc->fd == -1)) {
         upipe_err_va(upipe, "can't open file %s (%m)", path);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_fsrc->path = strdup(path);
@@ -293,57 +294,66 @@ static bool upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
         close(upipe_fsrc->fd);
         upipe_fsrc->fd = -1;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_notice_va(upipe, "opening file %s", upipe_fsrc->path);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the size of the currently opened file.
  *
  * @param upipe description structure of the pipe
  * @param size_p filled in with the size of the file, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsrc_get_size(struct upipe *upipe, uint64_t *size_p)
+static enum ubase_err _upipe_fsrc_get_size(struct upipe *upipe,
+                                           uint64_t *size_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(size_p != NULL);
-    if (unlikely(upipe_fsrc->fd == -1)) return false;
+    if (unlikely(upipe_fsrc->fd == -1))
+        return UBASE_ERR_UNHANDLED;
     struct stat st;
-    if (unlikely(fstat(upipe_fsrc->fd, &st) == -1)) return false;
+    if (unlikely(fstat(upipe_fsrc->fd, &st) == -1))
+        return UBASE_ERR_EXTERNAL;
     *size_p = st.st_size;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the position of the currently opened file.
  *
  * @param upipe description structure of the pipe
  * @param position_p filled in with the reading position, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsrc_get_position(struct upipe *upipe, uint64_t *position_p)
+static enum ubase_err _upipe_fsrc_get_position(struct upipe *upipe,
+                                               uint64_t *position_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(position_p != NULL);
-    if (unlikely(upipe_fsrc->fd == -1)) return false;
+    if (unlikely(upipe_fsrc->fd == -1))
+        return UBASE_ERR_UNHANDLED;
     off_t position = lseek(upipe_fsrc->fd, 0, SEEK_CUR);
-    if (unlikely(position == (off_t)-1)) return false;
+    if (unlikely(position == (off_t)-1))
+        return UBASE_ERR_EXTERNAL;
     *position_p = position;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to read at the given position.
  *
  * @param upipe description structure of the pipe
  * @param position new reading position, in octets (between 0 and the size)
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsrc_set_position(struct upipe *upipe, uint64_t position)
+static enum ubase_err _upipe_fsrc_set_position(struct upipe *upipe,
+                                               uint64_t position)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    if (unlikely(upipe_fsrc->fd == -1)) return false;
-    return lseek(upipe_fsrc->fd, position, SEEK_SET) != (off_t)-1;
+    if (unlikely(upipe_fsrc->fd == -1))
+        return UBASE_ERR_UNHANDLED;
+    return lseek(upipe_fsrc->fd, position, SEEK_SET) != (off_t)-1 ?
+        UBASE_ERR_NONE : UBASE_ERR_EXTERNAL;
 }
 
 /** @internal @This processes control commands on a file source pipe.
@@ -351,10 +361,11 @@ static bool _upipe_fsrc_set_position(struct upipe *upipe, uint64_t position)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err _upipe_fsrc_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -429,19 +440,17 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
             return _upipe_fsrc_get_size(upipe, size_p);
         }
         case UPIPE_FSRC_GET_POSITION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_position(upipe, position_p);
         }
         case UPIPE_FSRC_SET_POSITION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
             uint64_t position = va_arg(args, uint64_t);
             return _upipe_fsrc_set_position(upipe, position);
         }
         default:
-            return false;
+            return UBASE_ERR_NONE;
     }
 }
 
@@ -451,13 +460,13 @@ static bool _upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_fsrc_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
-    if (unlikely(!_upipe_fsrc_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_fsrc_control(upipe, command, args))
 
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (upipe_fsrc->upump_mgr != NULL && upipe_fsrc->fd != -1 &&
@@ -472,13 +481,13 @@ static bool upipe_fsrc_control(struct upipe *upipe, enum upipe_command command,
                                         upipe_fsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_fsrc_set_upump(upipe, upump);
         upump_start(upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -514,7 +523,9 @@ static struct upipe_mgr upipe_fsrc_mgr = {
 
     .upipe_alloc = upipe_fsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_fsrc_control
+    .upipe_control = upipe_fsrc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all file source pipes.

@@ -59,9 +59,9 @@ enum upipe_genaux_command {
  *
  * @param upipe description structure of the pipe
  * @param get callback
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_genaux_set_getattr(struct upipe *upipe,
+static inline enum ubase_err upipe_genaux_set_getattr(struct upipe *upipe,
                             bool (*get)(struct uref*, uint64_t*))
 {
     return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
@@ -72,9 +72,9 @@ static inline bool upipe_genaux_set_getattr(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param get callback pointer
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_genaux_get_getattr(struct upipe *upipe,
+static inline enum ubase_err upipe_genaux_get_getattr(struct upipe *upipe,
                             bool (**get)(struct uref*, uint64_t*))
 {
     return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,

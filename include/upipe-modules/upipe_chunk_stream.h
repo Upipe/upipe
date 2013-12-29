@@ -54,9 +54,9 @@ enum upipe_chunk_stream_command {
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
  * @param align_p filled in with the configured alignement, in octets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_chunk_stream_get_mtu(struct upipe *upipe,
+static inline enum ubase_err upipe_chunk_stream_get_mtu(struct upipe *upipe,
                                unsigned int *mtu_p, unsigned int *align_p)
 {
     return upipe_control(upipe, UPIPE_CHUNK_STREAM_GET_MTU,
@@ -67,9 +67,9 @@ static inline bool upipe_chunk_stream_get_mtu(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param mtu max packet size, in octets
  * @param align packet chunk alignement, in octets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_chunk_stream_set_mtu(struct upipe *upipe,
+static inline enum ubase_err upipe_chunk_stream_set_mtu(struct upipe *upipe,
                                unsigned int mtu, unsigned int align)
 {
     return upipe_control(upipe, UPIPE_CHUNK_STREAM_SET_MTU,

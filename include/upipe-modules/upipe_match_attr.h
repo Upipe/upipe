@@ -56,9 +56,9 @@ enum upipe_match_attr_command {
  *
  * @param upipe description structure of the pipe
  * @param match callback
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_match_attr_set_uint8_t(struct upipe *upipe,
+static inline enum ubase_err upipe_match_attr_set_uint8_t(struct upipe *upipe,
                             bool (*match)(struct uref*, uint8_t, uint8_t))
 {
     return upipe_control(upipe, UPIPE_MATCH_ATTR_SET_UINT8_T,
@@ -69,9 +69,9 @@ static inline bool upipe_match_attr_set_uint8_t(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param match callback
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_match_attr_set_uint64_t(struct upipe *upipe,
+static inline enum ubase_err upipe_match_attr_set_uint64_t(struct upipe *upipe,
                             bool (*match)(struct uref*, uint64_t, uint64_t))
 {
     return upipe_control(upipe, UPIPE_MATCH_ATTR_SET_UINT64_T,
@@ -83,10 +83,11 @@ static inline bool upipe_match_attr_set_uint64_t(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param min min
  * @param min max
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_match_attr_set_boundaries(struct upipe *upipe,
-                                                uint64_t min, uint64_t max)
+static inline enum ubase_err
+    upipe_match_attr_set_boundaries(struct upipe *upipe,
+                                    uint64_t min, uint64_t max)
 {
     return upipe_control(upipe, UPIPE_MATCH_ATTR_SET_BOUNDARIES,
                          UPIPE_MATCH_ATTR_SIGNATURE, min, max);

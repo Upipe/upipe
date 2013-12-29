@@ -805,32 +805,32 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
-                                      struct uref *flow_def)
+static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     const char *def;
     if (unlikely(!uref_flow_get_def(flow_def, &def) ||
                  (ubase_ncmp(def, "pic.") && ubase_ncmp(def, "sound.") &&
                   strstr(def, ".sound.") == NULL)))
-        return false;
+        return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
     struct uref *flow_def_check =
         upipe_avcenc_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     if (unlikely(!uref_flow_set_def(flow_def_check, def))) {
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     if (!ubase_ncmp(def, "pic.")) {
@@ -841,7 +841,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             !uref_pic_flow_get_fps(flow_def, &fps)) {
             upipe_err(upipe, "incompatible flow def");
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         uref_pic_flow_get_hsize_visible(flow_def, &hsize);
         uref_pic_flow_get_vsize_visible(flow_def, &vsize);
@@ -852,7 +852,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
                      !uref_pic_flow_set_fps(flow_def_check, fps))) {
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     } else {
         uint8_t channels;
@@ -861,7 +861,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             !uref_sound_flow_get_rate(flow_def, &rate)) {
             upipe_err(upipe, "incompatible flow def");
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
 
         if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
@@ -869,7 +869,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
                      !uref_sound_flow_set_rate(flow_def_check, rate))) {
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     }
 
@@ -883,7 +883,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
          * the udict is never empty. */
         if (!upipe_avcenc_check_flow_def_check(upipe, flow_def_check)) {
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_BUSY;
         }
         uref_free(flow_def_check);
 
@@ -894,7 +894,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             upipe_err_va(upipe, "unsupported pixel format");
             uref_dump(flow_def, upipe->uprobe);
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
 
         const AVRational *supported_framerates = codec->supported_framerates;
@@ -910,7 +910,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
                 upipe_err_va(upipe, "unsupported frame rate %"PRIu64"/%"PRIu64,
                              fps.num, fps.den);
                 uref_free(flow_def_check);
-                return false;
+                return UBASE_ERR_INVALID;
             }
         }
         context->time_base.num = fps.den;
@@ -937,7 +937,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
         if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL) {
             upipe_err_va(upipe, "unsupported sample format %s", def);
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         while (*sample_fmts != -1) {
             if (*sample_fmts == sample_fmt)
@@ -955,7 +955,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             if (*sample_fmts == -1) {
                 upipe_err_va(upipe, "unsupported sample format %s", def);
                 uref_free(flow_def_check);
-                return false;
+                return UBASE_ERR_INVALID;
             }
         }
         context->sample_fmt = *sample_fmts;
@@ -966,7 +966,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             supported_samplerates == NULL) {
             upipe_err_va(upipe, "unsupported sample rate");
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         while (*supported_samplerates != 0) {
             if (*supported_samplerates == rate)
@@ -976,7 +976,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
         if (*supported_samplerates == 0) {
             upipe_err_va(upipe, "unsupported sample rate %"PRIu64, rate);
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         context->sample_rate = rate;
         context->time_base.num = 1;
@@ -989,7 +989,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
             channel_layouts == NULL) {
             upipe_err_va(upipe, "unsupported channel layout");
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         while (*channel_layouts != 0) {
             if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
@@ -999,7 +999,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
         if (*channel_layouts == 0) {
             upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         context->channels = channels;
         context->channel_layout = *channel_layouts;
@@ -1010,7 +1010,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_avcenc_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL) {
@@ -1021,7 +1021,7 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
     upipe_avcenc->input_latency = 0;
     uref_clock_get_latency(upipe_avcenc->flow_def_input,
                            &upipe_avcenc->input_latency);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the content of an avcodec option. It only take effect
@@ -1030,10 +1030,11 @@ static bool upipe_avcenc_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL to delete it
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avcenc_set_option(struct upipe *upipe, const char *option,
-                                     const char *content)
+static enum ubase_err _upipe_avcenc_set_option(struct upipe *upipe,
+                                               const char *option,
+                                               const char *content)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     assert(option != NULL);
@@ -1043,9 +1044,9 @@ static bool _upipe_avcenc_set_option(struct upipe *upipe, const char *option,
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
                      buf);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -1056,8 +1057,9 @@ static bool _upipe_avcenc_set_option(struct upipe *upipe, const char *option,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_avcenc_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -1096,15 +1098,14 @@ static bool upipe_avcenc_control(struct upipe *upipe, enum upipe_command command
         }
 
         case UPIPE_AVCENC_SET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVCENC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCENC_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_avcenc_set_option(upipe, option, content);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1221,7 +1222,9 @@ static struct upipe_mgr upipe_avcenc_mgr = {
 
     .upipe_alloc = upipe_avcenc_alloc,
     .upipe_input = upipe_avcenc_input,
-    .upipe_control = upipe_avcenc_control
+    .upipe_control = upipe_avcenc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @internal @This returns the management structure for avcodec encoders.

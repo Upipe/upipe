@@ -152,28 +152,28 @@ static void upipe_x264_log(void *_upipe, int loglevel,
 
 /** @internal @This reconfigures encoder with updated parameters
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_reconfigure(struct upipe *upipe)
+static enum ubase_err _upipe_x264_reconfigure(struct upipe *upipe)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret;
     if (unlikely(!upipe_x264->encoder)) {
-        return false;
+        return UBASE_ERR_UNHANDLED;
     }
     ret = x264_encoder_reconfig(upipe_x264->encoder, &upipe_x264->params);
-    return ( (ret < 0) ? false : true );
+    return ( (ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE );
 }
 
 /** @internal @This reset parameters to default
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_set_default(struct upipe *upipe)
+static enum ubase_err _upipe_x264_set_default(struct upipe *upipe)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_default(&upipe_x264->params);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets default parameters for specified preset.
@@ -181,29 +181,30 @@ static bool _upipe_x264_set_default(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param preset x264 preset
  * @param tuning x264 tuning
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_set_default_preset(struct upipe *upipe,
+static enum ubase_err _upipe_x264_set_default_preset(struct upipe *upipe,
                                 const char *preset, const char *tune)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret;
     ret = x264_param_default_preset(&upipe_x264->params, preset, tune);
-    return ( (ret < 0) ? false : true );
+    return ( (ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE );
 }
 
 /** @internal @This enforces profile.
  *
  * @param upipe description structure of the pipe
  * @param profile x264 profile
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_set_profile(struct upipe *upipe, const char *profile)
+static enum ubase_err _upipe_x264_set_profile(struct upipe *upipe,
+                                              const char *profile)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret;
     ret = x264_param_apply_profile(&upipe_x264->params, profile);
-    return ( (ret < 0) ? false : true );
+    return ( (ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE );
 }
 
 /** @internal @This sets the content of an x264 option.
@@ -212,19 +213,20 @@ static bool _upipe_x264_set_profile(struct upipe *upipe, const char *profile)
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_set_option(struct upipe *upipe, const char *option,
-                                   const char *content)
+static enum ubase_err _upipe_x264_set_option(struct upipe *upipe,
+                                             const char *option,
+                                             const char *content)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret = x264_param_parse(&upipe_x264->params, option, content);
     if (unlikely(ret < 0)) {
         upipe_err_va(upipe, "can't set option %s:%s (%d)",
                      option, content, ret);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This switches x264 into speedcontrol mode, with the given latency (size
@@ -232,16 +234,17 @@ static bool _upipe_x264_set_option(struct upipe *upipe, const char *option,
  *
  * @param upipe description structure of the pipe
  * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
+static enum ubase_err _upipe_x264_set_sc_latency(struct upipe *upipe,
+                                                 uint64_t sc_latency)
 {
 #ifndef HAVE_X264_OBE
-    return false;
+    return UBASE_ERR_EXTERNAL;
 #else
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     upipe_x264->sc_latency = sc_latency;
-    return true;
+    return UBASE_ERR_NONE;
 #endif
 }
 
@@ -590,11 +593,11 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_x264_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
                                     struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     /* We only accept YUV420P for the moment. */
     uint8_t macropixel;
@@ -604,28 +607,28 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
                  !uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8") ||
                  !uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8") ||
                  !uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
-        return false;
+        return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
     struct uref *flow_def_check =
         upipe_x264_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     struct urational fps;
     if (!uref_pic_flow_get_fps(flow_def, &fps)) {
         upipe_err(upipe, "incompatible flow def");
         uref_free(flow_def_check);
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     if (unlikely(!uref_pic_flow_copy_format(flow_def_check, flow_def) ||
                  !uref_pic_flow_set_fps(flow_def_check, fps))) {
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
@@ -636,7 +639,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
          * the udict is never empty. */
         if (!upipe_x264_check_flow_def_check(upipe, flow_def_check)) {
             uref_free(flow_def_check);
-            return false;
+            return UBASE_ERR_BUSY;
         }
         uref_free(flow_def_check);
 
@@ -662,7 +665,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_x264_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL) {
@@ -673,7 +676,7 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
     upipe_x264->input_latency = 0;
     uref_clock_get_latency(upipe_x264->flow_def_input,
                            &upipe_x264->input_latency);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -681,10 +684,11 @@ static bool upipe_x264_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_x264_control(struct upipe *upipe,
-                               enum upipe_command command, va_list args)
+static enum ubase_err upipe_x264_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -721,43 +725,37 @@ static bool upipe_x264_control(struct upipe *upipe,
         }
 
         case UPIPE_X264_RECONFIG: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             return _upipe_x264_reconfigure(upipe);
         }
         case UPIPE_X264_SET_DEFAULT: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             return _upipe_x264_set_default(upipe);
         }
         case UPIPE_X264_SET_DEFAULT_PRESET: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             const char *preset = va_arg(args, const char *);
             const char *tune = va_arg(args, const char *);
             return _upipe_x264_set_default_preset(upipe, preset, tune);
         }
         case UPIPE_X264_SET_PROFILE: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             const char *profile = va_arg(args, const char *);
             return _upipe_x264_set_profile(upipe, profile);
         }
         case UPIPE_X264_SET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_x264_set_option(upipe, option, content);
         }
         case UPIPE_X264_SET_SC_LATENCY: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_X264_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             uint64_t sc_latency = va_arg(args, uint64_t);
             return _upipe_x264_set_sc_latency(upipe, sc_latency);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -785,7 +783,9 @@ static struct upipe_mgr upipe_x264_mgr = {
     .signature = UPIPE_X264_SIGNATURE,
     .upipe_alloc = upipe_x264_alloc,
     .upipe_input = upipe_x264_input,
-    .upipe_control = upipe_x264_control
+    .upipe_control = upipe_x264_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for glx_sink pipes

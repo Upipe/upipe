@@ -74,10 +74,10 @@ struct upipe_mgr *upipe_qsink_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param queue_p filled in with a pointer to the queue source
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_qsink_get_qsrc(struct upipe *upipe,
-                                        struct upipe **qsrc_p)
+static inline enum ubase_err upipe_qsink_get_qsrc(struct upipe *upipe,
+                                                  struct upipe **qsrc_p)
 {
     return upipe_control(upipe, UPIPE_QSINK_GET_QSRC, UPIPE_QSINK_SIGNATURE,
                          qsrc_p);
@@ -89,10 +89,10 @@ static inline bool upipe_qsink_get_qsrc(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param queue pointer to the queue source
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_qsink_set_qsrc(struct upipe *upipe,
-                                        struct upipe *qsrc)
+static inline enum ubase_err upipe_qsink_set_qsrc(struct upipe *upipe,
+                                                  struct upipe *qsrc)
 {
     return upipe_control(upipe, UPIPE_QSINK_SET_QSRC, UPIPE_QSINK_SIGNATURE,
                          qsrc);

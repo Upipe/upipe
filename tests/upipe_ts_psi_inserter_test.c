@@ -149,11 +149,11 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psii"));
     assert(upipe_ts_psii != NULL);
-    assert(upipe_set_flow_def(upipe_ts_psii, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_psii, uref));
     uref_free(uref);
-    assert(upipe_set_uref_mgr(upipe_ts_psii, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_ts_psii, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_psii, upipe_sink));
+    ubase_assert(upipe_set_uref_mgr(upipe_ts_psii, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_psii, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_psii, upipe_sink));
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
@@ -164,9 +164,9 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psii sub"));
     assert(upipe_ts_psii_sub != NULL);
-    assert(upipe_set_flow_def(upipe_ts_psii_sub, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_psii_sub, uref));
     uref_free(uref);
-    assert(upipe_ts_psii_sub_set_interval(upipe_ts_psii_sub, UCLOCK_FREQ * 2));
+    ubase_assert(upipe_ts_psii_sub_set_interval(upipe_ts_psii_sub, UCLOCK_FREQ * 2));
 
     /* create a pseudo-PAT */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);

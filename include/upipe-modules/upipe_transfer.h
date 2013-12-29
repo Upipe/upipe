@@ -39,6 +39,14 @@ extern "C" {
 
 #define UPIPE_XFER_SIGNATURE UBASE_FOURCC('x','f','e','r')
 
+/** @This extends upipe_mgr_command with specific commands for xfer. */
+enum upipe_xfer_mgr_command {
+    UPIPE_XFER_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
+
+    /** attach to given upump manager (struct upump_mgr *) */
+    UPIPE_XFER_MGR_ATTACH
+};
+
 /** @This returns a management structure for xfer pipes. You would need one
  * management structure per target event loop (upump manager). The management
  * structure can be allocated in any thread, but must be attached in the
@@ -51,13 +59,6 @@ extern "C" {
 struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
                                        uint16_t msg_pool_depth);
 
-/** @This instructs an existing manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
- *
- * @param mgr pointer to a upipe manager
- */
-void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr);
-
 /** @This attaches a upipe_xfer_mgr to a given event loop. The xfer manager
  * will call upump_alloc_XXX and upump_start, so it must be done in a context
  * where it is possible, which generally means that this command is done in
@@ -69,9 +70,15 @@ void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr);
  *
  * @param mgr xfer_mgr structure
  * @param upump_mgr event loop to attach
- * @return false in case of error
+ * @return an error code
  */
-bool upipe_xfer_mgr_attach(struct upipe_mgr *mgr, struct upump_mgr *upump_mgr);
+static inline enum ubase_err upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
+                                                   struct upump_mgr *upump_mgr)
+
+{
+    return upipe_mgr_control(mgr, UPIPE_XFER_MGR_ATTACH, UPIPE_XFER_SIGNATURE,
+                             upump_mgr);
+}
 
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then

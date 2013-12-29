@@ -58,7 +58,8 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  bool upipe_foo_get_ubuf_mgr(struct upipe *upipe, struct ubuf_mgr **p)
+ *  enum ubase_err upipe_foo_get_ubuf_mgr(struct upipe *upipe,
+ *                                        struct ubuf_mgr **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -69,7 +70,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_ubuf_mgr(struct upipe *upipe, struct ubuf_mgr *ubuf_mgr)
+ *  enum ubase_err upipe_foo_set_ubuf_mgr(struct upipe *upipe,
+ *                                        struct ubuf_mgr *ubuf_mgr)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -117,10 +119,10 @@ static bool STRUCTURE##_get_ubuf_mgr(struct upipe *upipe,                   \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param ubuf_mgr new ubuf manager                                         \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_ubuf_mgr(struct upipe *upipe,                   \
-                                     struct ubuf_mgr *ubuf_mgr)             \
+static enum ubase_err STRUCTURE##_set_ubuf_mgr(struct upipe *upipe,         \
+                                               struct ubuf_mgr *ubuf_mgr)   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UBUF_MGR != NULL))                              \
@@ -128,7 +130,7 @@ static bool STRUCTURE##_set_ubuf_mgr(struct upipe *upipe,                   \
     STRUCTURE->UBUF_MGR = ubuf_mgr;                                         \
     if (likely(ubuf_mgr != NULL))                                           \
         ubuf_mgr_use(STRUCTURE->UBUF_MGR);                                  \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members of this helper.           \
  *                                                                          \

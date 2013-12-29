@@ -175,9 +175,9 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "aggregate"));
     assert(upipe_ts_agg != NULL);
-    assert(upipe_set_flow_def(upipe_ts_agg, uref));
-    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_agg, uref));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;
@@ -211,12 +211,12 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "aggregate"));
     assert(upipe_ts_agg != NULL);
-    assert(upipe_set_flow_def(upipe_ts_agg, uref));
-    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_agg, uref));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
-    assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
-    assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+    ubase_assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
+    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
 
     /* valid TS packets */
     nb_packets = PACKETS_NUM;
@@ -248,12 +248,12 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "aggregate"));
     assert(upipe_ts_agg != NULL);
-    assert(upipe_set_flow_def(upipe_ts_agg, uref));
-    assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
-    assert(upipe_set_output(upipe_ts_agg, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_agg, uref));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_agg, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
-    assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
-    assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+    ubase_assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
+    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
 
     /* valid TS packets */
     nb_packets = PACKETS_NUM;

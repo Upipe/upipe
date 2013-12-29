@@ -222,22 +222,22 @@ error:
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_filter_blend_set_flow_def(struct upipe *upipe,
-                                            struct uref *flow_def)
+static enum ubase_err upipe_filter_blend_set_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, "pic."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_filter_blend_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -245,9 +245,9 @@ static bool upipe_filter_blend_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_filter_blend_control(struct upipe *upipe,
+static enum ubase_err upipe_filter_blend_control(struct upipe *upipe,
                                enum upipe_command command, va_list args)
 {
     switch (command) {
@@ -276,7 +276,7 @@ static bool upipe_filter_blend_control(struct upipe *upipe,
             return upipe_filter_blend_set_output(upipe, output);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

@@ -50,13 +50,13 @@ TESTS = \
 	udict_inline_test.sh \
 	ubuf_block_mem_test \
 	ubuf_pic_mem_test \
-	uref_std_test \
 	uprobe_stdio_test.sh \
 	uprobe_output_test \
 	uprobe_prefix_test.sh \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
 	uprobe_uref_mgr_test \
+	uref_std_test \
 	uclock_std_test \
 	upipe_trickplay_test \
 	upipe_dup_test \

@@ -148,13 +148,13 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
-    assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
-    assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
+    ubase_assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
+    ubase_assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
+    ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     if (delay)
-        assert(upipe_set_uclock(upipe_fsrc, uclock));
-    assert(upipe_set_uri(upipe_fsrc, src_file));
+        ubase_assert(upipe_set_uclock(upipe_fsrc, uclock));
+    ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
     if (upipe_fsrc_get_size(upipe_fsrc, &size))
         fprintf(stdout, "source file has size %"PRIu64"\n", size);
@@ -168,12 +168,12 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "file sink"));
     assert(upipe_fsink != NULL);
-    assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
+    ubase_assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
     if (delay) {
-        assert(upipe_set_uclock(upipe_fsink, uclock));
-        assert(upipe_sink_set_delay(upipe_fsink, delay));
+        ubase_assert(upipe_set_uclock(upipe_fsink, uclock));
+        ubase_assert(upipe_sink_set_delay(upipe_fsink, delay));
     }
-    assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
+    ubase_assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
 
     ev_loop(loop, 0);
 

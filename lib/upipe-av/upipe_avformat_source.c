@@ -238,11 +238,11 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsrc_sub_control(struct upipe *upipe,
-                                     enum upipe_command command,
-                                     va_list args)
+static enum ubase_err upipe_avfsrc_sub_control(struct upipe *upipe,
+                                               enum upipe_command command,
+                                               va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -271,7 +271,7 @@ static bool upipe_avfsrc_sub_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -303,6 +303,7 @@ static void upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_avfsrc_sub_alloc;
     sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_avfsrc_sub_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates an avfsrc pipe.
@@ -761,15 +762,19 @@ static void upipe_avfsrc_probe(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param p filled in with the next flow definition, initialize with NULL
- * @return false when no more flow definition is available
+ * @return an error code
  */
-static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
+static enum ubase_err upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    if (urefcount_dead(upipe->refcount)) {
+        *p = NULL;
+        return UBASE_ERR_NONE;
+    }
 
     AVFormatContext *context = upipe_avfsrc->context;
     if (context == NULL)
-        return false;
+        return UBASE_ERR_UNHANDLED;
     assert(p != NULL);
     uint64_t id = 0;
     if (*p != NULL) {
@@ -780,12 +785,13 @@ static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
     while (id < context->nb_streams) {
         if (context->streams[id]->codec->opaque != NULL) {
             *p = (struct uref *)context->streams[id]->codec->opaque;
-            return true;
+            return UBASE_ERR_NONE;
         }
         id++;
     }
 
-    return false;
+    *p = NULL;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the content of an avformat option.
@@ -793,9 +799,9 @@ static bool upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content_p filled in with the content of the option
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
+static enum ubase_err _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
                                      const char **content_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
@@ -804,9 +810,9 @@ static bool _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
     AVDictionaryEntry *entry = av_dict_get(upipe_avfsrc->options, option,
                                            NULL, 0);
     if (unlikely(entry == NULL))
-        return false;
+        return UBASE_ERR_EXTERNAL;
     *content_p = entry->value;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the content of an avformat option. It only take effect
@@ -815,9 +821,9 @@ static bool _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL to delete it
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
+static enum ubase_err _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
                                      const char *content)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
@@ -827,32 +833,32 @@ static bool _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
                      buf);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently opened URL.
  *
  * @param upipe description structure of the pipe
  * @param url_p filled in with the URL
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsrc_get_uri(struct upipe *upipe, const char **url_p)
+static enum ubase_err upipe_avfsrc_get_uri(struct upipe *upipe, const char **url_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(url_p != NULL);
     *url_p = upipe_avfsrc->url;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given URL.
  *
  * @param upipe description structure of the pipe
  * @param url URL to open
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
+static enum ubase_err upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
 
@@ -869,12 +875,12 @@ static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
     upipe_avfsrc->url = NULL;
 
     if (unlikely(url == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_avfsrc->uref_mgr == NULL) {
         upipe_throw_need_uref_mgr(upipe);
         if (unlikely(upipe_avfsrc->uref_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
     if (upipe_avfsrc->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
@@ -887,44 +893,44 @@ static bool upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
     if (unlikely(error < 0)) {
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't open URL %s (%s)", url, buf);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->url = strdup(url);
     upipe_avfsrc->probed = false;
     upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the time of the currently opened URL.
  *
  * @param upipe description structure of the pipe
  * @param time_p filled in with the reading time, in clock units
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
+static enum ubase_err _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(time_p != NULL);
     if (upipe_avfsrc->context != NULL && upipe_avfsrc->context->pb != NULL &&
         upipe_avfsrc->context->pb->seekable & AVIO_SEEKABLE_NORMAL) {
         *time_p = 0; /* TODO */
-        return true;
+        return UBASE_ERR_NONE;
     }
-    return false;
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @internal @This asks to read at the given time.
  *
  * @param upipe description structure of the pipe
  * @param time new reading time, in clock units
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
+static enum ubase_err _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 {
     //struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    return false;
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @internal @This processes control commands on an avformat source pipe.
@@ -932,10 +938,11 @@ static bool _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsrc_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
+static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -980,15 +987,13 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
         }
 
         case UPIPE_AVFSRC_GET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char **content_p = va_arg(args, const char **);
             return _upipe_avfsrc_get_option(upipe, option, content_p);
         }
         case UPIPE_AVFSRC_SET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_avfsrc_set_option(upipe, option, content);
@@ -1002,19 +1007,17 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
             return upipe_avfsrc_set_uri(upipe, uri);
         }
         case UPIPE_AVFSRC_GET_TIME: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
             uint64_t *time_p = va_arg(args, uint64_t *);
             return _upipe_avfsrc_get_time(upipe, time_p);
         }
         case UPIPE_AVFSRC_SET_TIME: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
             uint64_t time = va_arg(args, uint64_t);
             return _upipe_avfsrc_set_time(upipe, time);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1024,22 +1027,23 @@ static bool _upipe_avfsrc_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsrc_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_avfsrc_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
-    if (unlikely(!_upipe_avfsrc_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_avfsrc_control(upipe, command, args));
 
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (upipe_avfsrc->upump_mgr != NULL && upipe_avfsrc->url != NULL &&
         upipe_avfsrc->upump == NULL) {
         if (unlikely(upipe_avfsrc->probed))
-            return upipe_avfsrc_start(upipe);
+            return upipe_avfsrc_start(upipe) ?
+                   UBASE_ERR_NONE : UBASE_ERR_EXTERNAL;
 
         if (unlikely(upipe_avfsrc->upump_av_deal != NULL))
-            return true;
+            return UBASE_ERR_NONE;
 
         struct upump *upump_av_deal =
             upipe_av_deal_upump_alloc(upipe_avfsrc->upump_mgr,
@@ -1047,13 +1051,13 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
         if (unlikely(upump_av_deal == NULL)) {
             upipe_err(upipe, "can't create dealer");
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_avfsrc->upump_av_deal = upump_av_deal;
         upipe_av_deal_start(upump_av_deal);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -1063,7 +1067,7 @@ static bool upipe_avfsrc_control(struct upipe *upipe,
 static void upipe_avfsrc_free(struct urefcount *urefcount_real)
 {
     struct upipe_avfsrc *upipe_avfsrc =
-        upipe_avfsrc_from_urefcount(urefcount_real);
+        upipe_avfsrc_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe_avfsrc_clean_sub_subs(upipe);
 
@@ -1072,7 +1076,6 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
         if (likely(upipe_avfsrc->url != NULL))
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         
-        /* Throw del_flow for non-discarded streams. */
         for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++)
             if (upipe_avfsrc->context->streams[i]->codec->opaque != NULL)
                 uref_free((struct uref *)upipe_avfsrc->context->streams[i]->codec->opaque);
@@ -1112,7 +1115,9 @@ static struct upipe_mgr upipe_avfsrc_mgr = {
 
     .upipe_alloc = upipe_avfsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_avfsrc_control
+    .upipe_control = upipe_avfsrc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all avformat sources.

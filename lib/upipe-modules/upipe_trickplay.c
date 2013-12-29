@@ -227,13 +227,13 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_trickp_sub_set_flow_def(struct upipe *upipe,
-                                          struct uref *flow_def)
+static enum ubase_err upipe_trickp_sub_set_flow_def(struct upipe *upipe,
+                                                   struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_trickp_sub *upipe_trickp_sub =
         upipe_trickp_sub_from_upipe(upipe);
     const char *def;
@@ -250,10 +250,10 @@ static bool upipe_trickp_sub_set_flow_def(struct upipe *upipe,
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_trickp_sub_store_flow_def(upipe, flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on an output subpipe of a
@@ -262,11 +262,11 @@ static bool upipe_trickp_sub_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_trickp_sub_control(struct upipe *upipe,
-                                     enum upipe_command command,
-                                     va_list args)
+static enum ubase_err upipe_trickp_sub_control(struct upipe *upipe,
+                                               enum upipe_command command,
+                                               va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -300,7 +300,7 @@ static bool upipe_trickp_sub_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -445,30 +445,30 @@ static void upipe_trickp_reset_uclock(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param rate_p filled with the current rate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_trickp_get_rate(struct upipe *upipe,
-                                          struct urational *rate_p)
+static inline enum ubase_err _upipe_trickp_get_rate(struct upipe *upipe,
+                                                    struct urational *rate_p)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     *rate_p = upipe_trickp->rate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the playing rate.
  *
  * @param upipe description structure of the pipe
  * @param rate new rate (1/1 = normal play, 0 = pause)
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_trickp_set_rate(struct upipe *upipe,
-                                          struct urational rate)
+static inline enum ubase_err _upipe_trickp_set_rate(struct upipe *upipe,
+                                                    struct urational rate)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     upipe_trickp->rate = rate;
     upipe_trickp_reset_uclock(upipe);
     upipe_trickp_check_start(upipe);
-    return false;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a trickp pipe.
@@ -476,10 +476,11 @@ static inline bool _upipe_trickp_set_rate(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_trickp_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_trickp_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         case UPIPE_GET_UCLOCK: {
@@ -501,20 +502,18 @@ static bool upipe_trickp_control(struct upipe *upipe,
         }
 
         case UPIPE_TRICKP_GET_RATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TRICKP_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TRICKP_SIGNATURE)
             struct urational *p = va_arg(args, struct urational *);
             return _upipe_trickp_get_rate(upipe, p);
         }
         case UPIPE_TRICKP_SET_RATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TRICKP_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TRICKP_SIGNATURE)
             struct urational rate = va_arg(args, struct urational);
             return _upipe_trickp_set_rate(upipe, rate);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -538,7 +537,9 @@ static struct upipe_mgr upipe_trickp_mgr = {
 
     .upipe_alloc = upipe_trickp_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_trickp_control
+    .upipe_control = upipe_trickp_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all trickp pipes.

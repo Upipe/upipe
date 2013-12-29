@@ -68,12 +68,12 @@ static bool uprobe_test_control(struct upipe *upipe, enum upipe_command command,
             struct upump_mgr *mgr = va_arg(args, struct upump_mgr *);
             assert(mgr == upump_mgr);
             got_upump_mgr = true;
-            return true;
+            return UBASE_ERR_NONE;
         }
 
         default:
             assert(0);
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

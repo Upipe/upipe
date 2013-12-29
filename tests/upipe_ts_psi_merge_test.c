@@ -169,8 +169,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psim"));
     assert(upipe_ts_psim != NULL);
-    assert(upipe_set_flow_def(upipe_ts_psim, uref));
-    assert(upipe_set_output(upipe_ts_psim, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_psim, uref));
+    ubase_assert(upipe_set_output(upipe_ts_psim, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;

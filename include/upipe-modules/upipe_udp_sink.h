@@ -67,8 +67,8 @@ struct upipe_mgr *upipe_udpsink_mgr_alloc(void);
  * @param uri_p filled in with the uri of the udp
  * @return false in case of error
  */
-static inline bool upipe_udpsink_get_uri(struct upipe *upipe,
-                                        const char **uri_p)
+static inline enum ubase_err upipe_udpsink_get_uri(struct upipe *upipe,
+                                                   const char **uri_p)
 {
     return upipe_control(upipe, UPIPE_UDPSINK_GET_URI, UPIPE_UDPSINK_SIGNATURE,
                          uri_p);
@@ -81,8 +81,9 @@ static inline bool upipe_udpsink_get_uri(struct upipe *upipe,
  * @param mode mode of opening the uri
  * @return false in case of error
  */
-static inline bool upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
-                                        enum upipe_udpsink_mode mode)
+static inline enum ubase_err upipe_udpsink_set_uri(struct upipe *upipe,
+                                                   const char *uri,
+                                                   enum upipe_udpsink_mode mode)
 {
     return upipe_control(upipe, UPIPE_UDPSINK_SET_URI, UPIPE_UDPSINK_SIGNATURE,
                          uri, mode);

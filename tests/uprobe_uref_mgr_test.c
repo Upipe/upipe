@@ -64,20 +64,21 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe to test uprobe_uref_mgr */
-static bool uprobe_test_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err uprobe_test_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_SET_UREF_MGR: {
             struct uref_mgr *mgr = va_arg(args, struct uref_mgr *);
             assert(mgr == uref_mgr);
             got_uref_mgr = true;
-            return true;
+            return UBASE_ERR_NONE;
         }
 
         default:
             assert(0);
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

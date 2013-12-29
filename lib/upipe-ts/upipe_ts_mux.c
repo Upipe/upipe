@@ -494,13 +494,13 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
-                                            struct uref *flow_def)
+static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
@@ -512,10 +512,10 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     uint64_t octetrate;
     if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
         !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate)
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     bool ret = true;
     uint64_t pes_overhead = 0;
@@ -649,13 +649,15 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
-    if (!upipe_set_flow_def(upipe_ts_mux_input->pes_encaps, flow_def_dup) ||
+    if (!ubase_err_check(upipe_set_flow_def(upipe_ts_mux_input->pes_encaps,
+                                            flow_def_dup)) ||
         !uref_flow_set_def(flow_def_dup, "void.") ||
-        !upipe_set_flow_def(upipe_ts_mux_input->psig_flow, flow_def_dup)) {
+        !ubase_err_check(upipe_set_flow_def(upipe_ts_mux_input->psig_flow,
+                                            flow_def_dup))) {
         uref_free(flow_def_dup);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     uref_free(flow_def_dup);
@@ -668,7 +670,7 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     upipe_notice_va(upipe, "adding %s on PID %"PRIu64" (%"PRIu64" bits/s)",
                     def, pid, octetrate * 8);
     upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts_mux_input
@@ -677,10 +679,11 @@ static bool upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_mux_input_control(struct upipe *upipe,
-                                       enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_mux_input_control(struct upipe *upipe,
+                                                 enum upipe_command command,
+                                                 va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -693,7 +696,7 @@ static bool upipe_ts_mux_input_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -754,6 +757,7 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
     input_mgr->upipe_alloc = upipe_ts_mux_input_alloc;
     input_mgr->upipe_input = upipe_ts_mux_input_input;
     input_mgr->upipe_control = upipe_ts_mux_input_control;
+    input_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -985,23 +989,23 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
-                                              struct uref *flow_def)
+static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
+                                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
     struct upipe_ts_mux *upipe_ts_mux =
         upipe_ts_mux_from_program_mgr(upipe->mgr);
     if (!uref_flow_match_def(flow_def, "void."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     bool ret = true;
     uint64_t sid = 0;
@@ -1048,12 +1052,13 @@ static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
-    if (!upipe_set_flow_def(upipe_ts_mux_program->program_psig, flow_def_dup)) {
+    if (!ubase_err_check(upipe_set_flow_def(upipe_ts_mux_program->program_psig,
+                                            flow_def_dup))) {
         uref_free(flow_def_dup);
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     uref_free(flow_def_dup);
@@ -1062,23 +1067,24 @@ static bool upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
 
     upipe_notice_va(upipe, "adding program %"PRIu64" on PID %"PRIu64, sid, pid);
     upipe_ts_mux_change(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    return ret;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PMT interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_program_get_pmt_interval(struct upipe *upipe,
-                                                         uint64_t *interval_p)
+static enum ubase_err
+    upipe_ts_mux_program_get_pmt_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_mux_program->pmt_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PMT interval. It takes effect at the end of the
@@ -1086,10 +1092,11 @@ static inline bool upipe_ts_mux_program_get_pmt_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
-                                                         uint64_t interval)
+static enum ubase_err
+    upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
+                                          uint64_t interval)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1098,23 +1105,24 @@ static inline bool upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
         upipe_ts_psii_sub_set_interval(upipe_ts_mux_program->pmt_psii,
                                        interval);
     upipe_ts_mux_program_update(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PCR interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_program_get_pcr_interval(struct upipe *upipe,
-                                                         uint64_t *interval_p)
+static enum ubase_err
+    upipe_ts_mux_program_get_pcr_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_mux_program->pcr_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PCR interval. It takes effect at the end of the
@@ -1122,10 +1130,11 @@ static inline bool upipe_ts_mux_program_get_pcr_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
-                                                         uint64_t interval)
+static enum ubase_err
+    upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
+                                          uint64_t interval)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1139,7 +1148,7 @@ static inline bool upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
             upipe_ts_mux_set_pcr_interval(input->encaps, interval);
     }
     upipe_ts_mux_program_update(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts_mux_program pipe.
@@ -1147,11 +1156,11 @@ static inline bool upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_mux_program_control(struct upipe *upipe,
-                                         enum upipe_command command,
-                                         va_list args)
+static enum ubase_err upipe_ts_mux_program_control(struct upipe *upipe,
+                                                   enum upipe_command command,
+                                                   va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1172,26 +1181,22 @@ static bool upipe_ts_mux_program_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return upipe_ts_mux_program_get_pmt_interval(upipe, interval_p);
         }
         case UPIPE_TS_MUX_SET_PMT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return upipe_ts_mux_program_set_pmt_interval(upipe, interval);
         }
         case UPIPE_TS_MUX_GET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return upipe_ts_mux_program_get_pcr_interval(upipe, interval_p);
         }
         case UPIPE_TS_MUX_SET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return upipe_ts_mux_program_set_pcr_interval(upipe, interval);
         }
@@ -1254,6 +1259,7 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
     program_mgr->upipe_alloc = upipe_ts_mux_program_alloc;
     program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_mux_program_control;
+    program_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -1283,20 +1289,16 @@ static enum ubase_err upipe_ts_mux_handle_probes(struct upipe *outer,
         case UPROBE_NEED_UREF_MGR:
             if (unlikely(upipe_ts_mux->uref_mgr == NULL))
                 upipe_throw_need_uref_mgr(upipe);
-            if (likely(upipe_ts_mux->uref_mgr != NULL)) {
-                upipe_set_uref_mgr(inner, upipe_ts_mux->uref_mgr);
-                return UBASE_ERR_NONE;
-            }
+            if (likely(upipe_ts_mux->uref_mgr != NULL))
+                return upipe_set_uref_mgr(inner, upipe_ts_mux->uref_mgr);
             return UBASE_ERR_UNHANDLED;
 
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
             if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
                 upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (likely(upipe_ts_mux->ubuf_mgr != NULL)) {
-                upipe_set_ubuf_mgr(inner, upipe_ts_mux->ubuf_mgr);
-                return UBASE_ERR_NONE;
-            }
+            if (likely(upipe_ts_mux->ubuf_mgr != NULL))
+                return upipe_set_ubuf_mgr(inner, upipe_ts_mux->ubuf_mgr);
             return UBASE_ERR_UNHANDLED;
         }
         default:
@@ -1425,8 +1427,8 @@ static void upipe_ts_mux_init(struct upipe *upipe)
              uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
                               UPROBE_LOG_VERBOSE, "join"));
     if (unlikely(upipe_ts_mux->join == NULL ||
-                 !upipe_set_uref_mgr(upipe_ts_mux->join,
-                                     upipe_ts_mux->uref_mgr))) {
+                 !ubase_err_check(upipe_set_uref_mgr(upipe_ts_mux->join,
+                                  upipe_ts_mux->uref_mgr)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -1451,8 +1453,8 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     }
     upipe_ts_mux_store_last_inner(upipe, agg);
 
-    if (unlikely(!upipe_ts_mux_set_mode(upipe_ts_mux->agg,
-                                        UPIPE_TS_MUX_MODE_CAPPED) ||
+    if (unlikely(!ubase_err_check(upipe_ts_mux_set_mode(upipe_ts_mux->agg,
+                                        UPIPE_TS_MUX_MODE_CAPPED)) ||
                  (upipe_ts_mux->pat_psii =
                   upipe_void_alloc_output_sub(upipe_ts_mux->psig,
                          upipe_ts_mux->psii,
@@ -1598,20 +1600,20 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
-                                      struct uref *flow_def)
+static enum ubase_err upipe_ts_mux_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     if (!uref_flow_match_def(flow_def, "void."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     bool ret = true;
     uint64_t tsid = 0;
@@ -1627,12 +1629,12 @@ static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
     if (unlikely(!ret)) {
         uref_free(flow_def_dup);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
-    ret = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
+    enum ubase_err err = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
     uref_free(flow_def_dup);
-    return ret;
+    return err;
 }
 
 /** @internal @This returns the current conformance mode. It cannot
@@ -1640,25 +1642,27 @@ static bool upipe_ts_mux_set_flow_def(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_mux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance *conformance_p)
+static enum ubase_err
+    _upipe_ts_mux_get_conformance(struct upipe *upipe,
+                                  enum upipe_ts_conformance *conformance_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(conformance_p != NULL);
     *conformance_p = upipe_ts_mux->conformance;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the conformance mode.
  *
  * @param upipe description structure of the pipe
  * @param conformance conformance mode
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_mux_set_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance conformance)
+static enum ubase_err
+    _upipe_ts_mux_set_conformance(struct upipe *upipe,
+                                  enum upipe_ts_conformance conformance)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     uint64_t max_psi_interval = UINT64_MAX;
@@ -1676,7 +1680,7 @@ static bool _upipe_ts_mux_set_conformance(struct upipe *upipe,
             max_psi_interval = DEFAULT_PSI_INTERVAL_ATSC;
             break;
         default:
-            return false;
+            return UBASE_ERR_INVALID;
     }
 
     if (upipe_ts_mux->pat_interval > max_psi_interval)
@@ -1691,22 +1695,22 @@ static bool _upipe_ts_mux_set_conformance(struct upipe *upipe,
         if (program->pmt_interval > max_psi_interval)
             program->pmt_interval = max_psi_interval;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PAT interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
-                                                  uint64_t *interval_p)
+static enum ubase_err _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
+                                                     uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_mux->pat_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PAT interval. It takes effect at the end of the
@@ -1714,32 +1718,32 @@ static inline bool _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
-                                                  uint64_t interval)
+static enum ubase_err _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
+                                                     uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pat_interval = interval;
     if (upipe_ts_mux->pat_psii != NULL)
         upipe_ts_psii_sub_set_interval(upipe_ts_mux->pat_psii, interval);
     upipe_ts_mux_update(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PMT interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
-                                                  uint64_t *interval_p)
+static enum ubase_err _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
+                                                     uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_mux->pmt_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PMT interval. It takes effect at the end of the
@@ -1747,10 +1751,10 @@ static inline bool _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
-                                                  uint64_t interval)
+static enum ubase_err _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
+                                                     uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pmt_interval = interval;
@@ -1762,32 +1766,32 @@ static inline bool _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
         upipe_ts_mux_set_pmt_interval(upipe_ts_mux_program_to_upipe(program),
                                       interval);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PCR interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
-                                                  uint64_t *interval_p)
+static enum ubase_err _upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
+                                                     uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_mux->pcr_interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PCR interval.
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
-                                                  uint64_t interval)
+static enum ubase_err _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
+                                                     uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pcr_interval = interval;
@@ -1799,51 +1803,51 @@ static inline bool _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
         upipe_ts_mux_set_pcr_interval(upipe_ts_mux_program_to_upipe(program),
                                       interval);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current padding octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate_p filled in with the octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
-                                                       uint64_t *octetrate_p)
+static enum ubase_err _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
+                                                          uint64_t *octetrate_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(octetrate_p != NULL);
     *octetrate_p = upipe_ts_mux->padding_octetrate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PCR octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
-                                                       uint64_t octetrate)
+static enum ubase_err _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
+                                                          uint64_t octetrate)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->padding_octetrate = octetrate;
     upipe_ts_mux_update(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the mux octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool _upipe_ts_mux_set_octetrate(struct upipe *upipe,
-                                               uint64_t octetrate)
+static enum ubase_err _upipe_ts_mux_set_octetrate(struct upipe *upipe,
+                                                  uint64_t octetrate)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     if (upipe_ts_mux->agg == NULL)
-        return false;
+        return UBASE_ERR_UNHANDLED;
 
     if (octetrate) {
         upipe_ts_mux->octetrate_auto = false;
@@ -1859,10 +1863,11 @@ static inline bool _upipe_ts_mux_set_octetrate(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_mux_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_mux_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -1871,13 +1876,12 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
         }
         case UPIPE_SET_UREF_MGR: {
             struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            if (!upipe_ts_mux_set_uref_mgr(upipe, uref_mgr))
-                return false;
+            UBASE_ERR_CHECK(upipe_ts_mux_set_uref_mgr(upipe, uref_mgr));
             /* To create the flow definition. */
             struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
             if (upipe_ts_mux->join == NULL)
                 upipe_ts_mux_init(upipe);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -1901,66 +1905,61 @@ static bool upipe_ts_mux_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_MUX_GET_CONFORMANCE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             enum upipe_ts_conformance *conformance_p =
                 va_arg(args, enum upipe_ts_conformance *);
             return _upipe_ts_mux_get_conformance(upipe, conformance_p);
         }
         case UPIPE_TS_MUX_SET_CONFORMANCE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             enum upipe_ts_conformance conformance =
                 va_arg(args, enum upipe_ts_conformance);
             return _upipe_ts_mux_set_conformance(upipe, conformance);
         }
         case UPIPE_TS_MUX_GET_PAT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return _upipe_ts_mux_get_pat_interval(upipe, interval_p);
         }
         case UPIPE_TS_MUX_SET_PAT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_pat_interval(upipe, interval);
         }
         case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return _upipe_ts_mux_get_pmt_interval(upipe, interval_p);
         }
         case UPIPE_TS_MUX_SET_PMT_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_pmt_interval(upipe, interval);
         }
         case UPIPE_TS_MUX_GET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return _upipe_ts_mux_get_pcr_interval(upipe, interval_p);
         }
         case UPIPE_TS_MUX_SET_PCR_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_pcr_interval(upipe, interval);
         }
         case UPIPE_TS_MUX_GET_PADDING_OCTETRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
-            uint64_t *interval_p = va_arg(args, uint64_t *);
-            return _upipe_ts_mux_get_padding_octetrate(upipe, interval_p);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *octetrate_p = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_get_padding_octetrate(upipe, octetrate_p);
         }
         case UPIPE_TS_MUX_SET_PADDING_OCTETRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
-            uint64_t interval = va_arg(args, uint64_t);
-            return _upipe_ts_mux_set_padding_octetrate(upipe, interval);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t octetrate = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_padding_octetrate(upipe, octetrate);
+        }
+        case UPIPE_TS_MUX_SET_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t octetrate = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_octetrate(upipe, octetrate);
         }
 
         default:
@@ -2035,6 +2034,50 @@ static void upipe_ts_mux_mgr_free(struct urefcount *urefcount)
     free(ts_mux_mgr);
 }
 
+/** @This processes control commands on a ts_mux manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
+                                               enum upipe_mgr_command command,
+                                               va_list args)
+{
+    struct upipe_ts_mux_mgr *ts_mux_mgr = upipe_ts_mux_mgr_from_upipe_mgr(mgr);
+
+    switch (command) {
+#define GET_SET_MGR(name, NAME)                                             \
+        case UPIPE_TS_MUX_MGR_GET_##NAME##_MGR: {                           \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)             \
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
+            *p = ts_mux_mgr->name##_mgr;                                    \
+            return UBASE_ERR_NONE;                                          \
+        }                                                                   \
+        case UPIPE_TS_MUX_MGR_SET_##NAME##_MGR: {                           \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)             \
+            if (!urefcount_single(&ts_mux_mgr->urefcount))                  \
+                return UBASE_ERR_BUSY;                                      \
+            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
+            upipe_mgr_release(ts_mux_mgr->name##_mgr);                      \
+            ts_mux_mgr->name##_mgr = upipe_mgr_use(m);                      \
+            return UBASE_ERR_NONE;                                          \
+        }
+
+        GET_SET_MGR(ts_join, TS_JOIN)
+        GET_SET_MGR(ts_agg, TS_AGG)
+        GET_SET_MGR(ts_encaps, TS_ENCAPS)
+        GET_SET_MGR(ts_pese, TS_PESE)
+        GET_SET_MGR(ts_psig, TS_PSIG)
+        GET_SET_MGR(ts_psii, TS_PSII)
+#undef GET_SET_MGR
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager
@@ -2060,68 +2103,6 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
     ts_mux_mgr->mgr.upipe_alloc = upipe_ts_mux_alloc;
     ts_mux_mgr->mgr.upipe_input = NULL;
     ts_mux_mgr->mgr.upipe_control = upipe_ts_mux_control;
+    ts_mux_mgr->mgr.upipe_mgr_control = upipe_ts_mux_mgr_control;
     return upipe_ts_mux_mgr_to_upipe_mgr(ts_mux_mgr);
-}
-
-/** @This processes control commands on a ts_mux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_mux_mgr_control_va(struct upipe_mgr *mgr,
-                                 enum upipe_ts_mux_mgr_command command,
-                                 va_list args)
-{
-    struct upipe_ts_mux_mgr *ts_mux_mgr = upipe_ts_mux_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_mux_mgr->urefcount));
-
-    switch (command) {
-#define GET_SET_MGR(name, NAME)                                             \
-        case UPIPE_TS_MUX_MGR_GET_##NAME##_MGR: {                           \
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
-            *p = ts_mux_mgr->name##_mgr;                                    \
-            return true;                                                    \
-        }                                                                   \
-        case UPIPE_TS_MUX_MGR_SET_##NAME##_MGR: {                           \
-            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
-            if (ts_mux_mgr->name##_mgr != NULL)                             \
-                upipe_mgr_release(ts_mux_mgr->name##_mgr);                  \
-            if (m != NULL)                                                  \
-                upipe_mgr_use(m);                                           \
-            ts_mux_mgr->name##_mgr = m;                                     \
-            return true;                                                    \
-        }
-
-        GET_SET_MGR(ts_join, TS_JOIN)
-        GET_SET_MGR(ts_agg, TS_AGG)
-        GET_SET_MGR(ts_encaps, TS_ENCAPS)
-        GET_SET_MGR(ts_pese, TS_PESE)
-        GET_SET_MGR(ts_psig, TS_PSIG)
-        GET_SET_MGR(ts_psii, TS_PSII)
-#undef GET_SET_MGR
-
-        default:
-            return false;
-    }
-}
-
-/** @This processes control commands on a ts_mux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
-                              enum upipe_ts_mux_mgr_command command, ...)
-{
-    va_list args;
-    va_start(args, command);
-    bool ret = upipe_ts_mux_mgr_control_va(mgr, command, args);
-    va_end(args);
-    return ret;
 }

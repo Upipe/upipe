@@ -114,10 +114,10 @@ int main(int argc, char **argv)
                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
                                 UPROBE_LOG_LEVEL, "sinesrc"));
     assert(sinesrc != NULL);
-    assert(upipe_set_uref_mgr(sinesrc, uref_mgr));
-    assert(upipe_set_ubuf_mgr(sinesrc, ubuf_mgr));
-    assert(upipe_set_uclock(sinesrc, uclock));
-    assert(upipe_set_upump_mgr(sinesrc, upump_mgr));
+    ubase_assert(upipe_set_uref_mgr(sinesrc, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(sinesrc, ubuf_mgr));
+    ubase_assert(upipe_set_uclock(sinesrc, uclock));
+    ubase_assert(upipe_set_upump_mgr(sinesrc, upump_mgr));
 
     /* build alsink pipe */
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
@@ -126,9 +126,9 @@ int main(int argc, char **argv)
                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                 "alsink"));
     assert(alsink != NULL);
-    assert(upipe_set_uclock(alsink, uclock));
-    assert(upipe_set_upump_mgr(alsink, upump_mgr));
-    assert(upipe_set_uri(alsink, "default"));
+    ubase_assert(upipe_set_uclock(alsink, uclock));
+    ubase_assert(upipe_set_upump_mgr(alsink, upump_mgr));
+    ubase_assert(upipe_set_uri(alsink, "default"));
 
     ev_loop(loop, 0);
 

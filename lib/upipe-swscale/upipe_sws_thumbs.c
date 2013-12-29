@@ -351,7 +351,7 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
  * @param upipe description structure of the pipe
  * @param hsize horizontal size
  * @param vsize vertical size
- * @return false in case of error
+ * @return an error code
  */
 static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
                                        int hsize, int vsize, int cols, int rows)
@@ -359,7 +359,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if (unlikely(hsize <= 0 || vsize <= 0 || cols <= 0 || rows <= 0)) {
         upipe_warn_va(upipe, "invalid size %dx%d %dx%d", hsize, vsize, cols, rows);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     upipe_sws_thumbs->thumbsize = realloc(upipe_sws_thumbs->thumbsize,
                                  sizeof(struct picsize));
@@ -367,7 +367,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
                                  sizeof(struct picsize));
     if (unlikely(!upipe_sws_thumbs->thumbsize || !upipe_sws_thumbs->thumbnum)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_sws_thumbs->thumbsize->hsize = hsize;
     upipe_sws_thumbs->thumbsize->vsize = vsize;
@@ -382,7 +382,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
     struct uref *flow = uref_dup(upipe_sws_thumbs->flow_def_attr);
     if (unlikely(!flow)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     uref_pic_flow_set_hsize(flow, hsize * cols);
     uref_pic_flow_set_hsize_visible(flow, hsize * cols);
@@ -396,21 +396,22 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
 
     upipe_dbg_va(upipe, "new output size: %dx%d (%dx%d * %dx%d)",
                  hsize*cols, vsize*rows, hsize, vsize, cols, rows);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This retrieves output pictures size
+/** @internal @This retrieves output pictures size.
+ *
  * @param upipe description structure of the pipe
  * @param hsize_p horizontal size
  * @param vsize_p vertical size
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_sws_thumbs_get_size(struct upipe *upipe,
+static enum ubase_err _upipe_sws_thumbs_get_size(struct upipe *upipe,
                            int *hsize_p, int *vsize_p, int *cols_p, int *rows_p)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if (unlikely(!upipe_sws_thumbs->thumbsize || !upipe_sws_thumbs->thumbnum)) {
-        return false;
+        return UBASE_ERR_INVALID;
     }
     if (hsize_p) {
         *hsize_p = upipe_sws_thumbs->thumbsize->hsize;
@@ -425,23 +426,23 @@ static bool _upipe_sws_thumbs_get_size(struct upipe *upipe,
         *rows_p = upipe_sws_thumbs->thumbnum->vsize;
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
-                                          struct uref *flow_def)
+static enum ubase_err upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
+                                                    struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     if (unlikely(!uref_flow_match_def(flow_def, "pic.")))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if ((upipe_sws_thumbs->input_pix_fmt =
@@ -450,19 +451,19 @@ static bool upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
         !sws_isSupportedInput(upipe_sws_thumbs->input_pix_fmt)) {
         upipe_err(upipe, "incompatible flow def");
         uref_dump(flow_def, upipe->uprobe);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     flow_def = upipe_sws_thumbs_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL)
         upipe_sws_thumbs_store_flow_def(upipe, flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -471,10 +472,11 @@ static bool upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_sws_thumbs_control(struct upipe *upipe,
-                                     enum upipe_command command, va_list args)
+static enum ubase_err upipe_sws_thumbs_control(struct upipe *upipe,
+                                               enum upipe_command command,
+                                               va_list args)
 {
     switch (command) {
         /* generic commands */
@@ -505,8 +507,7 @@ static bool upipe_sws_thumbs_control(struct upipe *upipe,
 
         /* specific commands */
         case UPIPE_SWS_THUMBS_GET_SIZE: {
-            int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_SWS_THUMBS_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SWS_THUMBS_SIGNATURE)
             int *hsize_p = va_arg(args, int*);
             int *vsize_p = va_arg(args, int*);
             int *cols_p = va_arg(args, int*);
@@ -515,8 +516,7 @@ static bool upipe_sws_thumbs_control(struct upipe *upipe,
                                              hsize_p, vsize_p, cols_p, rows_p);
         }
         case UPIPE_SWS_THUMBS_SET_SIZE: {
-            int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_SWS_THUMBS_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SWS_THUMBS_SIGNATURE)
             int hsize = va_arg(args, int);
             int vsize = va_arg(args, int);
             int cols = va_arg(args, int);
@@ -524,13 +524,12 @@ static bool upipe_sws_thumbs_control(struct upipe *upipe,
             return _upipe_sws_thumbs_set_size(upipe, hsize, vsize, cols, rows);
         }
         case UPIPE_SWS_THUMBS_FLUSH_NEXT: {
-            int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_SWS_THUMBS_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SWS_THUMBS_SIGNATURE)
             upipe_sws_thumbs_from_upipe(upipe)->flush = true;
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -622,7 +621,9 @@ static struct upipe_mgr upipe_sws_thumbs_mgr = {
 
     .upipe_alloc = upipe_sws_thumbs_alloc,
     .upipe_input = upipe_sws_thumbs_input,
-    .upipe_control = upipe_sws_thumbs_control
+    .upipe_control = upipe_sws_thumbs_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for swscale pipes

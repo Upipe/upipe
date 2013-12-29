@@ -243,22 +243,22 @@ int main(int argc, char **argv)
                     uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                      "x264"));
     assert(x264);
-    assert(upipe_set_flow_def(x264, flow_def));
+    ubase_assert(upipe_set_flow_def(x264, flow_def));
     uref_free(flow_def);
-    assert(upipe_set_ubuf_mgr(x264, block_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(x264, block_mgr));
 
     /* x264_test */
     struct upipe *x264_test = upipe_void_alloc(&x264_test_mgr,
                     uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                      "x264_test"));
-    upipe_set_output(x264, x264_test);
+    ubase_assert(upipe_set_output(x264, x264_test));
 
     /* test controls */
-    assert(upipe_x264_set_default_preset(x264, "placebo", "film"));
-    assert(upipe_x264_set_profile(x264, "baseline"));
-    assert(upipe_x264_set_default_preset(x264, "faster", NULL));
-    assert(upipe_x264_set_profile(x264, "high"));
-    assert(upipe_x264_set_default(x264));
+    ubase_assert(upipe_x264_set_default_preset(x264, "placebo", "film"));
+    ubase_assert(upipe_x264_set_profile(x264, "baseline"));
+    ubase_assert(upipe_x264_set_default_preset(x264, "faster", NULL));
+    ubase_assert(upipe_x264_set_profile(x264, "high"));
+    ubase_assert(upipe_x264_set_default(x264));
     
     /* encoding test */
     for (counter = 0; counter < LIMIT; counter ++) {

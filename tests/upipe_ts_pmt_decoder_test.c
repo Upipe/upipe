@@ -108,7 +108,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (upipe_split_iterate(upipe, &flow_def)) {
+            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+                   flow_def != NULL) {
                 uint64_t id;
                 assert(uref_flow_get_id(flow_def, &id));
                 const uint8_t *pmtd_desc;
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts pmtd"));
     assert(upipe_ts_pmtd != NULL);
-    assert(upipe_set_flow_def(upipe_ts_pmtd, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_pmtd, uref));
     uref_free(uref);
 
     uint8_t *buffer, *pmt_es, *desc;

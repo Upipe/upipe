@@ -41,18 +41,23 @@ extern "C" {
 #endif
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
 
 #ifdef __GNUC__
 
+#ifndef likely
 /** @This should be used in a if conditional when it will be true most of the
  * time. */
-#define likely(x)       __builtin_expect(!!(x),1)
+#   define likely(x)       __builtin_expect(!!(x),1)
+#endif
+#ifndef unlikely
 /** @This should be used in a if conditional when it will be false most of the
  * time. */
-#define unlikely(x)     __builtin_expect(!!(x),0)
+#   define unlikely(x)     __builtin_expect(!!(x),0)
+#endif
 
 #else /* mkdoc:skip */
 #define likely(x)       !!(x)
@@ -162,11 +167,52 @@ enum ubase_err {
     UBASE_ERR_INVALID,
     /** error in external library */
     UBASE_ERR_EXTERNAL,
+    /** failure to get an exclusive resource */
+    UBASE_ERR_BUSY,
 
     /** non-standard error codes implemented by a module type can start from
-     * there (first arg = signature) */
+     * there */
     UBASE_ERR_LOCAL = 0x8000
 };
+
+/** @This returns true if no error happened in an error code.
+ *
+ * @param err error code
+ * @return true if no error happened
+ */
+static inline bool ubase_err_check(enum ubase_err err)
+{
+    return err == UBASE_ERR_NONE;
+}
+
+/** @This returns the error if the given function fails.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define UBASE_ERR_CHECK(command)                                            \
+do {                                                                        \
+    enum ubase_err ubase_err_tmp = command;                                 \
+    if (unlikely(!ubase_err_check(ubase_err_tmp)))                          \
+        return ubase_err_tmp;                                               \
+} while (0);
+
+/** @This asserts if the given command (returning an @ref ubase_err) failed.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define ubase_assert(command)                                               \
+    assert(ubase_err_check(command))
+
+/** @This checks that the first argument is equal to the given signature.
+ *
+ * @param args va_list of arguments
+ * @param signature unsigned int representing the signature of a module
+ */
+#define UBASE_SIGNATURE_CHECK(args, signature)                              \
+{                                                                           \
+    if (va_arg(args, unsigned int) != signature)                            \
+        return UBASE_ERR_UNHANDLED;                                         \
+}
 
 /** @This returns the greatest common denominator between two positive integers.
  *

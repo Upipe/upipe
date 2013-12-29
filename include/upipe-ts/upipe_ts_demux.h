@@ -59,10 +59,11 @@ enum upipe_ts_demux_command {
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_demux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance *conformance_p)
+static inline enum ubase_err
+    upipe_ts_demux_get_conformance(struct upipe *upipe,
+                                   enum upipe_ts_conformance *conformance_p)
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_GET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance_p);
@@ -72,10 +73,11 @@ static inline bool upipe_ts_demux_get_conformance(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param conformance conformance mode
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_demux_set_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance conformance)
+static inline enum ubase_err
+    upipe_ts_demux_set_conformance(struct upipe *upipe,
+                                   enum upipe_ts_conformance conformance)
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance);
@@ -87,8 +89,10 @@ static inline bool upipe_ts_demux_set_conformance(struct upipe *upipe,
  */
 struct upipe_mgr *upipe_ts_demux_mgr_alloc(void);
 
-/** @This is a list of specific commands for ts demux managers. */
+/** @This extends upipe_mgr_command with specific commands for ts_demux. */
 enum upipe_ts_demux_mgr_command {
+    UPIPE_TS_DEMUX_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
+
 /** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR(name, NAME)                          \
     /** returns the current manager for name subpipes                       \
@@ -114,57 +118,34 @@ enum upipe_ts_demux_mgr_command {
 #undef UPIPE_TS_DEMUX_MGR_GET_SET_MGR
 };
 
-/** @This processes control commands on a ts_demux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
-                                   enum upipe_ts_demux_mgr_command command,
-                                   va_list args);
-
-/** @This processes control commands on a ts_demux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process, followed by optional arguments
- * @return false in case of error
- */
-bool upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
-                                enum upipe_ts_demux_mgr_command command, ...);
-
 /** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(name, NAME)                         \
 /** @This returns the current manager for name subpipes.                    \
  *                                                                          \
  * @param mgr pointer to manager                                            \
  * @param p filled in with the name manager                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool                                                          \
+static inline enum ubase_err                                                \
     upipe_ts_demux_mgr_get_##name##_mgr(struct upipe_mgr *mgr,              \
                                         struct upipe_mgr *p)                \
 {                                                                           \
-    return upipe_ts_demux_mgr_control(mgr,                                  \
-                                      UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR,  \
-                                      p);                                   \
+    return upipe_mgr_control(mgr, UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR,      \
+                             UPIPE_TS_DEMUX_SIGNATURE, p);                  \
 }                                                                           \
-/** @This sets the manager for name subpipes.                               \
+/** @This sets the manager for name subpipes. This may only be called       \
+ * before any pipe has been allocated.                                      \
  *                                                                          \
  * @param mgr pointer to manager                                            \
  * @param m pointer to name manager                                         \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool                                                          \
+static inline enum ubase_err                                                \
     upipe_ts_demux_mgr_set_##name##_mgr(struct upipe_mgr *mgr,              \
                                         struct upipe_mgr *m)                \
 {                                                                           \
-    return upipe_ts_demux_mgr_control(mgr,                                  \
-                                      UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR,  \
-                                      m);                                   \
+    return upipe_mgr_control(mgr, UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR,      \
+                             UPIPE_TS_DEMUX_SIGNATURE, m);                  \
 }
 
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(null, NULL)

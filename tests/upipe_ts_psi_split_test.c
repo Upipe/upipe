@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psi split"));
     assert(upipe_ts_psi_split != NULL);
-    assert(upipe_set_flow_def(upipe_ts_psi_split, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_psi_split, uref));
 
     uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
     memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                  "ts psi split output 68"), uref);
     assert(upipe_ts_psi_split_output68 != NULL);
-    assert(upipe_set_output(upipe_ts_psi_split_output68, upipe_sink68));
+    ubase_assert(upipe_set_output(upipe_ts_psi_split_output68, upipe_sink68));
 
     psi_set_tableid(filter, 69);
     psi_set_tableidext(mask, 0xff);
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                  "ts psi split output 69"), uref);
     assert(upipe_ts_psi_split_output69 != NULL);
-    assert(upipe_set_output(upipe_ts_psi_split_output69, upipe_sink69));
+    ubase_assert(upipe_set_output(upipe_ts_psi_split_output69, upipe_sink69));
     uref_free(uref);
 
     uint8_t *buffer;

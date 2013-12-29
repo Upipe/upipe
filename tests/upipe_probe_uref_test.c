@@ -147,8 +147,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "probe_uref"));
     assert(upipe_probe_uref != NULL);
-    assert(upipe_set_flow_def(upipe_probe_uref, uref));
-    assert(upipe_set_output(upipe_probe_uref, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_probe_uref, uref));
+    ubase_assert(upipe_set_output(upipe_probe_uref, upipe_sink));
     uref_free(uref);
 
     int i;

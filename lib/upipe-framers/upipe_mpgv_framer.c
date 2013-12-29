@@ -1074,37 +1074,38 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_mpgvf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_mpgvf_set_flow_def(struct upipe *upipe,
+                                               struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, "block."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_mpgvf_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_mpgvf_store_flow_def(upipe, flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the current setting for sequence header insertion.
  *
  * @param upipe description structure of the pipe
  * @param val_p filled with the current setting
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
-                                                int *val_p)
+static enum ubase_err _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
+                                                          int *val_p)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     *val_p = upipe_mpgvf->insert_sequence ? 1 : 0;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets or unsets the sequence header insertion. When true, a sequence
@@ -1113,14 +1114,14 @@ static bool _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param val true for sequence header insertion
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
-                                                int val)
+static enum ubase_err _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
+                                                          int val)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     upipe_mpgvf->insert_sequence = !!val;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a mpgvf pipe.
@@ -1128,10 +1129,11 @@ static bool _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_mpgvf_control(struct upipe *upipe,
-                                enum upipe_command command, va_list args)
+static enum ubase_err upipe_mpgvf_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -1152,19 +1154,17 @@ static bool upipe_mpgvf_control(struct upipe *upipe,
         }
 
         case UPIPE_MPGVF_GET_SEQUENCE_INSERTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_MPGVF_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MPGVF_SIGNATURE)
             int *val_p = va_arg(args, int *);
             return _upipe_mpgvf_get_sequence_insertion(upipe, val_p);
         }
         case UPIPE_MPGVF_SET_SEQUENCE_INSERTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_MPGVF_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MPGVF_SIGNATURE)
             int val = va_arg(args, int);
             return _upipe_mpgvf_set_sequence_insertion(upipe, val);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1200,7 +1200,10 @@ static struct upipe_mgr upipe_mpgvf_mgr = {
 
     .upipe_alloc = upipe_mpgvf_alloc,
     .upipe_input = upipe_mpgvf_input,
-    .upipe_control = upipe_mpgvf_control
+    .upipe_control = upipe_mpgvf_control,
+
+    .upipe_mgr_control = NULL
+
 };
 
 /** @This returns the management structure for all mpgvf pipes.

@@ -59,10 +59,10 @@ struct upipe_mgr *upipe_setattr_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param dict_p filled with the current dictionary
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_setattr_get_dict(struct upipe *upipe,
-                                          struct uref **dict_p)
+static inline enum ubase_err upipe_setattr_get_dict(struct upipe *upipe,
+                                                    struct uref **dict_p)
 {
     return upipe_control(upipe, UPIPE_SETATTR_GET_DICT,
                          UPIPE_SETATTR_SIGNATURE, dict_p);
@@ -72,10 +72,10 @@ static inline bool upipe_setattr_get_dict(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param dict dictionary to set
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_setattr_set_dict(struct upipe *upipe,
-                                          struct uref *dict)
+static inline enum ubase_err upipe_setattr_set_dict(struct upipe *upipe,
+                                                    struct uref *dict)
 {
     return upipe_control(upipe, UPIPE_SETATTR_SET_DICT,
                          UPIPE_SETATTR_SIGNATURE, dict);

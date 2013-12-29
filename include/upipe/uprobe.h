@@ -137,7 +137,8 @@ struct uprobe {
  */
 static inline struct uprobe *uprobe_use(struct uprobe *uprobe)
 {
-    assert(uprobe != NULL);
+    if (uprobe == NULL)
+        return NULL;
     urefcount_use(uprobe->refcount);
     return uprobe;
 }

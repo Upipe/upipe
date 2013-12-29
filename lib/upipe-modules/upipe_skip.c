@@ -100,19 +100,20 @@ static inline void upipe_skip_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_skip_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_skip_set_flow_def(struct upipe *upipe,
+                                              struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
     upipe_skip_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a skip pipe.
@@ -120,10 +121,11 @@ static bool upipe_skip_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_skip_control(struct upipe *upipe,
-                               enum upipe_command command, va_list args)
+static enum ubase_err upipe_skip_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -143,25 +145,23 @@ static bool upipe_skip_control(struct upipe *upipe,
             return upipe_skip_set_output(upipe, output);
         }
         case UPIPE_SKIP_SET_OFFSET: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_SKIP_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SKIP_SIGNATURE)
             struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
             upipe_skip->offset = va_arg(args, size_t);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SKIP_GET_OFFSET: {
-            int signature = va_arg(args, int);
-            assert(signature == UPIPE_SKIP_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SKIP_SIGNATURE)
             struct upipe_skip *upipe_skip = upipe_skip_from_upipe(upipe);
             size_t *offset_p = va_arg(args, size_t *);
             if (unlikely(!offset_p)) {
-                return false;
+                return UBASE_ERR_INVALID;
             }
             upipe_skip->offset = *offset_p;
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -211,7 +211,9 @@ static struct upipe_mgr upipe_skip_mgr = {
 
     .upipe_alloc = upipe_skip_alloc,
     .upipe_input = upipe_skip_input,
-    .upipe_control = upipe_skip_control
+    .upipe_control = upipe_skip_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for skip pipes

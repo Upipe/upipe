@@ -195,17 +195,17 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "multicat sink"));
     assert(multicat_sink != NULL);
-    assert(upipe_set_flow_def(multicat_sink, flow));
+    ubase_assert(upipe_set_flow_def(multicat_sink, flow));
     uref_free(flow);
-    assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
-    assert(upipe_set_upump_mgr(multicat_sink, upump_mgr));
+    ubase_assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
+    ubase_assert(upipe_set_upump_mgr(multicat_sink, upump_mgr));
     if (rotate) {
-        assert(upipe_multicat_sink_set_rotate(multicat_sink, rotate));
+        ubase_assert(upipe_multicat_sink_set_rotate(multicat_sink, rotate));
     } else {
 		upipe_multicat_sink_get_rotate(multicat_sink, &rotate);
 	}
-	assert(upipe_multicat_sink_set_mode(multicat_sink, UPIPE_FSINK_OVERWRITE));
-    assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
+	ubase_assert(upipe_multicat_sink_set_mode(multicat_sink, UPIPE_FSINK_OVERWRITE));
+    ubase_assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
 
 	// idler - packet generator
 	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL);	

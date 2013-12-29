@@ -888,7 +888,8 @@ static inline void udict_mgr_vacuum(struct udict_mgr *mgr)
  */
 static inline struct udict_mgr *udict_mgr_use(struct udict_mgr *mgr)
 {
-    assert(mgr != NULL);
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }

@@ -580,10 +580,10 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     const char *def;
     uint64_t rate;
@@ -592,7 +592,7 @@ static bool upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def
         ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
         !uref_sound_flow_get_rate(flow_def, &rate) ||
         !uref_sound_flow_get_channels(flow_def, &channels))
-        return false;
+        return UBASE_ERR_INVALID;
     def += strlen(EXPECTED_FLOW_DEF);
 
     snd_pcm_format_t format;
@@ -638,14 +638,14 @@ static bool upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def
         format = SND_PCM_FORMAT_FLOAT64_BE;
     else {
         upipe_err_va(upipe, "unknown format %s", def);
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     if (upipe_alsink->handle != NULL) {
         if (format != upipe_alsink->format ||
             rate != upipe_alsink->rate ||
             channels != upipe_alsink->channels)
-            return false;
+            return UBASE_ERR_INVALID;
 
     } else {
         upipe_alsink->rate = rate;
@@ -657,30 +657,30 @@ static bool upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def
     uref_clock_get_latency(flow_def, &latency);
     if (latency > upipe_alsink->latency)
         upipe_alsink->latency = latency;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the name of the opened ALSA device.
  *
  * @param upipe description structure of the pipe
  * @param uri_p filled in with the device name
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_alsink_get_uri(struct upipe *upipe, const char **uri_p)
+static enum ubase_err upipe_alsink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     assert(uri_p != NULL);
     *uri_p = upipe_alsink->uri;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given ALSA device.
  *
  * @param upipe description structure of the pipe
  * @param uri name of the ALSA device
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
+static enum ubase_err upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
 
@@ -689,29 +689,29 @@ static bool upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
     upipe_alsink->uri = NULL;
 
     if (unlikely(uri == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     upipe_alsink->uri = strdup(uri);
     if (unlikely(upipe_alsink->uri == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This flushes all currently held buffers, and unblocks the
  * sources.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_alsink_flush(struct upipe *upipe)
+static enum ubase_err upipe_alsink_flush(struct upipe *upipe)
 {
     if (upipe_alsink_flush_sink(upipe))
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_alsink_input. */
         upipe_release(upipe);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file sink pipe.
@@ -719,10 +719,11 @@ static bool upipe_alsink_flush(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_alsink_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_alsink_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -758,7 +759,7 @@ static bool upipe_alsink_control(struct upipe *upipe,
         case UPIPE_SINK_FLUSH:
             return upipe_alsink_flush(upipe);
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -788,7 +789,9 @@ static struct upipe_mgr upipe_alsink_mgr = {
 
     .upipe_alloc = upipe_alsink_alloc,
     .upipe_input = upipe_alsink_input,
-    .upipe_control = upipe_alsink_control
+    .upipe_control = upipe_alsink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all file sink pipes.

@@ -159,9 +159,9 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "multicat_probe"));
     assert(upipe_multicat_probe != NULL);
-    assert(upipe_set_flow_def(upipe_multicat_probe, uref));
-    assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
-    assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_multicat_probe, uref));
+    ubase_assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
+    ubase_assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
     uref_free(uref);
 
     int i;

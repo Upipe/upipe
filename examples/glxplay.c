@@ -363,9 +363,6 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
             return UBASE_ERR_NONE;
         }
         case UPROBE_SOURCE_END: {
-            struct upipe_glxplayer *glxplayer =
-                container_of(uprobe, struct upipe_glxplayer,
-                             uprobe_demux_output_s);
             upipe_sink_flush(glxplayer->upipe_dec_qsink);
             upipe_release(glxplayer->upipe_dec_qsink);
 
@@ -833,8 +830,8 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         upipe_mgr_release(upipe_avfsrc_mgr);
         if (unlikely(upipe_src == NULL))
             return false;
-        if (unlikely(!upipe_set_uclock(upipe_src, glxplayer->uclock) ||
-                     !upipe_set_uri(upipe_src, uri))) {
+        if (unlikely(!ubase_err_check(upipe_set_uclock(upipe_src, glxplayer->uclock)) ||
+                     !ubase_err_check(upipe_set_uri(upipe_src, uri)))) {
             upipe_release(upipe_src);
             return false;
         }
@@ -852,7 +849,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         if (unlikely(upipe_src == NULL))
             return false;
         upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-        if (upipe_set_uri(upipe_src, uri)) {
+        if (ubase_err_check(upipe_set_uri(upipe_src, uri))) {
             glxplayer->trickp = true;
         } else {
             upipe_release(upipe_src);
@@ -870,7 +867,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             if (unlikely(upipe_src == NULL))
                 return false;
             upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-            if (upipe_set_uri(upipe_src, uri)) {
+            if (ubase_err_check(upipe_set_uri(upipe_src, uri))) {
                 upipe_set_uclock(upipe_src, glxplayer->uclock);
             } else {
                 upipe_release(upipe_src);
@@ -888,7 +885,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                 if (unlikely(upipe_src == NULL))
                     return false;
                 upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-                if (!upipe_set_uri(upipe_src, uri)) {
+                if (!ubase_err_check(upipe_set_uri(upipe_src, uri))) {
                     upipe_release(upipe_src);
                     return false;
                 }

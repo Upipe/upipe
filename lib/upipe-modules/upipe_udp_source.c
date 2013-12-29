@@ -222,23 +222,23 @@ static void upipe_udpsrc_worker(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uri_p filled in with the uri of the udp socket
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
+static enum ubase_err upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     assert(uri_p != NULL);
     *uri_p = upipe_udpsrc->uri;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given udp socket.
  *
  * @param upipe description structure of the pipe
  * @param uri relative or absolute uri of the udp socket
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
+static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 {
     bool use_tcp = 0;
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
@@ -255,19 +255,19 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     upipe_udpsrc_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_udpsrc->uref_mgr == NULL) {
         upipe_throw_need_uref_mgr(upipe);
         if (unlikely(upipe_udpsrc->uref_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
     if (upipe_udpsrc->flow_def == NULL) {
         struct uref *flow_def =
             uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         upipe_udpsrc_store_flow_def(upipe, flow_def);
     }
@@ -276,14 +276,14 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     if (upipe_udpsrc->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_udpsrc->flow_def);
         if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp, NULL, NULL);
     if (unlikely(upipe_udpsrc->fd == -1)) {
         upipe_err_va(upipe, "can't open udp socket %s (%m)", uri);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_udpsrc->uri = strdup(uri);
@@ -291,10 +291,10 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         close(upipe_udpsrc->fd);
         upipe_udpsrc->fd = -1;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_notice_va(upipe, "opening udp socket %s", upipe_udpsrc->uri);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a udp socket source pipe.
@@ -302,10 +302,11 @@ static bool upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -374,7 +375,7 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
             return upipe_udpsrc_set_uri(upipe, uri);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -384,13 +385,13 @@ static bool _upipe_udpsrc_control(struct upipe *upipe, enum upipe_command comman
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_udpsrc_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
-    if (unlikely(!_upipe_udpsrc_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_udpsrc_control(upipe, command, args));
 
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     if (upipe_udpsrc->upump_mgr != NULL && upipe_udpsrc->fd != -1 &&
@@ -400,13 +401,13 @@ static bool upipe_udpsrc_control(struct upipe *upipe, enum upipe_command command
                                                   upipe_udpsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_udpsrc_set_upump(upipe, upump);
         upump_start(upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -444,7 +445,9 @@ static struct upipe_mgr upipe_udpsrc_mgr = {
 
     .upipe_alloc = upipe_udpsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_udpsrc_control
+    .upipe_control = upipe_udpsrc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all udp socket sources

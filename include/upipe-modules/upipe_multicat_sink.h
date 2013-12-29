@@ -37,6 +37,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <upipe/ubase.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 #include <upipe-modules/upipe_file_sink.h>
@@ -76,10 +77,11 @@ struct upipe_mgr *upipe_multicat_sink_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_get_path(struct upipe *upipe,
-                           const char **path_p, const char **suffix_p)
+static inline enum ubase_err
+    upipe_multicat_sink_get_path(struct upipe *upipe,
+                                 const char **path_p, const char **suffix_p)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_GET_PATH,
                          UPIPE_MULTICAT_SINK_SIGNATURE, path_p, suffix_p);
@@ -89,10 +91,11 @@ static inline bool upipe_multicat_sink_get_path(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the node
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_set_path(struct upipe *upipe,
-                                const char *path, const char *suffix)
+static inline enum ubase_err
+    upipe_multicat_sink_set_path(struct upipe *upipe,
+                                 const char *path, const char *suffix)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_SET_PATH,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, path, suffix);
@@ -102,10 +105,10 @@ static inline bool upipe_multicat_sink_set_path(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the rotate interval in 27Mhz
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_get_rotate(struct upipe *upipe,
-                                                  uint64_t *interval_p)
+static inline enum ubase_err
+    upipe_multicat_sink_get_rotate(struct upipe *upipe, uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_GET_ROTATE,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, interval_p);
@@ -116,10 +119,10 @@ static inline bool upipe_multicat_sink_get_rotate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval rotate interval in 27Mhz
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_set_rotate(struct upipe *upipe,
-                                                     uint64_t interval)
+static inline enum ubase_err
+    upipe_multicat_sink_set_rotate(struct upipe *upipe, uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_SET_ROTATE,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, interval);
@@ -131,10 +134,11 @@ static inline bool upipe_multicat_sink_set_rotate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mode fsink mode
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_set_mode(struct upipe *upipe,
-                                          enum upipe_fsink_mode mode)
+static inline enum ubase_err
+    upipe_multicat_sink_set_mode(struct upipe *upipe,
+                                 enum upipe_fsink_mode mode)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_SET_MODE,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, mode);
@@ -144,10 +148,11 @@ static inline bool upipe_multicat_sink_set_mode(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param fsink_mgr fsink manager 
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
-                                              struct upipe_mgr *fsink_mgr)
+static inline enum ubase_err
+    upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
+                                      struct upipe_mgr *fsink_mgr)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_GET_FSINK_MGR,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, fsink_mgr);
@@ -157,10 +162,11 @@ static inline bool upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param fsink_mgr fsink manager 
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_sink_set_fsink_mgr(struct upipe *upipe,
-                                              struct upipe_mgr *fsink_mgr)
+static inline enum ubase_err
+    upipe_multicat_sink_set_fsink_mgr(struct upipe *upipe,
+                                      struct upipe_mgr *fsink_mgr)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_SET_FSINK_MGR,
                                 UPIPE_MULTICAT_SINK_SIGNATURE, fsink_mgr);

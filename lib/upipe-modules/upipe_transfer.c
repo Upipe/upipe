@@ -90,9 +90,10 @@ enum upipe_xfer_command {
 };
 
 /** @hidden */
-static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
-                                enum upipe_xfer_command type,
-                                struct upipe *upipe_remote, void *arg);
+static enum ubase_err upipe_xfer_mgr_send(struct upipe_mgr *mgr,
+                                          enum upipe_xfer_command type,
+                                          struct upipe *upipe_remote,
+                                          void *arg);
 
 /** @This stores a message to send.
  */
@@ -184,8 +185,9 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_xfer == NULL))
         return NULL;
 
-    if (unlikely(!upipe_xfer_mgr_send(mgr, UPIPE_XFER_SET_UPUMP_MGR,
-                                      upipe_remote, NULL))) {
+    if (unlikely(!ubase_err_check(upipe_xfer_mgr_send(mgr,
+                                                      UPIPE_XFER_SET_UPUMP_MGR,
+                                                      upipe_remote, NULL)))) {
         free(upipe_xfer);
         return NULL;
     }
@@ -203,10 +205,11 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_xfer_control(struct upipe *upipe,
-                               enum upipe_command command, va_list args)
+static enum ubase_err upipe_xfer_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
     switch (command) {
         case UPIPE_SET_URI: {
@@ -216,7 +219,7 @@ static bool upipe_xfer_control(struct upipe *upipe,
             if (uri != NULL) {
                 uri_dup = strdup(uri);
                 if (unlikely(uri_dup == NULL))
-                    return false;
+                    return UBASE_ERR_ALLOC;
             }
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_SET_URI,
                                        upipe_xfer->upipe_remote, uri_dup);
@@ -229,7 +232,7 @@ static bool upipe_xfer_control(struct upipe *upipe,
                                        upipe_xfer->upipe_remote, output);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -240,8 +243,10 @@ static bool upipe_xfer_control(struct upipe *upipe,
 static void upipe_xfer_free(struct upipe *upipe)
 {
     struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
-    if (unlikely(!upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_RELEASE,
-                                      upipe_xfer->upipe_remote, NULL)))
+    if (unlikely(!ubase_err_check(upipe_xfer_mgr_send(upipe->mgr,
+                                                      UPIPE_XFER_RELEASE,
+                                                      upipe_xfer->upipe_remote,
+                                                      NULL))))
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
 
     upipe_throw_dead(upipe);
@@ -323,16 +328,17 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
  * @param type type of message
  * @param upipe_remote optional remote pipe
  * @paral arg optional argument
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
-                                enum upipe_xfer_command type,
-                                struct upipe *upipe_remote, void *arg)
+static enum ubase_err upipe_xfer_mgr_send(struct upipe_mgr *mgr,
+                                          enum upipe_xfer_command type,
+                                          struct upipe *upipe_remote,
+                                          void *arg)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     struct upipe_xfer_msg *msg = upipe_xfer_msg_alloc(mgr);
     if (msg == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
 
     msg->type = type;
     msg->upipe_remote = upipe_remote;
@@ -341,9 +347,9 @@ static bool upipe_xfer_mgr_send(struct upipe_mgr *mgr,
     if (unlikely(!uqueue_push(&xfer_mgr->uqueue,
                               upipe_xfer_msg_to_uchain(msg)))) {
         upipe_xfer_msg_free(mgr, msg);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This detaches a upipe manager. Real deallocation is only performed after
@@ -359,6 +365,60 @@ static void upipe_xfer_mgr_detach(struct urefcount *urefcount)
     upipe_xfer_mgr_send(upipe_xfer_mgr_to_upipe_mgr(xfer_mgr),
                         UPIPE_XFER_DETACH, NULL, NULL);
     urefcount_clean(urefcount);
+}
+
+/** @This attaches a upipe_xfer_mgr to a given event loop. The xfer manager
+ * will call upump_alloc_XXX and upump_start, so it must be done in a context
+ * where it is possible, which generally means that this command is done in
+ * the same thread that runs the event loop (upump managers aren't generally
+ * thread-safe).
+ *
+ * Please note that an xfer_mgr must be attached to a upump manager before it
+ * can be released.
+ *
+ * @param mgr xfer_mgr structure
+ * @param upump_mgr event loop to attach
+ * @return an error code
+ */
+static enum ubase_err _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
+                                             struct upump_mgr *upump_mgr)
+{
+    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    if (unlikely(xfer_mgr->upump_mgr != NULL))
+        return UBASE_ERR_INVALID;
+
+    xfer_mgr->upump = uqueue_upump_alloc_pop(&xfer_mgr->uqueue,
+                                             upump_mgr, upipe_xfer_mgr_worker,
+                                             mgr);
+    if (unlikely(xfer_mgr->upump == NULL))
+        return UBASE_ERR_UPUMP;
+
+    xfer_mgr->upump_mgr = upump_mgr;
+    upump_mgr_use(upump_mgr);
+    upump_start(xfer_mgr->upump);
+    return UBASE_ERR_NONE;
+}
+
+/** @This processes manager control commands.
+ *
+ * @param mgr xfer_mgr structure
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err upipe_xfer_mgr_control(struct upipe_mgr *mgr,
+                                             enum upipe_mgr_command command,
+                                             va_list args)
+{
+    switch (command) {
+        case UPIPE_XFER_MGR_ATTACH: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_XFER_SIGNATURE)
+            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+            return _upipe_xfer_mgr_attach(mgr, upump_mgr);
+        }
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @This returns a management structure for xfer pipes. You would need one
@@ -398,36 +458,6 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
     mgr->upipe_alloc = _upipe_xfer_alloc;
     mgr->upipe_input =  NULL;
     mgr->upipe_control = upipe_xfer_control;
+    mgr->upipe_mgr_control = upipe_xfer_mgr_control;
     return mgr;
-}
-
-/** @This attaches a upipe_xfer_mgr to a given event loop. The xfer manager
- * will call upump_alloc_XXX and upump_start, so it must be done in a context
- * where it is possible, which generally means that this command is done in
- * the same thread that runs the event loop (upump managers aren't generally
- * thread-safe).
- *
- * Please note that an xfer_mgr must be attached to a upump manager before it
- * can be released.
- *
- * @param mgr xfer_mgr structure
- * @param upump_mgr event loop to attach
- * @return false in case of error
- */
-bool upipe_xfer_mgr_attach(struct upipe_mgr *mgr, struct upump_mgr *upump_mgr)
-{
-    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    if (unlikely(xfer_mgr->upump_mgr != NULL))
-        return false;
-
-    xfer_mgr->upump = uqueue_upump_alloc_pop(&xfer_mgr->uqueue,
-                                             upump_mgr, upipe_xfer_mgr_worker,
-                                             mgr);
-    if (unlikely(xfer_mgr->upump == NULL))
-        return false;
-
-    xfer_mgr->upump_mgr = upump_mgr;
-    upump_mgr_use(upump_mgr);
-    upump_start(xfer_mgr->upump);
-    return true;
 }

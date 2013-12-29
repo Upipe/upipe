@@ -83,24 +83,25 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe */
-static bool test_control(struct upipe *upipe, enum upipe_command command,
-                         va_list args)
+static enum ubase_err test_control(struct upipe *upipe,
+                                   enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_UPUMP_MGR: {
             struct upump_mgr *arg = va_arg(args, struct upump_mgr *);
             assert(arg == upump_mgr);
             transferred = true;
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
             assert(!strcmp(uri, "toto"));
             got_uri = true;
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
             assert(0);
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -120,7 +121,7 @@ static void *thread(void *_upipe_xfer_mgr)
     upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
-    assert(upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr));
+    ubase_assert(upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr));
     upipe_mgr_release(upipe_xfer_mgr);
 
     ev_loop(loop, 0);
@@ -148,7 +149,7 @@ int main(int argc, char **argv)
                                                   upipe_test);
     /* from now on upipe_test shouldn't be accessed from this thread */
     assert(upipe_handle != NULL);
-    upipe_set_uri(upipe_handle, "toto");
+    ubase_assert(upipe_set_uri(upipe_handle, "toto"));
     upipe_release(upipe_handle);
 
     upipe_mgr_release(upipe_xfer_mgr);

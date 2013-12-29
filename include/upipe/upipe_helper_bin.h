@@ -151,18 +151,18 @@ static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
  * @param upipe description structure of the pipe                           \
  * @param command control command                                           \
  * @param args optional control command arguments                           \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
-                                    enum upipe_command command,             \
-                                    va_list args)                           \
+static enum ubase_err STRUCTURE##_control_bin(struct upipe *upipe,          \
+                                              enum upipe_command command,   \
+                                              va_list args)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     switch (command) {                                                      \
         case UPIPE_GET_OUTPUT: {                                            \
             struct upipe **p = va_arg(args, struct upipe **);               \
             *p = s->OUTPUT;                                                 \
-            return true;                                                    \
+            return UBASE_ERR_NONE;                                          \
         }                                                                   \
         case UPIPE_SET_OUTPUT: {                                            \
             struct upipe *output = va_arg(args, struct upipe *);            \
@@ -171,17 +171,19 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
                 s->OUTPUT = NULL;                                           \
             }                                                               \
                                                                             \
+            enum ubase_err err;                                             \
             if (unlikely(s->LAST_INNER != NULL &&                           \
-                         !upipe_set_output(s->LAST_INNER, output)))         \
-                return false;                                               \
+                         (err = upipe_set_output(s->LAST_INNER, output)) != \
+                         UBASE_ERR_NONE))                                   \
+                return err;                                                 \
             s->OUTPUT = output;                                             \
             if (likely(output != NULL))                                     \
                 upipe_use(output);                                          \
-            return true;                                                    \
+            return UBASE_ERR_NONE;                                          \
         }                                                                   \
         default:                                                            \
             if (s->LAST_INNER == NULL)                                      \
-                return false;                                               \
+                return UBASE_ERR_UNHANDLED;                                 \
             return upipe_control_va(s->LAST_INNER, command, args);          \
     }                                                                       \
 }                                                                           \
@@ -192,8 +194,8 @@ static bool STRUCTURE##_control_bin(struct upipe *upipe,                    \
 static void STRUCTURE##_clean_bin(struct upipe *upipe)                      \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->LAST_INNER != NULL))                                    \
-        upipe_release(s->LAST_INNER);                                     \
+    if (likely(s->LAST_INNER != NULL))                                      \
+        upipe_release(s->LAST_INNER);                                       \
     if (likely(s->OUTPUT != NULL))                                          \
         upipe_release(s->OUTPUT);                                           \
 }

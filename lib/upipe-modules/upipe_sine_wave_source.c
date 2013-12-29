@@ -201,10 +201,11 @@ static void upipe_sinesrc_idler(struct upump *upump)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_sinesrc_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
+                                             enum upipe_command command,
+                                             va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -256,7 +257,7 @@ static bool _upipe_sinesrc_control(struct upipe *upipe,
             return upipe_sinesrc_set_uclock(upipe, uclock);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -266,13 +267,13 @@ static bool _upipe_sinesrc_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_sinesrc_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
+static enum ubase_err upipe_sinesrc_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
-    if (unlikely(!_upipe_sinesrc_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_sinesrc_control(upipe, command, args));
 
     struct upipe_sinesrc *upipe_sinesrc = upipe_sinesrc_from_upipe(upipe);
     if (upipe_sinesrc->uref_mgr != NULL && upipe_sinesrc->upump_mgr != NULL &&
@@ -282,7 +283,7 @@ static bool upipe_sinesrc_control(struct upipe *upipe,
                                       1, 2);
         if (flow_def == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         uref_sound_flow_set_rate(flow_def, UPIPE_SINESRC_RATE);
         upipe_sinesrc_store_flow_def(upipe, flow_def);
@@ -291,13 +292,13 @@ static bool upipe_sinesrc_control(struct upipe *upipe,
                                                 upipe_sinesrc_idler, upipe);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_sinesrc_set_upump(upipe, upump);
         upump_start(upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -325,7 +326,9 @@ static struct upipe_mgr upipe_sinesrc_mgr = {
 
     .upipe_alloc = upipe_sinesrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_sinesrc_control
+    .upipe_control = upipe_sinesrc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all sine wave source pipes.

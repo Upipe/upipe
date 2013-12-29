@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     struct upipe *nullpipe = upipe_void_alloc(null_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "null"));
     assert(nullpipe);
-    assert(upipe_null_dump_dict(nullpipe, true));
+    ubase_assert(upipe_null_dump_dict(nullpipe, true));
 
     struct uref *uref = uref_pic_flow_alloc_def(uref_mgr, 3);
     assert(uref);
@@ -124,9 +124,9 @@ int main(int argc, char **argv)
     struct upipe *filter_blend = upipe_void_alloc(blend_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blend"));
     assert(filter_blend);
-    assert(upipe_set_flow_def(filter_blend, uref));
-    assert(upipe_set_ubuf_mgr(filter_blend, ubuf_mgr));
-    assert(upipe_set_output(filter_blend, nullpipe));
+    ubase_assert(upipe_set_flow_def(filter_blend, uref));
+    ubase_assert(upipe_set_ubuf_mgr(filter_blend, ubuf_mgr));
+    ubase_assert(upipe_set_output(filter_blend, nullpipe));
     upipe_release(nullpipe);
     uref_free(uref);
 

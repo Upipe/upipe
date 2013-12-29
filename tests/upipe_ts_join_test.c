@@ -147,15 +147,15 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts join"));
     assert(upipe_ts_join != NULL);
-    assert(upipe_set_uref_mgr(upipe_ts_join, uref_mgr));
+    ubase_assert(upipe_set_uref_mgr(upipe_ts_join, uref_mgr));
 
     struct uref *uref;
-    assert(upipe_get_flow_def(upipe_ts_join, &uref));
+    ubase_assert(upipe_get_flow_def(upipe_ts_join, &uref));
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
                                                 uprobe_use(uprobe_stdio));
     assert(upipe_sink != NULL);
-    assert(upipe_set_output(upipe_ts_join, upipe_sink));
+    ubase_assert(upipe_set_output(upipe_ts_join, upipe_sink));
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
@@ -163,13 +163,13 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts join input 68"));
     assert(upipe_ts_join_input68 != NULL);
-    assert(upipe_set_flow_def(upipe_ts_join_input68, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_join_input68, uref));
 
     struct upipe *upipe_ts_join_input69 = upipe_void_alloc_sub(upipe_ts_join,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts join input 69"));
     assert(upipe_ts_join_input69 != NULL);
-    assert(upipe_set_flow_def(upipe_ts_join_input69, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_join_input69, uref));
     uref_free(uref);
 
     uint8_t *buffer;

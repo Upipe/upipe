@@ -135,15 +135,15 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 }
 
 /** helper phony pipe to test uprobe_select_flows */
-static bool test_control(struct upipe *upipe,
-                         enum upipe_command command, va_list args)
+static enum ubase_err test_control(struct upipe *upipe,
+                                   enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             assert(p != NULL);
             *p = &test_sub_mgr;
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
@@ -153,14 +153,16 @@ static bool test_control(struct upipe *upipe,
                 uchain = uref_to_uchain(*p);
             else
                 uchain = &flow_defs;
-            if (ulist_is_last(&flow_defs, uchain))
-                return false;
+            if (ulist_is_last(&flow_defs, uchain)) {
+                *p = NULL;
+                return UBASE_ERR_NONE;
+            }
             *p = uref_from_uchain(uchain->next);
-            return true;
+            return UBASE_ERR_NONE;
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

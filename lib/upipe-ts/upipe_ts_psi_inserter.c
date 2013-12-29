@@ -164,20 +164,17 @@ static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
     switch (event) {
         case UPROBE_NEED_UREF_MGR:
             if (unlikely(upipe_ts_psii->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            if (likely(upipe_ts_psii->uref_mgr != NULL)) {
-                upipe_set_uref_mgr(inner, upipe_ts_psii->uref_mgr);
-                return UBASE_ERR_NONE;
-            }
+                upipe_throw_need_uref_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii));
+            if (likely(upipe_ts_psii->uref_mgr != NULL))
+                return upipe_set_uref_mgr(inner, upipe_ts_psii->uref_mgr);
             return UBASE_ERR_UNHANDLED;
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
             if (unlikely(upipe_ts_psii->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe, flow_def);
-            if (likely(upipe_ts_psii->ubuf_mgr != NULL)) {
-                upipe_set_ubuf_mgr(inner, upipe_ts_psii->ubuf_mgr);
-                return UBASE_ERR_NONE;
-            }
+                upipe_throw_need_ubuf_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii),
+                                          flow_def);
+            if (likely(upipe_ts_psii->ubuf_mgr != NULL))
+                return upipe_set_ubuf_mgr(inner, upipe_ts_psii->ubuf_mgr);
             return UBASE_ERR_UNHANDLED;
         }
         default:
@@ -325,43 +322,44 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
                                            struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, "block.mpegtspsi."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
-    return upipe_ts_psii_sub->encaps != NULL &&
-           upipe_set_flow_def(upipe_ts_psii_sub->encaps, flow_def);
+    if (unlikely(upipe_ts_psii_sub->encaps == NULL))
+        return UBASE_ERR_UNHANDLED;
+    return upipe_set_flow_def(upipe_ts_psii_sub->encaps, flow_def);
 }
 
 /** @internal @This returns the current interval.
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_psii_sub_get_interval(struct upipe *upipe,
-                                            uint64_t *interval_p)
+static enum ubase_err _upipe_ts_psii_sub_get_interval(struct upipe *upipe,
+                                                      uint64_t *interval_p)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
     assert(interval_p != NULL);
     *interval_p = upipe_ts_psii_sub->interval;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the interval.
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
-                                            uint64_t interval)
+static enum ubase_err _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
+                                                      uint64_t interval)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
@@ -369,7 +367,7 @@ static bool _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
     upipe_ts_psii_sub->interval = interval;
     if (upipe_ts_psii_sub->next_cr_sys != UINT64_MAX)
         upipe_ts_psii_sub->next_cr_sys += diff;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -377,10 +375,11 @@ static bool _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_psii_sub_control(struct upipe *upipe,
-                                      enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_psii_sub_control(struct upipe *upipe,
+                                                enum upipe_command command,
+                                                va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -393,20 +392,18 @@ static bool upipe_ts_psii_sub_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_PSII_SUB_GET_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PSII_SUB_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSII_SUB_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
             return _upipe_ts_psii_sub_get_interval(upipe, interval_p);
         }
         case UPIPE_TS_PSII_SUB_SET_INTERVAL: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PSII_SUB_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSII_SUB_SIGNATURE)
             uint64_t interval = va_arg(args, uint64_t);
             return _upipe_ts_psii_sub_set_interval(upipe, interval);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -457,6 +454,7 @@ static void upipe_ts_psii_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_ts_psii_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_psii_sub_input;
     sub_mgr->upipe_control = upipe_ts_psii_sub_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a ts_psii pipe.
@@ -521,17 +519,17 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_ts_psii_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_ts_psii_set_flow_def(struct upipe *upipe,
                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, "block.mpegts."))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_ts_psii_store_flow_def(upipe, flow_def_dup);
     /* Force sending it immediately, because subpipes also send to output
@@ -539,19 +537,18 @@ static bool upipe_ts_psii_set_flow_def(struct upipe *upipe,
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
     upipe_ts_psii->flow_def_sent = true;
     upipe_throw_new_flow_def(upipe, upipe_ts_psii->flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the output on a pipe.
  *
  * @param upipe description structure of the pipe
  * @param output new output
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
+static enum ubase_err _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
 {
-    if (unlikely(!upipe_ts_psii_set_output(upipe, output)))
-        return false;
+    UBASE_ERR_CHECK(upipe_ts_psii_set_output(upipe, output));
 
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
     struct uchain *uchain;
@@ -560,7 +557,7 @@ static bool _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
         if (likely(sub->encaps != NULL))
             upipe_set_output(sub->encaps, output);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -568,11 +565,11 @@ static bool _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_psii_control(struct upipe *upipe,
-                                  enum upipe_command command,
-                                  va_list args)
+static enum ubase_err upipe_ts_psii_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -618,7 +615,7 @@ static bool upipe_ts_psii_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -652,6 +649,46 @@ static void upipe_ts_psii_mgr_free(struct urefcount *urefcount)
     free(ts_psii_mgr);
 }
 
+/** @This processes control commands on a ts_psii manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_psii_mgr_control(struct upipe_mgr *mgr,
+                                                enum upipe_mgr_command command,
+                                                va_list args)
+{
+    struct upipe_ts_psii_mgr *ts_psii_mgr =
+        upipe_ts_psii_mgr_from_upipe_mgr(mgr);
+
+    switch (command) {
+#define GET_SET_MGR(name, NAME)                                             \
+        case UPIPE_TS_MUX_MGR_GET_##NAME##_MGR: {                           \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)             \
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
+            *p = ts_psii_mgr->name##_mgr;                                   \
+            return UBASE_ERR_NONE;                                          \
+        }                                                                   \
+        case UPIPE_TS_MUX_MGR_SET_##NAME##_MGR: {                           \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)             \
+            if (!urefcount_single(&ts_psii_mgr->urefcount))                 \
+                return UBASE_ERR_BUSY;                                      \
+            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
+            upipe_mgr_release(ts_psii_mgr->name##_mgr);                     \
+            ts_psii_mgr->name##_mgr = upipe_mgr_use(m);                     \
+            return UBASE_ERR_NONE;                                          \
+        }
+
+        GET_SET_MGR(ts_encaps, TS_ENCAPS)
+#undef GET_SET_MGR
+
+        default:
+            return false;
+    }
+}
+
 /** @This returns the management structure for all ts_psii pipes.
  *
  * @return pointer to manager
@@ -672,63 +709,6 @@ struct upipe_mgr *upipe_ts_psii_mgr_alloc(void)
     ts_psii_mgr->mgr.upipe_alloc = upipe_ts_psii_alloc;
     ts_psii_mgr->mgr.upipe_input = upipe_ts_psii_input;
     ts_psii_mgr->mgr.upipe_control = upipe_ts_psii_control;
+    ts_psii_mgr->mgr.upipe_mgr_control = upipe_ts_psii_mgr_control;
     return upipe_ts_psii_mgr_to_upipe_mgr(ts_psii_mgr);
-}
-
-/** @This processes control commands on a ts_psii manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_psii_mgr_control_va(struct upipe_mgr *mgr,
-                                  enum upipe_ts_mux_mgr_command command,
-                                  va_list args)
-{
-    struct upipe_ts_psii_mgr *ts_psii_mgr = upipe_ts_psii_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_psii_mgr->urefcount));
-
-    switch (command) {
-#define GET_SET_MGR(name, NAME)                                             \
-        case UPIPE_TS_MUX_MGR_GET_##NAME##_MGR: {                           \
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
-            *p = ts_psii_mgr->name##_mgr;                                   \
-            return true;                                                    \
-        }                                                                   \
-        case UPIPE_TS_MUX_MGR_SET_##NAME##_MGR: {                           \
-            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
-            if (ts_psii_mgr->name##_mgr != NULL)                            \
-                upipe_mgr_release(ts_psii_mgr->name##_mgr);                 \
-            if (m != NULL)                                                  \
-                upipe_mgr_use(m);                                           \
-            ts_psii_mgr->name##_mgr = m;                                    \
-            return true;                                                    \
-        }
-
-        GET_SET_MGR(ts_encaps, TS_ENCAPS)
-#undef GET_SET_MGR
-
-        default:
-            return false;
-    }
-}
-
-/** @This processes control commands on a ts_psii manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_psii_mgr_control(struct upipe_mgr *mgr,
-                               enum upipe_ts_mux_mgr_command command, ...)
-{
-    va_list args;
-    va_start(args, command);
-    bool ret = upipe_ts_psii_mgr_control_va(mgr, command, args);
-    va_end(args);
-    return ret;
 }

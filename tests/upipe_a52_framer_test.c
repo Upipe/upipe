@@ -176,8 +176,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
                              UPROBE_LOG_LEVEL, "a52f"));
     assert(upipe_a52f != NULL);
-    assert(upipe_set_flow_def(upipe_a52f, uref));
-    assert(upipe_set_output(upipe_a52f, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_a52f, uref));
+    ubase_assert(upipe_set_output(upipe_a52f, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;

@@ -89,10 +89,11 @@ enum upipe_ts_mux_command {
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance *conformance_p)
+static inline enum ubase_err
+    upipe_ts_mux_get_conformance(struct upipe *upipe,
+                                 enum upipe_ts_conformance *conformance_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_CONFORMANCE,
                          UPIPE_TS_MUX_SIGNATURE, conformance_p);
@@ -102,10 +103,11 @@ static inline bool upipe_ts_mux_get_conformance(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param conformance conformance mode
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance conformance)
+static inline enum ubase_err
+    upipe_ts_mux_set_conformance(struct upipe *upipe,
+                                 enum upipe_ts_conformance conformance)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_CONFORMANCE,
                          UPIPE_TS_MUX_SIGNATURE, conformance);
@@ -115,9 +117,9 @@ static inline bool upipe_ts_mux_set_conformance(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_pat_interval(struct upipe *upipe,
+static inline enum ubase_err upipe_ts_mux_get_pat_interval(struct upipe *upipe,
                                                  uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PAT_INTERVAL,
@@ -129,10 +131,10 @@ static inline bool upipe_ts_mux_get_pat_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_pat_interval(struct upipe *upipe,
-                                                 uint64_t interval)
+static inline enum ubase_err upipe_ts_mux_set_pat_interval(struct upipe *upipe,
+                                                           uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PAT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -142,10 +144,10 @@ static inline bool upipe_ts_mux_set_pat_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
-                                                 uint64_t *interval_p)
+static inline enum ubase_err upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
+                                                           uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PMT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval_p);
@@ -156,10 +158,10 @@ static inline bool upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
-                                                 uint64_t interval)
+static inline enum ubase_err upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
+                                                           uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PMT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -169,10 +171,10 @@ static inline bool upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
-                                                 uint64_t *interval_p)
+static inline enum ubase_err upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
+                                                           uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PCR_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval_p);
@@ -182,10 +184,10 @@ static inline bool upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval new interval
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
-                                                 uint64_t interval)
+static inline enum ubase_err upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
+                                                           uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PCR_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -196,10 +198,10 @@ static inline bool upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param octetrate_p filled in with the octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_octetrate(struct upipe *upipe,
-                                              uint64_t *octetrate_p)
+static inline enum ubase_err upipe_ts_mux_get_octetrate(struct upipe *upipe,
+                                                        uint64_t *octetrate_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate_p);
@@ -209,10 +211,10 @@ static inline bool upipe_ts_mux_get_octetrate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_octetrate(struct upipe *upipe,
-                                              uint64_t octetrate)
+static inline enum ubase_err upipe_ts_mux_set_octetrate(struct upipe *upipe,
+                                                        uint64_t octetrate)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
@@ -222,10 +224,11 @@ static inline bool upipe_ts_mux_set_octetrate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param octetrate_p filled in with the octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
-                                                      uint64_t *octetrate_p)
+static inline enum ubase_err
+    upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
+                                       uint64_t *octetrate_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PADDING_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate_p);
@@ -235,10 +238,10 @@ static inline bool upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
-                                                      uint64_t octetrate)
+static inline enum ubase_err
+    upipe_ts_mux_set_padding_octetrate(struct upipe *upipe, uint64_t octetrate)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
@@ -249,10 +252,10 @@ static inline bool upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mode_p filled in with the mode
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_get_mode(struct upipe *upipe,
-                                         enum upipe_ts_mux_mode *mode_p)
+static inline enum ubase_err
+    upipe_ts_mux_get_mode(struct upipe *upipe, enum upipe_ts_mux_mode *mode_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_MODE,
                          UPIPE_TS_MUX_SIGNATURE, mode_p);
@@ -262,10 +265,10 @@ static inline bool upipe_ts_mux_get_mode(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mode new mode
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_mux_set_mode(struct upipe *upipe,
-                                         enum upipe_ts_mux_mode mode)
+static inline enum ubase_err upipe_ts_mux_set_mode(struct upipe *upipe,
+                                                   enum upipe_ts_mux_mode mode)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MODE,
                          UPIPE_TS_MUX_SIGNATURE, mode);
@@ -276,10 +279,10 @@ static inline bool upipe_ts_mux_set_mode(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_aggregate_get_mtu(struct upipe *upipe,
-                                              unsigned int *mtu_p)
+static inline enum ubase_err upipe_ts_aggregate_get_mtu(struct upipe *upipe,
+                                                        unsigned int *mtu_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu_p);
@@ -290,10 +293,10 @@ static inline bool upipe_ts_aggregate_get_mtu(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mtu configured mtu, in octets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_aggregate_set_mtu(struct upipe *upipe,
-                                              unsigned int mtu)
+static inline enum ubase_err upipe_ts_aggregate_set_mtu(struct upipe *upipe,
+                                                        unsigned int mtu)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu);
@@ -324,27 +327,6 @@ enum upipe_ts_mux_mgr_command {
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR
 };
 
-/** @This processes control commands on a ts_mux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_mux_mgr_control_va(struct upipe_mgr *mgr,
-                                 enum upipe_ts_mux_mgr_command command,
-                                 va_list args);
-
-/** @This processes control commands on a ts_mux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process, followed by optional arguments
- * @return false in case of error
- */
-bool upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
-                              enum upipe_ts_mux_mgr_command command, ...);
 
 /** @hidden */
 #define UPIPE_TS_MUX_MGR_GET_SET_MGR2(name, NAME)                           \
@@ -352,27 +334,27 @@ bool upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
  *                                                                          \
  * @param mgr pointer to manager                                            \
  * @param p filled in with the name manager                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool                                                          \
+static inline enum ubase_err                                                \
     upipe_ts_mux_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                \
                                       struct upipe_mgr *p)                  \
 {                                                                           \
-    return upipe_ts_mux_mgr_control(mgr,                                    \
-                                    UPIPE_TS_MUX_MGR_GET_##NAME##_MGR, p);  \
+    return upipe_mgr_control(mgr, UPIPE_TS_MUX_MGR_GET_##NAME##_MGR,        \
+                             UPIPE_TS_MUX_SIGNATURE, p);                    \
 }                                                                           \
 /** @This sets the manager for name subpipes.                               \
  *                                                                          \
  * @param mgr pointer to manager                                            \
  * @param m pointer to name manager                                         \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool                                                          \
+static inline enum ubase_err                                                \
     upipe_ts_mux_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                \
                                       struct upipe_mgr *m)                  \
 {                                                                           \
-    return upipe_ts_mux_mgr_control(mgr,                                    \
-                                    UPIPE_TS_MUX_MGR_SET_##NAME##_MGR, m);  \
+    return upipe_mgr_control(mgr, UPIPE_TS_MUX_MGR_SET_##NAME##_MGR,        \
+                             UPIPE_TS_MUX_SIGNATURE, m);                    \
 }
 
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_join, TS_JOIN)

@@ -57,7 +57,8 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  bool upipe_foo_get_upump_mgr(struct upipe *upipe, struct upump_mgr **p)
+ *  enum ubase_err upipe_foo_get_upump_mgr(struct upipe *upipe,
+ *                                         struct upump_mgr **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -68,7 +69,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_upump_mgr(struct upipe *upipe, struct upump_mgr *upump_mgr)
+ *  enum ubase_err upipe_foo_set_upump_mgr(struct upipe *upipe,
+ *                                         struct upump_mgr *upump_mgr)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -102,24 +104,24 @@ static void STRUCTURE##_init_upump_mgr(struct upipe *upipe)                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the upump_mgr                                    \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_upump_mgr(struct upipe *upipe,                  \
-                                      struct upump_mgr **p)                 \
+static enum ubase_err STRUCTURE##_get_upump_mgr(struct upipe *upipe,        \
+                                                struct upump_mgr **p)       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->UPUMP_MGR;                                              \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sets the upump_mgr.                                     \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param upump_mgr new upump_mgr                                           \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_upump_mgr(struct upipe *upipe,                  \
-                                      struct upump_mgr *upump_mgr)          \
+static enum ubase_err STRUCTURE##_set_upump_mgr(struct upipe *upipe,        \
+                                                struct upump_mgr *upump_mgr)\
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UPUMP_MGR != NULL))                             \
@@ -128,7 +130,7 @@ static bool STRUCTURE##_set_upump_mgr(struct upipe *upipe,                  \
     STRUCTURE->UPUMP_MGR = upump_mgr;                                       \
     if (likely(upump_mgr != NULL))                                          \
         upump_mgr_use(STRUCTURE->UPUMP_MGR);                                \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

@@ -143,9 +143,9 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             struct upipe *upipe_ts_demux;
-            assert(upipe_sub_get_super(upipe, &upipe_ts_demux));
+            ubase_assert(upipe_sub_get_super(upipe, &upipe_ts_demux));
             struct upipe *upipe_ts_mux;
-            assert(upipe_get_output(upipe_ts_demux, &upipe_ts_mux));
+            ubase_assert(upipe_get_output(upipe_ts_demux, &upipe_ts_mux));
             uint64_t flow_id;
             assert(uref_flow_get_id(flow_def, &flow_id));
 
@@ -159,7 +159,8 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
         }
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (upipe_split_iterate(upipe, &flow_def)) {
+            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+                   flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));
 
@@ -168,7 +169,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
                 while (upipe_iterate_sub(upipe, &output)) {
                     struct uref *flow_def2;
                     uint64_t id2;
-                    if (upipe_get_flow_def(output, &flow_def2) &&
+                    if (ubase_err_check(upipe_get_flow_def(output, &flow_def2)) &&
                         uref_flow_get_id(flow_def2, &id2) && flow_id == id2) {
                         /* We already have an output. */
                         found = true;
@@ -193,7 +194,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
                 assert(noclock != NULL);
 
                 struct upipe *upipe_ts_mux_program;
-                assert(upipe_get_output(upipe, &upipe_ts_mux_program));
+                ubase_assert(upipe_get_output(upipe, &upipe_ts_mux_program));
                 struct upipe *mux_input = upipe_void_alloc_output_sub(noclock,
                         upipe_ts_mux_program,
                         uprobe_pfx_alloc_va(uprobe_use(logger),
@@ -228,10 +229,10 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                      "ts mux"));
             assert(upipe_ts_mux != NULL);
             upipe_mgr_release(upipe_ts_mux_mgr);
-            assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
-            assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
-            //assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
-            //assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
+            ubase_assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
+            ubase_assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
+            //ubase_assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
+            //ubase_assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
 
             /* file sink */
             struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
@@ -242,8 +243,8 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                      UPROBE_LOG_LEVEL, "file sink"));
             assert(upipe_fsink != NULL);
             upipe_mgr_release(upipe_fsink_mgr);
-            assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
-            assert(upipe_fsink_set_path(upipe_fsink, sink_file, UPIPE_FSINK_OVERWRITE));
+            ubase_assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
+            ubase_assert(upipe_fsink_set_path(upipe_fsink, sink_file, UPIPE_FSINK_OVERWRITE));
 
             upipe_release(upipe_fsink);
             upipe_release(upipe_ts_mux);
@@ -251,15 +252,17 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (upipe_split_iterate(upipe, &flow_def)) {
+            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+                   flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *program = NULL;
-                while (upipe_iterate_sub(upipe, &program)) {
+                while (ubase_err_check(upipe_iterate_sub(upipe, &program)) &&
+                       program != NULL) {
                     struct uref *flow_def2;
                     uint64_t id2;
-                    if (upipe_get_flow_def(program, &flow_def2) &&
+                    if (ubase_err_check(upipe_get_flow_def(program, &flow_def2)) &&
                         uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
                         /* We already have a program */
                         return UBASE_ERR_NONE;
@@ -317,14 +320,14 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_use(logger)), UPROBE_LOG_LEVEL,
-                             "file source"));
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                             UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
-    assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
-    assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
-    assert(upipe_set_uri(upipe_fsrc, src_file));
+    ubase_assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
+    ubase_assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
+    ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
+    ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
 
     /* TS demux */
     /* no uprobe_use because no uprobe_clean */
@@ -342,12 +345,12 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                            upipe_mpgvf_mgr));
-    assert(upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
-                                            upipe_h264f_mgr));
-    assert(upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
-                                            upipe_mpgaf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
+                                                  upipe_mpgvf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
+                                                  upipe_h264f_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
+                                                  upipe_mpgaf_mgr));
 
     struct upipe *upipe_ts_demux = upipe_void_alloc_output(upipe_fsrc,
             upipe_ts_demux_mgr,

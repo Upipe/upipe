@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_source_read_size.h: upipe helper functions for read size
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for read size
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_SOURCE_READ_SIZE_H_
 /** @hidden */
@@ -55,7 +57,7 @@ extern "C" {
  * parameter is used for initialization.
  *
  * @item @code
- *  bool upipe_foo_get_read_size(struct upipe *upipe, unsigned int *p)
+ *  enum ubase_err upipe_foo_get_read_size(struct upipe *upipe, unsigned int *p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -66,7 +68,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_read_size(struct upipe *upipe, unsigned int read_size)
+ *  enum ubase_err upipe_foo_set_read_size(struct upipe *upipe,
+ *                                         unsigned int read_size)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -102,27 +105,27 @@ static void STRUCTURE##_init_read_size(struct upipe *upipe,                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the read size                                    \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
 static bool STRUCTURE##_get_read_size(struct upipe *upipe, unsigned int *p) \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->READ_SIZE;                                              \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sets the read_size of the source.                       \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param read_size new read size                                           \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
 static bool STRUCTURE##_set_read_size(struct upipe *upipe,                  \
                                       unsigned int read_size)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->READ_SIZE = read_size;                                       \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

@@ -88,7 +88,8 @@ extern "C" {
  * adds the output to the list in upipe_foo.
  *
  * @item @code
- *  void upipe_foo_output_get_super(struct upipe *upipe, struct upipe **p)
+ *  enum ubase_err upipe_foo_output_get_super(struct upipe *upipe,
+ *                                            struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -110,7 +111,8 @@ extern "C" {
  * Initializes the list in upipe_foo.
  *
  * @item @code
- *  void upipe_foo_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
+ *  enum ubase_err upipe_foo_get_sub_mgr(struct upipe *upipe,
+ *                                       struct upipe_mgr **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -121,7 +123,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  void upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
+ *  enum ubase_err upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -221,14 +223,15 @@ static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
  *                                                                          \
  * @param upipe description structure of the subpipe                        \
  * @param p filled in with a pointer to the super-pipe                      \
- * return always true                                                       \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p)\
+static enum ubase_err STRUCTURE_SUB##_get_super(struct upipe *upipe,        \
+                                                struct upipe **p)           \
 {                                                                           \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
     *p = STRUCTURE##_to_upipe(s);                                           \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE_SUB,   \
  * and removes it from the ULIST in STRUCTURE.                              \
@@ -260,23 +263,24 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
  *                                                                          \
  * @param upipe description structure of the super-pipe                     \
  * @param p filled in with a pointer to the subpipe manager                 \
- * return always true                                                       \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_sub_mgr(struct upipe *upipe,                    \
-                                    struct upipe_mgr **p)                   \
+static enum ubase_err STRUCTURE##_get_sub_mgr(struct upipe *upipe,          \
+                                              struct upipe_mgr **p)         \
 {                                                                           \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     *p = &s->MGR;                                                           \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @This iterates over the subpipes of a super-pipe.                       \
  *                                                                          \
  * @param upipe description structure of the super-pipe                     \
  * @param p filled in with the next subpipe, initialize with NULL           \
- * return false when no other subpipe is available                          \
+ * return an error code                                                     \
  */                                                                         \
-static bool STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)  \
+static enum ubase_err STRUCTURE##_iterate_sub(struct upipe *upipe,          \
+                                              struct upipe **p)             \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     assert(p != NULL);                                                      \
@@ -287,10 +291,12 @@ static bool STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)  \
         struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_upipe(*p);         \
         u = STRUCTURE_SUB##_to_uchain(sub);                                 \
     }                                                                       \
-    if (ulist_is_last(&s->ULIST, u))                                        \
-        return false;                                                       \
+    if (ulist_is_last(&s->ULIST, u)) {                                      \
+        *p = NULL;                                                          \
+        return UBASE_ERR_NONE;                                              \
+    }                                                                       \
     *p = STRUCTURE_SUB##_to_upipe(STRUCTURE_SUB##_from_uchain(u->next));    \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \
  *                                                                          \

@@ -168,7 +168,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_fsrc_mgr);
     upipe_set_ubuf_mgr(upipe_src, block_mgr);
     ubuf_mgr_release(block_mgr);
-    if (!upipe_set_uri(upipe_src, file)) {
+    if (!ubase_err_check(upipe_set_uri(upipe_src, file))) {
         fprintf(stderr, "invalid file\n");
         exit(EXIT_FAILURE);
     }

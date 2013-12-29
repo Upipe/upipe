@@ -394,48 +394,49 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_agg_set_flow_def(struct upipe *upipe,
-                                      struct uref *flow_def)
+static enum ubase_err upipe_ts_agg_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (unlikely(!uref_flow_set_def(flow_def_dup, "block.mpegtsaligned.")))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current mux octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate_p filled in with the octetrate
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_get_octetrate(struct upipe *upipe,
-                                       uint64_t *octetrate_p)
+static enum ubase_err upipe_ts_agg_get_octetrate(struct upipe *upipe,
+                                                 uint64_t *octetrate_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(octetrate_p != NULL);
     *octetrate_p = upipe_ts_agg->octetrate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the mux octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_set_octetrate(struct upipe *upipe, uint64_t octetrate)
+static enum ubase_err upipe_ts_agg_set_octetrate(struct upipe *upipe,
+                                                 uint64_t octetrate)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(octetrate != 0);
@@ -448,63 +449,65 @@ static bool upipe_ts_agg_set_octetrate(struct upipe *upipe, uint64_t octetrate)
                     upipe_ts_agg->mode == UPIPE_TS_MUX_MODE_VBR ? "VBR" :
                     upipe_ts_agg->mode == UPIPE_TS_MUX_MODE_CBR ? "CBR" :
                     "capped VBR", octetrate * 8);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current mode.
  *
  * @param upipe description structure of the pipe
  * @param mode_p filled in with the mode
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_get_mode(struct upipe *upipe,
-                                  enum upipe_ts_mux_mode *mode_p)
+static enum ubase_err upipe_ts_agg_get_mode(struct upipe *upipe,
+                                            enum upipe_ts_mux_mode *mode_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(mode_p != NULL);
     *mode_p = upipe_ts_agg->mode;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the mode.
  *
  * @param upipe description structure of the pipe
  * @param mode new mode
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_set_mode(struct upipe *upipe,
-                                  enum upipe_ts_mux_mode mode)
+static enum ubase_err upipe_ts_agg_set_mode(struct upipe *upipe,
+                                            enum upipe_ts_mux_mode mode)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     upipe_ts_agg->mode = mode;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the configured mtu.
  *
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_get_mtu(struct upipe *upipe, unsigned int *mtu_p)
+static enum ubase_err upipe_ts_agg_get_mtu(struct upipe *upipe,
+                                           unsigned int *mtu_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(mtu_p != NULL);
     *mtu_p = upipe_ts_agg->mtu;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the configured mtu.
  *
  * @param upipe description structure of the pipe
  * @param mtu configured mtu, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_set_mtu(struct upipe *upipe, unsigned int mtu)
+static enum ubase_err upipe_ts_agg_set_mtu(struct upipe *upipe,
+                                           unsigned int mtu)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     if (unlikely(mtu < TS_SIZE))
-        return false;
+        return UBASE_ERR_INVALID;
     mtu -= mtu % TS_SIZE;
     if (mtu < upipe_ts_agg->next_uref_size + TS_SIZE)
         upipe_ts_agg_complete(upipe, NULL);
@@ -512,7 +515,7 @@ static bool upipe_ts_agg_set_mtu(struct upipe *upipe, unsigned int mtu)
     if (upipe_ts_agg->octetrate)
         upipe_ts_agg->interval = upipe_ts_agg->mtu * UCLOCK_FREQ /
                                  upipe_ts_agg->octetrate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts check pipe.
@@ -520,10 +523,11 @@ static bool upipe_ts_agg_set_mtu(struct upipe *upipe, unsigned int mtu)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_agg_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
+                                           enum upipe_command command,
+                                           va_list args)
 {
     switch (command) {
         case UPIPE_GET_UREF_MGR: {
@@ -560,44 +564,38 @@ static bool upipe_ts_agg_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_MUX_GET_OCTETRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *octetrate_p = va_arg(args, uint64_t *);
             return upipe_ts_agg_get_octetrate(upipe, octetrate_p);
         }
         case UPIPE_TS_MUX_SET_OCTETRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t octetrate = va_arg(args, uint64_t);
             return upipe_ts_agg_set_octetrate(upipe, octetrate);
         }
         case UPIPE_TS_MUX_GET_MODE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             enum upipe_ts_mux_mode *mode_p = va_arg(args,
                                                     enum upipe_ts_mux_mode *);
             return upipe_ts_agg_get_mode(upipe, mode_p);
         }
         case UPIPE_TS_MUX_SET_MODE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             enum upipe_ts_mux_mode mode = va_arg(args, enum upipe_ts_mux_mode);
             return upipe_ts_agg_set_mode(upipe, mode);
         }
         case UPIPE_TS_MUX_GET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int *mtu_p = va_arg(args, unsigned int *);
             return upipe_ts_agg_get_mtu(upipe, mtu_p);
         }
         case UPIPE_TS_MUX_SET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_MUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int mtu = va_arg(args, unsigned int);
             return upipe_ts_agg_set_mtu(upipe, mtu);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -628,7 +626,9 @@ static struct upipe_mgr upipe_ts_agg_mgr = {
 
     .upipe_alloc = upipe_ts_agg_alloc,
     .upipe_input = upipe_ts_agg_input,
-    .upipe_control = upipe_ts_agg_control
+    .upipe_control = upipe_ts_agg_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_aggregate pipes.

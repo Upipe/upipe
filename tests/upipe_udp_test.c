@@ -267,12 +267,12 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "udp source"));
     assert(upipe_udpsrc != NULL);
-    assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
-    assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
-    assert(upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
-    assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
-    assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
-    assert(upipe_set_uclock(upipe_udpsrc, uclock));
+    ubase_assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
+    ubase_assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
+    ubase_assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
+    ubase_assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
+    ubase_assert(upipe_set_uclock(upipe_udpsrc, uclock));
 	srand(42);
 
     upipe_set_uri(upipe_udpsrc, "@127.0.0.1:42125");
@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = upipe_set_uri(upipe_udpsrc, udp_uri) )) {
+		if (( ret = ubase_err_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
 			break;
 		}
 	}
@@ -321,8 +321,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "udp sink"));
     assert(upipe_udpsink != NULL);
-    assert(upipe_set_flow_def(upipe_udpsink, flow_def));
-    assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
+    ubase_assert(upipe_set_flow_def(upipe_udpsink, flow_def));
+    ubase_assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
     uref_free(flow_def);
 
     /* reset source uri */
@@ -330,12 +330,12 @@ int main(int argc, char *argv[])
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = upipe_set_uri(upipe_udpsrc, udp_uri) )) {
+		if (( ret = ubase_err_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
 			break;
 		}
 	}
 	assert(ret);
-    assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
+    ubase_assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
 
     /* redefine write pump */
     write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL);

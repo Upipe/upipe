@@ -109,50 +109,50 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_multicat_probe_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_multicat_probe_set_flow_def(struct upipe *upipe,
                                               struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
     upipe_multicat_probe_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This changes the rotate interval
+/** @internal @This changes the rotate interval.
  *
  * @param upipe description structure of the pipe
  * @param rotate new rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate)
+static enum ubase_err  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     if (unlikely(rotate < 1)) {
         upipe_warn_va(upipe, "invalid rotate interval (%"PRIu64" < 1)", rotate);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     upipe_multicat_probe->rotate = rotate;
     upipe_notice_va(upipe, "setting rotate: %"PRIu64, rotate);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This returns the current rotate interval
+/** @internal @This returns the current rotate interval.
  *
  * @param upipe description structure of the pipe
  * @param rotate_p filled in with the current rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
+static enum ubase_err _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     assert(rotate_p != NULL);
     *rotate_p = upipe_multicat_probe->rotate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -161,10 +161,11 @@ static bool _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rota
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_multicat_probe_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_multicat_probe_control(struct upipe *upipe,
+                                                   enum upipe_command command,
+                                                   va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -185,17 +186,15 @@ static bool upipe_multicat_probe_control(struct upipe *upipe, enum upipe_command
         }
 
         case UPIPE_MULTICAT_PROBE_SET_ROTATE: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_PROBE_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_PROBE_SIGNATURE)
             return _upipe_multicat_probe_set_rotate(upipe, va_arg(args, uint64_t));
         }
         case UPIPE_MULTICAT_PROBE_GET_ROTATE: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_PROBE_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_PROBE_SIGNATURE)
             return _upipe_multicat_probe_get_rotate(upipe, va_arg(args, uint64_t*));
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -246,7 +245,9 @@ static struct upipe_mgr upipe_multicat_probe_mgr = {
 
     .upipe_alloc = upipe_multicat_probe_alloc,
     .upipe_input = upipe_multicat_probe_input,
-    .upipe_control = upipe_multicat_probe_control
+    .upipe_control = upipe_multicat_probe_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for multicat_probe pipes

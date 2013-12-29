@@ -96,7 +96,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (upipe_split_iterate(upipe, &flow_def)) {
+            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+                   flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));
                 assert(flow_id == wanted_flow_id);
@@ -132,7 +133,6 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
         case UPROBE_NEW_FLOW_DEF:
-                                  printf("meuh\n");
             assert(expect_new_flow_def);
             expect_new_flow_def = false;
             break;
@@ -163,8 +163,8 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                            upipe_mpgvf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
+                                                  upipe_mpgvf_mgr));
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     upipe_ts_demux = upipe_void_alloc(upipe_ts_demux_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "ts demux"));
     assert(upipe_ts_demux != NULL);
-    assert(upipe_set_flow_def(upipe_ts_demux, uref));
+    ubase_assert(upipe_set_flow_def(upipe_ts_demux, uref));
     uref_free(uref);
 
     uint8_t *buffer, *payload, *pat_program, *pmt_es;
@@ -380,7 +380,6 @@ int main(int argc, char *argv[])
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
     expect_new_flow_def = true;
-    printf("coin\n");
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 

@@ -128,20 +128,20 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_chunk_stream_set_flow_def(struct upipe *upipe,
-                                            struct uref *flow_def)
+static enum ubase_err upipe_chunk_stream_set_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
     upipe_chunk_stream_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This flushes input buffers.
@@ -181,7 +181,7 @@ static void upipe_chunk_stream_flush(struct upipe *upipe, struct upump *upump)
  * @param upipe description structure of the pipe
  * @param mtu max packet size, in octets
  * @param align packet chunk alignement, in octets
- * @return false in case of error
+ * @return an error code
  */
 static bool _upipe_chunk_stream_set_mtu(struct upipe *upipe,
                                         unsigned int mtu, unsigned int align)
@@ -191,12 +191,12 @@ static bool _upipe_chunk_stream_set_mtu(struct upipe *upipe,
     if (unlikely(mtu == 0 || align == 0 || align >= mtu)) {
         upipe_warn_va(upipe, "invalid mtu (%u) or alignement (%u)",
                       mtu, align);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     upipe_chunk_stream->align = align;
     upipe_chunk_stream->mtu = mtu;
     upipe_chunk_stream->size = (mtu / align) * align;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the configured mtu of TS packets.
@@ -204,10 +204,11 @@ static bool _upipe_chunk_stream_set_mtu(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
  * @param align_p filled in with the configured alignement, in octets
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_chunk_stream_get_mtu(struct upipe *upipe,
-                                        unsigned int *mtu, unsigned int *align)
+static enum ubase_err _upipe_chunk_stream_get_mtu(struct upipe *upipe,
+                                                  unsigned int *mtu,
+                                                  unsigned int *align)
 {
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
@@ -217,7 +218,7 @@ static bool _upipe_chunk_stream_get_mtu(struct upipe *upipe,
     if (align) {
         *align = upipe_chunk_stream->align;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a chunk_stream pipe.
@@ -225,10 +226,11 @@ static bool _upipe_chunk_stream_get_mtu(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_chunk_stream_control(struct upipe *upipe,
-                            enum upipe_command command, va_list args)
+static enum ubase_err upipe_chunk_stream_control(struct upipe *upipe,
+                                                 enum upipe_command command,
+                                                 va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -249,22 +251,20 @@ static bool upipe_chunk_stream_control(struct upipe *upipe,
         }
 
         case UPIPE_CHUNK_STREAM_GET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_CHUNK_STREAM_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_CHUNK_STREAM_SIGNATURE)
             unsigned int *mtu_p = va_arg(args, unsigned int *);
             unsigned int *align_p = va_arg(args, unsigned int *);
             return _upipe_chunk_stream_get_mtu(upipe, mtu_p, align_p);
         }
         case UPIPE_CHUNK_STREAM_SET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_CHUNK_STREAM_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_CHUNK_STREAM_SIGNATURE)
             unsigned int mtu = va_arg(args, unsigned int);
             unsigned int align = va_arg(args, unsigned int);
             return _upipe_chunk_stream_set_mtu(upipe, mtu, align);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -316,7 +316,9 @@ static struct upipe_mgr upipe_chunk_stream_mgr = {
 
     .upipe_alloc = upipe_chunk_stream_alloc,
     .upipe_input = upipe_chunk_stream_input,
-    .upipe_control = upipe_chunk_stream_control
+    .upipe_control = upipe_chunk_stream_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for chunk_stream pipes.

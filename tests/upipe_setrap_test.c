@@ -146,11 +146,11 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "setrap"));
     assert(upipe_setrap != NULL);
-    assert(upipe_set_flow_def(upipe_setrap, uref));
-    assert(upipe_set_output(upipe_setrap, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_setrap, uref));
+    ubase_assert(upipe_set_output(upipe_setrap, upipe_sink));
     uref_free(uref);
 
-    assert(upipe_setrap_set_rap(upipe_setrap, UINT32_MAX));
+    ubase_assert(upipe_setrap_set_rap(upipe_setrap, UINT32_MAX));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);

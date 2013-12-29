@@ -173,19 +173,19 @@ int main(int argc, char **argv)
     struct upipe *genaux = upipe_void_alloc(upipe_genaux_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "genaux"));
     assert(upipe_genaux_mgr);
-    assert(upipe_set_flow_def(genaux, uref));
+    ubase_assert(upipe_set_flow_def(genaux, uref));
     assert(genaux);
-    assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
+    ubase_assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
     uref_free(uref);
-    assert(upipe_get_flow_def(genaux, &uref));
+    ubase_assert(upipe_get_flow_def(genaux, &uref));
     const char *def;
     assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.aux."));
 
     struct upipe *genaux_test = upipe_void_alloc(&genaux_test_mgr,
                                                  uprobe_use(logger));
     assert(genaux_test != NULL);
-    assert(upipe_set_output(genaux, genaux_test));
+    ubase_assert(upipe_set_output(genaux, genaux_test));
 
     uref = uref_alloc(uref_mgr);
     assert(uref);
@@ -200,7 +200,7 @@ int main(int argc, char **argv)
     assert(opaque == result);
 
     /* test arbitrary geattr */
-    assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts_prog));
+    ubase_assert(upipe_genaux_set_getattr(genaux, uref_clock_get_pts_prog));
     uref = uref_alloc(uref_mgr);
     assert(uref);
     uref_clock_set_pts_prog(uref, opaque);

@@ -49,8 +49,8 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 10
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static unsigned int count_pic = 0;
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     struct upipe *upipe_trickp = upipe_void_alloc(upipe_trickp_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp"));
     assert(upipe_trickp != NULL);
-    assert(upipe_set_uclock(upipe_trickp, &uclock));
+    ubase_assert(upipe_set_uclock(upipe_trickp, &uclock));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
@@ -174,10 +174,11 @@ int main(int argc, char *argv[])
 
     struct upipe *upipe_trickp_pic = upipe_void_alloc_sub(upipe_trickp,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp pic"));
-    assert(upipe_set_flow_def(upipe_trickp_pic, uref));
+    assert(upipe_trickp_pic != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_trickp_pic, uref));
     assert(upipe_trickp_pic != NULL);
     uref_free(uref);
-    assert(upipe_set_output(upipe_trickp_pic, upipe_sink_pic));
+    ubase_assert(upipe_set_output(upipe_trickp_pic, upipe_sink_pic));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
@@ -190,9 +191,9 @@ int main(int argc, char *argv[])
     struct upipe *upipe_trickp_sound = upipe_void_alloc_sub(upipe_trickp,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp sound"));
     assert(upipe_trickp_sound != NULL);
-    assert(upipe_set_flow_def(upipe_trickp_sound, uref));
+    ubase_assert(upipe_set_flow_def(upipe_trickp_sound, uref));
     uref_free(uref);
-    assert(upipe_set_output(upipe_trickp_sound, upipe_sink_sound));
+    ubase_assert(upipe_set_output(upipe_trickp_sound, upipe_sink_sound));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
@@ -206,9 +207,9 @@ int main(int argc, char *argv[])
     struct upipe *upipe_trickp_subpic = upipe_void_alloc_sub(upipe_trickp,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp subpic"));
     assert(upipe_trickp_subpic != NULL);
-    assert(upipe_set_flow_def(upipe_trickp_subpic, uref));
+    ubase_assert(upipe_set_flow_def(upipe_trickp_subpic, uref));
     uref_free(uref);
-    assert(upipe_set_output(upipe_trickp_subpic, upipe_sink_subpic));
+    ubase_assert(upipe_set_output(upipe_trickp_subpic, upipe_sink_subpic));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);

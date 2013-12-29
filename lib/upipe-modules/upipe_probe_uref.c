@@ -89,18 +89,18 @@ static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_probe_uref_set_flow_def(struct upipe *upipe,
-                                          struct uref *flow_def)
+static enum ubase_err upipe_probe_uref_set_flow_def(struct upipe *upipe,
+                                                    struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
     upipe_probe_uref_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -109,10 +109,11 @@ static bool upipe_probe_uref_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_probe_uref_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_probe_uref_control(struct upipe *upipe,
+                                               enum upipe_command command,
+                                               va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -133,7 +134,7 @@ static bool upipe_probe_uref_control(struct upipe *upipe, enum upipe_command com
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -168,6 +169,7 @@ static void upipe_probe_uref_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_probe_uref_clean_output(upipe);
+    upipe_probe_uref_clean_urefcount(upipe);
     upipe_probe_uref_free_void(upipe);
 }
 
@@ -177,7 +179,9 @@ static struct upipe_mgr upipe_probe_uref_mgr = {
 
     .upipe_alloc = upipe_probe_uref_alloc,
     .upipe_input = upipe_probe_uref_input,
-    .upipe_control = upipe_probe_uref_control
+    .upipe_control = upipe_probe_uref_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for probe pipes

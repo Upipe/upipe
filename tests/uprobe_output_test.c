@@ -50,7 +50,7 @@
 #define UREF_POOL_DEPTH 0
 
 static struct upipe *output = NULL;
-static bool set_flow_def_answer = true;
+static enum ubase_err set_flow_def_answer = UBASE_ERR_NONE;
 static bool expect_new_flow_def = true;
 
 /** definition of our uprobe */
@@ -69,24 +69,24 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-static bool test_control(struct upipe *upipe, enum upipe_command command,
-                         va_list args)
+static enum ubase_err test_control(struct upipe *upipe,
+                                   enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             assert(p != NULL);
             *p = output;
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_OUTPUT: {
             struct upipe *s = va_arg(args, struct upipe *);
             output = s;
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
             assert(0);
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -100,15 +100,15 @@ static struct upipe_mgr test_mgr = {
     .upipe_control = test_control
 };
 
-static bool output_control(struct upipe *upipe, enum upipe_command command,
-                           va_list args)
+static enum ubase_err output_control(struct upipe *upipe,
+                                     enum upipe_command command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
             return set_flow_def_answer;
         default:
             assert(0);
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -159,11 +159,11 @@ int main(int argc, char **argv)
     upipe_throw_new_flow_def(upipe, uref);
     assert(!expect_new_flow_def);
 
-    assert(upipe_set_output(upipe, &output_pipe));
+    ubase_assert(upipe_set_output(upipe, &output_pipe));
     upipe_throw_new_flow_def(upipe, uref);
     assert(output == &output_pipe);
 
-    set_flow_def_answer = false;
+    set_flow_def_answer = UBASE_ERR_INVALID;
     expect_new_flow_def = true;
     upipe_throw_new_flow_def(upipe, uref);
     assert(!expect_new_flow_def);

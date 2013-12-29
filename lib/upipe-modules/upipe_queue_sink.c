@@ -205,87 +205,90 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param p filled in with a pointer to the pseudo-output
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsink_get_output(struct upipe *upipe, struct upipe **p)
+static enum ubase_err upipe_qsink_get_output(struct upipe *upipe, struct upipe **p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     assert(p != NULL);
     *p = upipe_qsink->output;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the pointer to the current pseudo-output.
  *
  * @param upipe description structure of the pipe
  * @param output pointer to the pseudo-output
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsink_set_output(struct upipe *upipe, struct upipe *output)
+static enum ubase_err upipe_qsink_set_output(struct upipe *upipe, struct upipe *output)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
     if (unlikely(upipe_qsink->output != NULL))
         upipe_release(upipe_qsink->output);
     if (unlikely(output == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     upipe_qsink->output = output;
     upipe_use(output);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
  * @param uref flow definition
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
+static enum ubase_err upipe_qsink_set_flow_def(struct upipe *upipe,
+                                               struct uref *uref)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (unlikely(uref == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup = NULL;
     if ((flow_def_dup = uref_dup(uref)) == NULL) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (upipe_qsink->flow_def != NULL)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink->flow_def = flow_def_dup;
     upipe_qsink->flow_def_sent = false;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns a pointer to the current queue source.
  *
  * @param upipe description structure of the pipe
  * @param queue_p filled in with a pointer to the queue source
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsink_get_qsrc(struct upipe *upipe, struct upipe **qsrc_p)
+static enum ubase_err _upipe_qsink_get_qsrc(struct upipe *upipe,
+                                            struct upipe **qsrc_p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     assert(qsrc_p != NULL);
     *qsrc_p = upipe_qsink->qsrc;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the pointer to the current queue source.
  *
  * @param upipe description structure of the pipe
  * @param queue pointer to the queue source
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
+static enum ubase_err _upipe_qsink_set_qsrc(struct upipe *upipe,
+                                            struct upipe *qsrc)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
     if (unlikely(upipe_qsink->qsrc != NULL))
-        return false;
+        return UBASE_ERR_UNHANDLED;
     if (unlikely(qsrc == NULL))
-        return true;
+        return UBASE_ERR_NONE;
     if (upipe_qsink->upump_mgr == NULL)
         upipe_throw_need_upump_mgr(upipe);
 
@@ -294,16 +297,16 @@ static bool _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
 
     upipe_notice_va(upipe, "using queue source %p", qsrc);
     upipe_qsink->flow_def_sent = false;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This flushes all currently held buffers, and unblocks the
  * sources.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsink_flush(struct upipe *upipe)
+static enum ubase_err upipe_qsink_flush(struct upipe *upipe)
 {
     if (upipe_qsink_flush_sink(upipe)) {
         struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
@@ -312,7 +315,7 @@ static bool upipe_qsink_flush(struct upipe *upipe)
          * used in @ref upipe_qsink_input. */
         upipe_release(upipe);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a queue sink pipe.
@@ -320,9 +323,9 @@ static bool upipe_qsink_flush(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param control type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsink_control(struct upipe *upipe,
+static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
                                  enum upipe_command command,
                                  va_list args)
 {
@@ -359,21 +362,19 @@ static bool _upipe_qsink_control(struct upipe *upipe,
         }
 
         case UPIPE_QSINK_GET_QSRC: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_QSINK_SIGNATURE)
             struct upipe **qsrc_p = va_arg(args, struct upipe **);
             return _upipe_qsink_get_qsrc(upipe, qsrc_p);
         }
         case UPIPE_QSINK_SET_QSRC: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_QSINK_SIGNATURE)
             struct upipe *qsrc = va_arg(args, struct upipe *);
             return _upipe_qsink_set_qsrc(upipe, qsrc);
         }
         case UPIPE_SINK_FLUSH:
             return upipe_qsink_flush(upipe);
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -383,13 +384,13 @@ static bool _upipe_qsink_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param control type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err upipe_qsink_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
-    if (unlikely(!_upipe_qsink_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_qsink_control(upipe, command, args));
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (upipe_qsink->upump_mgr != NULL && upipe_qsink->qsrc != NULL &&
@@ -401,14 +402,14 @@ static bool upipe_qsink_control(struct upipe *upipe, enum upipe_command command,
         if (unlikely(upump == NULL)) {
             upipe_err_va(upipe, "can't create watcher");
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         }
         upipe_qsink_set_upump(upipe, upump);
         if (unlikely(!upipe_qsink_check_sink(upipe)))
             upump_start(upipe_qsink->upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -466,7 +467,9 @@ static struct upipe_mgr upipe_qsink_mgr = {
 
     .upipe_alloc = upipe_qsink_alloc,
     .upipe_input = upipe_qsink_input,
-    .upipe_control = upipe_qsink_control
+    .upipe_control = upipe_qsink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all queue sink pipes.

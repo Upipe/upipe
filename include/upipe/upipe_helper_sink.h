@@ -102,7 +102,8 @@ extern "C" {
  * Outputs urefs that have been held.
  *
  * @item @code
- *  bool upipe_foo_get_max_length(struct upipe *upipe, unsigned int *p)
+ *  enum ubase_err upipe_foo_get_max_length(struct upipe *upipe,
+ *                                          unsigned int *p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -113,7 +114,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_max_length(struct upipe *upipe, unsigned int max_length)
+ *  enum ubase_err upipe_foo_set_max_length(struct upipe *upipe,
+ *                                          unsigned int max_length)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -260,28 +262,28 @@ static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the length                                       \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_max_length(struct upipe *upipe,                 \
-                                       unsigned int *p)                     \
+static enum ubase_err STRUCTURE##_get_max_length(struct upipe *upipe,       \
+                                                 unsigned int *p)           \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->MAX_UREFS;                                              \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sets the max length of the internal queue.              \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param length new length                                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_max_length(struct upipe *upipe,                 \
-                                       unsigned int length)                 \
+static enum ubase_err STRUCTURE##_set_max_length(struct upipe *upipe,       \
+                                                 unsigned int length)       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->MAX_UREFS = length;                                          \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This frees all urefs that have been held, and unblocks       \
  * all source pumps.                                                        \

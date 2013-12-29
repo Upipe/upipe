@@ -73,7 +73,7 @@ extern "C" {
  * Called whenever you change the flow definition on this output.
  *
  * @item @code
- *  bool upipe_foo_get_flow_def(struct upipe *upipe, struct uref **p)
+ *  enum ubase_err upipe_foo_get_flow_def(struct upipe *upipe, struct uref **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -84,7 +84,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_get_output(struct upipe *upipe, struct upipe **p)
+ *  enum ubase_err upipe_foo_get_output(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -95,7 +95,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_output(struct upipe *upipe, struct upipe *output)
+ *  enum ubase_err upipe_foo_set_output(struct upipe *upipe,
+ *                                      struct upipe *output)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -175,48 +176,47 @@ static void STRUCTURE##_store_flow_def(struct upipe *upipe,                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the flow definition (to use on the output)       \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_flow_def(struct upipe *upipe, struct uref **p)  \
+static enum ubase_err STRUCTURE##_get_flow_def(struct upipe *upipe,         \
+                                               struct uref **p)             \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     if (STRUCTURE->FLOW_DEF == NULL)                                        \
-        return false;                                                       \
+        return UBASE_ERR_UNHANDLED;                                         \
     *p = STRUCTURE->FLOW_DEF;                                               \
     STRUCTURE->FLOW_DEF_SENT = true;                                        \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This handles the get_output control command.                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the output                                       \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_output(struct upipe *upipe, struct upipe **p)   \
+static enum ubase_err STRUCTURE##_get_output(struct upipe *upipe,           \
+                                             struct upipe **p)              \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->OUTPUT;                                                 \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This handles the set_output control command.                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param output new output                                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_output(struct upipe *upipe,                     \
-                                   struct upipe *output)                    \
+static enum ubase_err STRUCTURE##_set_output(struct upipe *upipe,           \
+                                             struct upipe *output)          \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->OUTPUT != NULL))                                \
-        upipe_release(STRUCTURE->OUTPUT);                                   \
+    upipe_release(STRUCTURE->OUTPUT);                                       \
                                                                             \
-    STRUCTURE->OUTPUT = output;                                             \
-    if (likely(output != NULL))                                             \
-        upipe_use(output);                                                  \
-    return true;                                                            \
+    STRUCTURE->OUTPUT = upipe_use(output);                                  \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
@@ -225,8 +225,7 @@ static bool STRUCTURE##_set_output(struct upipe *upipe,                     \
 static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->OUTPUT != NULL))                                  \
-        upipe_release(STRUCTURE->OUTPUT);                                   \
+    upipe_release(STRUCTURE->OUTPUT);                                       \
     if (likely(STRUCTURE->FLOW_DEF != NULL))                                \
         uref_free(STRUCTURE->FLOW_DEF);                                     \
 }

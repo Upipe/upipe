@@ -69,11 +69,11 @@ struct upipe_mgr *upipe_avfsink_mgr_alloc(void);
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content_p filled in with the content of the option
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_get_option(struct upipe *upipe,
-                                            const char *option,
-                                            const char **content_p)
+static inline enum ubase_err upipe_avfsink_get_option(struct upipe *upipe,
+                                                      const char *option,
+                                                      const char **content_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_OPTION,
                          UPIPE_AVFSINK_SIGNATURE,
@@ -86,11 +86,11 @@ static inline bool upipe_avfsink_get_option(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL to delete it
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_set_option(struct upipe *upipe,
-                                            const char *option,
-                                            const char *content)
+static inline enum ubase_err upipe_avfsink_set_option(struct upipe *upipe,
+                                                      const char *option,
+                                                      const char *content)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_OPTION,
                          UPIPE_AVFSINK_SIGNATURE, option, content);
@@ -100,10 +100,10 @@ static inline bool upipe_avfsink_set_option(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mime_p filled in with the currently configured MIME type
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_get_mime(struct upipe *upipe,
-                                          const char **mime_p)
+static inline enum ubase_err upipe_avfsink_get_mime(struct upipe *upipe,
+                                                    const char **mime_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_MIME, UPIPE_AVFSINK_SIGNATURE,
                          mime_p);
@@ -114,9 +114,10 @@ static inline bool upipe_avfsink_get_mime(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mime MIME type
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
+static inline enum ubase_err upipe_avfsink_set_mime(struct upipe *upipe,
+                                                    const char *mime)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_MIME, UPIPE_AVFSINK_SIGNATURE,
                          mime);
@@ -126,13 +127,13 @@ static inline bool upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
  *
  * @param upipe description structure of the pipe
  * @param format_p filled in with the currently configured format name
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_get_format(struct upipe *upipe,
-                                          const char **format_p)
+static inline enum ubase_err upipe_avfsink_get_format(struct upipe *upipe,
+                                                      const char **format_p)
 {
-    return upipe_control(upipe, UPIPE_AVFSINK_GET_FORMAT, UPIPE_AVFSINK_SIGNATURE,
-                         format_p);
+    return upipe_control(upipe, UPIPE_AVFSINK_GET_FORMAT,
+                         UPIPE_AVFSINK_SIGNATURE, format_p);
 }
 
 /** @This sets the format. It only takes effect after the next call to
@@ -140,12 +141,13 @@ static inline bool upipe_avfsink_get_format(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param format format name
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avfsink_set_format(struct upipe *upipe, const char *format)
+static inline enum ubase_err upipe_avfsink_set_format(struct upipe *upipe,
+                                                      const char *format)
 {
-    return upipe_control(upipe, UPIPE_AVFSINK_SET_FORMAT, UPIPE_AVFSINK_SIGNATURE,
-                         format);
+    return upipe_control(upipe, UPIPE_AVFSINK_SET_FORMAT,
+                         UPIPE_AVFSINK_SIGNATURE, format);
 }
 
 #ifdef __cplusplus

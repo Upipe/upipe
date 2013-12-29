@@ -163,8 +163,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts sync"));
     assert(upipe_ts_sync != NULL);
-    assert(upipe_set_flow_def(upipe_ts_sync, uref));
-    assert(upipe_set_output(upipe_ts_sync, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_ts_sync, uref));
+    ubase_assert(upipe_set_output(upipe_ts_sync, upipe_sink));
     uref_free(uref);
 
     uint8_t *buffer;

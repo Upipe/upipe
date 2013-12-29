@@ -417,7 +417,8 @@ static struct upipe_ts_demux_psi_pid *
     if (unlikely(flow_def == NULL ||
                  !uref_flow_set_def(flow_def, "block.mpegtspsi.") ||
                  !uref_ts_flow_set_pid(flow_def, pid) ||
-                 !upipe_set_flow_def(psi_pid->psi_split, flow_def))) {
+                 !ubase_err_check(upipe_set_flow_def(psi_pid->psi_split,
+                                  flow_def)))) {
         if (flow_def != NULL)
             uref_free(flow_def);
         free(psi_pid);
@@ -829,9 +830,10 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
             return false;
         }
 
-        bool ret = upipe_set_flow_def(upipe_ts_demux_output->setrap, flow_def);
+        enum ubase_err err = upipe_set_flow_def(upipe_ts_demux_output->setrap,
+                                                flow_def);
         uref_free(flow_def);
-        return ret;
+        return err == UBASE_ERR_NONE;
     }
     return false;
 }
@@ -841,11 +843,11 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_demux_output_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+static enum ubase_err upipe_ts_demux_output_control(struct upipe *upipe,
+                                                    enum upipe_command command,
+                                                    va_list args)
 {
     switch (command) {
         case UPIPE_SUB_GET_SUPER: {
@@ -911,6 +913,7 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_output_control;
+    output_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -1024,7 +1027,8 @@ static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
 
         struct uref *flow_def = NULL;
         uint64_t id = 0;
-        while (upipe_split_iterate(pmtd, &flow_def))
+        while (ubase_err_check(upipe_split_iterate(pmtd, &flow_def)) &&
+               flow_def != NULL)
             if (uref_flow_get_id(flow_def, &id) && id == output->pid) {
                 if (!upipe_ts_demux_output_pmtd_update(
                         upipe_ts_demux_output_to_upipe(output), flow_def))
@@ -1147,8 +1151,9 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
         ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
             output = upipe_ts_demux_output_from_uchain(uchain);
             if (output->setrap != NULL)
-                ret = ret && upipe_setrap_set_rap(output->setrap,
-                                    upipe_ts_demux_program->systime_pcr);
+                ret = ret &&
+                    ubase_err_check(upipe_setrap_set_rap(output->setrap,
+                                        upipe_ts_demux_program->systime_pcr));
         }
         /* this is also valid for the packet we are processing */
         uref_clock_set_rap_sys(uref, upipe_ts_demux_program->systime_pcr);
@@ -1215,8 +1220,9 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                      flow_def);
     uref_free(flow_def);
     if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL ||
-                 !upipe_get_flow_def(upipe_ts_demux_program->pcr_split_output,
-                                     &flow_def))) {
+                 !ubase_err_check(upipe_get_flow_def(
+                         upipe_ts_demux_program->pcr_split_output,
+                         &flow_def)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -1230,7 +1236,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                              "decaps PCR %"PRIu64,
                              upipe_ts_demux_program->pcr_pid));
     if (unlikely(decaps == NULL ||
-                 !upipe_set_output(decaps, demux->null))) {
+                 !ubase_err_check(upipe_set_output(decaps, demux->null)))) {
         if (decaps != NULL)
             upipe_release(decaps);
         upipe_release(upipe_ts_demux_program->pcr_split_output);
@@ -1345,11 +1351,11 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_demux_program_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+static enum ubase_err upipe_ts_demux_program_control(struct upipe *upipe,
+                                                     enum upipe_command command,
+                                                     va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {
@@ -1440,6 +1446,7 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
     program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
     program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_demux_program_control;
+    program_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -1544,8 +1551,7 @@ static enum ubase_err upipe_ts_demux_psim_probe(struct uprobe *uprobe,
         return UBASE_ERR_INVALID;
     }
 
-    upipe_set_output(psim, psi_pid->psi_split);
-    return UBASE_ERR_NONE;
+    return upipe_set_output(psim, psi_pid->psi_split);
 }
 
 /** @internal @This tries to guess the conformance of the stream from the
@@ -1593,10 +1599,7 @@ static enum ubase_err upipe_ts_demux_patd_new_rap(struct upipe *upipe,
     uint64_t systime_rap;
     if (unlikely(!uref_clock_get_rap_sys(uref, &systime_rap)))
         return UBASE_ERR_INVALID;
-    if (unlikely(!upipe_setrap_set_rap(upipe_ts_demux->setrap,
-                                       systime_rap)))
-        return UBASE_ERR_UNKNOWN;
-    return UBASE_ERR_NONE;
+    return upipe_setrap_set_rap(upipe_ts_demux->setrap, systime_rap);
 }
 
 /** @internal @This catches update events coming from patd inner pipe.
@@ -1615,7 +1618,7 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
     struct uref *nit;
-    if (upipe_ts_patd_get_nit(patd, &nit)) {
+    if (ubase_err_check(upipe_ts_patd_get_nit(patd, &nit))) {
         upipe_ts_demux->nit_pid = 0;
         uref_ts_flow_get_pid(nit, &upipe_ts_demux->nit_pid);
         upipe_ts_demux_conformance_guess(upipe);
@@ -1633,7 +1636,8 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
 
         struct uref *flow_def = NULL;
         uint64_t id = 0, pid = 0;
-        while (upipe_split_iterate(patd, &flow_def))
+        while (ubase_err_check(upipe_split_iterate(patd, &flow_def)) &&
+               flow_def == NULL)
             if (uref_flow_get_id(flow_def, &id) && id == program->program &&
                 uref_ts_flow_get_pid(flow_def, &pid) && pid == program->pmt_pid)
                 break;
@@ -1804,32 +1808,32 @@ static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
-                                        struct uref *flow_def)
+static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
+                                                  struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (upipe_ts_demux->input != NULL &&
-        !upipe_set_flow_def(upipe_ts_demux->input, flow_def))
-        return false;
+    if (upipe_ts_demux->input != NULL) {
+        UBASE_ERR_CHECK(upipe_set_flow_def(upipe_ts_demux->input, flow_def));
+    }
 
     const char *def;
     if (!uref_flow_get_def(flow_def, &def) ||
         ubase_ncmp(def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     if (upipe_ts_demux->flow_def_input != NULL)
         uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux->flow_def_input = flow_def_dup;
     if (upipe_ts_demux->input != NULL)
-        return true;
+        return UBASE_ERR_NONE;
 
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
@@ -1849,9 +1853,10 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                       UPROBE_LOG_VERBOSE, "sync"));
         if (unlikely(upipe_ts_demux->input == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
-        ret = upipe_set_flow_def(upipe_ts_demux->input, flow_def);
+        ret = ubase_err_check(upipe_set_flow_def(upipe_ts_demux->input,
+                                                 flow_def));
         assert(ret);
 
         upipe_ts_demux->setrap =
@@ -1861,7 +1866,7 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                           UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     } else {
         upipe_ts_demux->setrap =
@@ -1870,9 +1875,10 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                               UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
-        ret = upipe_set_flow_def(upipe_ts_demux->setrap, flow_def);
+        ret = ubase_err_check(upipe_set_flow_def(upipe_ts_demux->setrap,
+                                                 flow_def));
         assert(ret);
 
         upipe_ts_demux->input = upipe_ts_demux->setrap;
@@ -1887,7 +1893,7 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                     UPROBE_LOG_VERBOSE, "split"));
     if (unlikely(upipe_ts_demux->split == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     upipe_ts_demux->null =
@@ -1896,14 +1902,14 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                           UPROBE_LOG_NOTICE, "null"));
     if (unlikely(upipe_ts_demux->null == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     /* get psi_split inner pipe */
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, 0);
     if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     /* set filter on table 0, current */
@@ -1932,7 +1938,7 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
         if (flow_def != NULL)
             uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     uref_free(flow_def);
     upipe_get_flow_def(upipe_ts_demux->psi_split_output_pat, &flow_def);
@@ -1945,10 +1951,10 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
                                     UPROBE_LOG_VERBOSE, "patd"));
     if (unlikely(patd == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_ts_demux_store_last_inner(upipe, patd);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently detected conformance mode. It cannot
@@ -1956,24 +1962,25 @@ static bool upipe_ts_demux_set_flow_def(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param conformance_p filled in with the conformance
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_demux_get_conformance(struct upipe *upipe,
-                                enum upipe_ts_conformance *conformance_p)
+static enum ubase_err
+    _upipe_ts_demux_get_conformance(struct upipe *upipe,
+                                    enum upipe_ts_conformance *conformance_p)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     assert(conformance_p != NULL);
     *conformance_p = upipe_ts_demux->conformance;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the conformance mode.
  *
  * @param upipe description structure of the pipe
  * @param conformance conformance mode
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_demux_set_conformance(struct upipe *upipe,
+static enum ubase_err _upipe_ts_demux_set_conformance(struct upipe *upipe,
                                 enum upipe_ts_conformance conformance)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
@@ -1990,9 +1997,9 @@ static bool _upipe_ts_demux_set_conformance(struct upipe *upipe,
             upipe_ts_demux->conformance = conformance;
             break;
         default:
-            return false;
+            return UBASE_ERR_INVALID;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ts_demux pipe.
@@ -2000,9 +2007,9 @@ static bool _upipe_ts_demux_set_conformance(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_demux_control(struct upipe *upipe,
+static enum ubase_err upipe_ts_demux_control(struct upipe *upipe,
                                    enum upipe_command command, va_list args)
 {
     switch (command) {
@@ -2020,15 +2027,13 @@ static bool upipe_ts_demux_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_DEMUX_GET_CONFORMANCE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE)
             enum upipe_ts_conformance *conformance_p =
                 va_arg(args, enum upipe_ts_conformance *);
             return _upipe_ts_demux_get_conformance(upipe, conformance_p);
         }
         case UPIPE_TS_DEMUX_SET_CONFORMANCE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_DEMUX_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE)
             enum upipe_ts_conformance conformance =
                 va_arg(args, enum upipe_ts_conformance);
             return _upipe_ts_demux_set_conformance(upipe, conformance);
@@ -2139,6 +2144,59 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     free(ts_demux_mgr);
 }
 
+/** @This processes control commands on a ts_demux manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
+                                                 enum upipe_mgr_command command,
+                                                 va_list args)
+{
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
+
+    switch (command) {
+#define GET_SET_MGR(name, NAME)                                             \
+        case UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR: {                         \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE)           \
+            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
+            *p = ts_demux_mgr->name##_mgr;                                  \
+            return UBASE_ERR_NONE;                                          \
+        }                                                                   \
+        case UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR: {                         \
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE)           \
+            if (!urefcount_single(&ts_demux_mgr->urefcount))                \
+                return UBASE_ERR_BUSY;                                      \
+            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
+            upipe_mgr_release(ts_demux_mgr->name##_mgr);                    \
+            upipe_mgr_use(m);                                               \
+            ts_demux_mgr->name##_mgr = upipe_mgr_use(m);                    \
+            return UBASE_ERR_NONE;                                          \
+        }
+
+        GET_SET_MGR(ts_split, TS_SPLIT)
+        GET_SET_MGR(ts_sync, TS_SYNC)
+        GET_SET_MGR(ts_check, TS_CHECK)
+        GET_SET_MGR(ts_decaps, TS_DECAPS)
+        GET_SET_MGR(ts_psim, TS_PSIM)
+        GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
+        GET_SET_MGR(ts_patd, TS_PATD)
+        GET_SET_MGR(ts_pmtd, TS_PMTD)
+        GET_SET_MGR(ts_pesd, TS_PESD)
+
+        GET_SET_MGR(mpgaf, MPGAF)
+        GET_SET_MGR(mpgvf, MPGVF)
+        GET_SET_MGR(h264f, H264F)
+#undef GET_SET_MGR
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** @This returns the management structure for all ts_demux pipes.
  *
  * @return pointer to manager
@@ -2174,76 +2232,6 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->mgr.upipe_alloc = upipe_ts_demux_alloc;
     ts_demux_mgr->mgr.upipe_input = upipe_ts_demux_input;
     ts_demux_mgr->mgr.upipe_control = upipe_ts_demux_control;
+    ts_demux_mgr->mgr.upipe_mgr_control = upipe_ts_demux_mgr_control;
     return upipe_ts_demux_mgr_to_upipe_mgr(ts_demux_mgr);
-}
-
-/** @This processes control commands on a ts_demux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_demux_mgr_control_va(struct upipe_mgr *mgr,
-                                   enum upipe_ts_demux_mgr_command command,
-                                   va_list args)
-{
-    struct upipe_ts_demux_mgr *ts_demux_mgr =
-        upipe_ts_demux_mgr_from_upipe_mgr(mgr);
-    assert(urefcount_single(&ts_demux_mgr->urefcount));
-
-    switch (command) {
-#define GET_SET_MGR(name, NAME)                                             \
-        case UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR: {                         \
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);       \
-            *p = ts_demux_mgr->name##_mgr;                                  \
-            return true;                                                    \
-        }                                                                   \
-        case UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR: {                         \
-            struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
-            if (ts_demux_mgr->name##_mgr != NULL)                           \
-                upipe_mgr_release(ts_demux_mgr->name##_mgr);                \
-            if (m != NULL)                                                  \
-                upipe_mgr_use(m);                                           \
-            ts_demux_mgr->name##_mgr = m;                                   \
-            return true;                                                    \
-        }
-
-        GET_SET_MGR(ts_split, TS_SPLIT)
-        GET_SET_MGR(ts_sync, TS_SYNC)
-        GET_SET_MGR(ts_check, TS_CHECK)
-        GET_SET_MGR(ts_decaps, TS_DECAPS)
-        GET_SET_MGR(ts_psim, TS_PSIM)
-        GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
-        GET_SET_MGR(ts_patd, TS_PATD)
-        GET_SET_MGR(ts_pmtd, TS_PMTD)
-        GET_SET_MGR(ts_pesd, TS_PESD)
-
-        GET_SET_MGR(mpgaf, MPGAF)
-        GET_SET_MGR(mpgvf, MPGVF)
-        GET_SET_MGR(h264f, H264F)
-#undef GET_SET_MGR
-
-        default:
-            return false;
-    }
-}
-
-/** @This processes control commands on a ts_demux manager. This may only be
- * called before any pipe has been allocated.
- *
- * @param mgr pointer to manager
- * @param command type of command to process
- * @param args arguments of the command
- * @return false in case of error
- */
-bool upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
-                                enum upipe_ts_demux_mgr_command command, ...)
-{
-    va_list args;
-    va_start(args, command);
-    bool ret = upipe_ts_demux_mgr_control_va(mgr, command, args);
-    va_end(args);
-    return ret;
 }

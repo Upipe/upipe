@@ -82,8 +82,8 @@ struct upipe_multicat_sink {
     /** rotate interval */
     uint64_t rotate;
 
-	/** file opening mode */
-	enum upipe_fsink_mode mode;
+    /** file opening mode */
+    enum upipe_fsink_mode mode;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -110,7 +110,7 @@ static bool _upipe_multicat_sink_change_file(struct upipe *upipe, int64_t idx)
         return false;
     }
     snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", upipe_multicat_sink->dirpath, idx, upipe_multicat_sink->suffix);
-    return upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode);
+    return ubase_err_check(upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode));
 }
 
 /** @internal @This handles data.
@@ -147,57 +147,59 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
 /** @internal @This allocates multicat_sink output (fsink)
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_output_alloc(struct upipe *upipe)
+static enum ubase_err _upipe_multicat_sink_output_alloc(struct upipe *upipe)
 {
     struct upipe *fsink = NULL;
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (!upipe_multicat_sink->fsink_mgr) {
         upipe_err(upipe, "fsink manager required");
-        return false;
+        return UBASE_ERR_UNHANDLED;
     }
     fsink = upipe_void_alloc(upipe_multicat_sink->fsink_mgr,
                              uprobe_pfx_alloc_va(uprobe_use(upipe->uprobe),
                                                  UPROBE_LOG_NOTICE, "fsink"));
     if (unlikely(!fsink)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
+    enum ubase_err err;
     if (upipe_multicat_sink->flow_def != NULL &&
-        !upipe_set_flow_def(fsink, upipe_multicat_sink->flow_def)) {
+        (err = upipe_set_flow_def(fsink, upipe_multicat_sink->flow_def)) !=
+        UBASE_ERR_NONE) {
         upipe_warn(upipe, "set_flow_def failed");
-        return false;
+        return err;
     }
     upipe_multicat_sink->fsink = fsink;
-	return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_multicat_sink_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_multicat_sink_set_flow_def(struct upipe *upipe,
                                              struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_multicat_sink *upipe_multicat_sink =
         upipe_multicat_sink_from_upipe(upipe);
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_NONE;
     if (upipe_multicat_sink->flow_def != NULL)
         uref_free(upipe_multicat_sink->flow_def);
     upipe_multicat_sink->flow_def = flow_def_dup;
     if (upipe_multicat_sink->fsink != NULL)
         return upipe_set_flow_def(upipe_multicat_sink->fsink,
                                   upipe_multicat_sink->flow_def);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This is called by _control to change dirpath/suffix
@@ -205,15 +207,13 @@ static bool upipe_multicat_sink_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param path directory path (or prefix)
  * @param suffix file suffix
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path, const char *suffix)
+static enum ubase_err _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path, const char *suffix)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(!upipe_multicat_sink->fsink)) {
-        if (unlikely(!_upipe_multicat_sink_output_alloc(upipe))) {
-            return false;
-        };
+        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
     }
 
     free(upipe_multicat_sink->dirpath);
@@ -225,59 +225,62 @@ static bool _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path,
         upipe_multicat_sink->dirpath = NULL;
         upipe_multicat_sink->suffix = NULL;
         upipe_fsink_set_path(upipe_multicat_sink->fsink, NULL, UPIPE_FSINK_APPEND);
-        return true;
+        return UBASE_ERR_NONE;
     }
 
     upipe_multicat_sink->dirpath = strndup(path, MAXPATHLEN);
     upipe_multicat_sink->suffix = strndup(suffix, MAXPATHLEN);
     upipe_notice_va(upipe, "setting path and suffix: %s %s", path, suffix);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This changes the rotate interval
  *
  * @param upipe description structure of the pipe
  * @param rotate new rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool  _upipe_multicat_sink_set_rotate(struct upipe *upipe, uint64_t rotate)
+static enum ubase_err  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
+        uint64_t rotate)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(rotate < 2)) {
         upipe_warn_va(upipe, "invalid rotate interval (%"PRIu64" < 2)", rotate);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     upipe_multicat_sink->rotate = rotate;
     upipe_notice_va(upipe, "setting rotate: %"PRIu64, rotate);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current fsink manager
  *
  * @param upipe description structure of the pipe
  * @param rotate_p filled in with the current rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe, struct upipe_mgr **fsink_mgr)
+static enum ubase_err _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
+        struct upipe_mgr **fsink_mgr)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     assert(fsink_mgr != NULL);
     *fsink_mgr = upipe_multicat_sink->fsink_mgr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current rotate interval
  *
  * @param upipe description structure of the pipe
  * @param rotate_p filled in with the current rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
+static enum ubase_err _upipe_multicat_sink_get_rotate(struct upipe *upipe,
+        uint64_t *rotate_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     assert(rotate_p != NULL);
     *rotate_p = upipe_multicat_sink->rotate;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current dirpath/suffix
@@ -285,9 +288,10 @@ static bool _upipe_multicat_sink_get_rotate(struct upipe *upipe, uint64_t *rotat
  * @param upipe description structure of the pipe
  * @param path_p filled in with the current rotate interval
  * @param suffix_p filled in with the current rotate interval
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_get_path(struct upipe *upipe, char **path_p, char **suffix_p)
+static enum ubase_err _upipe_multicat_sink_get_path(struct upipe *upipe,
+        char **path_p, char **suffix_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (path_p) {
@@ -296,22 +300,21 @@ static bool _upipe_multicat_sink_get_path(struct upipe *upipe, char **path_p, ch
     if (suffix_p) {
         *suffix_p = upipe_multicat_sink->suffix;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This pushes the given upump manager to the (fsink) output
  *
  * @param upipe description structure of the pipe
  * @param upump_mgr upump manager
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_set_upump_mgr(struct upipe *upipe, struct upump_mgr *upump_mgr)
+static enum ubase_err _upipe_multicat_sink_set_upump_mgr(struct upipe *upipe,
+        struct upump_mgr *upump_mgr)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
-        if (unlikely(!_upipe_multicat_sink_output_alloc(upipe))) {
-            return false;
-        }
+        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
     }
     return upipe_set_upump_mgr(upipe_multicat_sink->fsink, upump_mgr);
 }
@@ -320,15 +323,14 @@ static bool _upipe_multicat_sink_set_upump_mgr(struct upipe *upipe, struct upump
  *
  * @param upipe description structure of the pipe
  * @param uclock uclock
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_multicat_sink_set_uclock(struct upipe *upipe, struct uclock *uclock)
+static enum ubase_err _upipe_multicat_sink_set_uclock(struct upipe *upipe,
+                                                      struct uclock *uclock)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
-        if (unlikely(!_upipe_multicat_sink_output_alloc(upipe))) {
-            return false;
-        }
+        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
     }
     return upipe_set_uclock(upipe_multicat_sink->fsink, uclock);
 }
@@ -339,12 +341,13 @@ static bool _upipe_multicat_sink_set_uclock(struct upipe *upipe, struct uclock *
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_multicat_sink_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_multicat_sink_control(struct upipe *upipe,
+        enum upipe_command command, va_list args)
 {
-    struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
+    struct upipe_multicat_sink *upipe_multicat_sink =
+        upipe_multicat_sink_from_upipe(upipe);
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -369,48 +372,41 @@ static bool upipe_multicat_sink_control(struct upipe *upipe, enum upipe_command 
             return _upipe_multicat_sink_set_uclock(upipe, uclock);
         }
 
-		case UPIPE_MULTICAT_SINK_SET_MODE: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
-			upipe_multicat_sink->mode = va_arg(args, enum upipe_fsink_mode);
-			return true;
-		}
+        case UPIPE_MULTICAT_SINK_SET_MODE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
+            upipe_multicat_sink->mode = va_arg(args, enum upipe_fsink_mode);
+            return UBASE_ERR_NONE;
+        }
         case UPIPE_MULTICAT_SINK_SET_ROTATE: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             return _upipe_multicat_sink_set_rotate(upipe, va_arg(args, uint64_t));
         }
         case UPIPE_MULTICAT_SINK_GET_ROTATE: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             return _upipe_multicat_sink_get_rotate(upipe, va_arg(args, uint64_t*));
         }
         case UPIPE_MULTICAT_SINK_SET_FSINK_MGR: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             upipe_multicat_sink->fsink_mgr = va_arg(args, struct upipe_mgr*);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_MULTICAT_SINK_GET_FSINK_MGR: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             return _upipe_multicat_sink_get_fsink_mgr(upipe, va_arg(args, struct upipe_mgr **));
         }
         case UPIPE_MULTICAT_SINK_SET_PATH: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             const char *path = va_arg(args, const char *);
             const char *ext = va_arg(args, const char *);
             return _upipe_multicat_sink_set_path(upipe, path, ext);
         }
         case UPIPE_MULTICAT_SINK_GET_PATH: {
-			unsigned int signature = va_arg(args, unsigned int); 
-			assert(signature == UPIPE_MULTICAT_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             return _upipe_multicat_sink_get_path(upipe, va_arg(args, char **), va_arg(args, char **));
         }
         default:
             upipe_warn(upipe, "invalid command");
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -475,7 +471,9 @@ static struct upipe_mgr upipe_multicat_sink_mgr = {
 
     .upipe_alloc = upipe_multicat_sink_alloc,
     .upipe_input = upipe_multicat_sink_input,
-    .upipe_control = upipe_multicat_sink_control
+    .upipe_control = upipe_multicat_sink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for multicat_sink pipes

@@ -165,8 +165,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
-    assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
-    assert(upipe_set_output(upipe_qsrc, upipe_sink));
+    ubase_assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
+    ubase_assert(upipe_set_output(upipe_qsrc, upipe_sink));
 
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
@@ -174,9 +174,9 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "queue sink"));
     assert(upipe_qsink != NULL);
-    assert(upipe_set_flow_def(upipe_qsink, uref));
-    assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
-    assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
+    ubase_assert(upipe_set_flow_def(upipe_qsink, uref));
+    ubase_assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
+    ubase_assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
     upipe_input(upipe_qsink, uref, NULL);
 
     unsigned int length;
-    assert(upipe_qsrc_get_length(upipe_qsrc, &length));
+    ubase_assert(upipe_qsrc_get_length(upipe_qsrc, &length));
     assert(length == 3);
 
     ev_loop(loop, 0);

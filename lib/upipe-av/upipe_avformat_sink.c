@@ -205,27 +205,27 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
-                                           struct uref *flow_def)
+static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
+                                                     struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct upipe_avfsink *upipe_avfsink =
         upipe_avfsink_from_sub_mgr(upipe->mgr);
     struct upipe_avfsink_sub *upipe_avfsink_sub =
         upipe_avfsink_sub_from_upipe(upipe);
     if (upipe_avfsink->opened && upipe_avfsink_sub->id == -1)
-        return false;
+        return UBASE_ERR_UNHANDLED;
 
     const char *def;
     enum AVCodecID codec_id;
     if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
-        return false;
+        return UBASE_ERR_INVALID;
     }
     uint64_t octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &octetrate);
@@ -239,12 +239,12 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                      !uref_pic_flow_get_sar(flow_def, &sar) ||
                      !uref_pic_flow_get_hsize(flow_def, &width) ||
                      !uref_pic_flow_get_vsize(flow_def, &height)))
-            return false;
+            return UBASE_ERR_INVALID;
     } else {
         if (unlikely(!uref_sound_flow_get_channels(flow_def, &channels) ||
                      !uref_sound_flow_get_rate(flow_def, &rate) ||
                      !uref_sound_flow_get_samples(flow_def, &samples)))
-            return false;
+            return UBASE_ERR_INVALID;
     }
 
     uint8_t *extradata_alloc = NULL;
@@ -254,7 +254,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
@@ -267,7 +267,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (unlikely(flow_def_check == NULL)) {
         free(extradata_alloc);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
@@ -279,7 +279,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         free(extradata_alloc);
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!uref_pic_flow_set_fps(flow_def_check, fps) ||
@@ -289,7 +289,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     } else {
         if (unlikely(!uref_sound_flow_set_channels(flow_def_check, channels) ||
@@ -298,7 +298,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     }
 
@@ -310,7 +310,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                                                           flow_def_check);
         free(extradata_alloc);
         uref_free(flow_def_check);
-        return ret;
+        return ret ? UBASE_ERR_NONE : UBASE_ERR_BUSY;
     }
 
     /* Open a new avformat stream. */
@@ -322,7 +322,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         free(extradata_alloc);
         upipe_err_va(upipe, "couldn't allocate stream");
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     const char *lang;
@@ -359,7 +359,7 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         codec->extradata = extradata_alloc;
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on an output subpipe of an
@@ -368,10 +368,11 @@ static bool upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsink_sub_control(struct upipe *upipe,
-                                      enum upipe_command command, va_list args)
+static enum ubase_err upipe_avfsink_sub_control(struct upipe *upipe,
+                                                enum upipe_command command,
+                                                va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -384,7 +385,7 @@ static bool upipe_avfsink_sub_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -418,6 +419,7 @@ static void upipe_avfsink_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_avfsink_sub_alloc;
     sub_mgr->upipe_input = upipe_avfsink_sub_input;
     sub_mgr->upipe_control = upipe_avfsink_sub_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates an avfsink pipe.
@@ -595,10 +597,11 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content_p filled in with the content of the option
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_get_option(struct upipe *upipe, const char *option,
-                                      const char **content_p)
+static enum ubase_err _upipe_avfsink_get_option(struct upipe *upipe,
+                                                const char *option,
+                                                const char **content_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -606,9 +609,9 @@ static bool _upipe_avfsink_get_option(struct upipe *upipe, const char *option,
     AVDictionaryEntry *entry = av_dict_get(upipe_avfsink->options, option,
                                            NULL, 0);
     if (unlikely(entry == NULL))
-        return false;
+        return UBASE_ERR_EXTERNAL;
     *content_p = entry->value;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the content of an avformat option. It only take effect
@@ -617,10 +620,11 @@ static bool _upipe_avfsink_get_option(struct upipe *upipe, const char *option,
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option, or NULL to delete it
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_set_option(struct upipe *upipe, const char *option,
-                                     const char *content)
+static enum ubase_err _upipe_avfsink_set_option(struct upipe *upipe,
+                                                const char *option,
+                                                const char *content)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -629,23 +633,24 @@ static bool _upipe_avfsink_set_option(struct upipe *upipe, const char *option,
         upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
                      buf);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently configured MIME type.
  *
  * @param upipe description structure of the pipe
  * @param mime_p filled in with the currently configured MIME type
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_get_mime(struct upipe *upipe, const char **mime_p)
+static enum ubase_err _upipe_avfsink_get_mime(struct upipe *upipe,
+                                              const char **mime_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(mime_p != NULL);
     *mime_p = upipe_avfsink->mime;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the MIME type. It only takes effect after the next
@@ -653,9 +658,10 @@ static bool _upipe_avfsink_get_mime(struct upipe *upipe, const char **mime_p)
  *
  * @param upipe description structure of the pipe
  * @param mime MIME type
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
+static enum ubase_err _upipe_avfsink_set_mime(struct upipe *upipe,
+                                              const char *mime)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     free(upipe_avfsink->mime);
@@ -663,25 +669,26 @@ static bool _upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
         upipe_avfsink->mime = strdup(mime);
         if (upipe_avfsink->mime == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     } else
         upipe_avfsink->mime = NULL;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently configured format name.
  *
  * @param upipe description structure of the pipe
  * @param format_p filled in with the currently configured format name
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_get_format(struct upipe *upipe, const char **format_p)
+static enum ubase_err _upipe_avfsink_get_format(struct upipe *upipe,
+                                                const char **format_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(format_p != NULL);
     *format_p = upipe_avfsink->format;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the format name. It only takes effect after the next
@@ -689,9 +696,10 @@ static bool _upipe_avfsink_get_format(struct upipe *upipe, const char **format_p
  *
  * @param upipe description structure of the pipe
  * @param format format name
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
+static enum ubase_err _upipe_avfsink_set_format(struct upipe *upipe,
+                                                const char *format)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     free(upipe_avfsink->format);
@@ -699,34 +707,36 @@ static bool _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
         upipe_avfsink->format = strdup(format);
         if (upipe_avfsink->format == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
     } else
         upipe_avfsink->format = NULL;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently opened URI.
  *
  * @param upipe description structure of the pipe
  * @param uri_p filled in with the URI
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsink_get_uri(struct upipe *upipe, const char **uri_p)
+static enum ubase_err upipe_avfsink_get_uri(struct upipe *upipe,
+                                            const char **uri_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(uri_p != NULL);
     *uri_p = upipe_avfsink->uri;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given URI.
  *
  * @param upipe description structure of the pipe
  * @param uri URI to open
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
+static enum ubase_err upipe_avfsink_set_uri(struct upipe *upipe,
+                                            const char *uri)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
 
@@ -745,17 +755,17 @@ static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     upipe_avfsink->uri = NULL;
 
     if (unlikely(uri == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     AVOutputFormat *format = NULL;
     format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
     if (unlikely(format == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     upipe_avfsink->context = avformat_alloc_context();
     if (unlikely(upipe_avfsink->context == NULL)) {
         upipe_err_va(upipe, "can't allocate context (URI %s)", uri);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     upipe_avfsink->context->oformat = format;
     strncpy(upipe_avfsink->context->filename, uri,
@@ -765,7 +775,7 @@ static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;
     upipe_notice_va(upipe, "opening URI %s", upipe_avfsink->uri);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on an avformat source pipe.
@@ -773,10 +783,11 @@ static bool upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_avfsink_control(struct upipe *upipe,
-                                  enum upipe_command command, va_list args)
+static enum ubase_err upipe_avfsink_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {
@@ -788,40 +799,34 @@ static bool upipe_avfsink_control(struct upipe *upipe,
             return upipe_avfsink_iterate_sub(upipe, p);
         }
         case UPIPE_AVFSINK_GET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char **content_p = va_arg(args, const char **);
             return _upipe_avfsink_get_option(upipe, option, content_p);
         }
         case UPIPE_AVFSINK_SET_OPTION: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_avfsink_set_option(upipe, option, content);
         }
         case UPIPE_AVFSINK_GET_MIME: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char **mime_p = va_arg(args, const char **);
             return _upipe_avfsink_get_mime(upipe, mime_p);
         }
         case UPIPE_AVFSINK_SET_MIME: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *mime = va_arg(args, const char *);
             return _upipe_avfsink_set_mime(upipe, mime);
         }
         case UPIPE_AVFSINK_GET_FORMAT: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char **format_p = va_arg(args, const char **);
             return _upipe_avfsink_get_format(upipe, format_p);
         }
         case UPIPE_AVFSINK_SET_FORMAT: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AVFSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *format = va_arg(args, const char *);
             return _upipe_avfsink_set_format(upipe, format);
         }
@@ -835,7 +840,7 @@ static bool upipe_avfsink_control(struct upipe *upipe,
             return upipe_avfsink_set_uri(upipe, uri);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -867,7 +872,9 @@ static struct upipe_mgr upipe_avfsink_mgr = {
 
     .upipe_alloc = upipe_avfsink_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_avfsink_control
+    .upipe_control = upipe_avfsink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all avformat sinks.

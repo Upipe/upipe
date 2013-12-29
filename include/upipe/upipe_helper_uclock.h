@@ -55,7 +55,7 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  bool upipe_foo_get_uclock(struct upipe *upipe, struct uclock **p)
+ *  enum ubase_err upipe_foo_get_uclock(struct upipe *upipe, struct uclock **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -66,7 +66,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_uclock(struct upipe *upipe, struct uclock *uclock)
+ *  enum ubase_err upipe_foo_set_uclock(struct upipe *upipe,
+ *                                      struct uclock *uclock)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -100,23 +101,24 @@ static void STRUCTURE##_init_uclock(struct upipe *upipe)                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the uclock                                       \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_uclock(struct upipe *upipe, struct uclock **p)  \
+static enum ubase_err STRUCTURE##_get_uclock(struct upipe *upipe,           \
+                                             struct uclock **p)             \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->UCLOCK;                                                 \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sets the uclock.                                        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param uclock new uclock                                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_uclock(struct upipe *upipe,                     \
-                                   struct uclock *uclock)                   \
+static enum ubase_err STRUCTURE##_set_uclock(struct upipe *upipe,           \
+                                             struct uclock *uclock)         \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UCLOCK != NULL))                                \
@@ -124,7 +126,7 @@ static bool STRUCTURE##_set_uclock(struct upipe *upipe,                     \
     STRUCTURE->UCLOCK = uclock;                                             \
     if (likely(uclock != NULL))                                             \
         uclock_use(STRUCTURE->UCLOCK);                                      \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

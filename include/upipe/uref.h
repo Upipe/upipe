@@ -292,6 +292,8 @@ static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
  */
 static inline struct uref_mgr *uref_mgr_use(struct uref_mgr *mgr)
 {
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }

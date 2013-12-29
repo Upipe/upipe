@@ -378,8 +378,8 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sws"),
             output_flow); 
     assert(sws != NULL);
-    assert(upipe_set_flow_def(sws, pic_flow));
-    assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
+    ubase_assert(upipe_set_flow_def(sws, pic_flow));
+    ubase_assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
     uref_free(output_flow);
     uref_free(pic_flow);
 
@@ -392,7 +392,7 @@ int main(int argc, char **argv)
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
-    assert(upipe_set_output(sws, sws_test));
+    ubase_assert(upipe_set_output(sws, sws_test));
 
     /* Now send pic */
     struct uref *pic = uref_dup(uref1);

@@ -319,33 +319,33 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static bool upipe_udpsink_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_udpsink_set_flow_def(struct upipe *upipe,
                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
     if (latency > upipe_udpsink->latency)
         upipe_udpsink->latency = latency;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the uri of the currently opened socket.
  *
  * @param upipe description structure of the pipe
  * @param uri_p filled in with the uri of the socket
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
+static enum ubase_err _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     assert(uri_p != NULL);
     *uri_p = upipe_udpsink->uri;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given socket.
@@ -353,10 +353,11 @@ static bool _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
  * @param upipe description structure of the pipe
  * @param uri relative or absolute uri of the socket
  * @param mode mode of opening the socket
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
-                                  enum upipe_udpsink_mode mode)
+static enum ubase_err _upipe_udpsink_set_uri(struct upipe *upipe,
+                                             const char *uri,
+                                             enum upipe_udpsink_mode mode)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
@@ -371,12 +372,12 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     upipe_udpsink_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
-        return true;
+        return UBASE_ERR_NONE;
 
     if (upipe_udpsink->upump_mgr == NULL) {
         upipe_throw_need_upump_mgr(upipe);
         if (unlikely(upipe_udpsink->upump_mgr == NULL))
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     const char *mode_desc = NULL; /* hush gcc */
@@ -386,7 +387,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
             break;
         default:
             upipe_err_va(upipe, "invalid mode %d", mode);
-            return false;
+            return UBASE_ERR_INVALID;
     }
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
@@ -394,7 +395,7 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         upipe_err_va(upipe, "can't open uri %s (%s)", uri, mode_desc);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_udpsink->uri = strdup(uri);
@@ -402,20 +403,20 @@ static bool _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
         close(upipe_udpsink->fd);
         upipe_udpsink->fd = -1;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_notice_va(upipe, "opening uri %s in %s mode",
                     upipe_udpsink->uri, mode_desc);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This flushes all currently held buffers, and unblocks the
  * sources.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_udpsink_flush(struct upipe *upipe)
+static enum ubase_err upipe_udpsink_flush(struct upipe *upipe)
 {
     if (upipe_udpsink_flush_sink(upipe)) {
         upipe_udpsink_set_upump(upipe, NULL);
@@ -423,7 +424,7 @@ static bool upipe_udpsink_flush(struct upipe *upipe)
          * used in @ref upipe_udpsink_input. */
         upipe_release(upipe);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a udp sink pipe.
@@ -431,10 +432,11 @@ static bool upipe_udpsink_flush(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_udpsink_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err _upipe_udpsink_control(struct upipe *upipe,
+                                             enum upipe_command command,
+                                             va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -470,14 +472,12 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         }
 
         case UPIPE_UDPSINK_GET_URI: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_UDPSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
             const char **uri_p = va_arg(args, const char **);
             return _upipe_udpsink_get_uri(upipe, uri_p);
         }
         case UPIPE_UDPSINK_SET_URI: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_UDPSINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
             const char *uri = va_arg(args, const char *);
             enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
             return _upipe_udpsink_set_uri(upipe, uri, mode);
@@ -485,7 +485,7 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_SINK_FLUSH:
             return upipe_udpsink_flush(upipe);
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -495,18 +495,18 @@ static bool _upipe_udpsink_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_udpsink_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err upipe_udpsink_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
-    if (unlikely(!_upipe_udpsink_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_udpsink_control(upipe, command, args));
 
     if (unlikely(!upipe_udpsink_check_sink(upipe)))
         upipe_udpsink_poll(upipe);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -539,7 +539,9 @@ static struct upipe_mgr upipe_udpsink_mgr = {
 
     .upipe_alloc = upipe_udpsink_alloc,
     .upipe_input = upipe_udpsink_input,
-    .upipe_control = upipe_udpsink_control
+    .upipe_control = upipe_udpsink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all udp sink pipes.

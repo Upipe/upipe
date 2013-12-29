@@ -236,9 +236,9 @@ static bool upipe_glx_sink_init_watcher(struct upipe *upipe)
  * @param y window vertical position
  * @param width window width
  * @param height window height
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width, int height)
+static enum ubase_err upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width, int height)
 {
     int doubleBufferV[] =
     {
@@ -264,11 +264,11 @@ static bool upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width
     display = XOpenDisplay(NULL);
     if (unlikely(!display)) {
         upipe_err(upipe, "Could not open X display");
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     if (!glXQueryExtension(display, &errorBase, &eventBase)) {
         upipe_err(upipe, "X server has no GLX extension");
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_glx_sink->doublebuffered = true;
@@ -279,7 +279,7 @@ static bool upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width
         if (unlikely(!visual)) {
             upipe_err(upipe, "No single buffer either, aborting");
             XCloseDisplay(display);
-            return false;
+            return UBASE_ERR_EXTERNAL;
         }
         upipe_glx_sink->doublebuffered = false;
     }
@@ -288,7 +288,7 @@ static bool upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width
     if (unlikely(!glxContext)) {
         upipe_err(upipe, "Could not create GLX context.");
         XCloseDisplay(display);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
 
     upipe_glx_sink->eventmask = KeyPressMask | KeyReleaseMask | ExposureMask;
@@ -325,7 +325,7 @@ static bool upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width
     // Go through event process once to actually create the X window
     upipe_glx_sink_event_process(upipe);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This cleans everything GLX-related
@@ -457,15 +457,15 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
+static enum ubase_err upipe_glx_sink_set_flow_def(struct upipe *upipe,
                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (!uref_flow_match_def(flow_def, "pic."))
-        return false;
+        return UBASE_ERR_INVALID;
 
     /* for the moment we only support rgb24 */
     uint8_t macropixel;
@@ -474,7 +474,7 @@ static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
         !uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8")) {
         upipe_err(upipe, "incompatible flow definition");
         uref_dump(flow_def, upipe->uprobe);
-        return false;
+        return UBASE_ERR_INVALID;
     }
 
     uint64_t latency = 0;
@@ -486,7 +486,7 @@ static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
     /* throw new flow definition to update probe */
     upipe_throw_new_flow_def(upipe, flow_def);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -495,10 +495,11 @@ static bool upipe_glx_sink_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_glx_sink_control(struct upipe *upipe,
+                                             enum upipe_command command,
+                                             va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -513,9 +514,9 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
             upipe_glx_sink_set_upump(upipe, NULL);
             upipe_glx_sink_set_upump_watcher(upipe, NULL);
-            bool ret = upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
+            enum ubase_err err = upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
             upipe_glx_sink_init_watcher(upipe);
-            return ret;
+            return err;
         }
         case UPIPE_GET_UCLOCK: {
             struct uclock **p = va_arg(args, struct uclock **);
@@ -536,8 +537,7 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
         }
 
         case UPIPE_GLX_SINK_INIT: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GLX_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GLX_SINK_SIGNATURE)
             int x = va_arg(args, int);
             int y = va_arg(args, int);
             int width = va_arg(args, int);
@@ -546,7 +546,7 @@ static bool upipe_glx_sink_control(struct upipe *upipe, enum upipe_command comma
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -577,7 +577,9 @@ static struct upipe_mgr upipe_glx_sink_mgr = {
 
     .upipe_alloc = upipe_glx_sink_alloc,
     .upipe_input = upipe_glx_sink_input,
-    .upipe_control = upipe_glx_sink_control
+    .upipe_control = upipe_glx_sink_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for glx_sink pipes

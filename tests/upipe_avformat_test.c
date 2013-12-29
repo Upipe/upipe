@@ -97,7 +97,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (upipe_split_iterate(upipe, &flow_def)) {
+            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+                   flow_def != NULL) {
                 const char *def;
                 assert(uref_flow_get_def(flow_def, &def));
                 if (ubase_ncmp(def, "block.")) {
@@ -116,7 +117,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
                                             UPROBE_LOG_LEVEL,
                                             "src %"PRIu64, id), flow_def);
                 assert(upipe_avfsrc_output != NULL);
-                assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
+                ubase_assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
 
                 struct upipe *upipe_sink =
                     upipe_void_alloc_output_sub(upipe_avfsrc_output,
@@ -178,24 +179,24 @@ int main(int argc, char *argv[])
     assert(upipe_avfsink != NULL);
 #if 0
     if (delay) {
-        assert(upipe_set_uclock(upipe_avfsink, uclock));
-        assert(upipe_sink_set_delay(upipe_avfsink, delay));
+        ubase_assert(upipe_set_uclock(upipe_avfsink, uclock));
+        ubase_assert(upipe_sink_set_delay(upipe_avfsink, delay));
     }
 #endif
-    assert(upipe_set_uri(upipe_avfsink, sink_url));
+    ubase_assert(upipe_set_uri(upipe_avfsink, sink_url));
 
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     assert(upipe_avfsrc_mgr != NULL);
     upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsrc"));
     assert(upipe_avfsrc != NULL);
-    assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
-    assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
+    ubase_assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
+    ubase_assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
 #if 0
     if (delay)
-        assert(upipe_set_uclock(upipe_avfsrc, uclock));
+        ubase_assert(upipe_set_uclock(upipe_avfsrc, uclock));
 #endif
-    assert(upipe_set_uri(upipe_avfsrc, src_url));
+    ubase_assert(upipe_set_uri(upipe_avfsrc, src_url));
 
     ev_loop(loop, 0);
 

@@ -199,18 +199,18 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
-                                            struct uref *flow_def)
+static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t stream_type, pid;
     if (!uref_flow_match_def(flow_def, "void.") ||
         !uref_ts_flow_get_stream_type(flow_def, &stream_type) ||
         !uref_ts_flow_get_pid(flow_def, &pid))
-        return false;
+        return UBASE_ERR_INVALID;
     const uint8_t *descriptors = NULL;
     size_t descriptors_size = 0;
     uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
@@ -225,7 +225,7 @@ static bool upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
                 descriptors_size))) {
         struct uref *flow_def_dup;
         if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-            return false;
+            return UBASE_ERR_ALLOC;
         if (upipe_ts_psig_flow->flow_def_input != NULL)
             uref_free(upipe_ts_psig_flow->flow_def_input);
         upipe_ts_psig_flow->flow_def_input = flow_def_dup;
@@ -243,7 +243,7 @@ static bool upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
             upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
         upipe_ts_psig_program->pmt_version++;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -251,10 +251,11 @@ static bool upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_psig_flow_control(struct upipe *upipe,
-                                       enum upipe_command command, va_list args)
+static enum ubase_err upipe_ts_psig_flow_control(struct upipe *upipe,
+                                                 enum upipe_command command,
+                                                 va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -267,7 +268,7 @@ static bool upipe_ts_psig_flow_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -306,6 +307,7 @@ static void upipe_ts_psig_program_init_flow_mgr(struct upipe *upipe)
     flow_mgr->upipe_alloc = upipe_ts_psig_flow_alloc;
     flow_mgr->upipe_input = NULL;
     flow_mgr->upipe_control = upipe_ts_psig_flow_control;
+    flow_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a program of a ts_psig pipe.
@@ -459,18 +461,18 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
+static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
+                                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t program_number, pid;
     if (!uref_flow_match_def(flow_def, "void.") ||
         !uref_flow_get_id(flow_def, &program_number) ||
         !uref_ts_flow_get_pid(flow_def, &pid))
-        return false;
+        return UBASE_ERR_INVALID;
     const uint8_t *descriptors = NULL;
     size_t descriptors_size = 0;
     uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
@@ -486,13 +488,13 @@ static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
         struct uref *flow_def_dup;
         if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
         if (unlikely(!uref_flow_set_def(flow_def_dup,
                                         "block.mpegtspsi.mpegtspmt."))) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return UBASE_ERR_ALLOC;
         }
 
         upipe_ts_psig_program_store_flow_def(upipe, flow_def_dup);
@@ -512,38 +514,38 @@ static bool upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
             upipe_ts_psig_from_program_mgr(upipe->mgr);
         upipe_ts_psig->pat_version++;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current PCR PID.
  *
  * @param upipe description structure of the pipe
  * @param pcr_pid_p filled in with the pcr_pid
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
+static enum ubase_err _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
                                                unsigned int *pcr_pid_p)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     assert(pcr_pid_p != NULL);
     *pcr_pid_p = upipe_ts_psig_program->pcr_pid;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the PCR PID.
  *
  * @param upipe description structure of the pipe
  * @param pcr_pid pcr_pid
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
+static enum ubase_err _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
                                                unsigned int pcr_pid)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     upipe_ts_psig_program->pcr_pid = pcr_pid;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -551,11 +553,11 @@ static bool _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_psig_program_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+static enum ubase_err upipe_ts_psig_program_control(struct upipe *upipe,
+                                                    enum upipe_command command,
+                                                    va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -588,20 +590,18 @@ static bool upipe_ts_psig_program_control(struct upipe *upipe,
         }
 
         case UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PSIG_PROGRAM_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
             unsigned int *pcr_pid_p = va_arg(args, unsigned int *);
             return _upipe_ts_psig_program_get_pcr_pid(upipe, pcr_pid_p);
         }
         case UPIPE_TS_PSIG_PROGRAM_SET_PCR_PID: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_PSIG_PROGRAM_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
             unsigned int pcr_pid = va_arg(args, unsigned int);
             return _upipe_ts_psig_program_set_pcr_pid(upipe, pcr_pid);
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -800,21 +800,21 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+static enum ubase_err upipe_ts_psig_set_flow_def(struct upipe *upipe,
+                                                 struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     uint64_t tsid;
     if (!uref_flow_match_def(flow_def, "void.") ||
         !uref_flow_get_id(flow_def, &tsid))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     if (unlikely(!uref_flow_set_def(flow_def_dup,
                                     "block.mpegtspsi.mpegtspat.")))
@@ -825,7 +825,7 @@ static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
     upipe_ts_psig->tsid = tsid;
     upipe_ts_psig->pat_version = 0;
     uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig->pat_version);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands.
@@ -833,11 +833,11 @@ static bool upipe_ts_psig_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_ts_psig_control(struct upipe *upipe,
-                                  enum upipe_command command,
-                                  va_list args)
+static enum ubase_err upipe_ts_psig_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -875,7 +875,7 @@ static bool upipe_ts_psig_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -900,7 +900,9 @@ static struct upipe_mgr upipe_ts_psig_mgr = {
 
     .upipe_alloc = upipe_ts_psig_alloc,
     .upipe_input = upipe_ts_psig_input,
-    .upipe_control = upipe_ts_psig_control
+    .upipe_control = upipe_ts_psig_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all ts_psig pipes.

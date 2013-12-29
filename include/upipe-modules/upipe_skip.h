@@ -54,9 +54,10 @@ enum upipe_skip_command {
  *
  * @param upipe description structure of the pipe
  * @param offset current offset
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_skip_get_offset(struct upipe *upipe, size_t *offset_p)
+static inline enum ubase_err upipe_skip_get_offset(struct upipe *upipe,
+                                                   size_t *offset_p)
 {
     return upipe_control(upipe, UPIPE_SKIP_GET_OFFSET, UPIPE_SKIP_SIGNATURE,
                          offset_p);
@@ -66,9 +67,10 @@ static inline bool upipe_skip_get_offset(struct upipe *upipe, size_t *offset_p)
  *
  * @param upipe description structure of the pipe
  * @param offset skip offset
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_skip_set_offset(struct upipe *upipe, size_t offset)
+static inline enum ubase_err upipe_skip_set_offset(struct upipe *upipe,
+                                                   size_t offset)
 {
     return upipe_control(upipe, UPIPE_SKIP_SET_OFFSET, UPIPE_SKIP_SIGNATURE,
                          offset);

@@ -50,9 +50,10 @@ enum upipe_null_command {
  *
  * @param upipe description structure of the pipe
  * @param enable enable or disable
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_null_dump_dict(struct upipe *upipe, bool enable)
+static inline enum ubase_err upipe_null_dump_dict(struct upipe *upipe,
+                                                  bool enable)
 {
     return upipe_control(upipe, UPIPE_NULL_DUMP_DICT, UPIPE_NULL_SIGNATURE, (enable ? 1 : 0));
 }

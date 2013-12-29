@@ -265,7 +265,8 @@ static inline void upump_set_cb(struct upump *upump, upump_cb cb, void *opaque)
  */
 static inline struct upump_mgr *upump_mgr_use(struct upump_mgr *mgr)
 {
-    assert(mgr != NULL);
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }

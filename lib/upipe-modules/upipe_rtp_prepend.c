@@ -167,41 +167,43 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
- * @return false if the flow definition is not handled
+ * @return an error code
  */
-static bool upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
-                                           struct uref *flow_def)
+static enum ubase_err upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
+                                                     struct uref *flow_def)
 {
     if (flow_def == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     const char *def;
     if (!uref_flow_get_def(flow_def, &def) ||
         ubase_ncmp(def, EXPECTED_FLOW_DEF))
-        return false;
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return false;
+        return UBASE_ERR_ALLOC;
     if (!uref_flow_set_def_va(flow_def_dup, OUT_FLOW"%s",
                               def + strlen(EXPECTED_FLOW_DEF))) {
         uref_free(flow_def_dup);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
     upipe_rtp_prepend_store_flow_def(upipe, flow_def_dup);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the rtp type and clock rate
+/** @internal @This sets the rtp type and clock rate.
  *
  * @param upipe description structure of the pipe
  * @param type rtp payload type
  * @param clockrate rtp timestamp and clock rate (optional, set
  * according to rfc 3551 if null)
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_rtp_prepend_set_type(struct upipe *upipe,
-                                        uint8_t type, uint32_t clockrate)
+static enum ubase_err _upipe_rtp_prepend_set_type(struct upipe *upipe,
+                                                  uint8_t type,
+                                                  uint32_t clockrate)
 {
-    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
     type = 0x7f & type;
     if (!clockrate) {
         clockrate = rtp_3551_get_clock_rate(type);
@@ -212,7 +214,7 @@ static bool _upipe_rtp_prepend_set_type(struct upipe *upipe,
     }
     upipe_rtp_prepend->clockrate = clockrate;
     upipe_rtp_prepend->type = type;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the configured RTP type.
@@ -220,10 +222,11 @@ static bool _upipe_rtp_prepend_set_type(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param type_p rtp type
  * @param rate_p rtp timestamp clock rate
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_rtp_prepend_get_type(struct upipe *upipe,
-                                        uint8_t *type, uint32_t *clockrate)
+static enum ubase_err _upipe_rtp_prepend_get_type(struct upipe *upipe,
+                                                  uint8_t *type,
+                                                  uint32_t *clockrate)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend =
                        upipe_rtp_prepend_from_upipe(upipe);
@@ -233,7 +236,7 @@ static bool _upipe_rtp_prepend_get_type(struct upipe *upipe,
     if (clockrate) {
         *clockrate = upipe_rtp_prepend->clockrate;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a rtp_prepend pipe.
@@ -241,10 +244,11 @@ static bool _upipe_rtp_prepend_get_type(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_rtp_prepend_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static enum ubase_err upipe_rtp_prepend_control(struct upipe *upipe,
+                                                enum upipe_command command,
+                                                va_list args)
 {
     switch (command) {
         case UPIPE_GET_UBUF_MGR: {
@@ -288,7 +292,7 @@ static bool upipe_rtp_prepend_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

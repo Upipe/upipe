@@ -159,15 +159,15 @@ static void upipe_qsrc_worker(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param length_p filled in with the maximum length of the queue
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsrc_get_max_length(struct upipe *upipe,
-                                       unsigned int *length_p)
+static enum ubase_err _upipe_qsrc_get_max_length(struct upipe *upipe,
+                                                 unsigned int *length_p)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     assert(length_p != NULL);
     *length_p = upipe_qsrc->upipe_queue.max_length;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current length of the queue. This function,
@@ -177,13 +177,14 @@ static bool _upipe_qsrc_get_max_length(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param length_p filled in with the current length of the queue
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsrc_get_length(struct upipe *upipe, unsigned int *length_p)
+static enum ubase_err _upipe_qsrc_get_length(struct upipe *upipe,
+                                             unsigned int *length_p)
 {
     assert(length_p != NULL);
     *length_p = uqueue_length(upipe_queue(upipe));
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a queue source pipe.
@@ -191,10 +192,11 @@ static bool _upipe_qsrc_get_length(struct upipe *upipe, unsigned int *length_p)
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -221,19 +223,17 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
         }
 
         case UPIPE_QSRC_GET_MAX_LENGTH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_QSRC_SIGNATURE)
             unsigned int *length_p = va_arg(args, unsigned int *);
             return _upipe_qsrc_get_max_length(upipe, length_p);
         }
         case UPIPE_QSRC_GET_LENGTH: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_QSRC_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_QSRC_SIGNATURE)
             unsigned int *length_p = va_arg(args, unsigned int *);
             return _upipe_qsrc_get_length(upipe, length_p);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -243,13 +243,13 @@ static bool _upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+static enum ubase_err upipe_qsrc_control(struct upipe *upipe,
+                                         enum upipe_command command,
+                                         va_list args)
 {
-    if (unlikely(!_upipe_qsrc_control(upipe, command, args)))
-        return false;
+    UBASE_ERR_CHECK(_upipe_qsrc_control(upipe, command, args));
 
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (upipe_qsrc->upump_mgr != NULL && upipe_qsrc->upipe_queue.max_length &&
@@ -260,13 +260,13 @@ static bool upipe_qsrc_control(struct upipe *upipe, enum upipe_command command,
                                    upipe_qsrc_worker, upipe);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return false;
+            return UBASE_ERR_UPUMP;
         } 
         upipe_qsrc_set_upump(upipe, upump);
         upump_start(upump);
     }
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -302,7 +302,9 @@ static struct upipe_mgr upipe_qsrc_mgr = {
 
     .upipe_alloc = _upipe_qsrc_alloc,
     .upipe_input = NULL,
-    .upipe_control = upipe_qsrc_control
+    .upipe_control = upipe_qsrc_control,
+
+    .upipe_mgr_control = NULL
 };
 
 /** @This returns the management structure for all queue source pipes.

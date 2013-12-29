@@ -55,7 +55,8 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  bool upipe_foo_get_uref_mgr(struct upipe *upipe, struct uref_mgr **p)
+ *  enum ubase_err upipe_foo_get_uref_mgr(struct upipe *upipe,
+ *                                        struct uref_mgr **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -66,7 +67,8 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  bool upipe_foo_set_uref_mgr(struct upipe *upipe, struct uref_mgr *uref_mgr)
+ *  enum ubase_err upipe_foo_set_uref_mgr(struct upipe *upipe,
+ *                                        struct uref_mgr *uref_mgr)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -100,24 +102,24 @@ static void STRUCTURE##_init_uref_mgr(struct upipe *upipe)                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p filled in with the uref manager                                 \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_uref_mgr(struct upipe *upipe,                   \
-                                     struct uref_mgr **p)                   \
+static enum ubase_err STRUCTURE##_get_uref_mgr(struct upipe *upipe,         \
+                                               struct uref_mgr **p)         \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
     *p = STRUCTURE->UREF_MGR;                                               \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This sets the uref manager.                                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param uref_mgr new uref manager                                         \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_uref_mgr(struct upipe *upipe,                   \
-                                     struct uref_mgr *uref_mgr)             \
+static enum ubase_err STRUCTURE##_set_uref_mgr(struct upipe *upipe,         \
+                                               struct uref_mgr *uref_mgr)   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(STRUCTURE->UREF_MGR != NULL))                              \
@@ -125,7 +127,7 @@ static bool STRUCTURE##_set_uref_mgr(struct upipe *upipe,                   \
     STRUCTURE->UREF_MGR = uref_mgr;                                         \
     if (likely(uref_mgr != NULL))                                           \
         uref_mgr_use(STRUCTURE->UREF_MGR);                                  \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

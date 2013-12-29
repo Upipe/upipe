@@ -138,14 +138,14 @@ int main(int argc, char *argv[])
     struct upipe *upipe_dup = upipe_void_alloc(upipe_dup_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "dup"));
     assert(upipe_dup != NULL);
-    assert(upipe_set_flow_def(upipe_dup, uref));
+    ubase_assert(upipe_set_flow_def(upipe_dup, uref));
     uref_free(uref);
 
     struct upipe *upipe_dup_output0 = upipe_void_alloc_sub(upipe_dup,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "dup output 0"));
     assert(upipe_dup_output0 != NULL);
-    assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
+    ubase_assert(upipe_set_output(upipe_dup_output0, upipe_sink0));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "dup output 1"));
     assert(upipe_dup_output1 != NULL);
-    assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
+    ubase_assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
     assert(counter == 0);
 
     uref = uref_alloc(uref_mgr);

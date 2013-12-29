@@ -254,7 +254,8 @@ static inline void ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
  */
 static inline struct ubuf_mgr *ubuf_mgr_use(struct ubuf_mgr *mgr)
 {
-    assert(mgr != NULL);
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }

@@ -70,10 +70,10 @@ struct upipe_mgr *upipe_multicat_probe_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param interval_p filled in with the rotate interval in 27Mhz
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_probe_get_rotate(struct upipe *upipe,
-                                                   uint64_t *interval_p)
+static inline enum ubase_err
+    upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_PROBE_GET_ROTATE,
                                 UPIPE_MULTICAT_PROBE_SIGNATURE, interval_p);
@@ -84,10 +84,10 @@ static inline bool upipe_multicat_probe_get_rotate(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param interval rotate interval in 27Mhz
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_multicat_probe_set_rotate(struct upipe *upipe,
-                                                   uint64_t interval)
+static inline enum ubase_err
+    upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_PROBE_SET_ROTATE,
                                 UPIPE_MULTICAT_PROBE_SIGNATURE, interval);

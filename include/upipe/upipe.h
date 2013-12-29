@@ -162,6 +162,9 @@ UBASE_FROM_TO(upipe, uchain, uchain, uchain)
 
 /** @This defines standard commands which upipe managers may implement. */
 enum upipe_mgr_command {
+    /** release all buffers kept in pools (void) */
+    UPIPE_MGR_VACUUM,
+
     /** non-standard manager commands implemented by a module type can start
      * from there (first arg = signature) */
     UPIPE_MGR_CONTROL_LOCAL = 0x8000
@@ -174,7 +177,7 @@ struct upipe_mgr {
     /** signature of the pipe allocator */
     unsigned int signature;
 
-    /** function to create a pipe */
+    /** function to create a pipe - uprobe belongs to the callee */
     struct upipe *(*upipe_alloc)(struct upipe_mgr *, struct uprobe *,
                                  uint32_t, va_list);
     /** function to send a uref to an input - the uref then belongs to the
@@ -182,12 +185,13 @@ struct upipe_mgr {
     void (*upipe_input)(struct upipe *, struct uref *, struct upump *);
     /** control function for standard or local commands - all parameters
      * belong to the caller */
-    bool (*upipe_control)(struct upipe *, enum upipe_command, va_list);
+    enum ubase_err (*upipe_control)(struct upipe *,
+                                    enum upipe_command, va_list);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    void (*upipe_mgr_control)(struct upipe_mgr *, enum upipe_mgr_command,
-                              va_list);
+    enum ubase_err (*upipe_mgr_control)(struct upipe_mgr *,
+                                        enum upipe_mgr_command, va_list);
 };
 
 /** @This increments the reference count of a upipe manager.
@@ -197,19 +201,72 @@ struct upipe_mgr {
  */
 static inline struct upipe_mgr *upipe_mgr_use(struct upipe_mgr *mgr)
 {
-    assert(mgr != NULL);
+    if (mgr == NULL)
+        return NULL;
     urefcount_use(mgr->refcount);
     return mgr;
 }
 
 /** @This decrements the reference count of a upipe manager or frees it.
  *
- * @param mgr pointer to upipe manager.
+ * @param mgr pointer to upipe manager
  */
 static inline void upipe_mgr_release(struct upipe_mgr *mgr)
 {
     if (mgr != NULL)
         urefcount_release(mgr->refcount);
+}
+
+/** @internal @This sends a control command to the pipe manager. Note that
+ * thread semantics depend on the pipe manager. Also note that all arguments
+ * are owned by the caller.
+ *
+ * @param mgr pointer to upipe manager
+ * @param command manager control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    upipe_mgr_control_va(struct upipe_mgr *mgr,
+                         enum upipe_mgr_command command, va_list args)
+{
+    assert(mgr != NULL);
+    if (mgr->upipe_mgr_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return mgr->upipe_mgr_control(mgr, command, args);
+}
+
+/** @internal @This sends a control command to the pipe manager. Note that
+ * thread semantics depend on the pipe manager. Also note that all arguments
+ * are owned by the caller.
+ *
+ * @param mgr pointer to upipe manager
+ * @param command control manager command to send, followed by optional read
+ * or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    upipe_mgr_control(struct upipe_mgr *mgr,
+                      enum upipe_mgr_command command, ...)
+{
+    bool ret;
+    va_list args;
+    va_start(args, command);
+    ret = upipe_mgr_control_va(mgr, command, args);
+    va_end(args);
+    return ret;
+}
+
+/** @This instructs an existing upipe manager to release all structures
+ * currently kept in pools. It is inteded as a debug tool only.
+ *
+ * @param mgr pointer to upipe manager
+ * @return an error code
+ */
+static inline enum ubase_err upipe_mgr_vacuum(struct upipe_mgr *mgr)
+{
+    return upipe_mgr_control(mgr, UPIPE_MGR_VACUUM);
 }
 
 /** @internal @This allocates and initializes a pipe.
@@ -322,7 +379,8 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
  */
 static inline struct upipe *upipe_use(struct upipe *upipe)
 {
-    assert(upipe != NULL);
+    if (upipe == NULL)
+        return NULL;
     urefcount_use(upipe->refcount);
     return upipe;
 }
@@ -434,20 +492,21 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param command control command to send
- * @param optional read or write parameters
- * @return false in case of error
+ * @param args optional read or write parameters
+ * @return an error code
  */
-static inline bool upipe_control_va(struct upipe *upipe,
-                                    enum upipe_command command, va_list args)
+static inline enum ubase_err upipe_control_va(struct upipe *upipe,
+                                              enum upipe_command command,
+                                              va_list args)
 {
     if (upipe->mgr->upipe_control == NULL)
-        return false;
+        return UBASE_ERR_UNHANDLED;
 
-    bool ret;
+    enum ubase_err err;
     upipe_use(upipe);
-    ret = upipe->mgr->upipe_control(upipe, command, args);
+    err = upipe->mgr->upipe_control(upipe, command, args);
     upipe_release(upipe);
-    return ret;
+    return err;
 }
 
 /** @internal @This sends a control command to the pipe. Note that all control
@@ -458,17 +517,17 @@ static inline bool upipe_control_va(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command control command to send, followed by optional read or write
  * parameters
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_control(struct upipe *upipe,
-                                 enum upipe_command command, ...)
+static inline enum ubase_err upipe_control(struct upipe *upipe,
+                                           enum upipe_command command, ...)
 {
-    bool ret;
+    enum ubase_err err;
     va_list args;
     va_start(args, command);
-    ret = upipe_control_va(upipe, command, args);
+    err = upipe_control_va(upipe, command, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 /** @This should be called by the module writer before it disposes of its
@@ -497,9 +556,10 @@ static inline void upipe_clean(struct upipe *upipe)
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param p reference to a value, will be modified                          \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool group##_get_##name(struct upipe *upipe, type *p)         \
+static inline enum ubase_err group##_get_##name(struct upipe *upipe,        \
+                                                type *p)                    \
 {                                                                           \
     return upipe_control(upipe, GROUP##_GET_##NAME, p);                     \
 }                                                                           \
@@ -507,9 +567,9 @@ static inline bool group##_get_##name(struct upipe *upipe, type *p)         \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param s new value                                                       \
- * @return false in case of error                                           \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool group##_set_##name(struct upipe *upipe, type s)          \
+static inline enum ubase_err group##_set_##name(struct upipe *upipe, type s)\
 {                                                                           \
     return upipe_control(upipe, GROUP##_SET_##NAME, s);                     \
 }
@@ -543,9 +603,9 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
 /** @This flushes all currently held buffers, and unblocks the sources.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_sink_flush(struct upipe *upipe)
+static inline enum ubase_err upipe_sink_flush(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_SINK_FLUSH);
 }
@@ -554,9 +614,10 @@ static inline bool upipe_sink_flush(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param p filled in with the next flow def, initialize at NULL
- * @return false when no other flow definition is available
+ * @return an error code
  */
-static inline bool upipe_split_iterate(struct upipe *upipe, struct uref **p)
+static inline enum ubase_err upipe_split_iterate(struct upipe *upipe,
+                                                 struct uref **p)
 {
     return upipe_control(upipe, UPIPE_SPLIT_ITERATE, p);
 }
@@ -565,9 +626,10 @@ static inline bool upipe_split_iterate(struct upipe *upipe, struct uref **p)
  *
  * @param upipe description structure of the super-pipe
  * @param p filled in with a pointer to the subpipe manager
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
+static inline enum ubase_err upipe_get_sub_mgr(struct upipe *upipe,
+                                               struct upipe_mgr **p)
 {
     return upipe_control(upipe, UPIPE_GET_SUB_MGR, p);
 }
@@ -576,9 +638,10 @@ static inline bool upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
  *
  * @param upipe description structure of the super-pipe
  * @param p filled in with a pointer to the next subpipe, initialize at NULL
- * @return false when no other subpipe is available
+ * @return an error code
  */
-static inline bool upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
+static inline enum ubase_err upipe_iterate_sub(struct upipe *upipe,
+                                               struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_ITERATE_SUB, p);
 }
@@ -587,9 +650,10 @@ static inline bool upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
  *
  * @param upipe description structure of the subpipe
  * @param p filled in with a pointer to the super-pipe
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
+static inline enum ubase_err upipe_sub_get_super(struct upipe *upipe,
+                                                 struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }
@@ -609,7 +673,7 @@ static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
                                                  struct uprobe *uprobe)
 {
     struct upipe_mgr *sub_mgr;
-    if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
+    if (!ubase_err_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -633,7 +697,7 @@ static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
                                                  struct uref *flow_def)
 {
     struct upipe_mgr *sub_mgr;
-    if (!upipe_get_sub_mgr(upipe, &sub_mgr)) {
+    if (!ubase_err_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -665,9 +729,9 @@ static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
-                  !upipe_set_flow_def(output, flow_def)) ||
-                 !upipe_set_output(upipe, output))) {
+    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_err_check(upipe_set_flow_def(output, flow_def))) ||
+                 !ubase_err_check(upipe_set_output(upipe, output)))) {
         upipe_release(output);
         return NULL;
     }
@@ -702,9 +766,9 @@ static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((upipe_get_flow_def(upipe, &flow_def) &&
-                  !upipe_set_flow_def(output, flow_def)) ||
-                 !upipe_set_output(upipe, output))) {
+    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_err_check(upipe_set_flow_def(output, flow_def))) ||
+                 !ubase_err_check(upipe_set_output(upipe, output)))) {
         upipe_release(output);
         return NULL;
     }
@@ -735,7 +799,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe)
 {
     struct upipe_mgr *sub_mgr;
-    if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
+    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -766,7 +830,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe, struct uref *flow_def)
 {
     struct upipe_mgr *sub_mgr;
-    if (!upipe_get_sub_mgr(super_pipe, &sub_mgr)) {
+    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }

@@ -68,7 +68,8 @@ static inline uint64_t uclock_now(struct uclock *uclock)
  */
 static inline struct uclock *uclock_use(struct uclock *uclock)
 {
-    assert(uclock != NULL);
+    if (uclock == NULL)
+        return NULL;
     urefcount_use(uclock->refcount);
     return uclock;
 }
