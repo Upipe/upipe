@@ -268,7 +268,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
     enum ubase_err error = UBASE_ERR_NONE;
     /* Iterate over existing flows. */
     struct uref *flow_def = NULL;
-    while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+    while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
            flow_def != NULL) {
         uint64_t flow_id;
         const char *def;
@@ -341,7 +341,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
         struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
         bool found = false;
         flow_def = NULL;
-        while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+        while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                flow_def != NULL) {
             uint64_t flow_id;
             bool ret = uref_flow_get_id(flow_def, &flow_id);
@@ -366,7 +366,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
 
     if (need_update && uprobe_selflow->auto_cfg)
         uprobe_selflow_check_auto(uprobe);
-    if (ubase_err_check(error))
+    if (ubase_check(error))
         return uprobe_throw_next(uprobe, upipe, event, args);
     return error;
 }

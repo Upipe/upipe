@@ -501,7 +501,7 @@ static enum ubase_err upipe_udpsink_control(struct upipe *upipe,
                                             enum upipe_command command,
                                             va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_udpsink_control(upipe, command, args));
+    UBASE_RETURN(_upipe_udpsink_control(upipe, command, args));
 
     if (unlikely(!upipe_udpsink_check_sink(upipe)))
         upipe_udpsink_poll(upipe);

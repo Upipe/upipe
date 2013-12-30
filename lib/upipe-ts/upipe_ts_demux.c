@@ -417,7 +417,7 @@ static struct upipe_ts_demux_psi_pid *
     if (unlikely(flow_def == NULL ||
                  !uref_flow_set_def(flow_def, "block.mpegtspsi.") ||
                  !uref_ts_flow_set_pid(flow_def, pid) ||
-                 !ubase_err_check(upipe_set_flow_def(psi_pid->psi_split,
+                 !ubase_check(upipe_set_flow_def(psi_pid->psi_split,
                                   flow_def)))) {
         if (flow_def != NULL)
             uref_free(flow_def);
@@ -1027,7 +1027,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
 
         struct uref *flow_def = NULL;
         uint64_t id = 0;
-        while (ubase_err_check(upipe_split_iterate(pmtd, &flow_def)) &&
+        while (ubase_check(upipe_split_iterate(pmtd, &flow_def)) &&
                flow_def != NULL)
             if (uref_flow_get_id(flow_def, &id) && id == output->pid) {
                 if (!upipe_ts_demux_output_pmtd_update(
@@ -1152,7 +1152,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
             output = upipe_ts_demux_output_from_uchain(uchain);
             if (output->setrap != NULL)
                 ret = ret &&
-                    ubase_err_check(upipe_setrap_set_rap(output->setrap,
+                    ubase_check(upipe_setrap_set_rap(output->setrap,
                                         upipe_ts_demux_program->systime_pcr));
         }
         /* this is also valid for the packet we are processing */
@@ -1220,7 +1220,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                      flow_def);
     uref_free(flow_def);
     if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL ||
-                 !ubase_err_check(upipe_get_flow_def(
+                 !ubase_check(upipe_get_flow_def(
                          upipe_ts_demux_program->pcr_split_output,
                          &flow_def)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1236,7 +1236,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                              "decaps PCR %"PRIu64,
                              upipe_ts_demux_program->pcr_pid));
     if (unlikely(decaps == NULL ||
-                 !ubase_err_check(upipe_set_output(decaps, demux->null)))) {
+                 !ubase_check(upipe_set_output(decaps, demux->null)))) {
         if (decaps != NULL)
             upipe_release(decaps);
         upipe_release(upipe_ts_demux_program->pcr_split_output);
@@ -1618,7 +1618,7 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
     struct uref *nit;
-    if (ubase_err_check(upipe_ts_patd_get_nit(patd, &nit))) {
+    if (ubase_check(upipe_ts_patd_get_nit(patd, &nit))) {
         upipe_ts_demux->nit_pid = 0;
         uref_ts_flow_get_pid(nit, &upipe_ts_demux->nit_pid);
         upipe_ts_demux_conformance_guess(upipe);
@@ -1636,7 +1636,7 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
 
         struct uref *flow_def = NULL;
         uint64_t id = 0, pid = 0;
-        while (ubase_err_check(upipe_split_iterate(patd, &flow_def)) &&
+        while (ubase_check(upipe_split_iterate(patd, &flow_def)) &&
                flow_def == NULL)
             if (uref_flow_get_id(flow_def, &id) && id == program->program &&
                 uref_ts_flow_get_pid(flow_def, &pid) && pid == program->pmt_pid)
@@ -1818,7 +1818,7 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
 
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     if (upipe_ts_demux->input != NULL) {
-        UBASE_ERR_CHECK(upipe_set_flow_def(upipe_ts_demux->input, flow_def));
+        UBASE_RETURN(upipe_set_flow_def(upipe_ts_demux->input, flow_def));
     }
 
     const char *def;
@@ -1855,8 +1855,7 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        ret = ubase_err_check(upipe_set_flow_def(upipe_ts_demux->input,
-                                                 flow_def));
+        ret = ubase_check(upipe_set_flow_def(upipe_ts_demux->input, flow_def));
         assert(ret);
 
         upipe_ts_demux->setrap =
@@ -1877,8 +1876,7 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        ret = ubase_err_check(upipe_set_flow_def(upipe_ts_demux->setrap,
-                                                 flow_def));
+        ret = ubase_check(upipe_set_flow_def(upipe_ts_demux->setrap, flow_def));
         assert(ret);
 
         upipe_ts_demux->input = upipe_ts_demux->setrap;

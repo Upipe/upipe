@@ -157,7 +157,7 @@ static enum ubase_err catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_set_upump_mgr(alsink, upump_mgr);
     upipe_set_uclock(alsink, uclock);
-    if (!ubase_err_check(upipe_set_uri(alsink, device))) {
+    if (!ubase_check(upipe_set_uri(alsink, device))) {
         assert(0);
     }
     upipe_release(trickp_audio);
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
     upipe_set_ubuf_mgr(upipe_src, block_mgr);
     upipe_set_upump_mgr(upipe_src, upump_mgr);
     upipe_set_uclock(upipe_src, uclock);
-    if (!ubase_err_check(upipe_set_uri(upipe_src, uri)))
+    if (!ubase_check(upipe_set_uri(upipe_src, uri)))
         return false;
 
     /* no demux */

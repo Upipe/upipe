@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
     upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
     upipe_set_uclock(upipe_udpsrc, uclock);
-    if (!ubase_err_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
+    if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
     }
 
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
                                  loglevel, "udpsink"));
         upipe_set_upump_mgr(upipe_sink, upump_mgr);
-        if (!ubase_err_check(upipe_udpsink_set_uri(upipe_sink, dirpath, 0))) {
+        if (!ubase_check(upipe_udpsink_set_uri(upipe_sink, dirpath, 0))) {
             return EXIT_FAILURE;
         }
         upipe_release(upipe_sink);

@@ -663,9 +663,9 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
             UBUF_PREPEND, UBUF_APPEND, UBUF_PREPEND, UBUF_APPEND,
             UBUF_ALIGN, UBUF_ALIGN_OFFSET);
     if (unlikely(glxplayer->yuv_mgr == NULL ||
-                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "y8", 1, 1, 1)) ||
-                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "u8", 2, 2, 1)) ||
-                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "v8", 2, 2, 1))))
+                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "y8", 1, 1, 1)) ||
+                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "u8", 2, 2, 1)) ||
+                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "v8", 2, 2, 1))))
         goto fail_yuv_mgr;
 
     /* rgb (glx_sink needs contiguous rgb data for glTexImage2D) */
@@ -673,7 +673,7 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
             UBUF_POOL_DEPTH, umem_mgr, 1,
             UBUF_PREPEND, UBUF_APPEND, UBUF_PREPEND, UBUF_APPEND, 0, 0);
     if (unlikely(glxplayer->rgb_mgr == NULL ||
-                 !ubuf_pic_mem_mgr_add_plane(glxplayer->rgb_mgr, "r8g8b8", 1, 1, 3)))
+                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->rgb_mgr, "r8g8b8", 1, 1, 3))))
         goto fail_rgb_mgr;
 
     /* probes common to all threads */
@@ -830,8 +830,8 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         upipe_mgr_release(upipe_avfsrc_mgr);
         if (unlikely(upipe_src == NULL))
             return false;
-        if (unlikely(!ubase_err_check(upipe_set_uclock(upipe_src, glxplayer->uclock)) ||
-                     !ubase_err_check(upipe_set_uri(upipe_src, uri)))) {
+        if (unlikely(!ubase_check(upipe_set_uclock(upipe_src, glxplayer->uclock)) ||
+                     !ubase_check(upipe_set_uri(upipe_src, uri)))) {
             upipe_release(upipe_src);
             return false;
         }
@@ -849,7 +849,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         if (unlikely(upipe_src == NULL))
             return false;
         upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-        if (ubase_err_check(upipe_set_uri(upipe_src, uri))) {
+        if (ubase_check(upipe_set_uri(upipe_src, uri))) {
             glxplayer->trickp = true;
         } else {
             upipe_release(upipe_src);
@@ -867,7 +867,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             if (unlikely(upipe_src == NULL))
                 return false;
             upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-            if (ubase_err_check(upipe_set_uri(upipe_src, uri))) {
+            if (ubase_check(upipe_set_uri(upipe_src, uri))) {
                 upipe_set_uclock(upipe_src, glxplayer->uclock);
             } else {
                 upipe_release(upipe_src);
@@ -885,7 +885,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                 if (unlikely(upipe_src == NULL))
                     return false;
                 upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
-                if (!ubase_err_check(upipe_set_uri(upipe_src, uri))) {
+                if (!ubase_check(upipe_set_uri(upipe_src, uri))) {
                     upipe_release(upipe_src);
                     return false;
                 }
@@ -1036,6 +1036,7 @@ int main(int argc, char** argv)
         upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct upipe_glxplayer *glxplayer = upipe_glxplayer_alloc(loglevel);
+    assert(glxplayer != NULL);
 
     upipe_glxplayer_play(glxplayer, upump_mgr, uri, upipe_ts);
     upump_mgr_release(upump_mgr);

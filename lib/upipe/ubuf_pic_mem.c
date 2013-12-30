@@ -188,7 +188,7 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
     int hsize = va_arg(args, int);
     int vsize = va_arg(args, int);
 
-    if (unlikely(!ubase_err_check(ubuf_pic_common_check_size(mgr, hsize, vsize))))
+    if (unlikely(!ubase_check(ubuf_pic_common_check_size(mgr, hsize, vsize))))
         return NULL;
 
     struct ubuf_pic_mem_mgr *pic_mgr =
@@ -280,14 +280,14 @@ static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
-    if (unlikely(!ubase_err_check(ubuf_pic_common_dup(ubuf, new_ubuf)))) {
+    if (unlikely(!ubase_check(ubuf_pic_common_dup(ubuf, new_ubuf)))) {
         ubuf_free(new_ubuf);
         return UBASE_ERR_INVALID;
     }
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_ubuf_mgr(ubuf->mgr);
     for (uint8_t plane = 0; plane < pic_mgr->common_mgr.nb_planes; plane++) {
-        if (unlikely(!ubase_err_check(ubuf_pic_common_plane_dup(ubuf, new_ubuf, plane)))) {
+        if (unlikely(!ubase_check(ubuf_pic_common_plane_dup(ubuf, new_ubuf, plane)))) {
             ubuf_free(new_ubuf);
             return UBASE_ERR_INVALID;
         }
@@ -349,7 +349,7 @@ static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
                 ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
                                           hsize, vsize, buffer_p);
 #ifndef NDEBUG
-            if (ubase_err_check(err)) {
+            if (ubase_check(err)) {
                 struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
                 uatomic_fetch_add(&pic->readers, 1);
             }
@@ -369,7 +369,7 @@ static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
                 ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
                                           hsize, vsize, buffer_p);
 #ifndef NDEBUG
-            if (ubase_err_check(err)) {
+            if (ubase_check(err)) {
                 struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
                 uatomic_fetch_add(&pic->readers, 1);
             }

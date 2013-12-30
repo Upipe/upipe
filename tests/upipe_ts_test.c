@@ -159,7 +159,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
         }
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+            while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));
@@ -169,7 +169,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
                 while (upipe_iterate_sub(upipe, &output)) {
                     struct uref *flow_def2;
                     uint64_t id2;
-                    if (ubase_err_check(upipe_get_flow_def(output, &flow_def2)) &&
+                    if (ubase_check(upipe_get_flow_def(output, &flow_def2)) &&
                         uref_flow_get_id(flow_def2, &id2) && flow_id == id2) {
                         /* We already have an output. */
                         found = true;
@@ -252,17 +252,17 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+            while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *program = NULL;
-                while (ubase_err_check(upipe_iterate_sub(upipe, &program)) &&
+                while (ubase_check(upipe_iterate_sub(upipe, &program)) &&
                        program != NULL) {
                     struct uref *flow_def2;
                     uint64_t id2;
-                    if (ubase_err_check(upipe_get_flow_def(program, &flow_def2)) &&
+                    if (ubase_check(upipe_get_flow_def(program, &flow_def2)) &&
                         uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
                         /* We already have a program */
                         return UBASE_ERR_NONE;

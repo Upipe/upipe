@@ -96,7 +96,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
-            while (ubase_err_check(upipe_split_iterate(upipe, &flow_def)) &&
+            while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
                 assert(uref_flow_get_id(flow_def, &flow_id));

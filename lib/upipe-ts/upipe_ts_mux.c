@@ -651,10 +651,10 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (!ubase_err_check(upipe_set_flow_def(upipe_ts_mux_input->pes_encaps,
+    if (!ubase_check(upipe_set_flow_def(upipe_ts_mux_input->pes_encaps,
                                             flow_def_dup)) ||
         !uref_flow_set_def(flow_def_dup, "void.") ||
-        !ubase_err_check(upipe_set_flow_def(upipe_ts_mux_input->psig_flow,
+        !ubase_check(upipe_set_flow_def(upipe_ts_mux_input->psig_flow,
                                             flow_def_dup))) {
         uref_free(flow_def_dup);
         return UBASE_ERR_ALLOC;
@@ -1055,7 +1055,7 @@ static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
-    if (!ubase_err_check(upipe_set_flow_def(upipe_ts_mux_program->program_psig,
+    if (!ubase_check(upipe_set_flow_def(upipe_ts_mux_program->program_psig,
                                             flow_def_dup))) {
         uref_free(flow_def_dup);
         return UBASE_ERR_INVALID;
@@ -1427,7 +1427,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
              uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
                               UPROBE_LOG_VERBOSE, "join"));
     if (unlikely(upipe_ts_mux->join == NULL ||
-                 !ubase_err_check(upipe_set_uref_mgr(upipe_ts_mux->join,
+                 !ubase_check(upipe_set_uref_mgr(upipe_ts_mux->join,
                                   upipe_ts_mux->uref_mgr)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -1453,7 +1453,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
     }
     upipe_ts_mux_store_last_inner(upipe, agg);
 
-    if (unlikely(!ubase_err_check(upipe_ts_mux_set_mode(upipe_ts_mux->agg,
+    if (unlikely(!ubase_check(upipe_ts_mux_set_mode(upipe_ts_mux->agg,
                                         UPIPE_TS_MUX_MODE_CAPPED)) ||
                  (upipe_ts_mux->pat_psii =
                   upipe_void_alloc_output_sub(upipe_ts_mux->psig,
@@ -1876,7 +1876,7 @@ static enum ubase_err upipe_ts_mux_control(struct upipe *upipe,
         }
         case UPIPE_SET_UREF_MGR: {
             struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            UBASE_ERR_CHECK(upipe_ts_mux_set_uref_mgr(upipe, uref_mgr));
+            UBASE_RETURN(upipe_ts_mux_set_uref_mgr(upipe, uref_mgr));
             /* To create the flow definition. */
             struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
             if (upipe_ts_mux->join == NULL)

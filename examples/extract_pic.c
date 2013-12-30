@@ -345,7 +345,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_fsrc_mgr);
     upipe_set_upump_mgr(upipe_source, upump_mgr);
     upipe_set_ubuf_mgr(upipe_source, block_mgr);
-    if (!ubase_err_check(upipe_set_uri(upipe_source, srcpath)))
+    if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))
         exit(EXIT_FAILURE);
 
     /* upipe-ts */

@@ -574,7 +574,7 @@ static enum ubase_err _upipe_http_src_control(struct upipe *upipe,
 static enum ubase_err upipe_http_src_control(struct upipe *upipe, enum upipe_command command,
                                va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_http_src_control(upipe, command, args));
+    UBASE_RETURN(_upipe_http_src_control(upipe, command, args));
 
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     if (upipe_http_src->upump_mgr != NULL && upipe_http_src->fd != -1 &&

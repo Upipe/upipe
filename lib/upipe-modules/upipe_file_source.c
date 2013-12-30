@@ -466,7 +466,7 @@ static enum ubase_err upipe_fsrc_control(struct upipe *upipe,
                                          enum upipe_command command,
                                          va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_fsrc_control(upipe, command, args))
+    UBASE_RETURN(_upipe_fsrc_control(upipe, command, args))
 
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (upipe_fsrc->upump_mgr != NULL && upipe_fsrc->fd != -1 &&

@@ -224,7 +224,7 @@ static inline enum ubase_err ubuf_control(struct ubuf *ubuf,
 static inline struct ubuf *ubuf_dup(struct ubuf *ubuf)
 {
     struct ubuf *dup_ubuf;
-    if (unlikely(!ubase_err_check(ubuf_control(ubuf, UBUF_DUP, &dup_ubuf))))
+    if (unlikely(!ubase_check(ubuf_control(ubuf, UBUF_DUP, &dup_ubuf))))
         return NULL;
     return dup_ubuf;
 }

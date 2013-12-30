@@ -110,7 +110,7 @@ static bool _upipe_multicat_sink_change_file(struct upipe *upipe, int64_t idx)
         return false;
     }
     snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", upipe_multicat_sink->dirpath, idx, upipe_multicat_sink->suffix);
-    return ubase_err_check(upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode));
+    return ubase_check(upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode));
 }
 
 /** @internal @This handles data.
@@ -213,7 +213,7 @@ static enum ubase_err _upipe_multicat_sink_set_path(struct upipe *upipe, const c
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(!upipe_multicat_sink->fsink)) {
-        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
+        UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
     }
 
     free(upipe_multicat_sink->dirpath);
@@ -314,7 +314,7 @@ static enum ubase_err _upipe_multicat_sink_set_upump_mgr(struct upipe *upipe,
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
-        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
+        UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
     }
     return upipe_set_upump_mgr(upipe_multicat_sink->fsink, upump_mgr);
 }
@@ -330,7 +330,7 @@ static enum ubase_err _upipe_multicat_sink_set_uclock(struct upipe *upipe,
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
-        UBASE_ERR_CHECK(_upipe_multicat_sink_output_alloc(upipe));
+        UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
     }
     return upipe_set_uclock(upipe_multicat_sink->fsink, uclock);
 }

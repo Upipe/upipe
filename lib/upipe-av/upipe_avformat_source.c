@@ -1033,7 +1033,7 @@ static enum ubase_err upipe_avfsrc_control(struct upipe *upipe,
                                            enum upipe_command command,
                                            va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_avfsrc_control(upipe, command, args));
+    UBASE_RETURN(_upipe_avfsrc_control(upipe, command, args));
 
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (upipe_avfsrc->upump_mgr != NULL && upipe_avfsrc->url != NULL &&

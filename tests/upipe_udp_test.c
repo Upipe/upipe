@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = ubase_err_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
+		if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
 			break;
 		}
 	}
@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
 		port = ((rand() % 40000) + 1024);
 		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
 		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = ubase_err_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
+		if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
 			break;
 		}
 	}

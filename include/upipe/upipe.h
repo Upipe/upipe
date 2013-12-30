@@ -675,7 +675,7 @@ static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
                                                  struct uprobe *uprobe)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -699,7 +699,7 @@ static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
                                                  struct uref *flow_def)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -731,9 +731,9 @@ static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_err_check(upipe_set_flow_def(output, flow_def))) ||
-                 !ubase_err_check(upipe_set_output(upipe, output)))) {
+    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_check(upipe_set_flow_def(output, flow_def))) ||
+                 !ubase_check(upipe_set_output(upipe, output)))) {
         upipe_release(output);
         return NULL;
     }
@@ -768,9 +768,9 @@ static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_err_check(upipe_set_flow_def(output, flow_def))) ||
-                 !ubase_err_check(upipe_set_output(upipe, output)))) {
+    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_check(upipe_set_flow_def(output, flow_def))) ||
+                 !ubase_check(upipe_set_output(upipe, output)))) {
         upipe_release(output);
         return NULL;
     }
@@ -799,7 +799,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -828,7 +828,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe, struct uref *flow_def)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -860,9 +860,9 @@ static inline struct upipe *upipe_void_alloc_input(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_err_check(upipe_set_flow_def(input, flow_def))) ||
-                 !ubase_err_check(upipe_set_output(input, upipe)))) {
+    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_check(upipe_set_flow_def(input, flow_def))) ||
+                 !ubase_check(upipe_set_output(input, upipe)))) {
         upipe_release(input);
         return NULL;
     }
@@ -897,9 +897,9 @@ static inline struct upipe *upipe_flow_alloc_input(struct upipe *upipe,
     }
 
     struct uref *flow_def;
-    if (unlikely((ubase_err_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_err_check(upipe_set_flow_def(input, flow_def))) ||
-                 !ubase_err_check(upipe_set_output(input, upipe)))) {
+    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
+                  !ubase_check(upipe_set_flow_def(input, flow_def))) ||
+                 !ubase_check(upipe_set_output(input, upipe)))) {
         upipe_release(input);
         return NULL;
     }
@@ -928,7 +928,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }
@@ -957,7 +957,7 @@ static inline struct upipe *
                                 struct uprobe *uprobe, struct uref *flow_def)
 {
     struct upipe_mgr *sub_mgr;
-    if (!ubase_err_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
         uprobe_release(uprobe);
         return NULL;
     }

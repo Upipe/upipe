@@ -185,7 +185,7 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_xfer == NULL))
         return NULL;
 
-    if (unlikely(!ubase_err_check(upipe_xfer_mgr_send(mgr,
+    if (unlikely(!ubase_check(upipe_xfer_mgr_send(mgr,
                                                       UPIPE_XFER_SET_UPUMP_MGR,
                                                       upipe_remote, NULL)))) {
         free(upipe_xfer);
@@ -243,7 +243,7 @@ static enum ubase_err upipe_xfer_control(struct upipe *upipe,
 static void upipe_xfer_free(struct upipe *upipe)
 {
     struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
-    if (unlikely(!ubase_err_check(upipe_xfer_mgr_send(upipe->mgr,
+    if (unlikely(!ubase_check(upipe_xfer_mgr_send(upipe->mgr,
                                                       UPIPE_XFER_RELEASE,
                                                       upipe_xfer->upipe_remote,
                                                       NULL))))

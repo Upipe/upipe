@@ -246,7 +246,7 @@ static inline enum ubase_err udict_control(struct udict *udict,
 static inline struct udict *udict_dup(struct udict *udict)
 {
     struct udict *dup_udict;
-    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_DUP, &dup_udict))))
+    if (unlikely(!ubase_check(udict_control(udict, UDICT_DUP, &dup_udict))))
         return NULL;
     return dup_udict;
 }
@@ -264,7 +264,7 @@ static inline struct udict *udict_dup(struct udict *udict)
 static inline bool udict_iterate(struct udict *udict, const char **name_p,
                                  enum udict_type *type_p)
 {
-    return ubase_err_check(udict_control(udict, UDICT_ITERATE, name_p, type_p));
+    return ubase_check(udict_control(udict, UDICT_ITERATE, name_p, type_p));
 }
 
 /** @internal @This finds an attribute of the given name and type and returns
@@ -280,7 +280,7 @@ static inline const uint8_t *udict_get(struct udict *udict, const char *name,
                                        enum udict_type type, size_t *size_p)
 {
     const uint8_t *p;
-    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_GET, name, type,
+    if (unlikely(!ubase_check(udict_control(udict, UDICT_GET, name, type,
                                                 size_p, &p))))
         return NULL;
     return p;
@@ -532,7 +532,7 @@ static inline uint8_t *udict_set(struct udict *udict, const char *name,
                                  enum udict_type type, size_t attr_size)
 {
     uint8_t *p;
-    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_SET, name, type,
+    if (unlikely(!ubase_check(udict_control(udict, UDICT_SET, name, type,
                                                 attr_size, &p))))
         return NULL;
     return p;
@@ -776,7 +776,7 @@ static inline bool udict_set_rational(struct udict *udict,
 static inline bool udict_delete(struct udict *udict, enum udict_type type,
                                 const char *name)
 {
-    return ubase_err_check(udict_control(udict, UDICT_DELETE, name, type));
+    return ubase_check(udict_control(udict, UDICT_DELETE, name, type));
 }
 
 /** @This names a shorthand attribute.
@@ -790,7 +790,7 @@ static inline bool udict_delete(struct udict *udict, enum udict_type type,
 static inline bool udict_name(struct udict *udict, enum udict_type type,
                               const char **name_p, enum udict_type *base_type_p)
 {
-    return ubase_err_check(udict_control(udict, UDICT_NAME, type,
+    return ubase_check(udict_control(udict, UDICT_NAME, type,
                                          name_p, base_type_p));
 }
 

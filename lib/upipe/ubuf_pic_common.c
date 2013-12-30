@@ -324,8 +324,8 @@ enum ubase_err ubuf_pic_common_resize(struct ubuf *ubuf, int hskip, int vskip,
                  new_vsize == common->vsize))
         return UBASE_ERR_NONE; /* nothing to do */
 
-    UBASE_ERR_CHECK(ubuf_pic_common_check_size(ubuf->mgr, new_hsize, new_vsize));
-    UBASE_ERR_CHECK(ubuf_pic_common_check_skip(ubuf->mgr, hskip, vskip));
+    UBASE_RETURN(ubuf_pic_common_check_size(ubuf->mgr, new_hsize, new_vsize));
+    UBASE_RETURN(ubuf_pic_common_check_skip(ubuf->mgr, hskip, vskip));
 
     new_hmsize = new_hsize / common_mgr->macropixel;
     hmskip = hskip / common_mgr->macropixel;

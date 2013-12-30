@@ -469,7 +469,7 @@ static enum ubase_err upipe_ts_join_control(struct upipe *upipe,
                                             enum upipe_command command,
                                             va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_ts_join_control(upipe, command, args))
+    UBASE_RETURN(_upipe_ts_join_control(upipe, command, args))
 
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     if (upipe_ts_join->flow_def == NULL)

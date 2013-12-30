@@ -390,7 +390,7 @@ static enum ubase_err upipe_qsink_control(struct upipe *upipe,
                                           enum upipe_command command,
                                           va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_qsink_control(upipe, command, args));
+    UBASE_RETURN(_upipe_qsink_control(upipe, command, args));
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (upipe_qsink->upump_mgr != NULL && upipe_qsink->qsrc != NULL &&

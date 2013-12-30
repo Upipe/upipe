@@ -68,7 +68,7 @@ static inline bool ubuf_pic_size(struct ubuf *ubuf,
                                  size_t *hsize_p, size_t *vsize_p,
                                  uint8_t *macropixel_p)
 {
-    return ubase_err_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE,
+    return ubase_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE,
                                         hsize_p, vsize_p, macropixel_p));
 }
 
@@ -84,7 +84,7 @@ static inline bool ubuf_pic_size(struct ubuf *ubuf,
 static inline bool ubuf_pic_plane_iterate(struct ubuf *ubuf,
                                           const char **chroma_p)
 {
-    return ubase_err_check(ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE,
+    return ubase_check(ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE,
                                         chroma_p));
 }
 
@@ -108,7 +108,7 @@ static inline bool ubuf_pic_plane_size(struct ubuf *ubuf, const char *chroma,
                                        uint8_t *macropixel_size_p)
 
 {
-    return ubase_err_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma,
+    return ubase_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma,
                                         stride_p, hsub_p, vsub_p,
                                         macropixel_size_p));
 }
@@ -187,7 +187,7 @@ static inline bool ubuf_pic_plane_read(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubase_err_check(ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
+    return ubase_check(ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
                                         hoffset, voffset, hsize, vsize,
                                         buffer_p));
 }
@@ -219,7 +219,7 @@ static inline bool ubuf_pic_plane_write(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubase_err_check(ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
+    return ubase_check(ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
                                         hoffset, voffset, hsize, vsize,
                                         buffer_p));
 }
@@ -238,7 +238,7 @@ static inline bool ubuf_pic_plane_unmap(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubase_err_check(ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
+    return ubase_check(ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
                                         hoffset, voffset, hsize, vsize));
 }
 
@@ -324,8 +324,8 @@ static inline bool ubuf_pic_resize(struct ubuf *ubuf,
                                         &new_hsize, &new_vsize,
                                         NULL, NULL, NULL)))
         return false;
-    return ubase_err_check(ubuf_control(ubuf, UBUF_RESIZE_PICTURE,
-                                        hskip, vskip, new_hsize, new_vsize));
+    return ubase_check(ubuf_control(ubuf, UBUF_RESIZE_PICTURE,
+                                    hskip, vskip, new_hsize, new_vsize));
 }
 
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal

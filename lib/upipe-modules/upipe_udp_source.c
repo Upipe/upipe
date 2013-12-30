@@ -391,7 +391,7 @@ static enum ubase_err upipe_udpsrc_control(struct upipe *upipe,
                                            enum upipe_command command,
                                            va_list args)
 {
-    UBASE_ERR_CHECK(_upipe_udpsrc_control(upipe, command, args));
+    UBASE_RETURN(_upipe_udpsrc_control(upipe, command, args));
 
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     if (upipe_udpsrc->upump_mgr != NULL && upipe_udpsrc->fd != -1 &&

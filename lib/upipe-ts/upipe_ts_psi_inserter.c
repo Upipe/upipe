@@ -548,7 +548,7 @@ static enum ubase_err upipe_ts_psii_set_flow_def(struct upipe *upipe,
  */
 static enum ubase_err _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
 {
-    UBASE_ERR_CHECK(upipe_ts_psii_set_output(upipe, output));
+    UBASE_RETURN(upipe_ts_psii_set_output(upipe, output));
 
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
     struct uchain *uchain;

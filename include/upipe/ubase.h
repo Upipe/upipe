@@ -180,7 +180,7 @@ enum ubase_err {
  * @param err error code
  * @return true if no error happened
  */
-static inline bool ubase_err_check(enum ubase_err err)
+static inline bool ubase_check(enum ubase_err err)
 {
     return err == UBASE_ERR_NONE;
 }
@@ -189,10 +189,10 @@ static inline bool ubase_err_check(enum ubase_err err)
  *
  * @param command command whose return code is to be checked
  */
-#define UBASE_ERR_CHECK(command)                                            \
+#define UBASE_RETURN(command)                                               \
 do {                                                                        \
     enum ubase_err ubase_err_tmp = command;                                 \
-    if (unlikely(!ubase_err_check(ubase_err_tmp)))                          \
+    if (unlikely(!ubase_check(ubase_err_tmp)))                              \
         return ubase_err_tmp;                                               \
 } while (0);
 
@@ -201,7 +201,7 @@ do {                                                                        \
  * @param command command whose return code is to be checked
  */
 #define ubase_assert(command)                                               \
-    assert(ubase_err_check(command))
+    assert(ubase_check(command))
 
 /** @This checks that the first argument is equal to the given signature.
  *
