@@ -93,6 +93,16 @@ struct upump {
 
 UBASE_FROM_TO(upump, uchain, uchain, uchain)
 
+/** @This defines standard commands which upump managers may implement. */
+enum upump_mgr_command {
+    /** release all buffers kept in pools (void) */
+    UPUMP_MGR_VACUUM,
+
+    /** non-standard manager commands implemented by a module type can start
+     * from there (first arg = signature) */
+    UPUMP_MGR_CONTROL_LOCAL = 0x8000
+};
+
 /** @This stores common management parameters for a given event loop. */
 struct upump_mgr {
     /** pointer to refcount management structure */
@@ -117,8 +127,10 @@ struct upump_mgr {
     /** function to free the blocker */
     void (*upump_blocker_free)(struct upump_blocker *);
 
-    /** function to release all buffers kept in pools */
-    void (*upump_mgr_vacuum)(struct upump_mgr *);
+    /** control function for standard or local manager commands - all parameters
+     * belong to the caller */
+    enum ubase_err (*upump_mgr_control)(struct upump_mgr *,
+                                        enum upump_mgr_command, va_list);
 };
 
 UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
@@ -298,6 +310,57 @@ static inline void upump_mgr_set_opaque(struct upump_mgr *upump_mgr,
                                         void *opaque)
 {
     upump_mgr->opaque = opaque;
+}
+
+/** @internal @This sends a control command to the upump manager. Note that
+ * all arguments are owned by the caller.
+ *
+ * @param mgr pointer to upump manager
+ * @param command manager control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    upump_mgr_control_va(struct upump_mgr *mgr,
+                         enum upump_mgr_command command, va_list args)
+{
+    assert(mgr != NULL);
+    if (mgr->upump_mgr_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return mgr->upump_mgr_control(mgr, command, args);
+}
+
+/** @internal @This sends a control command to the pipe manager. Note that
+ * thread semantics depend on the pipe manager. Also note that all arguments
+ * are owned by the caller.
+ *
+ * @param mgr pointer to upump manager
+ * @param command control manager command to send, followed by optional read
+ * or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    upump_mgr_control(struct upump_mgr *mgr,
+                      enum upump_mgr_command command, ...)
+{
+    bool ret;
+    va_list args;
+    va_start(args, command);
+    ret = upump_mgr_control_va(mgr, command, args);
+    va_end(args);
+    return ret;
+}
+
+/** @This instructs an existing upump manager to release all structures
+ * currently kept in pools. It is inteded as a debug tool only.
+ *
+ * @param mgr pointer to upump manager
+ * @return an error code
+ */
+static inline enum ubase_err upump_mgr_vacuum(struct upump_mgr *mgr)
+{
+    return upump_mgr_control(mgr, UPUMP_MGR_VACUUM);
 }
 
 #ifdef __cplusplus

@@ -255,14 +255,24 @@ static void upump_ev_free(struct upump *upump)
         upump_ev_free_inner(upump);
 }
 
-/** @This instructs an existing manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
+/** @This processes control commands on a upump_ev_mgr.
  *
  * @param mgr pointer to a upump_mgr structure
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
  */
-static void upump_ev_mgr_vacuum(struct upump_mgr *mgr)
+static enum ubase_err upump_ev_mgr_control(struct upump_mgr *mgr,
+                                           enum upump_mgr_command command,
+                                           va_list args)
 {
-    upump_common_mgr_vacuum(mgr, upump_ev_free_inner);
+    switch (command) {
+        case UPUMP_MGR_VACUUM:
+            upump_common_mgr_vacuum(mgr, upump_ev_free_inner);
+            return UBASE_ERR_NONE;
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @This frees a upump manager.
@@ -306,6 +316,6 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
     ev_mgr->common_mgr.mgr.refcount = upump_ev_mgr_to_urefcount(ev_mgr);
     ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
     ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
-    ev_mgr->common_mgr.mgr.upump_mgr_vacuum = upump_ev_mgr_vacuum;
+    ev_mgr->common_mgr.mgr.upump_mgr_control = upump_ev_mgr_control;
     return mgr;
 }
