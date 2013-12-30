@@ -115,6 +115,16 @@ struct uref {
 
 UBASE_FROM_TO(uref, uchain, uchain, uchain)
 
+/** @This defines standard commands which uref managers may implement. */
+enum uref_mgr_command {
+    /** release all buffers kept in pools (void) */
+    UREF_MGR_VACUUM,
+
+    /** non-standard manager commands implemented by a module type can start
+     * from there (first arg = signature) */
+    UREF_MGR_CONTROL_LOCAL = 0x8000
+};
+
 /** @This stores common management parameters for a uref pool.
  */
 struct uref_mgr {
@@ -130,8 +140,10 @@ struct uref_mgr {
     /** function to free a uref */
     void (*uref_free)(struct uref *);
 
-    /** function to release all buffers kept in pools */
-    void (*uref_mgr_vacuum)(struct uref_mgr *);
+    /** control function for standard or local manager commands - all parameters
+     * belong to the caller */
+    enum ubase_err (*uref_mgr_control)(struct uref_mgr *,
+                                       enum uref_mgr_command, va_list);
 };
 
 /** @This frees a uref and other sub-structures.
@@ -275,16 +287,6 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     return ubuf;
 }
 
-/** @This instructs an existing uref manager to release all structures currently
- * kept in pools. It is intended as a debug tool only.
- *
- * @param mgr pointer to uref manager
- */
-static inline void uref_mgr_vacuum(struct uref_mgr *mgr)
-{
-    mgr->uref_mgr_vacuum(mgr);
-}
-
 /** @This increments the reference count of a uref manager.
  *
  * @param mgr pointer to uref manager
@@ -305,6 +307,56 @@ static inline struct uref_mgr *uref_mgr_use(struct uref_mgr *mgr)
 static inline void uref_mgr_release(struct uref_mgr *mgr)
 {
     urefcount_release(mgr->refcount);
+}
+
+/** @internal @This sends a control command to the uref manager. Note that all
+ * arguments are owned by the caller.
+ *
+ * @param mgr pointer to uref manager
+ * @param command manager control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    uref_mgr_control_va(struct uref_mgr *mgr,
+                         enum uref_mgr_command command, va_list args)
+{
+    assert(mgr != NULL);
+    if (mgr->uref_mgr_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return mgr->uref_mgr_control(mgr, command, args);
+}
+
+/** @internal @This sends a control command to the uref manager. Note that all
+ * arguments are owned by the caller.
+ *
+ * @param mgr pointer to uref manager
+ * @param command control manager command to send, followed by optional read
+ * or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    uref_mgr_control(struct uref_mgr *mgr,
+                      enum uref_mgr_command command, ...)
+{
+    bool ret;
+    va_list args;
+    va_start(args, command);
+    ret = uref_mgr_control_va(mgr, command, args);
+    va_end(args);
+    return ret;
+}
+
+/** @This instructs an existing uref manager to release all structures
+ * currently kept in pools. It is inteded as a debug tool only.
+ *
+ * @param mgr pointer to uref manager
+ * @return an error code
+ */
+static inline enum ubase_err uref_mgr_vacuum(struct uref_mgr *mgr)
+{
+    return uref_mgr_control(mgr, UREF_MGR_VACUUM);
 }
 
 #ifdef __cplusplus

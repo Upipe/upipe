@@ -96,8 +96,8 @@ static void uref_std_free(struct uref *uref)
     uref_mgr_release(&std_mgr->mgr);
 }
 
-/** @This instructs an existing uref standard manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
+/** @internal @This instructs an existing uref standard manager to release all
+ * structures currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a uref manager
  */
@@ -108,6 +108,26 @@ static void uref_std_mgr_vacuum(struct uref_mgr *mgr)
 
     while ((uref = ulifo_pop(&std_mgr->uref_pool, struct uref *)) != NULL)
         uref_std_free_inner(uref);
+}
+
+/** @This processes control commands on a uref_std_mgr.
+ *
+ * @param mgr pointer to a uref_mgr structure
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err uref_std_mgr_control(struct uref_mgr *mgr,
+                                           enum uref_mgr_command command,
+                                           va_list args)
+{
+    switch (command) {
+        case UREF_MGR_VACUUM:
+            uref_std_mgr_vacuum(mgr);
+            return UBASE_ERR_NONE;
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @This frees a uref manager.
@@ -156,7 +176,7 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     std_mgr->mgr.refcount = uref_std_mgr_to_urefcount(std_mgr);
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_free = uref_std_free;
-    std_mgr->mgr.uref_mgr_vacuum = uref_std_mgr_vacuum;
+    std_mgr->mgr.uref_mgr_control = uref_std_mgr_control;
     
     return uref_std_mgr_to_uref_mgr(std_mgr);
 }
