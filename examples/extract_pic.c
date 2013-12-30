@@ -106,6 +106,7 @@ struct uref_mgr *uref_mgr;
 const char *srcpath, *dstpath;
 
 struct upipe *upipe_source;
+struct upipe *upipe_split_output = NULL;
 struct upipe *upipe_null;
 
 static void usage(const char *argv0) {
@@ -133,6 +134,10 @@ static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
         /* release the source to exit */
         upipe_release(upipe_source);
         upipe_source = NULL;
+        /* send demux output to /dev/null */
+        upipe_set_output(upipe_split_output, upipe_null);
+        upipe_release(upipe_split_output);
+        upipe_split_output = NULL;
     } else {
         /* second (or after) frame, do not output them */
         upipe_set_output(upipe, upipe_null);
@@ -140,7 +145,7 @@ static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** split callback */
+/** avcdec callback */
 static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                                    enum uprobe_event event, va_list args)
 {
@@ -233,6 +238,9 @@ static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);
+
+    upipe_release(upipe_split_output);
+    upipe_split_output = upipe_use(upipe);
 
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
             uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
@@ -364,8 +372,8 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     /* release everyhing */
-    if (upipe_source != NULL)
-        upipe_release(upipe_source);
+    upipe_release(upipe_source);
+    upipe_release(upipe_split_output);
     upipe_release(upipe_null);
     uprobe_release(logger);
     uprobe_clean(&uprobe_catch);
