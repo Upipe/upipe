@@ -295,9 +295,9 @@ int main(int argc, char **argv)
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr != NULL);
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "y8", 1, 1, 1));
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "u8", 2, 2, 1));
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "v8", 2, 2, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "y8", 1, 1, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "u8", 2, 2, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "v8", 2, 2, 1));
 
     pic_flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(pic_flow != NULL);

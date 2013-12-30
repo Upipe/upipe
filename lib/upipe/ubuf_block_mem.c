@@ -114,10 +114,11 @@ static inline void ubuf_block_mem_use(struct ubuf *ubuf)
  *
  * @param ubuf pointer to ubuf
  */
-static inline bool ubuf_block_mem_single(struct ubuf *ubuf)
+static inline enum ubase_err ubuf_block_mem_single(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    return uatomic_load(&block_mem->shared->refcount) == 1;
+    return uatomic_load(&block_mem->shared->refcount) == 1 ?
+           UBASE_ERR_NONE : UBASE_ERR_BUSY;
 }
 
 /** @This returns the shared buffer.
@@ -236,11 +237,11 @@ static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     assert(new_ubuf_p != NULL);
     struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     if (unlikely(!ubuf_block_common_dup(ubuf, new_ubuf))) {
         ubuf_free(new_ubuf);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     *new_ubuf_p = new_ubuf;
 
@@ -249,7 +250,7 @@ static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     new_block->shared = block_mem->shared;
     ubuf_block_mem_use(new_ubuf);
     ubuf_mgr_use(new_ubuf->mgr);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This asks for the creation of a new reference to the same buffer space.
@@ -267,11 +268,11 @@ static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
     assert(new_ubuf_p != NULL);
     struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     if (unlikely(!ubuf_block_common_splice(ubuf, new_ubuf, offset, size))) {
         ubuf_free(new_ubuf);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     *new_ubuf_p = new_ubuf;
 
@@ -280,7 +281,7 @@ static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
     new_block->shared = block_mem->shared;
     ubuf_block_mem_use(new_ubuf);
     ubuf_mgr_use(new_ubuf->mgr);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This handles control commands.
@@ -288,10 +289,11 @@ static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
  * @param ubuf pointer to ubuf
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_block_mem_control(struct ubuf *ubuf,
-                                   enum ubuf_command command, va_list args)
+static enum ubase_err ubuf_block_mem_control(struct ubuf *ubuf,
+                                             enum ubuf_command command,
+                                             va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -308,7 +310,7 @@ static bool ubuf_block_mem_control(struct ubuf *ubuf,
             return ubuf_block_mem_splice(ubuf, new_ubuf_p, offset, size);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -382,19 +384,19 @@ static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
  * @param mgr pointer to ubuf manager
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
-                                       enum ubuf_mgr_command command,
-                                       va_list args)
+static enum ubase_err ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
+                                                 enum ubuf_mgr_command command,
+                                                 va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {
             ubuf_block_mem_mgr_vacuum(mgr);
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

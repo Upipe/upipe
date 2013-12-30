@@ -188,7 +188,7 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
     int hsize = va_arg(args, int);
     int vsize = va_arg(args, int);
 
-    if (unlikely(!ubuf_pic_common_check_size(mgr, hsize, vsize)))
+    if (unlikely(!ubase_err_check(ubuf_pic_common_check_size(mgr, hsize, vsize))))
         return NULL;
 
     struct ubuf_pic_mem_mgr *pic_mgr =
@@ -270,25 +270,26 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
  * @param ubuf pointer to ubuf
  * @param new_ubuf_p reference written with a pointer to the newly allocated
  * ubuf
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_pic_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
+static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
+                                       struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf *new_ubuf = ubuf_pic_mem_alloc_inner(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
-    if (unlikely(!ubuf_pic_common_dup(ubuf, new_ubuf))) {
+    if (unlikely(!ubase_err_check(ubuf_pic_common_dup(ubuf, new_ubuf)))) {
         ubuf_free(new_ubuf);
-        return false;
+        return UBASE_ERR_INVALID;
     }
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_ubuf_mgr(ubuf->mgr);
     for (uint8_t plane = 0; plane < pic_mgr->common_mgr.nb_planes; plane++) {
-        if (unlikely(!ubuf_pic_common_plane_dup(ubuf, new_ubuf, plane))) {
+        if (unlikely(!ubase_err_check(ubuf_pic_common_plane_dup(ubuf, new_ubuf, plane)))) {
             ubuf_free(new_ubuf);
-            return false;
+            return UBASE_ERR_INVALID;
         }
     }
     *new_ubuf_p = new_ubuf;
@@ -298,7 +299,7 @@ static bool ubuf_pic_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     new_pic->shared = pic->shared;
     ubuf_pic_mem_use(new_ubuf);
     ubuf_mgr_use(new_ubuf->mgr);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This handles control commands.
@@ -306,10 +307,11 @@ static bool ubuf_pic_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
  * @param ubuf pointer to ubuf
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_pic_mem_control(struct ubuf *ubuf,
-                                 enum ubuf_command command, va_list args)
+static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
+                                           enum ubuf_command command,
+                                           va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -343,15 +345,16 @@ static bool ubuf_pic_mem_control(struct ubuf *ubuf,
             int hsize = va_arg(args, int);
             int vsize = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
-            bool ret = ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
-                                                 hsize, vsize, buffer_p);
+            enum ubase_err err =
+                ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
+                                          hsize, vsize, buffer_p);
 #ifndef NDEBUG
-            if (ret) {
+            if (ubase_err_check(err)) {
                 struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
                 uatomic_fetch_add(&pic->readers, 1);
             }
 #endif
-            return ret;
+            return err;
         }
         case UBUF_WRITE_PICTURE_PLANE: {
             const char *chroma = va_arg(args, const char *);
@@ -361,16 +364,17 @@ static bool ubuf_pic_mem_control(struct ubuf *ubuf,
             int vsize = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
             if (!ubuf_pic_mem_single(ubuf))
-                return false;
-            bool ret = ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
-                                                 hsize, vsize, buffer_p);
+                return UBASE_ERR_BUSY;
+            enum ubase_err err =
+                ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
+                                          hsize, vsize, buffer_p);
 #ifndef NDEBUG
-            if (ret) {
+            if (ubase_err_check(err)) {
                 struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
                 uatomic_fetch_add(&pic->readers, 1);
             }
 #endif
-            return ret;
+            return err;
         }
         case UBUF_UNMAP_PICTURE_PLANE: {
             /* we don't actually care about the parameters */
@@ -378,7 +382,7 @@ static bool ubuf_pic_mem_control(struct ubuf *ubuf,
             struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
             uatomic_fetch_sub(&pic->readers, 1);
 #endif
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UBUF_RESIZE_PICTURE: {
             /* Implementation note: here we agree to extend the ubuf, even
@@ -393,7 +397,7 @@ static bool ubuf_pic_mem_control(struct ubuf *ubuf,
                                           new_hsize, new_vsize);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -472,19 +476,19 @@ static void ubuf_pic_mem_mgr_vacuum(struct ubuf_mgr *mgr)
  * @param mgr pointer to ubuf manager
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
-                                     enum ubuf_mgr_command command,
-                                     va_list args)
+static enum ubase_err ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
+                                               enum ubuf_mgr_command command,
+                                               va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {
             ubuf_pic_mem_mgr_vacuum(mgr);
-            return true;
+            return UBASE_ERR_NONE;
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -589,11 +593,12 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param hsub horizontal subsamping
  * @param vsub vertical subsamping
  * @param macropixel_size size of a macropixel in octets
- * @return false in case of allocation error
+ * @return an error code
  */
-bool ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
-                                uint8_t hsub, uint8_t vsub,
-                                uint8_t macropixel_size)
+enum ubase_err ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr,
+                                          const char *chroma,
+                                          uint8_t hsub, uint8_t vsub,
+                                          uint8_t macropixel_size)
 {
     assert(mgr != NULL);
     ubuf_pic_mem_mgr_vacuum(mgr);

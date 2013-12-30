@@ -663,9 +663,9 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
             UBUF_PREPEND, UBUF_APPEND, UBUF_PREPEND, UBUF_APPEND,
             UBUF_ALIGN, UBUF_ALIGN_OFFSET);
     if (unlikely(glxplayer->yuv_mgr == NULL ||
-                 !ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "y8", 1, 1, 1) ||
-                 !ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "u8", 2, 2, 1) ||
-                 !ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "v8", 2, 2, 1)))
+                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "y8", 1, 1, 1)) ||
+                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "u8", 2, 2, 1)) ||
+                 !ubase_err_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "v8", 2, 2, 1))))
         goto fail_yuv_mgr;
 
     /* rgb (glx_sink needs contiguous rgb data for glTexImage2D) */

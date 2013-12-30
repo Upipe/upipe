@@ -107,7 +107,7 @@ int main(int argc, char **argv)
                                       UBUF_PREPEND, UBUF_APPEND,
                                       UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr);
-    assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
 
     /* nullpipe */
     struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();

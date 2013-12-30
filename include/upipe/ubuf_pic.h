@@ -68,8 +68,8 @@ static inline bool ubuf_pic_size(struct ubuf *ubuf,
                                  size_t *hsize_p, size_t *vsize_p,
                                  uint8_t *macropixel_p)
 {
-    return ubuf_control(ubuf, UBUF_SIZE_PICTURE, hsize_p, vsize_p,
-                        macropixel_p);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE,
+                                        hsize_p, vsize_p, macropixel_p));
 }
 
 /** @This iterates on picture planes chroma types. Start by initializing
@@ -84,7 +84,8 @@ static inline bool ubuf_pic_size(struct ubuf *ubuf,
 static inline bool ubuf_pic_plane_iterate(struct ubuf *ubuf,
                                           const char **chroma_p)
 {
-    return ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE, chroma_p);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE,
+                                        chroma_p));
 }
 
 /** @This returns the sizes of a plane of the picture ubuf.
@@ -107,8 +108,9 @@ static inline bool ubuf_pic_plane_size(struct ubuf *ubuf, const char *chroma,
                                        uint8_t *macropixel_size_p)
 
 {
-    return ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma, stride_p,
-                        hsub_p, vsub_p, macropixel_size_p);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma,
+                                        stride_p, hsub_p, vsub_p,
+                                        macropixel_size_p));
 }
 
 /** @internal @This checks the offset and size parameters of a lot of functions,
@@ -185,8 +187,9 @@ static inline bool ubuf_pic_plane_read(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
-                        hoffset, voffset, hsize, vsize, buffer_p);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
+                                        hoffset, voffset, hsize, vsize,
+                                        buffer_p));
 }
 
 /** @This returns a writable pointer to the buffer space, if the ubuf is not
@@ -216,8 +219,9 @@ static inline bool ubuf_pic_plane_write(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
-                        hoffset, voffset, hsize, vsize, buffer_p);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
+                                        hoffset, voffset, hsize, vsize,
+                                        buffer_p));
 }
 
 /** @This marks the buffer space as being currently unused, and the pointer
@@ -234,8 +238,8 @@ static inline bool ubuf_pic_plane_unmap(struct ubuf *ubuf, const char *chroma,
     if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
                                               &hsize, &vsize)))
         return false;
-    return ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
-                        hoffset, voffset, hsize, vsize);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
+                                        hoffset, voffset, hsize, vsize));
 }
 
 /** @internal @This checks the skip and new_size parameters of a lot of
@@ -320,8 +324,8 @@ static inline bool ubuf_pic_resize(struct ubuf *ubuf,
                                         &new_hsize, &new_vsize,
                                         NULL, NULL, NULL)))
         return false;
-    return ubuf_control(ubuf, UBUF_RESIZE_PICTURE,
-                        hskip, vskip, new_hsize, new_vsize);
+    return ubase_err_check(ubuf_control(ubuf, UBUF_RESIZE_PICTURE,
+                                        hskip, vskip, new_hsize, new_vsize));
 }
 
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal

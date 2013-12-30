@@ -79,11 +79,12 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param hsub horizontal subsamping
  * @param vsub vertical subsamping
  * @param macropixel_size size of a macropixel in octets
- * @return false in case of allocation error
+ * @return an error code
  */
-bool ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
-                                uint8_t hsub, uint8_t vsub,
-                                uint8_t macropixel_size);
+enum ubase_err ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr,
+                                          const char *chroma,
+                                          uint8_t hsub, uint8_t vsub,
+                                          uint8_t macropixel_size);
 
 /** @This allocates a new instance of the ubuf manager for picture formats
  * using umem, from a fourcc image format.

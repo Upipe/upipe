@@ -344,12 +344,12 @@ static inline enum ubase_err
     upump_mgr_control(struct upump_mgr *mgr,
                       enum upump_mgr_command command, ...)
 {
-    bool ret;
+    enum ubase_err err;
     va_list args;
     va_start(args, command);
-    ret = upump_mgr_control_va(mgr, command, args);
+    err = upump_mgr_control_va(mgr, command, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 /** @This instructs an existing upump manager to release all structures

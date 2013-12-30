@@ -191,7 +191,7 @@ static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map) {
-        if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
+        if (!ubase_err_check(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p)))
             return false;
     } else
         *buffer_p = block->buffer;
@@ -225,12 +225,12 @@ static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
         return false;
 
-    if (!ubuf_control(ubuf, UBUF_SINGLE))
+    if (!ubase_err_check(ubuf_control(ubuf, UBUF_SINGLE)))
         return false;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map) {
-        if (!ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
+        if (!ubase_err_check(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p)))
             return false;
     } else
         *buffer_p = block->buffer;
@@ -257,7 +257,7 @@ static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset)
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map)
-        return ubuf_control(ubuf, UBUF_UNMAP_BLOCK);
+        return ubase_err_check(ubuf_control(ubuf, UBUF_UNMAP_BLOCK));
     return true;
 }
 
@@ -495,8 +495,8 @@ static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
     struct ubuf *new_ubuf;
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, &size)) == NULL ||
-                 !ubuf_control(ubuf, UBUF_SPLICE_BLOCK, &new_ubuf,
-                               offset, size)))
+                 !ubase_err_check(ubuf_control(ubuf, UBUF_SPLICE_BLOCK,
+                                               &new_ubuf, offset, size))))
         return NULL;
     return new_ubuf;
 }

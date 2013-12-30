@@ -205,17 +205,18 @@ static inline void ubuf_pic_common_plane_clean(struct ubuf *ubuf, uint8_t plane)
  * @param mgr common management structure
  * @param hsize horizontal size in pixels
  * @param vsize vertical size in lines
- * @return true if the picture size can be allocated
+ * @return an error code
  */
-bool ubuf_pic_common_check_size(struct ubuf_mgr *mgr, int hsize, int vsize);
+enum ubase_err ubuf_pic_common_check_size(struct ubuf_mgr *mgr,
+                                          int hsize, int vsize);
 
 /** @This duplicates the content of the common structure for picture ubuf.
  *
  * @param ubuf pointer to ubuf
  * @param new_ubuf pointer to ubuf to overwrite
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf);
+enum ubase_err ubuf_pic_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf);
 
 /** @This duplicates the content of the plane sub-structure for picture ubuf.
  * It is only necessary to call this function if you plan to use
@@ -224,10 +225,10 @@ bool ubuf_pic_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf);
  * @param ubuf pointer to ubuf
  * @param new_ubuf pointer to ubuf to overwrite
  * @param plane index of the plane
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_plane_dup(struct ubuf *ubuf, struct ubuf *new_ubuf,
-                               uint8_t plane);
+enum ubase_err ubuf_pic_common_plane_dup(struct ubuf *ubuf,
+                                         struct ubuf *new_ubuf, uint8_t plane);
 
 /** @This returns the sizes of the picture ubuf.
  *
@@ -238,10 +239,11 @@ bool ubuf_pic_common_plane_dup(struct ubuf *ubuf, struct ubuf *new_ubuf,
  * if not NULL
  * @param macropixel_p reference written with the number of pixels in a
  * macropixel if not NULL
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_size(struct ubuf *ubuf, size_t *hsize_p, size_t *vsize_p,
-                          uint8_t *macropixel_p);
+enum ubase_err ubuf_pic_common_size(struct ubuf *ubuf,
+                                    size_t *hsize_p, size_t *vsize_p,
+                                    uint8_t *macropixel_p);
 
 /** @This iterates on picture planes chroma types. Start by initializing
  * *chroma_p to NULL. If *chroma_p is NULL after running this function, there
@@ -250,9 +252,10 @@ bool ubuf_pic_common_size(struct ubuf *ubuf, size_t *hsize_p, size_t *vsize_p,
  *
  * @param ubuf pointer to ubuf
  * @param chroma_p reference written with chroma type of the next plane
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_plane_iterate(struct ubuf *ubuf, const char **chroma_p);
+enum ubase_err ubuf_pic_common_plane_iterate(struct ubuf *ubuf,
+                                             const char **chroma_p);
 
 /** @This returns the sizes of a plane of the picture ubuf.
  *
@@ -266,12 +269,12 @@ bool ubuf_pic_common_plane_iterate(struct ubuf *ubuf, const char **chroma_p);
  * if not NULL
  * @param macropixel_size_p reference written with the size of a macropixel in
  * octets for this plane if not NULL
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_plane_size(struct ubuf *ubuf, const char *chroma,
-                                size_t *stride_p,
-                                uint8_t *hsub_p, uint8_t *vsub_p,
-                                uint8_t *macropixel_size_p);
+enum ubase_err ubuf_pic_common_plane_size(struct ubuf *ubuf, const char *chroma,
+                                          size_t *stride_p,
+                                          uint8_t *hsub_p, uint8_t *vsub_p,
+                                          uint8_t *macropixel_size_p);
 
 /** @This returns a pointer to the buffer space of a plane.
  *
@@ -291,11 +294,12 @@ bool ubuf_pic_common_plane_size(struct ubuf *ubuf, const char *chroma,
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
  * @param buffer_p reference written with a pointer to buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-bool ubuf_pic_common_plane_map(struct ubuf *ubuf, const char *chroma,
-                               int hoffset, int voffset, int hsize, int vsize,
-                               uint8_t **buffer_p);
+enum ubase_err ubuf_pic_common_plane_map(struct ubuf *ubuf, const char *chroma,
+                                         int hoffset, int voffset,
+                                         int hsize, int vsize,
+                                         uint8_t **buffer_p);
 
 /** @This checks whether the requested picture resize can be performed with
  * this manager.
@@ -305,11 +309,13 @@ bool ubuf_pic_common_plane_map(struct ubuf *ubuf, const char *chroma,
  * extend the picture leftwards)
  * @param vskip number of lines to skip at the beginning of the picture (if < 0,
  * extend the picture upwards)
- * @return true if the picture size can be allocated
+ * @return an error code
  */
-bool ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip);
+enum ubase_err ubuf_pic_common_check_skip(struct ubuf_mgr *mgr,
+                                          int hskip, int vskip);
 
-/** @This resizes a picture ubuf, if the ubuf has enough space.
+/** @This resizes a picture ubuf, if the ubuf has enough space, and it is not
+ * shared.
  *
  * @param ubuf pointer to ubuf
  * @param hskip number of pixels to skip at the beginning of each line (if < 0,
@@ -320,11 +326,10 @@ bool ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip);
  * to -1, keep same line ends)
  * @param new_vsize final vertical size of the buffer, in lines (if set
  * to -1, keep same last line)
- * @return false in case of error, or if the ubuf is shared, or if the operation
- * is not possible
+ * @return an error code
  */
-bool ubuf_pic_common_resize(struct ubuf *ubuf, int hskip, int vskip,
-                            int new_hsize, int new_vsize);
+enum ubase_err ubuf_pic_common_resize(struct ubuf *ubuf, int hskip, int vskip,
+                                      int new_hsize, int new_vsize);
 
 /** @This frees memory allocated by @ref ubuf_pic_common_mgr_init and
  * @ref ubuf_pic_common_mgr_add_plane.
@@ -347,11 +352,12 @@ void ubuf_pic_common_mgr_init(struct ubuf_mgr *mgr, uint8_t macropixel);
  * @param hsub horizontal subsamping
  * @param vsub vertical subsamping
  * @param macropixel_size size of a macropixel in octets
- * @return false in case of allocation error
+ * @return an error code
  */
-bool ubuf_pic_common_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
-                                   uint8_t hsub, uint8_t vsub,
-                                   uint8_t macropixel_size);
+enum ubase_err ubuf_pic_common_mgr_add_plane(struct ubuf_mgr *mgr,
+                                             const char *chroma,
+                                             uint8_t hsub, uint8_t vsub,
+                                             uint8_t macropixel_size);
 
 #ifdef __cplusplus
 }

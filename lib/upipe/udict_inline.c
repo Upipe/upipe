@@ -173,22 +173,23 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
  * @param udict pointer to udict
  * @param new_udict_p reference written with a pointer to the newly allocated
  * udict
- * @return false in case of error
+ * @return an error code
  */
-static bool udict_inline_dup(struct udict *udict, struct udict **new_udict_p)
+static enum ubase_err udict_inline_dup(struct udict *udict,
+                                       struct udict **new_udict_p)
 {
     assert(new_udict_p != NULL);
     struct udict_inline *inl = udict_inline_from_udict(udict);
     struct udict *new_udict = udict_inline_alloc(udict->mgr, inl->size);
     if (unlikely(new_udict == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     *new_udict_p = new_udict;
 
     struct udict_inline *new_inl = udict_inline_from_udict(new_udict);
     memcpy(umem_buffer(&new_inl->umem), umem_buffer(&inl->umem), inl->size);
     new_inl->size = inl->size;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This looks up a shorthand attribute in the list of shorthands.
@@ -344,17 +345,17 @@ static uint8_t *_udict_inline_get(struct udict *udict, const char *name,
  * @param size_p size of the value, written on execution (can be NULL)
  * @param attr_p pointer to the value of the found attribute, written on
  * execution
- * @return false in case of error
+ * @return an error code
  */
-static bool udict_inline_get(struct udict *udict, const char *name,
-                             enum udict_type type, size_t *size_p,
-                             const uint8_t **attr_p)
+static enum ubase_err udict_inline_get(struct udict *udict, const char *name,
+                                       enum udict_type type, size_t *size_p,
+                                       const uint8_t **attr_p)
 {
     uint8_t *attr = _udict_inline_get(udict, name, type, size_p);
     if (unlikely(attr == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
     *attr_p = attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This deletes an attribute.
@@ -362,21 +363,21 @@ static bool udict_inline_get(struct udict *udict, const char *name,
  * @param udict pointer to the udict
  * @param name name of the attribute
  * @param type type of the attribute
- * @return true if the attribute existed before
+ * @return an error code
  */
-static bool udict_inline_delete(struct udict *udict, const char *name,
-                                enum udict_type type)
+static enum ubase_err udict_inline_delete(struct udict *udict, const char *name,
+                                          enum udict_type type)
 {
     assert(type != UDICT_TYPE_END);
     struct udict_inline *inl = udict_inline_from_udict(udict);
     uint8_t *attr = udict_inline_find(udict, name, type);
     if (unlikely(attr == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     uint8_t *end = udict_inline_next(attr);
     memmove(attr, end, umem_buffer(&inl->umem) + inl->size - end);
     inl->size -= end - attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This adds or changes an attribute (excluding the value itself).
@@ -385,11 +386,12 @@ static bool udict_inline_delete(struct udict *udict, const char *name,
  * @param name name of the attribute
  * @param type type of the attribute
  * @param attr_size size needed to store the value of the attribute
- * @return pointer to the value of the attribute
+ * @param attr_p pointer to the value of the attribute
+ * @return an error code
  */
-static bool udict_inline_set(struct udict *udict, const char *name,
-                             enum udict_type type, size_t attr_size,
-                             uint8_t **attr_p)
+static enum ubase_err udict_inline_set(struct udict *udict, const char *name,
+                                       enum udict_type type, size_t attr_size,
+                                       uint8_t **attr_p)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
     const struct inline_shorthand *shorthand = NULL;
@@ -397,7 +399,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
     if (likely(type > UDICT_TYPE_SHORTHAND)) {
         shorthand = udict_inline_shorthand(type);
         if (unlikely(shorthand == NULL))
-            return false;
+            return UBASE_ERR_INVALID;
         base_type = shorthand->base_type;
     }
 
@@ -409,14 +411,14 @@ static bool udict_inline_set(struct udict *udict, const char *name,
              base_type != UDICT_TYPE_STRING) ||
             current_size == attr_size) {
             *attr_p = attr;
-            return true;
+            return UBASE_ERR_NONE;
         }
         if (likely(base_type == UDICT_TYPE_STRING &&
                    current_size > attr_size)) {
             /* Just zero out superfluous bytes */
             memset(attr + attr_size, 0, current_size - attr_size);
             *attr_p = attr;
-            return true;
+            return UBASE_ERR_NONE;
         }
         udict_inline_delete(udict, name, type);
     }
@@ -441,7 +443,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
             udict_inline_mgr_from_udict_mgr(udict->mgr);
         if (unlikely(!umem_realloc(&inl->umem, total_size +
                                                inline_mgr->extra_size)))
-            return false;
+            return UBASE_ERR_ALLOC;
 
         attr = umem_buffer(&inl->umem) + inl->size - 1;
     }
@@ -469,7 +471,7 @@ static bool udict_inline_set(struct udict *udict, const char *name,
     attr[attr_size] = UDICT_TYPE_END;
     *attr_p = attr;
     inl->size += header_size + attr_size;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This names a shorthand attribute.
@@ -477,21 +479,22 @@ static bool udict_inline_set(struct udict *udict, const char *name,
  * @param type shorthand type
  * @param name_p filled in with the name of the shorthand attribute
  * @param base_type_p filled in with the base type of the shorthand attribute
- * @return false in case the shorthand doesn't exist
+ * @return an error code
  */
-static bool udict_inline_name(enum udict_type type,
-                              const char **name_p, enum udict_type *base_type_p)
+static enum ubase_err udict_inline_name(enum udict_type type,
+                                        const char **name_p,
+                                        enum udict_type *base_type_p)
 {
     if (type <= UDICT_TYPE_SHORTHAND)
-        return false;
+        return UBASE_ERR_INVALID;
 
     const struct inline_shorthand *shorthand = udict_inline_shorthand(type);
     if (unlikely(shorthand == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     *name_p = shorthand->name;
     *base_type_p = shorthand->base_type;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This handles control commands.
@@ -499,10 +502,11 @@ static bool udict_inline_name(enum udict_type type,
  * @param udict pointer to udict
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
-static bool udict_inline_control(struct udict *udict,
-                                 enum udict_command command, va_list args)
+static enum ubase_err udict_inline_control(struct udict *udict,
+                                           enum udict_command command,
+                                           va_list args)
 {
     switch (command) {
         case UDICT_DUP: {
@@ -513,7 +517,7 @@ static bool udict_inline_control(struct udict *udict,
             const char **name_p = va_arg(args, const char **);
             enum udict_type *type_p = va_arg(args, enum udict_type *);
             udict_inline_iterate(udict, name_p, type_p);
-            return true;
+            return UBASE_ERR_NONE;
         }
         case UDICT_GET: {
             const char *name = va_arg(args, const char *);
@@ -541,7 +545,7 @@ static bool udict_inline_control(struct udict *udict,
             return udict_inline_name(type, name_p, base_type_p);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -572,8 +576,8 @@ static void udict_inline_free(struct udict *udict)
     udict_mgr_release(&inline_mgr->mgr);
 }
 
-/** @This instructs an existing udict manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
+/** @internal @This instructs an existing udict manager to release all
+ * structures currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to udict manager
  */
@@ -583,6 +587,26 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
     struct udict *udict;
     while ((udict = ulifo_pop(&inline_mgr->udict_pool, struct udict *)) != NULL)
         udict_inline_free_inner(udict);
+}
+
+/** @This processes control commands on a udict_std_mgr.
+ *
+ * @param mgr pointer to a udict_mgr structure
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static enum ubase_err udict_inline_mgr_control(struct udict_mgr *mgr,
+                                               enum udict_mgr_command command,
+                                               va_list args)
+{
+    switch (command) {
+        case UDICT_MGR_VACUUM:
+            udict_inline_mgr_vacuum(mgr);
+            return UBASE_ERR_NONE;
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @This frees a udict manager.
@@ -646,7 +670,7 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     inline_mgr->mgr.udict_alloc = udict_inline_alloc;
     inline_mgr->mgr.udict_control = udict_inline_control;
     inline_mgr->mgr.udict_free = udict_inline_free;
-    inline_mgr->mgr.udict_mgr_vacuum = udict_inline_mgr_vacuum;
+    inline_mgr->mgr.udict_mgr_control = udict_inline_mgr_control;
 
 #ifdef STATS
     int i;

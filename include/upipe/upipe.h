@@ -250,16 +250,16 @@ static inline enum ubase_err
     upipe_mgr_control(struct upipe_mgr *mgr,
                       enum upipe_mgr_command command, ...)
 {
-    bool ret;
+    enum ubase_err err;
     va_list args;
     va_start(args, command);
-    ret = upipe_mgr_control_va(mgr, command, args);
+    err = upipe_mgr_control_va(mgr, command, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 /** @This instructs an existing upipe manager to release all structures
- * currently kept in pools. It is inteded as a debug tool only.
+ * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to upipe manager
  * @return an error code
@@ -479,6 +479,7 @@ static inline struct uprobe *upipe_pop_probe(struct upipe *upipe)
 static inline void upipe_input(struct upipe *upipe, struct uref *uref,
                                struct upump *upump)
 {
+    assert(upipe != NULL);
     assert(upipe->mgr->upipe_input != NULL);
     upipe_use(upipe);
     upipe->mgr->upipe_input(upipe, uref, upump);
@@ -499,6 +500,7 @@ static inline enum ubase_err upipe_control_va(struct upipe *upipe,
                                               enum upipe_command command,
                                               va_list args)
 {
+    assert(upipe != NULL);
     if (upipe->mgr->upipe_control == NULL)
         return UBASE_ERR_UNHANDLED;
 

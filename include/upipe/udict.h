@@ -161,6 +161,16 @@ struct udict {
     struct udict_mgr *mgr;
 };
 
+/** @This defines standard commands which udict managers may implement. */
+enum udict_mgr_command {
+    /** release all buffers kept in pools (void) */
+    UDICT_MGR_VACUUM,
+
+    /** non-standard manager commands implemented by a module type can start
+     * from there (first arg = signature) */
+    UDICT_MGR_CONTROL_LOCAL = 0x8000
+};
+
 /** @This stores common management parameters for a udict pool.
  */
 struct udict_mgr {
@@ -170,12 +180,15 @@ struct udict_mgr {
     /** function to allocate a udict with a given initial size */
     struct udict *(*udict_alloc)(struct udict_mgr *, size_t);
     /** control function for standard or local commands */
-    bool (*udict_control)(struct udict *, enum udict_command, va_list);
+    enum ubase_err (*udict_control)(struct udict *,
+                                    enum udict_command, va_list);
     /** function to free a udict */
     void (*udict_free)(struct udict *);
 
-    /** function to release all buffers kept in pools */
-    void (*udict_mgr_vacuum)(struct udict_mgr *);
+    /** control function for standard or local manager commands - all parameters
+     * belong to the caller */
+    enum ubase_err (*udict_mgr_control)(struct udict_mgr *,
+                                        enum udict_mgr_command, va_list);
 };
 
 /** @This allocates and initializes a new udict.
@@ -192,19 +205,37 @@ static inline struct udict *udict_alloc(struct udict_mgr *mgr, size_t size)
 /** @internal @This sends a control command to the udict.
  *
  * @param upipe description structure of the pipe
+ * @param command control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    udict_control_va(struct udict *udict,
+                     enum udict_mgr_command command, va_list args)
+{
+    assert(udict != NULL);
+    if (udict->mgr->udict_mgr_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return udict->mgr->udict_control(udict, command, args);
+}
+
+/** @internal @This sends a control command to the udict.
+ *
+ * @param upipe description structure of the pipe
  * @param command control command to send, followed by optional read or write
  * parameters
- * @return false in case of error
+ * @return an error code
  */
-static inline bool udict_control(struct udict *udict,
-                                 enum udict_command command, ...)
+static inline enum ubase_err udict_control(struct udict *udict,
+                                           enum udict_command command, ...)
 {
-    bool ret;
+    enum ubase_err err;
     va_list args;
     va_start(args, command);
-    ret = udict->mgr->udict_control(udict, command, args);
+    err = udict_control_va(udict, command, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 /** @This duplicates a given udict.
@@ -215,7 +246,7 @@ static inline bool udict_control(struct udict *udict,
 static inline struct udict *udict_dup(struct udict *udict)
 {
     struct udict *dup_udict;
-    if (unlikely(!udict_control(udict, UDICT_DUP, &dup_udict)))
+    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_DUP, &dup_udict))))
         return NULL;
     return dup_udict;
 }
@@ -233,7 +264,7 @@ static inline struct udict *udict_dup(struct udict *udict)
 static inline bool udict_iterate(struct udict *udict, const char **name_p,
                                  enum udict_type *type_p)
 {
-    return udict_control(udict, UDICT_ITERATE, name_p, type_p);
+    return ubase_err_check(udict_control(udict, UDICT_ITERATE, name_p, type_p));
 }
 
 /** @internal @This finds an attribute of the given name and type and returns
@@ -249,7 +280,8 @@ static inline const uint8_t *udict_get(struct udict *udict, const char *name,
                                        enum udict_type type, size_t *size_p)
 {
     const uint8_t *p;
-    if (unlikely(!udict_control(udict, UDICT_GET, name, type, size_p, &p)))
+    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_GET, name, type,
+                                                size_p, &p))))
         return NULL;
     return p;
 }
@@ -500,7 +532,8 @@ static inline uint8_t *udict_set(struct udict *udict, const char *name,
                                  enum udict_type type, size_t attr_size)
 {
     uint8_t *p;
-    if (unlikely(!udict_control(udict, UDICT_SET, name, type, attr_size, &p)))
+    if (unlikely(!ubase_err_check(udict_control(udict, UDICT_SET, name, type,
+                                                attr_size, &p))))
         return NULL;
     return p;
 }
@@ -743,7 +776,7 @@ static inline bool udict_set_rational(struct udict *udict,
 static inline bool udict_delete(struct udict *udict, enum udict_type type,
                                 const char *name)
 {
-    return udict_control(udict, UDICT_DELETE, name, type);
+    return ubase_err_check(udict_control(udict, UDICT_DELETE, name, type));
 }
 
 /** @This names a shorthand attribute.
@@ -757,7 +790,8 @@ static inline bool udict_delete(struct udict *udict, enum udict_type type,
 static inline bool udict_name(struct udict *udict, enum udict_type type,
                               const char **name_p, enum udict_type *base_type_p)
 {
-    return udict_control(udict, UDICT_NAME, type, name_p, base_type_p);
+    return ubase_err_check(udict_control(udict, UDICT_NAME, type,
+                                         name_p, base_type_p));
 }
 
 /** @This frees a udict.
@@ -870,17 +904,6 @@ static inline int udict_cmp(struct udict *udict1, struct udict *udict2)
     return 0;
 }
 
-/** @This instructs an existing udict manager to release all structures
- * currently kept in pools. It is intended as a debug tool only.
- *
- * @param mgr pointer to udict manager
- */
-static inline void udict_mgr_vacuum(struct udict_mgr *mgr)
-{
-    if (likely(mgr->udict_mgr_vacuum != NULL))
-        mgr->udict_mgr_vacuum(mgr);
-}
-
 /** @This increments the reference count of a udict manager.
  *
  * @param mgr pointer to udict manager
@@ -902,6 +925,56 @@ static inline void udict_mgr_release(struct udict_mgr *mgr)
 {
     if (mgr != NULL)
         urefcount_release(mgr->refcount);
+}
+
+/** @internal @This sends a control command to the pipe manager. Note that all
+ * arguments are owned by the caller.
+ *
+ * @param mgr pointer to udict manager
+ * @param command manager control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    udict_mgr_control_va(struct udict_mgr *mgr,
+                         enum udict_mgr_command command, va_list args)
+{
+    assert(mgr != NULL);
+    if (mgr->udict_mgr_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return mgr->udict_mgr_control(mgr, command, args);
+}
+
+/** @internal @This sends a control command to the pipe manager. Note that all
+ * arguments are owned by the caller.
+ *
+ * @param mgr pointer to udict manager
+ * @param command control manager command to send, followed by optional read
+ * or write parameters
+ * @return an error code
+ */
+static inline enum ubase_err
+    udict_mgr_control(struct udict_mgr *mgr,
+                      enum udict_mgr_command command, ...)
+{
+    enum ubase_err err;
+    va_list args;
+    va_start(args, command);
+    err = udict_mgr_control_va(mgr, command, args);
+    va_end(args);
+    return err;
+}
+
+/** @This instructs an existing udict manager to release all structures
+ * currently kept in pools. It is inteded as a debug tool only.
+ *
+ * @param mgr pointer to udict manager
+ * @return an error code
+ */
+static inline enum ubase_err udict_mgr_vacuum(struct udict_mgr *mgr)
+{
+    return udict_mgr_control(mgr, UDICT_MGR_VACUUM);
 }
 
 #ifdef __cplusplus

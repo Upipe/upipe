@@ -340,12 +340,12 @@ static inline enum ubase_err
     uref_mgr_control(struct uref_mgr *mgr,
                       enum uref_mgr_command command, ...)
 {
-    bool ret;
+    enum ubase_err err;
     va_list args;
     va_start(args, command);
-    ret = uref_mgr_control_va(mgr, command, args);
+    err = uref_mgr_control_va(mgr, command, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 /** @This instructs an existing uref manager to release all structures

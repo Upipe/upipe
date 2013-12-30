@@ -89,9 +89,9 @@ int main(int argc, char **argv)
                                  UBUF_PREPEND, UBUF_APPEND,
                                  UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(mgr != NULL);
-    assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1));
-    assert(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 2, 1));
-    assert(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 2, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 2, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 2, 1));
 
     assert(ubuf_pic_alloc(mgr, 31, 32) == NULL);
     assert(ubuf_pic_alloc(mgr, 32, 31) == NULL);
@@ -199,7 +199,7 @@ int main(int argc, char **argv)
                                  UBUF_PREPEND, UBUF_APPEND,
                                  UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(mgr != NULL);
-    assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8u8y8v8", 1, 1, 4));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8u8y8v8", 1, 1, 4));
 
     assert(ubuf_pic_alloc(mgr, 31, 32) == NULL);
 
