@@ -94,14 +94,15 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     uint8_t *buf = NULL;
 
     /* block size */
-    if (unlikely(!uref_block_size(uref, &size))) {
+    if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
         upipe_warn(upipe, "could not read uref block size");
         uref_free(uref);
         return;
     }
     /* copy ubuf if shared or 16b-unaligned */
     bufsize = -1;
-    if (!uref_block_write(uref, 0, &bufsize, &buf) || ((uintptr_t)buf & 1)) {
+    if (!ubase_check(uref_block_write(uref, 0, &bufsize, &buf)) ||
+        ((uintptr_t)buf & 1)) {
         ubuf = ubuf_block_copy(upipe_htons->ubuf_mgr, uref->ubuf, 0, size);
         if (unlikely(!ubuf)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -144,8 +145,7 @@ static enum ubase_err upipe_htons_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;

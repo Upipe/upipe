@@ -46,20 +46,21 @@ static inline bool upipe_ts_psid_check_crc(struct uref *section)
     assert(section_header != NULL);
     uint16_t size = psi_get_length(section_header) +
                     PSI_HEADER_SIZE - PSI_CRC_SIZE;
-    bool ret = uref_block_peek_unmap(section, 0, buffer, section_header);
-    assert(ret);
+    enum ubase_err err = uref_block_peek_unmap(section, 0, buffer,
+                                               section_header);
+    ubase_assert(err);
 
     uint32_t crc = 0xffffffff;
     int offset = 0;
     while (size > 0) {
         int read_size = size;
         const uint8_t *read_buffer;
-        if (unlikely(!uref_block_read(section, offset, &read_size,
-                                      &read_buffer)))
+        if (unlikely(!ubase_check(uref_block_read(section, offset, &read_size,
+                                                  &read_buffer))))
             return false;
         for (int i = 0; i < read_size; i++)
             crc = (crc << 8) ^ p_psi_crc_table[(crc >> 24) ^ (read_buffer[i])];
-        if (unlikely(!uref_block_unmap(section, offset)))
+        if (unlikely(!ubase_check(uref_block_unmap(section, offset))))
             return false;
         size -= read_size;
         offset += read_size;
@@ -72,8 +73,8 @@ static inline bool upipe_ts_psid_check_crc(struct uref *section)
                    section_crc[1] == ((crc >> 16) & 0xff) &&
                    section_crc[2] == ((crc >> 8) & 0xff) &&
                    section_crc[3] == (crc & 0xff);
-    ret = uref_block_peek_unmap(section, offset, buffer2, section_crc);
-    assert(ret);
+    err = uref_block_peek_unmap(section, offset, buffer2, section_crc);
+    ubase_assert(err);
     return checked;
 }
 
@@ -91,8 +92,9 @@ static inline bool upipe_ts_psid_validate(struct uref *section)
     bool checked = !psi_get_syntax(section_header) ||
                    psi_get_length(section_header) >= PSI_HEADER_SIZE_SYNTAX1 -
                                                 PSI_HEADER_SIZE + PSI_CRC_SIZE;
-    bool ret = uref_block_peek_unmap(section, 0, buffer, section_header);
-    assert(ret);
+    enum ubase_err err = uref_block_peek_unmap(section, 0, buffer,
+                                               section_header);
+    ubase_assert(err);
 
     return checked;
 }
@@ -106,7 +108,7 @@ static inline bool upipe_ts_psid_validate(struct uref *section)
 static inline bool upipe_ts_psid_equal(struct uref *section1,
                                        struct uref *section2)
 {
-    return uref_block_equal(section1, section2);
+    return ubase_check(uref_block_equal(section1, section2));
 }
 
 /** @This declares a PSI table in a structure.
@@ -172,8 +174,9 @@ static inline uint8_t upipe_ts_psid_table_get_lastsection(struct uref **sections
                                                     buffer);
     assert(section_header != NULL);
     uint8_t last_section = psi_get_lastsection(section_header);
-    bool ret = uref_block_peek_unmap(sections[0], 0, buffer, section_header);
-    assert(ret);
+    enum ubase_err err = uref_block_peek_unmap(sections[0], 0, buffer,
+                                               section_header);
+    ubase_assert(err);
     return last_section;
 }
 
@@ -198,8 +201,8 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
     uint8_t last_section = psi_get_lastsection(section_header);
     uint8_t version = psi_get_version(section_header);
     uint16_t tableidext = psi_get_tableidext(section_header);
-    bool ret = uref_block_peek_unmap(uref, 0, buffer, section_header);
-    assert(ret);
+    enum ubase_err err = uref_block_peek_unmap(uref, 0, buffer, section_header);
+    ubase_assert(err);
 
     if (unlikely(sections[section] != NULL))
         uref_free(sections[section]);
@@ -215,8 +218,8 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
         uint8_t sec_last_section = psi_get_lastsection(section_header);
         uint8_t sec_version = psi_get_version(section_header);
         uint16_t sec_tableidext = psi_get_tableidext(section_header);
-        ret = uref_block_peek_unmap(sections[i], 0, buffer, section_header);
-        assert(ret);
+        err = uref_block_peek_unmap(sections[i], 0, buffer, section_header);
+        ubase_assert(err);
 
         if (sec_last_section != last_section || sec_version != version ||
             sec_tableidext != tableidext)

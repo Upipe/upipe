@@ -106,7 +106,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 + 768 + MPGA_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 42 + 768 + MPGA_HEADER_SIZE);
     memset(buffer, 0, 42 + 768 + MPGA_HEADER_SIZE);
 
@@ -214,14 +214,14 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "mpgaf"));
     assert(upipe_mpgaf != NULL);
-    assert(upipe_set_flow_def(upipe_mpgaf, uref));
-    assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
     uref_free(uref);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 + 768 + ADTS_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 42 + 768 + ADTS_HEADER_SIZE);
     memset(buffer, 0, 42 + 768 + ADTS_HEADER_SIZE);
 

@@ -85,7 +85,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t pmtd_systime;
-            assert(uref_clock_get_cr_sys(uref, &pmtd_systime));
+            ubase_assert(uref_clock_get_cr_sys(uref, &pmtd_systime));
             assert(pmtd_systime == systime);
             systime = 0;
             break;
@@ -94,10 +94,10 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t pmtd_pcrpid;
-            assert(uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid));
+            ubase_assert(uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid));
             const uint8_t *pmtd_desc;
             size_t pmtd_desc_size;
-            assert(uref_ts_flow_get_descriptors(uref, &pmtd_desc,
+            ubase_assert(uref_ts_flow_get_descriptors(uref, &pmtd_desc,
                                                 &pmtd_desc_size));
             fprintf(stdout, "ts probe: pipe %p detected new PMT header (PCR PID:%"PRIu64" descs: %zu)\n",
                     upipe, pmtd_pcrpid, pmtd_desc_size);
@@ -111,10 +111,10 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t id;
-                assert(uref_flow_get_id(flow_def, &id));
+                ubase_assert(uref_flow_get_id(flow_def, &id));
                 const uint8_t *pmtd_desc;
                 size_t pmtd_desc_size;
-                assert(uref_ts_flow_get_descriptors(flow_def, &pmtd_desc,
+                ubase_assert(uref_ts_flow_get_descriptors(flow_def, &pmtd_desc,
                                                     &pmtd_desc_size));
                 pid_sum -= id;
                 desc_size_sum -= pmtd_desc_size;
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE);
     pmt_init(buffer);
     pmt_set_length(buffer, PMT_ES_SIZE);
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 5);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 5);
     pmt_init(buffer);
     pmt_set_length(buffer, PMT_ES_SIZE + 5);
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
     pmt_init(buffer);
     pmt_set_length(buffer, PMT_ES_SIZE + 10);
@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
     pmt_init(buffer);
     pmt_set_length(buffer, PMT_ES_SIZE + 10);
@@ -308,7 +308,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     pmt_init(buffer);
     pmt_set_length(buffer, 2 * PMT_ES_SIZE);
@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     pmt_init(buffer);
     pmt_set_length(buffer, 2 * PMT_ES_SIZE);
@@ -380,7 +380,7 @@ int main(int argc, char *argv[])
                             PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PMT_HEADER_SIZE + 2 * PMT_ES_SIZE + PSI_CRC_SIZE);
     pmt_init(buffer);
     pmt_set_length(buffer, 2 * PMT_ES_SIZE);

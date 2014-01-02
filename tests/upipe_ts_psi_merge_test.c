@@ -108,14 +108,14 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     assert(size == PSI_HEADER_SIZE + payload_size);
     const uint8_t *buffer;
     int wanted = 1;
-    assert(uref_block_read(uref, 0, &wanted, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &wanted, &buffer));
     assert(wanted == 1);
     assert(*buffer == tableid);
-    assert(uref_block_unmap(uref, 0));
+    ubase_assert(uref_block_unmap(uref, 0));
     uref_free(uref);
     nb_packets--;
 }
@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + PSI_HEADER_SIZE + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1 + PSI_HEADER_SIZE + 12);
     buffer[0] = 0; /* pointer_field */
     psi_init(buffer + 1, false);
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 12 + PSI_HEADER_SIZE + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 12 + PSI_HEADER_SIZE + 12);
     buffer[0] = 11; /* pointer_field */
     psi_init(buffer + 12, false);
@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + PSI_HEADER_SIZE + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1 + PSI_HEADER_SIZE + 12);
     buffer[0] = 0; /* pointer_field */
     psi_init(buffer + 1, false);
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 1 + PSI_HEADER_SIZE + 12; i += 2) {
         struct uref *dup = uref_dup(uref);
         assert(dup != NULL);
-        assert(uref_block_resize(dup, i, 2));
+        ubase_assert(uref_block_resize(dup, i, 2));
         if (!i)
             uref_block_set_start(dup);
         upipe_input(upipe_ts_psim, dup, NULL);
@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + PSI_HEADER_SIZE + 6);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1 + PSI_HEADER_SIZE + 6);
     buffer[0] = 0; /* pointer_field */
     psi_init(buffer + 1, false);
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + 6 + PSI_HEADER_SIZE + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1 + 6 + PSI_HEADER_SIZE + 12);
     buffer[0] = 6; /* pointer_field */
     psi_init(buffer + 1 + 6, false);

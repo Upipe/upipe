@@ -158,11 +158,12 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
                 return true;
         } else if (!strcmp(attr, "lang")) {
             const char *lang;
-            if (uref_flow_get_lang(flow_def, &lang) && !strcmp(lang, value))
+            if (ubase_check(uref_flow_get_lang(flow_def, &lang)) &&
+                !strcmp(lang, value))
                 return true;
         } else if (!strcmp(attr, "name")) {
             const char *name;
-            if (uref_program_flow_get_name(flow_def, &name) &&
+            if (ubase_check(uref_program_flow_get_name(flow_def, &name)) &&
                 !strcmp(name, value))
                  return true;
         }
@@ -272,9 +273,8 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
            flow_def != NULL) {
         uint64_t flow_id;
         const char *def;
-        bool ret = uref_flow_get_id(flow_def, &flow_id) &&
-                   uref_flow_get_def(flow_def, &def);
-        assert(ret);
+        UBASE_RETURN(uref_flow_get_id(flow_def, &flow_id))
+        UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
         if (!uprobe_selflow_check_def(uprobe, def))
             continue;
@@ -344,8 +344,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
         while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                flow_def != NULL) {
             uint64_t flow_id;
-            bool ret = uref_flow_get_id(flow_def, &flow_id);
-            assert(ret);
+            UBASE_RETURN(uref_flow_get_id(flow_def, &flow_id))
             if (flow_id == sub->flow_id) {
                 found = true;
                 break;

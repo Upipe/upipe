@@ -101,7 +101,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
             MP2VEND_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 42 + MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
             (MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4) * 2 +
             MP2VEND_HEADER_SIZE);

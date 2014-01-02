@@ -88,7 +88,7 @@ static void count_input(struct upipe *upipe, struct uref *uref,
                         struct upump *upump)
 {
     uint64_t uref_duration;
-    if (uref_clock_get_duration(uref, &uref_duration))
+    if (ubase_check(uref_clock_get_duration(uref, &uref_duration)))
         duration += uref_duration;
     uref_free(uref);
 }

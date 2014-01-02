@@ -180,7 +180,8 @@ int main(int argc, char **argv)
     uref_free(uref);
     ubase_assert(upipe_get_flow_def(genaux, &uref));
     const char *def;
-    assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.aux."));
+    ubase_assert(uref_flow_get_def(uref, &def));
+    assert(!strcmp(def, "block.aux."));
 
     struct upipe *genaux_test = upipe_void_alloc(&genaux_test_mgr,
                                                  uprobe_use(logger));

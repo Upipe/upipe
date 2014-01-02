@@ -154,7 +154,8 @@ static struct upipe *upipe_ts_split_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_split *upipe_ts_split =
         upipe_ts_split_from_sub_mgr(upipe->mgr);
     uint64_t pid;
-    if (likely(uref_ts_flow_get_pid(flow_def, &pid) && pid < MAX_PIDS))
+    if (likely(ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
+               pid < MAX_PIDS))
         upipe_ts_split_pid_set(upipe_ts_split_to_upipe(upipe_ts_split), pid,
                                upipe_ts_split_sub);
 
@@ -211,7 +212,7 @@ static void upipe_ts_split_sub_free(struct upipe *upipe)
     /* remove output from the subs list */
     if (upipe_ts_split_sub->flow_def != NULL) {
         uint64_t pid;
-        if (uref_ts_flow_get_pid(upipe_ts_split_sub->flow_def, &pid))
+        if (ubase_check(uref_ts_flow_get_pid(upipe_ts_split_sub->flow_def, &pid)))
             upipe_ts_split_pid_unset(
                     upipe_ts_split_to_upipe(upipe_ts_split), pid,
                     upipe_ts_split_sub);
@@ -355,8 +356,7 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
         return;
     }
     uint16_t pid = ts_get_pid(ts_header);
-    bool ret = uref_block_peek_unmap(uref, 0, buffer, ts_header);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 0, buffer, ts_header))
 
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_split->pids[pid].subs, uchain) {
@@ -394,8 +394,7 @@ static enum ubase_err upipe_ts_split_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF) ?
-           UBASE_ERR_NONE : UBASE_ERR_INVALID;
+    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
 }
 
 /** @internal @This processes control commands.

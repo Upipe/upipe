@@ -171,6 +171,7 @@ TESTS += \
 	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
 	upipe_mpgv_framer_test \
+	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
 	upipe_rtp_prepend_test
 endif

@@ -83,7 +83,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t patd_systime;
-            assert(uref_clock_get_rap_sys(uref, &patd_systime));
+            ubase_assert(uref_clock_get_rap_sys(uref, &patd_systime));
             assert(patd_systime == systime);
             systime = 0;
             break;
@@ -92,7 +92,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t patd_tsid;
-            assert(uref_flow_get_id(uref, &patd_tsid));
+            ubase_assert(uref_flow_get_id(uref, &patd_tsid));
             assert(uref != NULL);
             assert(patd_tsid == tsid);
             break;
@@ -102,9 +102,9 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t id;
-                assert(uref_flow_get_id(flow_def, &id));
+                ubase_assert(uref_flow_get_id(flow_def, &id));
                 uint64_t pid;
-                assert(uref_ts_flow_get_pid(flow_def, &pid));
+                ubase_assert(uref_ts_flow_get_pid(flow_def, &pid));
                 program_sum -= id;
                 pid_sum -= pid;
             }
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -313,7 +313,7 @@ int main(int argc, char *argv[])
                             PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE);
@@ -339,7 +339,7 @@ int main(int argc, char *argv[])
                             PSI_CRC_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PAT_HEADER_SIZE + PAT_PROGRAM_SIZE * 2 + PSI_CRC_SIZE);
     pat_init(buffer);
     pat_set_length(buffer, PAT_PROGRAM_SIZE * 2);

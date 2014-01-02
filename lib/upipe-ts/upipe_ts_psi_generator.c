@@ -207,10 +207,9 @@ static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     uint64_t stream_type, pid;
-    if (!uref_flow_match_def(flow_def, "void.") ||
-        !uref_ts_flow_get_stream_type(flow_def, &stream_type) ||
-        !uref_ts_flow_get_pid(flow_def, &pid))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
+    UBASE_RETURN(uref_ts_flow_get_stream_type(flow_def, &stream_type))
+    UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
     const uint8_t *descriptors = NULL;
     size_t descriptors_size = 0;
     uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
@@ -382,7 +381,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
 
     uint8_t *buffer;
     int size = -1;
-    if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
+    if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
         ubuf_free(ubuf);
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -469,10 +468,9 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     uint64_t program_number, pid;
-    if (!uref_flow_match_def(flow_def, "void.") ||
-        !uref_flow_get_id(flow_def, &program_number) ||
-        !uref_ts_flow_get_pid(flow_def, &pid))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
+    UBASE_RETURN(uref_flow_get_id(flow_def, &program_number))
+    UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
     const uint8_t *descriptors = NULL;
     size_t descriptors_size = 0;
     uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
@@ -490,8 +488,8 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        if (unlikely(!uref_flow_set_def(flow_def_dup,
-                                        "block.mpegtspsi.mpegtspmt."))) {
+        if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup,
+                                        "block.mpegtspsi.mpegtspmt.")))) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -710,7 +708,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
 
         uint8_t *buffer;
         int size = -1;
-        if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
+        if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
             ubuf_free(ubuf);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -764,7 +762,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         struct ubuf *ubuf = ubuf_from_uchain(section_chain);
         uint8_t *buffer;
         int size = -1;
-        if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
+        if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
             if (last)
                 uref_free(uref);
             ubuf_free(ubuf);
@@ -808,17 +806,15 @@ static enum ubase_err upipe_ts_psig_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     uint64_t tsid;
-    if (!uref_flow_match_def(flow_def, "void.") ||
-        !uref_flow_get_id(flow_def, &tsid))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
+    UBASE_RETURN(uref_flow_get_id(flow_def, &tsid))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def(flow_def_dup,
-                                    "block.mpegtspsi.mpegtspat.")))
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def_dup,
+                                         "block.mpegtspsi.mpegtspat."))
     upipe_ts_psig_store_flow_def(upipe, flow_def_dup);
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);

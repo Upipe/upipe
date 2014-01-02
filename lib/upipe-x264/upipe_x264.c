@@ -41,7 +41,6 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -300,7 +299,8 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     params->pf_log = upipe_x264_log;
     params->p_log_private = upipe;
     params->i_log_level = X264_LOG_DEBUG;
-    if (likely(uref_pic_flow_get_fps(upipe_x264->flow_def_input, &fps))) {
+    if (likely(ubase_check(uref_pic_flow_get_fps(upipe_x264->flow_def_input,
+                           &fps)))) {
         params->b_vfr_input = 0;
         params->i_fps_num = fps.num;
         params->i_fps_den = fps.den;
@@ -334,7 +334,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         return false;
     }
 
-    if (unlikely(!uref_flow_set_def(flow_def_attr, OUT_FLOW))) {
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_attr, OUT_FLOW)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
@@ -481,10 +481,10 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         for (i = 0; i < 3; i++) {
             size_t stride;
             const uint8_t *plane;
-            if (unlikely(!uref_pic_plane_size(uref, chromas[i], &stride,
-                                              NULL, NULL, NULL) ||
-                         !uref_pic_plane_read(uref, chromas[i], 0, 0, -1, -1,
-                                              &plane))) {
+            if (unlikely(!ubase_check(uref_pic_plane_size(uref, chromas[i], &stride,
+                                              NULL, NULL, NULL)) ||
+                         !ubase_check(uref_pic_plane_read(uref, chromas[i], 0, 0, -1, -1,
+                                              &plane)))) {
                 upipe_err_va(upipe, "Could not read origin chroma %s",
                              chromas[i]);
                 uref_free(uref);
@@ -555,7 +555,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
 #ifdef HAVE_X264_OBE
     /* speedcontrol */
     uint64_t dts;
-    if (uref_clock_get_dts_sys(uref, &dts)) {
+    if (ubase_check(uref_clock_get_dts_sys(uref, &dts))) {
         if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
             uint64_t systime = uclock_now(upipe_x264->uclock);
             float buffer_fill =
@@ -601,12 +601,12 @@ static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
 
     /* We only accept YUV420P for the moment. */
     uint8_t macropixel;
-    if (unlikely(!uref_flow_match_def(flow_def, EXPECTED_FLOW) ||
-                 !uref_pic_flow_get_macropixel(flow_def, &macropixel) ||
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW)) ||
+                 !ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
                  macropixel != 1 ||
-                 !uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8") ||
-                 !uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8") ||
-                 !uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
+                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ||
+                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) ||
+                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8"))))
         return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
@@ -618,14 +618,14 @@ static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
     }
 
     struct urational fps;
-    if (!uref_pic_flow_get_fps(flow_def, &fps)) {
+    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps))) {
         upipe_err(upipe, "incompatible flow def");
         uref_free(flow_def_check);
         return UBASE_ERR_INVALID;
     }
 
-    if (unlikely(!uref_pic_flow_copy_format(flow_def_check, flow_def) ||
-                 !uref_pic_flow_set_fps(flow_def_check, fps))) {
+    if (unlikely(!ubase_check(uref_pic_flow_copy_format(flow_def_check, flow_def)) ||
+                 !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)))) {
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
@@ -652,7 +652,7 @@ static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
             upipe_x264->params.sc.f_buffer_init = 1.0;
             upipe_x264->params.sc.b_alt_timer = 1;
             uint64_t height;
-            if (uref_pic_flow_get_hsize(flow_def, &height) && height >= 720)
+            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &height)) && height >= 720)
                 upipe_x264->params.sc.max_preset = 7;
             else
                 upipe_x264->params.sc.max_preset = 10;

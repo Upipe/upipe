@@ -72,15 +72,29 @@ static inline bool upipe_avcenc_set_option(struct upipe *upipe,
  */
 struct upipe_mgr *upipe_avcenc_mgr_alloc(void);
 
+/** @This extends upipe_mgr_command with specific commands for avcenc. */
+enum upipe_avcenc_mgr_command {
+    UPIPE_AVCENC_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
+
+    /** sets the flow definition from code name (struct uref *, const char *) */
+    UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME
+};
+
 /** @This configures the given flow definition to be able to encode to the
  * av codec described by name.
  *
+ * @param mgr pointer to manager
  * @param flow_def flow definition packet
  * @param name codec name
- * @return false if the codec was not found
+ * @return an error code
  */
-bool upipe_avcenc_mgr_flow_def_from_name(struct uref *flow_def,
-                                         const char *name);
+enum ubase_err upipe_avcenc_mgr_set_flow_def_from_name(struct upipe_mgr *mgr,
+                                                       struct uref *flow_def,
+                                                       const char *name)
+{
+    return upipe_mgr_control(mgr, UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME,
+                             UPIPE_AVCENC_SIGNATURE, flow_def, name);
+}
 
 #ifdef __cplusplus
 }

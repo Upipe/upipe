@@ -31,7 +31,6 @@
 #include <upipe/ubuf_pic.h>
 
 #include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
 
 /** @This clears (part of) the specified plane, depending on plane type
@@ -49,11 +48,11 @@
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
- * @return false if chroma not known or in case of error
+ * @return an error code
  */
-bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
-                          int hoffset, int voffset,
-                          int hsize, int vsize)
+enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
+                                    int hoffset, int voffset,
+                                    int hsize, int vsize)
 {
     size_t stride, width, height;
     uint8_t hsub, vsub, macropixel_size, macropixel;
@@ -61,21 +60,14 @@ bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
     bool known = true;
     int j;
 
-    if (!ubuf) return false;
+    if (!ubuf)
+        return UBASE_ERR_INVALID;
 
-    if (unlikely(!ubuf_pic_size(ubuf, &width, &height, &macropixel))) {
-        return false;
-    }
-
-    if (unlikely(!ubuf_pic_plane_size(ubuf, chroma,
-                    &stride, &hsub, &vsub, &macropixel_size))) {
-        return false;
-    }
-
-    ubuf_pic_plane_write(ubuf, chroma, hoffset, voffset, hsize, vsize, &buf);
-    if (unlikely(!buf)) {
-        return false;
-    }
+    UBASE_RETURN(ubuf_pic_size(ubuf, &width, &height, &macropixel))
+    UBASE_RETURN(ubuf_pic_plane_size(ubuf, chroma,
+                    &stride, &hsub, &vsub, &macropixel_size))
+    UBASE_RETURN(ubuf_pic_plane_write(ubuf, chroma, hoffset, voffset,
+                                      hsize, vsize, &buf))
 
     if (hsize == -1) {
         width -= hoffset;
@@ -109,8 +101,9 @@ bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
     
 #undef LINELOOP
 #undef MATCH
-    ubuf_pic_plane_unmap(ubuf, chroma, hoffset, voffset, hsize, vsize);
-    return known;
+    UBASE_RETURN(ubuf_pic_plane_unmap(ubuf, chroma, hoffset, voffset,
+                                      hsize, vsize))
+    return known ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
 }
 
 /** @This clears (part of) the specified picture, depending on plane type
@@ -127,19 +120,20 @@ bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
- * @return false if no chroma known or in case of error
+ * @return an error code
  */
-bool ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
+enum ubase_err ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
                                        int hsize, int vsize)
 {
-    if (!ubuf) return false;
+    if (!ubuf)
+        return UBASE_ERR_INVALID;
 
     bool ret = false;
     const char *chroma = NULL;
     while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma != NULL) {
-        ret |= ubuf_pic_plane_clear(ubuf, chroma,
-            hoffset, voffset, hsize, vsize);
+        ret = ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
+            hoffset, voffset, hsize, vsize)) || ret;
     }
 
-    return ret;
+    return ret ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
 }

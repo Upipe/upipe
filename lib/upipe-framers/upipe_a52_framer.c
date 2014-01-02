@@ -183,10 +183,10 @@ static struct upipe *upipe_a52f_alloc(struct upipe_mgr *mgr,
 static bool upipe_a52f_scan(struct upipe *upipe, size_t *dropped_p)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
-    while (uref_block_scan(upipe_a52f->next_uref, dropped_p, 0xb)) {
+    while (ubase_check(uref_block_scan(upipe_a52f->next_uref, dropped_p, 0xb))) {
         uint8_t word;
-        if (!uref_block_extract(upipe_a52f->next_uref, *dropped_p + 1, 1,
-                                &word))
+        if (!ubase_check(uref_block_extract(upipe_a52f->next_uref,
+                                            *dropped_p + 1, 1, &word)))
             return false;
 
         if (word == 0x77)
@@ -208,14 +208,14 @@ static bool upipe_a52f_check_frame(struct upipe *upipe, bool *ready_p)
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     size_t size;
     *ready_p = false;
-    if (!uref_block_size(upipe_a52f->next_uref, &size))
+    if (!ubase_check(uref_block_size(upipe_a52f->next_uref, &size)))
         return false;
     if (size < upipe_a52f->next_frame_size)
         return true;
 
     uint8_t words[2];
-    if (!uref_block_extract(upipe_a52f->next_uref,
-                            upipe_a52f->next_frame_size, 2, words)) {
+    if (!ubase_check(uref_block_extract(upipe_a52f->next_uref,
+                            upipe_a52f->next_frame_size, 2, words))) {
         /* not enough data */
         if (upipe_a52f->acquired) {/* avoid delaying packets unnecessarily */
             *ready_p = true;
@@ -237,7 +237,7 @@ static bool upipe_a52f_check_frame(struct upipe *upipe, bool *ready_p)
 static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[6];
-    if (unlikely(!uref_block_extract(upipe_a52f->next_uref, 0, 6, header)))
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
         return true;
 
     /* frame size */
@@ -275,7 +275,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
 static bool upipe_a52f_parse_a52(struct upipe *upipe) {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[6];
-    if (unlikely(!uref_block_extract(upipe_a52f->next_uref, 0, 6, header)))
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
         return true;
 
     /* frame size */
@@ -317,7 +317,7 @@ static bool upipe_a52f_parse_header(struct upipe *upipe)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[6];
-    if (unlikely(!uref_block_extract(upipe_a52f->next_uref, 0, 6, header)))
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
         return true;
 
     switch (a52_get_bsid(header)) {
@@ -365,10 +365,10 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump *upump)
     /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
+    if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
         uref_clock_set_dts_##dv(&upipe_a52f->au_uref_s, date + duration);   \
-    } else if (uref_clock_get_dts_##dv(uref, &date))                        \
+    } else if (ubase_check(uref_clock_get_dts_##dv(uref, &date)))           \
         uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
     SET_DATE(sys)
     SET_DATE(prog)
@@ -390,7 +390,7 @@ static void upipe_a52f_promote_uref(struct upipe *upipe)
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(upipe_a52f->next_uref, &date))              \
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_a52f->next_uref, &date))) \
         uref_clock_set_dts_##dv(&upipe_a52f->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
@@ -459,7 +459,7 @@ static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(uref_flow_get_discontinuity(uref))) {
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
         /* Drop the current frame and resync. */
         upipe_a52f_clean_uref_stream(upipe);
         upipe_a52f_init_uref_stream(upipe);
@@ -483,8 +483,7 @@ static enum ubase_err upipe_a52f_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (unlikely(!uref_flow_match_def(flow_def, "block.")))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

@@ -78,7 +78,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             const uint8_t *filter;
             const uint8_t *mask;
             size_t size;
-            assert(uref_ts_flow_get_psi_filter(uref, &filter, &mask, &size));
+            ubase_assert(uref_ts_flow_get_psi_filter(uref, &filter, &mask, &size));
             assert(size == PSI_HEADER_SIZE_SYNTAX1);
             assert(psi_get_tableid(mask) == 0xff);
             break;
@@ -122,7 +122,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     ts_test->nb_packets++;
     const uint8_t *buffer;
     int size = -1;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == PSI_MAX_SIZE);
     assert(psi_get_tableid(buffer) == ts_test->table_id);
     if (ts_test->table_id == 69) {
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(mask, 0xff);
 
     psi_set_tableid(filter, 68);
-    assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
+    ubase_assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_sink68 = upipe_void_alloc(&ts_test_mgr,
                                                   uprobe_use(uprobe_stdio));
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
     psi_set_tableid(filter, 69);
     psi_set_tableidext(mask, 0xff);
     psi_set_tableidext(filter, 69);
-    assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
+    ubase_assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
     struct upipe *upipe_sink69 = upipe_void_alloc(&ts_test_mgr,
                                                   uprobe_use(uprobe_stdio));
@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PSI_MAX_SIZE);
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 68);
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PSI_MAX_SIZE);
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 69);
@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PSI_MAX_SIZE);
     psi_init(buffer, 1);
     psi_set_tableid(buffer, 69);

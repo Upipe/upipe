@@ -95,10 +95,10 @@ static inline void ubuf_block_common_set_buffer(struct ubuf *ubuf,
  *
  * @param ubuf pointer to ubuf
  * @param new_ubuf pointer to ubuf to overwrite
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_common_dup(struct ubuf *ubuf,
-                                         struct ubuf *new_ubuf)
+static inline enum ubase_err ubuf_block_common_dup(struct ubuf *ubuf,
+                                                   struct ubuf *new_ubuf)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);
@@ -109,10 +109,10 @@ static inline bool ubuf_block_common_dup(struct ubuf *ubuf,
     if (block->next_ubuf != NULL)
         if (unlikely((new_block->next_ubuf = ubuf_dup(block->next_ubuf))
                        == NULL))
-            return false;
+            return UBASE_ERR_ALLOC;
     new_block->cached_ubuf = new_ubuf;
     new_block->cached_offset = 0;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This duplicates common sections of a block ubuf, and duplicates part of
@@ -122,11 +122,11 @@ static inline bool ubuf_block_common_dup(struct ubuf *ubuf,
  * @param new_ubuf pointer to ubuf to overwrite
  * @param offset offset in the buffer
  * @param size final size of the buffer
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_common_splice(struct ubuf *ubuf,
-                                            struct ubuf *new_ubuf, int offset,
-                                            int size)
+static inline enum ubase_err ubuf_block_common_splice(struct ubuf *ubuf,
+                                                      struct ubuf *new_ubuf,
+                                                      int offset, int size)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);
@@ -143,11 +143,11 @@ static inline bool ubuf_block_common_splice(struct ubuf *ubuf,
         if (unlikely(block->next_ubuf == NULL ||
                      (new_block->next_ubuf = ubuf_block_splice(block->next_ubuf,
                                                              0, size)) == NULL))
-            return false;
+            return UBASE_ERR_ALLOC;
     }
     new_block->cached_ubuf = new_ubuf;
     new_block->cached_offset = 0;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This frees the ubuf containg the next segments of the current

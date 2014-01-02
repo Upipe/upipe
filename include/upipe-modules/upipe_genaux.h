@@ -48,10 +48,10 @@ extern "C" {
 enum upipe_genaux_command {
     UPIPE_GENAUX_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** set getter (bool (*)(struct uref*, uint64_t*)) */
+    /** set getter (enum ubase_err (*)(struct uref*, uint64_t*)) */
     UPIPE_GENAUX_SET_GETATTR,
 
-    /** get getter (bool (*)(struct uref*, uint64_t*)) */
+    /** get getter (enum ubase_err (*)(struct uref*, uint64_t*)) */
     UPIPE_GENAUX_GET_GETATTR,
 };
 
@@ -62,7 +62,7 @@ enum upipe_genaux_command {
  * @return an error code
  */
 static inline enum ubase_err upipe_genaux_set_getattr(struct upipe *upipe,
-                            bool (*get)(struct uref*, uint64_t*))
+                            enum ubase_err (*get)(struct uref*, uint64_t*))
 {
     return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
                          UPIPE_GENAUX_SIGNATURE, get);
@@ -75,7 +75,7 @@ static inline enum ubase_err upipe_genaux_set_getattr(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_genaux_get_getattr(struct upipe *upipe,
-                            bool (**get)(struct uref*, uint64_t*))
+                            enum ubase_err (**get)(struct uref*, uint64_t*))
 {
     return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
                          UPIPE_GENAUX_SIGNATURE, get);

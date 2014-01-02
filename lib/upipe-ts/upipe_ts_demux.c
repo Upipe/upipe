@@ -415,8 +415,8 @@ static struct upipe_ts_demux_psi_pid *
     struct uref *flow_def =
         uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
     if (unlikely(flow_def == NULL ||
-                 !uref_flow_set_def(flow_def, "block.mpegtspsi.") ||
-                 !uref_ts_flow_set_pid(flow_def, pid) ||
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.")) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, pid)) ||
                  !ubase_check(upipe_set_flow_def(psi_pid->psi_split,
                                   flow_def)))) {
         if (flow_def != NULL)
@@ -574,7 +574,7 @@ static enum ubase_err upipe_ts_demux_output_clock_ts(struct upipe *upipe,
 
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t dts_orig;
-    if (uref_clock_get_dts_orig(uref, &dts_orig)) {
+    if (ubase_check(uref_clock_get_dts_orig(uref, &dts_orig))) {
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
@@ -763,11 +763,11 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     const char *def;
-    if (unlikely(!uref_ts_flow_get_pid(flow_def, &upipe_ts_demux_output->pid) ||
+    if (unlikely(!ubase_check(uref_ts_flow_get_pid(flow_def, &upipe_ts_demux_output->pid)) ||
                  upipe_ts_demux_output->pid >= MAX_PIDS ||
-                 !uref_flow_get_raw_def(flow_def, &def) ||
-                 !uref_flow_set_def(flow_def, def) ||
-                 !uref_flow_delete_raw_def(flow_def))) {
+                 !ubase_check(uref_flow_get_raw_def(flow_def, &def)) ||
+                 !ubase_check(uref_flow_set_def(flow_def, def)) ||
+                 !ubase_check(uref_flow_delete_raw_def(flow_def)))) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
@@ -822,9 +822,9 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
         }
 
         const char *def;
-        if (unlikely(!uref_flow_get_raw_def(flow_def, &def) ||
-                     !uref_flow_set_def(flow_def, def) ||
-                     !uref_flow_delete_raw_def(flow_def))) {
+        if (unlikely(!ubase_check(uref_flow_get_raw_def(flow_def, &def)) ||
+                     !ubase_check(uref_flow_set_def(flow_def, def)) ||
+                     !ubase_check(uref_flow_delete_raw_def(flow_def)))) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
@@ -982,8 +982,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_new_flow_def(
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t pmtd_pcrpid;
 
-    if (!uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid))
     if (upipe_ts_demux_program->pcr_pid != pmtd_pcrpid) {
         if (upipe_ts_demux_program->pcr_split_output != NULL) {
             upipe_release(upipe_ts_demux_program->pcr_split_output);
@@ -1029,7 +1028,8 @@ static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
         uint64_t id = 0;
         while (ubase_check(upipe_split_iterate(pmtd, &flow_def)) &&
                flow_def != NULL)
-            if (uref_flow_get_id(flow_def, &id) && id == output->pid) {
+            if (ubase_check(uref_flow_get_id(flow_def, &id)) &&
+                id == output->pid) {
                 if (!upipe_ts_demux_output_pmtd_update(
                         upipe_ts_demux_output_to_upipe(output), flow_def))
                     upipe_throw_source_end(
@@ -1066,7 +1066,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
         case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);
             uint64_t systime;
-            if (uref_clock_get_rap_sys(uref, &systime))
+            if (ubase_check(uref_clock_get_rap_sys(uref, &systime)))
                 upipe_ts_demux_program->systime_pmt = systime;
             return UBASE_ERR_NONE;
         }
@@ -1143,7 +1143,6 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
                           discontinuity);
 
     if (upipe_ts_demux_program->systime_pmt) {
-        bool ret = true;
         struct uchain *uchain;
         struct upipe_ts_demux_output *output = NULL;
         upipe_ts_demux_program->systime_pcr =
@@ -1151,14 +1150,11 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
         ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
             output = upipe_ts_demux_output_from_uchain(uchain);
             if (output->setrap != NULL)
-                ret = ret &&
-                    ubase_check(upipe_setrap_set_rap(output->setrap,
+                UBASE_FATAL(upipe, upipe_setrap_set_rap(output->setrap,
                                         upipe_ts_demux_program->systime_pcr));
         }
         /* this is also valid for the packet we are processing */
         uref_clock_set_rap_sys(uref, upipe_ts_demux_program->systime_pcr);
-        if (!ret)
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
 }
 
@@ -1203,9 +1199,9 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     struct uref *flow_def =
         uref_alloc_control(upipe_ts_demux_program->flow_def_input->mgr);
     if (unlikely(flow_def == NULL ||
-                 !uref_flow_set_def(flow_def, "block.mpegts.") ||
-                 !uref_ts_flow_set_pid(flow_def,
-                                       upipe_ts_demux_program->pcr_pid))) {
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegts.")) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def,
+                                       upipe_ts_demux_program->pcr_pid)))) {
         if (flow_def != NULL)
             uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1307,18 +1303,18 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     const char *def;
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL ||
-                 !uref_ts_flow_get_pid(flow_def,
-                     &upipe_ts_demux_program->pmt_pid) ||
+                 !ubase_check(uref_ts_flow_get_pid(flow_def,
+                     &upipe_ts_demux_program->pmt_pid)) ||
                  upipe_ts_demux_program->pmt_pid >= MAX_PIDS ||
-                 !uref_ts_flow_get_psi_filter(flow_def, &filter, &mask,
-                                              &size) ||
-                 !uref_flow_get_id(flow_def,
-                                   &upipe_ts_demux_program->program) ||
+                 !ubase_check(uref_ts_flow_get_psi_filter(flow_def, &filter, &mask,
+                                              &size)) ||
+                 !ubase_check(uref_flow_get_id(flow_def,
+                                   &upipe_ts_demux_program->program)) ||
                  upipe_ts_demux_program->program == 0 ||
                  upipe_ts_demux_program->program > UINT16_MAX ||
-                 !uref_flow_get_raw_def(flow_def, &def) ||
-                 !uref_flow_set_def(flow_def, def) ||
-                 !uref_flow_delete_raw_def(flow_def) ||
+                 !ubase_check(uref_flow_get_raw_def(flow_def, &def)) ||
+                 !ubase_check(uref_flow_set_def(flow_def, def)) ||
+                 !ubase_check(uref_flow_delete_raw_def(flow_def)) ||
                  (upipe_ts_demux_program->psi_pid =
                       upipe_ts_demux_psi_pid_use(upipe_ts_demux_to_upipe(demux),
                           upipe_ts_demux_program->pmt_pid)) == NULL)) {
@@ -1539,10 +1535,7 @@ static enum ubase_err upipe_ts_demux_psim_probe(struct uprobe *uprobe,
         return upipe_throw_proxy(upipe, psim, event, args);
 
     uint64_t pid;
-    if (unlikely(!uref_ts_flow_get_pid(flow_def, &pid))) {
-        upipe_warn(upipe, "invalid flow definition");
-        return UBASE_ERR_INVALID;
-    }
+    UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
 
     struct upipe_ts_demux_psi_pid *psi_pid =
         upipe_ts_demux_psi_pid_find(upipe, pid);
@@ -1597,8 +1590,7 @@ static enum ubase_err upipe_ts_demux_patd_new_rap(struct upipe *upipe,
     assert(uref != NULL);
 
     uint64_t systime_rap;
-    if (unlikely(!uref_clock_get_rap_sys(uref, &systime_rap)))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_clock_get_rap_sys(uref, &systime_rap))
     return upipe_setrap_set_rap(upipe_ts_demux->setrap, systime_rap);
 }
 
@@ -1638,8 +1630,10 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
         uint64_t id = 0, pid = 0;
         while (ubase_check(upipe_split_iterate(patd, &flow_def)) &&
                flow_def == NULL)
-            if (uref_flow_get_id(flow_def, &id) && id == program->program &&
-                uref_ts_flow_get_pid(flow_def, &pid) && pid == program->pmt_pid)
+            if (ubase_check(uref_flow_get_id(flow_def, &id)) &&
+                id == program->program &&
+                ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
+                pid == program->pmt_pid)
                 break;
         if (id != program->program || pid != program->pmt_pid)
             upipe_throw_source_end(upipe_ts_demux_program_to_upipe(program));
@@ -1822,8 +1816,8 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
     }
 
     const char *def;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
@@ -1923,10 +1917,10 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
     psi_set_current(mask);
     flow_def = uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
     if (unlikely(flow_def == NULL ||
-                 !uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtspat.") ||
-                 !uref_ts_flow_set_psi_filter(flow_def, filter, mask,
-                                              PSI_HEADER_SIZE_SYNTAX1) ||
-                 !uref_ts_flow_set_pid(flow_def, 0) ||
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtspat.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                              PSI_HEADER_SIZE_SYNTAX1)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, 0)) ||
                  (upipe_ts_demux->psi_split_output_pat =
                       upipe_flow_alloc_sub(
                           upipe_ts_demux->psi_pid_pat->psi_split,

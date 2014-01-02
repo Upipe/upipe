@@ -164,7 +164,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
 
     uint8_t *buffer;
     int size = -1;
-    if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
+    if (unlikely(!ubase_check(uref_block_write(output, 0, &size, &buffer)))) {
         uref_free(output);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
@@ -230,7 +230,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
 
     uint8_t *buffer;
     int size = -1;
-    if (unlikely(!uref_block_write(output, 0, &size, &buffer))) {
+    if (unlikely(!ubase_check(uref_block_write(output, 0, &size, &buffer)))) {
         uref_free(output);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
@@ -261,9 +261,10 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
 
     struct ubuf *payload = ubuf_block_splice(uref->ubuf, 0,
                                          TS_SIZE - header_size - padding_size);
-    if (unlikely(payload == NULL || !uref_block_append(output, payload) ||
-                 !uref_block_resize(uref,
-                            TS_SIZE - header_size - padding_size, -1))) {
+    if (unlikely(payload == NULL ||
+                 !ubase_check(uref_block_append(output, payload)) ||
+                 !ubase_check(uref_block_resize(uref,
+                            TS_SIZE - header_size - padding_size, -1)))) {
         if (payload != NULL)
             ubuf_free(payload);
         uref_free(output);
@@ -277,7 +278,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
                                                 padding_size);
         size = -1;
         if (unlikely(padding == NULL ||
-                     !ubuf_block_write(padding, 0, &size, &buffer))) {
+                     !ubase_check(ubuf_block_write(padding, 0, &size, &buffer)))) {
             uref_free(output);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return NULL;
@@ -285,7 +286,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         memset(buffer, 0xff, size);
         ubuf_block_unmap(padding, 0);
 
-        if (unlikely(!uref_block_append(output, padding))) {
+        if (unlikely(!ubase_check(uref_block_append(output, padding)))) {
             ubuf_free(padding);
             uref_free(output);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -307,8 +308,8 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     uint64_t dts_sys, dts_prog = UINT64_MAX, dts_orig = UINT64_MAX, delay = 0;
-    if (unlikely(!uref_clock_get_dts_sys(uref, &dts_sys) ||
-                 (!uref_clock_get_dts_prog(uref, &dts_prog) &&
+    if (unlikely(!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) ||
+                 (!ubase_check(uref_clock_get_dts_prog(uref, &dts_prog)) &&
                   upipe_ts_encaps->next_pcr != UINT64_MAX))) {
         upipe_warn_va(upipe, "non-dated packet received");
         uref_free(uref);
@@ -324,13 +325,13 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                       delay * 1000 / UCLOCK_FREQ);
 
     size_t size;
-    if (!uref_block_size(uref, &size) || !size) {
+    if (!ubase_check(uref_block_size(uref, &size)) || !size) {
         upipe_warn_va(upipe, "empty packet received");
         uref_free(uref);
         return;
     }
 
-    bool discontinuity = uref_flow_get_discontinuity(uref);
+    bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
 
     uint64_t duration = (uint64_t)size * UCLOCK_FREQ /
                         upipe_ts_encaps->octetrate;
@@ -373,7 +374,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    bool random = uref_flow_get_random(uref);
+    bool random = ubase_check(uref_flow_get_random(uref));
     if (unlikely(upipe_ts_encaps->next_pcr == 0))
         /* Insert on PCR interval change */
         upipe_ts_encaps->next_pcr = begin;
@@ -453,7 +454,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         discontinuity = false;
     }
 
-    if (uref_block_size(uref, &size) && size)
+    if (ubase_check(uref_block_size(uref, &size)) && size)
         upipe_warn_va(upipe, "failed to mux %u octets (pcr=%u)", size, nb_pcr);
     uref_free(uref);
 }
@@ -489,7 +490,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_encaps->ubuf_mgr, 1);
         uint8_t *buffer;
         int size = -1;
-        if (unlikely(!ubuf_block_write(ubuf, 0, &size, &buffer))) {
+        if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer)))) {
             ubuf_free(ubuf);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -500,7 +501,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         ubuf_block_unmap(ubuf, 0);
         struct ubuf *section = uref_detach_ubuf(uref);
         uref_attach_ubuf(uref, ubuf);
-        if (unlikely(!uref_block_append(uref, section))) {
+        if (unlikely(!ubase_check(uref_block_append(uref, section)))) {
             ubuf_free(section);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -525,11 +526,12 @@ static enum ubase_err upipe_ts_encaps_set_flow_def(struct upipe *upipe,
     const char *def;
     uint64_t pid;
     uint64_t octetrate, tb_rate;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
-        !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate ||
-        !uref_ts_flow_get_tb_rate(flow_def, &tb_rate) ||
-        !uref_ts_flow_get_pid(flow_def, &pid))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+        !ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate)) ||
+        !octetrate ||
+        !ubase_check(uref_ts_flow_get_tb_rate(flow_def, &tb_rate)) ||
+        !ubase_check(uref_ts_flow_get_pid(flow_def, &pid)))
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup;
@@ -537,8 +539,8 @@ static enum ubase_err upipe_ts_encaps_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
+    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_encaps_store_flow_def(upipe, flow_def_dup);
 

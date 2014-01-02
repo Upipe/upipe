@@ -259,12 +259,13 @@ static inline struct udict *udict_dup(struct udict *udict)
  * execution to the name of the next attribute, or NULL if it is a shorthand
  * @param type_p reference to the type of the attribute, changed to
  * UDICT_TYPE_END at the end of the iteration; start with UDICT_TYPE_END as well
- * @return false in case of error
+ * @return an error code
  */
-static inline bool udict_iterate(struct udict *udict, const char **name_p,
-                                 enum udict_type *type_p)
+static inline enum ubase_err udict_iterate(struct udict *udict,
+                                           const char **name_p,
+                                           enum udict_type *type_p)
 {
-    return ubase_check(udict_control(udict, UDICT_ITERATE, name_p, type_p));
+    return udict_control(udict, UDICT_ITERATE, name_p, type_p);
 }
 
 /** @internal @This finds an attribute of the given name and type and returns
@@ -274,16 +275,14 @@ static inline bool udict_iterate(struct udict *udict, const char **name_p,
  * @param name name of the attribute (NULL if type is a shorthand)
  * @param type type of the attribute (potentially a shorthand)
  * @param size_p size of the value, written on execution
- * @return pointer to the value of the found attribute, or NULL
+ * @param p pointer to the value of the found attribute
+ * @return an error code
  */
-static inline const uint8_t *udict_get(struct udict *udict, const char *name,
-                                       enum udict_type type, size_t *size_p)
+static inline enum ubase_err udict_get(struct udict *udict, const char *name,
+                                       enum udict_type type, size_t *size_p,
+                                       const uint8_t **p)
 {
-    const uint8_t *p;
-    if (unlikely(!ubase_check(udict_control(udict, UDICT_GET, name, type,
-                                                size_p, &p))))
-        return NULL;
-    return p;
+    return udict_control(udict, UDICT_GET, name, type, size_p, p);
 }
 
 /** @internal @This returns the value of an opaque attribute, potentially
@@ -293,18 +292,17 @@ static inline const uint8_t *udict_get(struct udict *udict, const char *name,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_opaque(struct udict *udict,
-                                    struct udict_opaque *p,
-                                    enum udict_type type,
-                                    const char *name)
+static inline enum ubase_err udict_get_opaque(struct udict *udict,
+                                              struct udict_opaque *p,
+                                              enum udict_type type,
+                                              const char *name)
 {
-    const uint8_t *attr = udict_get(udict, name, type, &p->size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &p->size, &attr));
     p->v = attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a string attribute.
@@ -313,18 +311,19 @@ static inline bool udict_get_opaque(struct udict *udict,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_string(struct udict *udict, const char **p,
-                                    enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_string(struct udict *udict,
+                                              const char **p,
+                                              enum udict_type type,
+                                              const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     *p = (const char *)attr;
     assert(size > strlen(*p));
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This checks for the presence of a void attribute.
@@ -333,13 +332,14 @@ static inline bool udict_get_string(struct udict *udict, const char **p,
  * @param p actually unused, but kept for API consistency (should be NULL)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found
+ * @return an error code
  */
-static inline bool udict_get_void(struct udict *udict, void *p,
-                                  enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_void(struct udict *udict, void *p,
+                                            enum udict_type type,
+                                            const char *name)
 {
-    const uint8_t *attr = udict_get(udict, name, type, NULL);
-    return (attr != NULL);
+    UBASE_RETURN(udict_get(udict, name, type, NULL, NULL));
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a bool attribute.
@@ -348,18 +348,18 @@ static inline bool udict_get_void(struct udict *udict, void *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_bool(struct udict *udict, bool *p,
-                                  enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_bool(struct udict *udict, bool *p,
+                                            enum udict_type type,
+                                            const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
     *p = !!*attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a small unsigned attribute.
@@ -368,19 +368,19 @@ static inline bool udict_get_bool(struct udict *udict, bool *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_small_unsigned(struct udict *udict, uint8_t *p,
-                                            enum udict_type type,
-                                            const char *name)
+static inline enum ubase_err udict_get_small_unsigned(struct udict *udict,
+                                                      uint8_t *p,
+                                                      enum udict_type type,
+                                                      const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
     *p = *attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a small int attribute.
@@ -389,18 +389,18 @@ static inline bool udict_get_small_unsigned(struct udict *udict, uint8_t *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_small_int(struct udict *udict, int8_t *p,
-                                       enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_small_int(struct udict *udict, int8_t *p,
+                                                 enum udict_type type,
+                                                 const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
     *p = *(int8_t *)attr;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This unserializes a 64 bit unsigned integer.
@@ -439,18 +439,19 @@ static inline int64_t udict_get_int64(const uint8_t *attr)
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_unsigned(struct udict *udict, uint64_t *p,
-                                      enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_unsigned(struct udict *udict,
+                                                uint64_t *p,
+                                                enum udict_type type,
+                                                const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
     *p = udict_get_uint64(attr);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of an int attribute.
@@ -459,18 +460,18 @@ static inline bool udict_get_unsigned(struct udict *udict, uint64_t *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_int(struct udict *udict, int64_t *p,
-                                 enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_int(struct udict *udict, int64_t *p,
+                                           enum udict_type type,
+                                           const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
     *p = udict_get_int64(attr);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a float attribute.
@@ -479,10 +480,11 @@ static inline bool udict_get_int(struct udict *udict, int64_t *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_float(struct udict *udict, double *p,
-                                   enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_float(struct udict *udict, double *p,
+                                             enum udict_type type,
+                                             const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
@@ -490,13 +492,12 @@ static inline bool udict_get_float(struct udict *udict, double *p,
         uint64_t i;
     } u;
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
     u.i = udict_get_uint64(attr);
     *p = u.f;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the value of a rational attribute.
@@ -505,19 +506,20 @@ static inline bool udict_get_float(struct udict *udict, double *p,
  * @param p pointer to the retrieved value (modified during execution)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute was found, otherwise p is not modified
+ * @return an error code
  */
-static inline bool udict_get_rational(struct udict *udict, struct urational *p,
-                                      enum udict_type type, const char *name)
+static inline enum ubase_err udict_get_rational(struct udict *udict,
+                                                struct urational *p,
+                                                enum udict_type type,
+                                                const char *name)
 {
     size_t size;
-    const uint8_t *attr = udict_get(udict, name, type, &size);
-    if (unlikely(attr == NULL))
-        return false;
+    const uint8_t *attr;
+    UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 16);
     p->num = udict_get_int64(attr);
     p->den = udict_get_uint64(attr + 8);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This adds or changes an attribute (excluding the value itself).
@@ -526,16 +528,13 @@ static inline bool udict_get_rational(struct udict *udict, struct urational *p,
  * @param name name of the attribute
  * @param type type of the attribute
  * @param attr_size size needed to store the value of the attribute
- * @return pointer to the value of the attribute, or NULL in case of error
+ * @param p pointer to the value of the attribute
  */
-static inline uint8_t *udict_set(struct udict *udict, const char *name,
-                                 enum udict_type type, size_t attr_size)
+static inline enum ubase_err udict_set(struct udict *udict, const char *name,
+                                       enum udict_type type, size_t attr_size,
+                                       uint8_t **p)
 {
-    uint8_t *p;
-    if (unlikely(!ubase_check(udict_control(udict, UDICT_SET, name, type,
-                                                attr_size, &p))))
-        return NULL;
-    return p;
+    return udict_control(udict, UDICT_SET, name, type, attr_size, p);
 }
 
 /** @This sets the value of an opaque attribute, optionally creating it.
@@ -544,20 +543,20 @@ static inline uint8_t *udict_set(struct udict *udict, const char *name,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_opaque(struct udict *udict,
-                                    struct udict_opaque value,
-                                    enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_opaque(struct udict *udict,
+                                              struct udict_opaque value,
+                                              enum udict_type type,
+                                              const char *name)
 {
     /* copy the opaque it case in points to us */
     uint8_t v[value.size];
     memcpy(v, value.v, value.size);
-    uint8_t *attr = udict_set(udict, name, type, value.size);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, value.size, &attr));
     memcpy(attr, v, value.size);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a string attribute, optionally creating it.
@@ -566,20 +565,21 @@ static inline bool udict_set_opaque(struct udict *udict,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_string(struct udict *udict, const char *value,
-                                    enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_string(struct udict *udict,
+                                              const char *value,
+                                              enum udict_type type,
+                                              const char *name)
 {
     size_t attr_size = strlen(value) + 1;
     /* copy the string it case in points to us */
     uint8_t v[attr_size];
     memcpy(v, value, attr_size);
-    uint8_t *attr = udict_set(udict, name, type, attr_size);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, attr_size, &attr));
     memcpy(attr, v, attr_size);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a void attribute, optionally creating it.
@@ -588,13 +588,14 @@ static inline bool udict_set_string(struct udict *udict, const char *value,
  * @param value actually unused, but kept for API consistency (should be NULL)
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_void(struct udict *udict, void *value,
-                                  enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_void(struct udict *udict, void *value,
+                                            enum udict_type type,
+                                            const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 0);
-    return (attr != NULL);
+    UBASE_RETURN(udict_set(udict, name, type, 0, NULL));
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a bool attribute, optionally creating it.
@@ -603,16 +604,16 @@ static inline bool udict_set_void(struct udict *udict, void *value,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_bool(struct udict *udict, bool value,
-                                  enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_bool(struct udict *udict, bool value,
+                                           enum udict_type type,
+                                           const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 1);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
     *attr = value ? 1 : 0;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a small unsigned attribute, optionally creating it.
@@ -621,17 +622,17 @@ static inline bool udict_set_bool(struct udict *udict, bool value,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_small_unsigned(struct udict *udict,
-                                            uint8_t value, enum udict_type type,
-                                            const char *name)
+static inline enum ubase_err udict_set_small_unsigned(struct udict *udict,
+                                                     uint8_t value,
+                                                     enum udict_type type,
+                                                     const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 1);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
     *attr = value;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a small int attribute, optionally creating it.
@@ -640,17 +641,18 @@ static inline bool udict_set_small_unsigned(struct udict *udict,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_small_int(struct udict *udict, int8_t value,
-                                       enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_small_int(struct udict *udict,
+                                                 int8_t value,
+                                                 enum udict_type type,
+                                                 const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 1);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
     int8_t *value_p = (int8_t *)attr;
     *value_p = value;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This serializes a 64 bit unsigned integer.
@@ -692,16 +694,17 @@ static inline void udict_set_int64(uint8_t *attr, int64_t value)
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_unsigned(struct udict *udict, uint64_t value,
-                                      enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_unsigned(struct udict *udict,
+                                                uint64_t value,
+                                                enum udict_type type,
+                                                const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 8);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 8, &attr));
     udict_set_uint64(attr, value);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of an int attribute, optionally creating it.
@@ -710,16 +713,16 @@ static inline bool udict_set_unsigned(struct udict *udict, uint64_t value,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_int(struct udict *udict, uint64_t value,
-                                 enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_int(struct udict *udict, uint64_t value,
+                                           enum udict_type type,
+                                           const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 8);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 8, &attr));
     udict_set_int64(attr, value);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a float attribute, optionally creating it.
@@ -728,22 +731,22 @@ static inline bool udict_set_int(struct udict *udict, uint64_t value,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_float(struct udict *udict, double value,
-                                   enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_float(struct udict *udict, double value,
+                                             enum udict_type type,
+                                             const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
         double f;
         uint64_t i;
     } u;
-    uint8_t *attr = udict_set(udict, name, type, 8);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 8, &attr));
     u.f = value;
     udict_set_uint64(attr, u.i);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a rational attribute, optionally creating it.
@@ -752,18 +755,18 @@ static inline bool udict_set_float(struct udict *udict, double value,
  * @param value value to set
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool udict_set_rational(struct udict *udict,
-                                      struct urational value,
-                                      enum udict_type type, const char *name)
+static inline enum ubase_err udict_set_rational(struct udict *udict,
+                                                struct urational value,
+                                                enum udict_type type,
+                                                const char *name)
 {
-    uint8_t *attr = udict_set(udict, name, type, 16);
-    if (unlikely(attr == NULL))
-        return false;
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, 16, &attr));
     udict_set_int64(attr, value.num);
     udict_set_uint64(attr + 8, value.den);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This deletes an attribute.
@@ -771,12 +774,13 @@ static inline bool udict_set_rational(struct udict *udict,
  * @param udict pointer to the udict
  * @param type type of the attribute (potentially a shorthand)
  * @param name name of the attribute
- * @return true if the attribute existed before
+ * @return an error code
  */
-static inline bool udict_delete(struct udict *udict, enum udict_type type,
-                                const char *name)
+static inline enum ubase_err udict_delete(struct udict *udict,
+                                          enum udict_type type,
+                                          const char *name)
 {
-    return ubase_check(udict_control(udict, UDICT_DELETE, name, type));
+    return udict_control(udict, UDICT_DELETE, name, type);
 }
 
 /** @This names a shorthand attribute.
@@ -785,13 +789,14 @@ static inline bool udict_delete(struct udict *udict, enum udict_type type,
  * @param type shorthand type
  * @param name_p filled in with the name of the shorthand attribute
  * @param base_type_p filled in with the base type of the shorthand attribute
- * @return false in case the shorthand doesn't exist
+ * @return an error code
  */
-static inline bool udict_name(struct udict *udict, enum udict_type type,
-                              const char **name_p, enum udict_type *base_type_p)
+static inline enum ubase_err udict_name(struct udict *udict,
+                                        enum udict_type type,
+                                        const char **name_p,
+                                        enum udict_type *base_type_p)
 {
-    return ubase_check(udict_control(udict, UDICT_NAME, type,
-                                         name_p, base_type_p));
+    return udict_control(udict, UDICT_NAME, type, name_p, base_type_p);
 }
 
 /** @This frees a udict.
@@ -807,9 +812,10 @@ static inline void udict_free(struct udict *udict)
  *
  * @param udict overwritten udict
  * @param udict_attr udict containing attributes to fetch
- * @return false in case of error
+ * @return an error code
  */
-static inline bool udict_import(struct udict *udict, struct udict *udict_attr)
+static inline enum ubase_err udict_import(struct udict *udict,
+                                          struct udict *udict_attr)
 {
     const char *name = NULL;
     enum udict_type type = UDICT_TYPE_END;
@@ -819,17 +825,14 @@ static inline bool udict_import(struct udict *udict, struct udict *udict_attr)
             break;
 
         size_t attr_size;
-        const uint8_t *attr = udict_get(udict_attr, name, type, &attr_size);
-        if (unlikely(attr == NULL))
-            return false;
-
-        uint8_t *new_attr = udict_set(udict, name, type, attr_size);
-        if (unlikely(new_attr == NULL))
-            return false;
+        const uint8_t *attr;
+        UBASE_RETURN(udict_get(udict_attr, name, type, &attr_size, &attr));
+        uint8_t *new_attr;
+        UBASE_RETURN(udict_set(udict, name, type, attr_size, &new_attr));
 
         memcpy(new_attr, attr, attr_size);
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This allocates a new udict with a given manager, and copies all attributes.
@@ -845,7 +848,7 @@ static inline struct udict *udict_copy(struct udict_mgr *mgr,
     if (unlikely(new_udict == NULL))
         return NULL;
 
-    if (!udict_import(new_udict, udict)) {
+    if (!ubase_check(udict_import(new_udict, udict))) {
         udict_free(new_udict);
         return NULL;
     }
@@ -868,13 +871,13 @@ static inline int udict_cmp(struct udict *udict1, struct udict *udict2)
             break;
 
         size_t attr1_size;
-        const uint8_t *attr1 = udict_get(udict1, name, type, &attr1_size);
-        if (unlikely(attr1 == NULL))
+        const uint8_t *attr1;
+        if (!ubase_check(udict_get(udict1, name, type, &attr1_size, &attr1)))
             return 1;
 
         size_t attr2_size;
-        const uint8_t *attr2 = udict_get(udict2, name, type, &attr2_size);
-        if (unlikely(attr2 == NULL))
+        const uint8_t *attr2;
+        if (!ubase_check(udict_get(udict2, name, type, &attr2_size, &attr2)))
             return 1;
 
         if (attr1_size != attr2_size || memcmp(attr1, attr2, attr1_size))
@@ -889,13 +892,13 @@ static inline int udict_cmp(struct udict *udict1, struct udict *udict2)
             break;
 
         size_t attr2_size;
-        const uint8_t *attr2 = udict_get(udict2, name, type, &attr2_size);
-        if (unlikely(attr2 == NULL))
+        const uint8_t *attr2;
+        if (!ubase_check(udict_get(udict2, name, type, &attr2_size, &attr2)))
             return -1;
 
         size_t attr1_size;
-        const uint8_t *attr1 = udict_get(udict1, name, type, &attr1_size);
-        if (unlikely(attr1 == NULL))
+        const uint8_t *attr1;
+        if (!ubase_check(udict_get(udict1, name, type, &attr1_size, &attr1)))
             return -1;
 
         if (attr1_size != attr2_size || memcmp(attr1, attr2, attr1_size))

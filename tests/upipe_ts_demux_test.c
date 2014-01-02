@@ -99,10 +99,10 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
-                assert(uref_flow_get_id(flow_def, &flow_id));
+                ubase_assert(uref_flow_get_id(flow_def, &flow_id));
                 assert(flow_id == wanted_flow_id);
                 const char *def;
-                assert(uref_flow_get_def(flow_def, &def));
+                ubase_assert(uref_flow_get_def(flow_def, &def));
                 if (!ubase_ncmp(def, "void.")) {
                     if (upipe_ts_demux_output_pmt != NULL) {
                         printf("pmt\n");
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);
@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);
@@ -248,7 +248,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);
@@ -278,7 +278,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);
@@ -313,7 +313,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);

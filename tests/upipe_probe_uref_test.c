@@ -91,12 +91,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     uref_free(uref);
     pipe_counter++;
 }
@@ -139,7 +133,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "internal."));
+    ubase_assert(uref_flow_set_def(uref, "internal."));
 
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(upipe_probe_uref_mgr != NULL);

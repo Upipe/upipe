@@ -185,7 +185,7 @@ static inline bool ubase_check(enum ubase_err err)
     return err == UBASE_ERR_NONE;
 }
 
-/** @This returns the error if the given function fails.
+/** @This runs the given function and returns an error in case of failure.
  *
  * @param command command whose return code is to be checked
  */
@@ -196,12 +196,41 @@ do {                                                                        \
         return ubase_err_tmp;                                               \
 } while (0);
 
+/** @This runs the given function and throws a fatal error in case of failure.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define UBASE_FATAL(upipe, command)                                         \
+do {                                                                        \
+    enum ubase_err ubase_err_tmp = command;                                 \
+    if (unlikely(!ubase_check(ubase_err_tmp)))                              \
+        upipe_throw_fatal(upipe, ubase_err_tmp);                            \
+} while (0);
+
+/** @This runs the given function and throws an error in case of failure.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define UBASE_ERROR(upipe, command)                                         \
+do {                                                                        \
+    enum ubase_err ubase_err_tmp = command;                                 \
+    if (unlikely(!ubase_check(ubase_err_tmp)))                              \
+        upipe_throw_error(upipe, ubase_err_tmp);                            \
+} while (0);
+
 /** @This asserts if the given command (returning an @ref ubase_err) failed.
  *
  * @param command command whose return code is to be checked
  */
 #define ubase_assert(command)                                               \
     assert(ubase_check(command))
+
+/** @This asserts if the given command (returning an @ref ubase_err) succeeded.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define ubase_nassert(command)                                              \
+    assert(!ubase_check(command))
 
 /** @This checks that the first argument is equal to the given signature.
  *

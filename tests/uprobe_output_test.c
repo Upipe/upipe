@@ -150,11 +150,12 @@ int main(int argc, char **argv)
 
     struct upipe output_pipe;
     output_pipe.refcount = NULL;
+    output_pipe.uprobe = NULL;
     output_pipe.mgr = &output_mgr;
 
     struct uref *uref = uref_alloc_control(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_def(uref, "void."));
 
     upipe_throw_new_flow_def(upipe, uref);
     assert(!expect_new_flow_def);

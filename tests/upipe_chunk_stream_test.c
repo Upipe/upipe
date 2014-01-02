@@ -103,7 +103,7 @@ static void chunk_test_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *buffer;
     size_t size = 0;
     int pos = 0, len = -1;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     upipe_dbg_va(upipe, "received packet of size %zu", size);
     nb_packets--;
     if (nb_packets) {
@@ -111,7 +111,7 @@ static void chunk_test_input(struct upipe *upipe, struct uref *uref,
     }
 
     while (size > 0) {
-        assert(uref_block_read(uref, pos, &len, &buffer));
+        ubase_assert(uref_block_read(uref, pos, &len, &buffer));
         uref_block_unmap(uref, 0);
         size -= len;
         pos += len;

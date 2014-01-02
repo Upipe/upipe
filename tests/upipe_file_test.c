@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
         ubase_assert(upipe_set_uclock(upipe_fsrc, uclock));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
-    if (upipe_fsrc_get_size(upipe_fsrc, &size))
+    if (ubase_check(upipe_fsrc_get_size(upipe_fsrc, &size)))
         fprintf(stdout, "source file has size %"PRIu64"\n", size);
     else
         fprintf(stdout, "source path is not a regular file\n");

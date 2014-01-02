@@ -107,7 +107,7 @@ static void queue_test_input(struct upipe *upipe, struct uref *uref,
     upipe_notice_va(upipe, "loop %"PRIu8, counter);
     if (counter == 0) {
         uint8_t uref_counter;
-        assert(uref_test_get_test(uref, &uref_counter));
+        ubase_assert(uref_test_get_test(uref, &uref_counter));
         assert(uref_counter == counter);
     } else
         upipe_release(upipe_qsink);
@@ -181,12 +181,12 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_test_set_test(uref, 0));
+    ubase_assert(uref_test_set_test(uref, 0));
     upipe_input(upipe_qsink, uref, NULL);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_test_set_test(uref, 1));
+    ubase_assert(uref_test_set_test(uref, 1));
     upipe_input(upipe_qsink, uref, NULL);
 
     unsigned int length;

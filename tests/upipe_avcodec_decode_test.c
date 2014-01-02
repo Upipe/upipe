@@ -80,14 +80,7 @@
 #define THREAD_NUM          16
 #define ITER_LIMIT          1000
 #define FRAMES_LIMIT        200
-#define THREAD_FRAMES_LIMIT 200
-
-/** @internal */
-enum plane_action {
-    UNMAP,
-    READ,
-    WRITE
-};
+#define THREAD_FRAMES_LIMIT 10
 
 /** @internal */
 struct thread {
@@ -285,27 +278,12 @@ static void fetch_av_packets(struct upump *pump)
         }
         av_free_packet(&avpkt);
     } else {
-        // Send empty uref to output last frame (move to decoder ?)
         upipe_release(thread->avcdec);
         if (thread->audiodec) {
             upipe_release(thread->audiodec);
         }
         upump_stop(pump);
     }
-}
-
-static void setcodec_idler(struct upump *pump)
-{
-    struct thread *thread = upump_get_opaque(pump, struct thread *);
-    struct upipe *avcdec = thread->avcdec;
-
-    if (thread->iteration >= ITER_LIMIT) {
-        upump_stop(pump);
-        upump_start(thread->fetchav_pump);
-//        upipe_release(avcdec);
-        return;
-    }
-    thread->iteration++;
 }
 
 /** Thread function from which ev_loops are launched.
@@ -323,19 +301,16 @@ static void *test_thread(void *_thread)
 
     ubase_assert(upipe_set_upump_mgr(avcdec, upump_mgr));
 
-    struct upump *setcodec_pump = upump_alloc_idler(upump_mgr, setcodec_idler, thread);
-    assert(setcodec_pump);
-    upump_start(setcodec_pump);
-
+    thread->count = 0;
     thread->limit = THREAD_FRAMES_LIMIT;
     thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread);
     assert(thread->fetchav_pump);
+    upump_start(thread->fetchav_pump);
 
     // Fire !
     ev_loop(loop, 0);
 
     printf("Thread %d ended.\n", thread->num);
-    upump_free(setcodec_pump);
     upump_free(thread->fetchav_pump);
     upump_mgr_release(upump_mgr);
     ev_loop_destroy(loop);
@@ -499,7 +474,6 @@ int main (int argc, char **argv)
         ubase_assert(upipe_set_flow_def(mainthread.audiodec, flowdef));
         uref_free(flowdef);
         upipe_set_ubuf_mgr(mainthread.audiodec, block_mgr);
-        upipe_set_uref_mgr(mainthread.audiodec, uref_mgr);
         ubase_assert(upipe_set_output(mainthread.audiodec, nullpipe));
     }
 
@@ -536,6 +510,7 @@ int main (int argc, char **argv)
                          UPROBE_LOG_LEVEL, "avcdec_thread(%d)", i));
             assert(thread[i].avcdec);
             ubase_assert(upipe_set_flow_def(thread[i].avcdec, flowdef));
+            uref_free(flowdef);
             ubase_assert(upipe_set_ubuf_mgr(thread[i].avcdec, pic_mgr));
             ubase_assert(upipe_set_output(thread[i].avcdec, nullpipe));
 

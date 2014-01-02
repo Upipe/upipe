@@ -391,7 +391,7 @@ static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
 
     if (likely(upipe_glx_sink->uclock != NULL)) {
         uint64_t pts = 0;
-        if (likely(uref_clock_get_pts_sys(uref, &pts))) {
+        if (likely(ubase_check(uref_clock_get_pts_sys(uref, &pts)))) {
             pts += upipe_glx_sink->latency;
             uint64_t now = uclock_now(upipe_glx_sink->uclock);
             if (now < pts) {
@@ -464,14 +464,13 @@ static enum ubase_err upipe_glx_sink_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, "pic."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
     /* for the moment we only support rgb24 */
     uint8_t macropixel;
-    if (!uref_pic_flow_get_macropixel(flow_def, &macropixel) ||
+    if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
         macropixel != 1 ||
-        !uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8")) {
+        !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8"))) {
         upipe_err(upipe, "incompatible flow definition");
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_INVALID;

@@ -396,14 +396,14 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
     struct uref *uref = uref_from_uchain(uchain);
 
     size_t uref_size;
-    if (uref_block_size(uref, &uref_size) && uref_size <= bytes) {
+    if (ubase_check(uref_block_size(uref, &uref_size)) && uref_size <= bytes) {
         upipe_alsink_pop_sink(upipe);
         uref_free(uref);
         frames = snd_pcm_bytes_to_frames(upipe_alsink->handle, uref_size);
     } else {
         uref_block_resize(uref, bytes, -1);
         uint64_t pts;
-        if (uref_clock_get_pts_sys(uref, &pts))
+        if (ubase_check(uref_clock_get_pts_sys(uref, &pts)))
             uref_clock_set_pts_sys(uref,
                     pts + frames * UCLOCK_FREQ / upipe_alsink->rate);
         /* We should also change the duration but we don't use it. */
@@ -472,7 +472,7 @@ static void upipe_alsink_timer(struct upump *upump)
         struct uref *uref = uref_from_uchain(uchain);
         if (next_pts != UINT64_MAX) {
             uint64_t uref_pts;
-            if (unlikely(!uref_clock_get_pts_sys(uref, &uref_pts))) {
+            if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &uref_pts)))) {
                 upipe_alsink_pop_sink(upipe);
                 uref_free(uref);
                 upipe_warn(upipe, "non-dated uref received");
@@ -505,7 +505,7 @@ static void upipe_alsink_timer(struct upump *upump)
 
         int size = -1;
         const uint8_t *buffer;
-        if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
+        if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &buffer)))) {
             upipe_alsink_pop_sink(upipe);
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
@@ -544,7 +544,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     size_t uref_size;
-    if (unlikely(!uref_block_size(uref, &uref_size))) {
+    if (unlikely(!ubase_check(uref_block_size(uref, &uref_size)))) {
         upipe_warn(upipe, "unable to read uref");
         uref_free(uref);
         return;
@@ -588,11 +588,11 @@ static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref
     const char *def;
     uint64_t rate;
     uint8_t channels;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
-        !uref_sound_flow_get_rate(flow_def, &rate) ||
-        !uref_sound_flow_get_channels(flow_def, &channels))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate))
+    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels))
     def += strlen(EXPECTED_FLOW_DEF);
 
     snd_pcm_format_t format;

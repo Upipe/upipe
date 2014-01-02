@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
-    assert(uref_clock_get_pts_sys(uref, &pts));
+    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts == systime);
 
     systime += 8000;
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
-    assert(uref_clock_get_pts_sys(uref, &pts));
+    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 9500 == systime - 8000);
 
     systime += 12000;
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
-    assert(uref_clock_get_pts_sys(uref, &pts));
+    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 19888 == systime - 20000);
 
     systime += UINT32_MAX;
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
-    assert(uref_clock_get_pts_sys(uref, &pts));
+    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
     assert(pts - 416 == systime);
     /* 416 = due to previous deviation */
 

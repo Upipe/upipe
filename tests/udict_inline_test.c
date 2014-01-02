@@ -64,50 +64,50 @@ int main(int argc, char **argv)
     struct udict_opaque o;
     o.v = opaque;
     o.size = sizeof(opaque);
-    assert(udict_set_opaque(udict1, o, UDICT_TYPE_OPAQUE, "x.opaque"));
-    assert(udict_set_string(udict1, "pouet", UDICT_TYPE_FLOW_DEF, NULL));
-    assert(udict_set_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
-    assert(udict_set_bool(udict1, true, UDICT_TYPE_BOOL, "x.truc"));
-    assert(udict_set_unsigned(udict1, UINT64_MAX, UDICT_TYPE_CLOCK_DURATION,
+    ubase_assert(udict_set_opaque(udict1, o, UDICT_TYPE_OPAQUE, "x.opaque"));
+    ubase_assert(udict_set_string(udict1, "pouet", UDICT_TYPE_FLOW_DEF, NULL));
+    ubase_assert(udict_set_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
+    ubase_assert(udict_set_bool(udict1, true, UDICT_TYPE_BOOL, "x.truc"));
+    ubase_assert(udict_set_unsigned(udict1, UINT64_MAX, UDICT_TYPE_CLOCK_DURATION,
                               NULL));
-    assert(udict_set_int(udict1, INT64_MAX, UDICT_TYPE_INT, "x.date"));
-    assert(udict_set_float(udict1, 1.0, UDICT_TYPE_FLOAT, "x.version"));
-    assert(udict_set_string(udict1, SALUTATION, UDICT_TYPE_STRING,
+    ubase_assert(udict_set_int(udict1, INT64_MAX, UDICT_TYPE_INT, "x.date"));
+    ubase_assert(udict_set_float(udict1, 1.0, UDICT_TYPE_FLOAT, "x.version"));
+    ubase_assert(udict_set_string(udict1, SALUTATION, UDICT_TYPE_STRING,
                             "x.salutation"));
     struct urational rational = { num: 64, den: 45 };
-    assert(udict_set_rational(udict1, rational, UDICT_TYPE_RATIONAL, "x.ar"));
+    ubase_assert(udict_set_rational(udict1, rational, UDICT_TYPE_RATIONAL, "x.ar"));
 
-    assert(udict_get_opaque(udict1, &o, UDICT_TYPE_OPAQUE, "x.opaque"));
+    ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_OPAQUE, "x.opaque"));
     assert(o.size == sizeof(opaque));
     assert(!memcmp(opaque, o.v, sizeof(opaque)));
     const char *string;
-    assert(udict_get_string(udict1, &string, UDICT_TYPE_FLOW_DEF, NULL));
+    ubase_assert(udict_get_string(udict1, &string, UDICT_TYPE_FLOW_DEF, NULL));
     assert(!strcmp(string, "pouet"));
-    assert(!udict_get_void(udict1, NULL, UDICT_TYPE_VOID, "f.eof"));
-    assert(udict_get_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
+    ubase_nassert(udict_get_void(udict1, NULL, UDICT_TYPE_VOID, "f.eof"));
+    ubase_assert(udict_get_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
 
-    assert(udict_delete(udict1, UDICT_TYPE_FLOW_ERROR, NULL));
-    assert(udict_delete(udict1, UDICT_TYPE_FLOW_DEF, NULL));
-    assert(!udict_delete(udict1, UDICT_TYPE_VOID, "x.truc"));
-    assert(!udict_delete(udict1, UDICT_TYPE_BOOL, "k.pts"));
+    ubase_assert(udict_delete(udict1, UDICT_TYPE_FLOW_ERROR, NULL));
+    ubase_assert(udict_delete(udict1, UDICT_TYPE_FLOW_DEF, NULL));
+    ubase_nassert(udict_delete(udict1, UDICT_TYPE_VOID, "x.truc"));
+    ubase_nassert(udict_delete(udict1, UDICT_TYPE_BOOL, "k.pts"));
 
     bool b;
-    assert(udict_get_bool(udict1, &b, UDICT_TYPE_BOOL, "x.truc"));
+    ubase_assert(udict_get_bool(udict1, &b, UDICT_TYPE_BOOL, "x.truc"));
     assert(b);
     uint64_t u;
-    assert(udict_get_unsigned(udict1, &u, UDICT_TYPE_CLOCK_DURATION, NULL));
+    ubase_assert(udict_get_unsigned(udict1, &u, UDICT_TYPE_CLOCK_DURATION, NULL));
     assert(u == UINT64_MAX);
     int64_t d;
-    assert(udict_get_int(udict1, &d, UDICT_TYPE_INT, "x.date"));
+    ubase_assert(udict_get_int(udict1, &d, UDICT_TYPE_INT, "x.date"));
     assert(d == INT64_MAX);
     double f;
-    assert(udict_get_float(udict1, &f, UDICT_TYPE_FLOAT, "x.version"));
+    ubase_assert(udict_get_float(udict1, &f, UDICT_TYPE_FLOAT, "x.version"));
     assert(f == 1.0);
-    assert(udict_get_string(udict1, &string, UDICT_TYPE_STRING,
+    ubase_assert(udict_get_string(udict1, &string, UDICT_TYPE_STRING,
                             "x.salutation"));
     assert(!strcmp(string, SALUTATION));
     struct urational r;
-    assert(udict_get_rational(udict1, &r, UDICT_TYPE_RATIONAL, "x.ar"));
+    ubase_assert(udict_get_rational(udict1, &r, UDICT_TYPE_RATIONAL, "x.ar"));
     assert(r.num == 64 && r.den == 45);
 
     udict_dump(udict1, uprobe);

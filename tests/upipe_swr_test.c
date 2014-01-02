@@ -115,12 +115,12 @@ int main(int argc, char **argv)
     /* alloc swr pipe */
     struct uref *flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
     assert(flow != NULL);
-    assert(uref_sound_flow_set_rate(flow, 48000));
-    assert(uref_sound_flow_set_channels(flow, 2));
+    ubase_assert(uref_sound_flow_set_rate(flow, 48000));
+    ubase_assert(uref_sound_flow_set_channels(flow, 2));
     struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "pcm_f32.", 2, 2);
     assert(flow_output != NULL);
-    assert(uref_sound_flow_set_rate(flow_output, 48000));
-    assert(uref_sound_flow_set_channels(flow_output, 2));
+    ubase_assert(uref_sound_flow_set_rate(flow_output, 48000));
+    ubase_assert(uref_sound_flow_set_channels(flow_output, 2));
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "swr"),
         flow_output);

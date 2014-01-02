@@ -64,9 +64,9 @@
 
 static unsigned int nb_packets;
 static uint64_t pcr = 0;
-static bool transporterror = false;
-static bool discontinuity = true;
-static bool start = true;
+static enum ubase_err transporterror = UBASE_ERR_INVALID;
+static enum ubase_err discontinuity = UBASE_ERR_NONE;
+static enum ubase_err start = UBASE_ERR_NONE;
 static size_t payload_size = 184;
 
 /** definition of our uprobe */
@@ -86,7 +86,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             uint64_t decaps_pcr = va_arg(args, uint64_t);
             assert(uref != NULL);
             assert(decaps_pcr == pcr);
-            assert(uref_clock_get_ref(uref));
+            ubase_assert(uref_clock_get_ref(uref));
             pcr = 0;
             break;
         }
@@ -111,7 +111,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     assert(size == payload_size);
     assert(transporterror == uref_flow_get_error(uref));
     assert(discontinuity == uref_flow_get_discontinuity(uref));
@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
     ts_set_unitstart(buffer);
@@ -192,14 +192,14 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
-    start = false;
+    start = UBASE_ERR_INVALID;
     ts_set_transporterror(buffer);
-    transporterror = true;
+    transporterror = UBASE_ERR_NONE;
     ts_set_cc(buffer, 1);
-    discontinuity = false;
+    discontinuity = UBASE_ERR_INVALID;
     ts_set_payload(buffer);
     ts_set_adaptation(buffer, 0);
     payload_size = 183;
@@ -211,12 +211,12 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_init(buffer);
-    transporterror = false;
+    transporterror = UBASE_ERR_INVALID;
     ts_set_cc(buffer, 3);
-    discontinuity = true;
+    discontinuity = UBASE_ERR_NONE;
     ts_set_payload(buffer);
     ts_set_adaptation(buffer, 42);
     payload_size = 141;

@@ -100,7 +100,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 const char *def;
-                assert(uref_flow_get_def(flow_def, &def));
+                ubase_assert(uref_flow_get_def(flow_def, &def));
                 if (ubase_ncmp(def, "block.")) {
                     upipe_warn_va(upipe,
                                   "flow def %s is not supported by unit test",
@@ -109,7 +109,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
                 }
 
                 uint64_t id;
-                assert(uref_flow_get_id(flow_def, &id));
+                ubase_assert(uref_flow_get_id(flow_def, &id));
 
                 struct upipe *upipe_avfsrc_output =
                     upipe_flow_alloc_sub(upipe_avfsrc,

@@ -183,7 +183,7 @@ void fill_pic(struct ubuf *ubuf)
     int i, j;
     
     ubuf_pic_size(ubuf, &width, &height, NULL);
-    while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma) {
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) && chroma) {
         ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buf);
         ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub, NULL);
         for (j = 0; j < height/vsub; j++) {
@@ -202,7 +202,7 @@ struct upipe *build_pipeline(const char *codec_def,
                              struct uref *flow_def)
 {
     struct uref *output_flow = uref_dup(flow_def);
-    assert(uref_flow_set_def_va(output_flow, "block.%s", codec_def));
+    ubase_assert(uref_flow_set_def_va(output_flow, "block.%s", codec_def));
     assert(flow_def != NULL);
     uref_xflow_set_num(flow_def, num);
 
@@ -253,13 +253,13 @@ void *thread_start(void *_thread)
 
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow != NULL);
-    assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
-    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
-    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
-    assert(uref_pic_flow_set_hsize(flow, WIDTH));
-    assert(uref_pic_flow_set_vsize(flow, HEIGHT));
+    ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
+    ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
+    ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
+    ubase_assert(uref_pic_flow_set_hsize(flow, WIDTH));
+    ubase_assert(uref_pic_flow_set_vsize(flow, HEIGHT));
     struct urational fps = { .num = 25, .den = 1 };
-    assert(uref_pic_flow_set_fps(flow, fps));
+    ubase_assert(uref_pic_flow_set_fps(flow, fps));
     thread->avcenc = build_pipeline("mpeg2video.pic.", upump_mgr, thread->num,
                                     flow);
     uref_free(flow);
@@ -359,13 +359,13 @@ int main(int argc, char **argv)
     /* mono-threaded test without upump_mgr */
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow != NULL);
-    assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
-    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
-    assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
-    assert(uref_pic_flow_set_hsize(flow, WIDTH));
-    assert(uref_pic_flow_set_vsize(flow, HEIGHT));
+    ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
+    ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
+    ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
+    ubase_assert(uref_pic_flow_set_hsize(flow, WIDTH));
+    ubase_assert(uref_pic_flow_set_vsize(flow, HEIGHT));
     struct urational fps = { .num = 25, .den = 1 };
-    assert(uref_pic_flow_set_fps(flow, fps));
+    ubase_assert(uref_pic_flow_set_fps(flow, fps));
     struct upipe *avcenc = build_pipeline("mpeg2video.pic.", NULL, -1, flow);
     uref_free(flow);
 
@@ -382,8 +382,8 @@ int main(int argc, char **argv)
     /* mono-threaded audio test without upump_mgr */
     flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
     assert(flow != NULL);
-    assert(uref_sound_flow_set_channels(flow, 2));
-    assert(uref_sound_flow_set_rate(flow, 48000));
+    ubase_assert(uref_sound_flow_set_channels(flow, 2));
+    ubase_assert(uref_sound_flow_set_rate(flow, 48000));
     avcenc = build_pipeline("mp2.sound.", NULL, -1, flow);
     uref_free(flow);
 
@@ -393,8 +393,8 @@ int main(int argc, char **argv)
         int samples = (1024+i-FRAMES_LIMIT/2);
         sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*samples);
         assert(sound != NULL);
-        assert(uref_sound_flow_set_samples(sound, samples));
-        assert(uref_block_write(sound, 0, &size, &buf));
+        ubase_assert(uref_sound_flow_set_samples(sound, samples));
+        ubase_assert(uref_block_write(sound, 0, &size, &buf));
         memset(buf, 0, size);
         uref_block_unmap(sound, 0);
         upipe_input(avcenc, sound, NULL);

@@ -60,8 +60,9 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe to test uprobe_upump_mgr */
-static bool uprobe_test_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err uprobe_test_control(struct upipe *upipe,
+                                          enum upipe_command command,
+                                          va_list args)
 {
     switch (command) {
         case UPIPE_SET_UPUMP_MGR: {

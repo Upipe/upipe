@@ -119,12 +119,14 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
         }
         const char *name = NULL;
         enum udict_type type = UDICT_TYPE_END;
-        while (udict_iterate(upipe_setattr->dict->udict, &name, &type) &&
+        while (ubase_check(udict_iterate(upipe_setattr->dict->udict,
+                                         &name, &type)) &&
                type != UDICT_TYPE_END) {
             size_t size;
-            const uint8_t *v1 = udict_get(upipe_setattr->dict->udict, name,
-                                          type, &size);
-            uint8_t *v2 = udict_set(uref->udict, name, type, size);
+            const uint8_t *v1 = NULL;
+            udict_get(upipe_setattr->dict->udict, name, type, &size, &v1);
+            uint8_t *v2 = NULL;
+            udict_set(uref->udict, name, type, size, &v2);
             if (unlikely(v1 == NULL || v2 == NULL)) {
                 uref_free(uref);
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

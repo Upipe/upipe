@@ -90,7 +90,7 @@ static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
     upipe_init(&test_pipe->upipe, mgr, uprobe);
     struct uref *flow_def = va_arg(args, struct uref *);
     const char *def;
-    assert(uref_flow_get_def(flow_def, &def));
+    ubase_assert(uref_flow_get_def(flow_def, &def));
     if (!strcmp(def, "pic."))
         test_pipe->count_p = &count_pic;
     else if (!strcmp(def, "block.pcm_s16le.sound."))
@@ -107,9 +107,9 @@ static void trickp_test_input(struct upipe *upipe, struct uref *uref,
     struct test_pipe *test_pipe = container_of(upipe, struct test_pipe, upipe);
     assert(uref != NULL);
     uint64_t systime;
-    if (uref_clock_get_pts_sys(uref, &systime))
+    if (ubase_check(uref_clock_get_pts_sys(uref, &systime)))
         *test_pipe->count_p += systime;
-    if (uref_clock_get_dts_sys(uref, &systime))
+    if (ubase_check(uref_clock_get_dts_sys(uref, &systime)))
         *test_pipe->count_p += systime;
     uref_free(uref);
 }
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "pic."));
+    ubase_assert(uref_flow_set_def(uref, "pic."));
 
     struct upipe *upipe_sink_pic = upipe_flow_alloc(&trickp_test_mgr,
                                                     uprobe_use(logger), uref);
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "block.pcm_s16le.sound."));
+    ubase_assert(uref_flow_set_def(uref, "block.pcm_s16le.sound."));
 
     struct upipe *upipe_sink_sound = upipe_flow_alloc(&trickp_test_mgr,
                                                       uprobe_use(logger), uref);
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "pic.sub."));
+    ubase_assert(uref_flow_set_def(uref, "pic.sub."));
 
     struct upipe *upipe_sink_subpic = upipe_flow_alloc(&trickp_test_mgr,
                                                        uprobe_use(logger),

@@ -449,7 +449,7 @@ static inline bool uprobe_plumber(enum uprobe_event event, va_list args,
     *flow_def_p = va_arg(args, struct uref *);
     va_end(args_copy);
 
-    if (unlikely(!uref_flow_get_def(*flow_def_p, def_p)))
+    if (unlikely(!ubase_check(uref_flow_get_def(*flow_def_p, def_p))))
         return false;
 
     return true;

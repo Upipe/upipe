@@ -79,7 +79,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref*);
             uint64_t index = va_arg(args, uint64_t);
             uint64_t systime = 0;
-            assert(uref_clock_get_cr_sys(uref, &systime));
+            ubase_assert(uref_clock_get_cr_sys(uref, &systime));
             assert(systime/ROTATE == index);
             assert(index == probe_counter);
 
@@ -103,12 +103,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     uref_free(uref);
     pipe_counter++;
 }
@@ -151,7 +145,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "internal."));
+    assert(ubase_check(uref_flow_set_def(uref, "internal.")));
 
     struct upipe_mgr *upipe_multicat_probe_mgr = upipe_multicat_probe_mgr_alloc();
     assert(upipe_multicat_probe_mgr != NULL);

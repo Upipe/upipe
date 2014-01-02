@@ -118,7 +118,7 @@ static void genpacket_idler(struct upump *upump)
 	uint8_t *buf;
 	
 	struct uref *uref = uref_block_alloc(uref_mgr, ubuf_mgr, sizeof(uint64_t));
-	assert(uref_block_write(uref, 0, &size, &buf));
+	ubase_assert(uref_block_write(uref, 0, &size, &buf));
 	assert(size == sizeof(uint64_t));
 
 	memcpy(buf, &systime, sizeof(uint64_t));

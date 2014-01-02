@@ -114,7 +114,7 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
     const uint8_t *buffer;
     int size = 1;
     uint8_t word;
-    if (unlikely(!uref_block_read(uref, 0, &size, &buffer))) {
+    if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &buffer)))) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
@@ -143,7 +143,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     size_t size;
-    if (unlikely(!uref_block_size(uref, &size))) {
+    if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -180,15 +180,14 @@ static enum ubase_err upipe_ts_check_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
     /* FIXME make it dependant on the output size */
-    if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_check_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;

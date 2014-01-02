@@ -147,7 +147,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
             struct upipe *upipe_ts_mux;
             ubase_assert(upipe_get_output(upipe_ts_demux, &upipe_ts_mux));
             uint64_t flow_id;
-            assert(uref_flow_get_id(flow_def, &flow_id));
+            ubase_assert(uref_flow_get_id(flow_def, &flow_id));
 
             struct upipe *mux_program = upipe_void_alloc_output_sub(upipe,
                     upipe_ts_mux,
@@ -162,7 +162,7 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
-                assert(uref_flow_get_id(flow_def, &flow_id));
+                ubase_assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *output = NULL;
                 bool found = false;
@@ -170,7 +170,8 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
                     struct uref *flow_def2;
                     uint64_t id2;
                     if (ubase_check(upipe_get_flow_def(output, &flow_def2)) &&
-                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2) {
+                        ubase_check(uref_flow_get_id(flow_def2, &id2)) &&
+                        flow_id == id2) {
                         /* We already have an output. */
                         found = true;
                         break;
@@ -255,7 +256,7 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
                    flow_def != NULL) {
                 uint64_t flow_id;
-                assert(uref_flow_get_id(flow_def, &flow_id));
+                ubase_assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *program = NULL;
                 while (ubase_check(upipe_iterate_sub(upipe, &program)) &&
@@ -263,7 +264,8 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                     struct uref *flow_def2;
                     uint64_t id2;
                     if (ubase_check(upipe_get_flow_def(program, &flow_def2)) &&
-                        uref_flow_get_id(flow_def2, &id2) && flow_id == id2)
+                        ubase_check(uref_flow_get_id(flow_def2, &id2)) &&
+                        flow_id == id2)
                         /* We already have a program */
                         return UBASE_ERR_NONE;
                 }

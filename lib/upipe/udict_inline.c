@@ -354,7 +354,8 @@ static enum ubase_err udict_inline_get(struct udict *udict, const char *name,
     uint8_t *attr = _udict_inline_get(udict, name, type, size_p);
     if (unlikely(attr == NULL))
         return UBASE_ERR_INVALID;
-    *attr_p = attr;
+    if (attr_p != NULL)
+        *attr_p = attr;
     return UBASE_ERR_NONE;
 }
 
@@ -410,14 +411,16 @@ static enum ubase_err udict_inline_set(struct udict *udict, const char *name,
         if ((base_type != UDICT_TYPE_OPAQUE &&
              base_type != UDICT_TYPE_STRING) ||
             current_size == attr_size) {
-            *attr_p = attr;
+            if (attr_p != NULL)
+                *attr_p = attr;
             return UBASE_ERR_NONE;
         }
         if (likely(base_type == UDICT_TYPE_STRING &&
                    current_size > attr_size)) {
             /* Just zero out superfluous bytes */
             memset(attr + attr_size, 0, current_size - attr_size);
-            *attr_p = attr;
+            if (attr_p != NULL)
+                *attr_p = attr;
             return UBASE_ERR_NONE;
         }
         udict_inline_delete(udict, name, type);
@@ -469,7 +472,8 @@ static enum ubase_err udict_inline_set(struct udict *udict, const char *name,
         *attr++ = type;
 
     attr[attr_size] = UDICT_TYPE_END;
-    *attr_p = attr;
+    if (attr_p != NULL)
+        *attr_p = attr;
     inl->size += header_size + attr_size;
     return UBASE_ERR_NONE;
 }

@@ -99,10 +99,10 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     uint64_t cr;
-    assert(uref_clock_get_cr_sys(uref, &cr));
+    ubase_assert(uref_clock_get_cr_sys(uref, &cr));
     const uint8_t *buffer;
     int size = -1;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
     assert(psi_validate(buffer));
     assert(psi_check_crc(buffer));
@@ -203,8 +203,8 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
-    assert(uref_flow_set_id(uref, 42));
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_id(uref, 42));
 
     struct upipe_mgr *upipe_ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     assert(upipe_ts_psig_mgr != NULL);
@@ -226,9 +226,9 @@ int main(int argc, char *argv[])
     /* programs */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
-    assert(uref_flow_set_id(uref, 1));
-    assert(uref_ts_flow_set_pid(uref, 66));
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_id(uref, 1));
+    ubase_assert(uref_ts_flow_set_pid(uref, 66));
     struct upipe *upipe_ts_psig_program1 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts psig program1"));
@@ -237,8 +237,8 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_ts_psig_program1, upipe_sink));
     ubase_assert(upipe_ts_psig_program_set_pcr_pid(upipe_ts_psig_program1, 67));
 
-    assert(uref_flow_set_id(uref, 2));
-    assert(uref_ts_flow_set_pid(uref, 1500));
+    ubase_assert(uref_flow_set_id(uref, 2));
+    ubase_assert(uref_ts_flow_set_pid(uref, 1500));
     struct upipe *upipe_ts_psig_program2 = upipe_void_alloc_sub(upipe_ts_psig,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psig program2"));
@@ -250,9 +250,9 @@ int main(int argc, char *argv[])
     /* flows */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
-    assert(uref_ts_flow_set_pid(uref, 67));
-    assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_VIDEO_MPEG2));
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_ts_flow_set_pid(uref, 67));
+    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_VIDEO_MPEG2));
     struct upipe *upipe_ts_psig_flow67 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
@@ -263,9 +263,9 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
-    assert(uref_ts_flow_set_pid(uref, 68));
-    assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_MPEG2));
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_ts_flow_set_pid(uref, 68));
+    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_MPEG2));
     uint8_t desc[DESC0A_HEADER_SIZE + DESC0A_LANGUAGE_SIZE];
     desc0a_init(desc);
     desc_set_length(desc, DESC0A_LANGUAGE_SIZE);
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
     desc0an_set_code(descn, (const uint8_t *)"eng");
     desc0an_set_audiotype(descn, DESC0A_TYPE_CLEAN);
     assert(desc0a_validate(desc));
-    assert(uref_ts_flow_set_descriptors(uref, desc, sizeof(desc)));
+    ubase_assert(uref_ts_flow_set_descriptors(uref, desc, sizeof(desc)));
     struct upipe *upipe_ts_psig_flow68 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
@@ -284,9 +284,9 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "void."));
-    assert(uref_ts_flow_set_pid(uref, 1501));
-    assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_ADTS));
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_ts_flow_set_pid(uref, 1501));
+    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_ADTS));
     struct upipe *upipe_ts_psig_flow1501 =
         upipe_void_alloc_sub(upipe_ts_psig_program2,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,

@@ -470,8 +470,8 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_mux_input_from_upipe(upipe);
 
     if (unlikely(upipe_ts_mux_input->start_cr_sys == UINT64_MAX &&
-                 uref_clock_get_cr_sys(uref,
-                     &upipe_ts_mux_input->start_cr_sys))) {
+                 ubase_check(uref_clock_get_cr_sys(uref,
+                     &upipe_ts_mux_input->start_cr_sys)))) {
         size_t uref_size = 0;
         uref_block_size(uref, &uref_size);
 
@@ -510,52 +510,48 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 upipe_ts_mux_program_to_upipe(program)->mgr);
     const char *def;
     uint64_t octetrate;
-    if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
-        !uref_block_flow_get_octetrate(flow_def, &octetrate) || !octetrate)
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    UBASE_RETURN(uref_block_flow_get_octetrate(flow_def, &octetrate))
+    if (ubase_ncmp(def, "block.") || !octetrate)
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
 
-    bool ret = true;
     uint64_t pes_overhead = 0;
     enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
     if (strstr(def, ".pic.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_VIDEO;
         if (!ubase_ncmp(def, "block.mpeg1video.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_VIDEO_MPEG1);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG1))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY));
         } else if (!ubase_ncmp(def, "block.mpeg2video.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_VIDEO_MPEG2);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG2));
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY))
         } else if (!ubase_ncmp(def, "block.mpeg4.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_VIDEO_MPEG4);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup,
-                                                    MAX_DELAY_14496);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_MPEG4));
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup,
+                                                    MAX_DELAY_14496));
         } else if (!ubase_ncmp(def, "block.h264.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_VIDEO_AVC);
-            ret = ret && uref_ts_flow_set_max_delay(flow_def_dup,
-                                                    MAX_DELAY_14496);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_VIDEO_AVC));
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup,
+                                                    MAX_DELAY_14496));
         }
-        ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
-                                             PES_STREAM_ID_VIDEO_MPEG);
+        UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                             PES_STREAM_ID_VIDEO_MPEG));
 
         uint64_t max_octetrate = octetrate;
         uref_block_flow_get_max_octetrate(flow_def, &max_octetrate);
         /* ISO/IEC 13818-1 2.4.2.3 */
-        ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup,
-                                              max_octetrate * 6 / 5);
+        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup,
+                                              max_octetrate * 6 / 5));
 
         struct urational fps;
-        if (uref_pic_flow_get_fps(flow_def, &fps)) {
+        if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps))) {
             /* PES header overhead */
             pes_overhead += PES_HEADER_SIZE_PTSDTS * (fps.num + fps.den - 1) /
                             fps.den;
@@ -568,41 +564,38 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     } else if (strstr(def, ".sound.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_AUDIO;
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_AUDIO_MPEG2);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_AUDIO_MPEG);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_AUDIO_MPEG2));
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.aac.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_AUDIO_ADTS);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_AUDIO_MPEG);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_AUDIO_ADTS));
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.ac3.")) {
-            ret = ret &&
-                  uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_PRIVATE_PES);
-            ret = ret && uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_PRIVATE_1);
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_PRIVATE_PES));
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_PRIVATE_1));
             uint8_t ac3_descriptor[DESC6A_HEADER_SIZE];
             desc6a_init(ac3_descriptor);
             desc_set_length(ac3_descriptor,
                             DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc6a_clear_flags(ac3_descriptor);
-            ret = ret && uref_ts_flow_set_descriptors(flow_def_dup,
-                    ac3_descriptor, DESC6A_HEADER_SIZE);
+            UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def_dup,
+                    ac3_descriptor, DESC6A_HEADER_SIZE));
         }
-        ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO);
-        ret = ret && uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY);
+        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO));
+        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY));
         uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
-        if (!uref_ts_flow_get_pes_min_duration(flow_def_dup, &pes_min_duration))
-            ret = ret && uref_ts_flow_set_pes_min_duration(flow_def_dup,
-                                                           pes_min_duration);
+        if (!ubase_check(uref_ts_flow_get_pes_min_duration(flow_def_dup, &pes_min_duration)))
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_min_duration(flow_def_dup,
+                                                           pes_min_duration));
 
         uint64_t rate, samples;
-        if (uref_sound_flow_get_rate(flow_def, &rate) &&
-            uref_sound_flow_get_samples(flow_def, &samples)) {
+        if (ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) &&
+            ubase_check(uref_sound_flow_get_samples(flow_def, &samples))) {
             unsigned int nb_frames = 1;
             while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
                 nb_frames++;
@@ -622,13 +615,13 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
         (TS_SIZE - TS_HEADER_SIZE);
     uint64_t ts_delay;
-    if (!uref_ts_flow_get_ts_delay(flow_def, &ts_delay))
-        ret = ret && uref_ts_flow_set_ts_delay(flow_def_dup,
+    if (!ubase_check(uref_ts_flow_get_ts_delay(flow_def, &ts_delay)))
+        UBASE_FATAL(upipe, uref_ts_flow_set_ts_delay(flow_def_dup,
                 (uint64_t)T_STD_TS_BUFFER * UCLOCK_FREQ /
-                (octetrate + pes_overhead + ts_overhead));
+                (octetrate + pes_overhead + ts_overhead)));
 
     uint64_t pid = 0;
-    if (uref_ts_flow_get_pid(flow_def, &pid) &&
+    if (ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
         pid != upipe_ts_mux_input->pid &&
         upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
         upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
@@ -640,20 +633,16 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             pid = upipe_ts_mux->pid_auto++;
         } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
                                        pid));
-        if (pid >= MAX_PIDS)
-            ret = false;
-        else
-            ret = ret && uref_ts_flow_set_pid(flow_def_dup, pid);
+        if (pid >= MAX_PIDS) {
+            uref_free(flow_def_dup);
+            return UBASE_ERR_BUSY;
+        } else
+            UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
     }
 
-    if (unlikely(!ret)) {
-        uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
     if (!ubase_check(upipe_set_flow_def(upipe_ts_mux_input->pes_encaps,
                                             flow_def_dup)) ||
-        !uref_flow_set_def(flow_def_dup, "void.") ||
+        !ubase_check(uref_flow_set_def(flow_def_dup, "void.")) ||
         !ubase_check(upipe_set_flow_def(upipe_ts_mux_input->psig_flow,
                                             flow_def_dup))) {
         uref_free(flow_def_dup);
@@ -1001,15 +990,13 @@ static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
         upipe_ts_mux_program_from_upipe(upipe);
     struct upipe_ts_mux *upipe_ts_mux =
         upipe_ts_mux_from_program_mgr(upipe->mgr);
-    if (!uref_flow_match_def(flow_def, "void."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
 
-    bool ret = true;
     uint64_t sid = 0;
-    if (uref_flow_get_id(flow_def, &sid) &&
+    if (ubase_check(uref_flow_get_id(flow_def, &sid)) &&
         upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux), sid)) {
         upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
                       "SID %"PRIu64" already exists", sid);
@@ -1020,14 +1007,15 @@ static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
             sid = upipe_ts_mux->sid_auto++;
         } while (upipe_ts_mux_find_sid(upipe_ts_mux_to_upipe(upipe_ts_mux),
                                        sid));
-        if (sid >= MAX_SIDS)
-            ret = false;
-        else
-            ret = ret && uref_flow_set_id(flow_def_dup, sid);
+        if (sid >= MAX_SIDS) {
+            uref_free(flow_def_dup);
+            return UBASE_ERR_BUSY;
+        } else
+            UBASE_FATAL(upipe, uref_flow_set_id(flow_def_dup, sid));
     }
 
     uint64_t pid = 0;
-    if (uref_ts_flow_get_pid(flow_def, &pid) &&
+    if (ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
         upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
         upipe_warn_va(upipe_ts_mux_to_upipe(upipe_ts_mux),
                       "PID %"PRIu64" already exists", pid);
@@ -1038,22 +1026,17 @@ static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
             pid = upipe_ts_mux->pid_auto++;
         } while (upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux),
                                        pid));
-        if (pid >= MAX_PIDS)
-            ret = false;
-        else
-            ret = ret && uref_ts_flow_set_pid(flow_def_dup, pid);
+        if (pid >= MAX_PIDS) {
+            uref_free(flow_def_dup);
+            return UBASE_ERR_BUSY;
+        } else
+            UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
     }
 
     uint64_t octetrate;
-    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
-        ret = ret && uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI);
-
-    if (unlikely(!ret)) {
-        uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
+    if (!ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate)))
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI))
+    UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI))
 
     if (!ubase_check(upipe_set_flow_def(upipe_ts_mux_program->program_psig,
                                             flow_def_dup))) {
@@ -1609,28 +1592,20 @@ static enum ubase_err upipe_ts_mux_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    if (!uref_flow_match_def(flow_def, "void."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
 
-    bool ret = true;
     uint64_t tsid = 0;
-    if (!uref_flow_get_id(flow_def, &tsid))
-        ret = ret && uref_flow_set_id(flow_def_dup, DEFAULT_TSID);
+    if (!ubase_check(uref_flow_get_id(flow_def, &tsid)))
+        UBASE_FATAL(upipe, uref_flow_set_id(flow_def_dup, DEFAULT_TSID));
 
     uint64_t octetrate;
-    if (!uref_block_flow_get_octetrate(flow_def, &octetrate))
-        ret = ret && uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI);
-    ret = ret && uref_ts_flow_set_pid(flow_def_dup, 0);
-
-    if (unlikely(!ret)) {
-        uref_free(flow_def_dup);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
+    if (!ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate)))
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def_dup, TB_RATE_PSI));
+    UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI));
+    UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, 0));
 
     enum ubase_err err = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
     uref_free(flow_def_dup);

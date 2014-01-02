@@ -181,15 +181,15 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     }
 
     // Iterate planes
-    while(uref_pic_plane_iterate(uref, &chroma) && chroma) {
+    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) && chroma) {
         // map all
-        if (unlikely(!uref_pic_plane_size(uref, chroma, &stride_in,
-                                                &hsub, &vsub, NULL))) {
+        if (unlikely(!ubase_check(uref_pic_plane_size(uref, chroma, &stride_in,
+                                                &hsub, &vsub, NULL)))) {
             upipe_err_va(upipe, "Could not read origin chroma %s", chroma);
             goto error;
         }
-        if (unlikely(!ubuf_pic_plane_size(ubuf_deint, chroma, &stride_out,
-                                                  NULL, NULL, NULL))) {
+        if (unlikely(!ubase_check(ubuf_pic_plane_size(ubuf_deint, chroma, &stride_out,
+                                                  NULL, NULL, NULL)))) {
             upipe_err_va(upipe, "Could not read dest chroma %s", chroma);
             goto error;
         }
@@ -229,8 +229,7 @@ static enum ubase_err upipe_filter_blend_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, "pic."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

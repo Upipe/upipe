@@ -134,8 +134,8 @@ int main(int argc, char **argv)
         printf("Sending pic %d\n", counter);
         pic = uref_pic_alloc(uref_mgr, ubuf_mgr, WIDTH, HEIGHT);
         assert(pic);
-        assert(uref_pic_plane_write(pic, "r8g8b8", 0, 0, -1, -1, &buf));
-        assert(uref_pic_plane_size(pic, "r8g8b8", &stride, NULL, NULL, &macropixel));
+        ubase_assert(uref_pic_plane_write(pic, "r8g8b8", 0, 0, -1, -1, &buf));
+        ubase_assert(uref_pic_plane_size(pic, "r8g8b8", &stride, NULL, NULL, &macropixel));
         for (y=0; y < HEIGHT; y++) {
             for (x=0; x < WIDTH; x++) {
                 buf[macropixel * x] = x + y + counter * 3;

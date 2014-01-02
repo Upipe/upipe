@@ -58,7 +58,8 @@ static inline struct uref *uref_program_flow_alloc_def(struct uref_mgr *mgr)
     if (unlikely(uref == NULL))
         return NULL;
 
-    if (unlikely(!uref_flow_set_def(uref, UREF_PROGRAM_FLOW_DEF))) {
+    if (unlikely(!ubase_check(uref_flow_set_def(uref,
+                                                UREF_PROGRAM_FLOW_DEF)))) {
         uref_free(uref);
         return NULL;
     }

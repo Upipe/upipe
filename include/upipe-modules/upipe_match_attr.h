@@ -44,7 +44,7 @@ extern "C" {
 enum upipe_match_attr_command {
     UPIPE_MATCH_ATTR_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** match uint8_t attr (bool (*)(uref*, uint8_t, uint8_t)) */
+    /** match uint8_t attr (enum ubase_err (*)(uref*, uint8_t, uint8_t)) */
     UPIPE_MATCH_ATTR_SET_UINT8_T,
     /** match uint64_t attr */
     UPIPE_MATCH_ATTR_SET_UINT64_T,
@@ -59,7 +59,7 @@ enum upipe_match_attr_command {
  * @return an error code
  */
 static inline enum ubase_err upipe_match_attr_set_uint8_t(struct upipe *upipe,
-                            bool (*match)(struct uref*, uint8_t, uint8_t))
+                    enum ubase_err (*match)(struct uref*, uint8_t, uint8_t))
 {
     return upipe_control(upipe, UPIPE_MATCH_ATTR_SET_UINT8_T,
                          UPIPE_MATCH_ATTR_SIGNATURE, match);
@@ -72,7 +72,7 @@ static inline enum ubase_err upipe_match_attr_set_uint8_t(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_match_attr_set_uint64_t(struct upipe *upipe,
-                            bool (*match)(struct uref*, uint64_t, uint64_t))
+                    enum ubase_err (*match)(struct uref*, uint64_t, uint64_t))
 {
     return upipe_control(upipe, UPIPE_MATCH_ATTR_SET_UINT64_T,
                          UPIPE_MATCH_ATTR_SIGNATURE, match);

@@ -70,10 +70,11 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
-    if (unlikely(!(uref_flow_set_def_va(uref, UREF_SOUND_FLOW_DEF "%s" "sound.",
-                                        format) &&
-                   uref_sound_flow_set_channels(uref, channels) &&
-                   uref_sound_flow_set_sample_size(uref, sample_size)))) {
+    if (unlikely(!(ubase_check(uref_flow_set_def_va(uref,
+                            UREF_SOUND_FLOW_DEF "%s" "sound.", format)) &&
+                   ubase_check(uref_sound_flow_set_channels(uref, channels)) &&
+                   ubase_check(uref_sound_flow_set_sample_size(uref,
+                            sample_size))))) {
         uref_free(uref);
         return NULL;
     }

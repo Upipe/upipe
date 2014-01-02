@@ -243,9 +243,9 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
                 upipe_ts_psi_split_sub_from_uchain(uchain);
         const uint8_t *filter, *mask;
         size_t size;
-        if (uref_ts_flow_get_psi_filter(output->flow_def, &filter, &mask,
-                                        &size) &&
-            uref_block_match(uref, filter, mask, size)) {
+        if (ubase_check(uref_ts_flow_get_psi_filter(output->flow_def, &filter,
+                        &mask, &size)) &&
+            ubase_check(uref_block_match(uref, filter, mask, size))) {
             if (likely(uchain->next == NULL)) {
                 upipe_ts_psi_split_sub_output(
                         upipe_ts_psi_split_sub_to_upipe(output), uref,
@@ -280,8 +280,7 @@ static enum ubase_err upipe_ts_psi_split_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF) ?
-        UBASE_ERR_NONE : UBASE_ERR_INVALID;
+    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
 }
 
 /** @internal @This processes control commands.

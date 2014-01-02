@@ -157,15 +157,15 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     uint64_t hsize, vsize, wanted_hsize;
     struct urational sar;
     bool progressive;
-    if (unlikely(!uref_pic_flow_get_hsize(flow_def, &hsize) ||
-                 !uref_pic_flow_get_vsize(flow_def, &vsize) ||
-                 !uref_pic_flow_get_sar(flow_def, &sar))) {
+    if (unlikely(!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
+                 !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)) ||
+                 !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
         upipe_err_va(upipe, "incompatible flow def");
         upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
     wanted_hsize = hsize * sar.num / sar.den;
-    progressive = uref_pic_get_progressive(flow_def);
+    progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
     struct uref *flow_def2 = uref_dup(flow_def);
     upipe_use(upipe);

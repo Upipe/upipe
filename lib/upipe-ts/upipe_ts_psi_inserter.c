@@ -263,12 +263,13 @@ static void upipe_ts_psii_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
 
-    if (uref_block_get_start(uref) || ulist_empty(&upipe_ts_psii_sub->table)) {
+    if (ubase_check(uref_block_get_start(uref)) ||
+        ulist_empty(&upipe_ts_psii_sub->table)) {
         upipe_dbg(upipe, "new table");
         upipe_ts_psii_sub_clean(upipe);
 
         uint64_t cr_sys;
-        if (uref_clock_get_cr_sys(uref, &cr_sys))
+        if (ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))
             upipe_ts_psii_sub->next_cr_sys = cr_sys;
         else
             /* Trigger immediate insertion. */
@@ -327,8 +328,7 @@ static enum ubase_err upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, "block.mpegtspsi."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "block.mpegtspsi."))
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
     if (unlikely(upipe_ts_psii_sub->encaps == NULL))
@@ -497,7 +497,7 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
 
     uint64_t cr_sys;
-    if (unlikely(!uref_clock_get_cr_sys(uref, &cr_sys))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
         return;
@@ -524,8 +524,7 @@ static enum ubase_err upipe_ts_psii_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, "block.mpegts."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "block.mpegts."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

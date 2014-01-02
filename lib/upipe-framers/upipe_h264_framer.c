@@ -248,14 +248,14 @@ static void upipe_h264f_promote_uref(struct upipe *upipe)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(upipe_h264f->next_uref, &date))             \
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_h264f->next_uref, &date)))\
         uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (uref_clock_get_dts_pts_delay(upipe_h264f->next_uref, &date))
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref, &date)))
         uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
 }
 
@@ -326,8 +326,8 @@ static bool upipe_h264f_find(struct upipe *upipe,
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     const uint8_t *buffer;
     int size = -1;
-    while (uref_block_read(upipe_h264f->next_uref, upipe_h264f->au_size,
-                           &size, &buffer)) {
+    while (ubase_check(uref_block_read(upipe_h264f->next_uref,
+                    upipe_h264f->au_size, &size, &buffer))) {
         const uint8_t *p = upipe_framers_mpeg_scan(buffer, buffer + size,
                                                    &upipe_h264f->scan_context);
         if (p > buffer + 4)
@@ -338,8 +338,8 @@ static bool upipe_h264f_find(struct upipe *upipe,
             *start_p = upipe_h264f->scan_context & 0xff;
             upipe_h264f->au_size += p - buffer;
             if (p <= buffer + 4 &&
-                !uref_block_extract(upipe_h264f->next_uref,
-                                    upipe_h264f->au_size - 4, 1, prev_p))
+                !ubase_check(uref_block_extract(upipe_h264f->next_uref,
+                                    upipe_h264f->au_size - 4, 1, prev_p)))
                 *prev_p = 0xff;
             return true;
         }
@@ -372,13 +372,12 @@ static inline void upipe_h264f_stream_init(struct upipe_h264f_stream *f)
  * @param s helper structure
  * @param ubuf pointer to block ubuf
  * @param offset start offset
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_h264f_stream_get(struct ubuf_block_stream *s,
-                                          uint8_t *octet_p)
+static inline enum ubase_err upipe_h264f_stream_get(struct ubuf_block_stream *s,
+                                                    uint8_t *octet_p)
 {
-    if (unlikely(!ubuf_block_stream_get(s, octet_p)))
-        return false;
+    UBASE_RETURN(ubuf_block_stream_get(s, octet_p))
     struct upipe_h264f_stream *f =
         container_of(s, struct upipe_h264f_stream, s);
     f->zeros <<= 1;
@@ -386,7 +385,7 @@ static inline bool upipe_h264f_stream_get(struct ubuf_block_stream *s,
         f->zeros |= 1;
     else if (unlikely(*octet_p == 3 && (f->zeros & 6) == 6)) /* escape word */
         return ubuf_block_stream_get(s, octet_p);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This fills the bit stream cache with at least the given number of bits.
@@ -550,13 +549,9 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, ubuf,
-                                      upipe_h264f->au_last_nal_start_size +
-                                      H264SPS_HEADER_SIZE - 4);
-    if (unlikely(!ret)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, ubuf,
+                                       upipe_h264f->au_last_nal_start_size +
+                                       H264SPS_HEADER_SIZE - 4));
     uint32_t sps_id = upipe_h264f_stream_ue(s);
     ubuf_block_stream_clean(s);
 
@@ -567,7 +562,7 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
     }
 
     if (upipe_h264f->active_sps == sps_id &&
-        !ubuf_block_equal(upipe_h264f->sps[sps_id], ubuf))
+        !ubase_check(ubuf_block_equal(upipe_h264f->sps[sps_id], ubuf)))
         upipe_h264f->active_sps = -1;
 
     if (upipe_h264f->sps[sps_id] != NULL)
@@ -597,9 +592,8 @@ static void upipe_h264f_handle_sps_ext(struct upipe *upipe)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, ubuf,
-                                      upipe_h264f->au_last_nal_start_size);
-    assert(ret);
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, ubuf,
+                                       upipe_h264f->au_last_nal_start_size))
     uint32_t sps_id = upipe_h264f_stream_ue(s);
     ubuf_block_stream_clean(s);
 
@@ -639,9 +633,8 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, ubuf,
-                                      upipe_h264f->au_last_nal_start_size);
-    assert(ret);
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, ubuf,
+                                       upipe_h264f->au_last_nal_start_size))
     uint32_t pps_id = upipe_h264f_stream_ue(s);
     ubuf_block_stream_clean(s);
 
@@ -652,7 +645,7 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
     }
 
     if (upipe_h264f->active_pps == pps_id &&
-        !ubuf_block_equal(upipe_h264f->pps[pps_id], ubuf))
+        !ubase_check(ubuf_block_equal(upipe_h264f->pps[pps_id], ubuf)))
         upipe_h264f->active_pps = -1;
 
     if (upipe_h264f->pps[pps_id] != NULL)
@@ -683,16 +676,15 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, upipe_h264f->sps[sps_id], 5);
-    assert(ret);
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, upipe_h264f->sps[sps_id], 5))
 
     upipe_h264f_stream_fill_bits(s, 24);
     uint8_t profile = ubuf_block_stream_show_bits(s, 8);
     ubuf_block_stream_skip_bits(s, 16);
-    ret = ret && uref_h264_flow_set_profile(flow_def, profile);
+    UBASE_FATAL(upipe, uref_h264_flow_set_profile(flow_def, profile))
     uint8_t level = ubuf_block_stream_show_bits(s, 8);
     ubuf_block_stream_skip_bits(s, 8);
-    ret = ret && uref_h264_flow_set_level(flow_def, level);
+    UBASE_FATAL(upipe, uref_h264_flow_set_level(flow_def, level))
 
     uint64_t max_octetrate;
     switch (level) {
@@ -715,7 +707,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             /* intended fall-through */
         case 51: max_octetrate = 240000000 / 8; break;
     }
-    ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
+    UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
 
     upipe_h264f_stream_ue(s); /* sps_id */
     uint32_t chroma_idc = 1;
@@ -747,18 +739,18 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                     chroma_idc != H264SPS_CHROMA_444 ? 8 : 12);
     }
 
-    ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
-    ret = ret && uref_pic_flow_set_planes(flow_def, 0);
+    UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
+    UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
     if (luma_depth == 8)
-        ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
     else {
-        ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y16");
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y16"))
         luma_depth = 16;
     }
     if (chroma_idc == H264SPS_CHROMA_MONO)
-        ret = ret && uref_flow_set_def_va(flow_def,
+        UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
                 UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_mono.",
-                luma_depth);
+                luma_depth))
     else {
         uint8_t hsub, vsub;
         const char *chroma;
@@ -786,19 +778,17 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 return false;
         }
         if (chroma_depth == 8) {
-            ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "u8");
-            ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "v8");
-            ret = ret && uref_flow_set_def_va(flow_def,
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "u8"))
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "v8"))
+            UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
                     UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_8_%s.",
-                    luma_depth, chroma);
+                    luma_depth, chroma))
         } else {
-            ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 2,
-                                                 "u16");
-            ret = ret && uref_pic_flow_add_plane(flow_def, hsub, vsub, 2,
-                                                 "v16");
-            ret = ret && uref_flow_set_def_va(flow_def,
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 2, "u16"))
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 2, "v16"))
+            UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
                     UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_16_%s.",
-                    luma_depth, chroma);
+                    luma_depth, chroma))
         }
     }
 
@@ -851,17 +841,17 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     ubuf_block_stream_skip_bits(s, 1); /* gaps_in_frame_num_value_allowed */
 
     uint64_t mb_width = upipe_h264f_stream_ue(s) + 1;
-    ret = ret && uref_pic_flow_set_hsize(flow_def, mb_width * 16);
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, mb_width * 16))
 
     uint64_t map_height = upipe_h264f_stream_ue(s) + 1;
     upipe_h264f_stream_fill_bits(s, 4);
     upipe_h264f->frame_mbs_only = !!ubuf_block_stream_show_bits(s, 1);
     ubuf_block_stream_skip_bits(s, 1);
     if (!upipe_h264f->frame_mbs_only) {
-        ret = ret && uref_pic_flow_set_vsize(flow_def, map_height * 16 * 2);
+        UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, map_height * 16 * 2))
         ubuf_block_stream_skip_bits(s, 1); /* mb_adaptive_frame_field */
     } else
-        ret = ret && uref_pic_flow_set_vsize(flow_def, map_height * 16);
+        UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, map_height * 16))
     ubuf_block_stream_skip_bits(s, 1); /* direct8x8_inference */
 
     bool frame_cropping = !!ubuf_block_stream_show_bits(s, 1);
@@ -888,7 +878,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             if (ar_idc > 0 &&
                 ar_idc < sizeof(sar_from_idc) / sizeof(struct urational)) {
                 upipe_h264f->sar = sar_from_idc[ar_idc];
-                ret = ret && uref_pic_flow_set_sar(flow_def, upipe_h264f->sar);
+                UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_h264f->sar))
             } else if (ar_idc == H264VUI_AR_EXTENDED) {
                 upipe_h264f_stream_fill_bits(s, 16);
                 upipe_h264f->sar.num = ubuf_block_stream_show_bits(s, 16);
@@ -896,7 +886,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 upipe_h264f_stream_fill_bits(s, 16);
                 upipe_h264f->sar.den = ubuf_block_stream_show_bits(s, 16);
                 ubuf_block_stream_skip_bits(s, 16);
-                ret = ret && uref_pic_flow_set_sar(flow_def, upipe_h264f->sar);
+                UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_h264f->sar))
             } else
                 upipe_warn_va(upipe, "unknown aspect ratio idc %"PRIu8, ar_idc);
         }
@@ -906,7 +896,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         ubuf_block_stream_skip_bits(s, 1);
         if (overscan_present) {
             if (ubuf_block_stream_show_bits(s, 1))
-                ret = ret && uref_pic_flow_set_overscan(flow_def);
+                UBASE_FATAL(upipe, uref_pic_flow_set_overscan(flow_def))
             ubuf_block_stream_skip_bits(s, 1);
         }
 
@@ -955,7 +945,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                     .den = num_units_in_ticks * 2
                 };
                 urational_simplify(&frame_rate);
-                ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
+                UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
                 if (frame_rate.num)
                     upipe_h264f->duration = UCLOCK_FREQ * frame_rate.den /
                                             frame_rate.num / 2;
@@ -969,8 +959,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         ubuf_block_stream_skip_bits(s, 1);
         if (nal_hrd_present &&
             upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
-            ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate);
-            ret = ret && uref_block_flow_set_cpb_buffer(flow_def, cpb_size);
+            UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+            UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, cpb_size))
             upipe_h264f->octet_rate = octetrate;
             upipe_h264f->cpb_length = cpb_size * UCLOCK_FREQ / octetrate;
         }
@@ -980,15 +970,15 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         ubuf_block_stream_skip_bits(s, 1);
         if (vcl_hrd_present &&
             upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
-            ret = ret && uref_block_flow_set_octetrate(flow_def, octetrate);
-            ret = ret && uref_block_flow_set_cpb_buffer(flow_def, cpb_size);
+            UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+            UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, cpb_size))
             upipe_h264f->cpb_length = cpb_size * UCLOCK_FREQ / octetrate;
         }
 
         if (nal_hrd_present || vcl_hrd_present) {
             upipe_h264f_stream_fill_bits(s, 1);
             if (!!ubuf_block_stream_show_bits(s, 1))
-                ret = ret && uref_flow_set_lowdelay(flow_def);
+                UBASE_FATAL(upipe, uref_flow_set_lowdelay(flow_def))
             ubuf_block_stream_skip_bits(s, 1);
             upipe_h264f->hrd = true;
         } else
@@ -1031,8 +1021,7 @@ static bool upipe_h264f_activate_pps(struct upipe *upipe, uint32_t pps_id)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, upipe_h264f->pps[pps_id], 5);
-    assert(ret);
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, upipe_h264f->pps[pps_id], 5))
 
     upipe_h264f_stream_ue(s); /* pps_id */
     uint32_t sps_id = upipe_h264f_stream_ue(s);
@@ -1141,10 +1130,10 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     uint8_t type;
-    if (unlikely(!uref_block_extract(upipe_h264f->next_uref,
+    if (unlikely(!ubase_check(uref_block_extract(upipe_h264f->next_uref,
                                      upipe_h264f->au_last_nal_offset +
                                      upipe_h264f->au_last_nal_start_size, 1,
-                                     &type)))
+                                     &type))))
         return;
     if (type != H264SEI_BUFFERING_PERIOD && type != H264SEI_PIC_TIMING)
         return;
@@ -1152,10 +1141,9 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
     struct upipe_h264f_stream f;
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, upipe_h264f->next_uref->ubuf,
-                                      upipe_h264f->au_last_nal_offset +
-                                      upipe_h264f->au_last_nal_start_size + 1);
-    assert(ret);
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, upipe_h264f->next_uref->ubuf,
+                                       upipe_h264f->au_last_nal_offset +
+                                       upipe_h264f->au_last_nal_start_size + 1))
 
     /* size field */
     uint8_t octet;
@@ -1201,14 +1189,13 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
         return;
     }
 
-    bool ret = true;
     uint64_t picture_number = upipe_h264f->last_picture_number +
         (upipe_h264f->frame_num - upipe_h264f->last_frame_num);
     if (upipe_h264f->frame_num > upipe_h264f->last_frame_num) {
         upipe_h264f->last_frame_num = upipe_h264f->frame_num;
         upipe_h264f->last_picture_number = picture_number;
     }
-    ret = ret && uref_pic_set_number(uref, picture_number);
+    UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
 
     uint64_t duration = upipe_h264f->duration;
     if (upipe_h264f->pic_struct == -1) {
@@ -1234,35 +1221,35 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
 
     switch (upipe_h264f->pic_struct) {
         case H264SEI_STRUCT_FRAME:
-            ret = ret && uref_pic_set_progressive(uref);
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
             duration *= 2;
             break;
         case H264SEI_STRUCT_TOP:
-            ret = ret && uref_pic_set_tf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             break;
         case H264SEI_STRUCT_BOT:
-            ret = ret && uref_pic_set_bf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
             break;
         case H264SEI_STRUCT_TOP_BOT:
-            ret = ret && uref_pic_set_tf(uref);
-            ret = ret && uref_pic_set_bf(uref);
-            ret = ret && uref_pic_set_tff(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
             duration *= 2;
             break;
         case H264SEI_STRUCT_BOT_TOP:
-            ret = ret && uref_pic_set_tf(uref);
-            ret = ret && uref_pic_set_bf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
             duration *= 2;
             break;
         case H264SEI_STRUCT_TOP_BOT_TOP:
-            ret = ret && uref_pic_set_tf(uref);
-            ret = ret && uref_pic_set_bf(uref);
-            ret = ret && uref_pic_set_tff(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
             duration *= 3;
             break;
         case H264SEI_STRUCT_BOT_TOP_BOT:
-            ret = ret && uref_pic_set_tf(uref);
-            ret = ret && uref_pic_set_bf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
             duration *= 3;
             break;
         case H264SEI_STRUCT_DOUBLE:
@@ -1277,24 +1264,25 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
             break;
     }
     if (duration)
-        ret = ret && uref_clock_set_duration(uref, duration);
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
     /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
+    if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
-        if (!uref_clock_get_dts_##dv(&upipe_h264f->au_uref_s, NULL))        \
+        if (!ubase_check(uref_clock_get_dts_##dv(&upipe_h264f->au_uref_s,   \
+                                                 NULL)))                    \
             uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s,                \
                                     date + duration);                       \
-    } else if (uref_clock_get_dts_##dv(uref, &date))                        \
+    } else if (ubase_check(uref_clock_get_dts_##dv(uref, &date)))           \
         uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (uref_clock_get_dts_pts_delay(&au_uref_s, &date))
+    if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
         uref_clock_set_dts_pts_delay(uref, date);
     else
         uref_clock_delete_dts_pts_delay(uref);
@@ -1302,8 +1290,8 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     if (upipe_h264f->systime_rap != UINT64_MAX)
         uref_clock_set_rap_sys(uref, upipe_h264f->systime_rap);
     if (upipe_h264f->au_vcl_offset > 0)
-        ret = ret && uref_block_set_header_size(uref,
-                                                upipe_h264f->au_vcl_offset);
+        UBASE_FATAL(upipe, uref_block_set_header_size(uref,
+                                               upipe_h264f->au_vcl_offset))
 
     if (upipe_h264f->initial_cpb_removal_delay != INT64_MAX &&
         upipe_h264f->octet_rate > 0) {
@@ -1332,11 +1320,6 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
     upipe_h264f->au_slice_nal = UINT8_MAX;
     upipe_h264f->pic_struct = -1;
 
-    if (unlikely(!ret)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
     if (unlikely(upipe_h264f->flow_def == NULL)) {
         uref_free(uref);
         return;
@@ -1374,10 +1357,9 @@ static void upipe_h264f_parse_slice(struct upipe *upipe, struct upump *upump)
 upipe_h264f_parse_slice_retry:
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    bool ret = ubuf_block_stream_init(s, upipe_h264f->next_uref->ubuf,
+    UBASE_FATAL(upipe, ubuf_block_stream_init(s, upipe_h264f->next_uref->ubuf,
                                       upipe_h264f->au_last_nal_offset +
-                                      upipe_h264f->au_last_nal_start_size);
-    assert(ret);
+                                      upipe_h264f->au_last_nal_start_size));
 
     upipe_h264f_stream_ue(s); /* first_mb_in_slice */
     upipe_h264f_stream_ue(s); /* slice_type */
@@ -1505,7 +1487,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
             upipe_h264f_parse_slice(upipe, upump);
         if (last_nal_type == H264NAL_TYPE_IDR) {
             uint64_t systime_rap;
-            if (uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap))
+            if (ubase_check(uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap)))
                 upipe_h264f->systime_rap = systime_rap;
         }
         return;
@@ -1651,7 +1633,7 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
 
-    if (unlikely(uref_flow_get_discontinuity(uref)))
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
         upipe_h264f->got_discontinuity = true;
 
     upipe_h264f_append_uref_stream(upipe, uref);
@@ -1669,8 +1651,7 @@ static enum ubase_err upipe_h264f_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (unlikely(!uref_flow_match_def(flow_def, "block.")))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

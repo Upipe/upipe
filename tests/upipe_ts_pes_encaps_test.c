@@ -109,7 +109,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     uint16_t pes_size;
     int size = -1;
     const uint8_t *buffer;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     header_size = size;
     assert(size >= PES_HEADER_SIZE);
     assert(pes_validate(buffer));
@@ -136,7 +136,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 
     /* check payload */
     size_t uref_size;
-    assert(uref_block_size(uref, &uref_size));
+    ubase_assert(uref_block_size(uref, &uref_size));
     if (pes_size != 0)
         assert(uref_size == pes_size + PES_HEADER_SIZE);
     total_size += uref_size - size;
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_ts_flow_set_pes_id(uref, PES_STREAM_ID_VIDEO_MPEG));
+    ubase_assert(uref_ts_flow_set_pes_id(uref, PES_STREAM_ID_VIDEO_MPEG));
 
     struct upipe_mgr *upipe_ts_pese_mgr = upipe_ts_pese_mgr_alloc();
     assert(upipe_ts_pese_mgr != NULL);
@@ -219,8 +219,8 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     stream_id = PES_STREAM_ID_PRIVATE_1;
-    assert(uref_ts_flow_set_pes_id(uref, stream_id));
-    assert(uref_ts_flow_set_pes_header(uref, 45));
+    ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
+    ubase_assert(uref_ts_flow_set_pes_header(uref, 45));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts pese"));
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     stream_id = PES_STREAM_ID_PRIVATE_2;
-    assert(uref_ts_flow_set_pes_id(uref, stream_id));
+    ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
@@ -262,8 +262,8 @@ int main(int argc, char *argv[])
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
     stream_id = PES_STREAM_ID_AUDIO_MPEG;
-    assert(uref_ts_flow_set_pes_id(uref, stream_id));
-    assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
+    ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
+    ubase_assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                    "ts pese"));
@@ -278,7 +278,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
     uref_clock_set_dts_pts_delay(uref, 0);
-    assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
+    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 0);
 
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     uref_clock_set_dts_prog(uref, UCLOCK_FREQ * 2);
     uref_clock_set_dts_pts_delay(uref, 0);
-    assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
+    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ));
     upipe_input(upipe_ts_pese, uref, NULL);
     assert(total_size == 24);
 

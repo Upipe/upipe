@@ -40,7 +40,6 @@ extern "C" {
 #include <upipe/ubuf_pic.h>
 
 #include <stdint.h>
-#include <stdbool.h>
 
 UREF_ATTR_UNSIGNED_SH(pic, number, UDICT_TYPE_PIC_NUM, picture number)
 UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
@@ -80,99 +79,92 @@ static inline struct uref *uref_pic_alloc(struct uref_mgr *uref_mgr,
 }
 
 /** @see ubuf_pic_size */
-static inline bool uref_pic_size(struct uref *uref,
-                                 size_t *hsize_p, size_t *vsize_p,
-                                 uint8_t *macropixel_p)
+static inline enum ubase_err uref_pic_size(struct uref *uref,
+                                           size_t *hsize_p, size_t *vsize_p,
+                                           uint8_t *macropixel_p)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_size(uref->ubuf, hsize_p, vsize_p, macropixel_p);
 }
 
 /** @see ubuf_pic_plane_iterate */
-static inline bool uref_pic_plane_iterate(struct uref *uref,
-                                          const char **chroma_p)
+static inline enum ubase_err uref_pic_plane_iterate(struct uref *uref,
+                                                    const char **chroma_p)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_iterate(uref->ubuf, chroma_p);
 }
 
 /** @see ubuf_pic_plane_size */
-static inline bool uref_pic_plane_size(struct uref *uref, const char *chroma,
-                                       size_t *stride_p,
-                                       uint8_t *hsub_p, uint8_t *vsub_p,
-                                       uint8_t *macropixel_size_p)
+static inline enum ubase_err uref_pic_plane_size(struct uref *uref,
+        const char *chroma, size_t *stride_p, uint8_t *hsub_p, uint8_t *vsub_p,
+        uint8_t *macropixel_size_p)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_size(uref->ubuf, chroma, stride_p, hsub_p, vsub_p,
                                macropixel_size_p);
 }
 
 /** @see ubuf_pic_plane_read */
-static inline bool uref_pic_plane_read(struct uref *uref, const char *chroma,
-                                       int hoffset, int voffset,
-                                       int hsize, int vsize,
-                                       const uint8_t **buffer_p)
+static inline enum ubase_err uref_pic_plane_read(struct uref *uref,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize,
+        const uint8_t **buffer_p)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_read(uref->ubuf, chroma, hoffset, voffset,
                                hsize, vsize, buffer_p);
 }
 
 /** @see ubuf_pic_plane_write */
-static inline bool uref_pic_plane_write(struct uref *uref, const char *chroma,
-                                       int hoffset, int voffset,
-                                       int hsize, int vsize,
-                                       uint8_t **buffer_p)
+static inline enum ubase_err uref_pic_plane_write(struct uref *uref,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize,
+        uint8_t **buffer_p)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_write(uref->ubuf, chroma, hoffset, voffset,
                                 hsize, vsize, buffer_p);
 }
 
 /** @see ubuf_pic_plane_unmap */
-static inline bool uref_pic_plane_unmap(struct uref *uref, const char *chroma,
-                                       int hoffset, int voffset,
-                                       int hsize, int vsize)
+static inline enum ubase_err uref_pic_plane_unmap(struct uref *uref,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_unmap(uref->ubuf, chroma, hoffset, voffset,
                                 hsize, vsize);
 }
 
 /** @see ubuf_pic_plane_clear */
-static inline bool uref_pic_plane_clear(struct uref *uref, const char *chroma,
-                                        int hoffset, int voffset,
-                                        int hsize, int vsize)
+static inline enum ubase_err uref_pic_plane_clear(struct uref *uref,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_plane_clear(uref->ubuf, chroma, hoffset, voffset,
                                 hsize, vsize);
 }
 
 /** @see ubuf_pic_resize */
-static inline bool uref_pic_resize(struct uref *uref,
-                                   int hskip, int vskip,
-                                   int new_hsize, int new_vsize)
+static inline enum ubase_err uref_pic_resize(struct uref *uref,
+        int hskip, int vskip, int new_hsize, int new_vsize)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_resize(uref->ubuf, hskip, vskip, new_hsize, new_vsize);
 }
 
 /** @see ubuf_pic_clear */
-static inline bool uref_pic_clear(struct uref *uref,
-                                  int hoffset, int voffset,
-                                  int hsize, int vsize)
+static inline enum ubase_err uref_pic_clear(struct uref *uref,
+        int hoffset, int voffset, int hsize, int vsize)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_clear(uref->ubuf, hoffset, voffset, hsize, vsize);
 }
 
@@ -190,15 +182,14 @@ static inline bool uref_pic_clear(struct uref *uref,
  * to -1, keep same line ends)
  * @param new_vsize final vertical size of the buffer, in lines (if set
  * to -1, keep same last line)
- * @return false in case of error
+ * @return an error code
  */
-static inline bool uref_pic_replace(struct uref *uref,
-                                    struct ubuf_mgr *ubuf_mgr,
-                                    int hskip, int vskip,
-                                    int new_hsize, int new_vsize)
+static inline enum ubase_err uref_pic_replace(struct uref *uref,
+        struct ubuf_mgr *ubuf_mgr, int hskip, int vskip,
+        int new_hsize, int new_vsize)
 {
     if (uref->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     return ubuf_pic_replace(ubuf_mgr, &uref->ubuf, hskip, vskip,
                             new_hsize, new_vsize);
 }

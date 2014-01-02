@@ -65,7 +65,7 @@ static enum ubase_err uprobe_dejitter_clock_ref(struct uprobe *uprobe,
     if (unlikely(uref == NULL))
         return UBASE_ERR_INVALID;
     uint64_t sys_ref;
-    if (unlikely(!uref_clock_get_cr_sys(uref, &sys_ref))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &sys_ref)))) {
         upipe_warn(upipe, "[dejitter] no clock ref in packet");
         return UBASE_ERR_INVALID;
     }

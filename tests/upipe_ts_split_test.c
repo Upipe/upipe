@@ -105,7 +105,7 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
 {
     struct uref *flow_def = va_arg(args, struct uref *);
     uint64_t pid;
-    assert(uref_ts_flow_get_pid(flow_def, &pid));
+    ubase_assert(uref_ts_flow_get_pid(flow_def, &pid));
     struct ts_test *ts_test = malloc(sizeof(struct ts_test));
     assert(ts_test != NULL);
     upipe_init(&ts_test->upipe, mgr, uprobe);
@@ -123,7 +123,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     ts_test->got_packet = true;
     const uint8_t *buffer;
     int size = -1;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == TS_SIZE); //because of the way we allocated it
     assert(ts_validate(buffer));
     assert(ts_get_pid(buffer) == ts_test->pid);
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     assert(upipe_ts_split != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_split, uref));
 
-    assert(uref_ts_flow_set_pid(uref, 68));
+    ubase_assert(uref_ts_flow_set_pid(uref, 68));
     struct upipe *upipe_sink68 = upipe_flow_alloc(&ts_test_mgr,
             uprobe_use(uprobe_stdio), uref);
     assert(upipe_sink68 != NULL);
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     assert(upipe_ts_split_output68 != NULL);
     ubase_assert(upipe_set_output(upipe_ts_split_output68, upipe_sink68));
 
-    assert(uref_ts_flow_set_pid(uref, 69));
+    ubase_assert(uref_ts_flow_set_pid(uref, 69));
     struct upipe *upipe_sink69 = upipe_flow_alloc(&ts_test_mgr,
             uprobe_use(uprobe_stdio), uref);
     assert(upipe_sink69 != NULL);
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 68);
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 69);

@@ -237,7 +237,7 @@ static enum ubase_err upipe_trickp_sub_set_flow_def(struct upipe *upipe,
     struct upipe_trickp_sub *upipe_trickp_sub =
         upipe_trickp_sub_from_upipe(upipe);
     const char *def;
-    if (likely(uref_flow_get_def(flow_def, &def))) {
+    if (likely(ubase_check(uref_flow_get_def(flow_def, &def)))) {
         if (!ubase_ncmp(def, "pic.sub."))
             upipe_trickp_sub->type = UPIPE_TRICKP_SUBPIC;
         else if (!ubase_ncmp(def, "pic."))

@@ -72,7 +72,7 @@ static inline struct uref *uref_block_flow_alloc_def(struct uref_mgr *mgr,
 
     char def[sizeof(UREF_BLOCK_FLOW_DEF) + strlen(def_suffix)];
     sprintf(def, UREF_BLOCK_FLOW_DEF "%s", def_suffix);
-    if (unlikely(!uref_flow_set_def(uref, def))) {
+    if (unlikely(!ubase_check(uref_flow_set_def(uref, def)))) {
         uref_free(uref);
         return NULL;
     }

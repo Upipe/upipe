@@ -41,7 +41,7 @@ bool upipe_gl_texture_load_uref(struct uref *uref, GLuint texture)
     const uint8_t *data = NULL;
     size_t width, height;
     uref_pic_size(uref, &width, &height, NULL);
-    if(!uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data)) {
+    if(!ubase_check(uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data))) {
         return false;
     }
     glBindTexture(GL_TEXTURE_2D, texture);

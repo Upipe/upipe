@@ -90,7 +90,7 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
             return NULL;                                                    \
         if (EXPECTED_FLOW_DEF != NULL) {                                    \
             const char *def;                                                \
-            if (unlikely(!uref_flow_get_def(flow_def, &def) ||              \
+            if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) || \
                          ubase_ncmp(def, EXPECTED_FLOW_DEF)))               \
                 return NULL;                                                \
         }                                                                   \

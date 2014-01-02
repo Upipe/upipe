@@ -170,7 +170,7 @@ static void upipe_ts_agg_init(struct upipe *upipe)
 
     uint8_t *buffer;
     int size = -1;
-    if (unlikely(!ubuf_block_write(upipe_ts_agg->padding, 0, &size, &buffer))) {
+    if (unlikely(!ubase_check(ubuf_block_write(upipe_ts_agg->padding, 0, &size, &buffer)))) {
         ubuf_free(upipe_ts_agg->padding);
         upipe_ts_agg->padding = NULL;
         return;
@@ -252,8 +252,8 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     uint8_t ts_header[TS_HEADER_SIZE_PCR];
 
-    if (unlikely(!uref_block_extract(uref, 0, TS_HEADER_SIZE_PCR,
-                                     ts_header))) {
+    if (unlikely(!ubase_check(uref_block_extract(uref, 0, TS_HEADER_SIZE_PCR,
+                                     ts_header)))) {
         uref_free(uref);
         upipe_warn_va(upipe, "couldn't read TS header from aggregate");
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
@@ -267,9 +267,9 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
         uint8_t *buffer;
         int size = TS_HEADER_SIZE_PCR;
         uint64_t orig_cr_sys, orig_cr_prog;
-        if (unlikely(!uref_clock_get_cr_sys(uref, &orig_cr_sys) ||
-                     !uref_clock_get_cr_prog(uref, &orig_cr_prog) ||
-                     !uref_block_write(uref, 0, &size, &buffer)))
+        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &orig_cr_sys)) ||
+                     !ubase_check(uref_clock_get_cr_prog(uref, &orig_cr_prog)) ||
+                     !ubase_check(uref_block_write(uref, 0, &size, &buffer))))
             upipe_warn_va(upipe, "couldn't fix PCR");
         else {
             orig_cr_prog += upipe_ts_agg->next_cr_sys - orig_cr_sys;
@@ -321,7 +321,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t dts_sys = UINT64_MAX;
-    if (unlikely(!uref_clock_get_dts_sys(uref, &dts_sys) &&
+    if (unlikely(!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) &&
                  upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR)) {
         upipe_warn(upipe, "non-dated packet received");
         uref_free(uref);
@@ -355,7 +355,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
         dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval)
         upipe_ts_agg_complete(upipe, upump);
 
-    if (uref_clock_get_ref(uref)) {
+    if (ubase_check(uref_clock_get_ref(uref))) {
         /* fix the PCR according to the new output date */
         upipe_ts_agg_fix_pcr(upipe, uref);
     }
@@ -377,7 +377,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     } else {
         struct ubuf *append = uref_detach_ubuf(uref);
         uref_free(uref);
-        if (unlikely(!uref_block_append(upipe_ts_agg->next_uref, append))) {
+        if (unlikely(!ubase_check(uref_block_append(upipe_ts_agg->next_uref, append)))) {
             upipe_warn(upipe, "error appending packet");
             ubuf_free(append);
             return;
@@ -401,14 +401,13 @@ static enum ubase_err upipe_ts_agg_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def(flow_def_dup, "block.mpegtsaligned.")))
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, "block.mpegtsaligned."))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;

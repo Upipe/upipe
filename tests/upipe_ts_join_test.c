@@ -98,7 +98,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     const uint8_t *buffer;
     int size = -1;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == TS_SIZE); //because of the way we allocated it
     assert(ts_validate(buffer));
     received_pids += ts_get_pid(buffer);
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 68);
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 69);
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == TS_SIZE);
     ts_pad(buffer);
     ts_set_pid(buffer, 69);

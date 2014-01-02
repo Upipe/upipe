@@ -106,11 +106,11 @@ static void aggregate_test_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *buffer;
     size_t size = 0;
     int pos = 0, len = -1;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     upipe_dbg_va(upipe, "received packet of size %zu", size);
 
     while (size > 0) {
-        assert(uref_block_read(uref, pos, &len, &buffer));
+        ubase_assert(uref_block_read(uref, pos, &len, &buffer));
         assert(ts_validate(buffer));
         bool padding = ts_get_pid(buffer) == 8191;
         uref_block_unmap(uref, 0);

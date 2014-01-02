@@ -100,31 +100,20 @@ static void x264_test_input(struct upipe *upipe, struct uref *uref,
                               struct upump *upump)
 {
     struct x264_test *x264_test = x264_test_from_upipe(upipe);
-    const char *def;
     uint64_t pts = 0, dts = 0;
     if (uref->udict != NULL) {
         udict_dump(uref->udict, upipe->uprobe);
     }
-    if (unlikely(uref_flow_get_def(uref, &def))) {
-        upipe_notice_va(upipe, "flow definition for %s", def);
-        goto end;
-    }
-    if (unlikely(!uref->ubuf)) {
-        upipe_dbg(upipe, "dropping empty uref ref");
-        goto end;
-    }
-
-    if (!uref_clock_get_pts_prog(uref, &pts)) {
+    if (!ubase_check(uref_clock_get_pts_prog(uref, &pts))) {
         upipe_warn(upipe, "received packet with no pts");
     }
-    if (!uref_clock_get_dts_prog(uref, &dts)) {
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts))) {
         upipe_warn(upipe, "received packet with no dts");
     }
     upipe_dbg_va(upipe, "received pic %d, pts: %"PRIu64" , dts: %"PRIu64,
                  x264_test->counter, pts, dts);
     x264_test->counter++;
 
-end:
     uref_free(uref);
 }
 
@@ -151,24 +140,24 @@ static void fill_pic(struct uref *uref, int counter)
 {
     size_t hsize, vsize;
     uint8_t macropixel;
-    assert(uref_pic_size(uref, &hsize, &vsize, &macropixel));
+    assert(ubase_check(uref_pic_size(uref, &hsize, &vsize, &macropixel)));
 
     const char *chroma = NULL;
-    while (uref_pic_plane_iterate(uref, &chroma) && chroma != NULL) {
+    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) && chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
-        assert(uref_pic_plane_size(uref, chroma, &stride, &hsub, &vsub,
-                                   &macropixel_size));
+        assert(ubase_check(uref_pic_plane_size(uref, chroma, &stride, &hsub, &vsub,
+                                   &macropixel_size)));
         int hoctets = hsize * macropixel_size / hsub / macropixel;
         uint8_t *buffer;
-        assert(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buffer));
+        assert(ubase_check(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buffer)));
 
         for (int y = 0; y < vsize / vsub; y++) {
             for (int x = 0; x < hoctets; x++)
                 buffer[x] = 1 + (y * hoctets) + x + counter * 5;
             buffer += stride;
         }
-        assert(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1));
+        assert(ubase_check(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1)));
     }
 }
 
@@ -230,13 +219,13 @@ int main(int argc, char **argv)
     /* send flow definition */
     struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def);
-    assert(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"));
-    assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"));
-    assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"));
-    assert(uref_pic_flow_set_hsize(flow_def, WIDTH));
-    assert(uref_pic_flow_set_vsize(flow_def, HEIGHT));
+    ubase_assert(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"));
+    ubase_assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"));
+    ubase_assert(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"));
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, WIDTH));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, HEIGHT));
     struct urational fps = { .num = 25, .den = 1 };
-    assert(uref_pic_flow_set_fps(flow_def, fps));
+    ubase_assert(uref_pic_flow_set_fps(flow_def, fps));
 
     /* x264 pipe */
     struct upipe *x264 = upipe_void_alloc(upipe_x264_mgr,

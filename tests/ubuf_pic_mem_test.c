@@ -49,24 +49,25 @@ static void fill_in(struct ubuf *ubuf)
 {
     size_t hsize, vsize;
     uint8_t macropixel;
-    assert(ubuf_pic_size(ubuf, &hsize, &vsize, &macropixel));
+    ubase_assert(ubuf_pic_size(ubuf, &hsize, &vsize, &macropixel));
 
     const char *chroma = NULL;
-    while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma != NULL) {
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+           chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
-        assert(ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub,
-                                   &macropixel_size));
+        ubase_assert(ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub,
+                                         &macropixel_size));
         int hoctets = hsize * macropixel_size / hsub / macropixel;
         uint8_t *buffer;
-        assert(ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buffer));
+        ubase_assert(ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buffer));
 
         for (int y = 0; y < vsize / vsub; y++) {
             for (int x = 0; x < hoctets; x++)
                 buffer[x] = 1 + (y * hoctets) + x;
             buffer += stride;
         }
-        assert(ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, -1, -1));
+        ubase_assert(ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, -1, -1));
     }
 }
 
@@ -99,7 +100,7 @@ int main(int argc, char **argv)
     ubuf1 = ubuf_pic_alloc(mgr, 32, 32);
     assert(ubuf1 != NULL);
 
-    assert(ubuf_pic_size(ubuf1, &hsize, &vsize, &macropixel));
+    ubase_assert(ubuf_pic_size(ubuf1, &hsize, &vsize, &macropixel));
     assert(hsize == 32);
     assert(vsize == 32);
     assert(macropixel == 1);
@@ -108,8 +109,8 @@ int main(int argc, char **argv)
     while (ubuf_pic_plane_iterate(ubuf1, &chroma) && chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
-        assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
-                                   &macropixel_size));
+        ubase_assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
+                                         &macropixel_size));
         if (!strcmp(chroma, "y8")) {
             assert(stride >= 32 + UBUF_PREPEND + UBUF_APPEND);
             assert(hsub == 1);
@@ -124,70 +125,70 @@ int main(int argc, char **argv)
             assert(1);
     }
 
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
 
-    assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1));
     fill_in(ubuf1);
 
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 2, 1, 1, &r));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 2, 1, 1, &r));
     assert(*r == 1 + 2 * 32 + 2);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 2, 2, 1, 1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 2, 2, 1, 1));
 
     ubuf2 = ubuf_dup(ubuf1);
     assert(ubuf2 != NULL);
-    assert(!ubuf_pic_plane_write(ubuf1, "y8", 0, 0, -1, -1, &w));
+    ubase_nassert(ubuf_pic_plane_write(ubuf1, "y8", 0, 0, -1, -1, &w));
     ubuf_free(ubuf2);
 
-    assert(!ubuf_pic_resize(ubuf1, 1, 0, 31, 32));
-    assert(!ubuf_pic_resize(ubuf1, -1, 0, 33, 32));
-    assert(!ubuf_pic_resize(ubuf1, 0, 1, 32, 31));
-    assert(!ubuf_pic_resize(ubuf1, 0, -1, 32, 33));
+    ubase_nassert(ubuf_pic_resize(ubuf1, 1, 0, 31, 32));
+    ubase_nassert(ubuf_pic_resize(ubuf1, -1, 0, 33, 32));
+    ubase_nassert(ubuf_pic_resize(ubuf1, 0, 1, 32, 31));
+    ubase_nassert(ubuf_pic_resize(ubuf1, 0, -1, 32, 33));
 
-    assert(ubuf_pic_resize(ubuf1, 2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
     assert(r[0] == 3);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "u8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "u8", 0, 0, -1, -1, &r));
     assert(r[0] == 2);
-    assert(ubuf_pic_plane_unmap(ubuf1, "u8", 0, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "v8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "u8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "v8", 0, 0, -1, -1, &r));
     assert(r[0] == 2);
-    assert(ubuf_pic_plane_unmap(ubuf1, "v8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "v8", 0, 0, -1, -1));
 
-    assert(ubuf_pic_resize(ubuf1, 0, 2, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, 0, 2, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
     assert(r[0] == 2 * 32 + 3);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "u8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "u8", 0, 0, -1, -1, &r));
     assert(r[0] == 16 + 2);
-    assert(ubuf_pic_plane_unmap(ubuf1, "u8", 0, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "v8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "u8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "v8", 0, 0, -1, -1, &r));
     assert(r[0] == 16 + 2);
-    assert(ubuf_pic_plane_unmap(ubuf1, "v8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "v8", 0, 0, -1, -1));
 
-    assert(ubuf_pic_resize(ubuf1, -4, -2, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, -4, -2, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "u8", 2, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "u8", 2, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "u8", 2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "v8", 2, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "u8", 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "v8", 2, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "v8", 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "v8", 2, 0, -1, -1));
 
-    assert(!ubuf_pic_resize(ubuf1, -2, 0, -1, -1));
-    assert(ubuf_pic_replace(mgr, &ubuf1, -2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8", 4, 0, -1, -1, &r));
+    ubase_nassert(ubuf_pic_resize(ubuf1, -2, 0, -1, -1));
+    ubase_assert(ubuf_pic_replace(mgr, &ubuf1, -2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 4, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8", 4, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "u8", 4, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 4, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "u8", 4, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "u8", 4, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "v8", 4, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "u8", 4, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "v8", 4, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "v8", 4, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "v8", 4, 0, -1, -1));
 
     ubuf_free(ubuf1);
 
@@ -206,17 +207,18 @@ int main(int argc, char **argv)
     ubuf1 = ubuf_pic_alloc(mgr, 32, 32);
     assert(ubuf1 != NULL);
 
-    assert(ubuf_pic_size(ubuf1, &hsize, &vsize, &macropixel));
+    ubase_assert(ubuf_pic_size(ubuf1, &hsize, &vsize, &macropixel));
     assert(hsize == 32);
     assert(vsize == 32);
     assert(macropixel == 2);
 
     chroma = NULL;
-    while (ubuf_pic_plane_iterate(ubuf1, &chroma) && chroma != NULL) {
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf1, &chroma)) &&
+           chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
-        assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
-                                   &macropixel_size));
+        ubase_assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
+                                          &macropixel_size));
         assert(!strcmp(chroma, "y8u8y8v8"));
         assert(stride >= (32 + UBUF_PREPEND + UBUF_APPEND) * 4 / 2);
         assert(hsub == 1);
@@ -228,32 +230,32 @@ int main(int argc, char **argv)
 
     ubuf2 = ubuf_dup(ubuf1);
     assert(ubuf2 != NULL);
-    assert(!ubuf_pic_plane_write(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &w));
+    ubase_nassert(ubuf_pic_plane_write(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &w));
     ubuf_free(ubuf2);
 
-    assert(!ubuf_pic_resize(ubuf1, 1, 0, 31, 32));
-    assert(!ubuf_pic_resize(ubuf1, -1, 0, 33, 32));
+    ubase_nassert(ubuf_pic_resize(ubuf1, 1, 0, 31, 32));
+    ubase_nassert(ubuf_pic_resize(ubuf1, -1, 0, 33, 32));
 
-    assert(ubuf_pic_resize(ubuf1, 2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &r));
     assert(r[0] == 5);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 0, 0, -1, -1));
 
-    assert(ubuf_pic_resize(ubuf1, 0, 2, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, 0, 2, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 0, 0, -1, -1, &r));
     assert(r[0] == 2 * 64 + 5);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 0, 0, -1, -1));
 
-    assert(ubuf_pic_resize(ubuf1, -4, -2, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 2, 0, -1, -1, &r));
+    ubase_assert(ubuf_pic_resize(ubuf1, -4, -2, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 2, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 2, 0, -1, -1));
 
-    assert(!ubuf_pic_resize(ubuf1, -2, 0, -1, -1));
-    assert(ubuf_pic_replace(mgr, &ubuf1, -2, 0, -1, -1));
-    assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 4, 0, -1, -1, &r));
+    ubase_nassert(ubuf_pic_resize(ubuf1, -2, 0, -1, -1));
+    ubase_assert(ubuf_pic_replace(mgr, &ubuf1, -2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_read(ubuf1, "y8u8y8v8", 4, 0, -1, -1, &r));
     assert(r[0] == 1);
-    assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 2, 0, -1, -1));
+    ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 2, 0, -1, -1));
 
     ubuf_free(ubuf1);
 

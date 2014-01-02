@@ -185,7 +185,7 @@ int main(int argc, char **argv)
 
     struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    assert(uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8"));
+    ubase_assert(uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8"));
 
     /* glx sink */
     struct upipe_mgr *glx_mgr = upipe_glx_sink_mgr_alloc();

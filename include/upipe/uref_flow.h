@@ -64,10 +64,10 @@ UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
  * @param uref uref structure
  * @param format printf-style format of the flow definition, followed by a
  * variable list of arguments
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool uref_flow_set_def_va(struct uref *uref,
-                                        const char *format, ...)
+static inline enum ubase_err uref_flow_set_def_va(struct uref *uref,
+                                                  const char *format, ...)
 {
     UBASE_VARARG(uref_flow_set_def(uref, string))
 }

@@ -130,7 +130,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     if (upipe_ts_psim->next_uref != NULL) {
         struct ubuf *ubuf = ubuf_dup(uref->ubuf);
         if (unlikely(ubuf == NULL ||
-                     !uref_block_append(upipe_ts_psim->next_uref, ubuf))) {
+                     !ubase_check(uref_block_append(upipe_ts_psim->next_uref, ubuf)))) {
             upipe_ts_psim_flush(upipe);
             if (ubuf != NULL)
                 ubuf_free(ubuf);
@@ -140,7 +140,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     } else {
         /* Check for stuffing */
         uint8_t table_id;
-        if (unlikely(!uref_block_extract(uref, 0, 1, &table_id) ||
+        if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, &table_id)) ||
                      table_id == 0xff)) {
             return false;
         }
@@ -152,10 +152,8 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    bool ret;
-    size_t size;
-    ret = uref_block_size(upipe_ts_psim->next_uref, &size);
-    assert(ret);
+    size_t size = 0;
+    UBASE_FATAL(upipe, uref_block_size(upipe_ts_psim->next_uref, &size))
     if (size < PSI_HEADER_SIZE)
         return false;
 
@@ -165,9 +163,8 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     assert(psi_header != NULL);
 
     uint16_t length = psi_get_length(psi_header);
-    ret = uref_block_peek_unmap(upipe_ts_psim->next_uref, 0, buffer,
-                                psi_header);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_ts_psim->next_uref, 0,
+                buffer, psi_header));
 
     if (unlikely(length + PSI_HEADER_SIZE > PSI_PRIVATE_MAX_SIZE)) {
         upipe_warn(upipe, "wrong PSI header");
@@ -178,20 +175,16 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
     if (length + PSI_HEADER_SIZE > size)
         return false;
 
-    ret = uref_block_resize(upipe_ts_psim->next_uref, 0,
-                            length + PSI_HEADER_SIZE);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_resize(upipe_ts_psim->next_uref, 0,
+                length + PSI_HEADER_SIZE));
     upipe_ts_psim_output(upipe, upipe_ts_psim->next_uref, upump);
     upipe_ts_psim->next_uref = NULL;
     if (length + PSI_HEADER_SIZE == size)
         return false;
 
-    size_t uref_size;
-    ret = uref_block_size(uref, &uref_size);
-    assert(ret);
-    ret = uref_block_resize(uref, length + PSI_HEADER_SIZE - (size - uref_size),
-                            -1);
-    assert(ret);
+    size_t uref_size = 0;
+    UBASE_FATAL(upipe, uref_block_size(uref, &uref_size))
+    UBASE_FATAL(upipe, uref_block_resize(uref, length + PSI_HEADER_SIZE - (size - uref_size), -1));
     return true;
 }
 
@@ -206,13 +199,13 @@ static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
-    if (unlikely(uref_flow_get_discontinuity(uref)))
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
         upipe_ts_psim_flush(upipe);
 
-    if (uref_block_get_start(uref)) {
+    if (ubase_check(uref_block_get_start(uref))) {
         if (likely(upipe_ts_psim->acquired)) {
             /* just remove pointer_field */
-            if (unlikely(!uref_block_resize(uref, 1, -1))) {
+            if (unlikely(!ubase_check(uref_block_resize(uref, 1, -1)))) {
                 uref_free(uref);
                 upipe_ts_psim_flush(upipe);
                 return;
@@ -220,8 +213,8 @@ static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
         } else {
             /* jump to the start of the next section */
             uint8_t pointer_field;
-            if (unlikely(!uref_block_extract(uref, 0, 1, &pointer_field) ||
-                         !uref_block_resize(uref, 1 + pointer_field, -1))) {
+            if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, &pointer_field)) ||
+                         !ubase_check(uref_block_resize(uref, 1 + pointer_field, -1)))) {
                 uref_free(uref);
                 return;
             }
@@ -250,8 +243,7 @@ static enum ubase_err upipe_ts_psim_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

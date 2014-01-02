@@ -92,7 +92,7 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
     uint64_t systime = 0;
     int64_t newidx;
 
-    if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "uref has no systime");
     }
     newidx = (systime/upipe_multicat_probe->rotate);

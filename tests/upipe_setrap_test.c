@@ -87,14 +87,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     uint64_t rap;
-    assert(uref_clock_get_rap_sys(uref, &rap));
+    ubase_assert(uref_clock_get_rap_sys(uref, &rap));
     assert(rap == UINT32_MAX);
     uref_free(uref);
     nb_packets++;
@@ -138,7 +132,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "internal."));
+    ubase_assert(uref_flow_set_def(uref, "internal."));
 
     struct upipe_mgr *upipe_setrap_mgr = upipe_setrap_mgr_alloc();
     assert(upipe_setrap_mgr != NULL);

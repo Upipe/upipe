@@ -60,7 +60,7 @@ struct ubuf_block {
     size_t total_size;
 
     /** true if UBUF_MAP_BLOCK & UBUF_UNMAP_BLOCK need to be called */
-    bool map;
+    enum ubase_err map;
     /** mapped buffer */
     uint8_t *buffer;
 
@@ -91,17 +91,17 @@ static inline struct ubuf *ubuf_block_alloc(struct ubuf_mgr *mgr, int size)
  *
  * @param ubuf pointer to ubuf
  * @param size_p reference written with the size of the buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
+static inline enum ubase_err ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
     if (likely(size_p != NULL)) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
         *size_p = block->total_size;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the ubuf corresponding to the given offset.
@@ -152,18 +152,18 @@ static inline struct ubuf *ubuf_block_get(struct ubuf *ubuf, int *offset_p,
  * @param offset offset of the buffer space wanted in the whole block, in
  * octets, negative values start from the end
  * @param size_p reference written with the size of the buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_size_linear(struct ubuf *ubuf, int offset,
-                                          size_t *size_p)
+static inline enum ubase_err ubuf_block_size_linear(struct ubuf *ubuf,
+                                                    int offset, size_t *size_p)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     *size_p = block->size - offset;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns a read-only pointer to the buffer space. You must call
@@ -180,26 +180,26 @@ static inline bool ubuf_block_size_linear(struct ubuf *ubuf, int offset,
  * or -1 for the end of the block, changed during execution for the actual
  * readable size
  * @param buffer_p reference written with a pointer to buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
-                                   const uint8_t **buffer_p)
+static inline enum ubase_err ubuf_block_read(struct ubuf *ubuf, int offset,
+                                             int *size_p,
+                                             const uint8_t **buffer_p)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map) {
-        if (!ubase_check(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p)))
-            return false;
+        UBASE_RETURN(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
     } else
         *buffer_p = block->buffer;
     *buffer_p += block->offset + offset;
 
     if (size_p != NULL && *size_p > block->size - offset)
         *size_p = block->size - offset;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns a writable pointer to the buffer space, if the ubuf is not
@@ -216,29 +216,27 @@ static inline bool ubuf_block_read(struct ubuf *ubuf, int offset, int *size_p,
  * @param size_p pointer to the size of the buffer space wanted, in octets,
  * or -1 for the end of the block, changed during execution for the actual
  * @param buffer_p reference written with a pointer to buffer space if not NULL
- * @return false in case of error, or if the ubuf is shared
+ * @return an error code
  */
-static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
-                                    uint8_t **buffer_p)
+static inline enum ubase_err ubuf_block_write(struct ubuf *ubuf, int offset,
+                                              int *size_p, uint8_t **buffer_p)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
-    if (!ubase_check(ubuf_control(ubuf, UBUF_SINGLE)))
-        return false;
+    UBASE_RETURN(ubuf_control(ubuf, UBUF_SINGLE))
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map) {
-        if (!ubase_check(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p)))
-            return false;
+        UBASE_RETURN(ubuf_control(ubuf, UBUF_MAP_BLOCK, buffer_p))
     } else
         *buffer_p = block->buffer;
     *buffer_p += block->offset + offset;
 
     if (size_p != NULL && *size_p > block->size - offset)
         *size_p = block->size - offset;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This marks the buffer space as being currently unused, and the pointer
@@ -247,18 +245,18 @@ static inline bool ubuf_block_write(struct ubuf *ubuf, int offset, int *size_p,
  * @param ubuf pointer to ubuf
  * @param offset offset of the buffer space wanted in the whole block, in
  * octets, negative values start from the end
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset)
+static inline enum ubase_err ubuf_block_unmap(struct ubuf *ubuf, int offset)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->map)
         return ubase_check(ubuf_control(ubuf, UBUF_UNMAP_BLOCK));
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This appends a new ubuf at the end of a segmented-to-be block ubuf.
@@ -266,12 +264,14 @@ static inline bool ubuf_block_unmap(struct ubuf *ubuf, int offset)
  * @param ubuf pointer to ubuf
  * @param append pointer to ubuf to be appended; it must no longer be used
  * afterwards as it becomes included in the segmented ubuf
+ * @return an error code
  */
-static inline bool ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
+static inline enum ubase_err ubuf_block_append(struct ubuf *ubuf,
+                                               struct ubuf *append)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  append->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf_block *append_block = ubuf_block_from_ubuf(append);
@@ -286,16 +286,16 @@ static inline bool ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
         block = ubuf_block_from_ubuf(ubuf);
     }
     block->next_ubuf = append;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This splits a block ubuf into two ubufs at the given offset.
  *
  * @param ubuf pointer to ubuf
  * @param offset offset at which to split
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_split(struct ubuf *ubuf, int offset)
+static inline enum ubase_err ubuf_block_split(struct ubuf *ubuf, int offset)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf *next = block->next_ubuf;
@@ -304,7 +304,7 @@ static inline bool ubuf_block_split(struct ubuf *ubuf, int offset)
     struct ubuf *dup_ubuf;
     if (unlikely((dup_ubuf = ubuf_dup(ubuf)) == NULL)) {
         block->next_ubuf = next;
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     struct ubuf_block *dup_block = ubuf_block_from_ubuf(dup_ubuf);
@@ -314,7 +314,7 @@ static inline bool ubuf_block_split(struct ubuf *ubuf, int offset)
 
     block->size = offset;
     block->next_ubuf = dup_ubuf;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This inserts a new ubuf inside a segmented-to-be block ubuf, at the given
@@ -324,23 +324,23 @@ static inline bool ubuf_block_split(struct ubuf *ubuf, int offset)
  * @param offset offset at which to insert the given ubuf.
  * @param insert pointer to ubuf to be inserted at the given offset; it must
  * no longer be used afterwards as it becomes included in the segmented ubuf
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_insert(struct ubuf *ubuf, int offset,
-                                     struct ubuf *insert)
+static inline enum ubase_err ubuf_block_insert(struct ubuf *ubuf, int offset,
+                                               struct ubuf *insert)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
                  insert->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
     if (unlikely((ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (offset < block->size)
-        if (unlikely(!ubuf_block_split(ubuf, offset)))
-            return false;
+    if (offset < block->size) {
+        UBASE_RETURN(ubuf_block_split(ubuf, offset))
+    }
 
     struct ubuf_block *insert_block = ubuf_block_from_ubuf(insert);
     head_block->total_size += insert_block->total_size;
@@ -348,7 +348,7 @@ static inline bool ubuf_block_insert(struct ubuf *ubuf, int offset,
     if (block->next_ubuf != NULL)
         ubuf_block_append(insert, block->next_ubuf);
     block->next_ubuf = insert;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This deletes part of a ubuf. The ubuf may become segmented afterwards.
@@ -356,16 +356,17 @@ static inline bool ubuf_block_insert(struct ubuf *ubuf, int offset,
  * @param ubuf pointer to ubuf
  * @param offset offset at which to delete data
  * @param size number of octets to delete
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
+static inline enum ubase_err ubuf_block_delete(struct ubuf *ubuf, int offset,
+                                               int size)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
     if (unlikely((ubuf = ubuf_block_get(ubuf, &offset, &size)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
     int delete_size = size;
 
     do {
@@ -382,7 +383,7 @@ static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
             /* Delete from the end */
             if (offset + size < block->size) {
                 if (unlikely(!ubuf_block_split(ubuf, offset + size)))
-                    return false;
+                    return UBASE_ERR_INVALID;
 
                 block->size = offset;
                 goto ubuf_block_delete_done;
@@ -396,23 +397,23 @@ static inline bool ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
         }
         ubuf = block->next_ubuf;
     } while (ubuf != NULL);
-    return false;
+    return UBASE_ERR_INVALID;
 
 ubuf_block_delete_done:
     head_block->total_size -= delete_size;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This truncates a ubuf at a given offset, possibly releasing segments.
  *
  * @param ubuf pointer to ubuf
  * @param offset offset at which to truncate data
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_truncate(struct ubuf *ubuf, int offset)
+static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
     if (!offset) {
@@ -424,13 +425,13 @@ static inline bool ubuf_block_truncate(struct ubuf *ubuf, int offset)
         head_block->total_size = 0;
         head_block->cached_ubuf = &head_block->ubuf;
         head_block->cached_offset = 0;
-        return true;
+        return UBASE_ERR_NONE;
     }
 
     int saved_size = offset;
     offset--;
     if (unlikely((ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (block->next_ubuf != NULL) {
@@ -441,7 +442,7 @@ static inline bool ubuf_block_truncate(struct ubuf *ubuf, int offset)
     head_block->total_size = saved_size;
     head_block->cached_ubuf = &head_block->ubuf;
     head_block->cached_offset = 0;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This shrinks a block ubuf.
@@ -451,32 +452,31 @@ static inline bool ubuf_block_truncate(struct ubuf *ubuf, int offset)
  * octets, negative values start from the end
  * @param new_size final size of the buffer (if set to -1, keep same buffer
  * end)
- * @return false in case of error
- * is not possible
+ * @return an error code
  */
-static inline bool ubuf_block_resize(struct ubuf *ubuf, int offset,
+static inline enum ubase_err ubuf_block_resize(struct ubuf *ubuf, int offset,
                                      int new_size)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
-        return false;
+        return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (offset < 0)
         offset += block->total_size;
     if (unlikely(offset < 0))
-        return false;
+        return UBASE_ERR_INVALID;
 
     if (new_size != -1) {
         if (new_size + offset > block->total_size)
-            return false;
-        if (new_size + offset < block->total_size)
-            if (unlikely(!ubuf_block_truncate(ubuf, new_size + offset)))
-                return false; /* should not happen */
+            return UBASE_ERR_INVALID;
+        if (new_size + offset < block->total_size) {
+            UBASE_RETURN(ubuf_block_truncate(ubuf, new_size + offset))
+        }
     }
 
     if (offset > 0)
         return ubuf_block_delete(ubuf, 0, offset);
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This duplicates part of a ubuf.
@@ -487,7 +487,7 @@ static inline bool ubuf_block_resize(struct ubuf *ubuf, int offset,
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
  * @param buffer pointer to buffer space of at least size octets
- * @return false in case of error
+ * @return newly allocated ubuf
  */
 static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
                                              int size)
@@ -509,23 +509,23 @@ static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
  * whole block, in octets, negative values start from the end (may not be NULL)
  * @param size_p reference to the size of the buffer space wanted, in octets,
  * or -1 for the end of the block (may not be NULL)
- * @return false when the parameters are invalid
+ * @return an error code
  */
-static inline bool ubuf_block_check_size(struct ubuf *ubuf, int *offset_p,
-                                         int *size_p)
+static inline enum ubase_err ubuf_block_check_size(struct ubuf *ubuf,
+                                                   int *offset_p, int *size_p)
 {
     if (*size_p == -1) {
         if (*offset_p < 0)
             *size_p = -*offset_p;
         else {
             if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
-                return false;
+                return UBASE_ERR_INVALID;
 
             struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
             *size_p = block->total_size - *offset_p;
         }
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This peeks into a ubuf for the given amount of octets, and returns a
@@ -547,12 +547,13 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
                                              int offset, int size,
                                              uint8_t *buffer)
 {
-    if (unlikely(!ubuf_block_check_size(ubuf, &offset, &size)))
+    if (unlikely(!ubase_check(ubuf_block_check_size(ubuf, &offset, &size))))
         return NULL;
 
     int read_size = size;
     const uint8_t *read_buffer;
-    if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+    if (unlikely(!ubase_check(ubuf_block_read(ubuf, offset,
+                                              &read_size, &read_buffer))))
         return NULL;
     if (read_size == size)
         return read_buffer;
@@ -560,7 +561,7 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
     uint8_t *write_buffer = buffer;
     for ( ; ; ) {
         memcpy(write_buffer, read_buffer, read_size);
-        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
+        if (unlikely(!ubase_check(ubuf_block_unmap(ubuf, offset))))
             return NULL;
         size -= read_size;
         write_buffer += read_size;
@@ -569,7 +570,8 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
         if (size <= 0)
             break;
 
-        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
+        if (unlikely(!ubase_check(ubuf_block_read(ubuf, offset,
+                                                  &read_size, &read_buffer))))
             return NULL;
     }
     return buffer;
@@ -582,14 +584,14 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
  * octets, negative values start from the end
  * @param buffer caller-supplied buffer space passed to @ref ubuf_block_peek
  * @param read_buffer buffer returned by @ref ubuf_block_peek
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_peek_unmap(struct ubuf *ubuf,
-                                         int offset, uint8_t *buffer,
-                                         const uint8_t *read_buffer)
+static inline enum ubase_err ubuf_block_peek_unmap(struct ubuf *ubuf,
+                                                   int offset, uint8_t *buffer,
+                                                   const uint8_t *read_buffer)
 {
     if (buffer == read_buffer)
-        return true;
+        return UBASE_ERR_NONE;
 
     return ubuf_block_unmap(ubuf, offset);
 }
@@ -602,27 +604,25 @@ static inline bool ubuf_block_peek_unmap(struct ubuf *ubuf,
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
  * @param buffer pointer to buffer space of at least size octets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_extract(struct ubuf *ubuf, int offset, int size,
-                                      uint8_t *buffer)
+static inline enum ubase_err ubuf_block_extract(struct ubuf *ubuf,
+                                                int offset, int size,
+                                                uint8_t *buffer)
 {
-    if (unlikely(!ubuf_block_check_size(ubuf, &offset, &size)))
-        return false;
+    UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
 
     while (size > 0) {
         int read_size = size;
         const uint8_t *read_buffer;
-        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
-            return false;
+        UBASE_RETURN(ubuf_block_read(ubuf, offset, &read_size, &read_buffer))
         memcpy(buffer, read_buffer, read_size);
-        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
-            return false;
+        UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
         size -= read_size;
         buffer += read_size;
         offset += read_size;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns the number of iovec needed to send part of a ubuf.
@@ -638,12 +638,13 @@ static inline int ubuf_block_iovec_count(struct ubuf *ubuf,
                                          int offset, int size)
 {
     int count = 0;
-    if (unlikely(!ubuf_block_check_size(ubuf, &offset, &size)))
+    if (unlikely(!ubase_check(ubuf_block_check_size(ubuf, &offset, &size))))
         return -1;
 
     while (size > 0) {
         size_t read_size;
-        if (unlikely(!ubuf_block_size_linear(ubuf, offset, &read_size)))
+        if (unlikely(!ubase_check(ubuf_block_size_linear(ubuf, offset,
+                                                         &read_size))))
             return -1;
         if (read_size > size)
             read_size = size;
@@ -663,28 +664,26 @@ static inline int ubuf_block_iovec_count(struct ubuf *ubuf,
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
  * @param iovecs iovec structures array
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_iovec_read(struct ubuf *ubuf,
-                                         int offset, int size,
-                                         struct iovec *iovecs)
+static inline enum ubase_err ubuf_block_iovec_read(struct ubuf *ubuf,
+                                                   int offset, int size,
+                                                   struct iovec *iovecs)
 {
     int count = 0;
-    if (unlikely(!ubuf_block_check_size(ubuf, &offset, &size)))
-        return false;
+    UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
 
     while (size > 0) {
         int read_size = size;
         const uint8_t *read_buffer;
-        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
-            return false;
+        UBASE_RETURN(ubuf_block_read(ubuf, offset, &read_size, &read_buffer))
         iovecs[count].iov_base = (void *)read_buffer;
         iovecs[count].iov_len = read_size;
         size -= read_size;
         offset += read_size;
         count++;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This unmaps the parts of a ubuf previsouly mapped by @ref
@@ -696,24 +695,22 @@ static inline bool ubuf_block_iovec_read(struct ubuf *ubuf,
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
  * @param iovec iovec structures array
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_iovec_unmap(struct ubuf *ubuf,
-                                          int offset, int size,
-                                          struct iovec *iovecs)
+static inline enum ubase_err ubuf_block_iovec_unmap(struct ubuf *ubuf,
+                                                    int offset, int size,
+                                                    struct iovec *iovecs)
 {
     int count = 0;
-    if (unlikely(!ubuf_block_check_size(ubuf, &offset, &size)))
-        return false;
+    UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
 
     while (size > 0) {
-        if (unlikely(!ubuf_block_unmap(ubuf, offset)))
-            return false;
+        UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
         size -= iovecs[count].iov_len;
         offset += iovecs[count].iov_len;
         count++;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This checks the skip and new_size parameters of a lot of
@@ -725,13 +722,13 @@ static inline bool ubuf_block_iovec_unmap(struct ubuf *ubuf,
  * @param new_size_p reference to final size of the buffer (if set to -1, keep
  * same buffer end)
  * @param ubuf_size_p filled in with the total size of the ubuf (may be NULL)
- * @return false when the parameters are invalid
+ * @return false in case of error
  */
 static inline bool ubuf_block_check_resize(struct ubuf *ubuf, int *skip_p,
                                            int *new_size_p, size_t *ubuf_size_p)
 {
     size_t ubuf_size;
-    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) ||
+    if (unlikely(!ubase_check(ubuf_block_size(ubuf, &ubuf_size)) ||
                  *skip_p > (int)ubuf_size))
         return false;
     if (*new_size_p == -1)
@@ -776,11 +773,12 @@ static inline struct ubuf *ubuf_block_copy(struct ubuf_mgr *mgr,
     int extract_size = new_size - extract_offset <= ubuf_size - extract_skip ?
                        new_size - extract_offset : ubuf_size - extract_skip;
     uint8_t *buffer;
-    if (unlikely(!ubuf_block_write(new_ubuf, extract_offset, &extract_size,
-                                   &buffer)))
+    if (unlikely(!ubase_check(ubuf_block_write(new_ubuf, extract_offset,
+                                               &extract_size, &buffer))))
         goto ubuf_block_copy_err;
-    bool ret = ubuf_block_extract(ubuf, extract_skip, extract_size, buffer);
-    if (unlikely(!ubuf_block_unmap(new_ubuf, extract_offset) ||
+    bool ret = ubase_check(ubuf_block_extract(ubuf, extract_skip, extract_size,
+                                              buffer));
+    if (unlikely(!ubase_check(ubuf_block_unmap(new_ubuf, extract_offset)) ||
                  !ret))
         goto ubuf_block_copy_err;
     return new_ubuf;
@@ -800,18 +798,19 @@ ubuf_block_copy_err:
  * (if < 0, extend buffer upwards)
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
- * @return false in case of allocation error
+ * @return an error code
  */
-static inline bool ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
-                                    int skip, int new_size)
+static inline enum ubase_err ubuf_block_merge(struct ubuf_mgr *mgr,
+                                              struct ubuf **ubuf_p,
+                                              int skip, int new_size)
 {
     struct ubuf *new_ubuf = ubuf_block_copy(mgr, *ubuf_p, skip, new_size);
     if (unlikely(new_ubuf == NULL))
-        return false;
+        return UBASE_ERR_INVALID;
 
     ubuf_free(*ubuf_p);
     *ubuf_p = new_ubuf;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This compares the content of a block ubuf in a larger ubuf.
@@ -819,57 +818,56 @@ static inline bool ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
  * @param ubuf pointer to large ubuf
  * @param offset supposed offset of the small ubuf in the large ubuf
  * @param ubuf_small pointer to small ubuf
- * @return false if the small ubuf doesn't match the larger ubuf
+ * @return UBASE_ERR_NONE if the small ubuf matches the larger ubuf
  */
-static inline bool ubuf_block_compare(struct ubuf *ubuf, int offset,
-                                      struct ubuf *ubuf_small)
+static inline enum ubase_err ubuf_block_compare(struct ubuf *ubuf, int offset,
+                                                struct ubuf *ubuf_small)
 {
     size_t ubuf_size, ubuf_size_small;
-    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) ||
-                 !ubuf_block_size(ubuf_small, &ubuf_size_small) ||
-                 ubuf_size < ubuf_size_small + offset))
-        return false;
+    UBASE_RETURN(ubuf_block_size(ubuf, &ubuf_size))
+    UBASE_RETURN(ubuf_block_size(ubuf_small, &ubuf_size_small))
+    if (ubuf_size < ubuf_size_small + offset)
+        return UBASE_ERR_INVALID;
 
     int i = 0;
     int size = ubuf_size_small;
     while (size > 0) {
         int read_size = size, read_size_small = size;
         const uint8_t *read_buffer, *read_buffer_small;
-        if (unlikely(!ubuf_block_read(ubuf, offset + i, &read_size,
-                                      &read_buffer)))
-            return false;
-        if (unlikely(!ubuf_block_read(ubuf_small, i, &read_size_small,
-                                      &read_buffer_small))) {
+        UBASE_RETURN(ubuf_block_read(ubuf, offset + i, &read_size,
+                                     &read_buffer))
+        if (unlikely(!ubase_check(ubuf_block_read(ubuf_small, i,
+                            &read_size_small, &read_buffer_small)))) {
             ubuf_block_unmap(ubuf, offset + i);
-            return false;
+            return UBASE_ERR_INVALID;
         }
         int compare_size = read_size < read_size_small ?
                            read_size : read_size_small;
         bool ret = !memcmp(read_buffer, read_buffer_small, compare_size);
-        ret = ubuf_block_unmap(ubuf, offset + i) && ret;
-        ret = ubuf_block_unmap(ubuf_small, i) && ret;
+        ubuf_block_unmap(ubuf, offset + i);
+        ubuf_block_unmap(ubuf_small, i);
         if (!ret)
-            return false;
+            return UBASE_ERR_INVALID;
         size -= compare_size;
         i += compare_size;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This compares whether two ubufs are identical.
  *
- * @param ubuf pointer to large ubuf
- * @param offset supposed offset of the small ubuf in the large ubuf
- * @param ubuf_small pointer to small ubuf
- * @return false if the small ubuf doesn't match the larger ubuf
+ * @param ubuf1 pointer to first ubuf
+ * @param ubuf2 pointer to second ubuf
+ * @return UBASE_ERR_NONE if the two ubufs are identical
  */
-static inline bool ubuf_block_equal(struct ubuf *ubuf1, struct ubuf *ubuf2)
+static inline enum ubase_err ubuf_block_equal(struct ubuf *ubuf1,
+                                              struct ubuf *ubuf2)
 {
     size_t ubuf_size1, ubuf_size2;
-    if (unlikely(!ubuf_block_size(ubuf1, &ubuf_size1) ||
-                 !ubuf_block_size(ubuf2, &ubuf_size2) ||
-                 ubuf_size1 != ubuf_size2))
-        return false;
+    UBASE_RETURN(ubuf_block_size(ubuf1, &ubuf_size1))
+    UBASE_RETURN(ubuf_block_size(ubuf2, &ubuf_size2))
+    if (ubuf_size1 != ubuf_size2)
+        return UBASE_ERR_INVALID;
 
     return ubuf_block_compare(ubuf1, 0, ubuf2);
 }
@@ -881,35 +879,33 @@ static inline bool ubuf_block_equal(struct ubuf *ubuf1, struct ubuf *ubuf2)
  * @param filter wanted content
  * @param mask mask of the bits to check
  * @param size size (in octets) of filter and mask
- * @return false if the ubuf doesn't match
+ * @return UBASE_ERR_NONE if the ubuf matches
  */
-static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
-                                    const uint8_t *mask, size_t size)
+static inline enum ubase_err ubuf_block_match(struct ubuf *ubuf,
+                                              const uint8_t *filter,
+                                              const uint8_t *mask, size_t size)
 {
     size_t ubuf_size;
-    if (unlikely(!ubuf_block_size(ubuf, &ubuf_size) || ubuf_size < size))
-        return false;
+    UBASE_RETURN(ubuf_block_size(ubuf, &ubuf_size))
+    if (ubuf_size < size)
+        return UBASE_ERR_INVALID;
 
     int offset = 0;
     while (size > 0) {
         int read_size = size;
         const uint8_t *read_buffer;
-        if (unlikely(!ubuf_block_read(ubuf, offset, &read_size, &read_buffer)))
-            return false;
+        UBASE_RETURN(ubuf_block_read(ubuf, offset, &read_size, &read_buffer))
         int compare_size = read_size < size ? read_size : size;
-        bool ret = true;
         for (int i = 0; i < compare_size; i++)
             if ((read_buffer[i] & mask[offset + i]) != filter[offset + i]) {
-                ret = false;
-                break;
+                ubuf_block_unmap(ubuf, offset);
+                return UBASE_ERR_INVALID;
             }
-        ret = ubuf_block_unmap(ubuf, offset) && ret;
-        if (!ret)
-            return false;
+        UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
         size -= compare_size;
         offset += compare_size;
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This scans for an octet word in a block ubuf.
@@ -918,25 +914,26 @@ static inline bool ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
  * @param offset_p start offset (in octets), written with the offset of the
  * first wanted word, or the total size of the ubuf if none was found
  * @param word word to scan for
- * @return false if the word wasn't found
+ * @return UBASE_ERR_NONE if the word was found
  */
-static inline bool ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
-                                   uint8_t word)
+static inline enum ubase_err ubuf_block_scan(struct ubuf *ubuf,
+                                             size_t *offset_p, uint8_t word)
 {
     const uint8_t *buffer;
     int size = -1;
-    while (ubuf_block_read(ubuf, *offset_p, &size, &buffer)) {
+    for ( ; ; ) {
+        UBASE_RETURN(ubuf_block_read(ubuf, *offset_p, &size, &buffer))
         const void *match = memchr(buffer, word, size);
         if (match != NULL) {
             ubuf_block_unmap(ubuf, *offset_p);
             *offset_p += (const uint8_t *)match - buffer;
-            return true;
+            return UBASE_ERR_NONE;
         }
         ubuf_block_unmap(ubuf, *offset_p);
         *offset_p += size;
         size = -1;
     }
-    return false;
+    return UBASE_ERR_INVALID;
 }
 
 /** @This finds a multi-octet word in a block ubuf.
@@ -947,22 +944,25 @@ static inline bool ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
  * ubuf, or the total size of the ubuf if none was found
  * @param nb_octets number of octets composing the word
  * @param args list of octets composing the word, in big-endian ordering
- * @return false if the word wasn't found
+ * @return UBASE_ERR_NONE if the word was found
  */
-static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
-                                      unsigned int nb_octets, va_list args)
+static inline enum ubase_err ubuf_block_find_va(struct ubuf *ubuf,
+                                                size_t *offset_p,
+                                                unsigned int nb_octets,
+                                                va_list args)
 {
     assert(nb_octets > 0);
     unsigned int sync = va_arg(args, unsigned int);
     if (nb_octets == 1)
         return ubuf_block_scan(ubuf, offset_p, sync);
 
-    while (ubuf_block_scan(ubuf, offset_p, sync)) {
+    for ( ; ; ) {
+        UBASE_RETURN(ubuf_block_scan(ubuf, offset_p, sync))
         uint8_t rbuffer[nb_octets - 1];
         const uint8_t *buffer = ubuf_block_peek(ubuf, *offset_p + 1,
                                                 nb_octets - 1, rbuffer);
         if (buffer == NULL)
-            return false;
+            return UBASE_ERR_INVALID;
 
         va_list args_copy;
         va_copy(args_copy, args);
@@ -975,10 +975,10 @@ static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
         va_end(args_copy);
         ubuf_block_peek_unmap(ubuf, *offset_p + 1, rbuffer, buffer);
         if (i == nb_octets - 1)
-            return true;
+            return UBASE_ERR_NONE;
         (*offset_p)++;
     }
-    return false;
+    return UBASE_ERR_INVALID;
 }
 
 /** @This finds a multi-octet word in a block ubuf.
@@ -989,16 +989,17 @@ static inline bool ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
  * ubuf, or the total size of the ubuf if none was found
  * @param nb_octets number of octets composing the word, followed by a list
  * of octets composing the word, in big-endian ordering
- * @return false if the word wasn't found
+ * @return UBASE_ERR_NONE if the word was found
  */
-static inline bool ubuf_block_find(struct ubuf *ubuf, size_t *offset_p,
-                                   unsigned int nb_octets, ...)
+static inline enum ubase_err ubuf_block_find(struct ubuf *ubuf,
+                                             size_t *offset_p,
+                                             unsigned int nb_octets, ...)
 {
     va_list args;
     va_start(args, nb_octets);
-    bool ret = ubuf_block_find_va(ubuf, offset_p, nb_octets, args);
+    enum ubase_err err = ubuf_block_find_va(ubuf, offset_p, nb_octets, args);
     va_end(args);
-    return ret;
+    return err;
 }
 
 #ifdef __cplusplus

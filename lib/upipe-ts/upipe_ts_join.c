@@ -160,7 +160,7 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_join_sub_from_upipe(upipe);
 
     uint64_t cr;
-    if (unlikely(!uref_clock_get_cr_sys(uref, &cr))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
         upipe_warn_va(upipe, "packet without date");
         uref_free(uref);
         return;
@@ -187,8 +187,7 @@ static enum ubase_err upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
@@ -453,8 +452,8 @@ static void upipe_ts_join_build_flow_def(struct upipe *upipe)
     }
 
     if (upipe_ts_join->latency)
-        if (!uref_clock_set_latency(flow_def, upipe_ts_join->latency))
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                                                  upipe_ts_join->latency))
     upipe_ts_join_store_flow_def(upipe, flow_def);
 }
 

@@ -230,16 +230,17 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
  * @param ubuf pointer to ubuf
  * @param new_ubuf_p reference written with a pointer to the newly allocated
  * ubuf
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
+static enum ubase_err ubuf_block_mem_dup(struct ubuf *ubuf,
+                                         struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
-    if (unlikely(!ubuf_block_common_dup(ubuf, new_ubuf))) {
+    if (unlikely(!ubase_check(ubuf_block_common_dup(ubuf, new_ubuf)))) {
         ubuf_free(new_ubuf);
         return UBASE_ERR_INVALID;
     }
@@ -260,17 +261,19 @@ static bool ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
  * ubuf
  * @param offset offset in the buffer
  * @param size final size of the buffer
- * @return false in case of error
+ * @return an error code
  */
-static bool ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
-                                  int offset, int size)
+static enum ubase_err ubuf_block_mem_splice(struct ubuf *ubuf,
+                                            struct ubuf **new_ubuf_p,
+                                            int offset, int size)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
-    if (unlikely(!ubuf_block_common_splice(ubuf, new_ubuf, offset, size))) {
+    if (unlikely(!ubase_check(ubuf_block_common_splice(ubuf, new_ubuf,
+                                                       offset, size)))) {
         ubuf_free(new_ubuf);
         return UBASE_ERR_INVALID;
     }

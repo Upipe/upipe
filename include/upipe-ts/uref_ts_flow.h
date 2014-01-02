@@ -62,22 +62,20 @@ UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
  * @param filter_p pointer to the retrieved filter (modified during execution)
  * @param mask_p pointer to the retrieved mask (modified during execution)
  * @param size_p size of the filter, written on execution
- * @return true if the attribute was found and is valid
+ * @return an error code
  */
-static inline bool uref_ts_flow_get_psi_filter(struct uref *uref,
-                                               const uint8_t **filter_p,
-                                               const uint8_t **mask_p,
-                                               size_t *size_p)
+static inline enum ubase_err uref_ts_flow_get_psi_filter(struct uref *uref,
+        const uint8_t **filter_p, const uint8_t **mask_p, size_t *size_p)
 {
     const uint8_t *attr;
     size_t size;
-    if (unlikely(!uref_ts_flow_get_psi_filter_internal(uref, &attr, &size) ||
-                 !size || size % 2))
-        return false;
+    UBASE_RETURN(uref_ts_flow_get_psi_filter_internal(uref, &attr, &size))
+    if (unlikely(!size || size % 2))
+        return UBASE_ERR_INVALID;
     *size_p = size / 2;
     *filter_p = attr;
     *mask_p = attr + *size_p;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This sets the value of a PSI section filter, optionally creating it.
@@ -86,12 +84,10 @@ static inline bool uref_ts_flow_get_psi_filter(struct uref *uref,
  * @param filter section filter
  * @param mask section mask
  * @param size size (in octets) of filter and mask
- * @return true if no allocation failure occurred
+ * @return an error code
  */
-static inline bool uref_ts_flow_set_psi_filter(struct uref *uref,
-                                               const uint8_t *filter,
-                                               const uint8_t *mask,
-                                               size_t size)
+static inline enum ubase_err uref_ts_flow_set_psi_filter(struct uref *uref,
+        const uint8_t *filter, const uint8_t *mask, size_t size)
 {
     uint8_t attr[2 * size];
     memcpy(attr, filter, size);
@@ -102,9 +98,9 @@ static inline bool uref_ts_flow_set_psi_filter(struct uref *uref,
 /** @This deletes a PSI section filter.
  *
  * @param uref pointer to the uref
- * @return true if the attribute existed before
+ * @return an error code
  */
-static inline bool uref_ts_flow_delete_psi_filter(struct uref *uref)
+static inline enum ubase_err uref_ts_flow_delete_psi_filter(struct uref *uref)
 {
     return uref_ts_flow_delete_psi_filter_internal(uref);
 }

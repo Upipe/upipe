@@ -198,7 +198,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     uint64_t id;
-    if (unlikely(!uref_flow_get_id(flow_def, &id))) {
+    if (unlikely(!ubase_check(uref_flow_get_id(flow_def, &id)))) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
@@ -428,7 +428,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
                        uclock_now(upipe_avfsrc->uclock) : 0;
     uint8_t *buffer;
     int read_size = -1;
-    if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size, &buffer)))) {
         uref_free(uref);
         av_free_packet(&pkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -439,11 +439,11 @@ static void upipe_avfsrc_worker(struct upump *upump)
     uref_block_unmap(uref, 0);
     av_free_packet(&pkt);
 
-    bool ret = true, ts = false;
+    bool ts = false;
     if (upipe_avfsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
     if (pkt.flags & AV_PKT_FLAG_KEY)
-        ret = ret && uref_flow_set_random(uref);
+        UBASE_FATAL(upipe, uref_flow_set_random(uref))
 
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
@@ -480,17 +480,11 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (pkt.duration > 0) {
         uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
                             stream->time_base.den;
-        ret = ret && uref_clock_set_duration(uref, duration);
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
     } else
         upipe_warn(upipe, "packet without duration");
     if (upipe_avfsrc->systime_rap != UINT64_MAX)
         uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
-
-    if (unlikely(!ret)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
 
     if (ts)
         upipe_throw_clock_ts(upipe, uref);
@@ -518,7 +512,7 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
 
 /** @hidden */
 #define CHK(x)                                                              \
-    if (unlikely(!x))                                                       \
+    if (unlikely(!ubase_check(x)))                                          \
         return NULL;
 
 /** @internal @This returns a flow definition for a raw audio media type.
@@ -701,7 +695,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
         AVStream *stream = context->streams[i];
         AVCodecContext *codec = stream->codec;
         struct uref *flow_def;
-        bool ret;
 
         // discard all packets from this stream
         stream->discard = AVDISCARD_ALL; 
@@ -734,21 +727,15 @@ static void upipe_avfsrc_probe(struct upump *upump)
                           codec->codec_type, codec->codec_id);
             continue;
         }
-        ret = uref_flow_set_id(flow_def, i);
+        UBASE_FATAL(upipe, uref_flow_set_id(flow_def, i))
 
         AVDictionaryEntry *lang = av_dict_get(stream->metadata, "language",
                                               NULL, 0);
         if (lang != NULL && lang->value != NULL)
-            ret = uref_flow_set_lang(flow_def, lang->value) && ret;
+            UBASE_FATAL(upipe, uref_flow_set_lang(flow_def, lang->value))
         if (codec->extradata_size)
-            ret = ret && uref_flow_set_headers(flow_def, codec->extradata,
-                                               codec->extradata_size);
-
-        if (unlikely(!ret)) {
-            uref_free(flow_def);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
+            UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, codec->extradata,
+                                                     codec->extradata_size))
 
         codec->opaque = flow_def;
     }

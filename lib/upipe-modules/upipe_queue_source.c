@@ -128,14 +128,14 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
 static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
                              struct upump *upump)
 {
-    if (unlikely(uref_flow_get_end(uref))) {
+    if (unlikely(ubase_check(uref_flow_get_end(uref)))) {
         uref_free(uref);
         upipe_throw_source_end(upipe);
         return;
     }
 
     const char *def;
-    if (unlikely(uref_flow_get_def(uref, &def))) {
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_qsrc_store_flow_def(upipe, uref);
         return;
     }

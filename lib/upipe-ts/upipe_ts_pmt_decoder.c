@@ -162,11 +162,10 @@ static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
  */
 #define UPIPE_TS_PMTD_HEADER_UNMAP(upipe, pmt, header, header_desc,         \
                                    header_desclength)                       \
-    bool ret = uref_block_peek_unmap(pmt, 0, header_buffer, header);        \
+    uref_block_peek_unmap(pmt, 0, header_buffer, header);                   \
     if (header_desclength)                                                  \
-        ret = uref_block_peek_unmap(pmt, PMT_HEADER_SIZE,                   \
-                                    header_desc_buffer, header_desc) && ret;\
-    assert(ret);
+        uref_block_peek_unmap(pmt, PMT_HEADER_SIZE,                         \
+                              header_desc_buffer, header_desc);
 
 /** @internal @This walks through the elementary streams in a PMT.
  * This is the first part: read data from es afterwards.
@@ -181,9 +180,8 @@ static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
  */
 #define UPIPE_TS_PMTD_PEEK(upipe, pmt, offset, header_desclength, es, desc, \
                            desclength)                                      \
-    size_t size;                                                            \
-    ret = uref_block_size(pmt, &size);                                      \
-    assert(ret);                                                            \
+    size_t size = 0;                                                        \
+    uref_block_size(pmt, &size);                                            \
                                                                             \
     int offset = PMT_HEADER_SIZE + header_desclength;                       \
     while (offset + PMT_ES_SIZE <= size - PSI_CRC_SIZE) {                   \
@@ -217,11 +215,10 @@ static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
  * @param desclength pointing to size of ES descriptors
  */
 #define UPIPE_TS_PMTD_PEEK_UNMAP(upipe, pmt, offset, es, desc, desclength)  \
-        ret = uref_block_peek_unmap(pmt, offset, es_buffer, es);            \
+        uref_block_peek_unmap(pmt, offset, es_buffer, es);                  \
         if (desc != NULL)                                                   \
-            ret = uref_block_peek_unmap(pmt, offset + PMT_ES_SIZE,          \
-                                        desc_buffer, desc) && ret;          \
-        assert(ret);                                                        \
+            uref_block_peek_unmap(pmt, offset + PMT_ES_SIZE,                \
+                                        desc_buffer, desc);                 \
         offset += PMT_ES_SIZE + desclength;
 
 /** @internal @This walks through the elementary streams in a PMT.
@@ -351,7 +348,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     assert(upipe_ts_pmtd->flow_def_input != NULL);
     if (upipe_ts_pmtd->pmt != NULL &&
-        uref_block_equal(upipe_ts_pmtd->pmt, uref)) {
+        ubase_check(uref_block_equal(upipe_ts_pmtd->pmt, uref))) {
         /* Identical PMT. */
         upipe_throw_new_rap(upipe, uref);
         uref_free(uref);
@@ -387,11 +384,10 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
             return;
         }
-        if (unlikely(!uref_flow_set_def(flow_def, "void.") ||
-                     !uref_ts_flow_set_pcr_pid(flow_def, pcrpid) ||
-                     !uref_ts_flow_set_descriptors(flow_def, header_desc,
-                                                   header_desclength)))
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
+        UBASE_FATAL(upipe, uref_ts_flow_set_pcr_pid(flow_def, pcrpid))
+        UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, header_desc,
+                                                 header_desclength))
         upipe_ts_pmtd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
         upipe_throw_new_flow_def(upipe, flow_def);
@@ -409,72 +405,67 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     if (likely(flow_def != NULL)) {
         switch (streamtype) {
             case PMT_STREAMTYPE_VIDEO_MPEG1:
-                if (unlikely(!uref_flow_set_def(flow_def,
-                                "block.mpeg1video.pic.") ||
-                             !uref_flow_set_id(flow_def, pid) ||
-                             !uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mpeg1video.pic.") ||
-                             !uref_ts_flow_set_pid(flow_def, pid) ||
-                             !uref_ts_flow_set_descriptors(flow_def, desc,
-                                                           desclength) ||
-                             !uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY_STILL)))
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.mpeg1video.pic."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mpeg1video.pic."))
+                UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength))
+                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY_STILL))
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
             case PMT_STREAMTYPE_VIDEO_MPEG2:
-                if (unlikely(!uref_flow_set_def(flow_def,
-                                "block.mpeg2video.pic.") ||
-                             !uref_flow_set_id(flow_def, pid) ||
-                             !uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mpeg2video.pic.") ||
-                             !uref_ts_flow_set_pid(flow_def, pid) ||
-                             !uref_ts_flow_set_descriptors(flow_def, desc,
-                                                           desclength) ||
-                             !uref_ts_flow_set_max_delay(flow_def,
-                                 MAX_DELAY_STILL)))
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.mpeg2video.pic."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mpeg2video.pic."))
+                UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength))
+                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                 MAX_DELAY_STILL))
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
             case PMT_STREAMTYPE_AUDIO_MPEG1:
             case PMT_STREAMTYPE_AUDIO_MPEG2:
-                if (unlikely(!uref_flow_set_def(flow_def, "block.mp2.sound.") ||
-                             !uref_flow_set_id(flow_def, pid) ||
-                             !uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mp2.sound.") ||
-                             !uref_ts_flow_set_pid(flow_def, pid) ||
-                             !uref_ts_flow_set_descriptors(flow_def, desc,
-                                                           desclength) ||
-                             !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp2.sound."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.mp2.sound."))
+                UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, desc,
+                                                         desclength))
+                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
             case PMT_STREAMTYPE_AUDIO_ADTS:
-                if (unlikely(!uref_flow_set_def(flow_def, "block.aac.sound.") ||
-                             !uref_flow_set_id(flow_def, pid) ||
-                             !uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.aac.sound.") ||
-                             !uref_ts_flow_set_pid(flow_def, pid) ||
-                             !uref_ts_flow_set_descriptors(flow_def, desc,
-                                                           desclength) ||
-                             !uref_ts_flow_set_max_delay(flow_def, MAX_DELAY)))
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.aac.sound."))
+                UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, desc,
+                                                           desclength))
+                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
             case PMT_STREAMTYPE_VIDEO_AVC:
-                if (unlikely(!uref_flow_set_def(flow_def, "block.h264.pic.") ||
-                             !uref_flow_set_id(flow_def, pid) ||
-                             !uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.h264.pic.") ||
-                             !uref_ts_flow_set_pid(flow_def, pid) ||
-                             !uref_ts_flow_set_max_delay(flow_def,
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.h264.pic."))
+                UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                 upipe_ts_pmtd_h264_max_delay(desc,
-                                    desclength))))
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                                    desclength)))
                 ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
                 break;
 
@@ -510,8 +501,7 @@ static enum ubase_err upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

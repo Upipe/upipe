@@ -183,7 +183,7 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t dts;
-    if (unlikely(!uref_clock_get_dts_prog(uref, &dts))) {
+    if (unlikely(!ubase_check(uref_clock_get_dts_prog(uref, &dts)))) {
         upipe_warn_va(upipe, "packet without DTS");
         uref_free(uref);
         return;
@@ -222,7 +222,8 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     const char *def;
     enum AVCodecID codec_id;
-    if (!uref_flow_get_def(flow_def, &def) || ubase_ncmp(def, "block.") ||
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
         return UBASE_ERR_INVALID;
@@ -235,22 +236,22 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     uint8_t channels;
     uint64_t rate, samples;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
-        if (unlikely(!uref_pic_flow_get_fps(flow_def, &fps) ||
-                     !uref_pic_flow_get_sar(flow_def, &sar) ||
-                     !uref_pic_flow_get_hsize(flow_def, &width) ||
-                     !uref_pic_flow_get_vsize(flow_def, &height)))
+        if (unlikely(!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
+                     !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) ||
+                     !ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) ||
+                     !ubase_check(uref_pic_flow_get_vsize(flow_def, &height))))
             return UBASE_ERR_INVALID;
     } else {
-        if (unlikely(!uref_sound_flow_get_channels(flow_def, &channels) ||
-                     !uref_sound_flow_get_rate(flow_def, &rate) ||
-                     !uref_sound_flow_get_samples(flow_def, &samples)))
+        if (unlikely(!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
+                     !ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) ||
+                     !ubase_check(uref_sound_flow_get_samples(flow_def, &samples))))
             return UBASE_ERR_INVALID;
     }
 
     uint8_t *extradata_alloc = NULL;
     const uint8_t *extradata;
     size_t extradata_size = 0;
-    if (uref_flow_get_headers(flow_def, &extradata, &extradata_size)) {
+    if (ubase_check(uref_flow_get_headers(flow_def, &extradata, &extradata_size))) {
         extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -270,31 +271,31 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
-    if (unlikely(!uref_flow_set_def(flow_def_check, def) ||
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_check, def)) ||
                  (octetrate &&
-                  !uref_block_flow_set_octetrate(flow_def_check, octetrate)) ||
+                  !ubase_check(uref_block_flow_set_octetrate(flow_def_check, octetrate))) ||
                  (extradata_alloc != NULL &&
-                  !uref_flow_set_headers(flow_def_check, extradata,
-                                         extradata_size)))) {
+                  !ubase_check(uref_flow_set_headers(flow_def_check, extradata,
+                                         extradata_size))))) {
         free(extradata_alloc);
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
-        if (unlikely(!uref_pic_flow_set_fps(flow_def_check, fps) ||
-                     !uref_pic_flow_set_sar(flow_def_check, sar) ||
-                     !uref_pic_flow_set_hsize(flow_def_check, width) ||
-                     !uref_pic_flow_set_vsize(flow_def_check, height))) {
+        if (unlikely(!ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
+                     !ubase_check(uref_pic_flow_set_sar(flow_def_check, sar)) ||
+                     !ubase_check(uref_pic_flow_set_hsize(flow_def_check, width)) ||
+                     !ubase_check(uref_pic_flow_set_vsize(flow_def_check, height)))) {
             free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
     } else {
-        if (unlikely(!uref_sound_flow_set_channels(flow_def_check, channels) ||
-                     !uref_sound_flow_set_rate(flow_def_check, rate) ||
-                     !uref_sound_flow_set_samples(flow_def_check, samples))) {
+        if (unlikely(!ubase_check(uref_sound_flow_set_channels(flow_def_check, channels)) ||
+                     !ubase_check(uref_sound_flow_set_rate(flow_def_check, rate)) ||
+                     !ubase_check(uref_sound_flow_set_samples(flow_def_check, samples)))) {
             free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -326,7 +327,7 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     const char *lang;
-    if (uref_flow_get_lang(flow_def, &lang) && lang) {
+    if (ubase_check(uref_flow_get_lang(flow_def, &lang)) && lang) {
         av_dict_set(&stream->metadata, "language", lang, 0);
     }
 
@@ -533,7 +534,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
 
         if (ulist_empty(&input->urefs)) {
             uint64_t duration;
-            if (uref_clock_get_duration(uref, &duration))
+            if (ubase_check(uref_clock_get_duration(uref, &duration)))
                 input->next_dts += duration;
             else
                 input->next_dts = UINT64_MAX;
@@ -548,16 +549,16 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
         memset(&avpkt, 0, sizeof(AVPacket));
         av_init_packet(&avpkt);
         avpkt.stream_index = input->id;
-        if (uref_flow_get_random(uref))
+        if (ubase_check(uref_flow_get_random(uref)))
             avpkt.flags |= AV_PKT_FLAG_KEY;
 
         uint64_t dts;
-        if (uref_clock_get_dts_prog(uref, &dts))
+        if (ubase_check(uref_clock_get_dts_prog(uref, &dts)))
             avpkt.dts = ((dts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;
         uint64_t pts;
-        if (uref_clock_get_pts_prog(uref, &pts))
+        if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
             avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;

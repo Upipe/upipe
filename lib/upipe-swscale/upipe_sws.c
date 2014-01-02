@@ -122,15 +122,15 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
     }
 
     size_t input_hsize, input_vsize;
-    if (!uref_pic_size(uref, &input_hsize, &input_vsize, NULL)) {
+    if (!ubase_check(uref_pic_size(uref, &input_hsize, &input_vsize, NULL))) {
         upipe_warn(upipe, "invalid buffer received");
         uref_free(uref);
         return;
     }
 
     uint64_t output_hsize, output_vsize;
-    if (!uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize) ||
-        !uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize)) {
+    if (!ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) ||
+        !ubase_check(uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize))) {
         /* comes handy in case of format conversion with no rescaling */
         output_hsize = input_hsize;
         output_vsize = input_vsize;
@@ -154,12 +154,12 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
                 upipe_sws->input_chroma_map[i] != NULL; i++) {
         const uint8_t *data;
         size_t stride;
-        if (unlikely(!uref_pic_plane_read(uref,
+        if (unlikely(!ubase_check(uref_pic_plane_read(uref,
                                           upipe_sws->input_chroma_map[i],
-                                          0, 0, -1, -1, &data) ||
-                     !uref_pic_plane_size(uref,
+                                          0, 0, -1, -1, &data)) ||
+                     !ubase_check(uref_pic_plane_size(uref,
                                           upipe_sws->input_chroma_map[i],
-                                          &stride, NULL, NULL, NULL))) {
+                                          &stride, NULL, NULL, NULL)))) {
             upipe_warn(upipe, "invalid buffer received");
             uref_free(uref);
             return;
@@ -186,12 +186,12 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
                 upipe_sws->output_chroma_map[i] != NULL; i++) {
         uint8_t *data;
         size_t stride;
-        if (unlikely(!ubuf_pic_plane_write(ubuf,
+        if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf,
                                            upipe_sws->output_chroma_map[i],
-                                           0, 0, -1, -1, &data) ||
-                     !ubuf_pic_plane_size(ubuf,
+                                           0, 0, -1, -1, &data)) ||
+                     !ubase_check(ubuf_pic_plane_size(ubuf,
                                           upipe_sws->output_chroma_map[i],
-                                          &stride, NULL, NULL, NULL))) {
+                                          &stride, NULL, NULL, NULL)))) {
             upipe_warn(upipe, "invalid buffer received");
             ubuf_free(ubuf);
             uref_free(uref);
@@ -228,14 +228,13 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
     uref_attach_ubuf(uref, ubuf);
 
     struct urational sar;
-    if (uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar))
+    if (ubase_check(uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar)))
         uref_pic_flow_delete_sar(uref);
-    else if (uref_pic_flow_get_sar(uref, &sar)) {
+    else if (ubase_check(uref_pic_flow_get_sar(uref, &sar))) {
         sar.num *= input_hsize * output_vsize;
         sar.den *= input_vsize * output_hsize;
         urational_simplify(&sar);
-        if (unlikely(!uref_pic_flow_set_sar(uref, sar)))
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        UBASE_FATAL(upipe, uref_pic_flow_set_sar(uref, sar))
     }
     upipe_sws_output(upipe, uref, upump);
 }
@@ -252,8 +251,7 @@ static enum ubase_err upipe_sws_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    if (unlikely(!uref_flow_match_def(flow_def, "pic.")))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     if ((upipe_sws->input_pix_fmt =
@@ -273,17 +271,16 @@ static enum ubase_err upipe_sws_set_flow_def(struct upipe *upipe,
 
     struct urational sar;
     uint64_t input_hsize, input_vsize, output_hsize, output_vsize;
-    if (!uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar) &&
-        uref_pic_flow_get_sar(flow_def, &sar) &&
-        uref_pic_flow_get_hsize(flow_def, &input_hsize) &&
-        uref_pic_flow_get_vsize(flow_def, &input_vsize) &&
-        uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize) &&
-        uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize)) {
+    if (!ubase_check(uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar)) &&
+        ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) &&
+        ubase_check(uref_pic_flow_get_hsize(flow_def, &input_hsize)) &&
+        ubase_check(uref_pic_flow_get_vsize(flow_def, &input_vsize)) &&
+        ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) &&
+        ubase_check(uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize))) {
         sar.num *= input_hsize * output_vsize;
         sar.den *= input_vsize * output_hsize;
         urational_simplify(&sar);
-        if (unlikely(!uref_pic_flow_set_sar(flow_def, sar)))
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
     }
     flow_def = upipe_sws_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL)

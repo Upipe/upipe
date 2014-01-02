@@ -126,7 +126,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
     uint64_t systime = 0;
     int64_t newidx;
 
-    if (unlikely(!uref_clock_get_cr_sys(uref, &systime))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "uref has no cr_sys, dropping");
         uref_free(uref);
         return;
@@ -188,8 +188,7 @@ static enum ubase_err upipe_multicat_sink_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     struct upipe_multicat_sink *upipe_multicat_sink =
         upipe_multicat_sink_from_upipe(upipe);
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_NONE;

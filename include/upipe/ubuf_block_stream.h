@@ -69,57 +69,60 @@ struct ubuf_block_stream {
  * @param s helper structure
  * @param ubuf pointer to block ubuf
  * @param offset start offset
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_stream_init(struct ubuf_block_stream *s,
-                                          struct ubuf *ubuf, int offset)
+static inline enum ubase_err ubuf_block_stream_init(struct ubuf_block_stream *s,
+                                                    struct ubuf *ubuf,
+                                                    int offset)
 {
     s->size = -1;
-    if (unlikely(!ubuf_block_read(ubuf, offset, &s->size, &s->buffer)))
-        return false;
+    UBASE_RETURN(ubuf_block_read(ubuf, offset, &s->size, &s->buffer))
     s->ubuf = ubuf;
     s->offset = offset;
     s->end = s->buffer + s->size;
     s->bits = 0;
     s->available = 0;
     s->overflow = false;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This cleans up the helper structure for octet stream.
  *
  * @param s helper structure
+ * @return an error code
  */
-static inline void ubuf_block_stream_clean(struct ubuf_block_stream *s)
+static inline enum ubase_err
+    ubuf_block_stream_clean(struct ubuf_block_stream *s)
 {
     if (s->ubuf != NULL)
-        ubuf_block_unmap(s->ubuf, s->offset);
+        UBASE_RETURN(ubuf_block_unmap(s->ubuf, s->offset));
+    return UBASE_ERR_NONE;
 }
 
 /** @This gets the next octet in the ubuf.
  *
  * @param s helper structure
  * @param octet_t filled in with the read octet
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_block_stream_get(struct ubuf_block_stream *s,
-                                         uint8_t *octet_p)
+static inline enum ubase_err ubuf_block_stream_get(struct ubuf_block_stream *s,
+                                                   uint8_t *octet_p)
 {
     if (s->ubuf == NULL)
-        return false;
+        return UBASE_ERR_INVALID;
     if (unlikely(s->buffer >= s->end)) {
         ubuf_block_unmap(s->ubuf, s->offset);
         s->offset += s->size;
         s->size = -1;
-        if (unlikely(!ubuf_block_read(s->ubuf, s->offset, &s->size,
-                                      &s->buffer))) {
+        if (unlikely(!ubase_check(ubuf_block_read(s->ubuf, s->offset,
+                                                  &s->size, &s->buffer)))) {
             s->ubuf = NULL;
-            return false;
+            return UBASE_ERR_INVALID;
         }
         s->end = s->buffer + s->size;
     }
     *octet_p = *s->buffer++;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This fills the bit stream cache with at least the given number of bits,
@@ -132,7 +135,7 @@ static inline bool ubuf_block_stream_get(struct ubuf_block_stream *s,
 #define ubuf_block_stream_fill_bits_inner(s, get_octet, nb)                 \
     while ((s)->available < (nb)) {                                         \
         uint8_t octet;                                                      \
-        if (unlikely(!get_octet((s), &octet))) {                            \
+        if (unlikely(!ubase_check(get_octet((s), &octet)))) {               \
             octet = 0;                                                      \
             (s)->overflow = true;                                           \
         }                                                                   \

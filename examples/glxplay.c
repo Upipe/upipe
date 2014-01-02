@@ -303,7 +303,7 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             const char *def = "(none)";
-            if (!uref_flow_get_def(flow_def, &def) ||
+            if (!ubase_check(uref_flow_get_def(flow_def, &def)) ||
                 ubase_ncmp(def, "block.")) {
                 upipe_warn_va(upipe, "flow def %s is not supported", def);
                 return UBASE_ERR_UNHANDLED;
@@ -454,9 +454,9 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
             if (unlikely(output_flow == NULL))
                 return UBASE_ERR_ALLOC;
             uref_pic_flow_clear_format(output_flow);
-            if (unlikely(!uref_pic_flow_set_planes(output_flow, 0) ||
-                         !uref_pic_flow_add_plane(output_flow, 1, 1, 3,
-                                                  "r8g8b8"))) {
+            if (unlikely(!ubase_check(uref_pic_flow_set_planes(output_flow, 0)) ||
+                         !ubase_check(uref_pic_flow_add_plane(output_flow, 1, 1, 3,
+                                                  "r8g8b8")))) {
                 uref_free(output_flow);
                 return UBASE_ERR_ALLOC;
             }

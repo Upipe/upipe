@@ -65,7 +65,7 @@
 static unsigned int nb_packets = 0;
 static uint64_t pts = 0x112121212;
 static uint64_t dts = 0x112121212 - 1080000;
-static bool dataalignment = true;
+static enum ubase_err dataalignment = UBASE_ERR_NONE;
 static size_t payload_size = 12;
 static bool expect_lost = false;
 static bool expect_acquired = true;
@@ -122,7 +122,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     assert(size == payload_size);
     assert(dataalignment == uref_block_get_start(uref));
     uref_free(uref);
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE_PTSDTS + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PES_HEADER_SIZE_PTSDTS + 12);
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
@@ -209,13 +209,13 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE_PTS);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PES_HEADER_SIZE_PTS);
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
     pes_set_length(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE_NOPTS);
-    dataalignment = false;
+    dataalignment = UBASE_ERR_INVALID;
     pes_set_pts(buffer, pts);
     uref_block_unmap(uref, 0);
     payload_size = 0;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < PES_HEADER_SIZE_PTS; i++) {
         struct uref *dup = uref_dup(uref);
         assert(dup != NULL);
-        assert(uref_block_resize(dup, i, 1));
+        ubase_assert(uref_block_resize(dup, i, 1));
         if (!i)
             uref_block_set_start(dup);
         upipe_input(upipe_ts_pesd, dup, NULL);
@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
     assert(uref != NULL);
     payload_size = 42;
-    dataalignment = false;
+    dataalignment = UBASE_ERR_INVALID;
     pts = dts = 0;
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);
@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PES_HEADER_SIZE);
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_PADDING);
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
     assert(uref != NULL);
     payload_size = 42;
-    dataalignment = false;
+    dataalignment = UBASE_ERR_INVALID;
     pts = dts = 0;
     /* do not increment nb_packets */
     upipe_input(upipe_ts_pesd, uref, NULL);
@@ -271,13 +271,13 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE_NOPTS + 12);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == PES_HEADER_SIZE_NOPTS + 12);
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
     pes_set_length(buffer, PES_HEADER_SIZE_NOPTS + 12 - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, 0);
-    dataalignment = false;
+    dataalignment = UBASE_ERR_INVALID;
     uref_block_unmap(uref, 0);
     uref_block_set_start(uref);
     payload_size = 12;

@@ -39,7 +39,6 @@ extern "C" {
 #include <upipe/uref_flow.h>
 
 #include <stdint.h>
-#include <stdbool.h>
 #include <inttypes.h>
 #include <assert.h>
 
@@ -96,9 +95,9 @@ static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL))
         return NULL;
-    if (unlikely(!(uref_flow_set_def(uref, UREF_PIC_FLOW_DEF) &&
-                   uref_pic_flow_set_macropixel(uref, macropixel) &&
-                   uref_pic_flow_set_planes(uref, 0)))) {
+    if (unlikely(!(ubase_check(uref_flow_set_def(uref, UREF_PIC_FLOW_DEF)) &&
+                   ubase_check(uref_pic_flow_set_macropixel(uref, macropixel)) &&
+                   ubase_check(uref_pic_flow_set_planes(uref, 0))))) {
         uref_free(uref);
         return NULL;
     }
@@ -112,25 +111,23 @@ static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
  * @param vsub vertical subsampling
  * @param macropixel_size size in octets of a compound
  * @param chroma chroma type (see chroma reference)
- * @return false in case of error
+ * @return an error code
  */
-static inline bool uref_pic_flow_add_plane(struct uref *uref,
-                                           uint8_t hsub, uint8_t vsub,
-                                           uint8_t macropixel_size,
-                                           const char *chroma)
+static inline enum ubase_err uref_pic_flow_add_plane(struct uref *uref,
+           uint8_t hsub, uint8_t vsub, uint8_t macropixel_size,
+           const char *chroma)
 {
     uint8_t plane;
     if (unlikely(hsub == 0 || vsub == 0 || macropixel_size == 0 ||
                  chroma == NULL))
-        return false;
-    if (unlikely(!uref_pic_flow_get_planes(uref, &plane)))
-        return false;
-
-    return uref_pic_flow_set_planes(uref, plane + 1) &&
-           uref_pic_flow_set_hsubsampling(uref, hsub, plane) &&
-           uref_pic_flow_set_vsubsampling(uref, vsub, plane) &&
-           uref_pic_flow_set_macropixel_size(uref, macropixel_size, plane) &&
-           uref_pic_flow_set_chroma(uref, chroma, plane);
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_pic_flow_get_planes(uref, &plane))
+    UBASE_RETURN(uref_pic_flow_set_planes(uref, plane + 1))
+    UBASE_RETURN(uref_pic_flow_set_hsubsampling(uref, hsub, plane))
+    UBASE_RETURN(uref_pic_flow_set_vsubsampling(uref, vsub, plane))
+    UBASE_RETURN(uref_pic_flow_set_macropixel_size(uref, macropixel_size, plane))
+    UBASE_RETURN(uref_pic_flow_set_chroma(uref, chroma, plane))
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This finds a plane by its chroma.
@@ -138,27 +135,25 @@ static inline bool uref_pic_flow_add_plane(struct uref *uref,
  * @param uref uref control packet
  * @param chroma chroma type
  * @param plane_p written with the matching plane number
- * @return false in case of error
+ * @return an error code
  */
-static inline bool uref_pic_flow_find_chroma(struct uref *uref,
-                                             const char *chroma,
-                                             uint8_t *plane_p)
+static inline enum ubase_err uref_pic_flow_find_chroma(struct uref *uref,
+                                                       const char *chroma,
+                                                       uint8_t *plane_p)
 {
     assert(chroma != NULL);
     uint8_t planes;
-    if (unlikely(!uref_pic_flow_get_planes(uref, &planes)))
-        return false;
+    UBASE_RETURN(uref_pic_flow_get_planes(uref, &planes))
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *plane_chroma;
-        if (unlikely(!uref_pic_flow_get_chroma(uref, &plane_chroma, plane)))
-            return false;
+        UBASE_RETURN(uref_pic_flow_get_chroma(uref, &plane_chroma, plane))
         if (unlikely(!strcmp(chroma, plane_chroma))) {
             *plane_p = plane;
-            return true;
+            return UBASE_ERR_NONE;
         }
     }
-    return false;
+    return UBASE_ERR_INVALID;
 }
 
 /** @This checks if there is a plane with the given properties.
@@ -166,23 +161,21 @@ static inline bool uref_pic_flow_find_chroma(struct uref *uref,
  * @param uref uref control packet
  * @param hsub horizontal subsampling
  * @param vsub vertical subsampling
- * @param macropixel_size size in octets of a compound
+ * @param mpixel_size size in octets of a compound
  * @param chroma chroma type
- * @return false in case of error
+ * @return an error code
  */
-static inline bool uref_pic_flow_check_chroma(struct uref *uref,
-                                              uint8_t hsub, uint8_t vsub,
-                                              uint8_t macropixel_size,
-                                              const char *chroma)
+static inline enum ubase_err uref_pic_flow_check_chroma(struct uref *uref,
+          uint8_t hsub, uint8_t vsub, uint8_t mpixel_size,
+          const char *chroma)
 {
-    uint8_t plane, hsub2, vsub2, macropixel_size2;
-    return uref_pic_flow_find_chroma(uref, chroma, &plane) &&
-           uref_pic_flow_get_hsubsampling(uref, &hsub2, plane) &&
-           hsub2 == hsub &&
-           uref_pic_flow_get_vsubsampling(uref, &vsub2, plane) &&
-           vsub2 == vsub &&
-           uref_pic_flow_get_macropixel_size(uref, &macropixel_size2, plane) &&
-           macropixel_size2 == macropixel_size;
+    uint8_t plane, hsub2, vsub2, mpixel_size2;
+    UBASE_RETURN(uref_pic_flow_find_chroma(uref, chroma, &plane))
+    UBASE_RETURN(uref_pic_flow_get_hsubsampling(uref, &hsub2, plane))
+    UBASE_RETURN(uref_pic_flow_get_vsubsampling(uref, &vsub2, plane))
+    UBASE_RETURN(uref_pic_flow_get_macropixel_size(uref, &mpixel_size2, plane))
+    return (hsub2 == hsub && vsub2 == vsub && mpixel_size2 == mpixel_size) ?
+           UBASE_ERR_NONE : UBASE_ERR_INVALID;
 }
 
 /** @This copies the attributes defining the ubuf manager format to
@@ -190,34 +183,32 @@ static inline bool uref_pic_flow_check_chroma(struct uref *uref,
  *
  * @param uref_dst destination uref
  * @param uref_src source uref
- * @return false in case of error
+ * @return an error code
  */
-static inline bool uref_pic_flow_copy_format(struct uref *uref_dst,
-                                             struct uref *uref_src)
+static inline enum ubase_err uref_pic_flow_copy_format(struct uref *uref_dst,
+                                                       struct uref *uref_src)
 {
     const char *def;
     uint8_t planes;
-    if (unlikely(!uref_flow_get_def(uref_src, &def) ||
-                 !uref_flow_set_def(uref_dst, def) ||
-                 !uref_pic_flow_get_planes(uref_src, &planes) ||
-                 !uref_pic_flow_set_planes(uref_dst, planes)))
-        return false;
+    UBASE_RETURN(uref_flow_get_def(uref_src, &def))
+    UBASE_RETURN(uref_flow_set_def(uref_dst, def))
+    UBASE_RETURN(uref_pic_flow_get_planes(uref_src, &planes))
+    UBASE_RETURN(uref_pic_flow_set_planes(uref_dst, planes))
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *chroma;
         uint8_t var;
-        if (unlikely(!uref_pic_flow_get_chroma(uref_src, &chroma, plane) ||
-                     !uref_pic_flow_set_chroma(uref_dst, chroma, plane) ||
-                     !uref_pic_flow_get_hsubsampling(uref_src, &var, plane) ||
-                     !uref_pic_flow_set_hsubsampling(uref_dst, var, plane) ||
-                     !uref_pic_flow_get_vsubsampling(uref_src, &var, plane) ||
-                     !uref_pic_flow_set_vsubsampling(uref_dst, var, plane) ||
-                     !uref_pic_flow_get_macropixel_size(uref_src, &var,
-                                                        plane) ||
-                     !uref_pic_flow_set_macropixel_size(uref_dst, var, plane)))
-            return false;
+        UBASE_RETURN(uref_pic_flow_get_chroma(uref_src, &chroma, plane))
+        UBASE_RETURN(uref_pic_flow_set_chroma(uref_dst, chroma, plane))
+        UBASE_RETURN(uref_pic_flow_get_hsubsampling(uref_src, &var, plane))
+        UBASE_RETURN(uref_pic_flow_set_hsubsampling(uref_dst, var, plane))
+        UBASE_RETURN(uref_pic_flow_get_vsubsampling(uref_src, &var, plane))
+        UBASE_RETURN(uref_pic_flow_set_vsubsampling(uref_dst, var, plane))
+        UBASE_RETURN(uref_pic_flow_get_macropixel_size(uref_src, &var,
+                                                        plane))
+        UBASE_RETURN(uref_pic_flow_set_macropixel_size(uref_dst, var, plane))
     }
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This clears the attributes defining the ubuf_pic manager format.
@@ -227,7 +218,7 @@ static inline bool uref_pic_flow_copy_format(struct uref *uref_dst,
 static inline void uref_pic_flow_clear_format(struct uref *uref)
 {
     uint8_t planes;
-    if (unlikely(!uref_pic_flow_get_planes(uref, &planes)))
+    if (unlikely(!ubase_check(uref_pic_flow_get_planes(uref, &planes))))
         return;
 
     for (uint8_t plane = 0; plane < planes; plane++) {

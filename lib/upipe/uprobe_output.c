@@ -57,9 +57,9 @@ static enum ubase_err uprobe_output_throw(struct uprobe *uprobe,
     struct uref *flow_def = va_arg(args_copy, struct uref *);
     va_end(args_copy);
     struct upipe *output;
-    if (likely(upipe_get_output(upipe, &output) == UBASE_ERR_NONE &&
+    if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
                output != NULL)) {
-        if (likely(upipe_set_flow_def(output, flow_def)) == UBASE_ERR_NONE)
+        if (likely(ubase_check(upipe_set_flow_def(output, flow_def))))
             return UBASE_ERR_NONE;
         upipe_set_output(upipe, NULL);
     }

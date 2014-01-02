@@ -157,9 +157,9 @@ int main(int argc, char *argv[])
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
-    assert(uref_block_flow_set_octetrate(uref, 125000));
-    assert(uref_ts_flow_set_tb_rate(uref, 125000));
-    assert(uref_ts_flow_set_pid(uref, 0));
+    ubase_assert(uref_block_flow_set_octetrate(uref, 125000));
+    ubase_assert(uref_ts_flow_set_tb_rate(uref, 125000));
+    ubase_assert(uref_ts_flow_set_pid(uref, 0));
     struct upipe *upipe_ts_psii_sub = upipe_void_alloc_sub(upipe_ts_psii,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psii sub"));

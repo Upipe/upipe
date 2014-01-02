@@ -60,16 +60,15 @@ static inline struct ubuf *ubuf_pic_alloc(struct ubuf_mgr *mgr,
  * if not NULL
  * @param vsize_p reference written with the vertical size of the picture
  * if not NULL
- * @param macropixel_p reference written with the number of pixels in a
+ * @param mpixel_p reference written with the number of pixels in a
  * macropixel if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_size(struct ubuf *ubuf,
+static inline enum ubase_err ubuf_pic_size(struct ubuf *ubuf,
                                  size_t *hsize_p, size_t *vsize_p,
-                                 uint8_t *macropixel_p)
+                                 uint8_t *mpixel_p)
 {
-    return ubase_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE,
-                                        hsize_p, vsize_p, macropixel_p));
+    return ubuf_control(ubuf, UBUF_SIZE_PICTURE, hsize_p, vsize_p, mpixel_p);
 }
 
 /** @This iterates on picture planes chroma types. Start by initializing
@@ -79,13 +78,12 @@ static inline bool ubuf_pic_size(struct ubuf *ubuf,
  *
  * @param ubuf pointer to ubuf
  * @param chroma_p reference written with chroma type of the next plane
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_plane_iterate(struct ubuf *ubuf,
-                                          const char **chroma_p)
+static inline enum ubase_err ubuf_pic_plane_iterate(struct ubuf *ubuf,
+                                                    const char **chroma_p)
 {
-    return ubase_check(ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE,
-                                        chroma_p));
+    return ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE, chroma_p);
 }
 
 /** @This returns the sizes of a plane of the picture ubuf.
@@ -100,17 +98,15 @@ static inline bool ubuf_pic_plane_iterate(struct ubuf *ubuf,
  * if not NULL
  * @param macropixel_size_p reference written with the size of a macropixel in
  * octets for this plane if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_plane_size(struct ubuf *ubuf, const char *chroma,
-                                       size_t *stride_p,
-                                       uint8_t *hsub_p, uint8_t *vsub_p,
-                                       uint8_t *macropixel_size_p)
+static inline enum ubase_err ubuf_pic_plane_size(struct ubuf *ubuf,
+        const char *chroma, size_t *stride_p, uint8_t *hsub_p, uint8_t *vsub_p,
+        uint8_t *macropixel_size_p)
 
 {
-    return ubase_check(ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma,
-                                        stride_p, hsub_p, vsub_p,
-                                        macropixel_size_p));
+    return ubuf_control(ubuf, UBUF_SIZE_PICTURE_PLANE, chroma,
+                        stride_p, hsub_p, vsub_p, macropixel_size_p);
 }
 
 /** @internal @This checks the offset and size parameters of a lot of functions,
@@ -128,20 +124,19 @@ static inline bool ubuf_pic_plane_size(struct ubuf *ubuf, const char *chroma,
  * until the end of the line
  * @param vsize_p reference to number of lines wanted in the picture area,
  * or -1 for until the last line (may be NULL)
- * @return false when the parameters are invalid
+ * @return UBASE_ERR_INVALID when the parameters are invalid
  */
-static inline bool ubuf_pic_plane_check_offset(struct ubuf *ubuf,
-                                               const char *chroma,
-                                               int *hoffset_p, int *voffset_p,
-                                               int *hsize_p, int *vsize_p)
+static inline enum ubase_err ubuf_pic_plane_check_offset(struct ubuf *ubuf,
+       const char *chroma, int *hoffset_p, int *voffset_p,
+       int *hsize_p, int *vsize_p)
 {
     size_t ubuf_hsize, ubuf_vsize;
     uint8_t macropixel;
-    if (unlikely(!ubuf_pic_size(ubuf, &ubuf_hsize, &ubuf_vsize, &macropixel) ||
-                 *hoffset_p > (int)ubuf_hsize || *voffset_p > (int)ubuf_vsize ||
+    UBASE_RETURN(ubuf_pic_size(ubuf, &ubuf_hsize, &ubuf_vsize, &macropixel))
+    if (unlikely(*hoffset_p > (int)ubuf_hsize || *voffset_p > (int)ubuf_vsize ||
                  *hoffset_p + *hsize_p > (int)ubuf_hsize ||
                  *voffset_p + *vsize_p > (int)ubuf_vsize))
-        return false;
+        return UBASE_ERR_INVALID;
     if (*hoffset_p < 0)
         *hoffset_p += ubuf_hsize;
     if (*voffset_p < 0)
@@ -151,14 +146,14 @@ static inline bool ubuf_pic_plane_check_offset(struct ubuf *ubuf,
     if (*vsize_p == -1)
         *vsize_p = ubuf_vsize - *voffset_p;
     if (unlikely(*hoffset_p % macropixel || *hsize_p % macropixel))
-        return false;
+        return UBASE_ERR_INVALID;
 
     uint8_t hsub, vsub;
-    if (unlikely(!ubuf_pic_plane_size(ubuf, chroma, NULL, &hsub, &vsub, NULL) ||
-                 *hoffset_p % hsub || *hsize_p % hsub ||
+    UBASE_RETURN(ubuf_pic_plane_size(ubuf, chroma, NULL, &hsub, &vsub, NULL))
+    if (unlikely(*hoffset_p % hsub || *hsize_p % hsub ||
                  *voffset_p % vsub || *vsize_p % vsub))
-        return false;
-    return true;
+        return UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
 }
 
 /** @This returns a read-only pointer to the buffer space. You must call
@@ -177,19 +172,16 @@ static inline bool ubuf_pic_plane_check_offset(struct ubuf *ubuf,
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line (before deviding by vsub)
  * @param buffer_p reference written with a pointer to buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_plane_read(struct ubuf *ubuf, const char *chroma,
-                                       int hoffset, int voffset,
-                                       int hsize, int vsize,
-                                       const uint8_t **buffer_p)
+static inline enum ubase_err ubuf_pic_plane_read(struct ubuf *ubuf,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize,
+        const uint8_t **buffer_p)
 {
-    if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
-                                              &hsize, &vsize)))
-        return false;
-    return ubase_check(ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
-                                        hoffset, voffset, hsize, vsize,
-                                        buffer_p));
+    UBASE_RETURN(ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
+                                             &hsize, &vsize))
+    return ubuf_control(ubuf, UBUF_READ_PICTURE_PLANE, chroma,
+                        hoffset, voffset, hsize, vsize, buffer_p);
 }
 
 /** @This returns a writable pointer to the buffer space, if the ubuf is not
@@ -209,19 +201,17 @@ static inline bool ubuf_pic_plane_read(struct ubuf *ubuf, const char *chroma,
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
  * @param buffer_p reference written with a pointer to buffer space if not NULL
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_plane_write(struct ubuf *ubuf, const char *chroma,
-                                        int hoffset, int voffset,
-                                        int hsize, int vsize,
-                                        uint8_t **buffer_p)
+static inline enum ubase_err ubuf_pic_plane_write(struct ubuf *ubuf,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize,
+        uint8_t **buffer_p)
 {
-    if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
-                                              &hsize, &vsize)))
-        return false;
-    return ubase_check(ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
-                                        hoffset, voffset, hsize, vsize,
-                                        buffer_p));
+    UBASE_RETURN(ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
+                                             &hsize, &vsize))
+    return ubuf_control(ubuf, UBUF_WRITE_PICTURE_PLANE, chroma,
+                        hoffset, voffset, hsize, vsize,
+                        buffer_p);
 }
 
 /** @This marks the buffer space as being currently unused, and the pointer
@@ -229,17 +219,15 @@ static inline bool ubuf_pic_plane_write(struct ubuf *ubuf, const char *chroma,
  *
  * @param ubuf pointer to ubuf
  * @param chroma chroma type (see chroma reference)
- * @return false in case of error
+ * @return an error code
  */
-static inline bool ubuf_pic_plane_unmap(struct ubuf *ubuf, const char *chroma,
-                                        int hoffset, int voffset,
-                                        int hsize, int vsize)
+static inline enum ubase_err ubuf_pic_plane_unmap(struct ubuf *ubuf,
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize)
 {
-    if (unlikely(!ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
-                                              &hsize, &vsize)))
-        return false;
-    return ubase_check(ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
-                                        hoffset, voffset, hsize, vsize));
+    UBASE_RETURN(ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
+                                             &hsize, &vsize))
+    return ubuf_control(ubuf, UBUF_UNMAP_PICTURE_PLANE, chroma,
+                        hoffset, voffset, hsize, vsize);
 }
 
 /** @internal @This checks the skip and new_size parameters of a lot of
@@ -260,37 +248,34 @@ static inline bool ubuf_pic_plane_unmap(struct ubuf *ubuf, const char *chroma,
  * (may be NULL)
  * @param macropixel_p filled in with the number of pixels in a macropixel
  * (may be NULL)
- * @return false when the parameters are invalid
+ * @return an error code
  */
-static inline bool ubuf_pic_check_resize(struct ubuf *ubuf,
-                                         int *hskip_p, int *vskip_p,
-                                         int *new_hsize_p, int *new_vsize_p,
-                                         size_t *ubuf_hsize_p,
-                                         size_t *ubuf_vsize_p,
-                                         uint8_t *macropixel_p)
+static inline enum ubase_err ubuf_pic_check_resize(struct ubuf *ubuf,
+        int *hskip_p, int *vskip_p, int *new_hsize_p, int *new_vsize_p,
+        size_t *ubuf_hsize_p, size_t *ubuf_vsize_p, uint8_t *macropixel_p)
 {
     size_t ubuf_hsize, ubuf_vsize;
     uint8_t macropixel;
-    if (unlikely(!ubuf_pic_size(ubuf, &ubuf_hsize, &ubuf_vsize, &macropixel) ||
-                 *hskip_p > (int)ubuf_hsize || *vskip_p > (int)ubuf_vsize))
-        return false;
+    UBASE_RETURN(ubuf_pic_size(ubuf, &ubuf_hsize, &ubuf_vsize, &macropixel))
+    if (unlikely(*hskip_p > (int)ubuf_hsize || *vskip_p > (int)ubuf_vsize))
+        return UBASE_ERR_INVALID;
     if (*new_hsize_p == -1)
         *new_hsize_p = ubuf_hsize - *hskip_p;
     if (*new_vsize_p == -1)
         *new_vsize_p = ubuf_vsize - *vskip_p;
     if (unlikely(*new_hsize_p < -*hskip_p || *new_vsize_p < -*vskip_p))
-        return false;
+        return UBASE_ERR_INVALID;
     if (unlikely((*hskip_p < 0 && -*hskip_p % macropixel) ||
                  (*hskip_p > 0 && *hskip_p % macropixel) ||
                  *new_hsize_p % macropixel))
-        return false;
+        return UBASE_ERR_INVALID;
     if (ubuf_hsize_p != NULL)
         *ubuf_hsize_p = ubuf_hsize;
     if (ubuf_vsize_p != NULL)
         *ubuf_vsize_p = ubuf_vsize;
     if (macropixel_p != NULL)
         *macropixel_p = macropixel;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This resizes a picture ubuf, if possible. This will only work if:
@@ -313,19 +298,16 @@ static inline bool ubuf_pic_check_resize(struct ubuf *ubuf,
  * to -1, keep same line ends)
  * @param new_vsize final vertical size of the buffer, in lines (if set
  * to -1, keep same last line)
- * @return false in case of error, or if the ubuf is shared, or if the operation
- * is not possible
+ * @return an error code
  */
-static inline bool ubuf_pic_resize(struct ubuf *ubuf,
-                                   int hskip, int vskip,
-                                   int new_hsize, int new_vsize)
+static inline enum ubase_err ubuf_pic_resize(struct ubuf *ubuf,
+        int hskip, int vskip, int new_hsize, int new_vsize)
 {
-    if (unlikely(!ubuf_pic_check_resize(ubuf, &hskip, &vskip,
-                                        &new_hsize, &new_vsize,
-                                        NULL, NULL, NULL)))
-        return false;
-    return ubase_check(ubuf_control(ubuf, UBUF_RESIZE_PICTURE,
-                                    hskip, vskip, new_hsize, new_vsize));
+    UBASE_RETURN(ubuf_pic_check_resize(ubuf, &hskip, &vskip,
+                                       &new_hsize, &new_vsize,
+                                       NULL, NULL, NULL))
+    return ubuf_control(ubuf, UBUF_RESIZE_PICTURE, hskip, vskip,
+                        new_hsize, new_vsize);
 }
 
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal
@@ -350,9 +332,8 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
 {
     size_t ubuf_hsize, ubuf_vsize;
     uint8_t macropixel;
-    if (unlikely(!ubuf_pic_check_resize(ubuf, &hskip, &vskip,
-                                        &new_hsize, &new_vsize,
-                                        &ubuf_hsize, &ubuf_vsize, &macropixel)))
+    if (unlikely(!ubase_check(ubuf_pic_check_resize(ubuf, &hskip, &vskip,
+            &new_hsize, &new_vsize, &ubuf_hsize, &ubuf_vsize, &macropixel))))
         return NULL;
 
     struct ubuf *new_ubuf = ubuf_pic_alloc(mgr, new_hsize, new_vsize);
@@ -360,7 +341,8 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
         return NULL;
 
     uint8_t new_macropixel;
-    if (unlikely(!ubuf_pic_size(new_ubuf, NULL, NULL, &new_macropixel) ||
+    if (unlikely(!ubase_check(ubuf_pic_size(new_ubuf, NULL, NULL,
+                                            &new_macropixel)) ||
                  new_macropixel != macropixel))
         goto ubuf_pic_copy_err;
 
@@ -389,18 +371,19 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
         new_vsize - extract_voffset : ubuf_vsize - extract_vskip;
 
     const char *chroma = NULL;
-    while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma != NULL) {
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+           chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
-        if (unlikely(!ubuf_pic_plane_size(ubuf, chroma, &stride,
-                                          &hsub, &vsub, &macropixel_size)))
+        if (unlikely(!ubase_check(ubuf_pic_plane_size(ubuf, chroma, &stride,
+                                          &hsub, &vsub, &macropixel_size))))
             goto ubuf_pic_copy_err;
 
         size_t new_stride;
         uint8_t new_hsub, new_vsub, new_macropixel_size;
-        if (unlikely(!ubuf_pic_plane_size(new_ubuf, chroma, &new_stride,
-                                          &new_hsub, &new_vsub,
-                                          &new_macropixel_size)))
+        if (unlikely(!ubase_check(ubuf_pic_plane_size(new_ubuf, chroma,
+                                          &new_stride, &new_hsub, &new_vsub,
+                                          &new_macropixel_size))))
             goto ubuf_pic_copy_err;
 
         if (unlikely(hsub != new_hsub || vsub != new_vsub ||
@@ -409,15 +392,15 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
 
         uint8_t *new_buffer;
         const uint8_t *buffer;
-        if (unlikely(!ubuf_pic_plane_write(new_ubuf, chroma,
+        if (unlikely(!ubase_check(ubuf_pic_plane_write(new_ubuf, chroma,
                                            extract_hoffset, extract_voffset,
                                            extract_hsize, extract_vsize,
-                                           &new_buffer)))
+                                           &new_buffer))))
             goto ubuf_pic_copy_err;
-        if (unlikely(!ubuf_pic_plane_read(ubuf, chroma,
+        if (unlikely(!ubase_check(ubuf_pic_plane_read(ubuf, chroma,
                                           extract_hskip, extract_vskip,
                                           extract_hsize, extract_vsize,
-                                          &buffer))) {
+                                          &buffer)))) {
             ubuf_pic_plane_unmap(new_ubuf, chroma,
                                  extract_hoffset, extract_voffset,
                                  extract_hsize, extract_vsize);
@@ -433,12 +416,12 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
             buffer += stride;
         }
 
-        bool ret = ubuf_pic_plane_unmap(new_ubuf, chroma,
+        bool ret = ubase_check(ubuf_pic_plane_unmap(new_ubuf, chroma,
                                         extract_hoffset, extract_voffset,
-                                        extract_hsize, extract_vsize);
-        if (unlikely(!ubuf_pic_plane_unmap(ubuf, chroma,
+                                        extract_hsize, extract_vsize));
+        if (unlikely(!ubase_check(ubuf_pic_plane_unmap(ubuf, chroma,
                                            extract_hskip, extract_vskip,
-                                           extract_hsize, extract_vsize) ||
+                                           extract_hsize, extract_vsize)) ||
                      !ret))
             goto ubuf_pic_copy_err;
     }
@@ -463,21 +446,20 @@ ubuf_pic_copy_err:
  * to -1, keep same line ends)
  * @param new_vsize final vertical size of the buffer, in lines (if set
  * to -1, keep same last line)
- * @return false in case of allocation error
+ * @return an error code
  */
-static inline bool ubuf_pic_replace(struct ubuf_mgr *mgr,
-                                    struct ubuf **ubuf_p,
-                                    int hskip, int vskip,
-                                    int new_hsize, int new_vsize)
+static inline enum ubase_err ubuf_pic_replace(struct ubuf_mgr *mgr,
+        struct ubuf **ubuf_p, int hskip, int vskip,
+        int new_hsize, int new_vsize)
 {
     struct ubuf *new_ubuf = ubuf_pic_copy(mgr, *ubuf_p, hskip, vskip,
                                           new_hsize, new_vsize);
     if (unlikely(new_ubuf == NULL))
-        return false;
+        return UBASE_ERR_ALLOC;
 
     ubuf_free(*ubuf_p);
     *ubuf_p = new_ubuf;
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @This clears (part of) the specified plane, depending on plane type
@@ -495,9 +477,9 @@ static inline bool ubuf_pic_replace(struct ubuf_mgr *mgr,
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
- * @return false if chroma not known or in case of error
+ * @return an error code
  */
-bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
+enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
                           int hoffset, int voffset,
                           int hsize, int vsize);
 
@@ -515,9 +497,9 @@ bool ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
- * @return false if chroma not known or in case of error
+ * @return an error code
  */
-bool ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
+enum ubase_err ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
                                        int hsize, int vsize);
 
 #ifdef __cplusplus

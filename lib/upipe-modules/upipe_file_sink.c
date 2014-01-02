@@ -179,7 +179,7 @@ static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
         goto write_buffer;
 
     uint64_t cr_sys = 0;
-    if (unlikely(!uref_clock_get_cr_sys(uref, &cr_sys))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))) {
         upipe_warn(upipe, "received non-dated buffer");
         goto write_buffer;
     }
@@ -205,7 +205,8 @@ write_buffer:
         }
 
         struct iovec iovecs[iovec_count];
-        if (unlikely(!uref_block_iovec_read(uref, 0, -1, iovecs))) {
+        if (unlikely(!ubase_check(uref_block_iovec_read(uref, 0, -1,
+                                                        iovecs)))) {
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             break;
@@ -241,7 +242,8 @@ write_buffer:
         }
 
         size_t uref_size;
-        if (uref_block_size(uref, &uref_size) && uref_size == ret) {
+        if (ubase_check(uref_block_size(uref, &uref_size)) &&
+            uref_size == ret) {
             uref_free(uref);
             break;
         }
@@ -300,8 +302,7 @@ static enum ubase_err upipe_fsink_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
-    if (!uref_flow_match_def(flow_def, UPIPE_FSINK_EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, UPIPE_FSINK_EXPECTED_FLOW_DEF))
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
     if (latency > upipe_fsink->latency)

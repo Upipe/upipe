@@ -165,7 +165,8 @@ static void upipe_sinesrc_idler(struct upump *upump)
 
     uint8_t *buffer;
     int read_size = -1;
-    if (unlikely(!uref_block_write(uref, 0, &read_size, &buffer))) {
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size,
+                                               &buffer)))) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;

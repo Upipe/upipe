@@ -301,9 +301,9 @@ int main(int argc, char **argv)
 
     pic_flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(pic_flow != NULL);
-    assert(uref_pic_flow_add_plane(pic_flow, 1, 1, 1, "y8"));
-    assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "u8"));
-    assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "v8"));
+    ubase_assert(uref_pic_flow_add_plane(pic_flow, 1, 1, 1, "y8"));
+    ubase_assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "u8"));
+    ubase_assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "v8"));
 //    uref_dump(pic_flow, mainlog);
 
     /* try allocating */
@@ -371,8 +371,8 @@ int main(int argc, char **argv)
     /* Define outputflow */
     struct uref *output_flow = uref_dup(pic_flow);
     assert(output_flow != NULL);
-    assert(uref_pic_flow_set_hsize(output_flow, DSTSIZE));
-    assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
+    ubase_assert(uref_pic_flow_set_hsize(output_flow, DSTSIZE));
+    ubase_assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
 
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sws"),

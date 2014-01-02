@@ -71,7 +71,7 @@ struct upipe_genaux {
     bool flow_def_sent;
 
     /** get attr */
-    bool (*getattr) (struct uref *, uint64_t *);
+    enum ubase_err (*getattr) (struct uref *, uint64_t *);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -104,7 +104,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
             return;
     }
 
-    if (!upipe_genaux->getattr(uref, &systime)) {
+    if (!ubase_check(upipe_genaux->getattr(uref, &systime))) {
         uref_free(uref);
         return;
     }
@@ -137,7 +137,7 @@ static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
-    if (unlikely(!uref_flow_set_def(flow_def_dup, "block.aux.")))
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, "block.aux."))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_genaux_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
@@ -150,7 +150,7 @@ static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err _upipe_genaux_set_getattr(struct upipe *upipe,
-                            bool (*get)(struct uref*, uint64_t*))
+                            enum ubase_err (*get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
@@ -168,7 +168,7 @@ static inline enum ubase_err _upipe_genaux_set_getattr(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err _upipe_genaux_get_getattr(struct upipe *upipe,
-                            bool (**get)(struct uref*, uint64_t*))
+                            enum ubase_err (**get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
@@ -218,12 +218,12 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
         case UPIPE_GENAUX_SET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_set_getattr(upipe,
-                       va_arg(args, bool (*)(struct uref*, uint64_t*)));
+                   va_arg(args, enum ubase_err (*)(struct uref*, uint64_t*)));
         }
         case UPIPE_GENAUX_GET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_get_getattr(upipe,
-                       va_arg(args, bool (**)(struct uref*, uint64_t*)));
+                   va_arg(args, enum ubase_err (**)(struct uref*, uint64_t*)));
         }
         default:
             return UBASE_ERR_UNHANDLED;

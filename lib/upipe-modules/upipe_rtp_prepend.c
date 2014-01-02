@@ -124,7 +124,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* timestamp (synced to program clock ref, fallback to system clock ref) */
-    if (unlikely(!uref_clock_get_cr_prog(uref, &cr))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
         uref_clock_get_cr_sys(uref, &cr);
     }
     div = lldiv(cr, UCLOCK_FREQ);
@@ -151,7 +151,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
 
     /* append payload (current ubuf) to header to form segmented ubuf */
     payload = uref_detach_ubuf(uref);
-    if (unlikely(!ubuf_block_append(header, payload))) {
+    if (unlikely(!ubase_check(ubuf_block_append(header, payload)))) {
         upipe_warn(upipe, "could not append payload to header");
         ubuf_free(header);
         ubuf_free(payload);
@@ -175,14 +175,14 @@ static enum ubase_err upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     const char *def;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
-    if (!uref_flow_set_def_va(flow_def_dup, OUT_FLOW"%s",
-                              def + strlen(EXPECTED_FLOW_DEF))) {
+    if (!ubase_check(uref_flow_set_def_va(flow_def_dup, OUT_FLOW"%s",
+                              def + strlen(EXPECTED_FLOW_DEF)))) {
         uref_free(flow_def_dup);
         return UBASE_ERR_ALLOC;
     }

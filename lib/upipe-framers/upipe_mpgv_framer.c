@@ -249,8 +249,8 @@ static bool upipe_mpgvf_find(struct upipe *upipe,
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     const uint8_t *buffer;
     int size = -1;
-    while (uref_block_read(upipe_mpgvf->next_uref, upipe_mpgvf->next_frame_size,
-                           &size, &buffer)) {
+    while (ubase_check(uref_block_read(upipe_mpgvf->next_uref,
+                    upipe_mpgvf->next_frame_size, &size, &buffer))) {
         const uint8_t *p = upipe_framers_mpeg_scan(buffer, buffer + size,
                                                    &upipe_mpgvf->scan_context);
         if (p < buffer + size)
@@ -261,8 +261,8 @@ static bool upipe_mpgvf_find(struct upipe *upipe,
             *start_p = upipe_mpgvf->scan_context & 0xff;
             upipe_mpgvf->next_frame_size += p - buffer;
             if (*start_p == MP2VX_START_CODE && p >= buffer + size &&
-                !uref_block_extract(upipe_mpgvf->next_uref,
-                                    upipe_mpgvf->next_frame_size, 1, next_p)) {
+                !ubase_check(uref_block_extract(upipe_mpgvf->next_uref,
+                                    upipe_mpgvf->next_frame_size, 1, next_p))) {
                 upipe_mpgvf->scan_context = UINT32_MAX;
                 upipe_mpgvf->next_frame_size -= 4;
                 return false;
@@ -298,11 +298,8 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     uint8_t framerate = mp2vseq_get_framerate(sequence);
     uint32_t bitrate = mp2vseq_get_bitrate(sequence);
     uint32_t vbvbuffer = mp2vseq_get_vbvbuffer(sequence);
-    if (unlikely(!ubuf_block_peek_unmap(upipe_mpgvf->sequence_header, 0,
-                                        sequence_buffer, sequence))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
+    UBASE_FATAL(upipe, ubuf_block_peek_unmap(upipe_mpgvf->sequence_header, 0,
+                                             sequence_buffer, sequence))
 
     struct urational frame_rate = frame_rate_from_code[framerate];
     if (!frame_rate.num) {
@@ -315,7 +312,6 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
-    bool ret = true;
 
     uint64_t max_octetrate = 1500000 / 8;
     bool progressive = true;
@@ -343,14 +339,9 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         frame_rate.den *= mp2vseqx_get_framerated(ext) + 1;
         urational_simplify(&frame_rate);
 
-        if (unlikely(!ubuf_block_peek_unmap(upipe_mpgvf->sequence_ext, 0,
-                                            ext_buffer, ext))) {
-            uref_free(flow_def);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
-        }
-
-        ret = ret && uref_mpgv_flow_set_profilelevel(flow_def, profilelevel);
+        UBASE_FATAL(upipe, ubuf_block_peek_unmap(upipe_mpgvf->sequence_ext, 0,
+                                                 ext_buffer, ext));
+        UBASE_FATAL(upipe, uref_mpgv_flow_set_profilelevel(flow_def, profilelevel))
         switch (profilelevel & MP2VSEQX_LEVEL_MASK) {
             case MP2VSEQX_LEVEL_LOW:
                 max_octetrate = 4000000 / 8;
@@ -371,34 +362,34 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
                 return false;
         }
         if (lowdelay)
-            ret = ret && uref_flow_set_lowdelay(flow_def);
+            UBASE_FATAL(upipe, uref_flow_set_lowdelay(flow_def))
     } else
         upipe_mpgvf->progressive_sequence = true;
 
-    ret = ret && uref_pic_flow_set_fps(flow_def, frame_rate);
-    ret = ret && uref_block_flow_set_max_octetrate(flow_def, max_octetrate);
+    UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
+    UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
     upipe_mpgvf->progressive_sequence = progressive;
-    ret = ret && uref_pic_flow_set_macropixel(flow_def, 1);
-    ret = ret && uref_pic_flow_set_planes(flow_def, 0);
-    ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
+    UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
+    UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
+    UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
     switch (chroma) {
         case MP2VSEQX_CHROMA_420:
-            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8");
-            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8");
-            ret = ret && uref_flow_set_def(flow_def,
-                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_420.");
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"))
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"))
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_420."))
             break;
         case MP2VSEQX_CHROMA_422:
-            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8");
-            ret = ret && uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8");
-            ret = ret && uref_flow_set_def(flow_def,
-                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_422.");
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8"))
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8"))
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_422."))
             break;
         case MP2VSEQX_CHROMA_444:
-            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8");
-            ret = ret && uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8");
-            ret = ret && uref_flow_set_def(flow_def,
-                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_444.");
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8"))
+            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8"))
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                    UPIPE_MPGVF_EXPECTED_FLOW_DEF "pic.planar8_8_444."))
             break;
         default:
             upipe_err_va(upipe, "invalid chroma format %d", chroma);
@@ -406,8 +397,8 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             return false;
     }
 
-    ret = ret && uref_pic_flow_set_hsize(flow_def, horizontal);
-    ret = ret && uref_pic_flow_set_vsize(flow_def, vertical);
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, horizontal))
+    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, vertical))
     switch (aspect) {
         case MP2VSEQ_ASPECT_SQUARE:
             upipe_mpgvf->sar.num = upipe_mpgvf->sar.den = 1;
@@ -432,17 +423,18 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             uref_free(flow_def);
             return false;
     }
-    ret = ret && uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar);
+    UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar))
     upipe_mpgvf->fps = frame_rate;
-    ret = ret && uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8);
-    ret = ret && uref_block_flow_set_cpb_buffer(flow_def,
-                                                vbvbuffer * 16 * 1024 / 8);
+    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8))
+    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def,
+                                                vbvbuffer * 16 * 1024 / 8))
 
     if (upipe_mpgvf->sequence_display != NULL) {
         size_t size;
         uint8_t display_buffer[MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE];
         const uint8_t *display;
-        if (unlikely(!ubuf_block_size(upipe_mpgvf->sequence_display, &size) ||
+        if (unlikely(!ubase_check(ubuf_block_size(upipe_mpgvf->sequence_display,
+                                  &size)) ||
                      (display = ubuf_block_peek(upipe_mpgvf->sequence_display,
                                                 0, size,
                                                 display_buffer)) == NULL)) {
@@ -454,24 +446,14 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         uint16_t display_horizontal = mp2vseqdx_get_horizontal(display);
         uint16_t display_vertical = mp2vseqdx_get_vertical(display);
 
-        if (unlikely(!ubuf_block_peek_unmap(upipe_mpgvf->sequence_display, 0,
-                                            display_buffer, display))) {
-            uref_free(flow_def);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
-        }
-
-        ret = ret && uref_pic_flow_set_hsize_visible(flow_def,
-                                                     display_horizontal);
-        ret = ret && uref_pic_flow_set_vsize_visible(flow_def,
-                                                     display_vertical);
+        UBASE_FATAL(upipe, ubuf_block_peek_unmap(upipe_mpgvf->sequence_display,
+                                                 0, display_buffer, display))
+        UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def,
+                                                     display_horizontal))
+        UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def,
+                                                     display_vertical))
     }
 
-    if (unlikely(!ret)) {
-        uref_free(flow_def);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
     flow_def = upipe_mpgvf_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -491,14 +473,14 @@ static struct ubuf *upipe_mpgvf_extract_sequence(struct upipe *upipe,
                                                  struct uref *uref)
 {
     uint8_t word;
-    if (unlikely(!uref_block_extract(uref, 11, 1, &word)))
+    if (unlikely(!ubase_check(uref_block_extract(uref, 11, 1, &word))))
         return NULL;
 
     size_t sequence_header_size = MP2VSEQ_HEADER_SIZE;
     if (word & 0x2) {
         /* intra quantiser matrix */
         sequence_header_size += 64;
-        if (unlikely(!uref_block_extract(uref, 11 + 64, 1, &word)))
+        if (unlikely(!ubase_check(uref_block_extract(uref, 11 + 64, 1, &word))))
             return NULL;
     }
     if (word & 0x1) {
@@ -534,7 +516,7 @@ static struct ubuf *upipe_mpgvf_extract_display(struct upipe *upipe,
                                                 size_t offset)
 {
     uint8_t word;
-    if (unlikely(!uref_block_extract(uref, offset + 4, 1, &word)))
+    if (unlikely(!ubase_check(uref_block_extract(uref, offset + 4, 1, &word))))
         return NULL;
     return ubuf_block_splice(uref->ubuf, offset, MP2VSEQDX_HEADER_SIZE + 
                                    ((word & 0x1) ? MP2VSEQDX_COLOR_SIZE : 0));
@@ -575,18 +557,18 @@ static bool upipe_mpgvf_handle_sequence(struct upipe *upipe, struct uref *uref)
     }
 
     if (likely(upipe_mpgvf->sequence_header != NULL &&
-               ubuf_block_equal(sequence_header,
-                                  upipe_mpgvf->sequence_header) &&
+               ubase_check(ubuf_block_equal(sequence_header,
+                                  upipe_mpgvf->sequence_header)) &&
                ((upipe_mpgvf->sequence_ext == NULL && sequence_ext == NULL) ||
                 (upipe_mpgvf->sequence_ext != NULL && sequence_ext != NULL &&
-                 ubuf_block_equal(sequence_ext,
-                                  upipe_mpgvf->sequence_ext))) &&
+                 ubase_check(ubuf_block_equal(sequence_ext,
+                                  upipe_mpgvf->sequence_ext)))) &&
                ((upipe_mpgvf->sequence_display == NULL &&
                  sequence_display == NULL) ||
                 (upipe_mpgvf->sequence_display != NULL &&
                  sequence_display != NULL &&
-                 ubuf_block_equal(sequence_display,
-                                  upipe_mpgvf->sequence_display))))) {
+                 ubase_check(ubuf_block_equal(sequence_display,
+                                  upipe_mpgvf->sequence_display)))))) {
         /* identical sequence header, extension and display, but we rotate them
          * to free older buffers */
         ubuf_free(upipe_mpgvf->sequence_header);
@@ -639,12 +621,9 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         }
         upipe_mpgvf->closed_gop = mp2vgop_get_closedgop(gop);
         brokenlink = mp2vgop_get_brokenlink(gop);
-        if (unlikely(!uref_block_peek_unmap(uref,
-                                            upipe_mpgvf->next_frame_gop_offset,
-                                            gop_buffer, gop))) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
-        }
+        UBASE_FATAL(upipe, uref_block_peek_unmap(uref,
+                                          upipe_mpgvf->next_frame_gop_offset,
+                                          gop_buffer, gop))
         upipe_mpgvf->last_temporal_reference = -1;
         if (upipe_mpgvf->next_frame_gop_offset)
             uref_block_set_header_size(uref,
@@ -669,11 +648,8 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     uint16_t temporalreference = mp2vpic_get_temporalreference(picture);
     uint8_t codingtype = mp2vpic_get_codingtype(picture);
     uint16_t vbvdelay = mp2vpic_get_vbvdelay(picture);
-    if (unlikely(!uref_block_peek_unmap(uref, upipe_mpgvf->next_frame_offset,
-                                        picture_buffer, picture))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
+    UBASE_FATAL(upipe, uref_block_peek_unmap(uref, upipe_mpgvf->next_frame_offset,
+                                      picture_buffer, picture))
 
     uint64_t picture_number = upipe_mpgvf->last_picture_number +
         (temporalreference - upipe_mpgvf->last_temporal_reference);
@@ -681,17 +657,13 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         upipe_mpgvf->last_temporal_reference = temporalreference;
         upipe_mpgvf->last_picture_number = picture_number;
     }
-    if (unlikely(!uref_pic_set_number(uref, picture_number) ||
-                 !uref_mpgv_set_type(uref, codingtype))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
+    UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
+    UBASE_FATAL(upipe, uref_mpgv_set_type(uref, codingtype))
 
     if (vbvdelay != UINT16_MAX)
         uref_clock_set_cr_dts_delay(uref,
                                     (uint64_t)vbvdelay * UCLOCK_FREQ / 90000);
 
-    bool ret = true;
     *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
     if (upipe_mpgvf->next_frame_ext_offset != -1) {
         uint8_t ext_buffer[MP2VPICX_HEADER_SIZE];
@@ -708,12 +680,9 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         bool tff = mp2vpicx_get_tff(ext);
         bool rff = mp2vpicx_get_rff(ext);
         bool progressive = mp2vpicx_get_progressive(ext);
-        if (unlikely(!uref_block_peek_unmap(uref,
-                                            upipe_mpgvf->next_frame_ext_offset,
-                                            ext_buffer, ext))) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
-        }
+        UBASE_FATAL(upipe, uref_block_peek_unmap(uref,
+                                          upipe_mpgvf->next_frame_ext_offset,
+                                          ext_buffer, ext))
 
         if (intradc != 0)
             upipe_warn_va(upipe, "bit depth %"PRIu8" is possibly not supported",
@@ -731,24 +700,20 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         }
 
         if (structure & MP2VPICX_TOP_FIELD)
-            ret = ret && uref_pic_set_tf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tf(uref))
         if (structure & MP2VPICX_BOTTOM_FIELD)
-            ret = ret && uref_pic_set_bf(uref);
+            UBASE_FATAL(upipe, uref_pic_set_bf(uref))
         if (tff)
-            ret = ret && uref_pic_set_tff(uref);
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
         if (progressive)
-            ret = ret && uref_pic_set_progressive(uref);
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
     } else {
-        ret = ret && uref_pic_set_tf(uref);
-        ret = ret && uref_pic_set_bf(uref);
-        ret = ret && uref_pic_set_progressive(uref);
+        UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+        UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
     }
 
-    ret = ret && uref_clock_set_duration(uref, *duration_p);
-    if (unlikely(!ret)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
+    UBASE_FATAL(upipe, uref_clock_set_duration(uref, *duration_p))
 
     return true;
 }
@@ -768,7 +733,7 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
         return false;
 
     uint8_t type;
-    if (!uref_mpgv_get_type(uref, &type))
+    if (!ubase_check(uref_mpgv_get_type(uref, &type)))
         return false;
 
     switch (type) {
@@ -881,19 +846,20 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe, struct upump *upump)
     /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(&au_uref_s, &date)) {                       \
+    if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
-        if (!uref_clock_get_dts_##dv(&upipe_mpgvf->au_uref_s, NULL))        \
+        if (!ubase_check(uref_clock_get_dts_##dv(&upipe_mpgvf->au_uref_s,   \
+                                                 NULL)))                    \
             uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s,                \
                                     date + duration);                       \
-    } else if (uref_clock_get_dts_##dv(uref, &date))                        \
+    } else if (ubase_check(uref_clock_get_dts_##dv(uref, &date)))           \
         uref_clock_set_date_##dv(uref, UINT64_MAX, UREF_DATE_NONE);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (uref_clock_get_dts_pts_delay(&au_uref_s, &date))
+    if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
         uref_clock_set_dts_pts_delay(uref, date);
     else
         uref_clock_delete_dts_pts_delay(uref);
@@ -912,14 +878,14 @@ static void upipe_mpgvf_promote_uref(struct upipe *upipe)
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     uint64_t date;
 #define SET_DATE(dv)                                                        \
-    if (uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &date))             \
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &date)))\
         uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref, &date))
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref, &date)))
         uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
 }
 
@@ -1051,7 +1017,7 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
 
-    if (unlikely(uref_flow_get_discontinuity(uref))) {
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
         if (!upipe_mpgvf->next_frame_slice) {
             /* we do not want discontinuities in the headers before the first
              * slice header; inside the slices it is less destructive */
@@ -1081,8 +1047,7 @@ static enum ubase_err upipe_mpgvf_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, "block."))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

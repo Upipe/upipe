@@ -121,10 +121,10 @@ UREF_CLOCK_SET(orig, pts, PTS)
  *                                                                          \
  * @param uref uref structure                                               \
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
- * @return false in case of failure                                         \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool uref_clock_get_pts_##dv(struct uref *uref,               \
-                                           uint64_t *date_p)                \
+static inline enum ubase_err uref_clock_get_pts_##dv(struct uref *uref,     \
+                                                     uint64_t *date_p)      \
 {                                                                           \
     uint64_t date, delay;                                                   \
     enum uref_date_type type;                                               \
@@ -133,21 +133,19 @@ static inline bool uref_clock_get_pts_##dv(struct uref *uref,               \
         /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
-            return false;                                                   \
+            return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_CR:                                                  \
-            if (unlikely(!uref_clock_get_cr_dts_delay(uref, &delay)))       \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date += delay;                                                  \
         case UREF_DATE_DTS:                                                 \
-            if (unlikely(!uref_clock_get_dts_pts_delay(uref, &delay)))      \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date += delay;                                                  \
         case UREF_DATE_PTS:                                                 \
             break;                                                          \
     }                                                                       \
     if (date_p != NULL)                                                     \
         *date_p = date;                                                     \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }
 
 UREF_CLOCK_GET_PTS(sys)
@@ -161,10 +159,10 @@ UREF_CLOCK_GET_PTS(orig)
  *                                                                          \
  * @param uref uref structure                                               \
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
- * @return false in case of failure                                         \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool uref_clock_get_dts_##dv(struct uref *uref,               \
-                                           uint64_t *date_p)                \
+static inline enum ubase_err uref_clock_get_dts_##dv(struct uref *uref,     \
+                                                     uint64_t *date_p)      \
 {                                                                           \
     uint64_t date, delay;                                                   \
     enum uref_date_type type;                                               \
@@ -173,22 +171,20 @@ static inline bool uref_clock_get_dts_##dv(struct uref *uref,               \
         /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
-            return false;                                                   \
+            return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_CR:                                                  \
-            if (unlikely(!uref_clock_get_cr_dts_delay(uref, &delay)))       \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date += delay;                                                  \
         case UREF_DATE_DTS:                                                 \
             break;                                                          \
         case UREF_DATE_PTS:                                                 \
-            if (unlikely(!uref_clock_get_dts_pts_delay(uref, &delay)))      \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date -= delay;                                                  \
             break;                                                          \
     }                                                                       \
     if (date_p != NULL)                                                     \
         *date_p = date;                                                     \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }
 
 UREF_CLOCK_GET_DTS(sys)
@@ -202,10 +198,10 @@ UREF_CLOCK_GET_DTS(orig)
  *                                                                          \
  * @param uref uref structure                                               \
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
- * @return false in case of failure                                         \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool uref_clock_get_cr_##dv(struct uref *uref,                \
-                                          uint64_t *date_p)                 \
+static inline enum ubase_err uref_clock_get_cr_##dv(struct uref *uref,      \
+                                                    uint64_t *date_p)       \
 {                                                                           \
     uint64_t date, delay;                                                   \
     enum uref_date_type type;                                               \
@@ -214,21 +210,19 @@ static inline bool uref_clock_get_cr_##dv(struct uref *uref,                \
         /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
-            return false;                                                   \
+            return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_PTS:                                                 \
-            if (unlikely(!uref_clock_get_dts_pts_delay(uref, &delay)))      \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date -= delay;                                                  \
         case UREF_DATE_DTS:                                                 \
-            if (unlikely(!uref_clock_get_cr_dts_delay(uref, &delay)))       \
-                return false;                                               \
+            UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date -= delay;                                                  \
         case UREF_DATE_CR:                                                  \
             break;                                                          \
     }                                                                       \
     if (date_p != NULL)                                                     \
         *date_p = date;                                                     \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }
 
 UREF_CLOCK_GET_CR(sys)
@@ -241,14 +235,15 @@ UREF_CLOCK_GET_CR(orig)
 /** @This rebases the dv date as a ##dt.                                    \
  *                                                                          \
  * @param uref uref structure                                               \
+ * @return an error code                                                    \
  */                                                                         \
-static inline bool uref_clock_rebase_##dt##_##dv(struct uref *uref)         \
+static inline enum ubase_err                                                \
+    uref_clock_rebase_##dt##_##dv(struct uref *uref)                        \
 {                                                                           \
     uint64_t date;                                                          \
-    if (unlikely(!uref_clock_get_##dt##_##dv(uref, &date)))                 \
-        return false;                                                       \
+    UBASE_RETURN(uref_clock_get_##dt##_##dv(uref, &date))                   \
     uref_clock_set_##dt##_##dv(uref, date);                                 \
-    return true;                                                            \
+    return UBASE_ERR_NONE;                                                  \
 }
 
 UREF_CLOCK_REBASE(sys, cr)

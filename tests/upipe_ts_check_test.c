@@ -96,12 +96,12 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     assert(size == TS_SIZE);
 
     const uint8_t *buffer;
     int rsize = 1;
-    assert(uref_block_read(uref, 0, &rsize, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &rsize, &buffer));
     assert(rsize == 1);
     assert(ts_validate(buffer));
     uref_block_unmap(uref, 0);
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 7 * TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 7 * TS_SIZE);
     for (i = 0; i < 7; i++)
         ts_pad(buffer + i * TS_SIZE);
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 7 * TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 7 * TS_SIZE);
     for (i = 0; i < 7; i++)
         ts_pad(buffer + i * TS_SIZE);
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1 + 7 * TS_SIZE);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1 + 7 * TS_SIZE);
     buffer[0] = 0xff;
     for (i = 0; i < 7; i++)

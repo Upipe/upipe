@@ -152,8 +152,8 @@ struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
 bool es_conf_iterate(struct es_conf *conf, const char **key,
                      const char **value, enum udict_type *type)
 {
-    bool ret = udict_iterate(conf->options, key, type);
-    if (*type == UDICT_TYPE_END || !ret) {
+    if (!ubase_check(udict_iterate(conf->options, key, type)) ||
+        *type == UDICT_TYPE_END) {
         return false;
     }
     return udict_get_string(conf->options, value, *type, *key);
@@ -222,7 +222,8 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
 
     /* iterate through flow list */
     struct uref *flow_def = NULL;
-    while (upipe_split_iterate(upipe, &flow_def)) {
+    while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
+           flow_def != NULL) {
         const char *def = "(none)";
         uref_flow_get_def(flow_def, &def);
         if (ubase_ncmp(def, "block.")) {

@@ -441,8 +441,7 @@ static enum ubase_err upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    if (unlikely(!uref_flow_match_def(flow_def, "pic.")))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if ((upipe_sws_thumbs->input_pix_fmt =

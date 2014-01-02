@@ -89,17 +89,11 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump *upump)
 {
     assert(uref != NULL);
-    const char *def;
-    if (uref_flow_get_def(uref, &def) || uref_flow_get_end(uref)) {
-        uref_free(uref);
-        return;
-    }
-
     const char *string;
-    assert(uref_test_get_1(uref, &string));
+    ubase_assert(uref_test_get_1(uref, &string));
     assert(!strcmp(string, "test"));
     uint64_t num;
-    assert(uref_test_get_2(uref, &num));
+    ubase_assert(uref_test_get_2(uref, &num));
     assert(num == 42);
     uref_free(uref);
     nb_packets++;
@@ -143,7 +137,7 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    assert(uref_flow_set_def(uref, "internal."));
+    ubase_assert(uref_flow_set_def(uref, "internal."));
 
     struct upipe_mgr *upipe_setattr_mgr = upipe_setattr_mgr_alloc();
     assert(upipe_setattr_mgr != NULL);
@@ -156,8 +150,8 @@ int main(int argc, char *argv[])
     uref_free(uref);
 
     struct uref *dict = uref_alloc(uref_mgr);
-    assert(uref_test_set_1(dict, "test"));
-    assert(uref_test_set_2(dict, 42));
+    ubase_assert(uref_test_set_1(dict, "test"));
+    ubase_assert(uref_test_set_2(dict, 42));
     ubase_assert(upipe_setattr_set_dict(upipe_setattr, dict));
     uref_free(dict);
 

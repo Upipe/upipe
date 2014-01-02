@@ -93,7 +93,7 @@ static void skip_test_input(struct upipe *upipe, struct uref *uref,
     int size;
 
     size = -1;
-    assert(uref_block_read(uref, 0, &size, &buf));
+    ubase_assert(uref_block_read(uref, 0, &size, &buf));
     assert(!memcmp(buf, TESTSTRSUB, sizeof(TESTSTRSUB)));
     printf("%d \"%s\"\n", skip_test->counter, buf);
     uref_block_unmap(uref, 0);
@@ -182,7 +182,8 @@ int main(int argc, char **argv)
     uref_free(uref);
     ubase_assert(upipe_get_flow_def(skip, &uref));
     const char *def;
-    assert(uref_flow_get_def(uref, &def) && !strcmp(def, "block.foo."));
+    ubase_assert(uref_flow_get_def(uref, &def));
+    assert(!strcmp(def, "block.foo."));
 
     /* skip_test */
     struct upipe *skip_test = upipe_void_alloc(&skip_test_mgr,

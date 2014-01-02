@@ -112,7 +112,8 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
     upipe_chunk_stream_append_uref_stream(upipe, uref);
 
     while(upipe_chunk_stream->next_uref
-          && uref_block_size(upipe_chunk_stream->next_uref, &remaining)
+          && ubase_check(uref_block_size(upipe_chunk_stream->next_uref,
+                                         &remaining))
                           && (remaining >= upipe_chunk_stream->size)) {
         uref = upipe_chunk_stream_extract_uref_stream(upipe, 
                                     upipe_chunk_stream->size);
@@ -135,8 +136,7 @@ static enum ubase_err upipe_chunk_stream_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
@@ -158,8 +158,8 @@ static void upipe_chunk_stream_flush(struct upipe *upipe, struct upump *upump)
     struct uref *uref;
 
     while(upipe_chunk_stream->next_uref
-          && uref_block_size(upipe_chunk_stream->next_uref, &remaining)
-                                                     && (remaining > 0)) {
+          && ubase_check(uref_block_size(upipe_chunk_stream->next_uref,
+                                         &remaining)) && (remaining > 0)) {
         size = (remaining >= upipe_chunk_stream->size)
                ? upipe_chunk_stream->size
                : ((remaining / upipe_chunk_stream->align)

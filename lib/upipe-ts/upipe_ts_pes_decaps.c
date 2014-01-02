@@ -128,7 +128,6 @@ static void upipe_ts_pesd_flush(struct upipe *upipe)
 static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    bool ret;
     uint8_t buffer[PES_HEADER_SIZE];
     const uint8_t *pes_header = uref_block_peek(upipe_ts_pesd->next_uref,
                                                 0, PES_HEADER_SIZE, buffer);
@@ -138,9 +137,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     bool validate = pes_validate(pes_header);
     uint8_t streamid = pes_get_streamid(pes_header);
     uint16_t length = pes_get_length(pes_header);
-    ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref, 0, buffer,
-                                pes_header);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_ts_pesd->next_uref, 0,
+                                             buffer, pes_header))
 
     if (unlikely(!validate)) {
         upipe_warn(upipe, "wrong PES header");
@@ -160,8 +158,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         streamid == PES_STREAM_ID_PSD ||
         streamid == PES_STREAM_ID_DSMCC ||
         streamid == PES_STREAM_ID_H222_1_E) {
-        ret = uref_block_resize(upipe_ts_pesd->next_uref, PES_HEADER_SIZE, -1);
-        assert(ret);
+        UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
+                                             PES_HEADER_SIZE, -1))
         upipe_ts_pesd_sync_acquired(upipe);
         upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
         upipe_ts_pesd->next_uref = NULL;
@@ -185,9 +183,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     bool has_pts = pes_has_pts(pes_header - PES_HEADER_SIZE);
     bool has_dts = pes_has_dts(pes_header - PES_HEADER_SIZE);
     uint8_t headerlength = pes_get_headerlength(pes_header - PES_HEADER_SIZE);
-    ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref, PES_HEADER_SIZE,
-                                buffer2, pes_header);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_ts_pesd->next_uref,
+                PES_HEADER_SIZE, buffer2, pes_header))
 
     if (unlikely(!validate)) {
         upipe_warn(upipe, "wrong PES optional header");
@@ -207,7 +204,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     }
 
     size_t gathered_size;
-    if (unlikely(!uref_block_size(upipe_ts_pesd->next_uref, &gathered_size))) {
+    if (unlikely(!ubase_check(uref_block_size(upipe_ts_pesd->next_uref, &gathered_size)))) {
         upipe_ts_pesd_flush(upipe);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -239,9 +236,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
             }
         } else
             dts = pts;
-        ret = uref_block_peek_unmap(upipe_ts_pesd->next_uref,
-                                    PES_HEADER_SIZE_NOPTS, buffer3, ts_fields);
-        assert(ret);
+        UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_ts_pesd->next_uref,
+                                    PES_HEADER_SIZE_NOPTS, buffer3, ts_fields))
 
         if (unlikely(!validate)) {
             upipe_warn(upipe, "wrong PES timestamp syntax");
@@ -265,9 +261,8 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     else
         uref_block_delete_start(upipe_ts_pesd->next_uref);
 
-    ret = uref_block_resize(upipe_ts_pesd->next_uref,
-                            PES_HEADER_SIZE_NOPTS + headerlength, -1);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
+                            PES_HEADER_SIZE_NOPTS + headerlength, -1))
     upipe_ts_pesd_sync_acquired(upipe);
     upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
     upipe_ts_pesd->next_uref = NULL;
@@ -284,9 +279,9 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (unlikely(uref_flow_get_discontinuity(uref)))
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
         upipe_ts_pesd_flush(upipe);
-    if (uref_block_get_start(uref)) {
+    if (ubase_check(uref_block_get_start(uref))) {
         if (unlikely(upipe_ts_pesd->next_uref != NULL)) {
             upipe_warn(upipe, "truncated PES header");
             uref_free(upipe_ts_pesd->next_uref);
@@ -296,7 +291,7 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
     } else if (upipe_ts_pesd->next_uref != NULL) {
         struct ubuf *ubuf = uref_detach_ubuf(uref);
         uref_free(uref);
-        if (unlikely(!uref_block_append(upipe_ts_pesd->next_uref, ubuf))) {
+        if (unlikely(!ubase_check(uref_block_append(upipe_ts_pesd->next_uref, ubuf)))) {
             ubuf_free(ubuf);
             upipe_ts_pesd_flush(upipe);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -321,16 +316,16 @@ static enum ubase_err upipe_ts_pesd_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     const char *def;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
+    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_pesd_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;

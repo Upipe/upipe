@@ -108,7 +108,6 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                                   struct upump *upump)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
-    bool ret;
     uint8_t buffer[TS_HEADER_SIZE];
     const uint8_t *ts_header = uref_block_peek(uref, 0, TS_HEADER_SIZE,
                                                buffer);
@@ -122,15 +121,13 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     uint8_t cc = ts_get_cc(ts_header);
     bool has_payload = ts_has_payload(ts_header);
     bool has_adaptation = ts_has_adaptation(ts_header);
-    ret = uref_block_peek_unmap(uref, 0, buffer, ts_header);
-    assert(ret);
-    ret = uref_block_resize(uref, TS_HEADER_SIZE, -1);
-    assert(ret);
+    UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 0, buffer, ts_header))
+    UBASE_FATAL(upipe, uref_block_resize(uref, TS_HEADER_SIZE, -1))
 
     bool discontinuity = upipe_ts_decaps->last_cc == -1;
     if (unlikely(has_adaptation)) {
         uint8_t af_length;
-        if (unlikely(!uref_block_extract(uref, 0, 1, &af_length))) {
+        if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, &af_length)))) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
@@ -145,7 +142,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
 
         if (af_length) {
             uint8_t af_header;
-            if (unlikely(!uref_block_extract(uref, 1, 1, &af_header))) {
+            if (unlikely(!ubase_check(uref_block_extract(uref, 1, 1, &af_header)))) {
                 uref_free(uref);
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
@@ -169,8 +166,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                 uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
                                    tsaf_get_pcrext(pcr - TS_HEADER_SIZE_AF));
                 pcrval *= UCLOCK_FREQ / 27000000;
-                ret = uref_block_peek_unmap(uref, 2, buffer2, pcr);
-                assert(ret);
+                UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 2, buffer2, pcr))
 
                 uref_clock_set_ref(uref);
                 upipe_throw_clock_ref(upipe, uref, pcrval,
@@ -178,8 +174,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        ret = uref_block_resize(uref, af_length + 1, -1);
-        assert(ret);
+        UBASE_FATAL(upipe, uref_block_resize(uref, af_length + 1, -1))
     }
 
     if (unlikely(ts_check_duplicate(cc, upipe_ts_decaps->last_cc))) {
@@ -204,11 +199,8 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
         uref_flow_set_discontinuity(uref);
     if (unlikely(unitstart))
         uref_block_set_start(uref);
-    if (unlikely((transporterror && !uref_flow_set_error(uref)))) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
+    if (unlikely(transporterror))
+        uref_flow_set_error(uref);
 
     upipe_ts_decaps_output(upipe, uref, upump);
 }
@@ -225,16 +217,16 @@ static enum ubase_err upipe_ts_decaps_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     const char *def;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
+    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_decaps_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;

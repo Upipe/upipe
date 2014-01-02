@@ -115,7 +115,7 @@ static void STRUCTURE##_append_uref_stream(struct upipe *upipe,             \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     size_t size;                                                            \
-    if (unlikely(!uref_block_size(uref, &size))) {                          \
+    if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {             \
         uref_free(uref);                                                    \
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                          \
         return;                                                             \
@@ -129,7 +129,8 @@ static void STRUCTURE##_append_uref_stream(struct upipe *upipe,             \
         return;                                                             \
     }                                                                       \
     struct ubuf *ubuf = uref_detach_ubuf(uref);                             \
-    if (unlikely(!uref_block_append(STRUCTURE->NEXT_UREF, ubuf))) {         \
+    if (unlikely(!ubase_check(uref_block_append(STRUCTURE->NEXT_UREF,       \
+                                                ubuf)))) {                  \
         uref_free(uref);                                                    \
         ubuf_free(ubuf);                                                    \
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                          \

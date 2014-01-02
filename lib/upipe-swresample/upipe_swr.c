@@ -123,7 +123,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    if (unlikely(!uref_sound_flow_get_samples(uref, &in_samples))) {
+    if (unlikely(!ubase_check(uref_sound_flow_get_samples(uref, &in_samples)))) {
         uref_free(uref);
         return;
     }
@@ -132,7 +132,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     out_samples = in_samples;
 
     size = -1;
-    if (unlikely(!uref_block_read(uref, 0, &size, &in_buf))) {
+    if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &in_buf)))) {
         upipe_err(upipe, "could not read uref, dropping samples");
         uref_free(uref);
         return;
@@ -190,8 +190,8 @@ static enum ubase_err upipe_swr_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     const char *def;
-    if (unlikely(!uref_flow_get_def(flow_def, &def) ||
-                 ubase_ncmp(def, UREF_SOUND_FLOW_DEF)))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (unlikely(ubase_ncmp(def, UREF_SOUND_FLOW_DEF)))
         return UBASE_ERR_INVALID;
 
     struct upipe_swr *upipe_swr = upipe_swr_from_upipe(upipe);
@@ -292,9 +292,9 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
     uref_flow_get_def(flow_def, &def);
     upipe_swr->out_fmt = upipe_av_samplefmt_from_flow_def(def);
     if (unlikely(upipe_swr->out_fmt == AV_SAMPLE_FMT_NONE ||
-                 !uref_sound_flow_get_rate(flow_def, &upipe_swr->out_rate) ||
-                 !uref_sound_flow_get_channels(flow_def,
-                                               &upipe_swr->out_chan))) {
+                 !ubase_check(uref_sound_flow_get_rate(flow_def, &upipe_swr->out_rate)) ||
+                 ubase_check(!uref_sound_flow_get_channels(flow_def,
+                                               &upipe_swr->out_chan)))) {
         uref_free(flow_def);
         upipe_swr_free_flow(upipe);
         return NULL;

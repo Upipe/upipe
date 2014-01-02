@@ -102,7 +102,7 @@ static struct upipe *test_sub_alloc(struct upipe_mgr *mgr,
     assert(signature == UPIPE_FLOW_SIGNATURE);
     struct uref *flow_def = va_arg(args, struct uref *);
     uint64_t flow_id;
-    assert(uref_flow_get_id(flow_def, &flow_id));
+    ubase_assert(uref_flow_get_id(flow_def, &flow_id));
     add_flows -= flow_id;
 
     struct test_sub *test_sub = malloc(sizeof(struct test_sub));
@@ -211,8 +211,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 12));
-    assert(uref_program_flow_set_name(flow_def, "A 1"));
+    ubase_assert(uref_flow_set_id(flow_def, 12));
+    ubase_assert(uref_program_flow_set_name(flow_def, "A 1"));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     add_flows = 12;
     del_flows = 0;
@@ -224,8 +224,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_program_flow_alloc_def(uref_mgr);
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 13));
-    assert(uref_program_flow_set_name(flow_def, "B 2"));
+    ubase_assert(uref_flow_set_id(flow_def, 13));
+    ubase_assert(uref_program_flow_set_name(flow_def, "B 2"));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
     assert(!add_flows);
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
 
     flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 42));
+    ubase_assert(uref_flow_set_id(flow_def, 42));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     add_flows = 0;
     del_flows = 0;
@@ -305,7 +305,7 @@ int main(int argc, char **argv)
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 43));
+    ubase_assert(uref_flow_set_id(flow_def, 43));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     add_flows = 43;
     upipe_split_throw_update(upipe);
@@ -316,7 +316,7 @@ int main(int argc, char **argv)
 
     flow_def = uref_block_flow_alloc_def(uref_mgr, "pic.");
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 44));
+    ubase_assert(uref_flow_set_id(flow_def, 44));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
     assert(!add_flows);
@@ -326,7 +326,7 @@ int main(int argc, char **argv)
 
     flow_def = uref_block_flow_alloc_def(uref_mgr, "pic.sub.");
     assert(flow_def != NULL);
-    assert(uref_flow_set_id(flow_def, 45));
+    ubase_assert(uref_flow_set_id(flow_def, 45));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
     assert(!add_flows);
@@ -354,8 +354,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    assert(uref_flow_set_lang(flow_def, "eng"));
-    assert(uref_flow_set_id(flow_def, 46));
+    ubase_assert(uref_flow_set_lang(flow_def, "eng"));
+    ubase_assert(uref_flow_set_id(flow_def, 46));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
     assert(!add_flows);
@@ -365,8 +365,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    assert(uref_flow_set_lang(flow_def, "fra"));
-    assert(uref_flow_set_id(flow_def, 47));
+    ubase_assert(uref_flow_set_lang(flow_def, "fra"));
+    ubase_assert(uref_flow_set_id(flow_def, 47));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
     assert(!add_flows);

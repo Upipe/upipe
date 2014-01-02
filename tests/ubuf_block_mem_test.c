@@ -61,53 +61,53 @@ int main(int argc, char **argv)
     assert(ubuf1 != NULL);
 
     size_t size;
-    assert(ubuf_block_size(ubuf1, &size));
+    ubase_assert(ubuf_block_size(ubuf1, &size));
     assert(size == UBUF_SIZE);
 
     const uint8_t *r;
     uint8_t *w;
     int wanted;
     wanted = -1;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE);
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     wanted = -1;
-    assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
     assert(wanted == UBUF_SIZE);
     for (int i = 0; i < UBUF_SIZE; i++)
         w[i] = i + 1;
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     wanted = 1;
-    assert(ubuf_block_read(ubuf1, 42, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf1, 42, &wanted, &r));
     assert(wanted == 1);
     assert(*r == 43);
-    assert(ubuf_block_unmap(ubuf1, 42));
+    ubase_assert(ubuf_block_unmap(ubuf1, 42));
 
     /* test ubuf_block_merge */
-    assert(ubuf_block_merge(mgr, &ubuf1, -2 * UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
+    ubase_assert(ubuf_block_merge(mgr, &ubuf1, -2 * UBUF_PREPEND, UBUF_SIZE + 3 * UBUF_PREPEND));
     wanted = -1;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE + 3 * UBUF_PREPEND);
     assert(r[2 * UBUF_PREPEND] == 1);
     assert(r[UBUF_SIZE + 2 * UBUF_PREPEND - 1] == UBUF_SIZE);
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     wanted = 1;
-    assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
     assert(wanted == 1);
     w[0] = 0xAB;
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     /* test ubuf_block_resize */
-    assert(ubuf_block_resize(ubuf1, 2 * UBUF_PREPEND, UBUF_SIZE));
+    ubase_assert(ubuf_block_resize(ubuf1, 2 * UBUF_PREPEND, UBUF_SIZE));
     wanted = -1;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == UBUF_SIZE);
     assert(r[0] == 1);
     assert(r[UBUF_SIZE - 1] == UBUF_SIZE);
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     ubuf_free(ubuf1);
 
@@ -115,65 +115,65 @@ int main(int argc, char **argv)
     ubuf1 = ubuf_block_alloc(mgr, 32);
     assert(ubuf1 != NULL);
     wanted = -1;
-    assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
     assert(wanted == 32);
     for (int i = 0; i < 16; i++)
         w[i] = 16 + i;
     for (int i = 16; i < 32; i++)
         w[i] = 17 + i;
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     ubuf2 = ubuf_block_alloc(mgr, 1);
     assert(ubuf2 != NULL);
     wanted = 1;
-    assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 1);
     w[0] = 32;
-    assert(ubuf_block_unmap(ubuf2, 0));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
     ubuf3 = ubuf_dup(ubuf2);
     assert(ubuf3 != NULL);
-    assert(ubuf_block_insert(ubuf1, 16, ubuf2));
+    ubase_assert(ubuf_block_insert(ubuf1, 16, ubuf2));
     /* ubuf2 pointer is now invalid */
 
-    assert(ubuf_block_size(ubuf1, &size));
+    ubase_assert(ubuf_block_size(ubuf1, &size));
     assert(size == 33);
 
     ubuf2 = ubuf_block_alloc(mgr, 16);
     assert(ubuf2 != NULL);
     wanted = -1;
-    assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 16);
     for (int i = 0; i < 16; i++)
         w[i] = i;
-    assert(ubuf_block_unmap(ubuf2, 0));
-    assert(ubuf_block_insert(ubuf1, 0, ubuf2));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
+    ubase_assert(ubuf_block_insert(ubuf1, 0, ubuf2));
     /* ubuf2 pointer is now invalid */
 
-    assert(ubuf_block_size(ubuf1, &size));
+    ubase_assert(ubuf_block_size(ubuf1, &size));
     assert(size == 49);
 
     ubuf2 = ubuf_block_alloc(mgr, 17);
     assert(ubuf2 != NULL);
     wanted = -1;
-    assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf2, 0, &wanted, &w));
     assert(wanted == 17);
     for (int i = 0; i < 16; i++)
         w[i] = i + 49;
-    assert(ubuf_block_unmap(ubuf2, 0));
-    assert(ubuf_block_append(ubuf1, ubuf2));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
+    ubase_assert(ubuf_block_append(ubuf1, ubuf2));
     /* ubuf2 pointer is now invalid */
 
-    assert(ubuf_block_size(ubuf1, &size));
+    ubase_assert(ubuf_block_size(ubuf1, &size));
     assert(size == 66);
 
     wanted = 32;
-    assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
     assert(wanted == 16);
-    assert(ubuf_block_unmap(ubuf1, 0));
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     /* test ubuf_block_truncate */
-    assert(ubuf_block_truncate(ubuf1, 65));
-    assert(ubuf_block_size(ubuf1, &size));
+    ubase_assert(ubuf_block_truncate(ubuf1, 65));
+    ubase_assert(ubuf_block_size(ubuf1, &size));
     assert(size == 65);
 
     /* test ubuf_block_splice */
@@ -181,12 +181,12 @@ int main(int argc, char **argv)
     assert(ubuf2 != NULL);
 
     wanted = -1;
-    assert(!ubuf_block_write(ubuf2, 0, &wanted, &w));
-    assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
+    ubase_nassert(ubuf_block_write(ubuf2, 0, &wanted, &w));
+    ubase_assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
     assert(wanted == 16);
     for (int i = 0; i < 16; i++)
         assert(r[i] == i + 49);
-    assert(ubuf_block_unmap(ubuf2, 0));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
     ubuf_free(ubuf2);
 
     /* test ubuf_block_peek */
@@ -194,56 +194,56 @@ int main(int argc, char **argv)
     r = ubuf_block_peek(ubuf1, 30, 4, buffer);
     assert(r == buffer);
     assert(r[0] == 30 && r[3] == 33);
-    assert(ubuf_block_peek_unmap(ubuf1, 30, buffer, r));
+    ubase_assert(ubuf_block_peek_unmap(ubuf1, 30, buffer, r));
 
     r = ubuf_block_peek(ubuf1, 0, 4, buffer);
     assert(r != NULL);
     assert(r != buffer);
     assert(r[0] == 0 && r[3] == 3);
-    assert(ubuf_block_peek_unmap(ubuf1, 0, buffer, r));
+    ubase_assert(ubuf_block_peek_unmap(ubuf1, 0, buffer, r));
 
     /* test refcounting */
     wanted = -1;
-    assert(!ubuf_block_write(ubuf1, 32, &wanted, &w));
+    ubase_nassert(ubuf_block_write(ubuf1, 32, &wanted, &w));
 
     ubuf_free(ubuf3);
     wanted = -1;
-    assert(ubuf_block_write(ubuf1, 32, &wanted, &w));
+    ubase_assert(ubuf_block_write(ubuf1, 32, &wanted, &w));
     assert(wanted == 1);
-    assert(ubuf_block_unmap(ubuf1, 32));
+    ubase_assert(ubuf_block_unmap(ubuf1, 32));
 
     /* test ubuf_block_copy */
     ubuf2 = ubuf_block_copy(mgr, ubuf1, 1, -1);
     assert(ubuf2 != NULL);
     wanted = -1;
-    assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
+    ubase_assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
     assert(wanted == 64);
     for (int i = 0; i < wanted; i++)
         assert(r[i] == i + 1);
-    assert(ubuf_block_unmap(ubuf2, 0));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
     ubuf_free(ubuf2);
 
     /* test ubuf_block_equal */
     ubuf2 = ubuf_block_copy(mgr, ubuf1, 0, -1);
     assert(ubuf2 != NULL);
-    assert(ubuf_block_equal(ubuf1, ubuf2));
+    ubase_assert(ubuf_block_equal(ubuf1, ubuf2));
     ubuf_free(ubuf2);
 
     /* test ubuf_block_match */
     uint8_t filter[] = { 0, 1, 2, 1 };
     uint8_t mask[] = { 0xff, 0xff, 0x0f, 0xfd };
-    assert(ubuf_block_match(ubuf1, filter, mask, 4));
+    ubase_assert(ubuf_block_match(ubuf1, filter, mask, 4));
     filter[3] = 0;
-    assert(!ubuf_block_match(ubuf1, filter, mask, 4));
+    ubase_nassert(ubuf_block_match(ubuf1, filter, mask, 4));
 
     /* test ubuf_block_scan */
     size_t offset = 2;
-    assert(ubuf_block_scan(ubuf1, &offset, 3));
+    ubase_assert(ubuf_block_scan(ubuf1, &offset, 3));
     assert(offset == 3);
 
     /* test ubuf_block_find */
     offset = 0;
-    assert(ubuf_block_find(ubuf1, &offset, 2, 2, 3));
+    ubase_assert(ubuf_block_find(ubuf1, &offset, 2, 2, 3));
     assert(offset == 2);
 
     /* test ubuf_block_stream */
@@ -262,9 +262,9 @@ int main(int argc, char **argv)
     ubuf_block_stream_clean(&s);
 
     /* test ubuf_block_delete */
-    assert(ubuf_block_delete(ubuf1, 8, 32));
+    ubase_assert(ubuf_block_delete(ubuf1, 8, 32));
     uint8_t buf[33];
-    assert(ubuf_block_extract(ubuf1, 0, -1, buf));
+    ubase_assert(ubuf_block_extract(ubuf1, 0, -1, buf));
     for (int i = 0; i < 8; i++)
         assert(buf[i] == i);
     for (int i = 9; i < 33; i++)

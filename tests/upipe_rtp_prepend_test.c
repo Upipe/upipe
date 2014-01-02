@@ -121,7 +121,7 @@ static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
     uref_dump(uref, upipe->uprobe);
 
     /* compute expected timestamp */
-    if (unlikely(!uref_clock_get_cr_prog(uref, &dts))) {
+    if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &dts)))) {
         uref_clock_get_cr_sys(uref, &dts);
     }
     div = lldiv(dts, UCLOCK_FREQ);

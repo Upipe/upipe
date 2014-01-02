@@ -105,7 +105,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
     size_t size;
-    assert(uref_block_size(uref, &size));
+    ubase_assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 4*framesize);
     assert(uref);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 4*framesize);
     memset(buffer, 0, size);
 

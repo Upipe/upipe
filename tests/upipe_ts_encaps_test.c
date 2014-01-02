@@ -111,8 +111,8 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     /* check attributes */
     uint64_t uref_dts, uref_dts_sys, vbv_delay = 0;
-    assert(uref_clock_get_dts_prog(uref, &uref_dts));
-    assert(uref_clock_get_dts_sys(uref, &uref_dts_sys));
+    ubase_assert(uref_clock_get_dts_prog(uref, &uref_dts));
+    ubase_assert(uref_clock_get_dts_sys(uref, &uref_dts_sys));
     uref_clock_get_cr_dts_delay(uref, &vbv_delay);
     uref_dts -= vbv_delay;
     uref_dts_sys -= vbv_delay;
@@ -120,14 +120,14 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     assert(uref_dts == dts - dts_step * nb_ts);
     assert(uref_dts_sys == dts_sys - dts_step * nb_ts);
     if (next_pcr <= uref_dts + pcr_tolerance)
-        assert(uref_clock_get_ref(uref));
+        ubase_assert(uref_clock_get_ref(uref));
 
     /* check header */
     cc++;
     cc &= 0xff;
     int size = -1;
     const uint8_t *buffer;
-    assert(uref_block_read(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size >= TS_HEADER_SIZE);
     assert(ts_validate(buffer));
     assert(ts_get_pid(buffer) == 68);
@@ -157,7 +157,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     if (psi_first) {
         /* check pointer_field */
         size = -1;
-        assert(uref_block_read(uref, offset, &size, &buffer));
+        ubase_assert(uref_block_read(uref, offset, &size, &buffer));
         assert(size == 1);
         assert(buffer[0] == 0);
         uref_block_unmap(uref, offset);
@@ -167,7 +167,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
 
     /* check payload */
     size = -1;
-    assert(uref_block_read(uref, offset, &size, &buffer));
+    ubase_assert(uref_block_read(uref, offset, &size, &buffer));
     if (size + offset != TS_SIZE)
         assert(psi);
     int i;
@@ -178,7 +178,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     if (size + offset != TS_SIZE) {
         /* check padding */
         offset += size;
-        assert(uref_block_read(uref, offset, &size, &buffer));
+        ubase_assert(uref_block_read(uref, offset, &size, &buffer));
         assert(size + offset == TS_SIZE);
         for (i = 0; i < size; i++)
             assert(buffer[i] == 0xff);
@@ -233,9 +233,9 @@ int main(int argc, char *argv[])
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_block_flow_set_octetrate(uref, 2206));
-    assert(uref_ts_flow_set_tb_rate(uref, 2206));
-    assert(uref_ts_flow_set_pid(uref, 68));
+    ubase_assert(uref_block_flow_set_octetrate(uref, 2206));
+    ubase_assert(uref_ts_flow_set_tb_rate(uref, 2206));
+    ubase_assert(uref_ts_flow_set_pid(uref, 68));
 
     struct upipe_mgr *upipe_ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     assert(upipe_ts_encaps_mgr != NULL);
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2206);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 2206);
     int i;
     for (i = 0; i < 2206; i++)
@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_sys(uref, 270000000 + 27000000);
     uref_clock_set_cr_dts_delay(uref, 27000000);
     uref_flow_set_discontinuity(uref);
-    assert(uref_flow_set_random(uref));
+    ubase_assert(uref_flow_set_random(uref));
     dts = 27000000;
     dts_sys = 270000000;
     nb_ts = 2206 / (TS_SIZE - TS_HEADER_SIZE) + 1;
@@ -283,9 +283,9 @@ int main(int argc, char *argv[])
     pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ / 2048;
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
-    assert(uref_block_flow_set_octetrate(uref, 2048));
-    assert(uref_ts_flow_set_tb_rate(uref, 2048));
-    assert(uref_ts_flow_set_pid(uref, 68));
+    ubase_assert(uref_block_flow_set_octetrate(uref, 2048));
+    ubase_assert(uref_ts_flow_set_tb_rate(uref, 2048));
+    ubase_assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 2048);
     for (i = 0; i < 2048; i++)
         buffer[i] = i % 256;
@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_prog(uref, 27000000);
     uref_clock_set_dts_sys(uref, 270000000);
     uref_flow_set_discontinuity(uref);
-    assert(uref_flow_set_random(uref));
+    ubase_assert(uref_flow_set_random(uref));
     dts = 27000000;
     dts_sys = 270000000;
     nb_ts = 2048 / (TS_SIZE - TS_HEADER_SIZE) + 1;
@@ -323,9 +323,9 @@ int main(int argc, char *argv[])
     cc = 0;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
-    assert(uref_block_flow_set_octetrate(uref, 1025));
-    assert(uref_ts_flow_set_tb_rate(uref, 1025));
-    assert(uref_ts_flow_set_pid(uref, 68));
+    ubase_assert(uref_block_flow_set_octetrate(uref, 1025));
+    ubase_assert(uref_ts_flow_set_tb_rate(uref, 1025));
+    ubase_assert(uref_ts_flow_set_pid(uref, 68));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1024);
     assert(uref != NULL);
     size = -1;
-    assert(uref_block_write(uref, 0, &size, &buffer));
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 1024);
     for (i = 0; i < 1024; i++)
         buffer[i] = i % 256;

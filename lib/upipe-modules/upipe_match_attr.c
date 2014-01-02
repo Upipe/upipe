@@ -64,9 +64,9 @@ struct upipe_match_attr {
     bool flow_def_sent;
 
     /** match uint8_t */
-    bool (*match_uint8_t) (struct uref*, uint8_t, uint8_t);
+    enum ubase_err (*match_uint8_t) (struct uref*, uint8_t, uint8_t);
     /** match uint64_t */
-    bool (*match_uint64_t) (struct uref*, uint64_t, uint64_t);
+    enum ubase_err (*match_uint64_t) (struct uref*, uint64_t, uint64_t);
     /** mode */
     enum upipe_match_attr_type mode;
     /** min */
@@ -93,7 +93,7 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
                                    struct upump *upump)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
-    bool forward = true;
+    enum ubase_err forward = UBASE_ERR_NONE;
     uint64_t min = upipe_match_attr->min;
     uint64_t max = upipe_match_attr->max;
 
@@ -116,7 +116,7 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
             break;
     }
 
-    if (forward) {
+    if (ubase_check(forward)) {
         upipe_match_attr_output(upipe, uref, upump);
     } else {
         uref_free(uref);
@@ -174,14 +174,14 @@ static enum ubase_err upipe_match_attr_control(struct upipe *upipe,
         case UPIPE_MATCH_ATTR_SET_UINT8_T: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MATCH_ATTR_SIGNATURE)
             upipe_match_attr->match_uint8_t = va_arg(args,
-                      bool (*)(struct uref*, uint8_t, uint8_t));
+                    enum ubase_err (*)(struct uref*, uint8_t, uint8_t));
             upipe_match_attr->mode = UPIPE_MATCH_ATTR_UINT8_T;
             return UBASE_ERR_NONE;
         }
         case UPIPE_MATCH_ATTR_SET_UINT64_T: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MATCH_ATTR_SIGNATURE)
             upipe_match_attr->match_uint64_t = va_arg(args,
-                    bool (*)(struct uref*, uint64_t, uint64_t));
+                    enum ubase_err (*)(struct uref*, uint64_t, uint64_t));
             upipe_match_attr->mode = UPIPE_MATCH_ATTR_UINT64_T;
             return UBASE_ERR_NONE;
         }

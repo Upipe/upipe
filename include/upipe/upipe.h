@@ -467,6 +467,400 @@ static inline struct uprobe *upipe_pop_probe(struct upipe *upipe)
     return uprobe;
 }
 
+/** @This should be called by the module writer before it disposes of its
+ * upipe structure.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_clean(struct upipe *upipe)
+{
+    assert(upipe != NULL);
+    uprobe_release(upipe->uprobe);
+    upipe_mgr_release(upipe->mgr);
+}
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param upipe description structure of the pipe
+ * @param event event to throw
+ * @param args arguments
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
+                                            enum uprobe_event event,
+                                            va_list args)
+{
+    return uprobe_throw_va(upipe->uprobe, upipe, event, args);
+}
+
+/** @internal @This throws generic events with optional arguments.
+ *
+ * @param upipe description structure of the pipe
+ * @param event event to throw, followed by arguments
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw(struct upipe *upipe,
+                                         enum uprobe_event event, ...)
+{
+    va_list args;
+    va_start(args, event);
+    enum ubase_err err = upipe_throw_va(upipe, event, args);
+    va_end(args);
+    return err;
+}
+
+/** @internal @This throws a log event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param msg textual message
+ */
+#define upipe_log(upipe, level, msg)                                        \
+    uprobe_log((upipe)->uprobe, upipe, level, msg)
+
+/** @internal @This throws a log event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_log_va(struct upipe *upipe,
+                                enum uprobe_log_level level,
+                                const char *format, ...)
+{
+    UBASE_VARARG(upipe_log(upipe, level, string))
+}
+
+/** @This throws an error event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_err(upipe, msg) upipe_log(upipe, UPROBE_LOG_ERROR, msg)
+
+/** @This throws an error event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_err(upipe, string))
+}
+
+/** @This throws a warning event. This event is thrown whenever a pipe wants
+ * to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_warn(upipe, msg) upipe_log(upipe, UPROBE_LOG_WARNING, msg)
+
+/** @This throws a warning event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_warn(upipe, string))
+}
+
+/** @This throws a notice statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_notice(upipe, msg) upipe_log(upipe, UPROBE_LOG_NOTICE, msg)
+
+/** @This throws a notice statement event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_notice(upipe, string))
+}
+
+/** @This throws a debug statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_dbg(upipe, msg) upipe_log(upipe, UPROBE_LOG_DEBUG, msg)
+
+/** @This throws a debug statement event, with printf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
+{
+    UBASE_VARARG(upipe_dbg(upipe, string))
+}
+
+/** @This throws a verbose statement event. This event is thrown whenever a pipe
+ * wants to send a textual message.
+ *
+ * @param upipe description structure of the pipe
+ * @param msg textual message
+ */
+#define upipe_verbose(upipe, msg) upipe_log(upipe, UPROBE_LOG_VERBOSE, msg)
+
+/** @This throws a verbose statement event, with printf-style message
+ * generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format of the textual message, followed by optional arguments
+ */
+static inline void upipe_verbose_va(struct upipe *upipe,
+                                    const char *format, ...)
+{
+    UBASE_VARARG(upipe_verbose(upipe, string))
+}
+
+/** @This throws a fatal error event. After this event, the behaviour
+ * of a pipe is undefined, except for calls to @ref upipe_release.
+ *
+ * @param upipe description structure of the pipe
+ * @param errcode error code
+ * @return an error code
+ */
+#define upipe_throw_fatal(upipe, errcode)                                   \
+    uprobe_throw_fatal((upipe)->uprobe, upipe, errcode)
+
+/** @This throws an error event.
+ *
+ * @param upipe description structure of the pipe
+ * @param errcode error code
+ * @return an error code
+ */
+#define upipe_throw_error(upipe, errcode)                                   \
+    uprobe_throw_error((upipe)->uprobe, upipe, errcode)
+
+/** @This throws a ready event. This event is thrown whenever a
+ * pipe is ready to accept input or respond to control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_ready(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw ready event");
+    return upipe_throw(upipe, UPROBE_READY);
+}
+
+/** @This throws a dead event. This event is thrown whenever a
+ * pipe is about to be destroyed and will no longer accept input and
+ * control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_dead(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw dead event");
+    return upipe_throw(upipe, UPROBE_DEAD);
+}
+
+/** @This throws a source end event. This event is thrown when a pipe is unable
+ * to read from an input because the end of file was reached, or because an
+ * error occurred.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_source_end(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw source end");
+    return upipe_throw(upipe, UPROBE_SOURCE_END);
+}
+
+/** @This throws a sink end event. This event is thrown when a pipe is unable
+ * to write to an output because the disk is full, or another error occurred.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw sink end");
+    return upipe_throw(upipe, UPROBE_SINK_END);
+}
+
+/** @This throws an event asking for a uref manager.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw need uref mgr");
+    return upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
+}
+
+/** @This throws an event asking for a upump manager.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw need upump mgr");
+    return upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
+}
+
+/** @This throws an event asking for a uclock.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw need uclock");
+    return upipe_throw(upipe, UPROBE_NEED_UCLOCK);
+}
+
+/** @This throws an event declaring a new flow definition on the output.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def definition for this flow
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
+{
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw new flow def (NULL)");
+    else {
+        upipe_dbg(upipe, "throw new flow def");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
+    return upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
+}
+
+/** @This throws an event asking for a ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def definition for this flow
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
+                                                       struct uref *flow_def)
+{
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
+    else {
+        upipe_dbg(upipe, "throw need ubuf mgr");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
+    return upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
+}
+
+/** @This throws an event declaring a new random access point in the input.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref containing the random access point
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_new_rap(struct upipe *upipe,
+                                                 struct uref *uref)
+{
+    return upipe_throw(upipe, UPROBE_NEW_RAP, uref);
+}
+
+/** @This throws an update event. This event is thrown whenever a split pipe
+ * declares a new output flow list.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_split_throw_update(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw split update");
+    return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
+}
+
+/** @This throws an event telling that a pipe synchronized on its input.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_sync_acquired(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw sync acquired");
+    return upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
+}
+
+/** @This throws an event telling that a pipe lost synchronization with its
+ * input.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_sync_lost(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw sync lost");
+    return upipe_throw(upipe, UPROBE_SYNC_LOST);
+}
+
+/** @This throws an event telling that the given uref carries a clock reference.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying a clock reference
+ * @param clock_ref clock reference, in 27 MHz scale
+ * @param discontinuity 1 if there is a suspicion of discontinuity
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_clock_ref(struct upipe *upipe,
+                                                   struct uref *uref,
+                                                   uint64_t clock_ref,
+                                                   int discontinuity)
+{
+    return upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
+}
+
+/** @This throws an event telling that the given uref carries a presentation
+ * and/or a decoding timestamp. The uref must at least have k.dts.orig set.
+ * Depending on the module documentation, k.dts may
+ * also be set. A probe is entitled to adding new attributes such as k.pts.sys
+ * and/or k.dts.sys.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying a presentation and/or a decoding timestamp
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
+                                                  struct uref *uref)
+{
+    return upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
+}
+
+/** @This catches an event coming from an inner pipe, and rethrows is as if
+ * it were sent by the outermost pipe.
+ *
+ * @param upipe pointer to outermost pipe
+ * @param inner pointer to inner pipe
+ * @param event event thrown
+ * @param args optional arguments of the event
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
+                                               struct upipe *inner,
+                                               enum uprobe_event event,
+                                               va_list args)
+{
+    if (event != UPROBE_READY && event != UPROBE_DEAD)
+        return upipe_throw_va(upipe, event, args);
+    else
+        return uprobe_throw_va(upipe->uprobe, inner, event, args);
+}
+
 /** @This sends an input buffer into a pipe. Note that all inputs and control
  * commands must be executed from the same thread - no reentrancy or locking
  * is required from the pipe. Also note that uref is then owned by the callee
@@ -508,6 +902,9 @@ static inline enum ubase_err upipe_control_va(struct upipe *upipe,
     upipe_use(upipe);
     err = upipe->mgr->upipe_control(upipe, command, args);
     upipe_release(upipe);
+    if (unlikely(!ubase_check(err)))
+        upipe_dbg_va(upipe, "returned error 0x%x to command 0x%x", err,
+                     command);
     return err;
 }
 
@@ -530,18 +927,6 @@ static inline enum ubase_err upipe_control(struct upipe *upipe,
     err = upipe_control_va(upipe, command, args);
     va_end(args);
     return err;
-}
-
-/** @This should be called by the module writer before it disposes of its
- * upipe structure.
- *
- * @param upipe description structure of the pipe
- */
-static inline void upipe_clean(struct upipe *upipe)
-{
-    assert(upipe != NULL);
-    uprobe_release(upipe->uprobe);
-    upipe_mgr_release(upipe->mgr);
 }
 
 /** @internal @This allows to easily define accessors for control commands.
@@ -962,388 +1347,6 @@ static inline struct upipe *
         return NULL;
     }
     return upipe_flow_alloc_input(upipe, sub_mgr, uprobe, flow_def);
-}
-
-/** @internal @This throws generic events with optional arguments.
- *
- * @param upipe description structure of the pipe
- * @param event event to throw
- * @param args arguments
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
-                                            enum uprobe_event event,
-                                            va_list args)
-{
-    return uprobe_throw_va(upipe->uprobe, upipe, event, args);
-}
-
-/** @internal @This throws generic events with optional arguments.
- *
- * @param upipe description structure of the pipe
- * @param event event to throw, followed by arguments
- * @return an error code
- */
-static inline enum ubase_err upipe_throw(struct upipe *upipe,
-                                         enum uprobe_event event, ...)
-{
-    va_list args;
-    va_start(args, event);
-    enum ubase_err err = upipe_throw_va(upipe, event, args);
-    va_end(args);
-    return err;
-}
-
-/** @internal @This throws a log event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param level level of importance of the message
- * @param msg textual message
- */
-#define upipe_log(upipe, level, msg)                                        \
-    uprobe_log((upipe)->uprobe, upipe, level, msg)
-
-/** @internal @This throws a log event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param level level of importance of the message
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_log_va(struct upipe *upipe,
-                                enum uprobe_log_level level,
-                                const char *format, ...)
-{
-    UBASE_VARARG(upipe_log(upipe, level, string))
-}
-
-/** @This throws an error event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_err(upipe, msg) upipe_log(upipe, UPROBE_LOG_ERROR, msg)
-
-/** @This throws an error event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_err(upipe, string))
-}
-
-/** @This throws a warning event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_warn(upipe, msg) upipe_log(upipe, UPROBE_LOG_WARNING, msg)
-
-/** @This throws a warning event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_warn(upipe, string))
-}
-
-/** @This throws a notice statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_notice(upipe, msg) upipe_log(upipe, UPROBE_LOG_NOTICE, msg)
-
-/** @This throws a notice statement event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_notice(upipe, string))
-}
-
-/** @This throws a debug statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_dbg(upipe, msg) upipe_log(upipe, UPROBE_LOG_DEBUG, msg)
-
-/** @This throws a debug statement event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_dbg(upipe, string))
-}
-
-/** @This throws a verbose statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_verbose(upipe, msg) upipe_log(upipe, UPROBE_LOG_VERBOSE, msg)
-
-/** @This throws a verbose statement event, with printf-style message
- * generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-static inline void upipe_verbose_va(struct upipe *upipe,
-                                    const char *format, ...)
-{
-    UBASE_VARARG(upipe_verbose(upipe, string))
-}
-
-/** @This throws a fatal error event. After this event, the behaviour
- * of a pipe is undefined, except for calls to @ref upipe_release.
- *
- * @param upipe description structure of the pipe
- * @param errcode error code
- * @return an error code
- */
-#define upipe_throw_fatal(upipe, errcode)                                   \
-    uprobe_throw_fatal((upipe)->uprobe, upipe, errcode)
-
-/** @This throws an error event.
- *
- * @param upipe description structure of the pipe
- * @param errcode error code
- * @return an error code
- */
-#define upipe_throw_error(upipe, errcode)                                   \
-    uprobe_throw_error((upipe)->uprobe, upipe, errcode)
-
-/** @This throws a ready event. This event is thrown whenever a
- * pipe is ready to accept input or respond to control commands.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_ready(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw ready event");
-    return upipe_throw(upipe, UPROBE_READY);
-}
-
-/** @This throws a dead event. This event is thrown whenever a
- * pipe is about to be destroyed and will no longer accept input and
- * control commands.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_dead(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw dead event");
-    return upipe_throw(upipe, UPROBE_DEAD);
-}
-
-/** @This throws a source end event. This event is thrown when a pipe is unable
- * to read from an input because the end of file was reached, or because an
- * error occurred.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_source_end(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw source end");
-    return upipe_throw(upipe, UPROBE_SOURCE_END);
-}
-
-/** @This throws a sink end event. This event is thrown when a pipe is unable
- * to write to an output because the disk is full, or another error occurred.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw sink end");
-    return upipe_throw(upipe, UPROBE_SINK_END);
-}
-
-/** @This throws an event asking for a uref manager.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw need uref mgr");
-    return upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
-}
-
-/** @This throws an event asking for a upump manager.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw need upump mgr");
-    return upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
-}
-
-/** @This throws an event asking for a uclock.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw need uclock");
-    return upipe_throw(upipe, UPROBE_NEED_UCLOCK);
-}
-
-/** @This throws an event declaring a new flow definition on the output.
- *
- * @param upipe description structure of the pipe
- * @param flow_def definition for this flow
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
-{
-    if (flow_def == NULL || flow_def->udict == NULL)
-        upipe_dbg(upipe, "throw new flow def (NULL)");
-    else {
-        upipe_dbg(upipe, "throw new flow def");
-        udict_dump(flow_def->udict, upipe->uprobe);
-    }
-    return upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
-}
-
-/** @This throws an event asking for a ubuf manager.
- *
- * @param upipe description structure of the pipe
- * @param flow_def definition for this flow
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
-                                                       struct uref *flow_def)
-{
-    if (flow_def == NULL || flow_def->udict == NULL)
-        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
-    else {
-        upipe_dbg(upipe, "throw need ubuf mgr");
-        udict_dump(flow_def->udict, upipe->uprobe);
-    }
-    return upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
-}
-
-/** @This throws an event declaring a new random access point in the input.
- *
- * @param upipe description structure of the pipe
- * @param uref uref containing the random access point
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_new_rap(struct upipe *upipe,
-                                                 struct uref *uref)
-{
-    return upipe_throw(upipe, UPROBE_NEW_RAP, uref);
-}
-
-/** @This throws an update event. This event is thrown whenever a split pipe
- * declares a new output flow list.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_split_throw_update(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw split update");
-    return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
-}
-
-/** @This throws an event telling that a pipe synchronized on its input.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_sync_acquired(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw sync acquired");
-    return upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
-}
-
-/** @This throws an event telling that a pipe lost synchronization with its
- * input.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_sync_lost(struct upipe *upipe)
-{
-    upipe_dbg(upipe, "throw sync lost");
-    return upipe_throw(upipe, UPROBE_SYNC_LOST);
-}
-
-/** @This throws an event telling that the given uref carries a clock reference.
- *
- * @param upipe description structure of the pipe
- * @param uref uref carrying a clock reference
- * @param clock_ref clock reference, in 27 MHz scale
- * @param discontinuity 1 if there is a suspicion of discontinuity
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_clock_ref(struct upipe *upipe,
-                                                   struct uref *uref,
-                                                   uint64_t clock_ref,
-                                                   int discontinuity)
-{
-    return upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
-}
-
-/** @This throws an event telling that the given uref carries a presentation
- * and/or a decoding timestamp. The uref must at least have k.dts.orig set.
- * Depending on the module documentation, k.dts may
- * also be set. A probe is entitled to adding new attributes such as k.pts.sys
- * and/or k.dts.sys.
- *
- * @param upipe description structure of the pipe
- * @param uref uref carrying a presentation and/or a decoding timestamp
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
-                                                  struct uref *uref)
-{
-    return upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
-}
-
-/** @This catches an event coming from an inner pipe, and rethrows is as if
- * it were sent by the outermost pipe.
- *
- * @param upipe pointer to outermost pipe
- * @param inner pointer to inner pipe
- * @param event event thrown
- * @param args optional arguments of the event
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
-                                               struct upipe *inner,
-                                               enum uprobe_event event,
-                                               va_list args)
-{
-    if (event != UPROBE_READY && event != UPROBE_DEAD)
-        return upipe_throw_va(upipe, event, args);
-    else
-        return uprobe_throw_va(upipe->uprobe, inner, event, args);
 }
 
 #ifdef __cplusplus

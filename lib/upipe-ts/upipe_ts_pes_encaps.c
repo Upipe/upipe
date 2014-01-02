@@ -134,7 +134,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
     upipe_ts_pese->next_pes = NULL;
 
     size_t uref_size;
-    if (!uref_block_size(uref, &uref_size) || !uref_size) {
+    if (!ubase_check(uref_block_size(uref, &uref_size)) || !uref_size) {
         upipe_warn_va(upipe, "empty packet received");
         uref_free(uref);
         return;
@@ -167,7 +167,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
 
     uint8_t *buffer;
     int size = -1;
-    if (!ubuf_block_write(ubuf, 0, &size, &buffer)) {
+    if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
         uref_free(uref);
         ubuf_free(ubuf);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -199,7 +199,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
 
     struct ubuf *payload = uref_detach_ubuf(uref);
     uref_attach_ubuf(uref, ubuf);
-    if (unlikely(!uref_block_append(uref, payload))) {
+    if (unlikely(!ubase_check(uref_block_append(uref, payload)))) {
         uref_free(uref);
         ubuf_free(payload);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -222,12 +222,12 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     bool force = false;
     uint64_t uref_duration = UINT64_MAX;
-    if (!uref_clock_get_duration(uref, &uref_duration) &&
+    if (!ubase_check(uref_clock_get_duration(uref, &uref_duration)) &&
         upipe_ts_pese->pes_min_duration)
         force = true;
 
     if (upipe_ts_pese->next_pes != NULL) {
-        if (unlikely(!uref_block_append(upipe_ts_pese->next_pes, uref->ubuf))) {
+        if (unlikely(!ubase_check(uref_block_append(upipe_ts_pese->next_pes, uref->ubuf)))) {
             upipe_warn(upipe, "unable to merge a PES");
             upipe_ts_pese_work(upipe, upump);
             upipe_ts_pese->next_pes = uref;
@@ -236,11 +236,11 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
             if (!force) {
                 uint64_t pes_duration;
-                if (uref_clock_get_duration(upipe_ts_pese->next_pes,
-                                            &pes_duration)) {
+                if (ubase_check(uref_clock_get_duration(upipe_ts_pese->next_pes,
+                                            &pes_duration))) {
                     pes_duration += uref_duration;
-                    if (!uref_clock_set_duration(upipe_ts_pese->next_pes,
-                                                 pes_duration))
+                    if (!ubase_check(uref_clock_set_duration(upipe_ts_pese->next_pes,
+                                                 pes_duration)))
                         force = true;
                 }
             }
@@ -250,8 +250,8 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
 
     if (upipe_ts_pese->pes_min_duration && !force) {
         uint64_t duration;
-        if (uref_clock_get_duration(upipe_ts_pese->next_pes,
-                                    &duration) &&
+        if (ubase_check(uref_clock_get_duration(upipe_ts_pese->next_pes,
+                                    &duration)) &&
             duration < upipe_ts_pese->pes_min_duration)
             return;
     }
@@ -294,17 +294,17 @@ static enum ubase_err upipe_ts_pese_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     const char *def;
     uint8_t pes_id;
-    if (!uref_flow_get_def(flow_def, &def) ||
-        ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
-        !uref_ts_flow_get_pes_id(flow_def, &pes_id))
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
+        !ubase_check(uref_ts_flow_get_pes_id(flow_def, &pes_id)))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!uref_flow_set_def_va(flow_def_dup, "block.mpegtspes.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF))))
+    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.mpegtspes.%s",
+                                       def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_pese_store_flow_def(upipe, flow_def_dup);
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);

@@ -118,7 +118,7 @@ static void upipe_osx_audioqueue_sink_input_audio(struct upipe *upipe,
     struct AudioQueueBuffer *qbuf;
     size_t size = 0;
 
-    if (unlikely(!uref_block_size(uref, &size))) {
+    if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
         upipe_warn(upipe, "could not get block size");
         uref_free(uref);
         return;

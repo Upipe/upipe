@@ -134,8 +134,8 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     for ( ; ; ) {
-        if (unlikely(!uref_block_scan(upipe_ts_sync->next_uref, offset_p,
-                                      TS_SYNC)))
+        if (unlikely(!ubase_check(uref_block_scan(upipe_ts_sync->next_uref,
+                                                  offset_p, TS_SYNC))))
             return false;
 
         /* first octet at *offset_p is a sync word */
@@ -145,8 +145,8 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
             const uint8_t *buffer;
             int size = 1;
             uint8_t word;
-            if (unlikely(!uref_block_read(upipe_ts_sync->next_uref,
-                                          offset, &size, &buffer)))
+            if (unlikely(!ubase_check(uref_block_read(upipe_ts_sync->next_uref,
+                                          offset, &size, &buffer))))
                 /* not enough sync words could be tested */
                 return false;
             assert(size == 1);
@@ -175,9 +175,9 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
     if (upipe_ts_sync->acquired) {
         size_t offset = 0, size;
         while (upipe_ts_sync->next_uref != NULL &&
-               uref_block_size(upipe_ts_sync->next_uref, &size) &&
+               ubase_check(uref_block_size(upipe_ts_sync->next_uref, &size)) &&
                size >= upipe_ts_sync->ts_size &&
-               uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC) &&
+               ubase_check(uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC)) &&
                !offset) {
             struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
                                                         upipe_ts_sync->ts_size);
@@ -203,7 +203,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (unlikely(uref_flow_get_discontinuity(uref)))
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
         upipe_ts_sync_flush(upipe, upump);
 
     upipe_ts_sync_append_uref_stream(upipe, uref);
@@ -241,15 +241,14 @@ static enum ubase_err upipe_ts_sync_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (!uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
     /* FIXME make it dependant on the output size */
-    if (unlikely(!uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF)))
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_sync_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
