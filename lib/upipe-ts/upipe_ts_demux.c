@@ -205,6 +205,8 @@ struct upipe_ts_demux {
     struct uprobe input_probe;
     /** probe to get events from ts_split inner pipe */
     struct uprobe split_probe;
+    /** probe to proxify events from other pipes */
+    struct uprobe proxy_probe;
 
     /** list of programs */
     struct uchain programs;
@@ -403,7 +405,7 @@ static struct upipe_ts_demux_psi_pid *
     if (unlikely((psi_pid->psi_split =
                       upipe_void_alloc(ts_demux_mgr->ts_psi_split_mgr,
                                        uprobe_pfx_alloc_va(
-                                               uprobe_use(upipe->uprobe),
+                                               uprobe_use(&upipe_ts_demux->proxy_probe),
                                                UPROBE_LOG_VERBOSE,
                                                "psi split %"PRIu16,
                                                pid))) == NULL)) {
@@ -1708,7 +1710,7 @@ static enum ubase_err upipe_ts_demux_input_probe(struct uprobe *uprobe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_split_probe(struct uprobe *uprobe,
-                                                 struct upipe *subpipe,
+                                                 struct upipe *inner,
                                                  enum uprobe_event event,
                                                  va_list args)
 {
@@ -1720,8 +1722,27 @@ static enum ubase_err upipe_ts_demux_split_probe(struct uprobe *uprobe,
         case UPROBE_TS_SPLIT_ADD_PID:
         case UPROBE_TS_SPLIT_DEL_PID:
         default:
-            return upipe_throw_proxy(upipe, subpipe, event, args);
+            return upipe_throw_proxy(upipe, inner, event, args);
     }
+}
+
+/** @internal @This catches events coming from other inner pipes.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static enum ubase_err upipe_ts_demux_proxy_probe(struct uprobe *uprobe,
+                                                 struct upipe *inner,
+                                                 enum uprobe_event event,
+                                                 va_list args)
+{
+    struct upipe_ts_demux *upipe_ts_demux =
+        container_of(uprobe, struct upipe_ts_demux, proxy_probe);
+    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
+    return upipe_throw_proxy(upipe, inner, event, args);
 }
 
 /** @internal @This allocates a ts_demux pipe.
@@ -1777,6 +1798,9 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->split_probe, upipe_ts_demux_split_probe, NULL);
     upipe_ts_demux->split_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
+    uprobe_init(&upipe_ts_demux->proxy_probe, upipe_ts_demux_proxy_probe, NULL);
+    upipe_ts_demux->proxy_probe.refcount =
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
 
     upipe_throw_ready(upipe);
@@ -1837,14 +1861,18 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
             /* allocate ts_check inner pipe */
             upipe_ts_demux->input =
                 upipe_void_alloc(ts_demux_mgr->ts_check_mgr,
-                     uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
-                                      UPROBE_LOG_VERBOSE, "check"));
+                     uprobe_pfx_alloc(
+                         uprobe_output_alloc(
+                             uprobe_use(&upipe_ts_demux->proxy_probe)),
+                         UPROBE_LOG_VERBOSE, "check"));
         else
             /* allocate ts_sync inner pipe */
             upipe_ts_demux->input =
                 upipe_void_alloc(ts_demux_mgr->ts_sync_mgr,
-                     uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
-                                      UPROBE_LOG_VERBOSE, "sync"));
+                     uprobe_pfx_alloc(
+                         uprobe_output_alloc(
+                             uprobe_use(&upipe_ts_demux->proxy_probe)),
+                     UPROBE_LOG_VERBOSE, "sync"));
         if (unlikely(upipe_ts_demux->input == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -1855,8 +1883,10 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
         upipe_ts_demux->setrap =
             upipe_void_alloc_output(upipe_ts_demux->input,
                          ts_demux_mgr->setrap_mgr,
-                         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
-                                          UPROBE_LOG_VERBOSE, "setrap"));
+                         uprobe_pfx_alloc(
+                             uprobe_output_alloc(
+                                 uprobe_use(&upipe_ts_demux->proxy_probe)),
+                             UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -1864,8 +1894,10 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
     } else {
         upipe_ts_demux->setrap =
             upipe_void_alloc(ts_demux_mgr->setrap_mgr,
-                             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(upipe->uprobe)),
-                                              UPROBE_LOG_VERBOSE, "setrap"));
+                             uprobe_pfx_alloc(
+                                 uprobe_output_alloc(
+                                     uprobe_use(&upipe_ts_demux->proxy_probe)),
+                                 UPROBE_LOG_VERBOSE, "setrap"));
         if (unlikely(upipe_ts_demux->setrap == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -1890,8 +1922,9 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
 
     upipe_ts_demux->null =
         upipe_void_alloc(ts_demux_mgr->null_mgr,
-                         uprobe_pfx_alloc(uprobe_use(upipe->uprobe),
-                                          UPROBE_LOG_NOTICE, "null"));
+                         uprobe_pfx_alloc(
+                             uprobe_use(&upipe_ts_demux->proxy_probe),
+                             UPROBE_LOG_NOTICE, "null"));
     if (unlikely(upipe_ts_demux->null == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
@@ -1924,7 +1957,8 @@ static enum ubase_err upipe_ts_demux_set_flow_def(struct upipe *upipe,
                  (upipe_ts_demux->psi_split_output_pat =
                       upipe_flow_alloc_sub(
                           upipe_ts_demux->psi_pid_pat->psi_split,
-                          uprobe_pfx_alloc(uprobe_use(upipe->uprobe),
+                          uprobe_pfx_alloc(
+                              uprobe_use(&upipe_ts_demux->proxy_probe),
                               UPROBE_LOG_VERBOSE, "psi_split output"),
                           flow_def)) == NULL)) {
         if (flow_def != NULL)
