@@ -9,6 +9,7 @@ pkginclude_HEADERS = \
 	ubuf_block_common.h \
 	ubuf_block_mem.h \
 	ubuf_block_stream.h \
+	ubuf_mem_common.h \
 	ubuf_pic.h \
 	ubuf_pic_common.h \
 	ubuf_pic_mem.h \

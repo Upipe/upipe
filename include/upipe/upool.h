@@ -37,14 +37,22 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/ulifo.h>
 
+/** @hidden */
+struct upool;
+
+/** @This is a call-back to allocate new elements */
+typedef void *(*upool_alloc_cb)(struct upool *);
+/** @This is a call-back to release unused elements */
+typedef void (*upool_free_cb)(struct upool *, void *);
+
 /** @This is the implementation of a pool of buffers. */
 struct upool {
     /** lifo */
     struct ulifo lifo;
     /** call-back to allocate new elements */
-    void *(*alloc_cb)(struct upool *);
+    upool_alloc_cb alloc_cb;
     /** call-back to release unused elements */
-    void (*free_cb)(struct upool *, void *);
+    upool_free_cb free_cb;
 };
 
 /** @This returns the required size of extra data space for upool.
@@ -62,8 +70,7 @@ struct upool {
  * returned by @ref #upool_sizeof
  */
 static inline void upool_init(struct upool *upool, uint16_t length, void *extra,
-                              void *(*alloc_cb)(struct upool *),
-                              void (*free_cb)(struct upool *, void *))
+                              upool_alloc_cb alloc_cb, upool_free_cb free_cb)
 {
     ulifo_init(&upool->lifo, length, extra);
     upool->alloc_cb = alloc_cb;
