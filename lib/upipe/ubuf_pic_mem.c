@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,7 +30,7 @@
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
 #include <upipe/urefcount.h>
-#include <upipe/ulifo.h>
+#include <upipe/upool.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
@@ -99,9 +99,9 @@ struct ubuf_pic_mem_mgr {
     int align_hmoffset;
 
     /** ubuf pool */
-    struct ulifo ubuf_pool;
+    struct upool ubuf_pool;
     /** ubuf shared pool */
-    struct ulifo shared_pool;
+    struct upool shared_pool;
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
@@ -111,11 +111,8 @@ struct ubuf_pic_mem_mgr {
 
 UBASE_FROM_TO(ubuf_pic_mem_mgr, ubuf_mgr, ubuf_mgr, common_mgr.mgr)
 UBASE_FROM_TO(ubuf_pic_mem_mgr, urefcount, urefcount, urefcount)
-
-/** @hidden */
-static void ubuf_pic_mem_free_inner(struct ubuf *ubuf);
-/** @hidden */
-static void ubuf_pic_mem_shared_free_inner(struct ubuf_pic_mem_shared *shared);
+UBASE_FROM_TO(ubuf_pic_mem_mgr, upool, ubuf_pool, ubuf_pool)
+UBASE_FROM_TO(ubuf_pic_mem_mgr, upool, shared_pool, shared_pool)
 
 /** @This increments the reference count of a shared buffer.
  *
@@ -130,6 +127,7 @@ static inline void ubuf_pic_mem_use(struct ubuf *ubuf)
 /** @This checks whether there is only one reference to the shared buffer.
  *
  * @param ubuf pointer to ubuf
+ * @return true if there is only one reference
  */
 static inline bool ubuf_pic_mem_single(struct ubuf *ubuf)
 {
@@ -152,25 +150,38 @@ static inline uint8_t *ubuf_pic_mem_buffer(struct ubuf *ubuf)
  * @param mgr common management structure
  * @return pointer to ubuf or NULL in case of allocation error
  */
-static struct ubuf *ubuf_pic_mem_alloc_inner(struct ubuf_mgr *mgr)
+static struct ubuf *ubuf_pic_mem_alloc_pool(struct ubuf_mgr *mgr)
 {
-    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf = ulifo_pop(&pic_mgr->ubuf_pool, struct ubuf *);
-    struct ubuf_pic_mem *pic;
-    if (ubuf == NULL) {
-        pic = malloc(sizeof(struct ubuf_pic_mem) + ubuf_pic_common_sizeof(mgr));
-        if (unlikely(pic == NULL))
-            return NULL;
-        ubuf = ubuf_pic_mem_to_ubuf(pic);
-        ubuf->mgr = mgr;
-#ifndef NDEBUG
-        uatomic_init(&pic->readers, 0);
-#endif
-    } else
-        pic = ubuf_pic_mem_from_ubuf(ubuf);
+    struct ubuf_pic_mem_mgr *pic_mem_mgr =
+        ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_pic_mem *pic_mem =
+        upool_alloc(&pic_mem_mgr->ubuf_pool, struct ubuf_pic_mem *);
+    if (unlikely(pic_mem == NULL))
+        return NULL;
+    pic_mem->shared = NULL;
 
-    pic->shared = NULL;
+    struct ubuf *ubuf = ubuf_pic_mem_to_ubuf(pic_mem);
     return ubuf;
+}
+
+/** @internal @This allocates the shared data structure or fetches it from the
+ * pool.
+ *
+ * @param mgr common management structure
+ * @return pointer to ubuf_pic_meme_shared or NULL in case of allocation error
+ */
+static struct ubuf_pic_mem_shared
+    *ubuf_pic_mem_shared_alloc_pool(struct ubuf_mgr *mgr)
+{
+    struct ubuf_pic_mem_mgr *pic_mem_mgr =
+        ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_pic_mem_shared *shared =
+        upool_alloc(&pic_mem_mgr->shared_pool,
+                    struct ubuf_pic_mem_shared *);
+    if (unlikely(shared == NULL))
+        return NULL;
+    uatomic_store(&shared->refcount, 1);
+    return shared;
 }
 
 /** @This allocates a ubuf, a shared structure and a umem buffer.
@@ -193,24 +204,16 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
 
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf = ubuf_pic_mem_alloc_inner(mgr);
+    struct ubuf *ubuf = ubuf_pic_mem_alloc_pool(mgr);
     if (unlikely(ubuf == NULL))
         return NULL;
 
-    struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
-    pic->shared = ulifo_pop(&pic_mgr->shared_pool,
-                            struct ubuf_pic_mem_shared *);
-    if (pic->shared == NULL) {
-        pic->shared = malloc(sizeof(struct ubuf_pic_mem_shared));
-        if (unlikely(pic->shared == NULL)) {
-            if (unlikely(!ulifo_push(&pic_mgr->ubuf_pool, ubuf)))
-                ubuf_pic_mem_free_inner(ubuf);
-            return NULL;
-        }
-
-        uatomic_init(&pic->shared->refcount, 1);
-    } else
-        uatomic_store(&pic->shared->refcount, 1);
+    struct ubuf_pic_mem *pic_mem = ubuf_pic_mem_from_ubuf(ubuf);
+    pic_mem->shared = ubuf_pic_mem_shared_alloc_pool(mgr);
+    if (unlikely(pic_mem->shared == NULL)) {
+        upool_free(&pic_mgr->ubuf_pool, pic_mem);
+        return NULL;
+    }
 
     size_t hmsize = hsize / pic_mgr->common_mgr.macropixel;
     size_t buffer_size = 0;
@@ -236,12 +239,10 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
         buffer_size += plane_sizes[plane];
     }
 
-    if (unlikely(!umem_alloc(pic_mgr->umem_mgr, &pic->shared->umem,
+    if (unlikely(!umem_alloc(pic_mgr->umem_mgr, &pic_mem->shared->umem,
                              buffer_size))) {
-        if (unlikely(!ulifo_push(&pic_mgr->shared_pool, pic->shared)))
-            ubuf_pic_mem_shared_free_inner(pic->shared);
-        if (unlikely(!ulifo_push(&pic_mgr->ubuf_pool, ubuf)))
-            ubuf_pic_mem_free_inner(ubuf);
+        upool_free(&pic_mgr->shared_pool, pic_mem->shared);
+        upool_free(&pic_mgr->ubuf_pool, pic_mem);
         return NULL;
     }
     ubuf_pic_common_init(ubuf, pic_mgr->hmprepend, pic_mgr->hmappend, hmsize,
@@ -276,7 +277,7 @@ static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
                                        struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
-    struct ubuf *new_ubuf = ubuf_pic_mem_alloc_inner(ubuf->mgr);
+    struct ubuf *new_ubuf = ubuf_pic_mem_alloc_pool(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
@@ -401,28 +402,6 @@ static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
     }
 }
 
-/** @internal @This frees a ubuf and all associated data structures.
- *
- * @param ubuf pointer to a ubuf structure to free
- */
-static void ubuf_pic_mem_free_inner(struct ubuf *ubuf)
-{
-    struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
-#ifndef NDEBUG
-    uatomic_clean(&pic->readers);
-#endif
-    free(pic);
-}
-
-/** @internal @This frees a shared buffer.
- *
- * @param shared pointer to shared structure to free
- */
-static void ubuf_pic_mem_shared_free_inner(struct ubuf_pic_mem_shared *shared)
-{
-    free(shared);
-}
-
 /** @This recycles or frees a ubuf.
  *
  * @param ubuf pointer to a ubuf structure
@@ -431,26 +410,86 @@ static void ubuf_pic_mem_free(struct ubuf *ubuf)
 {
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_ubuf_mgr(ubuf->mgr);
-    struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
+    struct ubuf_pic_mem *pic_mem = ubuf_pic_mem_from_ubuf(ubuf);
 
     ubuf_pic_common_clean(ubuf);
     for (uint8_t plane = 0; plane < pic_mgr->common_mgr.nb_planes; plane++)
         ubuf_pic_common_plane_clean(ubuf, plane);
 
 #ifndef NDEBUG
-    assert(uatomic_load(&pic->readers) == 0);
+    assert(uatomic_load(&pic_mem->readers) == 0);
 #endif
 
-    if (unlikely(uatomic_fetch_sub(&pic->shared->refcount, 1) == 1)) {
-        umem_free(&pic->shared->umem);
-        if (unlikely(!ulifo_push(&pic_mgr->shared_pool, pic->shared)))
-            ubuf_pic_mem_shared_free_inner(pic->shared);
+    if (unlikely(uatomic_fetch_sub(&pic_mem->shared->refcount, 1) == 1)) {
+        umem_free(&pic_mem->shared->umem);
+        upool_free(&pic_mgr->shared_pool, pic_mem->shared);
     }
-
-    if (unlikely(!ulifo_push(&pic_mgr->ubuf_pool, ubuf)))
-        ubuf_pic_mem_free_inner(ubuf);
-
+    upool_free(&pic_mgr->ubuf_pool, pic_mem);
     ubuf_mgr_release(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
+}
+
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to ubuf_pic_mem or NULL in case of allocation error
+ */
+static void *ubuf_pic_mem_alloc_inner(struct upool *upool)
+{
+    struct ubuf_pic_mem_mgr *pic_mem_mgr =
+        ubuf_pic_mem_mgr_from_ubuf_pool(upool);
+    struct ubuf_mgr *mgr = ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mem_mgr);
+    struct ubuf_pic_mem *pic_mem = malloc(sizeof(struct ubuf_pic_mem) +
+                                          ubuf_pic_common_sizeof(mgr));
+    if (unlikely(pic_mem == NULL))
+        return NULL;
+    struct ubuf *ubuf = ubuf_pic_mem_to_ubuf(pic_mem);
+    ubuf->mgr = mgr;
+#ifndef NDEBUG
+    uatomic_init(&pic_mem->readers, 0);
+#endif
+    return pic_mem;
+}
+
+/** @internal @This frees a ubuf_pic_mem.
+ *
+ * @param upool pointer to upool
+ * @param _pic_mem pointer to a ubuf_pic_mem structure to free
+ */
+static void ubuf_pic_mem_free_inner(struct upool *upool, void *_pic_mem)
+{
+    struct ubuf_pic_mem *pic_mem = (struct ubuf_pic_mem *)_pic_mem;
+#ifndef NDEBUG
+    uatomic_clean(&pic_mem->readers);
+#endif
+    free(pic_mem);
+}
+
+/** @internal @This allocates the shared data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to ubuf_pic_mem or NULL in case of allocation error
+ */
+static void *ubuf_pic_mem_shared_alloc_inner(struct upool *upool)
+{
+    struct ubuf_pic_mem_shared *shared =
+        malloc(sizeof(struct ubuf_pic_mem_shared));
+    if (unlikely(shared == NULL))
+        return NULL;
+    uatomic_init(&shared->refcount, 1);
+    return shared;
+}
+
+/** @internal @This frees a shared buffer.
+ *
+ * @param upool pointer to upool
+ * @param _shared pointer to shared structure to free
+ */
+static void ubuf_pic_mem_shared_free_inner(struct upool *upool, void *_shared)
+{
+    struct ubuf_pic_mem_shared *shared =
+        (struct ubuf_pic_mem_shared *)_shared;
+    uatomic_clean(&shared->refcount);
+    free(shared);
 }
 
 /** @internal @This instructs an existing ubuf pic manager to release all
@@ -461,14 +500,8 @@ static void ubuf_pic_mem_free(struct ubuf *ubuf)
 static void ubuf_pic_mem_mgr_vacuum(struct ubuf_mgr *mgr)
 {
     struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf;
-    struct ubuf_pic_mem_shared *shared;
-
-    while ((ubuf = ulifo_pop(&pic_mgr->ubuf_pool, struct ubuf *)) != NULL)
-        ubuf_pic_mem_free_inner(ubuf);
-    while ((shared = ulifo_pop(&pic_mgr->shared_pool,
-                               struct ubuf_pic_mem_shared *)) != NULL)
-        ubuf_pic_mem_shared_free_inner(shared);
+    upool_vacuum(&pic_mgr->ubuf_pool);
+    upool_vacuum(&pic_mgr->shared_pool);
 }
 
 /** @This handles manager control commands.
@@ -500,9 +533,8 @@ static void ubuf_pic_mem_mgr_free(struct urefcount *urefcount)
 {
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_urefcount(urefcount);
-    ubuf_pic_mem_mgr_vacuum(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
-    ulifo_clean(&pic_mgr->ubuf_pool);
-    ulifo_clean(&pic_mgr->shared_pool);
+    upool_clean(&pic_mgr->ubuf_pool);
+    upool_clean(&pic_mgr->shared_pool);
     umem_mgr_release(pic_mgr->umem_mgr);
 
     ubuf_pic_common_mgr_clean(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
@@ -546,16 +578,18 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
 
     struct ubuf_pic_mem_mgr *pic_mgr =
         malloc(sizeof(struct ubuf_pic_mem_mgr) +
-               ulifo_sizeof(ubuf_pool_depth) +
-               ulifo_sizeof(shared_pool_depth));
+               upool_sizeof(ubuf_pool_depth) +
+               upool_sizeof(shared_pool_depth));
     if (unlikely(pic_mgr == NULL))
         return NULL;
 
-    ulifo_init(&pic_mgr->ubuf_pool, ubuf_pool_depth,
-               (void *)pic_mgr + sizeof(struct ubuf_pic_mem_mgr));
-    ulifo_init(&pic_mgr->shared_pool, shared_pool_depth,
+    upool_init(&pic_mgr->ubuf_pool, ubuf_pool_depth,
+               (void *)pic_mgr + sizeof(struct ubuf_pic_mem_mgr),
+               ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
+    upool_init(&pic_mgr->shared_pool, shared_pool_depth,
                (void *)pic_mgr + sizeof(struct ubuf_pic_mem_mgr) +
-               ulifo_sizeof(ubuf_pool_depth));
+               upool_sizeof(ubuf_pool_depth),
+               ubuf_pic_mem_shared_alloc_inner, ubuf_pic_mem_shared_free_inner);
     pic_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 

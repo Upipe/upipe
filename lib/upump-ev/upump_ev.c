@@ -46,10 +46,6 @@ struct upump_ev_mgr {
 
     /** ev private structure */
     struct ev_loop *ev_loop;
-    /** upump pool */
-    struct ulifo upump_pool;
-    /** upump_blocker_pool */
-    struct ulifo upump_blocker_pool;
 
     /** common structure */
     struct upump_common_mgr common_mgr;
@@ -132,17 +128,11 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
                                     enum upump_type event, va_list args)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
-    struct upump *upump = ulifo_pop(&ev_mgr->common_mgr.upump_pool,
-                                    struct upump *);
-    struct upump_ev *upump_ev;
-    if (unlikely(upump == NULL)) {
-        upump_ev = malloc(sizeof(struct upump_ev));
-        if (unlikely(upump_ev == NULL))
-            return NULL;
-        upump = upump_ev_to_upump(upump_ev);
-        upump->mgr = mgr;
-    } else
-        upump_ev = upump_ev_from_upump(upump);
+    struct upump_ev *upump_ev = upool_alloc(&ev_mgr->common_mgr.upump_pool,
+                                            struct upump_ev *);
+    if (unlikely(upump_ev == NULL))
+        return NULL;
+    struct upump *upump = upump_ev_to_upump(upump_ev);
 
     switch (event) {
 #warning expect dereferencing warnings (libev doc says they are bogus)
@@ -229,16 +219,6 @@ static void upump_ev_real_stop(struct upump *upump)
     }
 }
 
-/** @This frees the actual memory space previously used by a pump.
- *
- * @param upump description structure of the pump
- */
-static void upump_ev_free_inner(struct upump *upump)
-{
-    struct upump_ev *upump_ev = upump_ev_from_upump(upump);
-    free(upump_ev);
-}
-
 /** @This released the memory space previously used by a pump.
  * Please note that the pump must be stopped before.
  *
@@ -249,10 +229,36 @@ static void upump_ev_free(struct upump *upump)
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
     upump_stop(upump);
     upump_common_clean(upump);
-    upump_mgr_release(upump->mgr);
+    struct upump_ev *upump_ev = upump_ev_from_upump(upump);
+    upool_free(&ev_mgr->common_mgr.upump_pool, upump_ev);
+    upump_mgr_release(&ev_mgr->common_mgr.mgr);
+}
 
-    if (unlikely(!ulifo_push(&ev_mgr->common_mgr.upump_pool, upump)))
-        upump_ev_free_inner(upump);
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to upump_ev or NULL in case of allocation error
+ */
+static void *upump_ev_alloc_inner(struct upool *upool)
+{
+    struct upump_common_mgr *common_mgr =
+        upump_common_mgr_from_upump_pool(upool);
+    struct upump_ev *upump_ev = malloc(sizeof(struct upump_ev));
+    if (unlikely(upump_ev == NULL))
+        return NULL;
+    struct upump *upump = upump_ev_to_upump(upump_ev);
+    upump->mgr = upump_common_mgr_to_upump_mgr(common_mgr);
+    return upump_ev;
+}
+
+/** @internal @This frees a upump_ev.
+ *
+ * @param upool pointer to upool
+ * @param upump_ev pointer to a upump_ev structure to free
+ */
+static void upump_ev_free_inner(struct upool *upool, void *upump_ev)
+{
+    free(upump_ev);
 }
 
 /** @This processes control commands on a upump_ev_mgr.
@@ -268,7 +274,7 @@ static enum ubase_err upump_ev_mgr_control(struct upump_mgr *mgr,
 {
     switch (command) {
         case UPUMP_MGR_VACUUM:
-            upump_common_mgr_vacuum(mgr, upump_ev_free_inner);
+            upump_common_mgr_vacuum(mgr);
             return UBASE_ERR_NONE;
         default:
             return UBASE_ERR_UNHANDLED;
@@ -282,8 +288,7 @@ static enum ubase_err upump_ev_mgr_control(struct upump_mgr *mgr,
 static void upump_ev_mgr_free(struct urefcount *urefcount)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_urefcount(urefcount);
-    upump_common_mgr_clean(upump_ev_mgr_to_upump_mgr(ev_mgr),
-                           upump_ev_free_inner);
+    upump_common_mgr_clean(upump_ev_mgr_to_upump_mgr(ev_mgr));
     free(ev_mgr);
 }
 
@@ -309,7 +314,8 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
     struct upump_mgr *mgr = upump_ev_mgr_to_upump_mgr(ev_mgr);
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
                           (void *)ev_mgr + sizeof(struct upump_ev_mgr),
-                          upump_ev_real_start, upump_ev_real_stop);
+                          upump_ev_real_start, upump_ev_real_stop,
+                          upump_ev_alloc_inner, upump_ev_free_inner);
 
     ev_mgr->ev_loop = ev_loop;
     urefcount_init(upump_ev_mgr_to_urefcount(ev_mgr), upump_ev_mgr_free);

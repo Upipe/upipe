@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,7 +30,7 @@
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
 #include <upipe/urefcount.h>
-#include <upipe/ulifo.h>
+#include <upipe/upool.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
@@ -63,6 +63,12 @@ struct ubuf_block_mem_shared {
 struct ubuf_block_mem {
     /** pointer to shared structure */
     struct ubuf_block_mem_shared *shared;
+#ifndef NDEBUG
+    /** atomic counter of the number of readers, to check for unsufficient
+     * use of unmap() */
+    uatomic_uint32_t readers;
+#endif
+
     /** block block_mem structure */
     struct ubuf_block ubuf_block;
 };
@@ -81,9 +87,9 @@ struct ubuf_block_mem_mgr {
     int align_offset;
 
     /** ubuf pool */
-    struct ulifo ubuf_pool;
+    struct upool ubuf_pool;
     /** ubuf shared pool */
-    struct ulifo shared_pool;
+    struct upool shared_pool;
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
@@ -93,12 +99,8 @@ struct ubuf_block_mem_mgr {
 
 UBASE_FROM_TO(ubuf_block_mem_mgr, ubuf_mgr, ubuf_mgr, mgr)
 UBASE_FROM_TO(ubuf_block_mem_mgr, urefcount, urefcount, urefcount)
-
-/** @hidden */
-static void ubuf_block_mem_free_inner(struct ubuf *ubuf);
-/** @hidden */
-static void
-    ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared);
+UBASE_FROM_TO(ubuf_block_mem_mgr, upool, ubuf_pool, ubuf_pool)
+UBASE_FROM_TO(ubuf_block_mem_mgr, upool, shared_pool, shared_pool)
 
 /** @This increments the reference count of a shared buffer.
  *
@@ -113,12 +115,12 @@ static inline void ubuf_block_mem_use(struct ubuf *ubuf)
 /** @This checks whether there is only one reference to the shared buffer.
  *
  * @param ubuf pointer to ubuf
+ * @return true if there is only one reference
  */
-static inline enum ubase_err ubuf_block_mem_single(struct ubuf *ubuf)
+static bool ubuf_block_mem_single(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    return uatomic_load(&block_mem->shared->refcount) == 1 ?
-           UBASE_ERR_NONE : UBASE_ERR_BUSY;
+    return uatomic_load(&block_mem->shared->refcount) == 1;
 }
 
 /** @This returns the shared buffer.
@@ -146,25 +148,39 @@ static inline size_t ubuf_block_mem_size(struct ubuf *ubuf)
  * @param mgr common management structure
  * @return pointer to ubuf or NULL in case of allocation error
  */
-static struct ubuf *ubuf_block_mem_alloc_inner(struct ubuf_mgr *mgr)
+static struct ubuf *ubuf_block_mem_alloc_pool(struct ubuf_mgr *mgr)
 {
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf = ulifo_pop(&block_mem_mgr->ubuf_pool, struct ubuf *);
-    struct ubuf_block_mem *block_mem;
-    if (ubuf == NULL) {
-        block_mem = malloc(sizeof(struct ubuf_block_mem));
-        if (unlikely(block_mem == NULL))
-            return NULL;
-        ubuf = ubuf_block_mem_to_ubuf(block_mem);
-        ubuf->mgr = mgr;
-    } else
-        block_mem = ubuf_block_mem_from_ubuf(ubuf);
-
+    struct ubuf_block_mem *block_mem =
+        upool_alloc(&block_mem_mgr->ubuf_pool, struct ubuf_block_mem *);
+    if (unlikely(block_mem == NULL))
+        return NULL;
     block_mem->shared = NULL;
-    ubuf_block_common_init(ubuf, false);
 
+    struct ubuf *ubuf = ubuf_block_mem_to_ubuf(block_mem);
+    ubuf_block_common_init(ubuf, false);
     return ubuf;
+}
+
+/** @internal @This allocates the shared data structure or fetches it from the
+ * pool.
+ *
+ * @param mgr common management structure
+ * @return pointer to ubuf_block_meme_shared or NULL in case of allocation error
+ */
+static struct ubuf_block_mem_shared
+    *ubuf_block_mem_shared_alloc_pool(struct ubuf_mgr *mgr)
+{
+    struct ubuf_block_mem_mgr *block_mem_mgr =
+        ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_block_mem_shared *shared =
+        upool_alloc(&block_mem_mgr->shared_pool,
+                    struct ubuf_block_mem_shared *);
+    if (unlikely(shared == NULL))
+        return NULL;
+    uatomic_store(&shared->refcount, 1);
+    return shared;
 }
 
 /** @This allocates a ubuf, a shared structure and a umem buffer.
@@ -184,33 +200,22 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
 
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf = ubuf_block_mem_alloc_inner(mgr);
+    struct ubuf *ubuf = ubuf_block_mem_alloc_pool(mgr);
     if (unlikely(ubuf == NULL))
         return NULL;
 
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    block_mem->shared = ulifo_pop(&block_mem_mgr->shared_pool,
-                                  struct ubuf_block_mem_shared *);
-    if (block_mem->shared == NULL) {
-        block_mem->shared = malloc(sizeof(struct ubuf_block_mem_shared));
-        if (unlikely(block_mem->shared == NULL)) {
-            if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
-                ubuf_block_mem_free_inner(ubuf);
-            return NULL;
-        }
-
-        uatomic_init(&block_mem->shared->refcount, 1);
-    } else
-        uatomic_store(&block_mem->shared->refcount, 1);
+    block_mem->shared = ubuf_block_mem_shared_alloc_pool(mgr);
+    if (unlikely(block_mem->shared == NULL)) {
+        upool_free(&block_mem_mgr->ubuf_pool, block_mem);
+        return NULL;
+    }
 
     size_t buffer_size = size + block_mem_mgr->align;
     if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
-        if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
-                                 block_mem->shared)))
-            ubuf_block_mem_shared_free_inner(block_mem->shared);
-        if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
-            ubuf_block_mem_free_inner(ubuf);
+        upool_free(&block_mem_mgr->shared_pool, block_mem->shared);
+        upool_free(&block_mem_mgr->ubuf_pool, block_mem);
         return NULL;
     }
 
@@ -236,7 +241,7 @@ static enum ubase_err ubuf_block_mem_dup(struct ubuf *ubuf,
                                          struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
-    struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
+    struct ubuf *new_ubuf = ubuf_block_mem_alloc_pool(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
@@ -268,7 +273,7 @@ static enum ubase_err ubuf_block_mem_splice(struct ubuf *ubuf,
                                             int offset, int size)
 {
     assert(new_ubuf_p != NULL);
-    struct ubuf *new_ubuf = ubuf_block_mem_alloc_inner(ubuf->mgr);
+    struct ubuf *new_ubuf = ubuf_block_mem_alloc_pool(ubuf->mgr);
     if (unlikely(new_ubuf == NULL))
         return UBASE_ERR_ALLOC;
 
@@ -304,7 +309,7 @@ static enum ubase_err ubuf_block_mem_control(struct ubuf *ubuf,
             return ubuf_block_mem_dup(ubuf, new_ubuf_p);
         }
         case UBUF_SINGLE:
-            return ubuf_block_mem_single(ubuf);
+            return ubuf_block_mem_single(ubuf) ? UBASE_ERR_NONE : UBASE_ERR_BUSY;
 
         case UBUF_SPLICE_BLOCK: {
             struct ubuf **new_ubuf_p = va_arg(args, struct ubuf **);
@@ -315,26 +320,6 @@ static enum ubase_err ubuf_block_mem_control(struct ubuf *ubuf,
         default:
             return UBASE_ERR_UNHANDLED;
     }
-}
-
-/** @internal @This frees a ubuf and all associated data structures.
- *
- * @param ubuf pointer to a ubuf structure to free
- */
-static void ubuf_block_mem_free_inner(struct ubuf *ubuf)
-{
-    struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
-    free(block_mem);
-}
-
-/** @internal @This frees a shared buffer.
- *
- * @param shared pointer to shared structure to free
- */
-static void
-    ubuf_block_mem_shared_free_inner(struct ubuf_block_mem_shared *shared)
-{
-    free(shared);
 }
 
 /** @This recycles or frees a ubuf.
@@ -349,17 +334,78 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
 
     ubuf_block_common_clean(ubuf);
 
+#ifndef NDEBUG
+    assert(uatomic_load(&block_mem->readers) == 0);
+#endif
+
     if (unlikely(uatomic_fetch_sub(&block_mem->shared->refcount, 1) == 1)) {
         umem_free(&block_mem->shared->umem);
-        if (unlikely(!ulifo_push(&block_mem_mgr->shared_pool,
-                                 block_mem->shared)))
-            ubuf_block_mem_shared_free_inner(block_mem->shared);
+        upool_free(&block_mem_mgr->shared_pool, block_mem->shared);
     }
-
-    if (unlikely(!ulifo_push(&block_mem_mgr->ubuf_pool, ubuf)))
-        ubuf_block_mem_free_inner(ubuf);
-
+    upool_free(&block_mem_mgr->ubuf_pool, block_mem);
     ubuf_mgr_release(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
+}
+
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to ubuf_block_mem or NULL in case of allocation error
+ */
+static void *ubuf_block_mem_alloc_inner(struct upool *upool)
+{
+    struct ubuf_block_mem_mgr *block_mem_mgr =
+        ubuf_block_mem_mgr_from_ubuf_pool(upool);
+    struct ubuf_block_mem *block_mem = malloc(sizeof(struct ubuf_block_mem));
+    if (unlikely(block_mem == NULL))
+        return NULL;
+    struct ubuf *ubuf = ubuf_block_mem_to_ubuf(block_mem);
+    ubuf->mgr = ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr);
+#ifndef NDEBUG
+    uatomic_init(&block_mem->readers, 0);
+#endif
+    return block_mem;
+}
+
+/** @internal @This frees a ubuf_block_mem.
+ *
+ * @param upool pointer to upool
+ * @param _block_mem pointer to a ubuf_block_mem structure to free
+ */
+static void ubuf_block_mem_free_inner(struct upool *upool, void *_block_mem)
+{
+    struct ubuf_block_mem *block_mem = (struct ubuf_block_mem *)_block_mem;
+#ifndef NDEBUG
+    uatomic_clean(&block_mem->readers);
+#endif
+    free(block_mem);
+}
+
+/** @internal @This allocates the shared data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to ubuf_block_mem or NULL in case of allocation error
+ */
+static void *ubuf_block_mem_shared_alloc_inner(struct upool *upool)
+{
+    struct ubuf_block_mem_shared *shared =
+        malloc(sizeof(struct ubuf_block_mem_shared));
+    if (unlikely(shared == NULL))
+        return NULL;
+    uatomic_init(&shared->refcount, 1);
+    return shared;
+}
+
+/** @internal @This frees a shared buffer.
+ *
+ * @param upool pointer to upool
+ * @param _shared pointer to shared structure to free
+ */
+static void ubuf_block_mem_shared_free_inner(struct upool *upool, void *_shared)
+{
+    struct ubuf_block_mem_shared *shared =
+        (struct ubuf_block_mem_shared *)_shared;
+    uatomic_clean(&shared->refcount);
+    free(shared);
 }
 
 /** @internal @This instructs an existing ubuf_block_mem manager to release
@@ -371,15 +417,8 @@ static void ubuf_block_mem_mgr_vacuum(struct ubuf_mgr *mgr)
 {
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
-    struct ubuf *ubuf;
-    struct ubuf_block_mem_shared *shared;
-
-    while ((ubuf = ulifo_pop(&block_mem_mgr->ubuf_pool,
-                             struct ubuf *)) != NULL)
-        ubuf_block_mem_free_inner(ubuf);
-    while ((shared = ulifo_pop(&block_mem_mgr->shared_pool,
-                               struct ubuf_block_mem_shared *)) != NULL)
-        ubuf_block_mem_shared_free_inner(shared);
+    upool_vacuum(&block_mem_mgr->ubuf_pool);
+    upool_vacuum(&block_mem_mgr->shared_pool);
 }
 
 /** @This handles manager control commands.
@@ -411,9 +450,8 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
 {
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_urefcount(urefcount);
-    ubuf_block_mem_mgr_vacuum(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr));
-    ulifo_clean(&block_mem_mgr->ubuf_pool);
-    ulifo_clean(&block_mem_mgr->shared_pool);
+    upool_clean(&block_mem_mgr->ubuf_pool);
+    upool_clean(&block_mem_mgr->shared_pool);
     umem_mgr_release(block_mem_mgr->umem_mgr);
 
     urefcount_clean(urefcount);
@@ -440,16 +478,19 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
 
     struct ubuf_block_mem_mgr *block_mem_mgr =
         malloc(sizeof(struct ubuf_block_mem_mgr) +
-               ulifo_sizeof(ubuf_pool_depth) +
-               ulifo_sizeof(shared_pool_depth));
+               upool_sizeof(ubuf_pool_depth) +
+               upool_sizeof(shared_pool_depth));
     if (unlikely(block_mem_mgr == NULL))
         return NULL;
 
-    ulifo_init(&block_mem_mgr->ubuf_pool, ubuf_pool_depth,
-               (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr));
-    ulifo_init(&block_mem_mgr->shared_pool, shared_pool_depth,
+    upool_init(&block_mem_mgr->ubuf_pool, ubuf_pool_depth,
+               (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr),
+               ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
+    upool_init(&block_mem_mgr->shared_pool, shared_pool_depth,
                (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr) +
-               ulifo_sizeof(ubuf_pool_depth));
+               upool_sizeof(ubuf_pool_depth),
+               ubuf_block_mem_shared_alloc_inner,
+               ubuf_block_mem_shared_free_inner);
     block_mem_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 

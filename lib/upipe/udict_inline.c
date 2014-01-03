@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,7 +32,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
-#include <upipe/ulifo.h>
+#include <upipe/upool.h>
 #include <upipe/umem.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
@@ -48,12 +48,11 @@
 /** default extra space added on udict expansion */
 #define UDICT_EXTRA_SIZE 64
 
-/** @hidden */
-static void udict_inline_free_inner(struct udict *udict);
-
 /** @internal @This represents a shorthand attribute type. */
 struct inline_shorthand {
+    /** name of the attribute */
     const char *name;
+    /** base type of the attribute */
     enum udict_type base_type;
 };
 
@@ -104,7 +103,7 @@ struct udict_inline_mgr {
     size_t extra_size;
 
     /** udict pool */
-    struct ulifo udict_pool;
+    struct upool udict_pool;
     /** umem allocator */
     struct umem_mgr *umem_mgr;
 
@@ -118,6 +117,7 @@ struct udict_inline_mgr {
 
 UBASE_FROM_TO(udict_inline_mgr, udict_mgr, udict_mgr, mgr)
 UBASE_FROM_TO(udict_inline_mgr, urefcount, urefcount, urefcount)
+UBASE_FROM_TO(udict_inline_mgr, upool, udict_pool, udict_pool)
 
 /** super-set of the udict structure with additional local members */
 struct udict_inline {
@@ -141,22 +141,14 @@ UBASE_FROM_TO(udict_inline, udict, udict, udict)
 static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
 {
     struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
-    struct udict *udict = ulifo_pop(&inline_mgr->udict_pool, struct udict *);
-    struct udict_inline *inl;
-    if (unlikely(udict == NULL)) {
-        inl = malloc(sizeof(struct udict_inline));
-        if (unlikely(inl == NULL))
-            return NULL;
-        udict = udict_inline_to_udict(inl);
-        inl->udict.mgr = mgr;
-    } else
-        inl = udict_inline_from_udict(udict);
+    struct udict_inline *inl = upool_alloc(&inline_mgr->udict_pool,
+                                           struct udict_inline *);
+    struct udict *udict = udict_inline_to_udict(inl);
 
     if (size < inline_mgr->min_size)
         size = inline_mgr->min_size;
     if (unlikely(!umem_alloc(inline_mgr->umem_mgr, &inl->umem, size))) {
-        if (unlikely(!ulifo_push(&inline_mgr->udict_pool, udict)))
-            udict_inline_free_inner(udict);
+        upool_free(&inline_mgr->udict_pool, inl);
         return NULL;
     }
 
@@ -553,16 +545,6 @@ static enum ubase_err udict_inline_control(struct udict *udict,
     }
 }
 
-/** @internal @This frees a udict and all associated data structures.
- *
- * @param udict pointer to a udict structure to free
- */
-static void udict_inline_free_inner(struct udict *udict)
-{
-    struct udict_inline *inl = udict_inline_from_udict(udict);
-    free(inl);
-}
-
 /** @This frees a udict.
  *
  * @param udict pointer to a udict structure to free
@@ -574,10 +556,35 @@ static void udict_inline_free(struct udict *udict)
     struct udict_inline *inl = udict_inline_from_udict(udict);
 
     umem_free(&inl->umem);
-    if (unlikely(!ulifo_push(&inline_mgr->udict_pool, udict)))
-        udict_inline_free_inner(udict);
-
+    upool_free(&inline_mgr->udict_pool, inl);
     udict_mgr_release(&inline_mgr->mgr);
+}
+
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to udict_inline or NULL in case of allocation error
+ */
+static void *udict_inline_alloc_inner(struct upool *upool)
+{
+    struct udict_inline_mgr *inline_mgr =
+        udict_inline_mgr_from_udict_pool(upool);
+    struct udict_inline *inl = malloc(sizeof(struct udict_inline));
+    if (unlikely(inl == NULL))
+        return NULL;
+    struct udict *udict = udict_inline_to_udict(inl);
+    udict->mgr = udict_inline_mgr_to_udict_mgr(inline_mgr);
+    return inl;
+}
+
+/** @internal @This frees a udict_inline.
+ *
+ * @param upool pointer to upool
+ * @param inl pointer to a udict_inline structure to free
+ */
+static void udict_inline_free_inner(struct upool *upool, void *inl)
+{
+    free(inl);
 }
 
 /** @internal @This instructs an existing udict manager to release all
@@ -588,9 +595,7 @@ static void udict_inline_free(struct udict *udict)
 static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
 {
     struct udict_inline_mgr *inline_mgr = udict_inline_mgr_from_udict_mgr(mgr);
-    struct udict *udict;
-    while ((udict = ulifo_pop(&inline_mgr->udict_pool, struct udict *)) != NULL)
-        udict_inline_free_inner(udict);
+    upool_vacuum(&inline_mgr->udict_pool);
 }
 
 /** @This processes control commands on a udict_std_mgr.
@@ -632,8 +637,7 @@ static void udict_inline_mgr_free(struct urefcount *urefcount)
     }
 #endif
 
-    udict_inline_mgr_vacuum(udict_inline_mgr_to_udict_mgr(inline_mgr));
-    ulifo_clean(&inline_mgr->udict_pool);
+    upool_clean(&inline_mgr->udict_pool);
     umem_mgr_release(inline_mgr->umem_mgr);
 
     urefcount_clean(urefcount);
@@ -656,12 +660,13 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
 {
     struct udict_inline_mgr *inline_mgr =
         malloc(sizeof(struct udict_inline_mgr) +
-               ulifo_sizeof(udict_pool_depth));
+               upool_sizeof(udict_pool_depth));
     if (unlikely(inline_mgr == NULL))
         return NULL;
 
-    ulifo_init(&inline_mgr->udict_pool, udict_pool_depth,
-               (void *)inline_mgr + sizeof(struct udict_inline_mgr));
+    upool_init(&inline_mgr->udict_pool, udict_pool_depth,
+               (void *)inline_mgr + sizeof(struct udict_inline_mgr),
+               udict_inline_alloc_inner, udict_inline_free_inner);
     inline_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 

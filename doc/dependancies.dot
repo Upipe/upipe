@@ -57,6 +57,7 @@ digraph "Upipe objects dependancies" {
 		uchain;
 		uatomic;
 		uring;
+		upool;
 		ulifo;
 		ufifo;
 		udeal;
@@ -73,7 +74,12 @@ digraph "Upipe objects dependancies" {
 
 	udict->umem;
 
-	umem->ulifo [style="dashed"];
+	uref->upool [style="dashed"];
+	ubuf->upool [style="dashed"];
+	udict->upool [style="dashed"];
+	upump->upool [style="dashed"];
+	umem->upool [style="dashed"];
+	upool->ulifo;
 
 	udeal->uatomic;
 	udeal->ueventfd;

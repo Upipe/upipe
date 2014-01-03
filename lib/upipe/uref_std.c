@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -29,7 +29,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
-#include <upipe/ulifo.h>
+#include <upipe/upool.h>
 #include <upipe/udict.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
@@ -43,7 +43,7 @@ struct uref_std_mgr {
     /** refcount management structure */
     struct urefcount urefcount;
     /** uref pool */
-    struct ulifo uref_pool;
+    struct upool uref_pool;
 
     /** common management structure */
     struct uref_mgr mgr;
@@ -51,6 +51,7 @@ struct uref_std_mgr {
 
 UBASE_FROM_TO(uref_std_mgr, uref_mgr, uref_mgr, mgr)
 UBASE_FROM_TO(uref_std_mgr, urefcount, urefcount, urefcount)
+UBASE_FROM_TO(uref_std_mgr, upool, uref_pool, uref_pool)
 
 /** @This allocates a uref.
  *
@@ -60,27 +61,12 @@ UBASE_FROM_TO(uref_std_mgr, urefcount, urefcount, urefcount)
 static struct uref *uref_std_alloc(struct uref_mgr *mgr)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
-    struct uref *uref = ulifo_pop(&std_mgr->uref_pool, struct uref *);
-    if (uref == NULL) {
-        uref = malloc(sizeof(struct uref));
-        if (unlikely(uref == NULL))
-            return NULL;
-
-        uref->mgr = mgr;
-    }
+    struct uref *uref = upool_alloc(&std_mgr->uref_pool, struct uref *);
+    if (unlikely(uref == NULL))
+        return NULL;
     uchain_init(&uref->uchain);
-
     uref_mgr_use(mgr);
     return uref;
-}
-
-/** @internal @This frees a uref and all associated data structures.
- *
- * @param uref pointer to uref structure to free
- */
-static void uref_std_free_inner(struct uref *uref)
-{
-    free(uref);
 }
 
 /** @This recycles or frees a uref.
@@ -90,10 +76,31 @@ static void uref_std_free_inner(struct uref *uref)
 static void uref_std_free(struct uref *uref)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(uref->mgr);
-    if (unlikely(!ulifo_push(&std_mgr->uref_pool, uref)))
-        uref_std_free_inner(uref);
-
+    upool_free(&std_mgr->uref_pool, uref);
     uref_mgr_release(&std_mgr->mgr);
+}
+
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to uref or NULL in case of allocation error
+ */
+static void *uref_std_alloc_inner(struct upool *upool)
+{
+    struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_pool(upool);
+    struct uref *uref = malloc(sizeof(struct uref));
+    uref->mgr = uref_std_mgr_to_uref_mgr(std_mgr);
+    return uref;
+}
+
+/** @internal @This frees a buffer.
+ *
+ * @param upool pointer to upool
+ * @param uref pointer to shared structure to free
+ */
+static void uref_std_free_inner(struct upool *upool, void *uref)
+{
+    free(uref);
 }
 
 /** @internal @This instructs an existing uref standard manager to release all
@@ -104,10 +111,7 @@ static void uref_std_free(struct uref *uref)
 static void uref_std_mgr_vacuum(struct uref_mgr *mgr)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(mgr);
-    struct uref *uref;
-
-    while ((uref = ulifo_pop(&std_mgr->uref_pool, struct uref *)) != NULL)
-        uref_std_free_inner(uref);
+    upool_vacuum(&std_mgr->uref_pool);
 }
 
 /** @This processes control commands on a uref_std_mgr.
@@ -138,8 +142,7 @@ static void uref_std_mgr_free(struct urefcount *urefcount)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_urefcount(urefcount);
     struct uref_mgr *mgr = uref_std_mgr_to_uref_mgr(std_mgr);
-    uref_std_mgr_vacuum(mgr);
-    ulifo_clean(&std_mgr->uref_pool);
+    upool_clean(&std_mgr->uref_pool);
     udict_mgr_release(mgr->udict_mgr);
 
     urefcount_clean(urefcount);
@@ -161,12 +164,13 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     assert(control_attr_size >= 0);
 
     struct uref_std_mgr *std_mgr = malloc(sizeof(struct uref_std_mgr) +
-                                          ulifo_sizeof(uref_pool_depth));
+                                          upool_sizeof(uref_pool_depth));
     if (unlikely(std_mgr == NULL))
         return NULL;
 
-    ulifo_init(&std_mgr->uref_pool, uref_pool_depth,
-               (void *)std_mgr + sizeof(struct uref_std_mgr));
+    upool_init(&std_mgr->uref_pool, uref_pool_depth,
+               (void *)std_mgr + sizeof(struct uref_std_mgr),
+               uref_std_alloc_inner, uref_std_free_inner);
 
     std_mgr->mgr.control_attr_size = control_attr_size;
     std_mgr->mgr.udict_mgr = udict_mgr;

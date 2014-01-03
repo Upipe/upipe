@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -36,7 +36,7 @@ extern "C" {
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/ulifo.h>
+#include <upipe/upool.h>
 #include <upipe/upump.h>
 
 #include <stdbool.h>
@@ -107,9 +107,9 @@ void upump_common_clean(struct upump *upump);
  */
 struct upump_common_mgr {
     /** upump pool */
-    struct ulifo upump_pool;
+    struct upool upump_pool;
     /** upump_blocker_pool */
-    struct ulifo upump_blocker_pool;
+    struct upool upump_blocker_pool;
 
     /** function to really start a watcher */
     void (*upump_real_start)(struct upump *);
@@ -121,16 +121,16 @@ struct upump_common_mgr {
 };
 
 UBASE_FROM_TO(upump_common_mgr, upump_mgr, upump_mgr, mgr)
+UBASE_FROM_TO(upump_common_mgr, upool, upump_pool, upump_pool)
+UBASE_FROM_TO(upump_common_mgr, upool, upump_blocker_pool, upump_blocker_pool)
 
 /** @This instructs an existing manager to release all structures
  * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to a upump_mgr structure wrapped into a
  * upump_common_mgr structure
- * @param upump_free_inner function to call to release a upump buffer
  */
-void upump_common_mgr_vacuum(struct upump_mgr *mgr,
-                             void (*upump_free_inner)(struct upump *));
+void upump_common_mgr_vacuum(struct upump_mgr *mgr);
 
 /** @This returns the extra buffer space needed for pools.
  *
@@ -146,10 +146,8 @@ size_t upump_common_mgr_sizeof(uint16_t upump_pool_depth,
  *
  * @param mgr pointer to a upump_mgr structure wrapped into a
  * upump_common_mgr structure
- * @param upump_free_inner function to call to release a upump buffer
  */
-void upump_common_mgr_clean(struct upump_mgr *mgr,
-                             void (*upump_free_inner)(struct upump *));
+void upump_common_mgr_clean(struct upump_mgr *mgr);
 
 /** @This initializes the common parts of a upump_common_mgr structure.
  *
@@ -161,12 +159,16 @@ void upump_common_mgr_clean(struct upump_mgr *mgr,
  * @param pool_extra extra buffer space (see @ref upump_common_mgr_sizeof)
  * @param upump_real_start function of the real manager that starts a pump
  * @param upump_real_stop function of the real manager that stops a pump
+ * @param upump_alloc_inner function to call to allocate a upump buffer
+ * @param upump_free_inner function to call to release a upump buffer
  */
 void upump_common_mgr_init(struct upump_mgr *mgr,
                            uint16_t upump_pool_depth,
                            uint16_t upump_blocker_pool_depth, void *pool_extra,
                            void (*upump_real_start)(struct upump *),
-                           void (*upump_real_stop)(struct upump *));
+                           void (*upump_real_stop)(struct upump *),
+                           void *(*upump_alloc_inner)(struct upool *),
+                           void (*upump_free_inner)(struct upool *, void *));
 
 #ifdef __cplusplus
 }
