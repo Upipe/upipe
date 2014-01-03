@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *          Benjamin Cohen
@@ -258,11 +258,9 @@ static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    if (upipe_udpsrc->uref_mgr == NULL) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(upipe_udpsrc->uref_mgr == NULL))
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_RETURN(upipe_udpsrc_check_uref_mgr(upipe))
+    upipe_udpsrc_check_upump_mgr(upipe);
+
     if (upipe_udpsrc->flow_def == NULL) {
         struct uref *flow_def =
             uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
@@ -272,8 +270,6 @@ static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         }
         upipe_udpsrc_store_flow_def(upipe, flow_def);
     }
-    if (upipe_udpsrc->upump_mgr == NULL)
-        upipe_throw_need_upump_mgr(upipe);
     if (upipe_udpsrc->ubuf_mgr == NULL) {
         upipe_throw_need_ubuf_mgr(upipe, upipe_udpsrc->flow_def);
         if (unlikely(upipe_udpsrc->ubuf_mgr == NULL))
@@ -310,14 +306,14 @@ static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_udpsrc_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_udpsrc_set_uref_mgr(upipe, uref_mgr);
-        }
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_udpsrc_attach_uref_mgr(upipe);
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_udpsrc_set_upump(upipe, NULL);
+            return upipe_udpsrc_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_udpsrc_set_upump(upipe, NULL);
+            return upipe_udpsrc_attach_uclock(upipe);
 
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
@@ -340,24 +336,6 @@ static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
             return upipe_udpsrc_set_output(upipe, output);
         }
 
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_udpsrc_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_udpsrc_set_upump(upipe, NULL);
-            return upipe_udpsrc_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_udpsrc_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            upipe_udpsrc_set_upump(upipe, NULL);
-            return upipe_udpsrc_set_uclock(upipe, uclock);
-        }
         case UPIPE_SOURCE_GET_READ_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_udpsrc_get_read_size(upipe, p);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -343,7 +343,6 @@ int main(int argc, char **argv)
                              loglevel, "fsrc"));
     assert(upipe_source != NULL);
     upipe_mgr_release(upipe_fsrc_mgr);
-    upipe_set_upump_mgr(upipe_source, upump_mgr);
     upipe_set_ubuf_mgr(upipe_source, block_mgr);
     if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))
         exit(EXIT_FAILURE);

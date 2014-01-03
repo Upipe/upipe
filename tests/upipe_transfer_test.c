@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -66,6 +66,7 @@ static void test_free(struct urefcount *urefcount)
     struct test_pipe *test_pipe =
         container_of(urefcount, struct test_pipe, urefcount);
     urefcount_clean(&test_pipe->urefcount);
+    upipe_clean(&test_pipe->upipe);
     free(test_pipe);
 }
 
@@ -87,9 +88,7 @@ static enum ubase_err test_control(struct upipe *upipe,
                                    enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *arg = va_arg(args, struct upump_mgr *);
-            assert(arg == upump_mgr);
+        case UPIPE_ATTACH_UPUMP_MGR: {
             transferred = true;
             return UBASE_ERR_NONE;
         }

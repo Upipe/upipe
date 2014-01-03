@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -31,6 +31,7 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -112,10 +113,10 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum upr
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEED_UPUMP_MGR:
             break;
         case UPROBE_SINK_END:
         case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
         default:
             assert(0);
@@ -150,17 +151,15 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     /* decoder lives in encoder's thread */
-    upipe_get_upump_mgr(upipe, &upump_mgr);
+    upump_mgr = upipe_get_opaque(upipe, struct upump_mgr *);
 
     /* decoder */
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-        uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                            "avcdec %"PRId64, num));
+        uprobe_upump_mgr_alloc(
+            uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                                "avcdec %"PRId64, num), upump_mgr));
     assert(avcdec);
     ubase_assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
-    if (upump_mgr) {
-        ubase_assert(upipe_set_upump_mgr(avcdec, upump_mgr));
-    }
     upipe_release(avcdec);
 
     /* /dev/null */
@@ -208,15 +207,15 @@ struct upipe *build_pipeline(const char *codec_def,
 
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
-        uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_avcenc_s),
-                            UPROBE_LOG_LEVEL, "avcenc %d", num), output_flow);
+        uprobe_upump_mgr_alloc(
+            uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_avcenc_s),
+                                UPROBE_LOG_LEVEL, "avcenc %d", num), upump_mgr),
+        output_flow);
     uref_free(output_flow);
     assert(avcenc);
     ubase_assert(upipe_set_flow_def(avcenc, flow_def));
     ubase_assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
-    if (upump_mgr) {
-        ubase_assert(upipe_set_upump_mgr(avcenc, upump_mgr));
-    }
+    upipe_set_opaque(avcenc, upump_mgr);
 
     return avcenc;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -270,6 +270,7 @@ static void upipe_avcenc_start_av_deal(struct upipe *upipe)
     upipe_avcenc_abort_av_deal(upipe);
 
     /* use udeal/upump callback if available */
+    upipe_avcenc_check_upump_mgr(upipe);
     if (upipe_avcenc->upump_mgr == NULL) {
         upipe_dbg(upipe, "no upump_mgr present, direct call to avcodec_open");
         upipe_avcenc_do_av_deal(upipe);
@@ -1056,6 +1057,10 @@ static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
                                            va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_avcenc_set_upump_av_deal(upipe, NULL);
+            upipe_avcenc_abort_av_deal(upipe);
+            return upipe_avcenc_attach_upump_mgr(upipe);
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_avcenc_get_ubuf_mgr(upipe, p);
@@ -1079,16 +1084,6 @@ static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_avcenc_set_output(upipe, output);
-        }
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_avcenc_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_avcenc_set_upump_av_deal(upipe, NULL);
-            upipe_avcenc_abort_av_deal(upipe);
-            return upipe_avcenc_set_upump_mgr(upipe, upump_mgr);
         }
 
         case UPIPE_AVCENC_SET_OPTION: {

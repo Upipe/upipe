@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,8 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -230,7 +232,6 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                      "ts mux"));
             assert(upipe_ts_mux != NULL);
             upipe_mgr_release(upipe_ts_mux_mgr);
-            ubase_assert(upipe_set_uref_mgr(upipe_ts_mux, uref_mgr));
             ubase_assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
             //ubase_assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
             //ubase_assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
@@ -244,7 +245,6 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                      UPROBE_LOG_LEVEL, "file sink"));
             assert(upipe_fsink != NULL);
             upipe_mgr_release(upipe_fsink_mgr);
-            ubase_assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
             ubase_assert(upipe_fsink_set_path(upipe_fsink, sink_file, UPIPE_FSINK_OVERWRITE));
 
             upipe_release(upipe_fsink);
@@ -314,6 +314,10 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe_s, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe_s, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
 
     upipe_noclock_mgr = upipe_noclock_mgr_alloc();
     assert(upipe_noclock_mgr != NULL);
@@ -325,8 +329,6 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
-    ubase_assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
     ubase_assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));

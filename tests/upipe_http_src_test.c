@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -32,6 +32,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -113,26 +115,27 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "null"));
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
     assert(upipe_http_src_mgr != NULL);
     struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "http"));
     assert(upipe_http_src != NULL);
-    assert(upipe_set_upump_mgr(upipe_http_src, upump_mgr));
-    assert(upipe_set_uref_mgr(upipe_http_src, uref_mgr));
     assert(upipe_set_ubuf_mgr(upipe_http_src, ubuf_mgr));
     assert(upipe_source_set_read_size(upipe_http_src, READ_SIZE));
-    assert(upipe_set_uclock(upipe_http_src, uclock));
     assert(upipe_set_uri(upipe_http_src, url));
     assert(upipe_set_output(upipe_http_src, upipe_null));
     upipe_release(upipe_null);
@@ -149,7 +152,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     ev_default_destroy();

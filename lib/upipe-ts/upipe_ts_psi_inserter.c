@@ -35,7 +35,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -74,8 +73,6 @@ struct upipe_ts_psii {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
 
@@ -99,7 +96,6 @@ struct upipe_ts_psii {
 UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psii, urefcount, upipe_ts_psii_free)
 UPIPE_HELPER_VOID(upipe_ts_psii)
-UPIPE_HELPER_UREF_MGR(upipe_ts_psii, uref_mgr)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psii, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
 
@@ -162,12 +158,6 @@ static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
         upipe_ts_psii_from_sub_mgr(upipe->mgr);
 
     switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_psii->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii));
-            if (likely(upipe_ts_psii->uref_mgr != NULL))
-                return upipe_set_uref_mgr(inner, upipe_ts_psii->uref_mgr);
-            return UBASE_ERR_UNHANDLED;
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
             if (unlikely(upipe_ts_psii->ubuf_mgr == NULL))
@@ -475,7 +465,6 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     upipe_ts_psii_init_urefcount(upipe);
-    upipe_ts_psii_init_uref_mgr(upipe);
     upipe_ts_psii_init_ubuf_mgr(upipe);
     upipe_ts_psii_init_output(upipe);
     upipe_ts_psii_init_sub_mgr(upipe);
@@ -571,14 +560,6 @@ static enum ubase_err upipe_ts_psii_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_psii_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_psii_set_uref_mgr(upipe, uref_mgr);
-        }
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_ts_psii_get_ubuf_mgr(upipe, p);
@@ -628,7 +609,6 @@ static void upipe_ts_psii_free(struct upipe *upipe)
     upipe_ts_psii_clean_sub_subs(upipe);
     upipe_ts_psii_clean_output(upipe);
     upipe_ts_psii_clean_ubuf_mgr(upipe);
-    upipe_ts_psii_clean_uref_mgr(upipe);
     upipe_ts_psii_clean_urefcount(upipe);
     upipe_ts_psii_free_void(upipe);
 }

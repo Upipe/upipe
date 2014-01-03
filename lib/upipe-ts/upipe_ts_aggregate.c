@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -210,9 +210,7 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
             /* Do not output a packet. */
             return;
 
-        if (unlikely(upipe_ts_agg->uref_mgr == NULL))
-            upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(upipe_ts_agg->uref_mgr == NULL))
+        if (unlikely(!ubase_check(upipe_ts_agg_check_uref_mgr(upipe))))
             return;
 
         uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
@@ -529,14 +527,8 @@ static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
                                            va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_agg_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_agg_set_uref_mgr(upipe, uref_mgr);
-        }
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_ts_agg_attach_uref_mgr(upipe);
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_ts_agg_get_ubuf_mgr(upipe, p);

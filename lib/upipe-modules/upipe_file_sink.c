@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -353,11 +353,7 @@ static enum ubase_err _upipe_fsink_set_path(struct upipe *upipe,
     if (unlikely(path == NULL))
         return UBASE_ERR_NONE;
 
-    if (upipe_fsink->upump_mgr == NULL) {
-        upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_fsink->upump_mgr == NULL))
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_RETURN(upipe_fsink_check_upump_mgr(upipe))
 
     const char *mode_desc = NULL; /* hush gcc */
     int flags;
@@ -444,27 +440,15 @@ static enum ubase_err  _upipe_fsink_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_fsink_set_upump(upipe, NULL);
+            return upipe_fsink_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_fsink_set_upump(upipe, NULL);
+            return upipe_fsink_attach_uclock(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_fsink_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_fsink_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_fsink_set_upump(upipe, NULL);
-            return upipe_fsink_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_fsink_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            upipe_fsink_set_upump(upipe, NULL);
-            return upipe_fsink_set_uclock(upipe, uclock);
         }
 
         case UPIPE_SINK_GET_MAX_LENGTH: {

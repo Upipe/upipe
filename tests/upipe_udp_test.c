@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
             Benjamin Cohen
@@ -33,6 +33,9 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -251,12 +254,18 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
 
     struct upipe *udpsrc_test = upipe_void_alloc(&udpsrc_test_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "udpsrc_test"));
 
 
@@ -264,15 +273,13 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "udp source"));
     assert(upipe_udpsrc != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_udpsrc, upump_mgr));
-    ubase_assert(upipe_set_uref_mgr(upipe_udpsrc, uref_mgr));
     ubase_assert(upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
     ubase_assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
-    ubase_assert(upipe_set_uclock(upipe_udpsrc, uclock));
+    ubase_assert(upipe_attach_uclock(upipe_udpsrc));
 	srand(42);
 
     upipe_set_uri(upipe_udpsrc, "@127.0.0.1:42125");
@@ -318,11 +325,10 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr != NULL);
     upipe_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "udp sink"));
     assert(upipe_udpsink != NULL);
     ubase_assert(upipe_set_flow_def(upipe_udpsink, flow_def));
-    ubase_assert(upipe_set_upump_mgr(upipe_udpsink, upump_mgr));
     uref_free(flow_def);
 
     /* reset source uri */
@@ -357,7 +363,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
 	freeaddrinfo(servinfo);

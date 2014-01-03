@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -138,6 +138,9 @@ static struct upipe *upipe_sinesrc_alloc(struct upipe_mgr *mgr,
     upipe_sinesrc->next_pts = UINT64_MAX;
     upipe_sinesrc->phase = 0.;
     upipe_throw_ready(upipe);
+
+    upipe_sinesrc_check_uref_mgr(upipe);
+    upipe_sinesrc_check_upump_mgr(upipe);
     return upipe;
 }
 
@@ -209,14 +212,14 @@ static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
                                              va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_sinesrc_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_sinesrc_set_uref_mgr(upipe, uref_mgr);
-        }
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_sinesrc_attach_uref_mgr(upipe);
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_sinesrc_set_upump(upipe, NULL);
+            return upipe_sinesrc_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_sinesrc_set_upump(upipe, NULL);
+            return upipe_sinesrc_attach_uclock(upipe);
 
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
@@ -239,24 +242,6 @@ static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
             return upipe_sinesrc_set_output(upipe, output);
         }
 
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_sinesrc_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_sinesrc_set_upump(upipe, NULL);
-            return upipe_sinesrc_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_sinesrc_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            upipe_sinesrc_set_upump(upipe, NULL);
-            return upipe_sinesrc_set_uclock(upipe, uclock);
-        }
         default:
             return UBASE_ERR_UNHANDLED;
     }

@@ -123,8 +123,9 @@
         @item @ref uprobe_stdio_alloc @item print all log messages to a file stream @item @tt -lupipe
         @item @ref uprobe_pfx_alloc @item prefix all log messages with the given name @item @tt -lupipe
         @item @ref uprobe_output_alloc @item forward flow definition changes to the output pipe @item @tt -lupipe
-        @item @ref uprobe_upump_mgr_alloc @item set a upump manager on pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
-        @item @ref uprobe_uref_mgr_alloc @item set a uref manager on pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
+        @item @ref uprobe_upump_mgr_alloc @item give a upump manager to pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
+        @item @ref uprobe_uref_mgr_alloc @item give a uref manager to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
+        @item @ref uprobe_uclock_alloc @item give a uclock to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
 

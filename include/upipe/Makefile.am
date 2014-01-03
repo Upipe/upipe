@@ -53,6 +53,7 @@ pkginclude_HEADERS = \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \
 	uprobe_stdio.h \
+	uprobe_uclock.h \
 	uprobe_upump_mgr.h \
 	uprobe_uref_mgr.h \
 	upump_blocker.h \

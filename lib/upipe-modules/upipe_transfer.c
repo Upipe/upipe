@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,7 @@
 #include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -77,8 +78,8 @@ UBASE_FROM_TO(upipe_xfer_mgr, urefcount, urefcount, urefcount)
 /** @This represents types of commands to send to the remote upump_mgr.
  */
 enum upipe_xfer_command {
-    /** set upump manager on a pipe */
-    UPIPE_XFER_SET_UPUMP_MGR,
+    /** attach upump manager on a pipe */
+    UPIPE_XFER_ATTACH_UPUMP_MGR,
     /** set URI on a pipe */
     UPIPE_XFER_SET_URI,
     /** set output of a pipe */
@@ -186,8 +187,8 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     if (unlikely(!ubase_check(upipe_xfer_mgr_send(mgr,
-                                                      UPIPE_XFER_SET_UPUMP_MGR,
-                                                      upipe_remote, NULL)))) {
+                                                  UPIPE_XFER_ATTACH_UPUMP_MGR,
+                                                  upipe_remote, NULL)))) {
         free(upipe_xfer);
         return NULL;
     }
@@ -299,8 +300,10 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
 
     struct upipe_xfer_msg *msg = upipe_xfer_msg_from_uchain(uchain);
     switch (msg->type) {
-        case UPIPE_XFER_SET_UPUMP_MGR:
-            upipe_set_upump_mgr(msg->upipe_remote, xfer_mgr->upump_mgr);
+        case UPIPE_XFER_ATTACH_UPUMP_MGR:
+            upipe_push_probe(msg->upipe_remote,
+                    uprobe_upump_mgr_alloc(NULL, xfer_mgr->upump_mgr));
+            upipe_attach_upump_mgr(msg->upipe_remote);
             break;
         case UPIPE_XFER_SET_URI:
             upipe_set_uri(msg->upipe_remote, (char *)msg->arg);

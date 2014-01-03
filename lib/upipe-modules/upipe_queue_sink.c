@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -158,6 +158,38 @@ static void upipe_qsink_watcher(struct upump *upump)
         upipe_qsink_free(upipe);
 }
 
+/** @internal @This checks and creates the upump watcher to wait for the
+ * availability of the queue.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_qsink_check_watcher(struct upipe *upipe)
+{
+    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
+    if (likely(upipe_qsink->upump != NULL))
+        return true;
+
+    if (upipe_qsink->qsrc == NULL)
+        return false;
+
+    upipe_qsink_check_upump_mgr(upipe);
+    if (upipe_qsink->upump_mgr == NULL)
+        return false;
+
+    struct upump *upump =
+        uqueue_upump_alloc_push(upipe_queue(upipe_qsink->qsrc),
+                                upipe_qsink->upump_mgr,
+                                upipe_qsink_watcher, upipe);
+    if (unlikely(upump == NULL)) {
+        upipe_err_va(upipe, "can't create watcher");
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return false;
+    }
+    upipe_qsink_set_upump(upipe, upump);
+    return true;
+}
+
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
@@ -173,14 +205,6 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "received a buffer before opening a queue");
         return;
     }
-    if (unlikely(upipe_qsink->upump_mgr == NULL)) {
-        upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_qsink->upump_mgr == NULL)) {
-            uref_free(uref);
-            return;
-        }
-    }
-
     if (!upipe_qsink->flow_def_sent && upipe_qsink->flow_def != NULL) {
         struct uref *flow_def;
         if ((flow_def = uref_dup(upipe_qsink->flow_def)) == NULL)
@@ -194,10 +218,14 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         upipe_qsink_hold_sink(upipe, uref);
         upipe_qsink_block_sink(upipe, upump);
     } else if (!upipe_qsink_output(upipe, uref, upump)) {
+        if (!upipe_qsink_check_watcher(upipe)) {
+            upipe_warn(upipe, "unable to spool uref");
+            uref_free(uref);
+            return;
+        }
         upipe_qsink_hold_sink(upipe, uref);
         upipe_qsink_block_sink(upipe, upump);
-        if (upipe_qsink->upump != NULL)
-            upump_start(upipe_qsink->upump);
+        upump_start(upipe_qsink->upump);
     }
 }
 
@@ -289,8 +317,6 @@ static enum ubase_err _upipe_qsink_set_qsrc(struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
     if (unlikely(qsrc == NULL))
         return UBASE_ERR_NONE;
-    if (upipe_qsink->upump_mgr == NULL)
-        upipe_throw_need_upump_mgr(upipe);
 
     upipe_qsink->qsrc = qsrc;
     upipe_use(qsrc);
@@ -330,6 +356,9 @@ static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
                                  va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_qsink_set_upump(upipe, NULL);
+            return upipe_qsink_attach_upump_mgr(upipe);
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_qsink_get_output(upipe, p);
@@ -341,15 +370,6 @@ static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_qsink_set_flow_def(upipe, uref);
-        }
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_qsink_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_qsink_set_upump(upipe, NULL);
-            return upipe_qsink_set_upump_mgr(upipe, upump_mgr);
         }
 
         case UPIPE_SINK_GET_MAX_LENGTH: {
@@ -393,21 +413,9 @@ static enum ubase_err upipe_qsink_control(struct upipe *upipe,
     UBASE_RETURN(_upipe_qsink_control(upipe, command, args));
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (upipe_qsink->upump_mgr != NULL && upipe_qsink->qsrc != NULL &&
-        upipe_qsink->upump == NULL) {
-        struct upump *upump =
-            uqueue_upump_alloc_push(upipe_queue(upipe_qsink->qsrc),
-                                    upipe_qsink->upump_mgr,
-                                    upipe_qsink_watcher, upipe);
-        if (unlikely(upump == NULL)) {
-            upipe_err_va(upipe, "can't create watcher");
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_qsink_set_upump(upipe, upump);
-        if (unlikely(!upipe_qsink_check_sink(upipe)))
-            upump_start(upipe_qsink->upump);
-    }
+    upipe_qsink_check_watcher(upipe);
+    if (unlikely(!upipe_qsink_check_sink(upipe)))
+        upump_start(upipe_qsink->upump);
 
     return UBASE_ERR_NONE;
 }

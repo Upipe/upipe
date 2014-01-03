@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -305,33 +305,29 @@ static enum ubase_err _upipe_multicat_sink_get_path(struct upipe *upipe,
 /** @internal @This pushes the given upump manager to the (fsink) output
  *
  * @param upipe description structure of the pipe
- * @param upump_mgr upump manager
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_set_upump_mgr(struct upipe *upipe,
-        struct upump_mgr *upump_mgr)
+static enum ubase_err upipe_multicat_sink_attach_upump_mgr(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
         UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
     }
-    return upipe_set_upump_mgr(upipe_multicat_sink->fsink, upump_mgr);
+    return upipe_attach_upump_mgr(upipe_multicat_sink->fsink);
 }
 
 /** @internal @This pushes the given uclock to the (fsink) output
  *
  * @param upipe description structure of the pipe
- * @param uclock uclock
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_set_uclock(struct upipe *upipe,
-                                                      struct uclock *uclock)
+static enum ubase_err upipe_multicat_sink_attach_uclock(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
         UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
     }
-    return upipe_set_uclock(upipe_multicat_sink->fsink, uclock);
+    return upipe_attach_uclock(upipe_multicat_sink->fsink);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -352,24 +348,10 @@ static enum ubase_err upipe_multicat_sink_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_multicat_sink_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_UPUMP_MGR: {
-            if (! upipe_multicat_sink->fsink) return false;
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_get_upump_mgr(upipe_multicat_sink->fsink, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_multicat_sink_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            if (! upipe_multicat_sink->fsink) return false;
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_get_uclock(upipe_multicat_sink->fsink, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            return _upipe_multicat_sink_set_uclock(upipe, uclock);
-        }
+        case UPIPE_ATTACH_UPUMP_MGR:
+            return upipe_multicat_sink_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            return upipe_multicat_sink_attach_uclock(upipe);
 
         case UPIPE_MULTICAT_SINK_SET_MODE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)

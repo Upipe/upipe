@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,7 +40,7 @@ extern "C" {
 
 #include <stdbool.h>
 
-/** @This declares four functions dealing with the upump manager.
+/** @This declares three functions dealing with the upump manager.
  *
  * You must add one pointer to your private upipe structure, for instance:
  * @code
@@ -57,28 +57,19 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_upump_mgr(struct upipe *upipe,
- *                                         struct upump_mgr **p)
+ *  enum ubase_err upipe_foo_attach_upump_mgr(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_GET_UPUMP_MGR: {
- *      struct upump_mgr **p = va_arg(args, struct upump_mgr **);
- *      return upipe_foo_get_upump_mgr(upipe, p);
+ *  case UPIPE_ATTACH_UPUMP_MGR: {
+ *      return upipe_foo_attach_upump_mgr(upipe);
  *  }
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_upump_mgr(struct upipe *upipe,
- *                                         struct upump_mgr *upump_mgr)
+ *  enum ubase_err upipe_foo_check_upump_mgr(struct upipe *upipe)
  * @end code
- * Typically called from your upipe_foo_control() handler, such as:
- * @code
- *  case UPIPE_SET_UPUMP_MGR: {
- *      struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
- *      return upipe_foo_set_upump_mgr(upipe, upump_mgr);
- *  }
- * @end code
+ * Checks if the upump manager is available, and asks for it otherwise.
  *
  * @item @code
  *  void upipe_foo_clean_upump_mgr(struct upipe *upipe)
@@ -97,39 +88,32 @@ extern "C" {
  */                                                                         \
 static void STRUCTURE##_init_upump_mgr(struct upipe *upipe)                 \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE->UPUMP_MGR = NULL;                                            \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s->UPUMP_MGR = NULL;                                                    \
 }                                                                           \
-/** @internal @This gets the current upump_mgr.                             \
+/** @internal @This sends a probe to attach a uref manager.                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param p filled in with the upump_mgr                                    \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_upump_mgr(struct upipe *upipe,        \
-                                                struct upump_mgr **p)       \
+static enum ubase_err STRUCTURE##_attach_upump_mgr(struct upipe *upipe)     \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    assert(p != NULL);                                                      \
-    *p = STRUCTURE->UPUMP_MGR;                                              \
-    return UBASE_ERR_NONE;                                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    upump_mgr_release(s->UPUMP_MGR);                                        \
+    s->UPUMP_MGR = NULL;                                                    \
+    return upipe_throw_need_upump_mgr(upipe, &s->UPUMP_MGR);                \
 }                                                                           \
-/** @internal @This sets the upump_mgr.                                     \
+/** @internal @This checks if the upump manager is available, and asks      \
+ * for it otherwise.                                                        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param upump_mgr new upump_mgr                                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_upump_mgr(struct upipe *upipe,        \
-                                                struct upump_mgr *upump_mgr)\
+static enum ubase_err STRUCTURE##_check_upump_mgr(struct upipe *upipe)      \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UPUMP_MGR != NULL))                             \
-        upump_mgr_release(STRUCTURE->UPUMP_MGR);                            \
-                                                                            \
-    STRUCTURE->UPUMP_MGR = upump_mgr;                                       \
-    if (likely(upump_mgr != NULL))                                          \
-        upump_mgr_use(STRUCTURE->UPUMP_MGR);                                \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (unlikely(s->UPUMP_MGR == NULL))                                     \
+        return upipe_throw_need_upump_mgr(upipe, &s->UPUMP_MGR);            \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -138,9 +122,8 @@ static enum ubase_err STRUCTURE##_set_upump_mgr(struct upipe *upipe,        \
  */                                                                         \
 static void STRUCTURE##_clean_upump_mgr(struct upipe *upipe)                \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->UPUMP_MGR != NULL))                               \
-        upump_mgr_release(STRUCTURE->UPUMP_MGR);                            \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    upump_mgr_release(s->UPUMP_MGR);                                        \
 }
 
 #ifdef __cplusplus

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -55,27 +55,19 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_uclock(struct upipe *upipe, struct uclock **p)
+ *  enum ubase_err upipe_foo_attach_uclock(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_GET_UCLOCK: {
- *      struct uclock **p = va_arg(args, struct uclock **);
- *      return upipe_foo_get_uclock(upipe, p);
+ *  case UPIPE_ATTACH_UREF_MGR: {
+ *      return upipe_foo_attach_uclock(upipe);
  *  }
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_uclock(struct upipe *upipe,
- *                                      struct uclock *uclock)
+ *  enum ubase_err upipe_foo_check_uclock(struct upipe *upipe)
  * @end code
- * Typically called from your upipe_foo_control() handler, such as:
- * @code
- *  case UPIPE_SET_UCLOCK: {
- *      struct uclock *uclock = va_arg(args, struct uclock *);
- *      return upipe_foo_set_uclock(upipe, uclock);
- *  }
- * @end code
+ * Checks if the uclock is available, and asks for it otherwise.
  *
  * @item @code
  *  void upipe_foo_clean_uclock(struct upipe *upipe)
@@ -94,38 +86,32 @@ extern "C" {
  */                                                                         \
 static void STRUCTURE##_init_uclock(struct upipe *upipe)                    \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE->UCLOCK = NULL;                                               \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s->UCLOCK = NULL;                                                       \
 }                                                                           \
-/** @internal @This gets the current uclock.                                \
+/** @internal @This sends a probe to attach a uclock.                       \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param p filled in with the uclock                                       \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_uclock(struct upipe *upipe,           \
-                                             struct uclock **p)             \
+static enum ubase_err STRUCTURE##_attach_uclock(struct upipe *upipe)        \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    assert(p != NULL);                                                      \
-    *p = STRUCTURE->UCLOCK;                                                 \
-    return UBASE_ERR_NONE;                                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    uclock_release(s->UCLOCK);                                              \
+    s->UCLOCK = NULL;                                                       \
+    return upipe_throw_need_uclock(upipe, &s->UCLOCK);                      \
 }                                                                           \
-/** @internal @This sets the uclock.                                        \
+/** @internal @This checks if the uclock is available, and asks             \
+ * for it otherwise.                                                        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param uclock new uclock                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_uclock(struct upipe *upipe,           \
-                                             struct uclock *uclock)         \
+static enum ubase_err STRUCTURE##_check_uclock(struct upipe *upipe)         \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UCLOCK != NULL))                                \
-        uclock_release(STRUCTURE->UCLOCK);                                  \
-    STRUCTURE->UCLOCK = uclock;                                             \
-    if (likely(uclock != NULL))                                             \
-        uclock_use(STRUCTURE->UCLOCK);                                      \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (unlikely(s->UCLOCK == NULL))                                        \
+        return upipe_throw_need_uclock(upipe, &s->UCLOCK);                  \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -134,9 +120,8 @@ static enum ubase_err STRUCTURE##_set_uclock(struct upipe *upipe,           \
  */                                                                         \
 static void STRUCTURE##_clean_uclock(struct upipe *upipe)                   \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->UCLOCK != NULL))                                  \
-        uclock_release(STRUCTURE->UCLOCK);                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    uclock_release(s->UCLOCK);                                              \
 }
 
 #ifdef __cplusplus

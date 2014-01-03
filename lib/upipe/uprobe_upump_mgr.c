@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,8 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_upump_mgr events and providing a given upump
- * manager
+ * @short probe catching need_upump_mgr events and providing a given upump manager
  */
 
 #include <upipe/ubase.h>
@@ -45,7 +44,7 @@
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
 static enum ubase_err uprobe_upump_mgr_throw(struct uprobe *uprobe,
                                              struct upipe *upipe,
@@ -57,9 +56,8 @@ static enum ubase_err uprobe_upump_mgr_throw(struct uprobe *uprobe,
     if (event != UPROBE_NEED_UPUMP_MGR || uprobe_upump_mgr->upump_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    if (unlikely(upipe_set_upump_mgr(upipe, uprobe_upump_mgr->upump_mgr) !=
-                 UBASE_ERR_NONE))
-        upipe_warn(upipe, "probe couldn't set upump manager");
+    struct upump_mgr **upump_mgr_p = va_arg(args, struct upump_mgr **);
+    *upump_mgr_p = upump_mgr_use(uprobe_upump_mgr->upump_mgr);
     return UBASE_ERR_NONE;
 }
 
@@ -76,9 +74,7 @@ struct uprobe *uprobe_upump_mgr_init(struct uprobe_upump_mgr *uprobe_upump_mgr,
 {
     assert(uprobe_upump_mgr != NULL);
     struct uprobe *uprobe = uprobe_upump_mgr_to_uprobe(uprobe_upump_mgr);
-    uprobe_upump_mgr->upump_mgr = upump_mgr;
-    if (upump_mgr != NULL)
-        upump_mgr_use(upump_mgr);
+    uprobe_upump_mgr->upump_mgr = upump_mgr_use(upump_mgr);
     uprobe_init(uprobe, uprobe_upump_mgr_throw, next);
     return uprobe;
 }
@@ -110,9 +106,6 @@ void uprobe_upump_mgr_set(struct uprobe *uprobe, struct upump_mgr *upump_mgr)
 {
     struct uprobe_upump_mgr *uprobe_upump_mgr =
         uprobe_upump_mgr_from_uprobe(uprobe);
-    if (uprobe_upump_mgr->upump_mgr != NULL)
-        upump_mgr_release(uprobe_upump_mgr->upump_mgr);
-    uprobe_upump_mgr->upump_mgr = upump_mgr;
-    if (upump_mgr != NULL)
-        upump_mgr_use(upump_mgr);
+    upump_mgr_release(uprobe_upump_mgr->upump_mgr);
+    uprobe_upump_mgr->upump_mgr = upump_mgr_use(upump_mgr);
 }

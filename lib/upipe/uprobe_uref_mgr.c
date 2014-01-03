@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,7 +44,7 @@
  * @param upipe pointer to pipe throwing the event
  * @param event event thrown
  * @param args optional event-specific parameters
- * @return true if the event was caught and handled
+ * @return an error code
  */
 static enum ubase_err uprobe_uref_mgr_throw(struct uprobe *uprobe,
                                             struct upipe *upipe,
@@ -56,9 +56,8 @@ static enum ubase_err uprobe_uref_mgr_throw(struct uprobe *uprobe,
     if (event != UPROBE_NEED_UREF_MGR || uprobe_uref_mgr->uref_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    if (unlikely(upipe_set_uref_mgr(upipe, uprobe_uref_mgr->uref_mgr) !=
-                 UBASE_ERR_NONE))
-        upipe_warn(upipe, "probe couldn't set uref manager");
+    struct uref_mgr **uref_mgr_p = va_arg(args, struct uref_mgr **);
+    *uref_mgr_p = uref_mgr_use(uprobe_uref_mgr->uref_mgr);
     return UBASE_ERR_NONE;
 }
 
@@ -70,14 +69,12 @@ static enum ubase_err uprobe_uref_mgr_throw(struct uprobe *uprobe,
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_uref_mgr_init(struct uprobe_uref_mgr *uprobe_uref_mgr,
-                                     struct uprobe *next,
-                                     struct uref_mgr *uref_mgr)
+                                    struct uprobe *next,
+                                    struct uref_mgr *uref_mgr)
 {
     assert(uprobe_uref_mgr != NULL);
     struct uprobe *uprobe = uprobe_uref_mgr_to_uprobe(uprobe_uref_mgr);
-    uprobe_uref_mgr->uref_mgr = uref_mgr;
-    if (uref_mgr != NULL)
-        uref_mgr_use(uref_mgr);
+    uprobe_uref_mgr->uref_mgr = uref_mgr_use(uref_mgr);
     uprobe_init(uprobe, uprobe_uref_mgr_throw, next);
     return uprobe;
 }
@@ -109,10 +106,6 @@ void uprobe_uref_mgr_set(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
 {
     struct uprobe_uref_mgr *uprobe_uref_mgr =
         uprobe_uref_mgr_from_uprobe(uprobe);
-    if (uprobe_uref_mgr->uref_mgr != NULL)
-        uref_mgr_release(uprobe_uref_mgr->uref_mgr);
-    uprobe_uref_mgr->uref_mgr = uref_mgr;
-    if (uref_mgr != NULL)
-        uref_mgr_use(uref_mgr);
+    uref_mgr_release(uprobe_uref_mgr->uref_mgr);
+    uprobe_uref_mgr->uref_mgr = uref_mgr_use(uref_mgr);
 }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -864,13 +864,8 @@ static enum ubase_err upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;
 
-    if (upipe_avfsrc->uref_mgr == NULL) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(upipe_avfsrc->uref_mgr == NULL))
-            return UBASE_ERR_UNHANDLED;
-    }
-    if (upipe_avfsrc->upump_mgr == NULL)
-        upipe_throw_need_upump_mgr(upipe);
+    UBASE_RETURN(upipe_avfsrc_check_uref_mgr(upipe))
+    upipe_avfsrc_check_upump_mgr(upipe);
 
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsrc->options, 0);
@@ -932,34 +927,15 @@ static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_avfsrc_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_avfsrc_set_uref_mgr(upipe, uref_mgr);
-        }
-
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_avfsrc_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_avfsrc_attach_uref_mgr(upipe);
+        case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avfsrc_set_upump(upipe, NULL);
             upipe_avfsrc_abort_av_deal(upipe);
-            return upipe_avfsrc_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_avfsrc_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
+            return upipe_avfsrc_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
             upipe_avfsrc_set_upump(upipe, NULL);
-            return upipe_avfsrc_set_uclock(upipe, uclock);
-        }
+            return upipe_avfsrc_attach_uclock(upipe);
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_iterate(upipe, p);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -295,6 +295,9 @@ static struct upipe *upipe_ts_join_alloc(struct upipe_mgr *mgr,
     upipe_ts_join->latency = 0;
 
     upipe_throw_ready(upipe);
+
+    if (ubase_check(upipe_ts_join_check_uref_mgr(upipe)))
+        upipe_ts_join_build_flow_def(upipe);
     return upipe;
 }
 
@@ -335,9 +338,7 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
     struct upipe_ts_join_sub *input;
     while ((input = upipe_ts_join_find_input(upipe)) != NULL) {
         if (unlikely(upipe_ts_join->flow_def == NULL)) {
-            if (unlikely(upipe_ts_join->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            if (unlikely(upipe_ts_join->flow_def == NULL))
+            if (unlikely(!ubase_check(upipe_ts_join_check_uref_mgr(upipe))))
                 return;
         }
 
@@ -370,23 +371,6 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
     }
 }
 
-/** @internal @This returns the flow definition on the output.
- *
- * @param upipe description structure of the pipe
- * @param p filled in with the flow definition
- * @return an error code
- */
-static enum ubase_err _upipe_ts_join_get_flow_def(struct upipe *upipe,
-                                                  struct uref **p)
-{
-    struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
-    if (unlikely(upipe_ts_join->uref_mgr == NULL))
-        upipe_throw_need_uref_mgr(upipe);
-    if (unlikely(upipe_ts_join->flow_def == NULL))
-        return UBASE_ERR_UNHANDLED;
-    return upipe_ts_join_get_flow_def(upipe, p);
-}
-
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -399,18 +383,11 @@ static enum ubase_err _upipe_ts_join_control(struct upipe *upipe,
                                              va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_join_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_join_set_uref_mgr(upipe, uref_mgr);
-        }
-
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_ts_join_attach_uref_mgr(upipe);
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
-            return _upipe_ts_join_get_flow_def(upipe, p);
+            return upipe_ts_join_get_flow_def(upipe, p);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);

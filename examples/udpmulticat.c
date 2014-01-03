@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -55,6 +55,9 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -169,7 +172,14 @@ int main(int argc, char *argv[])
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout, loglevel);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout, loglevel);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
@@ -178,13 +188,11 @@ int main(int argc, char *argv[])
     /* udp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                              loglevel, "udp source"));
-    upipe_set_upump_mgr(upipe_udpsrc, upump_mgr);
-    upipe_set_uref_mgr(upipe_udpsrc, uref_mgr);
     upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
     upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
-    upipe_set_uclock(upipe_udpsrc, uclock);
+    upipe_attach_uclock(upipe_udpsrc);
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
     }
@@ -194,9 +202,8 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
         struct upipe *upipe_sink = upipe_void_alloc_output(upipe_udpsrc,
                 upipe_udpsink_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "udpsink"));
-        upipe_set_upump_mgr(upipe_sink, upump_mgr);
         if (!ubase_check(upipe_udpsink_set_uri(upipe_sink, dirpath, 0))) {
             return EXIT_FAILURE;
         }
@@ -208,22 +215,21 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();
         struct upipe *upipe_dup = upipe_void_alloc_output(upipe_udpsrc,
                 upipe_dup_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), loglevel, "dup"));
+                uprobe_pfx_alloc(uprobe_use(logger), loglevel, "dup"));
 
         struct upipe *upipe_dup_data = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                                      loglevel, "dupdata"));
         struct upipe *upipe_dup_aux = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                                      loglevel, "dupaux"));
 
         /* data files (multicat sink) */
         struct upipe *datasink = upipe_void_alloc_output(upipe_dup_data,
                 upipe_multicat_sink_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "datasink"));
         upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
-        upipe_set_upump_mgr(datasink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(datasink, rotate);
         }
@@ -234,17 +240,16 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
         struct upipe *genaux = upipe_void_alloc_output(upipe_dup_aux,
                 upipe_genaux_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                                  loglevel, "genaux"));
         ubase_assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
         /* aux files (multicat sink) */
         struct upipe *auxsink = upipe_void_alloc_output(genaux,
                 upipe_multicat_sink_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "auxsink"));
         upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
-        upipe_set_upump_mgr(auxsink, upump_mgr);
         if (rotate) {
             upipe_multicat_sink_set_rotate(auxsink, rotate);
         }
@@ -259,7 +264,7 @@ int main(int argc, char *argv[])
 
     /* should never be here for the moment. todo: sighandler.
      * release everything */
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     upump_mgr_release(upump_mgr);

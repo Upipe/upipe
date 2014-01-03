@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -471,9 +471,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     assert(upipe_ts_encaps->octetrate);
 
-    if (unlikely(upipe_ts_encaps->uref_mgr == NULL))
-        upipe_throw_need_uref_mgr(upipe);
-    if (unlikely(upipe_ts_encaps->uref_mgr == NULL)) {
+    if (unlikely(!ubase_check(upipe_ts_encaps_check_uref_mgr(upipe)))) {
         uref_free(uref);
         return;
     }
@@ -600,14 +598,8 @@ static enum ubase_err upipe_ts_encaps_control(struct upipe *upipe,
                                     enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_encaps_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_ts_encaps_set_uref_mgr(upipe, uref_mgr);
-        }
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_ts_encaps_attach_uref_mgr(upipe);
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_ts_encaps_get_ubuf_mgr(upipe, p);

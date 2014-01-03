@@ -24,32 +24,25 @@
  */
 
 /** @file
- * @short unit tests for uprobe_uref_mgr implementation
+ * @short unit tests for uprobe_uclock implementation
  */
 
 #undef NDEBUG
 
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/upipe.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
+#include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 1
-#define UREF_POOL_DEPTH 1
+static struct uclock *uclock;
 
-static struct uref_mgr *uref_mgr;
-
-/** helper phony pipe to test uprobe_uref_mgr */
+/** helper phony pipe to test uprobe_uclock */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
@@ -57,21 +50,21 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
-    struct uref_mgr *m;
-    upipe_throw_need_uref_mgr(upipe, &m);
-    assert(m == uref_mgr);
-    uref_mgr_release(m);
+    struct uclock *m;
+    upipe_throw_need_uclock(upipe, &m);
+    assert(m == uclock);
+    uclock_release(m);
     return upipe;
 }
 
-/** helper phony pipe to test uprobe_uref_mgr */
+/** helper phony pipe to test uprobe_uclock */
 static void uprobe_test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test uprobe_uref_mgr */
+/** helper phony pipe to test uprobe_uclock */
 static struct upipe_mgr uprobe_test_mgr = {
     .refcount = NULL,
     .upipe_alloc = uprobe_test_alloc,
@@ -81,22 +74,15 @@ static struct upipe_mgr uprobe_test_mgr = {
 
 int main(int argc, char **argv)
 {
-    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
-    assert(umem_mgr != NULL);
-    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
-                                                         umem_mgr, -1, -1);
-    assert(udict_mgr != NULL);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
-    assert(uref_mgr != NULL);
+    uclock = uclock_std_alloc(0);
+    assert(uclock != NULL);
 
-    struct uprobe *uprobe = uprobe_uref_mgr_alloc(NULL, uref_mgr);
+    struct uprobe *uprobe = uprobe_uclock_alloc(NULL, uclock);
     assert(uprobe != NULL);
 
     struct upipe *upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
-    uref_mgr_release(uref_mgr);
-    udict_mgr_release(udict_mgr);
-    umem_mgr_release(umem_mgr);
+    uclock_release(uclock);
     return 0;
 }

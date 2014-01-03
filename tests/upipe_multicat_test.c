@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -172,9 +173,11 @@ int main(int argc, char *argv[])
     assert(upump_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
 
 	// write junk to the first file to test set_mode/OVERWRITE
 	snprintf(filepath, MAXPATHLEN, "%s%u%s", dirpath, 0, suffix);
@@ -192,13 +195,12 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
     multicat_sink = upipe_void_alloc(upipe_multicat_sink_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "multicat sink"));
     assert(multicat_sink != NULL);
     ubase_assert(upipe_set_flow_def(multicat_sink, flow));
     uref_free(flow);
     ubase_assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
-    ubase_assert(upipe_set_upump_mgr(multicat_sink, upump_mgr));
     if (rotate) {
         ubase_assert(upipe_multicat_sink_set_rotate(multicat_sink, rotate));
     } else {
@@ -225,7 +227,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     ev_default_destroy();

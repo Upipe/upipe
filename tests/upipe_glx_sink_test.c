@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -102,6 +102,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_GLX_SINK_KEYRELEASE: // dont care about release
             break;
         case UPROBE_GLX_SINK_KEYPRESS: {
@@ -146,9 +147,6 @@ static void idler_cb(struct upump *upump)
     counter++;
     if (counter > LIMIT) {
         upump_stop(upump);
-        for (i=0; i < SINK_NUM; i++) {
-            upipe_set_upump_mgr(glx_sink[i], NULL);
-        }
     }
 }
 
@@ -196,7 +194,6 @@ int main(int argc, char **argv)
         assert(glx_sink[i]);
         ubase_assert(upipe_set_flow_def(glx_sink[i], flow_def));
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
-        upipe_set_upump_mgr(glx_sink[i], upump_mgr);
     }
     uref_free(flow_def);
 

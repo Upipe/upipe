@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -28,6 +28,9 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -59,7 +62,7 @@
 #include <unistd.h>
 #include <ev.h>
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
@@ -132,15 +135,12 @@ static enum ubase_err catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    upipe_dbg_va(upipe, "avcdec flow def:");
-    uref_dump(flow_def, upipe->uprobe);
-
     /* trick play */
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,
             uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "trickp"));
     upipe_mgr_release(upipe_trickp_mgr);
-    upipe_set_uclock(trickp, uclock);
+    upipe_attach_uclock(trickp);
     struct upipe *trickp_audio = upipe_void_alloc_output_sub(upipe, trickp,
             uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
                                 loglevel, "trickp audio"));
@@ -155,8 +155,7 @@ static enum ubase_err catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
         assert(0);
     }
     upipe_mgr_release(upipe_alsink_mgr);
-    upipe_set_upump_mgr(alsink, upump_mgr);
-    upipe_set_uclock(alsink, uclock);
+    upipe_attach_uclock(alsink);
     if (!ubase_check(upipe_set_uri(alsink, device))) {
         assert(0);
     }
@@ -202,8 +201,18 @@ int main(int argc, char **argv)
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                          UBUF_POOL_DEPTH, umem_mgr, -1, 0);
 
+    /* uclock */
+    uclock = uclock_std_alloc(0);
+
     /* log probes */
     logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
 
     /* source probe */
     struct uprobe uprobe_src;
@@ -215,9 +224,6 @@ int main(int argc, char **argv)
 
     /* avcdec probe */
     uprobe_init(&uprobe_avcdec, catch_avcdec, uprobe_use(logger));
-
-    /* uclock */
-    uclock = uclock_std_alloc(0);
 
     /* upipe-av */
     upipe_av_init(true, uprobe_use(logger));
@@ -233,10 +239,8 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_fsrc_mgr);
     if (unlikely(upipe_src == NULL))
         exit(1);
-    upipe_set_uref_mgr(upipe_src, uref_mgr);
     upipe_set_ubuf_mgr(upipe_src, block_mgr);
-    upipe_set_upump_mgr(upipe_src, upump_mgr);
-    upipe_set_uclock(upipe_src, uclock);
+    upipe_attach_uclock(upipe_src);
     if (!ubase_check(upipe_set_uri(upipe_src, uri)))
         return false;
 

@@ -217,6 +217,8 @@ static enum ubase_err upipe_ts_mux_handle_probes(struct upipe *outer,
                                                  enum uprobe_event event,
                                                  va_list args);
 /** @hidden */
+static void upipe_ts_mux_init(struct upipe *upipe);
+/** @hidden */
 static void upipe_ts_mux_update(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_mux_change(struct upipe *upipe);
@@ -795,9 +797,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
                                                 va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(mgr);
-    if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-        upipe_throw_need_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    if (unlikely(upipe_ts_mux->uref_mgr == NULL))
+    if (unlikely(!ubase_check(upipe_ts_mux_check_uref_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)))))
         return NULL;
 
     struct upipe *upipe = upipe_ts_mux_program_alloc_void(mgr, uprobe,
@@ -1269,13 +1269,6 @@ static enum ubase_err upipe_ts_mux_handle_probes(struct upipe *outer,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
 
     switch (event) {
-        case UPROBE_NEED_UREF_MGR:
-            if (unlikely(upipe_ts_mux->uref_mgr == NULL))
-                upipe_throw_need_uref_mgr(upipe);
-            if (likely(upipe_ts_mux->uref_mgr != NULL))
-                return upipe_set_uref_mgr(inner, upipe_ts_mux->uref_mgr);
-            return UBASE_ERR_UNHANDLED;
-
         case UPROBE_NEED_UBUF_MGR: {
             struct uref *flow_def = va_arg(args, struct uref *);
             if (unlikely(upipe_ts_mux->ubuf_mgr == NULL))
@@ -1385,13 +1378,15 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     if (unlikely((upipe_ts_mux->psig =
                   upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
                          uprobe_pfx_alloc(
-                             uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
+                             uprobe_output_alloc(
+                                 uprobe_use(&upipe_ts_mux->probe)),
                              UPROBE_LOG_VERBOSE, "psig"))) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
 
-    upipe_throw_need_uref_mgr(upipe);
+    if (ubase_check(upipe_ts_mux_check_uref_mgr(upipe)))
+        upipe_ts_mux_init(upipe);
     return upipe;
 }
 
@@ -1409,9 +1404,7 @@ static void upipe_ts_mux_init(struct upipe *upipe)
         upipe_void_alloc(ts_mux_mgr->ts_join_mgr,
              uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&upipe_ts_mux->probe)),
                               UPROBE_LOG_VERBOSE, "join"));
-    if (unlikely(upipe_ts_mux->join == NULL ||
-                 !ubase_check(upipe_set_uref_mgr(upipe_ts_mux->join,
-                                  upipe_ts_mux->uref_mgr)))) {
+    if (unlikely(upipe_ts_mux->join == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -1845,13 +1838,8 @@ static enum ubase_err upipe_ts_mux_control(struct upipe *upipe,
                                            va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_ts_mux_get_uref_mgr(upipe, p);
-        }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            UBASE_RETURN(upipe_ts_mux_set_uref_mgr(upipe, uref_mgr));
+        case UPIPE_ATTACH_UREF_MGR: {
+            UBASE_RETURN(upipe_ts_mux_attach_uref_mgr(upipe))
             /* To create the flow definition. */
             struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
             if (upipe_ts_mux->join == NULL)

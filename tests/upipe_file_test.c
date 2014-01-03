@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,9 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -138,22 +141,28 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    if (delay) {
+        logger = uprobe_uclock_alloc(logger, uclock);
+        assert(logger != NULL);
+    }
 
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_stdio)),
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_fsrc, upump_mgr));
-    ubase_assert(upipe_set_uref_mgr(upipe_fsrc, uref_mgr));
     ubase_assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     if (delay)
-        ubase_assert(upipe_set_uclock(upipe_fsrc, uclock));
+        ubase_assert(upipe_attach_uclock(upipe_fsrc));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
     if (ubase_check(upipe_fsrc_get_size(upipe_fsrc, &size)))
@@ -165,12 +174,11 @@ int main(int argc, char *argv[])
     assert(upipe_fsink_mgr != NULL);
     struct upipe *upipe_fsink = upipe_void_alloc_output(upipe_fsrc,
             upipe_fsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "file sink"));
     assert(upipe_fsink != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_fsink, upump_mgr));
     if (delay) {
-        ubase_assert(upipe_set_uclock(upipe_fsink, uclock));
+        ubase_assert(upipe_attach_uclock(upipe_fsink));
         ubase_assert(upipe_sink_set_delay(upipe_fsink, delay));
     }
     ubase_assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
@@ -189,7 +197,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     ev_default_destroy();

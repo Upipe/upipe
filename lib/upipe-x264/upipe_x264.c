@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -691,6 +691,8 @@ static enum ubase_err upipe_x264_control(struct upipe *upipe,
                                          va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UCLOCK:
+            return upipe_x264_attach_uclock(upipe);
         case UPIPE_GET_UBUF_MGR: {
             struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
             return upipe_x264_get_ubuf_mgr(upipe, p);
@@ -698,14 +700,6 @@ static enum ubase_err upipe_x264_control(struct upipe *upipe,
         case UPIPE_SET_UBUF_MGR: {
             struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
             return upipe_x264_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_x264_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            return upipe_x264_set_uclock(upipe, uclock);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

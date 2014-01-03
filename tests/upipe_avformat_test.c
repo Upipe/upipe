@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,6 +34,9 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -169,6 +172,16 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+#if 0
+    if (delay) {
+        logger = uprobe_uclock_alloc(logger, uclock);
+        assert(logger != NULL);
+    }
+#endif
 
     assert(upipe_av_init(false, uprobe_use(logger)));
 
@@ -179,7 +192,7 @@ int main(int argc, char *argv[])
     assert(upipe_avfsink != NULL);
 #if 0
     if (delay) {
-        ubase_assert(upipe_set_uclock(upipe_avfsink, uclock));
+        ubase_assert(upipe_attach_uclock(upipe_avfsink));
         ubase_assert(upipe_sink_set_delay(upipe_avfsink, delay));
     }
 #endif
@@ -190,11 +203,9 @@ int main(int argc, char *argv[])
     upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsrc"));
     assert(upipe_avfsrc != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_avfsrc, upump_mgr));
-    ubase_assert(upipe_set_uref_mgr(upipe_avfsrc, uref_mgr));
 #if 0
     if (delay)
-        ubase_assert(upipe_set_uclock(upipe_avfsrc, uclock));
+        ubase_assert(upipe_attach_uclock(upipe_avfsrc));
 #endif
     ubase_assert(upipe_set_uri(upipe_avfsrc, src_url));
 

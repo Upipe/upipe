@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,6 +34,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -152,17 +154,20 @@ int main(int argc, char *argv[])
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
 
     struct uclock uclock;
     uclock.refcount = NULL;
     uclock.uclock_now = now;
+    logger = uprobe_uclock_alloc(logger, &uclock);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     assert(upipe_trickp_mgr != NULL);
     struct upipe *upipe_trickp = upipe_void_alloc(upipe_trickp_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp"));
     assert(upipe_trickp != NULL);
-    ubase_assert(upipe_set_uclock(upipe_trickp, &uclock));
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -66,18 +66,12 @@ enum upipe_command {
     /*
      * Global commands
      */
-    /** gets uclock structure (struct uclock **) */
-    UPIPE_GET_UCLOCK,
-    /** sets uclock structure (struct uclock *) */
-    UPIPE_SET_UCLOCK,
-    /** gets uref manager (struct uref_mgr **) */
-    UPIPE_GET_UREF_MGR,
-    /** sets uref manager (struct uref_mgr *) */
-    UPIPE_SET_UREF_MGR,
-    /** gets upump manager (struct upump_mgr **) */
-    UPIPE_GET_UPUMP_MGR,
-    /** sets upump manager (struct upump_mgr *) */
-    UPIPE_SET_UPUMP_MGR,
+    /** sends a probe to attach a uref manager (void) */
+    UPIPE_ATTACH_UREF_MGR,
+    /** sends a probe to attach a upump manager (void) */
+    UPIPE_ATTACH_UPUMP_MGR,
+    /** sends a probe to attach a uclock (void) */
+    UPIPE_ATTACH_UCLOCK,
     /** gets uniform resource identifier (const char **) */
     UPIPE_GET_URI,
     /** sets uniform resource identifier (const char *) */
@@ -693,37 +687,57 @@ static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
     return upipe_throw(upipe, UPROBE_SINK_END);
 }
 
-/** @This throws an event asking for a uref manager.
+/** @This throws an event asking for a uref manager. Note that all parameters
+ * belong to the caller, so there is no need to @ref uref_mgr_use the given
+ * manager.
  *
  * @param upipe description structure of the pipe
+ * @param uref_mgr_p filled in with a pointer to the uref manager
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe,
+        struct uref_mgr **uref_mgr_p)
 {
     upipe_dbg(upipe, "throw need uref mgr");
-    return upipe_throw(upipe, UPROBE_NEED_UREF_MGR);
+    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UREF_MGR, uref_mgr_p);
+    upipe_dbg_va(upipe, "got uref_mgr %p with error code 0x%x",
+                 *uref_mgr_p, err);
+    return err;
 }
 
-/** @This throws an event asking for a upump manager.
+/** @This throws an event asking for a upump manager. Note that all parameters
+ * belong to the caller, so there is no need to @ref upump_mgr_use the given
+ * manager.
  *
  * @param upipe description structure of the pipe
+ * @param upump_mgr_p filled in with a pointer to the upump manager
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe,
+        struct upump_mgr **upump_mgr_p)
 {
     upipe_dbg(upipe, "throw need upump mgr");
-    return upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR);
+    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR, upump_mgr_p);
+    upipe_dbg_va(upipe, "got upump_mgr %p with error code 0x%x",
+                 *upump_mgr_p, err);
+    return err;
 }
 
-/** @This throws an event asking for a uclock.
+/** @This throws an event asking for a uclock. Note that all parameters
+ * belong to the caller, so there is no need to @ref uclock_use the given
+ * manager.
  *
  * @param upipe description structure of the pipe
+ * @param uclock_p filled in with a pointer to the uclock
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe)
+static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe,
+        struct uclock **uclock_p)
 {
     upipe_dbg(upipe, "throw need uclock");
-    return upipe_throw(upipe, UPROBE_NEED_UCLOCK);
+    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UCLOCK, uclock_p);
+    upipe_dbg_va(upipe, "got uclock %p with error code 0x%x", *uclock_p, err);
+    return err;
 }
 
 /** @This throws an event declaring a new flow definition on the output.
@@ -961,12 +975,6 @@ static inline enum ubase_err group##_set_##name(struct upipe *upipe, type s)\
     return upipe_control(upipe, GROUP##_SET_##NAME, s);                     \
 }
 
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uclock, UCLOCK, struct uclock *,
-                       uclock structure)
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uref_mgr, UREF_MGR, struct uref_mgr *,
-                       uref manager)
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, upump_mgr, UPUMP_MGR, struct upump_mgr *,
-                       upump manager)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
                        const char *, uniform resource identifier)
 
@@ -986,6 +994,36 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, max_length, MAX_LENGTH,
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
                        delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
+
+/** @This sends a probe to attach a uref manager.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_attach_uref_mgr(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_ATTACH_UREF_MGR);
+}
+
+/** @This sends a probe to attach a upump manager.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_attach_upump_mgr(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_ATTACH_UPUMP_MGR);
+}
+
+/** @This sends a probe to attach a uclock.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_attach_uclock(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_ATTACH_UCLOCK);
+}
 
 /** @This flushes all currently held buffers, and unblocks the sources.
  *

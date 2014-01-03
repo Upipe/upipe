@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -36,6 +36,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -129,10 +130,10 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum upr
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEED_UPUMP_MGR:
             break;
         case UPROBE_SOURCE_END:
         case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEED_UBUF_MGR:
         default:
             assert(0);
@@ -299,7 +300,8 @@ static void *test_thread(void *_thread)
                                                      UPUMP_BLOCKER_POOL);
     assert (upump_mgr != NULL);
 
-    ubase_assert(upipe_set_upump_mgr(avcdec, upump_mgr));
+    uprobe_upump_mgr_set(avcdec->uprobe, upump_mgr);
+    ubase_assert(upipe_attach_upump_mgr(avcdec));
 
     thread->count = 0;
     thread->limit = THREAD_FRAMES_LIMIT;
@@ -434,8 +436,9 @@ int main (int argc, char **argv)
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     assert(upipe_avcdec_mgr);
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+            uprobe_upump_mgr_alloc(
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
-                                 "avcdec"));
+                                 "avcdec"), NULL));
     assert(avcdec);
     ubase_assert(upipe_set_flow_def(avcdec, flowdef));
     uref_free(flowdef);
@@ -468,8 +471,9 @@ int main (int argc, char **argv)
                         mainthread.avfctx->streams[audioStream]->codec->codec_id);
         flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
         mainthread.audiodec = upipe_void_alloc(upipe_avcdec_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
-                                 UPROBE_LOG_LEVEL, "audiodec"));
+                uprobe_upump_mgr_alloc(
+                    uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                                     UPROBE_LOG_LEVEL, "audiodec"), NULL));
         assert(mainthread.audiodec);
         ubase_assert(upipe_set_flow_def(mainthread.audiodec, flowdef));
         uref_free(flowdef);
@@ -506,8 +510,9 @@ int main (int argc, char **argv)
                                                    mainthread.codec_def);
 
             thread[i].avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+                uprobe_upump_mgr_alloc(
                     uprobe_pfx_alloc_va(uprobe_use(uprobe_stdio),
-                         UPROBE_LOG_LEVEL, "avcdec_thread(%d)", i));
+                         UPROBE_LOG_LEVEL, "avcdec_thread(%d)", i), NULL));
             assert(thread[i].avcdec);
             ubase_assert(upipe_set_flow_def(thread[i].avcdec, flowdef));
             uref_free(flowdef);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -70,11 +70,11 @@ enum uprobe_event {
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
     UPROBE_SINK_END,
-    /** a uref manager is necessary to operate (void) */
+    /** a uref manager is necessary to operate (struct uref_mgr **) */
     UPROBE_NEED_UREF_MGR,
-    /** a upump manager is necessary to operate (void) */
+    /** a upump manager is necessary to operate (struct upump_mgr **) */
     UPROBE_NEED_UPUMP_MGR,
-    /** a uclock is necessary to operate (void) */
+    /** a uclock is necessary to operate (struct uclock **) */
     UPROBE_NEED_UCLOCK,
     /** a new flow definition is available on the output (struct uref *) */
     UPROBE_NEW_FLOW_DEF,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -319,6 +319,8 @@ static enum ubase_err upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y,
                 UPIPE_GL_SINK_SIGNATURE, width, height);
     upipe_glx_sink_flush(upipe);
 
+    upipe_glx_sink_check_upump_mgr(upipe);
+
     // Set watcher (in case _set_upump_mgr was called before _init_glx())
     upipe_glx_sink_init_watcher(upipe);
 
@@ -375,6 +377,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     upipe_glx_sink->theta = 0;
 
     upipe_throw_ready(upipe);
+
     return upipe;
 }
 
@@ -501,30 +504,18 @@ static enum ubase_err upipe_glx_sink_control(struct upipe *upipe,
                                              va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_glx_sink_set_upump(upipe, NULL);
+            upipe_glx_sink_set_upump_watcher(upipe, NULL);
+            UBASE_RETURN(upipe_glx_sink_attach_upump_mgr(upipe))
+            upipe_glx_sink_init_watcher(upipe);
+            return UBASE_ERR_NONE;
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_glx_sink_set_upump(upipe, NULL);
+            return upipe_glx_sink_attach_uclock(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_glx_sink_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_glx_sink_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_glx_sink_set_upump(upipe, NULL);
-            upipe_glx_sink_set_upump_watcher(upipe, NULL);
-            enum ubase_err err = upipe_glx_sink_set_upump_mgr(upipe, upump_mgr);
-            upipe_glx_sink_init_watcher(upipe);
-            return err;
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_glx_sink_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            upipe_glx_sink_set_upump(upipe, NULL);
-            return upipe_glx_sink_set_uclock(upipe, uclock);
         }
         case UPIPE_SINK_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);

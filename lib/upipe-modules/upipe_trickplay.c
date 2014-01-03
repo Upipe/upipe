@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -201,12 +201,9 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
                                    struct upump *upump)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(upipe->mgr);
-    if (unlikely(upipe_trickp->uclock == NULL)) {
-        upipe_throw_need_uclock(upipe);
-        if (unlikely(upipe_trickp->uclock == NULL)) {
-            uref_free(uref);
-            return;
-        }
+    if (unlikely(!ubase_check(upipe_trickp_check_uclock(upipe_trickp_to_upipe(upipe_trickp))))) {
+        uref_free(uref);
+        return;
     }
 
     if (upipe_trickp->rate.num == 0 || upipe_trickp->rate.den == 0) {
@@ -483,15 +480,9 @@ static enum ubase_err upipe_trickp_control(struct upipe *upipe,
                                            va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_trickp_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
+        case UPIPE_ATTACH_UCLOCK:
             upipe_trickp_reset_uclock(upipe);
-            return upipe_trickp_set_uclock(upipe, uclock);
-        }
+            return upipe_trickp_attach_uclock(upipe);
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_trickp_get_sub_mgr(upipe, p);

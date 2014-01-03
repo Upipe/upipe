@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -82,6 +82,7 @@ graph {flow: east}
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -323,15 +324,15 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
 
             glxplayer->upipe_dec_qsink =
                 upipe_void_alloc_output(upipe, glxplayer->upipe_qsink_mgr,
-                    uprobe_pfx_alloc_va(uprobe_use(glxplayer->uprobe_logger),
-                                              glxplayer->loglevel,
-                                              "dec qsink"));
+                    uprobe_pfx_alloc_va(
+                        uprobe_upump_mgr_alloc(
+                            uprobe_use(glxplayer->uprobe_logger),
+                            glxplayer->upump_mgr_source),
+                            glxplayer->loglevel, "dec qsink"));
             if (unlikely(glxplayer->upipe_dec_qsink == NULL)) {
                 upipe_release(upipe_dec_qsrc);
                 return UBASE_ERR_ALLOC;
             }
-            upipe_set_upump_mgr(glxplayer->upipe_dec_qsink,
-                                glxplayer->upump_mgr_source);
             upipe_qsink_set_qsrc(glxplayer->upipe_dec_qsink, upipe_dec_qsrc);
 
             /* prepare to transfer the queue source */
@@ -408,12 +409,15 @@ static enum ubase_err upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
                 container_of(uprobe, struct upipe_glxplayer, uprobe_dec_qsrc_s);
             struct upipe *avcdec = upipe_void_alloc_output(upipe,
                     glxplayer->upipe_avcdec_mgr,
-                    uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&glxplayer->uprobe_avcdec_s)),
-                                        glxplayer->loglevel, "avcdec"));
+                    uprobe_pfx_alloc_va(
+                        uprobe_upump_mgr_alloc(
+                            uprobe_output_alloc(
+                                uprobe_use(&glxplayer->uprobe_avcdec_s)),
+                            glxplayer->upump_mgr_dec),
+                        glxplayer->loglevel, "avcdec"));
             if (unlikely(avcdec == NULL))
                 return UBASE_ERR_ALLOC;
             upipe_set_ubuf_mgr(avcdec, glxplayer->yuv_mgr);
-            upipe_set_upump_mgr(avcdec, glxplayer->upump_mgr_dec);
             upipe_avcdec_set_option(avcdec, "threads", "2");
             upipe_release(avcdec);
             return UBASE_ERR_NONE;
@@ -474,13 +478,14 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
 
             glxplayer->upipe_glx_qsink =
                 upipe_void_alloc_output(yuvrgb, glxplayer->upipe_qsink_mgr,
-                    uprobe_pfx_alloc(uprobe_use(glxplayer->uprobe_logger),
-                                     glxplayer->loglevel, "glx qsink"));
+                    uprobe_pfx_alloc(
+                        uprobe_upump_mgr_alloc(
+                            uprobe_use(glxplayer->uprobe_logger),
+                            glxplayer->upump_mgr_dec),
+                    glxplayer->loglevel, "glx qsink"));
             upipe_release(yuvrgb);
             if (unlikely(glxplayer->upipe_glx_qsink == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_set_upump_mgr(glxplayer->upipe_glx_qsink,
-                                glxplayer->upump_mgr_dec);
             upipe_qsink_set_qsrc(glxplayer->upipe_glx_qsink,
                                  glxplayer->upipe_glx_qsrc);
             return UBASE_ERR_NONE;
@@ -528,7 +533,7 @@ static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
                                           glxplayer->loglevel, "trickp"));
                 if (unlikely(glxplayer->upipe_trickp == NULL))
                     return UBASE_ERR_ALLOC;
-                upipe_set_uclock(glxplayer->upipe_trickp, glxplayer->uclock);
+                upipe_attach_uclock(glxplayer->upipe_trickp);
                 trickp_pic = upipe_void_alloc_output_sub(upipe,
                         glxplayer->upipe_trickp,
                         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(glxplayer->uprobe_logger)),
@@ -542,15 +547,17 @@ static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
             struct upipe *glx_sink = upipe_void_alloc_output(trickp_pic,
                     glxplayer->upipe_glx_mgr,
                     uprobe_gl_sink_cube_alloc(
-                         uprobe_pfx_alloc(uprobe_use(&glxplayer->uprobe_glx_s),
-                                          glxplayer->loglevel, "glx")));
+                         uprobe_pfx_alloc(
+                             uprobe_upump_mgr_alloc(
+                                 uprobe_use(&glxplayer->uprobe_glx_s),
+                                 glxplayer->upump_mgr_main),
+                             glxplayer->loglevel, "glx")));
             if (glxplayer->trickp)
                 upipe_release(trickp_pic);
             if (unlikely(glx_sink == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_set_upump_mgr(glx_sink, glxplayer->upump_mgr_main);
             upipe_glx_sink_init(glx_sink, 0, 0, 800, 480);
-            upipe_set_uclock(glx_sink, glxplayer->uclock);
+            upipe_attach_uclock(glx_sink);
             upipe_release(glx_sink);
             return UBASE_ERR_NONE;
         }
@@ -678,9 +685,10 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 
     /* probes common to all threads */
     glxplayer->uprobe_logger =
-        uprobe_uref_mgr_alloc(
-             uprobe_stdio_alloc(NULL, stdout, glxplayer->loglevel),
-             uref_mgr);
+        uprobe_uclock_alloc(
+            uprobe_uref_mgr_alloc(
+                 uprobe_stdio_alloc(NULL, stdout, glxplayer->loglevel),
+                 uref_mgr), glxplayer->uclock);
     if (unlikely(glxplayer->uprobe_logger == NULL))
         goto fail_probe_logger;
 
@@ -830,7 +838,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         upipe_mgr_release(upipe_avfsrc_mgr);
         if (unlikely(upipe_src == NULL))
             return false;
-        if (unlikely(!ubase_check(upipe_set_uclock(upipe_src, glxplayer->uclock)) ||
+        if (unlikely(!ubase_check(upipe_attach_uclock(upipe_src)) ||
                      !ubase_check(upipe_set_uri(upipe_src, uri)))) {
             upipe_release(upipe_src);
             return false;
@@ -868,7 +876,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                 return false;
             upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
             if (ubase_check(upipe_set_uri(upipe_src, uri))) {
-                upipe_set_uclock(upipe_src, glxplayer->uclock);
+                upipe_attach_uclock(upipe_src);
             } else {
                 upipe_release(upipe_src);
 
@@ -929,14 +937,16 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
 
     /* prepare a queue source for the decoded video frames */
     glxplayer->upipe_glx_qsrc = upipe_qsrc_alloc(glxplayer->upipe_qsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&glxplayer->uprobe_glx_qsrc_s)),
-                                 glxplayer->loglevel, "glx qsrc"),
-                GLX_QUEUE_LENGTH);
+            uprobe_pfx_alloc(
+                uprobe_upump_mgr_alloc(
+                    uprobe_output_alloc(
+                        uprobe_use(&glxplayer->uprobe_glx_qsrc_s)), upump_mgr),
+                glxplayer->loglevel, "glx qsrc"), GLX_QUEUE_LENGTH);
     if (unlikely(glxplayer->upipe_glx_qsrc == NULL)) {
         upipe_release(upipe_src);
         return false;
     }
-    upipe_set_upump_mgr(glxplayer->upipe_glx_qsrc, upump_mgr);
+    upipe_attach_upump_mgr(glxplayer->upipe_glx_qsrc);
 
     /* prepare to transfer the source to a new thread */
     glxplayer->src_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);

@@ -306,7 +306,8 @@ static inline struct uref_mgr *uref_mgr_use(struct uref_mgr *mgr)
  */
 static inline void uref_mgr_release(struct uref_mgr *mgr)
 {
-    urefcount_release(mgr->refcount);
+    if (mgr != NULL)
+        urefcount_release(mgr->refcount);
 }
 
 /** @internal @This sends a control command to the uref manager. Note that all

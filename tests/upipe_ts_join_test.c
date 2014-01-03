@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -137,36 +138,37 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_ts_join_mgr = upipe_ts_join_mgr_alloc();
     assert(upipe_ts_join_mgr != NULL);
     struct upipe *upipe_ts_join = upipe_void_alloc(upipe_ts_join_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts join"));
     assert(upipe_ts_join != NULL);
-    ubase_assert(upipe_set_uref_mgr(upipe_ts_join, uref_mgr));
 
     struct uref *uref;
     ubase_assert(upipe_get_flow_def(upipe_ts_join, &uref));
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
-                                                uprobe_use(uprobe_stdio));
+                                                uprobe_use(logger));
     assert(upipe_sink != NULL);
     ubase_assert(upipe_set_output(upipe_ts_join, upipe_sink));
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
     struct upipe *upipe_ts_join_input68 = upipe_void_alloc_sub(upipe_ts_join,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts join input 68"));
     assert(upipe_ts_join_input68 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_join_input68, uref));
 
     struct upipe *upipe_ts_join_input69 = upipe_void_alloc_sub(upipe_ts_join,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts join input 69"));
     assert(upipe_ts_join_input69 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_join_input69, uref));
@@ -230,7 +232,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     return 0;

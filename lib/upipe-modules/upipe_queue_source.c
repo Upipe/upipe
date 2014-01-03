@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -117,7 +117,6 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
     upipe_qsrc->upipe_queue.max_length = length;
     upipe_throw_ready(upipe);
 
-    upipe_throw_need_upump_mgr(upipe);
     return upipe;
 }
 
@@ -199,6 +198,9 @@ static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
                                           va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_qsrc_set_upump(upipe, NULL);
+            return upipe_qsrc_attach_upump_mgr(upipe);
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_qsrc_get_flow_def(upipe, p);
@@ -210,16 +212,6 @@ static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_qsrc_set_output(upipe, output);
-        }
-
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_qsrc_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_qsrc_set_upump(upipe, NULL);
-            return upipe_qsrc_set_upump_mgr(upipe, upump_mgr);
         }
 
         case UPIPE_QSRC_GET_MAX_LENGTH: {
@@ -250,6 +242,7 @@ static enum ubase_err upipe_qsrc_control(struct upipe *upipe,
                                          va_list args)
 {
     UBASE_RETURN(_upipe_qsrc_control(upipe, command, args));
+    upipe_qsrc_check_upump_mgr(upipe);
 
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     if (upipe_qsrc->upump_mgr != NULL && upipe_qsrc->upipe_queue.max_length &&

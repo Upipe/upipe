@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -37,6 +37,9 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
+#include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -403,6 +406,13 @@ int main(int argc, char *argv[])
     struct uprobe uprobe, uprobe_demux_s;
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(uprobe_use(&uprobe), stdout, loglevel);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
     uprobe_init(&uprobe_demux_s, catch_demux, uprobe_use(logger));
 
     upipe_av_init(false, uprobe_use(logger));
@@ -417,7 +427,7 @@ int main(int argc, char *argv[])
     /* avformat sink */
     avfsink = upipe_void_alloc(upipe_avfsink_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "avfsink"));
-    upipe_set_uclock(avfsink, uclock);
+    upipe_attach_uclock(avfsink);
 
     upipe_avfsink_set_mime(avfsink, mime);
     upipe_avfsink_set_format(avfsink, format);
@@ -429,9 +439,7 @@ int main(int argc, char *argv[])
     /* avformat source */
     avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
         uprobe_pfx_alloc(uprobe_use(&uprobe_demux_s), loglevel, "avfsrc"));
-    upipe_set_upump_mgr(avfsrc, upump_mgr);
-    upipe_set_uref_mgr(avfsrc, uref_mgr);
-    upipe_set_uclock(avfsrc, uclock);
+    upipe_attach_uclock(avfsrc);
     upipe_set_uri(avfsrc, src_url);
 
     /* fire */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/uclock.h>
@@ -131,12 +132,14 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
-                                                uprobe_use(uprobe_stdio));
+                                                uprobe_use(logger));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -146,12 +149,11 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_psii_mgr = upipe_ts_psii_mgr_alloc();
     assert(upipe_ts_psii_mgr != NULL);
     struct upipe *upipe_ts_psii = upipe_void_alloc(upipe_ts_psii_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psii"));
     assert(upipe_ts_psii != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psii, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_uref_mgr(upipe_ts_psii, uref_mgr));
     ubase_assert(upipe_set_ubuf_mgr(upipe_ts_psii, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_psii, upipe_sink));
 
@@ -161,7 +163,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_tb_rate(uref, 125000));
     ubase_assert(uref_ts_flow_set_pid(uref, 0));
     struct upipe *upipe_ts_psii_sub = upipe_void_alloc_sub(upipe_ts_psii,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psii sub"));
     assert(upipe_ts_psii_sub != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psii_sub, uref));
@@ -213,7 +215,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     return 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -147,35 +148,35 @@ int main(int argc, char *argv[])
     struct uref *uref;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
 
     uref = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(uref != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&queue_test_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "sink"));
     assert(upipe_sink != NULL);
 
     struct upipe_mgr *upipe_qsrc_mgr = upipe_qsrc_mgr_alloc();
     assert(upipe_qsrc_mgr != NULL);
     struct upipe *upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
-    ubase_assert(upipe_set_upump_mgr(upipe_qsrc, upump_mgr));
     ubase_assert(upipe_set_output(upipe_qsrc, upipe_sink));
 
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
     upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "queue sink"));
     assert(upipe_qsink != NULL);
     ubase_assert(upipe_set_flow_def(upipe_qsink, uref));
-    ubase_assert(upipe_set_upump_mgr(upipe_qsink, upump_mgr));
     ubase_assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
     uref_free(uref);
 
@@ -206,7 +207,7 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     ev_default_destroy();

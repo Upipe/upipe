@@ -182,11 +182,8 @@ static bool upipe_alsink_open(struct upipe *upipe)
     if (!strcmp(uri, "default"))
         uri = DEFAULT_DEVICE;
 
-    if (upipe_alsink->upump_mgr == NULL) {
-        upipe_throw_need_upump_mgr(upipe);
-        if (unlikely(upipe_alsink->upump_mgr == NULL))
-            return false;
-    }
+    if (unlikely(!ubase_check(upipe_alsink_check_upump_mgr(upipe))))
+        return false;
 
     if (snd_pcm_open(&upipe_alsink->handle, uri, SND_PCM_STREAM_PLAYBACK,
                      SND_PCM_NONBLOCK) < 0) {
@@ -726,27 +723,15 @@ static enum ubase_err upipe_alsink_control(struct upipe *upipe,
                                            va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_alsink_set_upump(upipe, NULL);
+            return upipe_alsink_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_alsink_set_upump(upipe, NULL);
+            return upipe_alsink_attach_uclock(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_alsink_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_alsink_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            upipe_alsink_set_upump(upipe, NULL);
-            return upipe_alsink_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_alsink_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            upipe_alsink_set_upump(upipe, NULL);
-            return upipe_alsink_set_uclock(upipe, uclock);
         }
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);

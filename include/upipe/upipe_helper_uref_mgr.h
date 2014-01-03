@@ -1,9 +1,7 @@
-/*****************************************************************************
- * upipe_helper_uref_mgr.h: upipe helper functions for uref manager
- *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+/*
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe helper functions for uref manager
+ */
 
 #ifndef _UPIPE_UPIPE_HELPER_UREF_MGR_H_
 /** @hidden */
@@ -55,28 +57,19 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_uref_mgr(struct upipe *upipe,
- *                                        struct uref_mgr **p)
+ *  enum ubase_err upipe_foo_attach_uref_mgr(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_GET_UREF_MGR: {
- *      struct uref_mgr **p = va_arg(args, struct uref_mgr **);
- *      return upipe_foo_get_uref_mgr(upipe, p);
+ *  case UPIPE_ATTACH_UREF_MGR: {
+ *      return upipe_foo_attach_uref_mgr(upipe);
  *  }
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_uref_mgr(struct upipe *upipe,
- *                                        struct uref_mgr *uref_mgr)
+ *  enum ubase_err upipe_foo_check_uref_mgr(struct upipe *upipe)
  * @end code
- * Typically called from your upipe_foo_control() handler, such as:
- * @code
- *  case UPIPE_SET_UREF_MGR: {
- *      struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
- *      return upipe_foo_set_uref_mgr(upipe, uref_mgr);
- *  }
- * @end code
+ * Checks if the uref manager is available, and asks for it otherwise.
  *
  * @item @code
  *  void upipe_foo_clean_uref_mgr(struct upipe *upipe)
@@ -95,38 +88,32 @@ extern "C" {
  */                                                                         \
 static void STRUCTURE##_init_uref_mgr(struct upipe *upipe)                  \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE->UREF_MGR = NULL;                                             \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s->UREF_MGR = NULL;                                                     \
 }                                                                           \
-/** @internal @This gets the current uref manager.                          \
+/** @internal @This sends a probe to attach a uref manager.                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param p filled in with the uref manager                                 \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_uref_mgr(struct upipe *upipe,         \
-                                               struct uref_mgr **p)         \
+static enum ubase_err STRUCTURE##_attach_uref_mgr(struct upipe *upipe)      \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    assert(p != NULL);                                                      \
-    *p = STRUCTURE->UREF_MGR;                                               \
-    return UBASE_ERR_NONE;                                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    uref_mgr_release(s->UREF_MGR);                                          \
+    s->UREF_MGR = NULL;                                                     \
+    return upipe_throw_need_uref_mgr(upipe, &s->UREF_MGR);                  \
 }                                                                           \
-/** @internal @This sets the uref manager.                                  \
+/** @internal @This checks if the uref manager is available, and asks       \
+ * for it otherwise.                                                        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param uref_mgr new uref manager                                         \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_uref_mgr(struct upipe *upipe,         \
-                                               struct uref_mgr *uref_mgr)   \
+static enum ubase_err STRUCTURE##_check_uref_mgr(struct upipe *upipe)       \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UREF_MGR != NULL))                              \
-        uref_mgr_release(STRUCTURE->UREF_MGR);                              \
-    STRUCTURE->UREF_MGR = uref_mgr;                                         \
-    if (likely(uref_mgr != NULL))                                           \
-        uref_mgr_use(STRUCTURE->UREF_MGR);                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (unlikely(s->UREF_MGR == NULL))                                      \
+        return upipe_throw_need_uref_mgr(upipe, &s->UREF_MGR);              \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -135,9 +122,8 @@ static enum ubase_err STRUCTURE##_set_uref_mgr(struct upipe *upipe,         \
  */                                                                         \
 static void STRUCTURE##_clean_uref_mgr(struct upipe *upipe)                 \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->UREF_MGR != NULL))                                \
-        uref_mgr_release(STRUCTURE->UREF_MGR);                              \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    uref_mgr_release(s->UREF_MGR);                                          \
 }
 
 #ifdef __cplusplus
