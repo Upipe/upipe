@@ -83,6 +83,7 @@ graph {flow: east}
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -115,10 +116,6 @@ graph {flow: east}
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
@@ -161,9 +158,6 @@ struct upipe_glxplayer {
 
     /* managers */
     struct uclock *uclock;
-    struct ubuf_mgr *yuv_mgr;
-    struct ubuf_mgr *rgb_mgr;
-    struct ubuf_mgr *block_mgr;
     struct upipe_mgr *upipe_filter_blend_mgr;
     struct upipe_mgr *upipe_sws_mgr;
     struct upipe_mgr *upipe_qsink_mgr;
@@ -296,11 +290,6 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
     struct upipe_glxplayer *glxplayer =
         container_of(uprobe, struct upipe_glxplayer, uprobe_demux_output_s);
     switch (event) {
-        case UPROBE_NEED_UBUF_MGR:
-            /* FIXME */
-            upipe_set_ubuf_mgr(upipe, glxplayer->block_mgr);
-            return UBASE_ERR_NONE;
-
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             const char *def = "(none)";
@@ -366,6 +355,7 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
         case UPROBE_SOURCE_END: {
             upipe_sink_flush(glxplayer->upipe_dec_qsink);
             upipe_release(glxplayer->upipe_dec_qsink);
+            glxplayer->upipe_dec_qsink = NULL;
 
             /* set dec_qsrc output to null */
             struct upipe *null = upipe_void_alloc(glxplayer->upipe_null_mgr,
@@ -417,7 +407,6 @@ static enum ubase_err upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
                         glxplayer->loglevel, "avcdec"));
             if (unlikely(avcdec == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_set_ubuf_mgr(avcdec, glxplayer->yuv_mgr);
             upipe_avcdec_set_option(avcdec, "threads", "2");
             upipe_release(avcdec);
             return UBASE_ERR_NONE;
@@ -452,7 +441,6 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
                                          glxplayer->loglevel, "deint"));
             if (unlikely(deint == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_set_ubuf_mgr(deint, glxplayer->yuv_mgr);
 
             struct uref *output_flow = uref_dup(flow_def);
             if (unlikely(output_flow == NULL))
@@ -474,7 +462,6 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
             upipe_release(deint);
             if (unlikely(yuvrgb == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_set_ubuf_mgr(yuvrgb, glxplayer->rgb_mgr);
 
             glxplayer->upipe_glx_qsink =
                 upipe_void_alloc_output(yuvrgb, glxplayer->upipe_qsink_mgr,
@@ -658,37 +645,14 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     if (unlikely(uref_mgr == NULL))
         goto fail_uref_mgr;
 
-    /* input blocks */
-    glxplayer->block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_SHARED_POOL_DEPTH, umem_mgr, -1, 0);
-    if (unlikely(glxplayer->block_mgr == NULL))
-        goto fail_block_mgr;
-
-    /* planar YUV (I420) */
-    glxplayer->yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr, 1,
-            UBUF_PREPEND, UBUF_APPEND, UBUF_PREPEND, UBUF_APPEND,
-            UBUF_ALIGN, UBUF_ALIGN_OFFSET);
-    if (unlikely(glxplayer->yuv_mgr == NULL ||
-                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "y8", 1, 1, 1)) ||
-                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "u8", 2, 2, 1)) ||
-                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->yuv_mgr, "v8", 2, 2, 1))))
-        goto fail_yuv_mgr;
-
-    /* rgb (glx_sink needs contiguous rgb data for glTexImage2D) */
-    glxplayer->rgb_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr, 1,
-            UBUF_PREPEND, UBUF_APPEND, UBUF_PREPEND, UBUF_APPEND, 0, 0);
-    if (unlikely(glxplayer->rgb_mgr == NULL ||
-                 !ubase_check(ubuf_pic_mem_mgr_add_plane(glxplayer->rgb_mgr, "r8g8b8", 1, 1, 3))))
-        goto fail_rgb_mgr;
-
     /* probes common to all threads */
     glxplayer->uprobe_logger =
-        uprobe_uclock_alloc(
-            uprobe_uref_mgr_alloc(
-                 uprobe_stdio_alloc(NULL, stdout, glxplayer->loglevel),
-                 uref_mgr), glxplayer->uclock);
+        uprobe_ubuf_mem_alloc(
+            uprobe_uclock_alloc(
+                uprobe_uref_mgr_alloc(
+                     uprobe_stdio_alloc(NULL, stderr, glxplayer->loglevel),
+                     uref_mgr), glxplayer->uclock),
+            umem_mgr, UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
     if (unlikely(glxplayer->uprobe_logger == NULL))
         goto fail_probe_logger;
 
@@ -795,12 +759,6 @@ fail_pipe_mgrs:
 fail_av:
     uprobe_release(glxplayer->uprobe_logger);
 fail_probe_logger:
-    ubuf_mgr_release(glxplayer->rgb_mgr);
-fail_rgb_mgr:
-    ubuf_mgr_release(glxplayer->yuv_mgr);
-fail_yuv_mgr:
-    ubuf_mgr_release(glxplayer->block_mgr);
-fail_block_mgr:
     uref_mgr_release(uref_mgr);
 fail_uref_mgr:
     udict_mgr_release(udict_mgr);
@@ -856,7 +814,6 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         upipe_mgr_release(upipe_fsrc_mgr);
         if (unlikely(upipe_src == NULL))
             return false;
-        upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
         if (ubase_check(upipe_set_uri(upipe_src, uri))) {
             glxplayer->trickp = true;
         } else {
@@ -874,7 +831,6 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             upipe_mgr_release(upipe_udpsrc_mgr);
             if (unlikely(upipe_src == NULL))
                 return false;
-            upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
             if (ubase_check(upipe_set_uri(upipe_src, uri))) {
                 upipe_attach_uclock(upipe_src);
             } else {
@@ -892,7 +848,6 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                 upipe_mgr_release(upipe_http_src_mgr);
                 if (unlikely(upipe_src == NULL))
                     return false;
-                upipe_set_ubuf_mgr(upipe_src, glxplayer->block_mgr);
                 if (!ubase_check(upipe_set_uri(upipe_src, uri))) {
                     upipe_release(upipe_src);
                     return false;
@@ -1008,9 +963,6 @@ void upipe_glxplayer_free(struct upipe_glxplayer *glxplayer)
     upipe_mgr_release(glxplayer->upipe_null_mgr);
     upipe_av_clean();
     uprobe_release(glxplayer->uprobe_logger);
-    ubuf_mgr_release(glxplayer->rgb_mgr);
-    ubuf_mgr_release(glxplayer->yuv_mgr);
-    ubuf_mgr_release(glxplayer->block_mgr);
     uclock_release(glxplayer->uclock);
     free(glxplayer);
 }

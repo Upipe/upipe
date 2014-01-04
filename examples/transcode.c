@@ -40,6 +40,7 @@
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -101,8 +102,6 @@ struct es_conf {
 
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uref_mgr *uref_mgr;
-struct ubuf_mgr *block_mgr;
-struct ubuf_mgr *yuv_mgr;
 
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
@@ -246,7 +245,6 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                     uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
                         loglevel, "src %"PRIu64, id), flow_def);
         assert(avfsrc_output != NULL);
-        upipe_set_ubuf_mgr(avfsrc_output, block_mgr);
 
         struct upipe *incoming = avfsrc_output;
 
@@ -262,11 +260,7 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             incoming = decoder;
             
             /* stream type */
-            if (strstr(def, ".pic.")) {
-                upipe_set_ubuf_mgr(decoder, yuv_mgr);
-            } else if (strstr(def, ".sound.")) {
-                upipe_set_ubuf_mgr(decoder, block_mgr);
-
+            if (strstr(def, ".sound.")) {
                 /* resample */
                 struct uref *flow = uref_sound_flow_alloc_def(uref_mgr,
                                                               "pcm_s16.", 2, 0);
@@ -277,9 +271,8 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                                             loglevel, "swr %"PRIu64, id), flow);
                 upipe_release(swr);
                 uref_free(flow);
-                upipe_set_ubuf_mgr(swr, block_mgr);
                 incoming = swr;
-            } else {
+            } else if (!strstr(def, ".pic.")) {
                 upipe_err_va(upipe, "stream type unsupported %"PRIu64" (%s)",
                              id, def);
                 exit(EXIT_FAILURE);
@@ -294,7 +287,6 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                                     loglevel, "enc %"PRIu64, id), flow);
             upipe_release(encoder);
             uref_free(flow);
-            upipe_set_ubuf_mgr(encoder, block_mgr);
             if (strstr(def, ".pic.")) {
                 upipe_avcenc_set_option(encoder, "threads", "0");
             }
@@ -388,17 +380,6 @@ int main(int argc, char *argv[])
     /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                         UBUF_POOL_DEPTH, umem_mgr, -1, 0);
-    yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
-                                     umem_mgr, 1,
-                                     UBUF_PREPEND, UBUF_APPEND,
-                                     UBUF_PREPEND, UBUF_APPEND,
-                                     UBUF_ALIGN, UBUF_ALIGN_OFFSET);
-    /* planar YUV (I420) */
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "y8", 1, 1, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "u8", 2, 2, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "v8", 2, 2, 1);
 
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
@@ -412,6 +393,9 @@ int main(int argc, char *argv[])
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
     logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
     assert(logger != NULL);
     uprobe_init(&uprobe_demux_s, catch_demux, uprobe_use(logger));
 
@@ -456,7 +440,6 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    ubuf_mgr_release(block_mgr);
     uclock_release(uclock);
     uprobe_release(logger);
     uprobe_clean(&uprobe);

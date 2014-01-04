@@ -105,7 +105,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_sinesrc, urefcount, upipe_sinesrc_free)
 UPIPE_HELPER_VOID(upipe_sinesrc)
 UPIPE_HELPER_UREF_MGR(upipe_sinesrc, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_sinesrc, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_sinesrc, upump_mgr)
@@ -156,6 +156,9 @@ static void upipe_sinesrc_idler(struct upump *upump)
                  upipe_sinesrc->next_pts == UINT64_MAX))
         upipe_sinesrc->next_pts = uclock_now(upipe_sinesrc->uclock) +
                                   UPIPE_SINESRC_DELAY;
+
+    if (unlikely(!ubase_check(upipe_sinesrc_check_ubuf_mgr(upipe))))
+        return;
 
     size_t size = (uint64_t)UPIPE_SINESRC_DURATION * 2 * UPIPE_SINESRC_RATE /
                   UCLOCK_FREQ;
@@ -220,15 +223,9 @@ static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
         case UPIPE_ATTACH_UCLOCK:
             upipe_sinesrc_set_upump(upipe, NULL);
             return upipe_sinesrc_attach_uclock(upipe);
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_sinesrc_attach_ubuf_mgr(upipe);
 
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_sinesrc_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_sinesrc_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_sinesrc_get_flow_def(upipe, p);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -93,7 +93,7 @@ struct upipe_rtp_prepend {
 UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_rtp_prepend, urefcount, upipe_rtp_prepend_free)
 UPIPE_HELPER_VOID(upipe_rtp_prepend);
-UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr, flow_def);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
 
 /** @internal @This handles data.
@@ -114,13 +114,9 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     int size = -1;
 
     /* check ubuf manager */
-    if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_rtp_prepend->flow_def);
-        if (unlikely(!upipe_rtp_prepend->ubuf_mgr)) {
-            upipe_warn(upipe, "ubuf_mgr not set !");
-            uref_free(uref);
-            return;
-        }
+    if (unlikely(!ubase_check(upipe_rtp_prepend_check_ubuf_mgr(upipe)))) {
+        uref_free(uref);
+        return;
     }
 
     /* timestamp (synced to program clock ref, fallback to system clock ref) */
@@ -251,14 +247,9 @@ static enum ubase_err upipe_rtp_prepend_control(struct upipe *upipe,
                                                 va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_rtp_prepend_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_rtp_prepend_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_rtp_prepend_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_rtp_prepend_get_flow_def(upipe, p);

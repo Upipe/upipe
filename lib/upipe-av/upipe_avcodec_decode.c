@@ -152,7 +152,7 @@ UPIPE_HELPER_VOID(upipe_avcdec)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_avcdec, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avcdec, flow_def_check)
-UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr, flow_def);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcdec, urefs, nb_urefs, max_urefs, blockers, upipe_avcdec_decode)
@@ -210,8 +210,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     /* Check if we have a new pixel format. */
     if (unlikely(context->pix_fmt != upipe_avcdec->pix_fmt)) {
-        if (upipe_avcdec->pix_fmt != AV_PIX_FMT_NONE)
-            upipe_avcdec_set_ubuf_mgr(upipe, NULL);
+        ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
+        upipe_avcdec->ubuf_mgr = NULL;
         upipe_avcdec->pix_fmt = context->pix_fmt;
     }
 
@@ -268,7 +268,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     }
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
-        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
+        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr,
+                                  &upipe_avcdec->ubuf_mgr);
         if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
             uref_free(uref);
             uref_free(flow_def_attr);
@@ -397,8 +398,8 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 
     /* Check if we have a new sample format. */
     if (unlikely(context->sample_fmt != upipe_avcdec->sample_fmt)) {
-        if (upipe_avcdec->sample_fmt != AV_SAMPLE_FMT_NONE)
-            upipe_avcdec_set_ubuf_mgr(upipe, NULL);
+        ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
+        upipe_avcdec->ubuf_mgr = NULL;
         upipe_avcdec->sample_fmt = context->sample_fmt;
     }
 
@@ -433,7 +434,8 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
                      av_get_bytes_per_sample(context->sample_fmt)))
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
-        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
+        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr,
+                                  &upipe_avcdec->ubuf_mgr);
         if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
             uref_free(uref);
             uref_free(flow_def_attr);
@@ -1221,14 +1223,13 @@ static enum ubase_err upipe_avcdec_control(struct upipe *upipe,
             upipe_avcdec_set_upump_av_deal(upipe, NULL);
             upipe_avcdec_abort_av_deal(upipe);
             return upipe_avcdec_attach_upump_mgr(upipe);
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_avcdec_get_ubuf_mgr(upipe, p);
+        case UPIPE_ATTACH_UBUF_MGR: {
+            struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+            ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
+            upipe_avcdec->ubuf_mgr = NULL;
+            return UBASE_ERR_NONE;
         }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_avcdec_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avcdec_get_flow_def(upipe, p);

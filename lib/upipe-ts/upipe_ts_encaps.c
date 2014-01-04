@@ -106,7 +106,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe, UPIPE_TS_ENCAPS_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_encaps, urefcount, upipe_ts_encaps_free)
 UPIPE_HELPER_VOID(upipe_ts_encaps)
 UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_ts_encaps, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_encaps pipe.
@@ -471,13 +471,8 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     assert(upipe_ts_encaps->octetrate);
 
-    if (unlikely(!ubase_check(upipe_ts_encaps_check_uref_mgr(upipe)))) {
-        uref_free(uref);
-        return;
-    }
-    if (unlikely(upipe_ts_encaps->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_encaps->flow_def);
-    if (unlikely(upipe_ts_encaps->ubuf_mgr == NULL)) {
+    if (unlikely(!ubase_check(upipe_ts_encaps_check_uref_mgr(upipe)) ||
+                 !ubase_check(upipe_ts_encaps_check_ubuf_mgr(upipe)))) {
         uref_free(uref);
         return;
     }
@@ -600,14 +595,8 @@ static enum ubase_err upipe_ts_encaps_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
             return upipe_ts_encaps_attach_uref_mgr(upipe);
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_ts_encaps_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_ts_encaps_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_ts_encaps_attach_ubuf_mgr(upipe);
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

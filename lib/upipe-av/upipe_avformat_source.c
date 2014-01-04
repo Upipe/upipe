@@ -164,7 +164,7 @@ UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe, UPIPE_AVFSRC_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_avfsrc_sub, urefcount, upipe_avfsrc_sub_free)
 UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, flow_def)
 
 UPIPE_HELPER_SUBPIPE(upipe_avfsrc, upipe_avfsrc_sub, sub, sub_mgr,
                      subs, uchain)
@@ -245,14 +245,9 @@ static enum ubase_err upipe_avfsrc_sub_control(struct upipe *upipe,
                                                va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_avfsrc_sub_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_avfsrc_sub_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_avfsrc_sub_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_sub_get_flow_def(upipe, p);
@@ -407,10 +402,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         av_free_packet(&pkt);
         return;
     }
-    if (unlikely(output->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output),
-                                  output->flow_def);
-    if (unlikely(output->ubuf_mgr == NULL)) {
+    if (unlikely(!ubase_check(upipe_avfsrc_sub_check_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output))))) {
         av_free_packet(&pkt);
         return;
     }

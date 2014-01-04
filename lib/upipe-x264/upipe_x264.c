@@ -106,7 +106,7 @@ struct upipe_x264 {
 UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_x264, urefcount, upipe_x264_free)
 UPIPE_HELPER_VOID(upipe_x264);
-UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, flow_def_attr);
 UPIPE_HELPER_UCLOCK(upipe_x264, uclock);
 UPIPE_HELPER_OUTPUT(upipe_x264, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_x264, flow_def_input, flow_def_attr)
@@ -465,12 +465,9 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         }
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
 
-        if (unlikely(upipe_x264->ubuf_mgr == NULL)) {
-            upipe_throw_need_ubuf_mgr(upipe, upipe_x264->flow_def_attr);
-            if (unlikely(upipe_x264->ubuf_mgr == NULL)) {
-                uref_free(uref);
-                return;
-            }
+        if (unlikely(!ubase_check(upipe_x264_check_ubuf_mgr(upipe)))) {
+            uref_free(uref);
+            return;
         }
 
         /* set pts in x264 timebase */
@@ -693,14 +690,9 @@ static enum ubase_err upipe_x264_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             return upipe_x264_attach_uclock(upipe);
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_x264_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_x264_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_x264_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_x264_get_flow_def(upipe, p);

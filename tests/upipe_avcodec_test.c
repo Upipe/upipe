@@ -32,6 +32,7 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_output.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -132,7 +133,6 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     struct uref *flow = NULL;
     const char *def;
     int64_t num = 0;
-    struct ubuf_mgr *ubuf_mgr = pic_mgr;
     struct upump_mgr *upump_mgr = NULL;
 
     if (event != UPROBE_NEW_FLOW_DEF) {
@@ -145,11 +145,6 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     uref_flow_get_def(flow, &def);
     assert(def != NULL);
 
-    /* check def to choose ubuf manager */
-    if (strstr(def, ".sound.")) {
-        ubuf_mgr = block_mgr;
-    }
-
     /* decoder lives in encoder's thread */
     upump_mgr = upipe_get_opaque(upipe, struct upump_mgr *);
 
@@ -159,7 +154,6 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
             uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                 "avcdec %"PRId64, num), upump_mgr));
     assert(avcdec);
-    ubase_assert(upipe_set_ubuf_mgr(avcdec, ubuf_mgr));
     upipe_release(avcdec);
 
     /* /dev/null */
@@ -214,7 +208,6 @@ struct upipe *build_pipeline(const char *codec_def,
     uref_free(output_flow);
     assert(avcenc);
     ubase_assert(upipe_set_flow_def(avcenc, flow_def));
-    ubase_assert(upipe_set_ubuf_mgr(avcenc, block_mgr));
     upipe_set_opaque(avcenc, upump_mgr);
 
     return avcenc;
@@ -328,6 +321,9 @@ int main(int argc, char **argv)
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
     uprobe_init(&uprobe_avcenc_s, catch_avcenc, uprobe_use(logger));

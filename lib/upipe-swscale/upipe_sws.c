@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -98,7 +98,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_sws, urefcount, upipe_sws_free)
 UPIPE_HELPER_FLOW(upipe_sws, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_sws, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr, flow_def_attr);
 
 /** @internal @This receives incoming uref.
  *
@@ -112,13 +112,9 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     int i;
     /* check ubuf manager */
-    if (unlikely(!upipe_sws->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_sws->flow_def_attr);
-        if (unlikely(!upipe_sws->ubuf_mgr)) {
-            upipe_err(upipe, "ubuf_mgr not set !");
-            uref_free(uref);
-            return;
-        }
+    if (unlikely(!ubase_check(upipe_sws_check_ubuf_mgr(upipe)))) {
+        uref_free(uref);
+        return;
     }
 
     size_t input_hsize, input_vsize;
@@ -328,14 +324,9 @@ static enum ubase_err upipe_sws_control(struct upipe *upipe,
 {
     switch (command) {
         /* generic commands */
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_sws_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_sws_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_sws_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_get_output(upipe, p);
@@ -401,12 +392,13 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws_init_ubuf_mgr(upipe);
     upipe_sws_init_output(upipe);
     upipe_sws_init_flow_def(upipe);
-    upipe_sws_store_flow_def_attr(upipe, flow_def);
 
     upipe_sws->convert_ctx = NULL;
     upipe_sws->flags = SWS_BICUBIC;
 
     upipe_throw_ready(upipe);
+    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
+    upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;
 }
 

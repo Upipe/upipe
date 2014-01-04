@@ -43,10 +43,6 @@
 #include <string.h>
 #include <assert.h>
 
-/** default minimum extra space before buffer when unspecified */
-#define UBUF_DEFAULT_PREPEND        32
-/** default minimum extra space after buffer when unspecified */
-#define UBUF_DEFAULT_APPEND         32
 /** default alignement of buffer when unspecified */
 #define UBUF_DEFAULT_ALIGN          0
 
@@ -357,7 +353,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     ubuf_block_mem_mgr_init_pool(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr),
             ubuf_pool_depth, shared_pool_depth,
             (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr),
-             ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
+            ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
 
     block_mem_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);

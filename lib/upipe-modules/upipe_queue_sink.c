@@ -337,9 +337,6 @@ static enum ubase_err upipe_qsink_flush(struct upipe *upipe)
     if (upipe_qsink_flush_sink(upipe)) {
         struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
         upump_stop(upipe_qsink->upump);
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_qsink_input. */
-        upipe_release(upipe);
     }
     return UBASE_ERR_NONE;
 }

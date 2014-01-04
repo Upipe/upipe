@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -50,6 +50,8 @@ UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",
 UREF_ATTR_UNSIGNED(sound_flow, rate, "s.rate", samples per second)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, prepend, "s.prepend",
         extra samples added before each channel)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, append, "s.append",
+        extra samples added after each channel)
 UREF_ATTR_UNSIGNED(sound_flow, align, "s.align", alignment in octets)
 UREF_ATTR_INT(sound_flow, align_offset, "s.align_offset",
         offset of the aligned sample)

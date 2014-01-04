@@ -31,6 +31,7 @@
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -79,7 +80,6 @@ enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uprobe *logger;
 struct uprobe uprobe_avcdec;
 
-struct ubuf_mgr *block_mgr;
 struct upump_mgr *upump_mgr;
 struct uclock *uclock;
 bool inited = false;
@@ -122,7 +122,6 @@ static enum ubase_err catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
             uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
                                 loglevel, "avcdec"));
-    upipe_set_ubuf_mgr(avcdec, block_mgr);
     upipe_release(avcdec);
     return UBASE_ERR_NONE;
 }
@@ -198,8 +197,6 @@ int main(int argc, char **argv)
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH,
                                                    udict_mgr, 0);
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                         UBUF_POOL_DEPTH, umem_mgr, -1, 0);
 
     /* uclock */
     uclock = uclock_std_alloc(0);
@@ -212,6 +209,9 @@ int main(int argc, char **argv)
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
     logger = uprobe_uclock_alloc(logger, uclock);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
     /* source probe */
@@ -239,7 +239,6 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_fsrc_mgr);
     if (unlikely(upipe_src == NULL))
         exit(1);
-    upipe_set_ubuf_mgr(upipe_src, block_mgr);
     upipe_attach_uclock(upipe_src);
     if (!ubase_check(upipe_set_uri(upipe_src, uri)))
         return false;
@@ -282,7 +281,6 @@ int main(int argc, char **argv)
     
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
-    ubuf_mgr_release(block_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uprobe_release(logger);

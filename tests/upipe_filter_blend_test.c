@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -28,6 +28,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -90,11 +91,6 @@ int main(int argc, char **argv)
     struct uref *pic;
 
     /* upipe env */
-    struct uprobe uprobe;
-    uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
-                                               UPROBE_LOG_LEVEL);
-    assert(logger != NULL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
@@ -108,6 +104,15 @@ int main(int argc, char **argv)
                                       UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
     assert(ubuf_mgr);
     ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
+
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch, NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     /* nullpipe */
     struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
@@ -125,7 +130,6 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blend"));
     assert(filter_blend);
     ubase_assert(upipe_set_flow_def(filter_blend, uref));
-    ubase_assert(upipe_set_ubuf_mgr(filter_blend, ubuf_mgr));
     ubase_assert(upipe_set_output(filter_blend, nullpipe));
     upipe_release(nullpipe);
     uref_free(uref);

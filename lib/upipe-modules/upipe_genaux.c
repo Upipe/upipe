@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -80,7 +80,7 @@ struct upipe_genaux {
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free)
 UPIPE_HELPER_VOID(upipe_genaux);
-UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, flow_def);
 UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
 
 /** @internal @This handles data.
@@ -98,13 +98,8 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     struct ubuf *dst;
     uint8_t *aux;
 
-    if (upipe_genaux->ubuf_mgr == NULL) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_genaux->flow_def);
-        if (unlikely(upipe_genaux->ubuf_mgr == NULL))
-            return;
-    }
-
-    if (!ubase_check(upipe_genaux->getattr(uref, &systime))) {
+    if (!ubase_check(upipe_genaux_check_ubuf_mgr(upipe)) ||
+        !ubase_check(upipe_genaux->getattr(uref, &systime))) {
         uref_free(uref);
         return;
     }
@@ -190,14 +185,9 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
                                  enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_genaux_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_genaux_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_genaux_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_genaux_get_flow_def(upipe, p);

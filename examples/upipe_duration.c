@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,6 +38,7 @@
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_pool.h>
 #include <upipe/udict.h>
@@ -141,18 +142,21 @@ int main(int argc, char **argv)
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     udict_mgr_release(udict_mgr);
-    struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                         UBUF_SHARED_POOL_DEPTH, umem_mgr,
-                                         -1, 0);
-    umem_mgr_release(umem_mgr);
 
     /* probes */
     struct uprobe *uprobe;
     uprobe = uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_DEBUG);
+    assert(uprobe != NULL);
     uprobe = uprobe_uref_mgr_alloc(uprobe, uref_mgr);
+    assert(uprobe != NULL);
     uprobe = uprobe_upump_mgr_alloc(uprobe, upump_mgr);
+    assert(uprobe != NULL);
+    uprobe = uprobe_ubuf_mem_alloc(uprobe, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(uprobe != NULL);
     uref_mgr_release(uref_mgr);
     upump_mgr_release(upump_mgr);
+    umem_mgr_release(umem_mgr);
 
     struct uprobe uprobe_split_s;
     uprobe_init(&uprobe_split_s, catch, uprobe_use(uprobe));
@@ -166,8 +170,6 @@ int main(int argc, char **argv)
                    uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG,
                                     "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
-    upipe_set_ubuf_mgr(upipe_src, block_mgr);
-    ubuf_mgr_release(block_mgr);
     if (!ubase_check(upipe_set_uri(upipe_src, file))) {
         fprintf(stderr, "invalid file\n");
         exit(EXIT_FAILURE);

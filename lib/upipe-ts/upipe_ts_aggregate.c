@@ -110,7 +110,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_agg, upipe, UPIPE_TS_AGG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_agg, urefcount, upipe_ts_agg_free)
 UPIPE_HELPER_VOID(upipe_ts_agg)
 UPIPE_HELPER_UREF_MGR(upipe_ts_agg, uref_mgr)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_agg, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_agg, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_ts_agg, output, flow_def, flow_def_sent)
 
 /** @internal @This allocates a ts_aggregate pipe.
@@ -157,9 +157,7 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
 static void upipe_ts_agg_init(struct upipe *upipe)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
-    if (unlikely(upipe_ts_agg->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_agg->flow_def);
-    if (unlikely(upipe_ts_agg->ubuf_mgr == NULL))
+    if (unlikely(!ubase_check(upipe_ts_agg_check_ubuf_mgr(upipe))))
         return;
 
     upipe_ts_agg->padding = ubuf_block_alloc(upipe_ts_agg->ubuf_mgr, TS_SIZE);
@@ -529,14 +527,9 @@ static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
             return upipe_ts_agg_attach_uref_mgr(upipe);
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_ts_agg_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_ts_agg_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_ts_agg_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_agg_get_flow_def(upipe, p);

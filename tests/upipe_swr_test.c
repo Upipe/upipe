@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -30,6 +30,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -106,6 +107,9 @@ int main(int argc, char **argv)
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     /* managers */
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
@@ -126,7 +130,6 @@ int main(int argc, char **argv)
         flow_output);
     assert(swr);
     ubase_assert(upipe_set_flow_def(swr, flow));
-    ubase_assert(upipe_set_ubuf_mgr(swr, block_mgr));
     uref_free(flow);
     uref_free(flow_output);
 

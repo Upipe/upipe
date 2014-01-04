@@ -106,7 +106,10 @@ int main(int argc, char **argv)
     assert(macropixel == 1);
 
     chroma = NULL;
-    while (ubuf_pic_plane_iterate(ubuf1, &chroma) && chroma != NULL) {
+    unsigned int nb_planes = 0;
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf1, &chroma)) &&
+           chroma != NULL) {
+        nb_planes++;
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
         ubase_assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
@@ -122,8 +125,9 @@ int main(int argc, char **argv)
             assert(vsub == 2);
             assert(macropixel_size == 1);
         } else
-            assert(1);
+            assert(0);
     }
+    assert(nb_planes == 3);
 
     ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
     ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
@@ -213,8 +217,10 @@ int main(int argc, char **argv)
     assert(macropixel == 2);
 
     chroma = NULL;
+    nb_planes = 0;
     while (ubase_check(ubuf_pic_plane_iterate(ubuf1, &chroma)) &&
            chroma != NULL) {
+        nb_planes++;
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
         ubase_assert(ubuf_pic_plane_size(ubuf1, chroma, &stride, &hsub, &vsub,
@@ -225,6 +231,7 @@ int main(int argc, char **argv)
         assert(vsub == 1);
         assert(macropixel_size == 4);
     }
+    assert(nb_planes == 1);
 
     fill_in(ubuf1);
 

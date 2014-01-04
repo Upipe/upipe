@@ -58,6 +58,7 @@
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -164,9 +165,6 @@ int main(int argc, char *argv[])
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                                         UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, 0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
@@ -180,6 +178,9 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_uclock_alloc(logger, uclock);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_multicat_sink_mgr = upipe_multicat_sink_mgr_alloc();
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
@@ -190,7 +191,6 @@ int main(int argc, char *argv[])
     struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                              loglevel, "udp source"));
-    upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr);
     upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
     upipe_attach_uclock(upipe_udpsrc);
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
@@ -242,7 +242,6 @@ int main(int argc, char *argv[])
                 upipe_genaux_mgr,
                 uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                                  loglevel, "genaux"));
-        ubase_assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
         /* aux files (multicat sink) */
         struct upipe *auxsink = upipe_void_alloc_output(genaux,
@@ -269,7 +268,6 @@ int main(int argc, char *argv[])
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
-    ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);

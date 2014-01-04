@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -362,9 +363,12 @@ int main(int argc, char **argv)
     /* build sws pipe and dependencies */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     assert(upipe_sws_mgr != NULL);
 
@@ -375,20 +379,19 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_flow_set_vsize(output_flow, DSTSIZE));
 
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sws"),
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "sws"),
             output_flow); 
     assert(sws != NULL);
     ubase_assert(upipe_set_flow_def(sws, pic_flow));
-    ubase_assert(upipe_set_ubuf_mgr(sws, ubuf_mgr));
     uref_free(output_flow);
     uref_free(pic_flow);
 
     /* build phony pipe */
     struct upipe *sws_test = upipe_void_alloc(&sws_test_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "sws_test"));
-    uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws:\t %p", sws);
-    uprobe_dbg_va(uprobe_stdio, NULL, "Pipe addr: sws_test: %p", sws_test);
+    uprobe_dbg_va(logger, NULL, "Pipe addr: sws:\t %p", sws);
+    uprobe_dbg_va(logger, NULL, "Pipe addr: sws_test: %p", sws_test);
     assert(sws_test);
 
     /* connect upipe_sws output to sws_test */
@@ -399,9 +402,9 @@ int main(int argc, char **argv)
     upipe_input(sws, pic, NULL);
 
     assert(sws_test_from_upipe(sws_test)->pic);
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, uprobe_stdio));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, uprobe_stdio));
-    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, uprobe_stdio));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "y8", 1, 1, 1, logger));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "u8", 2, 2, 1, logger));
+    assert(compare_chroma(((struct uref*[]){uref2, sws_test_from_upipe(sws_test)->pic}), "v8", 2, 2, 1, logger));
 
     /* release urefs */
     uref_free(uref1);
@@ -414,7 +417,7 @@ int main(int argc, char **argv)
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr); 
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);

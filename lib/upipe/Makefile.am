@@ -5,6 +5,7 @@ libupipe_la_SOURCES = \
 	umem_alloc.c \
 	umem_pool.c \
 	ubuf_block_mem.c \
+	ubuf_mem.c \
 	ubuf_mem_common.c \
 	ubuf_pic_common.c \
 	ubuf_pic.c \
@@ -16,6 +17,7 @@ libupipe_la_SOURCES = \
 	uprobe_output.c \
 	uprobe_select_flows.c \
 	uprobe_stdio.c \
+	uprobe_ubuf_mem.c \
 	uprobe_uclock.c \
 	uprobe_upump_mgr.c \
 	uprobe_uref_mgr.c \

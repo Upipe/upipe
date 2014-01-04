@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -83,7 +83,7 @@ struct upipe_ts_psig {
 UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psig, urefcount, upipe_ts_psig_free)
 UPIPE_HELPER_VOID(upipe_ts_psig)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_psig pipe. */
@@ -358,9 +358,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_psig_program_from_upipe(upipe);
     struct upipe_ts_psig *upipe_ts_psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
-    if (unlikely(upipe_ts_psig->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_psig->flow_def);
-    if (unlikely(upipe_ts_psig->ubuf_mgr == NULL)) {
+    if (unlikely(!ubase_check(upipe_ts_psig_check_ubuf_mgr(upipe_ts_psig_to_upipe(upipe_ts_psig))))) {
         uref_free(uref);
         return;
     }
@@ -676,9 +674,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
                                 struct upump *upump)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
-    if (unlikely(upipe_ts_psig->ubuf_mgr == NULL))
-        upipe_throw_need_ubuf_mgr(upipe, upipe_ts_psig->flow_def);
-    if (unlikely(upipe_ts_psig->ubuf_mgr == NULL)) {
+    if (unlikely(!ubase_check(upipe_ts_psig_check_ubuf_mgr(upipe)))) {
         uref_free(uref);
         return;
     }
@@ -836,14 +832,8 @@ static enum ubase_err upipe_ts_psig_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_ts_psig_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_ts_psig_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_ts_psig_attach_ubuf_mgr(upipe);
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

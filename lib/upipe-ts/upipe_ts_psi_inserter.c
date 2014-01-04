@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,7 +35,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/upipe_ts_psi_inserter.h>
@@ -73,9 +72,6 @@ struct upipe_ts_psii {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
-
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -96,7 +92,6 @@ struct upipe_ts_psii {
 UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psii, urefcount, upipe_ts_psii_free)
 UPIPE_HELPER_VOID(upipe_ts_psii)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_psii, ubuf_mgr)
 UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
 
 /** @internal @This is the private context of a program of a ts_psii pipe. */
@@ -116,7 +111,7 @@ struct upipe_ts_psii_sub {
     /** date (in system time) of the next table occurrence */
     uint64_t next_cr_sys;
 
-    /** probe for uref_mgr and ubuf_mgr */
+    /** proxy probe */
     struct uprobe probe;
     /** pointer to ts_encaps pipe */
     struct upipe *encaps;
@@ -137,8 +132,7 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_psii, upipe_ts_psii_sub, sub, sub_mgr,
 /** @hidden */
 static void upipe_ts_psii_sub_free(struct urefcount *urefcount_real);
 
-/** @internal @This catches the need_uref_mgr and need_ubuf_mgr events from
- * inner pipes.
+/** @internal @This catches the events from inner pipes.
  *
  * @param uprobe pointer to the probe in upipe_ts_psii
  * @param inner pointer to the inner pipe
@@ -154,22 +148,8 @@ static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         container_of(uprobe, struct upipe_ts_psii_sub, probe);
     struct upipe *upipe = upipe_ts_psii_sub_to_upipe(upipe_ts_psii_sub);
-    struct upipe_ts_psii *upipe_ts_psii =
-        upipe_ts_psii_from_sub_mgr(upipe->mgr);
 
-    switch (event) {
-        case UPROBE_NEED_UBUF_MGR: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            if (unlikely(upipe_ts_psii->ubuf_mgr == NULL))
-                upipe_throw_need_ubuf_mgr(upipe_ts_psii_to_upipe(upipe_ts_psii),
-                                          flow_def);
-            if (likely(upipe_ts_psii->ubuf_mgr != NULL))
-                return upipe_set_ubuf_mgr(inner, upipe_ts_psii->ubuf_mgr);
-            return UBASE_ERR_UNHANDLED;
-        }
-        default:
-            return upipe_throw_proxy(upipe, inner, event, args);
-    }
+    return upipe_throw_proxy(upipe, inner, event, args);
 }
 
 /** @internal @This allocates an input subpipe of a ts_psii pipe.
@@ -465,7 +445,6 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     upipe_ts_psii_init_urefcount(upipe);
-    upipe_ts_psii_init_ubuf_mgr(upipe);
     upipe_ts_psii_init_output(upipe);
     upipe_ts_psii_init_sub_mgr(upipe);
     upipe_ts_psii_init_sub_subs(upipe);
@@ -560,15 +539,6 @@ static enum ubase_err upipe_ts_psii_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_ts_psii_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_ts_psii_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
-
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psii_get_flow_def(upipe, p);
@@ -608,7 +578,6 @@ static void upipe_ts_psii_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_ts_psii_clean_sub_subs(upipe);
     upipe_ts_psii_clean_output(upipe);
-    upipe_ts_psii_clean_ubuf_mgr(upipe);
     upipe_ts_psii_clean_urefcount(upipe);
     upipe_ts_psii_free_void(upipe);
 }

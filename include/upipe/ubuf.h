@@ -170,6 +170,7 @@ struct ubuf_mgr {
 static inline struct ubuf *ubuf_alloc(struct ubuf_mgr *mgr,
                                       enum ubuf_alloc_type alloc_type, ...)
 {
+    assert(mgr != NULL);
     struct ubuf *ubuf;
     va_list args;
     va_start(args, alloc_type);
@@ -235,6 +236,7 @@ static inline struct ubuf *ubuf_dup(struct ubuf *ubuf)
  */
 static inline void ubuf_free(struct ubuf *ubuf)
 {
+    assert(ubuf != NULL);
     ubuf->mgr->ubuf_free(ubuf);
 }
 

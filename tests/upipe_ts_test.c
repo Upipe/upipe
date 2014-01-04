@@ -35,6 +35,7 @@
 #include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -84,7 +85,6 @@
 
 static const char *src_file, *sink_file;
 static struct uref_mgr *uref_mgr;
-static struct ubuf_mgr *ubuf_mgr;
 static struct upump_mgr *upump_mgr;
 
 static struct upipe_mgr *upipe_noclock_mgr;
@@ -232,7 +232,6 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                      "ts mux"));
             assert(upipe_ts_mux != NULL);
             upipe_mgr_release(upipe_ts_mux_mgr);
-            ubase_assert(upipe_set_ubuf_mgr(upipe_ts_mux, ubuf_mgr));
             //ubase_assert(upipe_ts_mux_set_padding_octetrate(upipe_ts_mux, 20000));
             //ubase_assert(upipe_ts_mux_set_mode(upipe_ts_mux, UPIPE_TS_MUX_MODE_CBR));
 
@@ -304,9 +303,6 @@ int main(int argc, char *argv[])
     assert(udict_mgr != NULL);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
-                                        umem_mgr, -1, 0);
-    assert(ubuf_mgr != NULL);
     upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
@@ -317,6 +313,9 @@ int main(int argc, char *argv[])
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
     upipe_noclock_mgr = upipe_noclock_mgr_alloc();
@@ -329,7 +328,6 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_fsrc, ubuf_mgr));
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
 
@@ -375,7 +373,6 @@ int main(int argc, char *argv[])
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
-    ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uprobe_release(logger);

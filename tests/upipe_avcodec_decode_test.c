@@ -37,6 +37,7 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -378,9 +379,12 @@ int main (int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     /* ev / pumps */
     struct ev_loop *loop = ev_default_loop(0);
@@ -399,7 +403,7 @@ int main (int argc, char **argv)
 
     // Open file with avformat
     printf("Trying to open %s ...\n", srcpath);
-    assert(upipe_av_init(false, uprobe_use(uprobe_stdio)));
+    assert(upipe_av_init(false, uprobe_use(logger)));
     avformat_open_input(&mainthread.avfctx, srcpath, NULL, NULL);
     assert(mainthread.avfctx);
     assert(avformat_find_stream_info(mainthread.avfctx, NULL) >= 0);
@@ -437,12 +441,11 @@ int main (int argc, char **argv)
     assert(upipe_avcdec_mgr);
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
             uprobe_upump_mgr_alloc(
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                  "avcdec"), NULL));
     assert(avcdec);
     ubase_assert(upipe_set_flow_def(avcdec, flowdef));
     uref_free(flowdef);
-    ubase_assert(upipe_set_ubuf_mgr(avcdec, pic_mgr));
     /* mainthread avcdec runs alone (no thread) so it doesn't need any upump_mgr
      * Please do not add one, to check the nopump (direct call) case */
     mainthread.avcdec = avcdec;
@@ -451,13 +454,13 @@ int main (int argc, char **argv)
 
     // test pipe
     struct upipe *avcdec_test = upipe_void_alloc(&avcdec_test_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "avcdec_test"));
     ubase_assert(upipe_set_output(avcdec, avcdec_test));
     
     // null pipe
     struct upipe *nullpipe = upipe_void_alloc(&nullpipe_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                  "devnull"));
 
     if (!pgm_prefix) {
@@ -472,12 +475,11 @@ int main (int argc, char **argv)
         flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
         mainthread.audiodec = upipe_void_alloc(upipe_avcdec_mgr,
                 uprobe_upump_mgr_alloc(
-                    uprobe_pfx_alloc(uprobe_use(uprobe_stdio),
+                    uprobe_pfx_alloc(uprobe_use(logger),
                                      UPROBE_LOG_LEVEL, "audiodec"), NULL));
         assert(mainthread.audiodec);
         ubase_assert(upipe_set_flow_def(mainthread.audiodec, flowdef));
         uref_free(flowdef);
-        upipe_set_ubuf_mgr(mainthread.audiodec, block_mgr);
         ubase_assert(upipe_set_output(mainthread.audiodec, nullpipe));
     }
 
@@ -511,12 +513,11 @@ int main (int argc, char **argv)
 
             thread[i].avcdec = upipe_void_alloc(upipe_avcdec_mgr,
                 uprobe_upump_mgr_alloc(
-                    uprobe_pfx_alloc_va(uprobe_use(uprobe_stdio),
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
                          UPROBE_LOG_LEVEL, "avcdec_thread(%d)", i), NULL));
             assert(thread[i].avcdec);
             ubase_assert(upipe_set_flow_def(thread[i].avcdec, flowdef));
             uref_free(flowdef);
-            ubase_assert(upipe_set_ubuf_mgr(thread[i].avcdec, pic_mgr));
             ubase_assert(upipe_set_output(thread[i].avcdec, nullpipe));
 
             thread[i].audio_def = NULL;
@@ -555,7 +556,7 @@ int main (int argc, char **argv)
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
     upipe_av_clean();
 

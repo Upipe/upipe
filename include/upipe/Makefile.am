@@ -9,6 +9,7 @@ pkginclude_HEADERS = \
 	ubuf_block_common.h \
 	ubuf_block_mem.h \
 	ubuf_block_stream.h \
+	ubuf_mem.h \
 	ubuf_mem_common.h \
 	ubuf_pic.h \
 	ubuf_pic_common.h \
@@ -55,6 +56,7 @@ pkginclude_HEADERS = \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \
 	uprobe_stdio.h \
+	uprobe_ubuf_mem.h \
 	uprobe_uclock.h \
 	uprobe_upump_mgr.h \
 	uprobe_uref_mgr.h \

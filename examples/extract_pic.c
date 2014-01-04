@@ -30,6 +30,7 @@
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -99,8 +100,6 @@ struct upipe_mgr *upipe_filter_blend_mgr;
 struct upipe_mgr *upipe_sws_mgr;
 struct upipe_mgr *upipe_fsink_mgr;
 struct upipe_mgr *upipe_probe_uref_mgr;
-struct ubuf_mgr *yuv_mgr;
-struct ubuf_mgr *block_mgr;
 struct uref_mgr *uref_mgr;
 
 const char *srcpath, *dstpath;
@@ -178,7 +177,6 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                                  loglevel, "deint"));
         assert(deint != NULL);
         upipe_release(upipe);
-        upipe_set_ubuf_mgr(deint, yuv_mgr);
         upipe = deint;
     }
 
@@ -195,7 +193,6 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(upipe_source);
             return true;
         }
-        upipe_set_ubuf_mgr(sws, yuv_mgr);
         upipe = sws;
     }
 
@@ -207,7 +204,6 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     assert(jpegenc != NULL);
     upipe_release(upipe);
     upipe_avcenc_set_option(jpegenc, "qmax", "2");
-    upipe_set_ubuf_mgr(jpegenc, block_mgr);
     upipe = jpegenc;
 
     struct upipe *urefprobe = upipe_void_alloc_output(upipe,
@@ -250,7 +246,6 @@ static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
         upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
-    upipe_set_ubuf_mgr(avcdec, yuv_mgr);
     upipe_release(avcdec);
     return UBASE_ERR_NONE;
 }
@@ -288,25 +283,20 @@ int main(int argc, char **argv)
                                                          umem_mgr, -1, -1);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
-                                         umem_mgr, -1, 0);
-    yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
-                                     umem_mgr, 1,
-                                     UBUF_PREPEND, UBUF_APPEND,
-                                     UBUF_PREPEND, UBUF_APPEND,
-                                     UBUF_ALIGN, UBUF_ALIGN_OFFSET);
-    /* planar YUV (I420) */
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "y8", 1, 1, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "u8", 2, 2, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "v8", 2, 2, 1);
 
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop,
                             UPUMP_POOL, UPUMP_BLOCKER_POOL);
 
     /* default probe */
     logger = uprobe_stdio_alloc(NULL, logstream, loglevel);
+    assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
     uref_mgr_release(uref_mgr);
     upump_mgr_release(upump_mgr);
 
@@ -343,7 +333,6 @@ int main(int argc, char **argv)
                              loglevel, "fsrc"));
     assert(upipe_source != NULL);
     upipe_mgr_release(upipe_fsrc_mgr);
-    upipe_set_ubuf_mgr(upipe_source, block_mgr);
     if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))
         exit(EXIT_FAILURE);
 
@@ -386,8 +375,6 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_fsink_mgr);
     upipe_mgr_release(upipe_probe_uref_mgr);
 
-    ubuf_mgr_release(block_mgr);
-    ubuf_mgr_release(yuv_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 

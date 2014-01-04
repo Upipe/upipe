@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,6 +33,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/ubuf.h>
@@ -186,11 +187,6 @@ int main(int argc, char **argv)
     uint64_t pts;
 
     /* upipe env */
-    struct uprobe uprobe;
-    uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
-                                               UPROBE_LOG_LEVEL);
-    assert(logger != NULL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
@@ -206,12 +202,15 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, "y8", 1, 1, 1));
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, "u8", 2, 2, 1));
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, "v8", 2, 2, 1));
-    /* block */
-    struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_ALIGN,
-            UBUF_ALIGN_OFFSET);
-    assert(block_mgr);
+
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch, NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     /* x264 manager */
     struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
@@ -234,7 +233,6 @@ int main(int argc, char **argv)
     assert(x264);
     ubase_assert(upipe_set_flow_def(x264, flow_def));
     uref_free(flow_def);
-    ubase_assert(upipe_set_ubuf_mgr(x264, block_mgr));
 
     /* x264_test */
     struct upipe *x264_test = upipe_void_alloc(&x264_test_mgr,
@@ -268,7 +266,6 @@ int main(int argc, char **argv)
     /* clean everything */
     upipe_mgr_release(upipe_x264_mgr); // noop
     ubuf_mgr_release(pic_mgr);
-    ubuf_mgr_release(block_mgr);
     uref_mgr_release(uref_mgr);
     uprobe_release(logger);
     uprobe_clean(&uprobe);

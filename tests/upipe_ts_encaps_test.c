@@ -33,6 +33,7 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/uclock.h>
@@ -228,6 +229,9 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
                                                 uprobe_use(logger));
@@ -248,7 +252,6 @@ int main(int argc, char *argv[])
     assert(upipe_ts_encaps != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uint8_t *buffer;
@@ -295,7 +298,6 @@ int main(int argc, char *argv[])
     assert(upipe_ts_encaps != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
     ubase_assert(upipe_ts_mux_set_pcr_interval(upipe_ts_encaps, UCLOCK_FREQ / 5));
     ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
@@ -334,7 +336,6 @@ int main(int argc, char *argv[])
     assert(upipe_ts_encaps != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_encaps, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_encaps, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_encaps, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1024);

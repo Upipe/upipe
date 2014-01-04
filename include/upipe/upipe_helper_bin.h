@@ -140,8 +140,7 @@ static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
                                          struct upipe *last_inner)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (s->LAST_INNER != NULL)                                              \
-        upipe_release(s->LAST_INNER);                                       \
+    upipe_release(s->LAST_INNER);                                           \
     s->LAST_INNER = last_inner;                                             \
     if (last_inner != NULL && s->OUTPUT != NULL)                            \
         upipe_set_output(last_inner, s->OUTPUT);                            \
@@ -166,19 +165,15 @@ static enum ubase_err STRUCTURE##_control_bin(struct upipe *upipe,          \
         }                                                                   \
         case UPIPE_SET_OUTPUT: {                                            \
             struct upipe *output = va_arg(args, struct upipe *);            \
-            if (unlikely(s->OUTPUT != NULL)) {                              \
-                upipe_release(s->OUTPUT);                                   \
-                s->OUTPUT = NULL;                                           \
-            }                                                               \
+            upipe_release(s->OUTPUT);                                       \
+            s->OUTPUT = NULL;                                               \
                                                                             \
             enum ubase_err err;                                             \
             if (unlikely(s->LAST_INNER != NULL &&                           \
                          (err = upipe_set_output(s->LAST_INNER, output)) != \
                          UBASE_ERR_NONE))                                   \
                 return err;                                                 \
-            s->OUTPUT = output;                                             \
-            if (likely(output != NULL))                                     \
-                upipe_use(output);                                          \
+            s->OUTPUT = upipe_use(output);                                  \
             return UBASE_ERR_NONE;                                          \
         }                                                                   \
         default:                                                            \
@@ -194,10 +189,8 @@ static enum ubase_err STRUCTURE##_control_bin(struct upipe *upipe,          \
 static void STRUCTURE##_clean_bin(struct upipe *upipe)                      \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->LAST_INNER != NULL))                                      \
-        upipe_release(s->LAST_INNER);                                       \
-    if (likely(s->OUTPUT != NULL))                                          \
-        upipe_release(s->OUTPUT);                                           \
+    upipe_release(s->LAST_INNER);                                           \
+    upipe_release(s->OUTPUT);                                               \
 }
 
 #ifdef __cplusplus

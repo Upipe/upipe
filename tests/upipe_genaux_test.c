@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -28,6 +28,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -51,11 +52,9 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
-#define UBUF_ALIGN          16
-#define UBUF_ALIGN_OFFSET   0
+#define UDICT_POOL_DEPTH    0
+#define UREF_POOL_DEPTH     0
+#define UBUF_POOL_DEPTH     0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
@@ -131,13 +130,10 @@ static struct upipe_mgr genaux_test_mgr = {
     .upipe_control = NULL
 };
 
-
-
 int main(int argc, char **argv)
 {
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
 
-    struct ubuf_mgr *ubuf_mgr;
     struct uref *uref;
     uint64_t opaque = 0xcafebabedeadbeef, result;
     uint8_t buf[8];
@@ -150,18 +146,14 @@ int main(int argc, char **argv)
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
     assert(uref_mgr != NULL);
 
-    /* block */
-    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                                    UBUF_POOL_DEPTH, umem_mgr,
-                                                    UBUF_ALIGN,
-                                                    UBUF_ALIGN_OFFSET);
-    assert(ubuf_mgr);
-
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
                                                UPROBE_LOG_DEBUG);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
     /* set up flow definition packet */
@@ -175,7 +167,6 @@ int main(int argc, char **argv)
     assert(upipe_genaux_mgr);
     ubase_assert(upipe_set_flow_def(genaux, uref));
     assert(genaux);
-    ubase_assert(upipe_set_ubuf_mgr(genaux, ubuf_mgr));
 
     uref_free(uref);
     ubase_assert(upipe_get_flow_def(genaux, &uref));
@@ -216,7 +207,6 @@ int main(int argc, char **argv)
     genaux_test_free(genaux_test);
 
     /* release managers */
-    ubuf_mgr_release(ubuf_mgr);
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);

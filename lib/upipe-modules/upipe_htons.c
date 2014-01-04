@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -75,7 +75,7 @@ struct upipe_htons {
 UPIPE_HELPER_UPIPE(upipe_htons, upipe, UPIPE_HTONS_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_htons, urefcount, upipe_htons_free)
 UPIPE_HELPER_VOID(upipe_htons);
-UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
 
 /** @internal @This handles input.
@@ -99,10 +99,15 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    /* copy ubuf if shared or 16b-unaligned */
+    /* copy ubuf if shared or not 16b-unaligned or segmented */
     bufsize = -1;
     if (!ubase_check(uref_block_write(uref, 0, &bufsize, &buf)) ||
-        ((uintptr_t)buf & 1)) {
+        ((uintptr_t)buf & 1) || bufsize != size) {
+        if (unlikely(!ubase_check(upipe_htons_check_ubuf_mgr(upipe)))) {
+            uref_free(uref);
+            return;
+        }
+
         ubuf = ubuf_block_copy(upipe_htons->ubuf_mgr, uref->ubuf, 0, size);
         if (unlikely(!ubuf)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -117,7 +122,12 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     /* process ubuf chunks */
     while(size > 0) {
         bufsize = -1;
-        uref_block_write(uref, offset, &bufsize, &buf);
+        if (unlikely(!ubase_check(uref_block_write(uref, offset, &bufsize,
+                                  &buf)))) {
+            upipe_warn(upipe, "unexpected buffer error");
+            uref_free(uref);
+            return;
+        }
         if (unlikely((uintptr_t)buf & 1)) {
             upipe_warn_va(upipe, "unaligned buffer: %p", buf);
         }
@@ -165,6 +175,9 @@ static enum ubase_err upipe_htons_control(struct upipe *upipe,
                                           va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_htons_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_htons_get_flow_def(upipe, p);
@@ -180,14 +193,6 @@ static enum ubase_err upipe_htons_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_htons_set_output(upipe, output);
-        }
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_htons_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_htons_set_ubuf_mgr(upipe, ubuf_mgr);
         }
 
         default:

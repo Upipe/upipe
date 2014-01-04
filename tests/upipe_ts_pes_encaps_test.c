@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/uclock.h>
@@ -174,12 +175,15 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
-                                                uprobe_use(uprobe_stdio));
+                                                uprobe_use(logger));
     assert(upipe_sink != NULL);
 
     struct uref *uref;
@@ -190,12 +194,11 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_pese_mgr = upipe_ts_pese_mgr_alloc();
     assert(upipe_ts_pese_mgr != NULL);
     struct upipe *upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts pese"));
     assert(upipe_ts_pese != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2048);
@@ -222,12 +225,11 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
     ubase_assert(uref_ts_flow_set_pes_header(uref, 45));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts pese"));
     assert(upipe_ts_pese != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
@@ -243,12 +245,11 @@ int main(int argc, char *argv[])
     stream_id = PES_STREAM_ID_PRIVATE_2;
     ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
@@ -265,12 +266,11 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_pes_id(uref, stream_id));
     ubase_assert(uref_ts_flow_set_pes_min_duration(uref, UCLOCK_FREQ * 2));
     upipe_ts_pese = upipe_void_alloc(upipe_ts_pese_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts pese"));
     assert(upipe_ts_pese != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_pese, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_pese, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_ts_pese, upipe_sink));
 
     total_size = 0;
@@ -299,7 +299,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
 
     return 0;
 }

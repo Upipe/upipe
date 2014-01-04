@@ -34,6 +34,7 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -104,10 +105,6 @@ int main(int argc, char *argv[])
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     assert(uref_mgr != NULL);
-    struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                                         UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, 0);
-    assert(ubuf_mgr != NULL);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
@@ -122,6 +119,9 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
@@ -134,7 +134,6 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "http"));
     assert(upipe_http_src != NULL);
-    assert(upipe_set_ubuf_mgr(upipe_http_src, ubuf_mgr));
     assert(upipe_source_set_read_size(upipe_http_src, READ_SIZE));
     assert(upipe_set_uri(upipe_http_src, url));
     assert(upipe_set_output(upipe_http_src, upipe_null));
@@ -148,7 +147,6 @@ int main(int argc, char *argv[])
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
-    ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);

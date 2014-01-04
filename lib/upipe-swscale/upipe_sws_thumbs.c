@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -116,7 +116,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_sws_thumbs, urefcount, upipe_sws_thumbs_free)
 UPIPE_HELPER_FLOW(upipe_sws_thumbs, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, output_flow, output_flow_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_sws_thumbs, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr, flow_def_attr);
 
 /** @internal @This configures swscale context
  *
@@ -316,13 +316,9 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
 
     /* check ubuf manager */
-    if (unlikely(!upipe_sws_thumbs->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_sws_thumbs->output_flow);
-        if (unlikely(!upipe_sws_thumbs->ubuf_mgr)) {
-            upipe_warn(upipe, "ubuf_mgr not set, dropping picture");
-            uref_free(uref);
-            return;
-        }
+    if (unlikely(!ubase_check(upipe_sws_thumbs_check_ubuf_mgr(upipe)))) {
+        uref_free(uref);
+        return;
     }
 
     if (unlikely(!upipe_sws_thumbs->flow_def_input)) {
@@ -479,14 +475,9 @@ static enum ubase_err upipe_sws_thumbs_control(struct upipe *upipe,
 {
     switch (command) {
         /* generic commands */
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_sws_thumbs_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_sws_thumbs_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_sws_thumbs_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_thumbs_get_output(upipe, p);
@@ -577,13 +568,13 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
     upipe_sws_thumbs->counter = 0;
     upipe_sws_thumbs->flush = false;
 
+    upipe_throw_ready(upipe);
 
     struct urational sar;
     sar.num = sar.den = 1;
-    uref_pic_flow_set_sar(flow_def, sar);
+    UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
+    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
     upipe_sws_thumbs_store_flow_def_attr(upipe, flow_def);
-
-    upipe_throw_ready(upipe);
     return upipe;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -95,7 +95,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_swr, urefcount, upipe_swr_free)
 UPIPE_HELPER_FLOW(upipe_swr, UREF_SOUND_FLOW_DEF);
 UPIPE_HELPER_OUTPUT(upipe_swr, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_swr, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_swr, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_swr, ubuf_mgr, flow_def_attr);
 
 /** @internal @This receives incoming uref.
  *
@@ -114,13 +114,9 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     int size, ret;
 
     /* check ubuf manager */
-    if (unlikely(!upipe_swr->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_swr->flow_def_attr);
-        if (unlikely(!upipe_swr->ubuf_mgr)) {
-            upipe_warn(upipe, "ubuf_mgr not set !");
-            uref_free(uref);
-            return;
-        }
+    if (unlikely(!ubase_check(upipe_swr_check_ubuf_mgr(upipe)))) {
+        uref_free(uref);
+        return;
     }
 
     if (unlikely(!ubase_check(uref_sound_flow_get_samples(uref, &in_samples)))) {
@@ -237,14 +233,9 @@ static enum ubase_err upipe_swr_control(struct upipe *upipe,
 {
     switch (command) {
         /* generic commands */
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_swr_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_swr_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_swr_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_swr_get_output(upipe, p);

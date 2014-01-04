@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -43,10 +43,12 @@ extern "C" {
 /** @This declares four functions dealing with the ubuf manager used on the
  * output of a pipe.
  *
- * You must add one pointer to your private upipe structure, for instance:
+ * You must add two members to your private upipe structure, for instance:
  * @code
  *  struct ubuf_mgr *ubuf_mgr;
+ *  struct uref *flow_def;
  * @end code
+ * where the flow_def is probably shared with @ref #UPIPE_HELPER_OUTPUT.
  *
  * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
  *
@@ -58,28 +60,19 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_ubuf_mgr(struct upipe *upipe,
- *                                        struct ubuf_mgr **p)
+ *  enum ubase_err upipe_foo_attach_ubuf_mgr(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
- *  case UPIPE_GET_UBUF_MGR: {
- *      struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
- *      return upipe_foo_get_ubuf_mgr(upipe, p);
+ *  case UPIPE_ATTACH_UBUF_MGR: {
+ *      return upipe_foo_attach_ubuf_mgr(upipe);
  *  }
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_ubuf_mgr(struct upipe *upipe,
- *                                        struct ubuf_mgr *ubuf_mgr)
+ *  enum ubase_err upipe_foo_check_ubuf_mgr(struct upipe *upipe)
  * @end code
- * Typically called from your upipe_foo_control() handler, such as:
- * @code
- *  case UPIPE_SET_UBUF_MGR: {
- *      struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
- *      return upipe_foo_set_ubuf_mgr(upipe, ubuf_mgr);
- *  }
- * @end code
+ * Checks if the ubuf manager is available, and asks for it otherwise.
  *
  * @item @code
  *  void upipe_foo_clean_ubuf_mgr(struct upipe *upipe)
@@ -90,8 +83,10 @@ extern "C" {
  * @param STRUCTURE name of your private upipe structure 
  * @param UBUF_MGR name of the @tt {struct ubuf_mgr *} field of
  * your private upipe structure
+ * @param FLOW_DEF name of the @tt{struct uref *} field of
+ * your private upipe structure
  */
-#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR)                          \
+#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR, FLOW_DEF)                \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -101,36 +96,34 @@ static void STRUCTURE##_init_ubuf_mgr(struct upipe *upipe)                  \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->UBUF_MGR = NULL;                                             \
 }                                                                           \
-/** @internal @This gets the current ubuf manager.                          \
+/** @internal @This sends a probe to attach a ubuf manager.                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param p filled in with the ubuf manager                                 \
- * @return false in case of error                                           \
- */                                                                         \
-static bool STRUCTURE##_get_ubuf_mgr(struct upipe *upipe,                   \
-                                     struct ubuf_mgr **p)                   \
-{                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    assert(p != NULL);                                                      \
-    *p = STRUCTURE->UBUF_MGR;                                               \
-    return true;                                                            \
-}                                                                           \
-/** @internal @This sets the ubuf manager.                                  \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- * @param ubuf_mgr new ubuf manager                                         \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_ubuf_mgr(struct upipe *upipe,         \
-                                               struct ubuf_mgr *ubuf_mgr)   \
+static enum ubase_err STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)      \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (unlikely(STRUCTURE->UBUF_MGR != NULL))                              \
-        ubuf_mgr_release(STRUCTURE->UBUF_MGR);                              \
-    STRUCTURE->UBUF_MGR = ubuf_mgr;                                         \
-    if (likely(ubuf_mgr != NULL))                                           \
-        ubuf_mgr_use(STRUCTURE->UBUF_MGR);                                  \
-    return UBASE_ERR_NONE;                                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    ubuf_mgr_release(s->UBUF_MGR);                                          \
+    s->UBUF_MGR = NULL;                                                     \
+    if (likely(s->FLOW_DEF != NULL))                                        \
+        return upipe_throw_need_ubuf_mgr(upipe, s->FLOW_DEF, &s->UBUF_MGR); \
+    return UBASE_ERR_UNHANDLED;                                             \
+}                                                                           \
+/** @internal @This checks if the ubuf manager is available, and asks       \
+ * for it otherwise.                                                        \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static enum ubase_err STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)       \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (likely(s->UBUF_MGR != NULL))                                        \
+        return UBASE_ERR_NONE;                                              \
+    if (unlikely(s->FLOW_DEF == NULL))                                      \
+        return UBASE_ERR_INVALID;                                           \
+    return upipe_throw_need_ubuf_mgr(upipe, s->FLOW_DEF, &s->UBUF_MGR);     \
 }                                                                           \
 /** @internal @This cleans up the private members of this helper.           \
  *                                                                          \
@@ -139,8 +132,7 @@ static enum ubase_err STRUCTURE##_set_ubuf_mgr(struct upipe *upipe,         \
 static void STRUCTURE##_clean_ubuf_mgr(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->UBUF_MGR != NULL))                                \
-        ubuf_mgr_release(STRUCTURE->UBUF_MGR);                              \
+    ubuf_mgr_release(STRUCTURE->UBUF_MGR);                                  \
 }
 
 #ifdef __cplusplus

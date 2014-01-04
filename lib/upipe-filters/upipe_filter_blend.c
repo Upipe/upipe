@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 VLC authors and VideoLAN
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -71,7 +71,7 @@ struct upipe_filter_blend {
 UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_filter_blend, urefcount, upipe_filter_blend_free)
 UPIPE_HELPER_VOID(upipe_filter_blend)
-UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr, output_flow);
 UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, output_flow, output_flow_sent)
 
 /** @internal @This allocates a filter pipe.
@@ -169,10 +169,9 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     upipe_verbose_va(upipe, "received pic (%dx%d)", width, height);
 
     // Alloc deint buffer
-    if (unlikely(!upipe_filter_blend->ubuf_mgr)) {
-        upipe_throw(upipe, UPROBE_NEED_UBUF_MGR);
+    if (unlikely(!ubase_check(upipe_filter_blend_check_ubuf_mgr(upipe))))
         goto error;
-    }
+
     assert(upipe_filter_blend->ubuf_mgr);
     ubuf_deint = ubuf_pic_alloc(upipe_filter_blend->ubuf_mgr, width, height);
     if (unlikely(!ubuf_deint)) {
@@ -250,14 +249,9 @@ static enum ubase_err upipe_filter_blend_control(struct upipe *upipe,
                                enum upipe_command command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_filter_blend_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_filter_blend_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_filter_blend_attach_ubuf_mgr(upipe);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_filter_blend_get_flow_def(upipe, p);

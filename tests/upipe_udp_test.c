@@ -36,6 +36,7 @@
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -263,6 +264,9 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_uclock_alloc(logger, uclock);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct upipe *udpsrc_test = upipe_void_alloc(&udpsrc_test_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -276,7 +280,6 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "udp source"));
     assert(upipe_udpsrc != NULL);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_udpsrc, ubuf_mgr));
     ubase_assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
     ubase_assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
     ubase_assert(upipe_attach_uclock(upipe_udpsrc));

@@ -37,6 +37,7 @@
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -75,7 +76,6 @@
 #define READ_SIZE 4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-struct ubuf_mgr *ubuf_mgr;
 static struct uprobe *logger;
 static struct upipe *upipe_avfsrc;
 static struct upipe *upipe_avfsink;
@@ -120,7 +120,6 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
                                             UPROBE_LOG_LEVEL,
                                             "src %"PRIu64, id), flow_def);
                 assert(upipe_avfsrc_output != NULL);
-                ubase_assert(upipe_set_ubuf_mgr(upipe_avfsrc_output, ubuf_mgr));
 
                 struct upipe *upipe_sink =
                     upipe_void_alloc_output_sub(upipe_avfsrc_output,
@@ -158,9 +157,6 @@ int main(int argc, char *argv[])
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     assert(uref_mgr != NULL);
-    ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                        UBUF_POOL_DEPTH, umem_mgr, -1, 0);
-    assert(ubuf_mgr != NULL);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
@@ -182,6 +178,9 @@ int main(int argc, char *argv[])
         assert(logger != NULL);
     }
 #endif
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     assert(upipe_av_init(false, uprobe_use(logger)));
 
@@ -222,7 +221,6 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    ubuf_mgr_release(ubuf_mgr);
 #if 0
     uclock_release(uclock);
 #endif

@@ -78,20 +78,24 @@ enum upipe_command {
     UPIPE_SET_URI,
 
     /*
+     * Input-related commands
+     */
+    /** amend ubuf flow format (struct uref *) */
+    UPIPE_AMEND_FLOW_FORMAT,
+    /** sets input flow definition (struct uref *) */
+    UPIPE_SET_FLOW_DEF,
+
+    /*
      * Output-related commands
      */
     /** gets output (struct upipe **) */
     UPIPE_GET_OUTPUT,
     /** sets output (struct upipe *) */
     UPIPE_SET_OUTPUT,
-    /** gets ubuf manager (struct ubuf_mgr **) */
-    UPIPE_GET_UBUF_MGR,
-    /** sets ubuf manager (struct ubuf_mgr *) */
-    UPIPE_SET_UBUF_MGR,
+    /** sends a probe to attach a ubuf manager (void) */
+    UPIPE_ATTACH_UBUF_MGR,
     /** gets output flow definition (struct uref **) */
     UPIPE_GET_FLOW_DEF,
-    /** sets input flow definition (struct uref *) */
-    UPIPE_SET_FLOW_DEF,
 
     /*
      * Source elements commands
@@ -725,7 +729,7 @@ static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe,
 
 /** @This throws an event asking for a uclock. Note that all parameters
  * belong to the caller, so there is no need to @ref uclock_use the given
- * manager.
+ * uclock.
  *
  * @param upipe description structure of the pipe
  * @param uclock_p filled in with a pointer to the uclock
@@ -737,6 +741,31 @@ static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe,
     upipe_dbg(upipe, "throw need uclock");
     enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UCLOCK, uclock_p);
     upipe_dbg_va(upipe, "got uclock %p with error code 0x%x", *uclock_p, err);
+    return err;
+}
+
+/** @This throws an event asking for a ubuf manager. Note that all parameters
+ * belong to the caller, so there is no need to @ref ubuf_mgr_use the given
+ * manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format format of this flow
+ * @param ubuf_mgr_p filled in with a pointer to the ubuf_mgr
+ * @return an error code
+ */
+static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
+        struct uref *flow_format, struct ubuf_mgr **ubuf_mgr_p)
+{
+    if (flow_format == NULL || flow_format->udict == NULL)
+        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
+    else {
+        upipe_dbg(upipe, "throw need ubuf mgr");
+        udict_dump(flow_format->udict, upipe->uprobe);
+    }
+    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_format,
+                                     ubuf_mgr_p);
+    upipe_dbg_va(upipe, "got ubuf_mgr %p with error code 0x%x", *ubuf_mgr_p,
+                 err);
     return err;
 }
 
@@ -756,24 +785,6 @@ static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
         udict_dump(flow_def->udict, upipe->uprobe);
     }
     return upipe_throw(upipe, UPROBE_NEW_FLOW_DEF, flow_def);
-}
-
-/** @This throws an event asking for a ubuf manager.
- *
- * @param upipe description structure of the pipe
- * @param flow_def definition for this flow
- * @return an error code
- */
-static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
-                                                       struct uref *flow_def)
-{
-    if (flow_def == NULL || flow_def->udict == NULL)
-        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
-    else {
-        upipe_dbg(upipe, "throw need ubuf mgr");
-        udict_dump(flow_def->udict, upipe->uprobe);
-    }
-    return upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_def);
 }
 
 /** @This throws an event declaring a new random access point in the input.
@@ -978,12 +989,10 @@ static inline enum ubase_err group##_set_##name(struct upipe *upipe, type s)\
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
                        const char *, uniform resource identifier)
 
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
-                       pipe acting as output (unsafe, use only internally))
-UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, ubuf_mgr, UBUF_MGR, struct ubuf_mgr *,
-                       ubuf manager)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
                        flow definition of the output)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
+                       pipe acting as output (unsafe, use only internally))
 
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
                        unsigned int, read size of the source)
@@ -1023,6 +1032,44 @@ static inline enum ubase_err upipe_attach_upump_mgr(struct upipe *upipe)
 static inline enum ubase_err upipe_attach_uclock(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_ATTACH_UCLOCK);
+}
+
+/** @This sends a probe to attach a ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_attach_ubuf_mgr(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_ATTACH_UBUF_MGR);
+}
+
+/** @This asks the pipe to review the given ubuf format, and optionally
+ * amend it with additional attributes. Allowed attributes are:
+ * @list
+ * @item @ref uref_block_flow_set_align
+ * @item @ref uref_block_flow_set_align_offset
+ * @item @ref uref_pic_flow_set_hmprepend
+ * @item @ref uref_pic_flow_set_hmappend
+ * @item @ref uref_pic_flow_set_vprepend
+ * @item @ref uref_pic_flow_set_vappend
+ * @item @ref uref_pic_flow_set_align
+ * @item @ref uref_pic_flow_set_align_hmoffset
+ * @item @ref uref_sound_flow_set_prepend
+ * @item @ref uref_sound_flow_set_append
+ * @item @ref uref_sound_flow_set_align
+ * @item @ref uref_sound_flow_set_align_offset
+ * @end list
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format proposed flow format, to be amended by the pipe (and
+ * optionally its outputs)
+ * @return an error code
+ */
+static inline enum ubase_err upipe_amend_flow_format(struct upipe *upipe,
+                                                     struct uref *flow_format)
+{
+    return upipe_control(upipe, UPIPE_AMEND_FLOW_FORMAT, flow_format);
 }
 
 /** @This flushes all currently held buffers, and unblocks the sources.

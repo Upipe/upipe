@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/uclock.h>
@@ -196,9 +197,12 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
-    assert(uprobe_stdio != NULL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+                                               UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     struct uref *uref;
     uref = uref_alloc(uref_mgr);
@@ -209,17 +213,16 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     assert(upipe_ts_psig_mgr != NULL);
     struct upipe *upipe_ts_psig = upipe_void_alloc(upipe_ts_psig_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psig"));
     assert(upipe_ts_psig != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_ubuf_mgr(upipe_ts_psig, ubuf_mgr));
 
     ubase_assert(upipe_get_flow_def(upipe_ts_psig, &uref));
 
     struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
-                                                uprobe_use(uprobe_stdio));
+                                                uprobe_use(logger));
     assert(upipe_sink != NULL);
     ubase_assert(upipe_set_output(upipe_ts_psig, upipe_sink));
 
@@ -230,7 +233,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_flow_set_id(uref, 1));
     ubase_assert(uref_ts_flow_set_pid(uref, 66));
     struct upipe *upipe_ts_psig_program1 = upipe_void_alloc_sub(upipe_ts_psig,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts psig program1"));
     assert(upipe_ts_psig_program1 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_program1, uref));
@@ -240,7 +243,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_flow_set_id(uref, 2));
     ubase_assert(uref_ts_flow_set_pid(uref, 1500));
     struct upipe *upipe_ts_psig_program2 = upipe_void_alloc_sub(upipe_ts_psig,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psig program2"));
     assert(upipe_ts_psig_program2 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_program2, uref));
@@ -255,7 +258,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_VIDEO_MPEG2));
     struct upipe *upipe_ts_psig_flow67 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psig flow67"));
     assert(upipe_ts_psig_flow67 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_flow67, uref));
@@ -276,7 +279,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_descriptors(uref, desc, sizeof(desc)));
     struct upipe *upipe_ts_psig_flow68 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psig flow68"));
     assert(upipe_ts_psig_flow68 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_flow68, uref));
@@ -289,7 +292,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_ADTS));
     struct upipe *upipe_ts_psig_flow1501 =
         upipe_void_alloc_sub(upipe_ts_psig_program2,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psig flow1501"));
     assert(upipe_ts_psig_flow1501 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_flow1501, uref));
@@ -334,7 +337,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(uprobe_stdio);
+    uprobe_release(logger);
     uprobe_clean(&uprobe);
 
     return 0;

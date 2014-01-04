@@ -416,11 +416,11 @@ static void ubuf_pic_mem_mgr_free(struct urefcount *urefcount)
 {
     struct ubuf_pic_mem_mgr *pic_mgr =
         ubuf_pic_mem_mgr_from_urefcount(urefcount);
-    upool_clean(&pic_mgr->ubuf_pool);
-    upool_clean(&pic_mgr->shared_pool);
+    struct ubuf_mgr *mgr = ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr);
+    ubuf_pic_mem_mgr_clean_pool(mgr);
     umem_mgr_release(pic_mgr->umem_mgr);
 
-    ubuf_pic_common_mgr_clean(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr));
+    ubuf_pic_common_mgr_clean(mgr);
 
     urefcount_clean(urefcount);
     free(pic_mgr);
@@ -469,7 +469,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     ubuf_pic_mem_mgr_init_pool(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr),
             ubuf_pool_depth, shared_pool_depth,
             (void *)pic_mgr + sizeof(struct ubuf_pic_mem_mgr),
-             ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
+            ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
 
     pic_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);

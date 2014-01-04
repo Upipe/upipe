@@ -124,7 +124,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_http_src, urefcount, upipe_http_src_free)
 UPIPE_HELPER_VOID(upipe_http_src)
 UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_http_src, output, flow_def, flow_def_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr)
@@ -443,11 +443,7 @@ static enum ubase_err upipe_http_src_set_uri(struct upipe *upipe,
         }
         upipe_http_src_store_flow_def(upipe, flow_def);
     }
-    if (upipe_http_src->ubuf_mgr == NULL) {
-        upipe_throw_need_ubuf_mgr(upipe, upipe_http_src->flow_def);
-        if (unlikely(upipe_http_src->ubuf_mgr == NULL))
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_RETURN(upipe_http_src_check_ubuf_mgr(upipe))
 
     /* now call real code */
     upipe_http_src->fd = upipe_http_src_open_url(upipe ,url);
@@ -497,15 +493,9 @@ static enum ubase_err _upipe_http_src_control(struct upipe *upipe,
         case UPIPE_ATTACH_UCLOCK:
             upipe_http_src_set_upump_read(upipe, NULL);
             return upipe_http_src_attach_uclock(upipe);
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_http_src_attach_ubuf_mgr(upipe);
 
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_http_src_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_http_src_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_http_src_get_flow_def(upipe, p);

@@ -167,7 +167,7 @@ UPIPE_HELPER_FLOW(upipe_avcenc, "block.")
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_avcenc, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avcenc, flow_def_check)
-UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr);
+UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, flow_def);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcenc, urefs, nb_urefs, max_urefs, blockers, upipe_avcenc_encode)
@@ -451,7 +451,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                 context->delay * UCLOCK_FREQ * fps.num / fps.den));
 
     if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
-        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr);
+        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr,
+                                  &upipe_avcenc->ubuf_mgr);
         if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
             uref_free(flow_def_attr);
             av_free_packet(&avpkt);
@@ -1061,14 +1062,13 @@ static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
             upipe_avcenc_set_upump_av_deal(upipe, NULL);
             upipe_avcenc_abort_av_deal(upipe);
             return upipe_avcenc_attach_upump_mgr(upipe);
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_avcenc_get_ubuf_mgr(upipe, p);
+        case UPIPE_ATTACH_UBUF_MGR: {
+            struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+            ubuf_mgr_release(upipe_avcenc->ubuf_mgr);
+            upipe_avcenc->ubuf_mgr = NULL;
+            return UBASE_ERR_NONE;
         }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_avcenc_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avcenc_get_flow_def(upipe, p);
