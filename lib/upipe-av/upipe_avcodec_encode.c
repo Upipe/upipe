@@ -451,8 +451,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                 context->delay * UCLOCK_FREQ * fps.num / fps.den));
 
     if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
-        upipe_throw_need_ubuf_mgr(upipe, flow_def_attr,
-                                  &upipe_avcenc->ubuf_mgr);
+        upipe_throw_new_flow_format(upipe, flow_def_attr,
+                                    &upipe_avcenc->ubuf_mgr);
         if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
             uref_free(flow_def_attr);
             av_free_packet(&avpkt);
@@ -1069,6 +1069,8 @@ static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         }
 
+        case UPIPE_AMEND_FLOW_FORMAT:
+            return UBASE_ERR_NONE;
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avcenc_get_flow_def(upipe, p);

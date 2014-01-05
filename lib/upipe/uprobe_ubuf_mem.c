@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_ubuf_mgr events and providing a given ubuf manager using umem storage
+ * @short probe catching new_flow_format events and providing a given ubuf manager using umem storage
  */
 
 #include <upipe/ubase.h>
@@ -55,7 +55,7 @@ static enum ubase_err uprobe_ubuf_mem_throw(struct uprobe *uprobe,
 {
     struct uprobe_ubuf_mem *uprobe_ubuf_mem =
         uprobe_ubuf_mem_from_uprobe(uprobe);
-    if (event != UPROBE_NEED_UBUF_MGR || uprobe_ubuf_mem->umem_mgr == NULL)
+    if (event != UPROBE_NEW_FLOW_FORMAT || uprobe_ubuf_mem->umem_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     va_list args_copy;
@@ -63,6 +63,9 @@ static enum ubase_err uprobe_ubuf_mem_throw(struct uprobe *uprobe,
     struct uref *flow_def = va_arg(args_copy, struct uref *);
     struct ubuf_mgr **ubuf_mgr_p = va_arg(args_copy, struct ubuf_mgr **);
     va_end(args_copy);
+
+    if (ubuf_mgr_p == NULL)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     *ubuf_mgr_p =
         ubuf_mem_mgr_alloc_from_flow_def(uprobe_ubuf_mem->ubuf_pool_depth,

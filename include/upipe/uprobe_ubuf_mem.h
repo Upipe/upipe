@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_ubuf_mgr events and providing a given ubuf manager using umem storage
+ * @short probe catching new_flow_format events and providing a given ubuf manager using umem storage
  */
 
 #ifndef _UPIPE_UPROBE_UBUF_MEM_H_

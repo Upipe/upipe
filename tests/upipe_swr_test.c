@@ -69,10 +69,6 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
             break;
-        case UPROBE_SINK_END:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_NEED_UBUF_MGR:
         default:
             assert(0);
             break;

@@ -110,13 +110,6 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
                             enum uprobe_event event, va_list args)
 {
     switch (event) {
-        case UPROBE_FATAL:
-        case UPROBE_ERROR:
-        case UPROBE_SINK_END:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_NEED_UBUF_MGR:
-        case UPROBE_READY:
         default:
             break;
         case UPROBE_SOURCE_END:

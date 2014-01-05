@@ -235,6 +235,29 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
     upipe_sws_output(upipe, uref, upump);
 }
 
+/** @internal @This amends a proposed flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static enum ubase_err upipe_sws_amend_flow_format(struct upipe *upipe,
+                                                  struct uref *flow_format)
+{
+    if (flow_format == NULL)
+        return UBASE_ERR_INVALID;
+
+    uint64_t align;
+    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
+        return uref_pic_flow_set_align(flow_format, 16);
+
+    if (align % 16) {
+        align = align * 16 / ubase_gcd(align, 16);
+        return uref_pic_flow_set_align(flow_format, align);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -327,6 +350,10 @@ static enum ubase_err upipe_sws_control(struct upipe *upipe,
         case UPIPE_ATTACH_UBUF_MGR:
             return upipe_sws_attach_ubuf_mgr(upipe);
 
+        case UPIPE_AMEND_FLOW_FORMAT: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return upipe_sws_amend_flow_format(upipe, flow_format);
+        }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_get_output(upipe, p);

@@ -169,7 +169,7 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
     struct ubuf_mgr *m;
-    ubase_assert(upipe_throw_need_ubuf_mgr(upipe, flow_def, &m));
+    ubase_assert(upipe_throw_new_flow_format(upipe, flow_def, &m));
     assert(m != NULL);
     test_mgr(m);
     ubuf_mgr_release(m);

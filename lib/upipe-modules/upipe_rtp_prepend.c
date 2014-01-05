@@ -250,6 +250,10 @@ static enum ubase_err upipe_rtp_prepend_control(struct upipe *upipe,
         case UPIPE_ATTACH_UBUF_MGR:
             return upipe_rtp_prepend_attach_ubuf_mgr(upipe);
 
+        case UPIPE_AMEND_FLOW_FORMAT: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_rtp_prepend_get_flow_def(upipe, p);

@@ -120,6 +120,7 @@ static enum ubase_err upipe_null_control(struct upipe *upipe,
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     switch (command) {
+        case UPIPE_AMEND_FLOW_FORMAT:
         case UPIPE_SET_FLOW_DEF:
             return UBASE_ERR_NONE;
 

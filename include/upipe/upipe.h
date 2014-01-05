@@ -744,28 +744,30 @@ static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe,
     return err;
 }
 
-/** @This throws an event asking for a ubuf manager. Note that all parameters
- * belong to the caller, so there is no need to @ref ubuf_mgr_use the given
- * manager.
+/** @This throws an event proposing a new flow format. If the ubuf_mgr_p
+ * parameter is not NULL, its also requests a ubuf manager. Note that all
+ * parameters belong to the caller, so there is no need to @ref ubuf_mgr_use
+ * the given manager.
  *
  * @param upipe description structure of the pipe
  * @param flow_format format of this flow
- * @param ubuf_mgr_p filled in with a pointer to the ubuf_mgr
+ * @param ubuf_mgr_p filled in with a pointer to an ubuf_mgr, if not NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_ubuf_mgr(struct upipe *upipe,
+static inline enum ubase_err upipe_throw_new_flow_format(struct upipe *upipe,
         struct uref *flow_format, struct ubuf_mgr **ubuf_mgr_p)
 {
     if (flow_format == NULL || flow_format->udict == NULL)
-        upipe_dbg(upipe, "throw need ubuf mgr (NULL)");
+        upipe_dbg(upipe, "throw new flow format (NULL)");
     else {
-        upipe_dbg(upipe, "throw need ubuf mgr");
+        upipe_dbg(upipe, "throw new flow format");
         udict_dump(flow_format->udict, upipe->uprobe);
     }
-    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UBUF_MGR, flow_format,
+    enum ubase_err err = upipe_throw(upipe, UPROBE_NEW_FLOW_FORMAT, flow_format,
                                      ubuf_mgr_p);
-    upipe_dbg_va(upipe, "got ubuf_mgr %p with error code 0x%x", *ubuf_mgr_p,
-                 err);
+    if (ubuf_mgr_p != NULL)
+        upipe_dbg_va(upipe, "got ubuf_mgr %p with error code 0x%x", *ubuf_mgr_p,
+                     err);
     return err;
 }
 

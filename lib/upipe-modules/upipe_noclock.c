@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -141,6 +141,10 @@ static enum ubase_err upipe_noclock_control(struct upipe *upipe,
                                             va_list args)
 {
     switch (command) {
+        case UPIPE_AMEND_FLOW_FORMAT: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_noclock_get_flow_def(upipe, p);

@@ -188,6 +188,8 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
         case UPIPE_ATTACH_UBUF_MGR:
             return upipe_genaux_attach_ubuf_mgr(upipe);
 
+        case UPIPE_AMEND_FLOW_FORMAT:
+            return UBASE_ERR_NONE;
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_genaux_get_flow_def(upipe, p);

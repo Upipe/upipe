@@ -106,9 +106,9 @@ static enum ubase_err STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)      \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ubuf_mgr_release(s->UBUF_MGR);                                          \
     s->UBUF_MGR = NULL;                                                     \
-    if (likely(s->FLOW_DEF != NULL))                                        \
-        return upipe_throw_need_ubuf_mgr(upipe, s->FLOW_DEF, &s->UBUF_MGR); \
-    return UBASE_ERR_UNHANDLED;                                             \
+    if (likely(s->FLOW_DEF == NULL))                                        \
+        return UBASE_ERR_UNHANDLED;                                         \
+    return upipe_throw_new_flow_format(upipe, s->FLOW_DEF, &s->UBUF_MGR);   \
 }                                                                           \
 /** @internal @This checks if the ubuf manager is available, and asks       \
  * for it otherwise.                                                        \
@@ -123,7 +123,7 @@ static enum ubase_err STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)       \
         return UBASE_ERR_NONE;                                              \
     if (unlikely(s->FLOW_DEF == NULL))                                      \
         return UBASE_ERR_INVALID;                                           \
-    return upipe_throw_need_ubuf_mgr(upipe, s->FLOW_DEF, &s->UBUF_MGR);     \
+    return upipe_throw_new_flow_format(upipe, s->FLOW_DEF, &s->UBUF_MGR);   \
 }                                                                           \
 /** @internal @This cleans up the private members of this helper.           \
  *                                                                          \

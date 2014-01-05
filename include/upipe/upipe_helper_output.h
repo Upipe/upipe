@@ -42,7 +42,7 @@ extern "C" {
 #include <stdbool.h>
 #include <assert.h>
 
-/** @This declares eight functions dealing with the output of a pipe,
+/** @This declares seven functions dealing with the output of a pipe,
  * and an associated uref which is the flow definition on the output.
  *
  * You must add three members to your private upipe structure, for instance:
@@ -60,20 +60,6 @@ extern "C" {
  *  void upipe_foo_init_output(struct upipe *upipe)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
- *
- * @item @code
- *  void upipe_amend_output(struct upipe *upipe, struct uref *flow_format)
- * @end code
- * Asks the output pipe to amend the flow format packet. Typically called from
- * your upipe_foo_control() handler (if your pipe doesn't change the flow
- * format), such as:
- * @code
- *  case UPIPE_AMEND_FLOW_FORMAT: {
- *      struct uref *flow_format = va_arg(args, struct uref *);
- *      upipe_foo_amend_output(upipe, flow_format);
- *      return UBASE_ERR_NONE;
- *  }
- * @end code
  *
  * @item @code
  *  void upipe_foo_output(struct upipe *upipe, struct uref *uref)
@@ -145,18 +131,6 @@ static void STRUCTURE##_init_output(struct upipe *upipe)                    \
     STRUCTURE->OUTPUT = NULL;                                               \
     STRUCTURE->FLOW_DEF = NULL;                                             \
     STRUCTURE->FLOW_DEF_SENT = false;                                       \
-}                                                                           \
-/** @internal @This asks the output to amend the flow format.               \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- * @param flow_format flow format to amend                                  \
- */                                                                         \
-static void STRUCTURE##_amend_output(struct upipe *upipe,                   \
-                                     struct uref *flow_format)              \
-{                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    if (likely(STRUCTURE->OUTPUT != NULL))                                  \
-        upipe_amend_flow_format(STRUCTURE->OUTPUT, flow_format);            \
 }                                                                           \
 /** @internal @This sends a uref to the output. Note that uref is then      \
  * owned by the callee and shouldn't be used any longer.                    \

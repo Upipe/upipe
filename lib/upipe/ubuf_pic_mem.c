@@ -111,7 +111,7 @@ UBUF_MEM_MGR_HELPER_POOL(ubuf_pic_mem, ubuf_pool, shared_pool, shared)
  *
  * @param mgr common management structure
  * @param alloc_type must be UBUF_ALLOC_PICTURE (sentinel)
- * @param args optional arguments (1st = size)
+ * @param args optional arguments (1st = hsize, 2nd = vsize)
  * @return pointer to ubuf or NULL in case of allocation error
  */
 static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,

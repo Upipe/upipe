@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,7 +30,7 @@
  * @ref upipe_set_flow_def on the output. If it returns an error, the output
  * is cleared and the event is forwarded to higher-level probes.
  *
- * It also catches the need_ubuf_mgr event, and calls
+ * It also catches the new_flow_format event, and calls
  * @ref upipe_amend_flow_format on the output, so that it can tune the
  * parameters of the new ubuf manager (alignment, prepending and appending).
  * The event is then always forwarded to higher-level probes.

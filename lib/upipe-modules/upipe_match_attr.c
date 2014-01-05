@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -24,8 +24,7 @@
  */
 
 /** @file
- * @short Upipe module dropping urefs not matching certain values for
- * int attributes
+ * @short Upipe module dropping urefs not matching certain values for int attributes
  */
 
 #include <upipe/ubase.h>
@@ -154,6 +153,10 @@ static enum ubase_err upipe_match_attr_control(struct upipe *upipe,
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     switch (command) {
+        case UPIPE_AMEND_FLOW_FORMAT: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_match_attr_get_flow_def(upipe, p);
