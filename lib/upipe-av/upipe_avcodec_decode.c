@@ -973,6 +973,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     /* Track current uref in pipe structure - required for buffer allocation
      * in upipe_avcdec_get_buffer */
+    uref_free(upipe_avcdec->uref);
     upipe_avcdec->uref = uref;
 
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump);
@@ -1231,6 +1232,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
     av_free(upipe_avcdec->frame);
 
     upipe_throw_dead(upipe);
+    uref_free(upipe_avcdec->uref);
     upipe_avcdec_abort_av_deal(upipe);
     upipe_avcdec_clean_sink(upipe);
     upipe_avcdec_clean_output(upipe);
@@ -1280,6 +1282,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->close = false;
     upipe_avcdec->pix_fmt = PIX_FMT_NONE;
     upipe_avcdec->sample_fmt = AV_SAMPLE_FMT_NONE;
+    upipe_avcdec->uref = NULL;
 
     upipe_avcdec->index_rap = 0;
     upipe_avcdec->prev_rap = 0;

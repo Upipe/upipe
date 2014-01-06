@@ -152,6 +152,8 @@ struct uref_mgr {
  */
 static inline void uref_free(struct uref *uref)
 {
+    if (uref == NULL)
+        return;
     if (uref->ubuf != NULL)
         ubuf_free(uref->ubuf);
     if (uref->udict != NULL)
