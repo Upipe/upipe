@@ -36,12 +36,13 @@
 
     @section {Buffer management}
 
-      Buffer management structures define how data is carried across inside a pipeline and are handled by @ref ubuf and associated managers. These structures typically point to a shared, reference counted area maintained by the manager. Upipe natively supports two types of buffers, each with a dedicated API to access and modify data :
+      Buffer management structures define how data is carried across inside a pipeline and are handled by @ref ubuf and associated managers. These structures typically point to a shared, reference counted area maintained by the manager. Upipe natively supports three types of buffers, each with a dedicated API to access and modify data :
 
       @list
 
-        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref ubuf_block_alloc ; the API supports windowing and resizing blocks, as well as merging and cutting out with zero-copy and copy-on-write semantics. Packed sound is currently considered as blocks.
+        @item blocks (arbitrary octet content with arbitrary and variable size), typically used for encoded data: @ref ubuf_block_alloc ; the API supports windowing and resizing blocks, as well as merging and cutting out with zero-copy and copy-on-write semantics.
         @item pictures, defined by their chromatic planes, pixel sizes and subsampling, with arbitrary width and height: @ref ubuf_pic_alloc.
+        @item sounds, in planar or packed formats: @ref ubuf_sound_alloc.
 
       @end list
 
@@ -127,6 +128,7 @@
         @item @ref uprobe_upump_mgr_alloc @item give a upump manager to pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
         @item @ref uprobe_uref_mgr_alloc @item give a uref manager to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
         @item @ref uprobe_uclock_alloc @item give a uclock to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
+        @item @ref uprobe_ubuf_mem_alloc @item allocated and give a ubuf manager to pipes that throw @ref UPROBE_NEW_FLOW_FORMAT @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
 

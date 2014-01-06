@@ -10,6 +10,8 @@ libupipe_la_SOURCES = \
 	ubuf_pic_common.c \
 	ubuf_pic.c \
 	ubuf_pic_mem.c \
+	ubuf_sound_common.c \
+	ubuf_sound_mem.c \
 	udict_inline.c \
 	uref_std.c \
 	uprobe_dejitter.c \

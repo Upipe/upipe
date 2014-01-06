@@ -1057,10 +1057,6 @@ static inline enum ubase_err upipe_attach_ubuf_mgr(struct upipe *upipe)
  * @item @ref uref_pic_flow_set_vappend
  * @item @ref uref_pic_flow_set_align
  * @item @ref uref_pic_flow_set_align_hmoffset
- * @item @ref uref_sound_flow_set_prepend
- * @item @ref uref_sound_flow_set_append
- * @item @ref uref_sound_flow_set_align
- * @item @ref uref_sound_flow_set_align_offset
  * @end list
  *
  * @param upipe description structure of the pipe
@@ -1206,6 +1202,8 @@ static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
     if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
                   !ubase_check(upipe_set_flow_def(output, flow_def))) ||
                  !ubase_check(upipe_set_output(upipe, output)))) {
+        upipe_dbg_va(upipe, "failed allocating output");
+        udict_dump(flow_def->udict, upipe->uprobe);
         upipe_release(output);
         return NULL;
     }

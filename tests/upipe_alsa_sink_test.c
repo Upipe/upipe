@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,8 +40,6 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_sound_flow.h>

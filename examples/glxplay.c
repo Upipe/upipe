@@ -446,7 +446,8 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
             if (unlikely(output_flow == NULL))
                 return UBASE_ERR_ALLOC;
             uref_pic_flow_clear_format(output_flow);
-            if (unlikely(!ubase_check(uref_pic_flow_set_planes(output_flow, 0)) ||
+            if (unlikely(!ubase_check(uref_pic_flow_set_macropixel(output_flow, 1)) ||
+                         !ubase_check(uref_pic_flow_set_planes(output_flow, 0)) ||
                          !ubase_check(uref_pic_flow_add_plane(output_flow, 1, 1, 3,
                                                   "r8g8b8")))) {
                 uref_free(output_flow);
@@ -458,6 +459,7 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
                     uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(glxplayer->uprobe_logger)),
                                         glxplayer->loglevel, "rgb"),
                     output_flow);
+            assert(yuvrgb != NULL);
             uref_free(output_flow);
             upipe_release(deint);
             if (unlikely(yuvrgb == NULL))

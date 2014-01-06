@@ -32,7 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
@@ -160,41 +160,37 @@ static void upipe_sinesrc_idler(struct upump *upump)
     if (unlikely(!ubase_check(upipe_sinesrc_check_ubuf_mgr(upipe))))
         return;
 
-    size_t size = (uint64_t)UPIPE_SINESRC_DURATION * 2 * UPIPE_SINESRC_RATE /
+    size_t size = (uint64_t)UPIPE_SINESRC_DURATION * UPIPE_SINESRC_RATE /
                   UCLOCK_FREQ;
-    struct uref *uref = uref_block_alloc(upipe_sinesrc->uref_mgr,
+    struct uref *uref = uref_sound_alloc(upipe_sinesrc->uref_mgr,
                                          upipe_sinesrc->ubuf_mgr, size);
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
-    uint8_t *buffer;
-    int read_size = -1;
-    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size,
-                                               &buffer)))) {
+    int16_t *buffer;
+    if (unlikely(!ubase_check(uref_sound_plane_write_int16_t(uref, "c", 0, -1,
+                                                             &buffer)))) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    assert(read_size == size);
 
     double phase = upipe_sinesrc->phase;
     double step = max_phase * UPIPE_SINESRC_FREQ / (double)UPIPE_SINESRC_RATE;
     /* fill the channel areas */
     while (size > 0) {
-        int16_t res = sin(phase) * INT16_MAX;
-        buffer[0] = (res) & 0xff;
-        buffer[1] = (res >> 8) & 0xff;
-        size -= 2;
-        buffer += 2;
+        *buffer = sin(phase) * INT16_MAX;
+        size--;
+        buffer++;
         phase += step;
         if (phase >= max_phase)
             phase -= max_phase;
     }
     upipe_sinesrc->phase = phase;
 
-    uref_block_unmap(uref, 0);
+    uref_sound_plane_unmap(uref, "c", 0, -1);
 
     if (upipe_sinesrc->next_pts != UINT64_MAX) {
         uref_clock_set_pts_sys(uref, upipe_sinesrc->next_pts);
@@ -262,12 +258,13 @@ static enum ubase_err upipe_sinesrc_control(struct upipe *upipe,
     if (upipe_sinesrc->uref_mgr != NULL && upipe_sinesrc->upump_mgr != NULL &&
         upipe_sinesrc->upump == NULL) {
         struct uref *flow_def =
-            uref_sound_flow_alloc_def(upipe_sinesrc->uref_mgr, "pcm_s16le.",
+            uref_sound_flow_alloc_def(upipe_sinesrc->uref_mgr, "s16.",
                                       1, 2);
         if (flow_def == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
+        uref_sound_flow_add_plane(flow_def, "c");
         uref_sound_flow_set_rate(flow_def, UPIPE_SINESRC_RATE);
         upipe_sinesrc_store_flow_def(upipe, flow_def);
 

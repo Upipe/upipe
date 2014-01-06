@@ -32,10 +32,12 @@
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/ubuf_pic_mem.h>
+#include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_sound_flow.h>
 
 #include <stdint.h>
 
@@ -104,6 +106,33 @@ struct ubuf_mgr *ubuf_mem_mgr_alloc_from_flow_def(uint16_t ubuf_pool_depth,
                                                 &macropixel_size, plane)) ||
                          !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr,
                                  chroma, hsub, vsub, macropixel_size)))) {
+                ubuf_mgr_release(mgr);
+                return NULL;
+            }
+        }
+        return mgr;
+    }
+
+    if (!ubase_ncmp(def, "sound.")) {
+        uint8_t sample_size;
+        uint8_t planes;
+        if (unlikely(!ubase_check(uref_sound_flow_get_sample_size(flow_def,
+                                                               &sample_size) ||
+                     !ubase_check(uref_sound_flow_get_planes(flow_def,
+                                                             &planes)))))
+            return NULL;
+
+        struct ubuf_mgr *mgr = ubuf_sound_mem_mgr_alloc(ubuf_pool_depth,
+                shared_pool_depth, umem_mgr, sample_size);
+        if (unlikely(mgr == NULL))
+            return NULL;
+
+        for (uint8_t plane = 0; plane < planes; plane++) {
+            const char *channel;
+            if (unlikely(!ubase_check(uref_sound_flow_get_channel(flow_def,
+                                                         &channel, plane)) ||
+                         !ubase_check(ubuf_sound_mem_mgr_add_plane(mgr,
+                                                                   channel)))) {
                 ubuf_mgr_release(mgr);
                 return NULL;
             }

@@ -37,12 +37,12 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
+#include <upipe/ubuf_sound.h>
+#include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_block.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe-swresample/upipe_swr.h>
@@ -77,7 +77,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 struct uref_mgr *uref_mgr;
-struct ubuf_mgr *block_mgr;
+struct ubuf_mgr *sound_mgr;
 struct uprobe *logger;
 
 int main(int argc, char **argv)
@@ -90,13 +90,11 @@ int main(int argc, char **argv)
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
     assert(uref_mgr != NULL);
 
-    /* block */
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_ALIGN,
-            UBUF_ALIGN_OFFSET);
-    assert(block_mgr);
-
+    /* sound */
+    sound_mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH,
+            UBUF_POOL_DEPTH, umem_mgr, 4);
+    assert(sound_mgr);
+    ubase_assert(ubuf_sound_mem_mgr_add_plane(sound_mgr, "lr"));
 
     /* uprobe stuff */
     struct uprobe uprobe;
@@ -113,12 +111,14 @@ int main(int argc, char **argv)
     assert(upipe_swr_mgr);
 
     /* alloc swr pipe */
-    struct uref *flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
+    struct uref *flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 4);
     assert(flow != NULL);
+    ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
     ubase_assert(uref_sound_flow_set_rate(flow, 48000));
     ubase_assert(uref_sound_flow_set_channels(flow, 2));
-    struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "pcm_f32.", 2, 2);
+    struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "f32.", 2, 8);
     assert(flow_output != NULL);
+    ubase_assert(uref_sound_flow_add_plane(flow_output, "lr"));
     ubase_assert(uref_sound_flow_set_rate(flow_output, 48000));
     ubase_assert(uref_sound_flow_set_channels(flow_output, 2));
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
@@ -142,13 +142,12 @@ int main(int argc, char **argv)
 
     for (i=0; i < FRAMES_LIMIT; i++) {
         uint8_t *buf = NULL;
-        int size = -1;
         int samples = (1024+i-FRAMES_LIMIT/2);
-        sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*samples);
-        uref_sound_flow_set_samples(sound, samples);
-        uref_block_write(sound, 0, &size, &buf);
-        memset(buf, 0, size);
-        uref_block_unmap(sound, 0);
+        sound = uref_sound_alloc(uref_mgr, sound_mgr, samples);
+        assert(sound != NULL);
+        ubase_assert(uref_sound_plane_write_uint8_t(sound, "lr", 0, -1, &buf));
+        memset(buf, 0, 2*2*samples);
+        ubase_assert(uref_sound_plane_unmap(sound, "lr", 0, -1));
         upipe_input(swr, sound, NULL);
     }
 
@@ -158,7 +157,7 @@ int main(int argc, char **argv)
     /* clean managers and probes */
     upipe_mgr_release(upipe_swr_mgr);
     upipe_mgr_release(upipe_null_mgr);
-    ubuf_mgr_release(block_mgr);
+    ubuf_mgr_release(sound_mgr);
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);
     udict_mgr_release(udict_mgr);

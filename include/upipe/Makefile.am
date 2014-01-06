@@ -14,6 +14,9 @@ pkginclude_HEADERS = \
 	ubuf_pic.h \
 	ubuf_pic_common.h \
 	ubuf_pic_mem.h \
+	ubuf_sound.h \
+	ubuf_sound_common.h \
+	ubuf_sound_mem.h \
 	uclock.h \
 	uclock_std.h \
 	udeal.h \
@@ -34,7 +37,6 @@ pkginclude_HEADERS = \
 	upipe_helper_flow.h \
 	upipe_helper_output.h \
 	upipe_helper_sink.h \
-	upipe_helper_sound_stream.h \
 	upipe_helper_source_read_size.h \
 	upipe_helper_subpipe.h \
 	upipe_helper_sync.h \
@@ -75,6 +77,7 @@ pkginclude_HEADERS = \
 	uref_pic_flow.h \
 	uref_pic.h \
 	uref_program_flow.h \
+	uref_sound.h \
 	uref_sound_flow.h \
 	uref_std.h \
 	uring.h

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -64,6 +64,8 @@ enum ubuf_alloc_type {
     UBUF_ALLOC_BLOCK,
     /** picture (int, int) */
     UBUF_ALLOC_PICTURE,
+    /** picture (int) */
+    UBUF_ALLOC_SOUND,
 
     /** non-standard ubuf allocators can start from there */
     UBUF_ALLOC_LOCAL = 0x8000
@@ -76,7 +78,7 @@ enum ubuf_command {
      */
     /** duplicate a given ubuf (struct ubuf **) */
     UBUF_DUP,
-    /** returns true if the memory area's refcount is 1 (void) */
+    /** returns UBASE_ERR_NONE if the memory area's refcount is 1 (void) */
     UBUF_SINGLE,
 
     /*
@@ -87,6 +89,8 @@ enum ubuf_command {
     /** size a plane of a picture ubuf (const char *, size_t *,
      * uint8_t *, uint8_t *, uint8_t *) */
     UBUF_SIZE_PICTURE_PLANE,
+    /** size sound ubuf (size_t *, uint8_t *) */
+    UBUF_SIZE_SOUND,
 
     /*
      * Map commands
@@ -99,6 +103,12 @@ enum ubuf_command {
     /** write a plane of a picture ubuf (const char *, int, int, int, int,
      * uint8_t **) */
     UBUF_WRITE_PICTURE_PLANE,
+    /** read a plane of a sound ubuf (const char *, int, int,
+     * const uint8_t **) */
+    UBUF_READ_SOUND_PLANE,
+    /** write a plane of a sound ubuf (const char *, int, int,
+     * uint8_t **) */
+    UBUF_WRITE_SOUND_PLANE,
 
     /*
      * Unmap commands
@@ -107,6 +117,8 @@ enum ubuf_command {
     UBUF_UNMAP_BLOCK,
     /** unmap a plane of a picture ubuf (const char *, int, int, int, int) */
     UBUF_UNMAP_PICTURE_PLANE,
+    /** unmap a plane of a picture ubuf (const char *, int, int) */
+    UBUF_UNMAP_SOUND_PLANE,
 
     /*
      * Resize commands
@@ -115,12 +127,16 @@ enum ubuf_command {
     UBUF_SPLICE_BLOCK,
     /** resize picture ubuf (int, int, int, int) */
     UBUF_RESIZE_PICTURE,
+    /** resize picture ubuf (int, int, int, int) */
+    UBUF_RESIZE_SOUND,
 
     /*
      * Other standard commands
      */
     /** iterate on picture plane chroma (const char **) */
     UBUF_ITERATE_PICTURE_PLANE,
+    /** iterate on sound plane channel (const char **) */
+    UBUF_ITERATE_SOUND_PLANE,
 
     /** non-standard commands implemented by a ubuf manager can start from
      * there */

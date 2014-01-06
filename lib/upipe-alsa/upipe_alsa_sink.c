@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,8 +32,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upump.h>
 #include <upipe/upump_blocker.h>
@@ -77,7 +77,7 @@
 /** max number of urefs to buffer */
 #define BUFFER_UREFS 5
 /** we expect sound */
-#define EXPECTED_FLOW_DEF "block."
+#define EXPECTED_FLOW_DEF "sound."
 
 /** @hidden */
 static void upipe_alsink_timer(struct upump *upump);
@@ -100,6 +100,8 @@ struct upipe_alsink {
     unsigned int channels;
     /** sample format */
     snd_pcm_format_t format;
+    /** number of planes (1 for planar formats) */
+    uint8_t planes;
     /** duration of a period */
     uint64_t period_duration;
     /** remainder of the number of frames to output per period */
@@ -338,30 +340,77 @@ static bool upipe_alsink_recover(struct upipe *upipe, int err)
     return true;
 }
 
-/** @internal @This is called to output data to alsa.
+/** @internal @This is called to output raw interleaved data to alsa.
  *
  * @param upipe description structure of the pipe
  * @param buffer pointer to buffer
  * @param buffer_frames number of frames in buffer
  * @return the number of frames effectively written, or -1 in case of error
  */
+static snd_pcm_sframes_t upipe_alsink_output_interleave(struct upipe *upipe,
+        const void *buffer, snd_pcm_uframes_t buffer_frames)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    snd_pcm_sframes_t frames;
+    for ( ; ; ) {
+        frames = snd_pcm_writei(upipe_alsink->handle, buffer, buffer_frames);
+        if (frames >= 0)
+            break;
+        if (frames == -EAGAIN) {
+            upipe_warn_va(upipe, "ALSA FIFO full, skipping tick");
+            frames = 0;
+            break;
+        }
+        if (unlikely(!upipe_alsink_recover(upipe, frames))) {
+            frames = -1;
+            break;
+        }
+    }
+    return frames;
+}
+
+/** @internal @This is called to output data to alsa.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref
+ * @param buffer_frames number of frames in buffer
+ * @return the number of frames effectively written, or -1 in case of error
+ */
 static snd_pcm_sframes_t upipe_alsink_output(struct upipe *upipe,
-                                             const uint8_t *buffer,
+                                             struct uref *uref,
                                              snd_pcm_uframes_t buffer_frames)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    for ( ; ; ) {
-        snd_pcm_sframes_t frames = snd_pcm_writei(upipe_alsink->handle,
-                                                  buffer, buffer_frames);
-        if (frames >= 0)
-            return frames;
-        if (frames == -EAGAIN) {
-            upipe_warn_va(upipe, "ALSA FIFO full, skipping tick");
-            return 0;
+    /* FIXME fix planes order */
+    const void *buffer[upipe_alsink->planes];
+    if (unlikely(!ubase_check(uref_sound_read_void(uref, 0, -1, buffer,
+                                                   upipe_alsink->planes))))
+        return -1;
+
+    snd_pcm_sframes_t frames;
+    if (upipe_alsink->planes == 1)
+        frames = upipe_alsink_output_interleave(upipe, buffer[0],
+                                                buffer_frames);
+    else {
+        for ( ; ; ) {
+            frames = snd_pcm_writei(upipe_alsink->handle,
+                                    buffer, buffer_frames);
+            if (frames >= 0)
+                break;
+            if (frames == -EAGAIN) {
+                upipe_warn_va(upipe, "ALSA FIFO full, skipping tick");
+                frames = 0;
+                break;
+            }
+            if (unlikely(!upipe_alsink_recover(upipe, frames))) {
+                frames = -1;
+                break;
+            }
         }
-        if (unlikely(!upipe_alsink_recover(upipe, frames)))
-            return -1;
     }
+
+    uref_sound_unmap(uref, 0, -1, upipe_alsink->planes);
+    return frames;
 }
 
 /** @internal @This is called to output silence to alsa.
@@ -377,7 +426,7 @@ static snd_pcm_sframes_t upipe_alsink_silence(struct upipe *upipe,
     uint8_t buffer[snd_pcm_frames_to_bytes(upipe_alsink->handle,
                                            silence_frames)];
     snd_pcm_format_set_silence(upipe_alsink->format, buffer, silence_frames);
-    return upipe_alsink_output(upipe, buffer, silence_frames);
+    return upipe_alsink_output_interleave(upipe, buffer, silence_frames);
 }
 
 /** @internal @This is called to consume frames out of the first buffered uref.
@@ -388,17 +437,17 @@ static snd_pcm_sframes_t upipe_alsink_silence(struct upipe *upipe,
 static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    size_t bytes = snd_pcm_frames_to_bytes(upipe_alsink->handle, frames);
     struct uchain *uchain = ulist_peek(&upipe_alsink->urefs);
     struct uref *uref = uref_from_uchain(uchain);
 
     size_t uref_size;
-    if (ubase_check(uref_block_size(uref, &uref_size)) && uref_size <= bytes) {
+    if (ubase_check(uref_sound_size(uref, &uref_size, NULL)) &&
+        uref_size <= frames) {
         upipe_alsink_pop_sink(upipe);
         uref_free(uref);
-        frames = snd_pcm_bytes_to_frames(upipe_alsink->handle, uref_size);
+        frames = uref_size;
     } else {
-        uref_block_resize(uref, bytes, -1);
+        uref_sound_resize(uref, frames, -1);
         uint64_t pts;
         if (ubase_check(uref_clock_get_pts_sys(uref, &pts)))
             uref_clock_set_pts_sys(uref,
@@ -500,19 +549,16 @@ static void upipe_alsink_timer(struct upump *upump)
             }
         }
 
-        int size = -1;
-        const uint8_t *buffer;
-        if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &buffer)))) {
+        size_t size;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &size, NULL)))) {
             upipe_alsink_pop_sink(upipe);
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             continue;
         }
 
-        long uref_frames = snd_pcm_bytes_to_frames(upipe_alsink->handle, size);
-        result = upipe_alsink_output(upipe, buffer, uref_frames < frames ?
-                                                    uref_frames : frames);
-        uref_block_unmap(uref, 0);
+        result = upipe_alsink_output(upipe, uref, size < frames ?
+                                                  size : frames);
         if (result <= 0)
             break;
         if (result > 0)
@@ -541,7 +587,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     size_t uref_size;
-    if (unlikely(!ubase_check(uref_block_size(uref, &uref_size)))) {
+    if (unlikely(!ubase_check(uref_sound_size(uref, &uref_size, NULL)))) {
         upipe_warn(upipe, "unable to read uref");
         uref_free(uref);
         return;
@@ -553,9 +599,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t uref_duration =
-        (uint64_t)snd_pcm_bytes_to_frames(upipe_alsink->handle,
-                                          uref_size) * UCLOCK_FREQ /
+    uint64_t uref_duration = (uint64_t)uref_size * UCLOCK_FREQ /
         upipe_alsink->rate;
 
     if (upipe_alsink_check_sink(upipe)) {
@@ -585,54 +629,104 @@ static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref
     const char *def;
     uint64_t rate;
     uint8_t channels;
+    uint8_t planes;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate))
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels))
-    def += strlen(EXPECTED_FLOW_DEF);
+    UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes))
 
+    def += strlen(EXPECTED_FLOW_DEF);
     snd_pcm_format_t format;
-    if (!ubase_ncmp(def, "pcm_s16le."))
+    if (!ubase_ncmp(def, "s16le."))
         format = SND_PCM_FORMAT_S16_LE;
-    else if (!ubase_ncmp(def, "pcm_s16be."))
+    else if (!ubase_ncmp(def, "s16be."))
         format = SND_PCM_FORMAT_S16_BE;
-    else if (!ubase_ncmp(def, "pcm_u16le."))
+    else if (!ubase_ncmp(def, "s16."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S16_BE;
+#else
+        format = SND_PCM_FORMAT_S16_LE;
+#endif
+    else if (!ubase_ncmp(def, "u16le."))
         format = SND_PCM_FORMAT_U16_LE;
-    else if (!ubase_ncmp(def, "pcm_u16be."))
+    else if (!ubase_ncmp(def, "u16be."))
         format = SND_PCM_FORMAT_U16_BE;
-    else if (!ubase_ncmp(def, "pcm_s8."))
+    else if (!ubase_ncmp(def, "u16."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U16_BE;
+#else
+        format = SND_PCM_FORMAT_U16_LE;
+#endif
+    else if (!ubase_ncmp(def, "s8."))
         format = SND_PCM_FORMAT_S8;
-    else if (!ubase_ncmp(def, "pcm_u8."))
+    else if (!ubase_ncmp(def, "u8."))
         format = SND_PCM_FORMAT_U8;
-    else if (!ubase_ncmp(def, "pcm_mulaw."))
+    else if (!ubase_ncmp(def, "mulaw."))
         format = SND_PCM_FORMAT_MU_LAW;
-    else if (!ubase_ncmp(def, "pcm_alaw."))
+    else if (!ubase_ncmp(def, "alaw."))
         format = SND_PCM_FORMAT_A_LAW;
-    else if (!ubase_ncmp(def, "pcm_s32le."))
+    else if (!ubase_ncmp(def, "s32le."))
         format = SND_PCM_FORMAT_S32_LE;
-    else if (!ubase_ncmp(def, "pcm_s32be."))
+    else if (!ubase_ncmp(def, "s32be."))
         format = SND_PCM_FORMAT_S32_BE;
-    else if (!ubase_ncmp(def, "pcm_u32le."))
+    else if (!ubase_ncmp(def, "s32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S32_BE;
+#else
+        format = SND_PCM_FORMAT_S32_LE;
+#endif
+    else if (!ubase_ncmp(def, "u32le."))
         format = SND_PCM_FORMAT_U32_LE;
-    else if (!ubase_ncmp(def, "pcm_u32be."))
+    else if (!ubase_ncmp(def, "u32be."))
         format = SND_PCM_FORMAT_U32_BE;
-    else if (!ubase_ncmp(def, "pcm_s24le."))
+    else if (!ubase_ncmp(def, "u32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U32_BE;
+#else
+        format = SND_PCM_FORMAT_U32_LE;
+#endif
+    else if (!ubase_ncmp(def, "s24le."))
         format = SND_PCM_FORMAT_S24_LE;
-    else if (!ubase_ncmp(def, "pcm_s24be."))
+    else if (!ubase_ncmp(def, "s24be."))
         format = SND_PCM_FORMAT_S24_BE;
-    else if (!ubase_ncmp(def, "pcm_u24le."))
+    else if (!ubase_ncmp(def, "s24."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S24_BE;
+#else
+        format = SND_PCM_FORMAT_S24_LE;
+#endif
+    else if (!ubase_ncmp(def, "u24le."))
         format = SND_PCM_FORMAT_U24_LE;
-    else if (!ubase_ncmp(def, "pcm_u24be."))
+    else if (!ubase_ncmp(def, "u24be."))
         format = SND_PCM_FORMAT_U24_BE;
-    else if (!ubase_ncmp(def, "pcm_f32le."))
+    else if (!ubase_ncmp(def, "u24."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U24_BE;
+#else
+        format = SND_PCM_FORMAT_U24_LE;
+#endif
+    else if (!ubase_ncmp(def, "f32le."))
         format = SND_PCM_FORMAT_FLOAT_LE;
-    else if (!ubase_ncmp(def, "pcm_f32be."))
+    else if (!ubase_ncmp(def, "f32be."))
         format = SND_PCM_FORMAT_FLOAT_BE;
-    else if (!ubase_ncmp(def, "pcm_f64le."))
+    else if (!ubase_ncmp(def, "f32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_FLOAT_BE;
+#else
+        format = SND_PCM_FORMAT_FLOAT_LE;
+#endif
+    else if (!ubase_ncmp(def, "f64le."))
         format = SND_PCM_FORMAT_FLOAT64_LE;
-    else if (!ubase_ncmp(def, "pcm_f64be."))
+    else if (!ubase_ncmp(def, "f64be."))
         format = SND_PCM_FORMAT_FLOAT64_BE;
+    else if (!ubase_ncmp(def, "f64."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_FLOAT64_BE;
+#else
+        format = SND_PCM_FORMAT_FLOAT64_LE;
+#endif
     else {
         upipe_err_va(upipe, "unknown format %s", def);
         return UBASE_ERR_INVALID;
@@ -648,6 +742,7 @@ static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref
         upipe_alsink->rate = rate;
         upipe_alsink->channels = channels;
         upipe_alsink->format = format;
+        upipe_alsink->planes = planes;
     }
 
     uint64_t latency = 0;

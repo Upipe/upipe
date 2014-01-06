@@ -189,9 +189,11 @@ static inline enum ubase_err uref_pic_flow_copy_format(struct uref *uref_dst,
                                                        struct uref *uref_src)
 {
     const char *def;
-    uint8_t planes;
+    uint8_t planes, macropixel;
     UBASE_RETURN(uref_flow_get_def(uref_src, &def))
     UBASE_RETURN(uref_flow_set_def(uref_dst, def))
+    UBASE_RETURN(uref_pic_flow_get_macropixel(uref_src, &macropixel))
+    UBASE_RETURN(uref_pic_flow_set_macropixel(uref_dst, macropixel))
     UBASE_RETURN(uref_pic_flow_get_planes(uref_src, &planes))
     UBASE_RETURN(uref_pic_flow_set_planes(uref_dst, planes))
 
@@ -228,6 +230,7 @@ static inline void uref_pic_flow_clear_format(struct uref *uref)
         uref_pic_flow_delete_macropixel_size(uref, plane);
     }
     uref_pic_flow_delete_planes(uref);
+    uref_pic_flow_delete_macropixel(uref);
 }
 
 #ifdef __cplusplus

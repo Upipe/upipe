@@ -455,7 +455,7 @@ static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
  * @return an error code
  */
 static inline enum ubase_err ubuf_block_resize(struct ubuf *ubuf, int offset,
-                                     int new_size)
+                                               int new_size)
 {
     if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;

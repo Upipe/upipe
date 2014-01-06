@@ -173,7 +173,7 @@ static inline void ubuf_pic_common_clean(struct ubuf *ubuf)
 {
 }
 
-/** @This initializes a planes substructure of a picture ubuf. It is only
+/** @This initializes a plane sub-structure of a picture ubuf. It is only
  * necessary to call this function if you plan to use
  * @ref ubuf_pic_common_plane_map.
  *

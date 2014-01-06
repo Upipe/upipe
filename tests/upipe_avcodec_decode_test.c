@@ -69,11 +69,11 @@
 
 #define ALIVE(a) { printf("# ALIVE[%d]: %s %s - %d\n", (a), __FILE__, __func__, __LINE__); fflush(stdout); }
 
-#define UPUMP_POOL 1
-#define UPUMP_BLOCKER_POOL 1
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
+#define UPUMP_POOL 0
+#define UPUMP_BLOCKER_POOL 0
+#define UDICT_POOL_DEPTH    0
+#define UREF_POOL_DEPTH     0
+#define UBUF_POOL_DEPTH     0
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
@@ -131,6 +131,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum upr
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEW_FLOW_FORMAT:
         case UPROBE_NEED_UPUMP_MGR:
             break;
         default:

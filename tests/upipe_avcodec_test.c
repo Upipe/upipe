@@ -39,15 +39,16 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
+#include <upipe/ubuf_sound.h>
+#include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
@@ -94,7 +95,7 @@ struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
 struct upipe_mgr *upipe_null_mgr;
 struct uref_mgr *uref_mgr;
-struct ubuf_mgr *block_mgr;
+struct ubuf_mgr *sound_mgr;
 struct ubuf_mgr *pic_mgr;
 struct uprobe *logger;
 struct uprobe uprobe_avcenc_s;
@@ -114,6 +115,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum upr
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEW_FLOW_FORMAT:
         case UPROBE_NEED_UPUMP_MGR:
             break;
         default:
@@ -186,7 +188,7 @@ void fill_pic(struct ubuf *ubuf)
     }
 }
 
-/* build video pipeline */
+/* build video or audio pipeline */
 struct upipe *build_pipeline(const char *codec_def,
                              struct upump_mgr *upump_mgr, int num,
                              struct uref *flow_def)
@@ -297,12 +299,11 @@ int main(int argc, char **argv)
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
     assert(uref_mgr != NULL);
 
-    /* block */
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr,
-            UBUF_ALIGN,
-            UBUF_ALIGN_OFFSET);
-    assert(block_mgr);
+    /* sound */
+    sound_mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH,
+            UBUF_POOL_DEPTH, umem_mgr, 4);
+    assert(sound_mgr);
+    ubase_assert(ubuf_sound_mem_mgr_add_plane(sound_mgr, "lr"));
 
     /* planar YUV (I420) */
     pic_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
@@ -372,8 +373,9 @@ int main(int argc, char **argv)
     printf("Everything good so far, cleaning\n");
 
     /* mono-threaded audio test without upump_mgr */
-    flow = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16le.", 2, 2);
+    flow = uref_sound_flow_alloc_def(uref_mgr, "s16le.", 2, 4);
     assert(flow != NULL);
+    ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
     ubase_assert(uref_sound_flow_set_channels(flow, 2));
     ubase_assert(uref_sound_flow_set_rate(flow, 48000));
     avcenc = build_pipeline("mp2.sound.", NULL, -1, flow);
@@ -381,16 +383,14 @@ int main(int argc, char **argv)
 
     for (i=0; i < FRAMES_LIMIT; i++) {
         uint8_t *buf = NULL;
-        int size = -1;
         int samples = (1024+i-FRAMES_LIMIT/2);
-        sound = uref_block_alloc(uref_mgr, block_mgr, 2*2*samples);
+        sound = uref_sound_alloc(uref_mgr, sound_mgr, samples);
         assert(sound != NULL);
-        ubase_assert(uref_sound_flow_set_samples(sound, samples));
-        ubase_assert(uref_block_write(sound, 0, &size, &buf));
-        memset(buf, 0, size);
-        uref_block_unmap(sound, 0);
+        ubase_assert(uref_sound_plane_write_uint8_t(sound, "lr", 0, -1, &buf));
+        memset(buf, 0, 2*2*samples);
+        ubase_assert(uref_sound_plane_unmap(sound, "lr", 0, -1));
         upipe_input(avcenc, sound, NULL);
-   }
+    }
 
     upipe_release(avcenc);
     printf("Everything good so far, cleaning\n");
@@ -399,7 +399,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_avcdec_mgr);
     upipe_mgr_release(upipe_avcenc_mgr);
     upipe_mgr_release(upipe_null_mgr);
-    ubuf_mgr_release(block_mgr);
+    ubuf_mgr_release(sound_mgr);
     ubuf_mgr_release(pic_mgr);
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);

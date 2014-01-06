@@ -31,8 +31,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -79,6 +79,10 @@ struct upipe_swr {
     /** swresample context */
     struct SwrContext *swr;
 
+    /** number of planes in input */
+    uint8_t in_planes;
+    /** number of planes in output */
+    uint8_t out_planes;
     /** output sample rate */
     uint64_t out_rate;
     /** output channels number */
@@ -108,10 +112,8 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_swr *upipe_swr = upipe_swr_from_upipe(upipe);
     struct ubuf *ubuf;
-    const uint8_t *in_buf;
-    uint8_t *out_buf;
     uint64_t in_samples, out_samples;
-    int size, ret;
+    int ret;
 
     /* check ubuf manager */
     if (unlikely(!ubase_check(upipe_swr_check_ubuf_mgr(upipe)))) {
@@ -119,7 +121,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(!ubase_check(uref_sound_flow_get_samples(uref, &in_samples)))) {
+    if (unlikely(!ubase_check(uref_sound_size(uref, &in_samples, NULL)))) {
         uref_free(uref);
         return;
     }
@@ -127,33 +129,40 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
      * This is fine with format conversion but not with resampling. */
     out_samples = in_samples;
 
-    size = -1;
-    if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &in_buf)))) {
+    const uint8_t *in_buf[upipe_swr->in_planes];
+    if (unlikely(!ubase_check(uref_sound_read_uint8_t(uref, 0, -1, in_buf,
+                                                    upipe_swr->in_planes)))) {
         upipe_err(upipe, "could not read uref, dropping samples");
         uref_free(uref);
         return;
     }
 
     /* allocate output ubuf */
-    ubuf = ubuf_block_alloc(upipe_swr->ubuf_mgr, 
-            av_samples_get_buffer_size(NULL, upipe_swr->out_chan,
-                                       out_samples, upipe_swr->out_fmt, 1));
+    ubuf = ubuf_sound_alloc(upipe_swr->ubuf_mgr, out_samples);
     if (unlikely(!ubuf)) {
-        uref_block_unmap(uref, 0);
+        uref_sound_unmap(uref, 0, -1, upipe_swr->in_planes);
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
-    size = -1;
-    ubuf_block_write(ubuf, 0, &size, &out_buf);
+    uint8_t *out_buf[upipe_swr->out_planes];
+    if (unlikely(!ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, out_buf,
+                                               upipe_swr->out_planes)))) {
+        upipe_err(upipe, "could not write uref, dropping samples");
+        ubuf_free(ubuf);
+        uref_sound_unmap(uref, 0, -1, upipe_swr->in_planes);
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
 
     /* fire! */
-    ret = swr_convert(upipe_swr->swr, &out_buf, out_samples,
-                                      &in_buf, in_samples);
+    ret = swr_convert(upipe_swr->swr, out_buf, out_samples,
+                                      in_buf, in_samples);
 
-    ubuf_block_unmap(ubuf, 0);
-    uref_block_unmap(uref, 0);
+    ubuf_sound_unmap(ubuf, 0, -1, upipe_swr->out_planes);
+    uref_sound_unmap(uref, 0, -1, upipe_swr->in_planes);
     ubuf_free(uref_detach_ubuf(uref));
     uref_attach_ubuf(uref, ubuf);
 
@@ -166,9 +175,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
 
     /* set new samples count and resize ubuf */
     uref_sound_flow_set_samples(uref, out_samples);
-    uref_block_resize(uref, 0,
-            av_samples_get_buffer_size(NULL, upipe_swr->out_chan,
-                                       out_samples, upipe_swr->out_fmt, 1));
+    uref_sound_resize(uref, 0, out_samples);
 
     upipe_swr_output(upipe, uref, upump);
 }
@@ -186,13 +193,17 @@ static enum ubase_err upipe_swr_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     const char *def;
+    uint8_t in_planes;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (unlikely(ubase_ncmp(def, UREF_SOUND_FLOW_DEF)))
+    if (unlikely(ubase_ncmp(def, UREF_SOUND_FLOW_DEF) ||
+                 !ubase_check(uref_sound_flow_get_planes(flow_def,
+                                                         &in_planes))))
         return UBASE_ERR_INVALID;
 
     struct upipe_swr *upipe_swr = upipe_swr_from_upipe(upipe);
+    uint8_t in_chan;
     enum AVSampleFormat in_fmt =
-        upipe_av_samplefmt_from_flow_def(def);
+        upipe_av_samplefmt_from_flow_def(flow_def, &in_chan);
     if (in_fmt == AV_SAMPLE_FMT_NONE) {
         upipe_err(upipe, "incompatible flow def");
         uref_dump(flow_def, upipe->uprobe);
@@ -206,6 +217,8 @@ static enum ubase_err upipe_swr_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_EXTERNAL;
     }
     /* TODO : check that sample rates and channels are identical */
+    assert(in_chan == upipe_swr->out_chan);
+    upipe_swr->in_planes = in_planes;
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
@@ -283,11 +296,13 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
     /* get sample format */
     const char *def = "(none)";
     uref_flow_get_def(flow_def, &def);
-    upipe_swr->out_fmt = upipe_av_samplefmt_from_flow_def(def);
+    upipe_swr->out_fmt = upipe_av_samplefmt_from_flow_def(flow_def,
+            &upipe_swr->out_chan);
     if (unlikely(upipe_swr->out_fmt == AV_SAMPLE_FMT_NONE ||
-                 !ubase_check(uref_sound_flow_get_rate(flow_def, &upipe_swr->out_rate)) ||
-                 ubase_check(!uref_sound_flow_get_channels(flow_def,
-                                               &upipe_swr->out_chan)))) {
+                 !ubase_check(uref_sound_flow_get_rate(flow_def,
+                         &upipe_swr->out_rate)) ||
+                 !ubase_check(uref_sound_flow_get_planes(flow_def,
+                         &upipe_swr->out_planes)))) {
         uref_free(flow_def);
         upipe_swr_free_flow(upipe);
         return NULL;

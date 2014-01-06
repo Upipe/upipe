@@ -68,7 +68,7 @@ struct upipe_osx_audioqueue_sink {
 
 UPIPE_HELPER_UPIPE(upipe_osx_audioqueue_sink, upipe, UPIPE_OSX_AUDIOQUEUE_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_osx_audioqueue_sink, urefcount, upipe_osx_audioqueue_sink_free)
-UPIPE_HELPER_VOID(upipe_osx_audioqueue_sink, "block.")
+UPIPE_HELPER_VOID(upipe_osx_audioqueue_sink)
 
 /** @internal @This is called by AudioQueue after reading a buffer
  * @param _upipe description structure of the pipe (void)

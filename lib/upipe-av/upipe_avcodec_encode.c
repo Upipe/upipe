@@ -39,6 +39,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_dump.h>
@@ -53,7 +54,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
-#include <upipe/upipe_helper_sound_stream.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
 #include <stdlib.h>
@@ -85,8 +85,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
                                       struct upump *upump);
 /** @hidden */
-static void upipe_avcenc_encode_audio(struct upipe *upipe,
-                                      struct uref *uref, struct upump *upump);
+static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump);
 /** @hidden */
 static bool upipe_avcenc_encode(struct upipe *upipe,
                                 struct uref *uref, struct upump *upump);
@@ -125,6 +124,11 @@ struct upipe_avcenc {
     /** list of blockers (used during udeal) */
     struct uchain blockers;
 
+    /** temporary uref storage (used for sound processing) */
+    struct uchain sound_urefs;
+    /** nb samples in storage */
+    unsigned int nb_samples;
+
     /** uref associated to frames currently in encoder */
     struct uchain urefs_in_use;
     /** last incoming pts (in avcodec timebase) */
@@ -142,13 +146,6 @@ struct upipe_avcenc {
     uint64_t input_latency;
     /** chroma map */
     const char *chroma_map[UPIPE_AV_MAX_PLANES];
-
-    /** next uref to be processed */
-    struct uref *next_uref;
-    /** original size of the next uref */
-    size_t next_uref_size;
-    /** urefs received after next uref */
-    struct uchain stream_urefs;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -171,7 +168,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, flow_def);
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_SINK(upipe_avcenc, urefs, nb_urefs, max_urefs, blockers, upipe_avcenc_encode)
-UPIPE_HELPER_SOUND_STREAM(upipe_avcenc, next_uref, next_uref_size, stream_urefs)
 
 /** @hidden */
 static void upipe_avcenc_free(struct upipe *upipe);
@@ -319,43 +315,9 @@ static void upipe_avcenc_close(struct upipe *upipe)
         return;
     }
 
-    if (upipe_avcenc->next_uref != NULL && upipe_avcenc->ubuf_mgr != NULL) {
+    if (!ulist_empty(&upipe_avcenc->sound_urefs))
         /* Feed avcodec with the last incomplete uref (sound only). */
-        struct uref *uref = upipe_avcenc->next_uref;
-        size_t next_uref_size = upipe_avcenc->next_uref_size;
-        upipe_avcenc->next_uref = NULL;
-        upipe_avcenc->next_uref_size = 0;
-
-        int frame_size = av_samples_get_buffer_size(NULL, context->channels,
-                                                    context->frame_size,
-                                                    context->sample_fmt, 0);
-        int sample_size = av_get_bytes_per_sample(context->sample_fmt);
-        assert(frame_size > next_uref_size);
-
-        struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr,
-                                             frame_size - next_uref_size);
-        if (likely(ubuf != NULL)) {
-            int size = -1;
-            uint8_t *buf;
-            if (likely(ubase_check(ubuf_block_write(ubuf, 0, &size, &buf)))) {
-                av_samples_set_silence(&buf, 0,
-                        size / context->channels / sample_size,
-                        context->channels,
-                        av_get_packed_sample_fmt(context->sample_fmt));
-                ubuf_block_unmap(ubuf, 0);
-                if (likely(ubase_check(uref_block_append(uref, ubuf))))
-                    upipe_avcenc_encode_audio(upipe, uref, NULL);
-                else {
-                    ubuf_free(ubuf);
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                }
-            } else {
-                ubuf_free(ubuf);
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            }
-        } else
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    }
+        upipe_avcenc_encode_audio(upipe, NULL);
 
     if (context->codec->capabilities & CODEC_CAP_DELAY) {
         /* Feed avcodec with NULL frames to output the remaining packets. */
@@ -522,7 +484,6 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
             break;
         }
         case AVMEDIA_TYPE_AUDIO: {
-            uref_block_unmap(uref, 0);
             break;
         }
         default: /* should never be there */
@@ -626,58 +587,12 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     upipe_avcenc_encode_frame(upipe, frame, upump);
 }
 
-/** @internal @This is a temporary function to uninterleave to planar formats.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param buf output buffer
- * @param bufsize output buffer size
- * @return false in case of error
- */
-static bool upipe_avcenc_uninterleave(struct upipe *upipe, struct uref *uref,
-                                      uint8_t *buf, int bufsize)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    AVCodecContext *context = upipe_avcenc->context;
-    AVFrame *frame = upipe_avcenc->frame;
-    int sample_size = av_get_bytes_per_sample(context->sample_fmt);
-    int channels = context->channels;
-    int nb_samples = frame->nb_samples;
-    unsigned int sample = 0;
-
-    while (sample < nb_samples) {
-        int read_size = -1;
-        const uint8_t *read_buffer;
-        unsigned int old_sample = sample;
-        if (unlikely(!ubase_check(uref_block_read(uref, sample * sample_size * channels,
-                                      &read_size, &read_buffer))))
-            return false;
-
-        while (read_size >= channels * sample_size) {
-            unsigned int channel;
-            for (channel = 0; channel < channels; channel++) {
-                unsigned int k;
-                for (k = 0; k < sample_size; k++)
-                    buf[((channel * nb_samples) + sample) * sample_size + k] =
-                        read_buffer[k];
-            }
-            read_size -= channels * sample_size;
-            read_buffer += channels * sample_size;
-            sample++;
-        }
-        uref_block_unmap(uref, old_sample * sample_size * channels);
-    }
-    return true;
-}
-
 /** @internal @This encodes audio frames.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
  * @param upump upump structure
  */
-static void upipe_avcenc_encode_audio(struct upipe *upipe,
-                                      struct uref *uref, struct upump *upump)
+static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -694,35 +609,79 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     /* TODO replace with umem */
     uint8_t *buf = malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(buf == NULL)) {
-        uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    bool ret;
-    if (av_sample_fmt_is_planar(context->sample_fmt))
-        ret = upipe_avcenc_uninterleave(upipe, uref, buf, size);
-    else
-        ret = ubase_check(uref_block_extract(uref, 0, size, buf));
-    if (unlikely(!ret)) {
-        upipe_warn(upipe, "invalid buffer received");
-        uref_free(uref);
         return;
     }
 
     avcodec_fill_audio_frame(frame, context->channels,
                              context->sample_fmt, buf, size, 0);
 
+    struct uref *main_uref = NULL;
+    size_t offset = 0;
+    while (offset < context->frame_size) {
+        struct uchain *uchain = ulist_peek(&upipe_avcenc->sound_urefs);
+        if (unlikely(uchain == NULL)) {
+            /* end of stream, finish with silence */
+            av_samples_set_silence(frame->data, offset,
+                                   context->frame_size - offset,
+                                   context->channels, context->sample_fmt);
+            break;
+        }
+
+        struct uref *uref = uref_from_uchain(uchain);
+        assert(uref != NULL);
+        if (main_uref == NULL)
+            main_uref = uref_dup(uref);
+        size_t size;
+        uref_sound_size(uref, &size, NULL);
+
+        size_t extracted = (context->frame_size - offset) < size ?
+                           (context->frame_size - offset) : size;
+        const uint8_t *buffers[AV_NUM_DATA_POINTERS];
+        if (unlikely(!ubase_check(uref_sound_read_uint8_t(uref, 0, extracted,
+                                        buffers, AV_NUM_DATA_POINTERS)))) {
+            upipe_warn(upipe, "invalid buffer received");
+            uref_free(uref_from_uchain(ulist_pop(&upipe_avcenc->sound_urefs)));
+            upipe_avcenc->nb_samples -= size;
+            free(buf);
+            return;
+        }
+        int err = av_samples_copy(frame->data, buffers, offset, 0, extracted,
+                                  context->channels, context->sample_fmt);
+        UBASE_ERROR(upipe, uref_sound_unmap(uref, 0, extracted,
+                                            AV_NUM_DATA_POINTERS))
+        if (err < 0)
+            upipe_warn_va(upipe, "av_samples_copy error %d", err);
+
+        offset += extracted;
+        upipe_avcenc->nb_samples -= extracted;
+        if (extracted == size)
+            uref_free(uref_from_uchain(ulist_pop(&upipe_avcenc->sound_urefs)));
+        else {
+            uref_sound_resize(uref, extracted, -1);
+            uint64_t duration = (uint64_t)extracted * UCLOCK_FREQ /
+                                context->sample_rate;
+            uint64_t pts;
+            if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
+                uref_clock_set_pts_prog(uref, pts + duration);
+            if (ubase_check(uref_clock_get_pts_sys(uref, &pts)))
+                uref_clock_set_pts_sys(uref, pts + duration);
+            if (ubase_check(uref_clock_get_pts_orig(uref, &pts)))
+                uref_clock_set_pts_orig(uref, pts + duration);
+        }
+    }
+
     /* set pts (needed for uref/avpkt mapping) */
     frame->pts = upipe_avcenc->avcpts++;
-    if (unlikely(!ubase_check(uref_avcenc_set_priv(uref, frame->pts)))) {
-        uref_free(uref);
+    if (unlikely(!ubase_check(uref_avcenc_set_priv(main_uref, frame->pts)))) {
+        uref_free(main_uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        free(buf);
         return;
     }
 
     /* store uref in mapping list */
-    ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));
+    ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(main_uref));
     upipe_avcenc_encode_frame(upipe, frame, upump);
     free(buf);
 }
@@ -747,21 +706,18 @@ static bool upipe_avcenc_encode(struct upipe *upipe,
             break;
 
         case AVMEDIA_TYPE_AUDIO: {
-            upipe_avcenc_append_sound_stream(upipe, uref);
-
-            int size = av_samples_get_buffer_size(NULL, context->channels,
-                                                  context->frame_size,
-                                                  context->sample_fmt, 0);
-            size_t remaining = 0;
-            while (upipe_avcenc->next_uref &&
-                   ubase_check(uref_block_size(upipe_avcenc->next_uref, &remaining)) &&
-                   (remaining >= size)) {
-                uref = upipe_avcenc_extract_sound_stream(upipe, size,
-                            context->channels,
-                            av_get_bytes_per_sample(context->sample_fmt),
-                            context->sample_rate);
-                upipe_avcenc_encode_audio(upipe, uref, upump);
+            size_t size;
+            if (unlikely(!ubase_check(uref_sound_size(uref, &size, NULL)))) {
+                upipe_warn(upipe, "invalid uref received");
+                uref_free(uref);
+                return true;
             }
+
+            ulist_add(&upipe_avcenc->sound_urefs, uref_to_uchain(uref));
+            upipe_avcenc->nb_samples += size;
+
+            while (upipe_avcenc->nb_samples >= context->frame_size)
+                upipe_avcenc_encode_audio(upipe, upump);
             break;
         }
         default:
@@ -809,8 +765,7 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
 
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (unlikely((ubase_ncmp(def, "pic.") && ubase_ncmp(def, "sound.") &&
-                  strstr(def, ".sound.") == NULL))) {
+    if (unlikely((ubase_ncmp(def, "pic.") && ubase_ncmp(def, "sound.")))) {
         upipe_err(upipe, "incompatible flow def");
         return UBASE_ERR_INVALID;
     }
@@ -927,8 +882,9 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else {
+        uint8_t channels;
         enum AVSampleFormat sample_fmt =
-            upipe_av_samplefmt_from_flow_def(def);
+            upipe_av_samplefmt_from_flow_def(flow_def, &channels);
         const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
         if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL) {
             upipe_err_va(upipe, "unsupported sample format %s", def);
@@ -941,18 +897,9 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
             sample_fmts++;
         }
         if (*sample_fmts == -1) {
-            /* Try again with planar formats. */
-            sample_fmts = codec->sample_fmts;
-            while (*sample_fmts != -1) {
-                if (av_get_packed_sample_fmt(*sample_fmts) == sample_fmt)
-                    break;
-                sample_fmts++;
-            }
-            if (*sample_fmts == -1) {
-                upipe_err_va(upipe, "unsupported sample format %s", def);
-                uref_free(flow_def_check);
-                return UBASE_ERR_INVALID;
-            }
+            upipe_err_va(upipe, "unsupported sample format %s", def);
+            uref_free(flow_def_check);
+            return UBASE_ERR_INVALID;
         }
         context->sample_fmt = *sample_fmts;
 
@@ -978,15 +925,8 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
         context->time_base.num = 1;
         context->time_base.den = 1;//rate; FIXME
 
-        uint8_t channels;
         const uint64_t *channel_layouts =
             upipe_avcenc->context->codec->channel_layouts;
-        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
-            channel_layouts == NULL) {
-            upipe_err_va(upipe, "unsupported channel layout");
-            uref_free(flow_def_check);
-            return UBASE_ERR_INVALID;
-        }
         while (*channel_layouts != 0) {
             if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
                 break;
@@ -1128,7 +1068,6 @@ static void upipe_avcenc_free(struct upipe *upipe)
     upipe_avcenc_clean_ubuf_mgr(upipe);
     upipe_avcenc_clean_upump_av_deal(upipe);
     upipe_avcenc_clean_upump_mgr(upipe);
-    upipe_avcenc_clean_sound_stream(upipe);
     upipe_avcenc_clean_output(upipe);
     upipe_avcenc_clean_flow_def(upipe);
     upipe_avcenc_clean_flow_def_check(upipe);
@@ -1194,7 +1133,9 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_flow_def(upipe);
     upipe_avcenc_init_flow_def_check(upipe);
     upipe_avcenc_init_sink(upipe);
-    upipe_avcenc_init_sound_stream(upipe);
+
+    ulist_init(&upipe_avcenc->sound_urefs);
+    upipe_avcenc->nb_samples = 0;
 
     ulist_init(&upipe_avcenc->urefs_in_use);
     upipe_avcenc->avcpts = 1;

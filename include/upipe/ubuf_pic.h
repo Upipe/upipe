@@ -219,6 +219,16 @@ static inline enum ubase_err ubuf_pic_plane_write(struct ubuf *ubuf,
  *
  * @param ubuf pointer to ubuf
  * @param chroma chroma type (see chroma reference)
+ * @param hoffset horizontal offset of the picture area wanted in the whole
+ * picture, negative values start from the end of lines, in pixels (before
+ * dividing by macropixel and hsub)
+ * @param voffset vertical offset of the picture area wanted in the whole
+ * picture, negative values start from the last line, in lines (before dividing
+ * by vsub)
+ * @param hsize number of pixels wanted per line, or -1 for until the end of
+ * the line
+ * @param vsize number of lines wanted in the picture area, or -1 for until the
+ * last line
  * @return an error code
  */
 static inline enum ubase_err ubuf_pic_plane_unmap(struct ubuf *ubuf,
