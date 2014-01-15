@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -675,7 +675,6 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
-        uint8_t intradc = mp2vpicx_get_intradc(ext);
         uint8_t structure = mp2vpicx_get_structure(ext);
         bool tff = mp2vpicx_get_tff(ext);
         bool rff = mp2vpicx_get_rff(ext);
@@ -683,10 +682,6 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
         UBASE_FATAL(upipe, uref_block_peek_unmap(uref,
                                           upipe_mpgvf->next_frame_ext_offset,
                                           ext_buffer, ext))
-
-        if (intradc != 0)
-            upipe_warn_va(upipe, "bit depth %"PRIu8" is possibly not supported",
-                          intradc + 8);
 
         if (upipe_mpgvf->progressive_sequence) {
             if (rff)
