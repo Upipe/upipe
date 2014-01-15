@@ -163,7 +163,7 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
         upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
-    wanted_hsize = hsize * sar.num / sar.den;
+    wanted_hsize = (hsize * sar.num / sar.den / 2) * 2;
     progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
     struct uref *flow_def2 = uref_dup(flow_def);
