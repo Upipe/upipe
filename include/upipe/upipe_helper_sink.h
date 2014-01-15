@@ -97,7 +97,7 @@ extern "C" {
  *
  * @item @code
  * @item @code
- *  void upipe_foo_output_sink(struct upipe *upipe)
+ *  bool upipe_foo_output_sink(struct upipe *upipe)
  * @end code
  * Outputs urefs that have been held.
  *
@@ -239,7 +239,7 @@ static struct uref *STRUCTURE##_pop_sink(struct upipe *upipe)               \
 /** @internal @This outputs all urefs that have been held.                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @return true if all urefs could ben output                               \
+ * @return true if all urefs could be output                                \
  */                                                                         \
 static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
 {                                                                           \
