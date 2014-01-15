@@ -170,6 +170,10 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_sws->ubuf_mgr,
                                        output_hsize, output_vsize);
     if (unlikely(ubuf == NULL)) {
+        for (i = 0; i < UPIPE_AV_MAX_PLANES &&
+                    upipe_sws->input_chroma_map[i] != NULL; i++)
+            uref_pic_plane_unmap(uref, upipe_sws->input_chroma_map[i],
+                                 0, 0, -1, -1);
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
