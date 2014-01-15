@@ -281,8 +281,8 @@ static inline enum ubase_err upipe_ts_mux_set_mode(struct upipe *upipe,
  * @param mtu_p filled in with the configured mtu, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_aggregate_get_mtu(struct upipe *upipe,
-                                                        unsigned int *mtu_p)
+static inline enum ubase_err upipe_ts_mux_get_mtu(struct upipe *upipe,
+                                                  unsigned int *mtu_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu_p);
@@ -295,8 +295,8 @@ static inline enum ubase_err upipe_ts_aggregate_get_mtu(struct upipe *upipe,
  * @param mtu configured mtu, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_aggregate_set_mtu(struct upipe *upipe,
-                                                        unsigned int mtu)
+static inline enum ubase_err upipe_ts_mux_set_mtu(struct upipe *upipe,
+                                                  unsigned int mtu)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu);
