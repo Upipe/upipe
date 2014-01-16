@@ -1,0 +1,283 @@
+
+@section TPH {Tutorials}
+
+  @section T {Application tutorial}
+
+    In this tutorial, we will write an application that builds a pipeline featuring a file source, a TS demux, an avcodec decoder, an avcodec JPEG encoder, and a file sink. The goal of the application is to extract the first picture off of a TS file, and write it to the disk as a JPEG. The full source code is in the examples/extract_pic.c file.
+
+    @section {Upipe environment}
+
+      First we start with setting up the global structures required by most Upipe modules:
+
+      @code
+struct ev_loop *loop = ev_default_loop(0);
+struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
+struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
+struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
+      @end code
+
+      The first two lines establish an event loop, which will be the event loop of our main thread. In the example we use the libev library. The umem_mgr, udict_mgr and uref_mgr structures are used by Upipe modules to allocate memory chunks, which will serve as certain purposes.
+
+      We then start building the pipeline from source to sink, beginning with the file source module:
+
+      @code
+struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
+upipe_source = upipe_void_alloc(upipe_fsrc_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                             loglevel, "fsrc"));
+assert(upipe_source != NULL);
+upipe_mgr_release(upipe_fsrc_mgr);
+if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))
+    exit(EXIT_FAILURE);
+      @end code
+
+      In Upipe, each object is attached to a "manager", which is used to allocate objects and perform commands on it. The manager is also useful when there is some kind of global context to maintain, such as the handle of a unique hardware resource. So the first line allocates the manager for file sources. The second line allocates a pipe object. @ref upipe_void_alloc is the function used to allocate pipes which require no extra argument (such as specifying the output format of the pipe). Its first argument is the manager to use, and the second specifies a list of "probes" to attach to the pipe. Probes are used to handle events and log messages, and can be viewed as a hierarchy - lower-level probes will be called before higher-level probes. In this case, we allocate a uprobe_pfx probe, whose purpose is to prepend "[fsrc] " before every log message, and uprobe_output, which is used to communicate with the output pipe (more information on that later). The next probe after uprobe_output is the global probe "logger", on which we have to increment the refcount via @ref uprobe_use, and whose purpose is to print messages to stderr (more information later).
+
+      After the pipe has been allocated, there is no need for the file source manager anymore, so we can release it. In Upipe, most structures are refcounted so the object is not actually freed - it is still in use by the upipe_source object. It will only be freed when upipe_source is released. But the upipe_fsrc_mgr pointer should no longer be accessed after this point.
+
+      The last command we send, @ref upipe_set_uri, sends a control command to the file source pipe, asking it to open the file srcpath. It returns an error code that should be UBASE_ERR_NONE if the file was opened, or any other documented error.
+
+      At this point we have opened a file, and as it is supposed to be a TS file, we would like to allocate a demux.
+
+      @code
+struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
+struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
+upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr, upipe_mpgvf_mgr);
+upipe_mgr_release(upipe_mpgvf_mgr);
+struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
+upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
+upipe_mgr_release(upipe_h264f_mgr);
+struct upipe *ts_demux = upipe_void_alloc_output(upipe_source, upipe_ts_demux_mgr,
+    uprobe_pfx_alloc(
+	uprobe_selflow_alloc(uprobe_use(logger),
+	    uprobe_selflow_alloc(uprobe_use(logger), &uprobe_catch,
+		UPROBE_SELFLOW_PIC, "auto"),
+	    UPROBE_SELFLOW_VOID, "auto"),
+	 loglevel, "tsdemux"));
+assert(ts_demux != NULL);
+upipe_mgr_release(upipe_ts_demux_mgr);
+upipe_release(ts_demux);
+      @end code
+
+      Again, we start by allocating the TS demux manager. Then we allocate other managers for framers (parsers for MPEG-2 and MPEG-4 AVC video formats), which are delivered in separate libraries, and we tell the TS demux manager about them. Then we allocate the TS demux as the output of our file source. When it is done we can release the ts_demux pointer as we won't need to access it again - this doesn't release the object, as it is still in use by the source pipe.
+
+      The TS demux is allocated with a collection of probes - uprobe_pfx (which was already discussed) and uprobe_selflow. We'll talk about this one later. There is no uprobe_output, as the ts_demux pipe itself doesn't have any output. Then we enter the process's main event loop:
+
+      @code
+ev_loop(loop, 0);
+      @end code
+
+      This is a libev instruction that starts watchers and triggers callbacks. So what happens now? The file source pipe has allocated an idler pump, that is called immediately to read data from the file. The data is then fed to the TS demux, which starts by looking for a PAT (a structure containing the list of programs in the file). When a PAT is found, it emits a @ref UPROBE_SPLIT_UPDATE event, and the list of programs can be read via @ref upipe_split_iterate. We have a probe that does just that: iterate on the list of programs, and select the one	we'd like to read. This is why we passed that to the TS demux:
+
+      @code
+    uprobe_pfx_alloc(
+	uprobe_selflow_alloc(uprobe_use(logger), [...],
+	    UPROBE_SELFLOW_VOID, "auto"),
+	 loglevel, "tsdemux"));
+      @end code
+
+      UPROBE_SELFLOW_VOID indicates that we are looking for a program, "auto" means to select the first available program (otherwise you can specify a list of comma-separated program numbers). This probe, on the first detected program, allocates a "subpipe", an object with a @ref upipe API which indicates our interest for the program. In turn, the subpipe looks for a PMT (a structure containing the list of elementary streams in the program), and emits @ref UPROBE_SPLIT_UPDATE. Then another uprobe_selflow allows to select the first video elementary stream:
+
+      @code
+	    uprobe_selflow_alloc(uprobe_use(logger), &uprobe_catch,
+		UPROBE_SELFLOW_PIC, "auto"),
+      @end code
+
+      In all probes, the first argument is the next probe to call if the event wasn't caught. For selflow, the second argument is the probe to pass to subpipes when they are allocated. In that second case, we pass &uprobe_catch, an application-defined probe intialized earlier:
+
+      @code
+struct uprobe uprobe_catch;
+uprobe_init(&uprobe_catch, split_catch, uprobe_use(logger));
+      @end code
+
+      Where split_catch is a callback:
+
+      @code
+static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                  enum uprobe_event event, va_list args)
+{
+    if (event != UPROBE_NEW_FLOW_DEF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
+                                loglevel, "avcdec"));
+    if (avcdec == NULL) {
+        upipe_err_va(upipe, "incompatible flow def");
+        upipe_release(upipe_source);
+        return UBASE_ERR_UNHANDLED;
+    }
+    upipe_release(avcdec);
+    return UBASE_ERR_NONE;
+}
+      @end code
+
+      This probe only catches @ref UPROBE_NEW_FLOW_DEF, which is thrown when the first picture out of the mpgv or h264 framer is sent. We allocate an avcodec decoder, with a special probe, defined as followed:
+
+      @code
+static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                   enum uprobe_event event, va_list args)
+{
+    if (event != UPROBE_NEW_FLOW_DEF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct uref *flow_def = va_arg(args, struct uref *);
+
+    uint64_t hsize, vsize, wanted_hsize;
+    struct urational sar;
+    bool progressive;
+    if (unlikely(!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
+                 !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)) ||
+                 !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
+        upipe_err_va(upipe, "incompatible flow def");
+        upipe_release(upipe_source);
+        return UBASE_ERR_UNHANDLED;
+    }
+    wanted_hsize = (hsize * sar.num / sar.den / 2) * 2;
+    progressive = ubase_check(uref_pic_get_progressive(flow_def));
+
+    struct uref *flow_def2 = uref_dup(flow_def);
+    upipe_use(upipe);
+
+    if (!progressive) {
+        uref_pic_set_progressive(flow_def2);
+        struct upipe *deint = upipe_void_alloc_output(upipe,
+                upipe_filter_blend_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                                 loglevel, "deint"));
+        assert(deint != NULL);
+        upipe_release(upipe);
+        upipe = deint;
+    }
+
+    if (wanted_hsize != hsize) {
+        uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
+        struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr,
+                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                    loglevel, "sws"), flow_def2);
+        assert(sws != NULL);
+        upipe_release(upipe);
+        if (sws == NULL) {
+            upipe_err_va(upipe, "incompatible flow def");
+            uref_free(flow_def2);
+            upipe_release(upipe_source);
+            return true;
+        }
+        upipe = sws;
+    }
+
+    uref_pic_flow_clear_format(flow_def2);
+    uref_flow_set_def(flow_def2, "block.mjpeg.pic.");
+    struct upipe *jpegenc = upipe_flow_alloc_output(upipe, upipe_avcenc_mgr,
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                                loglevel, "jpeg"), flow_def2);
+    assert(jpegenc != NULL);
+    upipe_release(upipe);
+    upipe_avcenc_set_option(jpegenc, "qmax", "2");
+    upipe = jpegenc;
+
+    struct upipe *urefprobe = upipe_void_alloc_output(upipe,
+            upipe_probe_uref_mgr,
+            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_uref)),
+                                loglevel, "urefprobe"));
+    assert(urefprobe != NULL);
+    upipe_release(upipe);
+    upipe = urefprobe;
+
+    struct upipe *fsink = upipe_void_alloc_output(upipe, upipe_fsink_mgr,
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel),
+            "jpegsink"));
+    assert(fsink != NULL);
+    upipe_release(upipe);
+    upipe_fsink_set_path(fsink, dstpath, UPIPE_FSINK_OVERWRITE);
+    upipe = fsink;
+
+    uref_free(flow_def2);
+    upipe_release(upipe);
+    return UBASE_ERR_NONE;
+}
+      @end code
+
+      This probe does the hard work. It allocates a deinterlacer, a scaler (on an as-needed basis), a JPEG encoder, an uref probe (more on this later) and a file sink. The pipes are released after allocation, so that a single call to @ref upipe_release on the avcodec decoder releases the rest of the pipeline. Note how we use a second flow definition packet (uref2) and @ref upipe_flow_alloc_output to specify the output format of the deinterlacer and scaler.
+
+      We said we wanted to output only the first frame, and quit afterwards. This magic is performed with the "urefprobe" pipe, allocated in the avcodec probe. This type of pipe throws a custom event (@ref UPROBE_PROBE_UREF) for each incoming uref. Then we just need to write a specific probe handler as follows:
+
+      @code
+static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
+                                 enum uprobe_event event, va_list args)
+{
+    if (event != UPROBE_PROBE_UREF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    unsigned int signature = va_arg(args_copy, unsigned int);
+    va_end(args_copy);
+    if (signature != UPIPE_PROBE_UREF_SIGNATURE)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    if (upipe_source != NULL) {
+        /* release the source to exit */
+        upipe_release(upipe_source);
+        upipe_source = NULL;
+        /* send demux output to /dev/null */
+        upipe_set_output(upipe_split_output, upipe_null);
+        upipe_release(upipe_split_output);
+        upipe_split_output = NULL;
+    } else {
+        /* second (or after) frame, do not output them */
+        upipe_set_output(upipe, upipe_null);
+    }
+    return UBASE_ERR_NONE;
+}
+      @end code
+
+      The @ref UPROBE_PROBE_UREF event is a custom event; it is mandatory for custom events to send the pipe's signature as the first argument, to make sure that we do not mistake it with another custom event from another pipe. So the magic here is, as soon as we receive the first picture (first uref), we release the source. Another good idea is to send the output of the TS demux to a null pipe (a pipe that discards all input packets), so that we do not decode the following picture that could be output by the file source before it is finally deallocated (in Upipe, pipes treat entire uref's at a time, and are protected from deletion for the duration of the processing of the uref; if a uref contains several "frames", it is therefore possible for it to output several frames before being deallocated). The else clause is useful in case avcodec outputs several frames, which can happen if there is some reordering magic in the codec (B frames and stuff).
+
+      The release of the file source pipe kills its idler pump. When there is no pump anymore, libev returns from the ev_loop call, and the process exits. However please note that if the file sink is blocked (for instance writing to a blocking pipe), a pump will be allocated, and libev will only return when the file sink has finished its job and killed its pump.
+
+      When the event loop is over, you should release all pipes to which you have kept a pointer, clean all custom probe structures, and release all managers. The example shows how to do that.
+
+      There is one more thing we haven't talked about. All pipes we allocated have an argument (or a subsequently allocated probe) uprobe_use(logger). The logger object is allocated at the beginning of the program as follows:
+
+      @code
+logger = uprobe_stdio_alloc(NULL, logstream, loglevel);
+assert(logger != NULL);
+logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+assert(logger != NULL);
+logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+assert(logger != NULL);
+logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+			   UBUF_POOL_DEPTH);
+assert(logger != NULL);
+      @end code
+
+      So it is a collection of probes that are passed to all pipes. The uprobe_stdio probe catches all log messages and prints them to an stdio handle (typically stderr). uprobe_uref_mgr and uprobe_upump_mgr catch respectively @ref UPROBE_NEED_UREF_MGR and @ref UPROBE_NEED_UPUMP_MGR, which can be thrown by pipes which need to allocate urefs or upumps. Finally, uprobe_ubuf_mem catches the @ref UPROBE_NEW_FLOW_FORMAT event, and allocates an ubuf manager (a structure which allocates data buffer) according to the given flow format (block, picture or sound).
+
+      The @ref uprobe_use call is necessary because when passing a probe to a pipe (or a lower-level probe), it then owns the probe, and it wouldn't be possible to use the logger pointer anymore afterwards. The call increments the reference count of the logger object, so that logger can be used on other pipes as well. This implies that at the end of the process, logger must be released:
+
+      @code
+uprobe_release(logger);
+      @end code
+
+      Finally, we need to explain how the magic of connecting pipes together works, and the role of the uprobe_output probe. Upipe has two kinds of control messages :
+
+      @list
+        @item flow format: describes the low-level format of the buffer (block/picture/sound, number of planes, size of samples, etc.)
+        @item flow definition: extends the flow format with more metadata (language, codec global headers, fps, sample_rate, etc.)
+      @end list
+
+      A pipe may only be the output of another if both agree on the flow format and flow definition. When the input pipe determines a new flow format, it throws a @ref UPROBE_NEW_FLOW_FORMAT event. uprobe_output catches this event, and calls @ref upipe_amend_flow_format on the output, so the output has the chance to modify the padding or alignment of buffers. Then it forwards the event upstream (to a higher-level probe), which allocates a @ref ubuf_mgr (such as uprobe_ubuf_mem), so the input can allocate buffers.
+
+      When the first buffer is ready to be output, the input pipe throws @ref UPROBE_NEW_FLOW_DEF. uprobe_output catches the event, and calls @ref upipe_set_flow_def on the output. If the output pipe returns an error, it is deallocated, and uprobe_output forwards the event upstream, so a new output pipe can be allocated (using @ref upipe_void_alloc_output or @ref upipe_flow_alloc_output).
+
+      So uprobe_output plays a major role in flow negociations, and should be allocated for each pipe, except sinks (which have no output). Some pipes, like the TS demux are technically a sink, because the output is handled by a subpipe for each elementary stream.
+    @end section
+
+  @end section
+
+  @section T {Pipe tutorial}
+  @end section
+
+@end section
