@@ -481,7 +481,10 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (ts)
         upipe_throw_clock_ts(upipe, uref);
 
-    upipe_avfsrc_sub_output(upipe_avfsrc_sub_to_upipe(output), uref, upump);
+    upipe_use(upipe);
+    upipe_avfsrc_sub_output(upipe_avfsrc_sub_to_upipe(output), uref,
+                            &upipe_avfsrc->upump);
+    upipe_release(upipe);
 }
 
 /** @internal @This starts the worker.

@@ -182,9 +182,9 @@ static void upipe_ts_agg_init(struct upipe *upipe)
  * necessary, and rewrites PCR if necessary.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
+static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     struct uref *uref = upipe_ts_agg->next_uref;
@@ -235,7 +235,7 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump *upump)
         upipe_verbose_va(upipe, "inserting %u padding at %"PRIu64, padding,
                          next_cr_sys);
 
-    upipe_ts_agg_output(upipe, uref, upump);
+    upipe_ts_agg_output(upipe, uref, upump_p);
 }
 
 /** @internal @This rewrites the PCR according to the new output date.
@@ -281,10 +281,10 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
 
@@ -349,7 +349,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
      * aggregate */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
         dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval)
-        upipe_ts_agg_complete(upipe, upump);
+        upipe_ts_agg_complete(upipe, upump_p);
 
     if (ubase_check(uref_clock_get_ref(uref))) {
         /* fix the PCR according to the new output date */
@@ -383,7 +383,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
 
     /* anticipate next packet size and flush now if necessary */
     if (upipe_ts_agg->next_uref_size + TS_SIZE > mtu)
-        upipe_ts_agg_complete(upipe, upump);
+        upipe_ts_agg_complete(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

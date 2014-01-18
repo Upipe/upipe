@@ -68,7 +68,7 @@
 static void upipe_fsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump);
+                               struct upump **upump_p);
 
 /** @internal @This is the private context of a file sink pipe. */
 struct upipe_fsink {
@@ -161,11 +161,11 @@ static void upipe_fsink_poll(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return true if the uref was processed
  */
 static bool upipe_fsink_output(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
 
@@ -273,17 +273,17 @@ static void upipe_fsink_watcher(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     if (!upipe_fsink_check_sink(upipe)) {
         upipe_fsink_hold_sink(upipe, uref);
-        upipe_fsink_block_sink(upipe, upump);
-    } else if (!upipe_fsink_output(upipe, uref, upump)) {
+        upipe_fsink_block_sink(upipe, upump_p);
+    } else if (!upipe_fsink_output(upipe, uref, upump_p)) {
         upipe_fsink_hold_sink(upipe, uref);
-        upipe_fsink_block_sink(upipe, upump);
+        upipe_fsink_block_sink(upipe, upump_p);
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);

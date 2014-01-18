@@ -54,7 +54,7 @@ static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts);
 static void upipe_trickp_check_start(struct upipe *upipe);
 /** @hidden */
 static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump);
+                                     struct upump **upump);
 
 /** @internal @This is the private context of a trickp pipe. */
 struct upipe_trickp {
@@ -165,11 +165,11 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return true if the uref was processed
  */
 static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump)
+                                     struct upump **upump_p)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(upipe->mgr);
     if (upipe_trickp->rate.num == 0 || upipe_trickp->rate.den == 0) {
@@ -187,7 +187,7 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
                                           date),
                 type);
 
-    upipe_trickp_sub_output(upipe, uref, upump);
+    upipe_trickp_sub_output(upipe, uref, upump_p);
     return true;
 }
 
@@ -195,10 +195,10 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump *upump)
+                                   struct upump **upump_p)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(upipe->mgr);
     if (unlikely(!ubase_check(upipe_trickp_check_uclock(upipe_trickp_to_upipe(upipe_trickp))))) {
@@ -209,14 +209,14 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
     if (upipe_trickp->rate.num == 0 || upipe_trickp->rate.den == 0) {
         /* pause */
         upipe_trickp_sub_hold_sink(upipe, uref);
-        upipe_trickp_sub_block_sink(upipe, upump);
+        upipe_trickp_sub_block_sink(upipe, upump_p);
     } else if (upipe_trickp->systime_offset == 0) {
         upipe_trickp_sub_hold_sink(upipe, uref);
         upipe_trickp_check_start(upipe_trickp_to_upipe(upipe_trickp));
     } else if (!upipe_trickp_sub_check_sink(upipe) ||
-               !upipe_trickp_sub_process(upipe, uref, upump)) {
+               !upipe_trickp_sub_process(upipe, uref, upump_p)) {
         upipe_trickp_sub_hold_sink(upipe, uref);
-        upipe_trickp_sub_block_sink(upipe, upump);
+        upipe_trickp_sub_block_sink(upipe, upump_p);
     }
 }
 

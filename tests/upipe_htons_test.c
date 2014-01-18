@@ -94,7 +94,7 @@ static struct upipe *htons_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_htons */
 static void htons_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump *upump)
+                          struct upump **upump_p)
 {
     assert(uref != NULL);
     const uint8_t *buffer;

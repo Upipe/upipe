@@ -76,13 +76,13 @@ UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump *upump)
+                                   struct upump **upump_p)
 {
     upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref);
-    upipe_probe_uref_output(upipe, uref, upump);
+    upipe_probe_uref_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

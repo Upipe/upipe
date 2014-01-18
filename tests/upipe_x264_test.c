@@ -98,7 +98,7 @@ static struct upipe *x264_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_x264 */
 static void x264_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct x264_test *x264_test = x264_test_from_upipe(upipe);
     uint64_t pts = 0, dts = 0;

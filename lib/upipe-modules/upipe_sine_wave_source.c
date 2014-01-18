@@ -196,7 +196,9 @@ static void upipe_sinesrc_idler(struct upump *upump)
         uref_clock_set_pts_sys(uref, upipe_sinesrc->next_pts);
         upipe_sinesrc->next_pts += UPIPE_SINESRC_DURATION;
     }
-    upipe_sinesrc_output(upipe, uref, upump);
+    upipe_use(upipe);
+    upipe_sinesrc_output(upipe, uref, &upipe_sinesrc->upump);
+    upipe_release(upipe);
 }
 
 /** @internal @This processes control commands on a sine wave source pipe.

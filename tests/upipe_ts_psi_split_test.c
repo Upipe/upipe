@@ -115,7 +115,7 @@ static void ts_test_set_table(struct upipe *upipe, uint16_t table_id)
 
 /** helper phony pipe to test upipe_ts_psi_split */
 static void ts_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump *upump)
+                          struct upump **upump_p)
 {
     struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
     assert(uref != NULL);

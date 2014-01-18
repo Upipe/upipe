@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -100,7 +100,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
 
 /** helper phony pipe to test upipe_multicat_probe */
 static void test_input(struct upipe *upipe, struct uref *uref,
-                       struct upump *upump)
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     uref_free(uref);

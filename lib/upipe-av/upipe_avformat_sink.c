@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -130,7 +130,7 @@ UPIPE_HELPER_SUBPIPE(upipe_avfsink, upipe_avfsink_sub, sub, sub_mgr,
                      subs, uchain)
 
 /** @hidden */
-static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump);
+static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p);
 
 /** @internal @This allocates an output subpipe of an avfsink pipe.
  *
@@ -169,10 +169,10 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
+                                    struct upump **upump_p)
 {
     struct upipe_avfsink_sub *upipe_avfsink_sub =
         upipe_avfsink_sub_from_upipe(upipe);
@@ -198,7 +198,7 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
 
     struct upipe_avfsink *upipe_avfsink =
         upipe_avfsink_from_sub_mgr(upipe->mgr);
-    upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump);
+    upipe_avfsink_mux(upipe_avfsink_to_upipe(upipe_avfsink), upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -488,9 +488,9 @@ static struct upipe_avfsink_sub *upipe_avfsink_find_input(struct upipe *upipe)
 /** @internal @This asks avformat to multiplex some data.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the last buffer
+ * @param upump_p reference to pump that generated the last buffer
  */
-static void upipe_avfsink_mux(struct upipe *upipe, struct upump *upump)
+static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     struct upipe_avfsink_sub *input;

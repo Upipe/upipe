@@ -99,7 +99,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
 
 /** helper phony pipe to test upipe_a52f */
 static void test_input(struct upipe *upipe, struct uref *uref,
-                       struct upump *upump)
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     upipe_dbg_va(upipe, "frame: %u", nb_packets);

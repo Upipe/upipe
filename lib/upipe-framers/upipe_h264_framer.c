@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1170,9 +1170,9 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
 /** @internal @This handles and outputs an access unit.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
+static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (!upipe_h264f->au_size || upipe_h264f->au_slice_nal == UINT8_MAX)
@@ -1325,21 +1325,22 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump *upump)
         return;
     }
 
-    upipe_h264f_output(upipe, uref, upump);
+    upipe_h264f_output(upipe, uref, upump_p);
 }
 
 /** @internal @This outputs the previous access unit, before the current NAL.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_h264f_output_prev_au(struct upipe *upipe, struct upump *upump)
+static void upipe_h264f_output_prev_au(struct upipe *upipe,
+                                       struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     size_t slice_size = upipe_h264f->au_size -
                         upipe_h264f->au_last_nal_offset;
     upipe_h264f->au_size = upipe_h264f->au_last_nal_offset;
-    upipe_h264f_output_au(upipe, upump);
+    upipe_h264f_output_au(upipe, upump_p);
     upipe_h264f->au_size = slice_size;
     upipe_h264f->au_last_nal_offset = 0;
 }
@@ -1348,9 +1349,9 @@ static void upipe_h264f_output_prev_au(struct upipe *upipe, struct upump *upump)
  * access unit if it is the start of a new one.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_h264f_parse_slice(struct upipe *upipe, struct upump *upump)
+static void upipe_h264f_parse_slice(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     struct upipe_h264f_stream f;
@@ -1372,7 +1373,7 @@ upipe_h264f_parse_slice_retry:
 
     if (upipe_h264f->au_slice && pps_id != upipe_h264f->active_pps) {
         ubuf_block_stream_clean(s);
-        upipe_h264f_output_prev_au(upipe, upump);
+        upipe_h264f_output_prev_au(upipe, upump_p);
         goto upipe_h264f_parse_slice_retry;
     }
 
@@ -1411,7 +1412,7 @@ upipe_h264f_parse_slice_retry:
          bf != upipe_h264f->bf ||
          idr_pic_id != upipe_h264f->idr_pic_id)) {
         ubuf_block_stream_clean(s);
-        upipe_h264f_output_prev_au(upipe, upump);
+        upipe_h264f_output_prev_au(upipe, upump_p);
         goto upipe_h264f_parse_slice_retry;
     }
     upipe_h264f->frame_num = frame_num;
@@ -1432,7 +1433,7 @@ upipe_h264f_parse_slice_retry:
             (poc_lsb != upipe_h264f->poc_lsb ||
              delta_poc_bottom != upipe_h264f->delta_poc_bottom)) {
             ubuf_block_stream_clean(s);
-            upipe_h264f_output_prev_au(upipe, upump);
+            upipe_h264f_output_prev_au(upipe, upump_p);
             goto upipe_h264f_parse_slice_retry;
         }
         upipe_h264f->poc_lsb = poc_lsb;
@@ -1449,7 +1450,7 @@ upipe_h264f_parse_slice_retry:
             (delta_poc0 != upipe_h264f->delta_poc0 ||
              delta_poc1 != upipe_h264f->delta_poc1)) {
             ubuf_block_stream_clean(s);
-            upipe_h264f_output_prev_au(upipe, upump);
+            upipe_h264f_output_prev_au(upipe, upump_p);
             goto upipe_h264f_parse_slice_retry;
         }
         upipe_h264f->delta_poc0 = delta_poc0;
@@ -1460,9 +1461,9 @@ upipe_h264f_parse_slice_retry:
 /** @internal @This is called when a new NAL starts, to check the previous NAL.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
+static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (unlikely(!upipe_h264f->acquired)) {
@@ -1484,7 +1485,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
         if (unlikely(upipe_h264f->got_discontinuity))
             uref_flow_set_error(upipe_h264f->next_uref);
         else
-            upipe_h264f_parse_slice(upipe, upump);
+            upipe_h264f_parse_slice(upipe, upump_p);
         if (last_nal_type == H264NAL_TYPE_IDR) {
             uint64_t systime_rap;
             if (ubase_check(uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap)))
@@ -1523,10 +1524,10 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump *upump)
 /** @internal @This is called when a new NAL starts, to check it.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @param true if the NAL was completely handled
  */
-static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump *upump)
+static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     /* detection of a new access unit - ISO/IEC 14496-10 7.4.1.2.4 */
@@ -1569,7 +1570,7 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump *upump)
         case H264NAL_TYPE_ENDSEQ:
         case H264NAL_TYPE_ENDSTR:
             /* immediately output everything and jump out */
-            upipe_h264f_output_au(upipe, upump);
+            upipe_h264f_output_au(upipe, upump_p);
             return true;
 
         case H264NAL_TYPE_AUD:
@@ -1589,7 +1590,7 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump *upump)
     }
 
     upipe_h264f->au_size -= upipe_h264f->au_last_nal_start_size;
-    upipe_h264f_output_au(upipe, upump);
+    upipe_h264f_output_au(upipe, upump_p);
     upipe_h264f->au_size = upipe_h264f->au_last_nal_start_size;
     return false;
 }
@@ -1598,9 +1599,9 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump *upump)
  * buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_h264f_work(struct upipe *upipe, struct upump *upump)
+static void upipe_h264f_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     while (upipe_h264f->next_uref != NULL) {
@@ -1610,12 +1611,12 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump *upump)
         size_t start_size = !prev ? 5 : 4;
 
         upipe_h264f->au_size -= start_size;
-        upipe_h264f_nal_end(upipe, upump);
+        upipe_h264f_nal_end(upipe, upump_p);
         upipe_h264f->au_size += start_size;
         upipe_h264f->got_discontinuity = false;
         upipe_h264f->au_last_nal = start;
         upipe_h264f->au_last_nal_start_size = start_size;
-        if (upipe_h264f_nal_begin(upipe, upump))
+        if (upipe_h264f_nal_begin(upipe, upump_p))
             upipe_h264f->au_last_nal_offset = -1;
         else
             upipe_h264f->au_last_nal_offset = upipe_h264f->au_size - start_size;
@@ -1626,10 +1627,10 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
 
@@ -1637,7 +1638,7 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
         upipe_h264f->got_discontinuity = true;
 
     upipe_h264f_append_uref_stream(upipe, uref);
-    upipe_h264f_work(upipe, upump);
+    upipe_h264f_work(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

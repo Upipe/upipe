@@ -100,10 +100,10 @@ UPIPE_HELPER_UREF_STREAM(upipe_chunk_stream, next_uref, next_uref_size, urefs, N
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_chunk_stream_input(struct upipe *upipe,
-                                     struct uref *uref, struct upump *upump)
+                                     struct uref *uref, struct upump **upump_p)
 {
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
@@ -121,7 +121,7 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        upipe_chunk_stream_output(upipe, uref, upump);
+        upipe_chunk_stream_output(upipe, uref, upump_p);
     }
 }
 
@@ -147,9 +147,8 @@ static enum ubase_err upipe_chunk_stream_set_flow_def(struct upipe *upipe,
 /** @internal @This flushes input buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
  */
-static void upipe_chunk_stream_flush(struct upipe *upipe, struct upump *upump)
+static void upipe_chunk_stream_flush(struct upipe *upipe)
 {
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
@@ -171,7 +170,7 @@ static void upipe_chunk_stream_flush(struct upipe *upipe, struct upump *upump)
             return;
         }
         
-        upipe_chunk_stream_output(upipe, uref, upump);
+        upipe_chunk_stream_output(upipe, uref, NULL);
     }
     upipe_chunk_stream_clean_uref_stream(upipe);
     upipe_chunk_stream_init_uref_stream(upipe);
@@ -303,7 +302,7 @@ static struct upipe *upipe_chunk_stream_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_chunk_stream_free(struct upipe *upipe)
 {
-    upipe_chunk_stream_flush(upipe, NULL);
+    upipe_chunk_stream_flush(upipe);
 
     upipe_throw_dead(upipe);
 

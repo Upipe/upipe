@@ -162,7 +162,7 @@ static struct upipe *avcdec_test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe to test upipe_avcdec */
-static void avcdec_test_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
+static void avcdec_test_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
     const uint8_t *buf = NULL;
     size_t stride = 0, hsize = 0, vsize = 0;
@@ -224,7 +224,7 @@ static void nullpipe_free(struct upipe *upipe)
 }
 
 /** nullpipe (/dev/null) */
-static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
+static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
     upipe_dbg(upipe, "sending uref to devnull");
     uref_free(uref);
@@ -262,7 +262,7 @@ static void fetch_av_packets(struct upump *pump)
             uref_block_unmap(uref, 0);
 
             // Send uref to avcdec pipe and free avpkt
-            upipe_input(avcdec, uref, pump);
+            upipe_input(avcdec, uref, NULL);
             thread->count++;
         } else if (thread->audiodec && avpkt.stream_index == audioStream) {
             size = avpkt.size;
@@ -274,7 +274,7 @@ static void fetch_av_packets(struct upump *pump)
             uref_block_unmap(uref, 0);
 
             // Send uref to audiodec pipe and free avpkt
-            upipe_input(thread->audiodec, uref, pump);
+            upipe_input(thread->audiodec, uref, NULL);
         }
         av_free_packet(&avpkt);
     } else {

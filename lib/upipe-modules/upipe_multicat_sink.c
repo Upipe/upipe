@@ -117,10 +117,10 @@ static bool _upipe_multicat_sink_change_file(struct upipe *upipe, int64_t idx)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
-                                      struct upump *upump)
+                                      struct upump **upump_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     uint64_t systime = 0;
@@ -141,7 +141,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
         upipe_multicat_sink->fileidx = newidx;
     }
 
-    upipe_input(upipe_multicat_sink->fsink, uref, upump);
+    upipe_input(upipe_multicat_sink->fsink, uref, upump_p);
 }
 
 /** @internal @This allocates multicat_sink output (fsink)

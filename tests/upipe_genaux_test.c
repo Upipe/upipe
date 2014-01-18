@@ -95,7 +95,7 @@ static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_genaux */
 static void genaux_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
     assert(uref != NULL);

@@ -112,7 +112,7 @@ UPIPE_HELPER_OUTPUT(upipe_x264, output, flow_def, flow_def_sent)
 UPIPE_HELPER_FLOW_DEF(upipe_x264, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_x264, flow_def_check)
 
-static void upipe_x264_input(struct upipe *upipe, struct uref *uref, struct upump *upump);
+static void upipe_x264_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p);
 
 /** @internal loglevel map from x264 to uprobe_log */
 static const enum uprobe_log_level loglevel_map[] = {
@@ -419,10 +419,10 @@ static inline bool upipe_x264_need_update(struct upipe *upipe, int width, int he
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
-                             struct upump *upump)
+                             struct upump **upump_p)
 {
     static const char *const chromas[] = {"y8", "u8", "v8"};
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
@@ -581,7 +581,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
                 (pic.hrd_timing.cpb_removal_time -
                  pic.hrd_timing.cpb_final_arrival_time));
 
-    upipe_x264_output(upipe, uref, upump);
+    upipe_x264_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

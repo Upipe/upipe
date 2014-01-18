@@ -105,17 +105,17 @@ static struct upipe *upipe_nodemux_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_nodemux_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_nodemux *upipe_nodemux = upipe_nodemux_from_upipe(upipe);
 
     if (unlikely(!upipe_nodemux->inited))
         uref_clock_set_dts_prog(uref, NODEMUX_CLOCK_MIN);
     upipe_nodemux->inited = true;
-    upipe_nodemux_output(upipe, uref, upump);
+    upipe_nodemux_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

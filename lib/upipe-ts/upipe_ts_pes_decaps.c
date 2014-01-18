@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -123,9 +123,9 @@ static void upipe_ts_pesd_flush(struct upipe *upipe)
 /** @internal @This parses and removes the PES header of a packet.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
+static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     uint8_t buffer[PES_HEADER_SIZE];
@@ -161,7 +161,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
         UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
                                              PES_HEADER_SIZE, -1))
         upipe_ts_pesd_sync_acquired(upipe);
-        upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
+        upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump_p);
         upipe_ts_pesd->next_uref = NULL;
         return;
     }
@@ -264,7 +264,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
     UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1))
     upipe_ts_pesd_sync_acquired(upipe);
-    upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump);
+    upipe_ts_pesd_output(upipe, upipe_ts_pesd->next_uref, upump_p);
     upipe_ts_pesd->next_uref = NULL;
 }
 
@@ -273,10 +273,10 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
@@ -287,7 +287,7 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
             uref_free(upipe_ts_pesd->next_uref);
         }
         upipe_ts_pesd->next_uref = uref;
-        upipe_ts_pesd_decaps(upipe, upump);
+        upipe_ts_pesd_decaps(upipe, upump_p);
     } else if (upipe_ts_pesd->next_uref != NULL) {
         struct ubuf *ubuf = uref_detach_ubuf(uref);
         uref_free(uref);
@@ -297,9 +297,9 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        upipe_ts_pesd_decaps(upipe, upump);
+        upipe_ts_pesd_decaps(upipe, upump_p);
     } else if (likely(upipe_ts_pesd->acquired))
-        upipe_ts_pesd_output(upipe, uref, upump);
+        upipe_ts_pesd_output(upipe, uref, upump_p);
     else
         uref_free(uref);
 }

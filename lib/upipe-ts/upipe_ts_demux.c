@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1812,14 +1812,14 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_demux_input(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     assert(upipe_ts_demux->input != NULL);
-    upipe_input(upipe_ts_demux->input, uref, upump);
+    upipe_input(upipe_ts_demux->input, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

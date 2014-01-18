@@ -225,10 +225,10 @@ static void upipe_ts_psii_sub_clean(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psii_sub_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
+                                    struct upump **upump_p)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
@@ -457,10 +457,10 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
 
@@ -478,7 +478,7 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
             upipe_ts_psii_sub_output(upipe_ts_psii_sub_to_upipe(sub), uref);
     }
 
-    upipe_ts_psii_output(upipe, uref, upump);
+    upipe_ts_psii_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

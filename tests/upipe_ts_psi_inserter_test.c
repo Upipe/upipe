@@ -95,7 +95,7 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_ts_psii */
 static void ts_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump *upump)
+                          struct upump **upump_p)
 {
     assert(uref != NULL);
     nb_packets++;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -102,10 +102,10 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
-                                  struct upump *upump)
+                                  struct upump **upump_p)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
     uint8_t buffer[TS_HEADER_SIZE];
@@ -202,7 +202,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(transporterror))
         uref_flow_set_error(uref);
 
-    upipe_ts_decaps_output(upipe, uref, upump);
+    upipe_ts_decaps_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -95,9 +95,9 @@ static struct upipe *upipe_null_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upump *upump)
+static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     upipe_verbose(upipe, "sending uref to devnull");

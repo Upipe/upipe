@@ -167,9 +167,9 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
 /** @internal @This flushes all input buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
+static void upipe_ts_sync_flush(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (upipe_ts_sync->acquired) {
@@ -185,7 +185,7 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 continue;
             }
-            upipe_ts_sync_output(upipe, output, upump);
+            upipe_ts_sync_output(upipe, output, upump_p);
         }
     }
 
@@ -197,14 +197,14 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
-        upipe_ts_sync_flush(upipe, upump);
+        upipe_ts_sync_flush(upipe, upump_p);
 
     upipe_ts_sync_append_uref_stream(upipe, uref);
 
@@ -226,7 +226,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
         }
-        upipe_ts_sync_output(upipe, output, upump);
+        upipe_ts_sync_output(upipe, output, upump_p);
     }
 }
 

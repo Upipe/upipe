@@ -104,7 +104,7 @@ static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_trickp */
 static void trickp_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct test_pipe *test_pipe = container_of(upipe, struct test_pipe, upipe);
     assert(uref != NULL);

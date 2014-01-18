@@ -301,10 +301,10 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     uint64_t dts_sys, dts_prog = UINT64_MAX, dts_orig = UINT64_MAX, delay = 0;
@@ -368,7 +368,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                     uref_clock_set_dts_orig(output, dts_orig);
                     uref_clock_rebase_cr_orig(output);
                 }
-                upipe_ts_encaps_output(upipe, output, upump);
+                upipe_ts_encaps_output(upipe, output, upump_p);
             }
             upipe_ts_encaps->next_pcr += upipe_ts_encaps->pcr_interval;
         }
@@ -449,7 +449,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
             nb_pcr--;
         }
 
-        upipe_ts_encaps_output(upipe, output, upump);
+        upipe_ts_encaps_output(upipe, output, upump_p);
         random = false;
         discontinuity = false;
     }
@@ -463,10 +463,10 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
-                                  struct upump *upump)
+                                  struct upump **upump_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
     assert(upipe_ts_encaps->octetrate);
@@ -502,7 +502,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    upipe_ts_encaps_work(upipe, uref, upump);
+    upipe_ts_encaps_work(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

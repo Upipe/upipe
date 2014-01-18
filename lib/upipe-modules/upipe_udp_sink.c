@@ -73,7 +73,7 @@
 static void upipe_udpsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump);
+                                 struct upump **upump_p);
 
 /** @internal @This is the private context of a udp sink pipe. */
 struct upipe_udpsink {
@@ -173,11 +173,11 @@ static void upipe_udpsink_poll(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return true if the uref was processed
  */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
 
@@ -296,17 +296,17 @@ static void upipe_udpsink_watcher(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                                struct upump **upump_p)
 {
     if (!upipe_udpsink_check_sink(upipe)) {
         upipe_udpsink_hold_sink(upipe, uref);
-        upipe_udpsink_block_sink(upipe, upump);
-    } else if (!upipe_udpsink_output(upipe, uref, upump)) {
+        upipe_udpsink_block_sink(upipe, upump_p);
+    } else if (!upipe_udpsink_output(upipe, uref, upump_p)) {
         upipe_udpsink_hold_sink(upipe, uref);
-        upipe_udpsink_block_sink(upipe, upump);
+        upipe_udpsink_block_sink(upipe, upump_p);
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);

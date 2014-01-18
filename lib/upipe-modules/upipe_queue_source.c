@@ -123,9 +123,11 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
 /** @internal @This takes data as input.
  *
  * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
-                             struct upump *upump)
+                             struct upump **upump_p)
 {
     if (unlikely(ubase_check(uref_flow_get_end(uref)))) {
         uref_free(uref);
@@ -139,7 +141,9 @@ static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_qsrc_output(upipe, uref, upump);
+    upipe_use(upipe);
+    upipe_qsrc_output(upipe, uref, upump_p);
+    upipe_release(upipe);
 }
 
 /** @internal @This reads data from the queue and outputs it.
@@ -149,9 +153,10 @@ static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
 static void upipe_qsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
     if (likely(uchain != NULL))
-        upipe_qsrc_input(upipe, uref_from_uchain(uchain), upump);
+        upipe_qsrc_input(upipe, uref_from_uchain(uchain), &upipe_qsrc->upump);
 }
 
 /** @internal @This returns the maximum length of the queue.

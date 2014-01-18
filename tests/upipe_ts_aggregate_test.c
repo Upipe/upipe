@@ -101,7 +101,7 @@ static struct upipe *aggregate_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_ts_agg */
 static void aggregate_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump *upump)
+                          struct upump **upump_p)
 {
     assert(uref != NULL);
     const uint8_t *buffer;

@@ -340,10 +340,10 @@ static uint64_t upipe_ts_pmtd_h264_max_delay(const uint8_t *descl,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     assert(upipe_ts_pmtd->flow_def_input != NULL);

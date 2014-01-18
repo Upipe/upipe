@@ -105,10 +105,10 @@ UPIPE_HELPER_UBUF_MGR(upipe_swr, ubuf_mgr, flow_def_attr);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
-                            struct upump *upump)
+                            struct upump **upump_p)
 {
     struct upipe_swr *upipe_swr = upipe_swr_from_upipe(upipe);
     struct ubuf *ubuf;
@@ -177,7 +177,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     uref_sound_flow_set_samples(uref, out_samples);
     uref_sound_resize(uref, 0, out_samples);
 
-    upipe_swr_output(upipe, uref, upump);
+    upipe_swr_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

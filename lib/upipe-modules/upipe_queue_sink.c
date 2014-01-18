@@ -55,7 +55,7 @@
 static void upipe_qsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump);
+                               struct upump **upump_p);
 
 /** @This is the private context of a queue sink pipe. */
 struct upipe_qsink {
@@ -132,11 +132,11 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return true if the output could be written
  */
 static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     return uqueue_push(upipe_queue(upipe_qsink->qsrc), uref_to_uchain(uref));
@@ -194,10 +194,10 @@ static bool upipe_qsink_check_watcher(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (unlikely(upipe_qsink->qsrc == NULL)) {
@@ -211,20 +211,20 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         else {
             upipe_qsink->flow_def_sent = true;
-            upipe_qsink_input(upipe, flow_def, upump);
+            upipe_qsink_input(upipe, flow_def, upump_p);
         }
     }
     if (!upipe_qsink_check_sink(upipe)) {
         upipe_qsink_hold_sink(upipe, uref);
-        upipe_qsink_block_sink(upipe, upump);
-    } else if (!upipe_qsink_output(upipe, uref, upump)) {
+        upipe_qsink_block_sink(upipe, upump_p);
+    } else if (!upipe_qsink_output(upipe, uref, upump_p)) {
         if (!upipe_qsink_check_watcher(upipe)) {
             upipe_warn(upipe, "unable to spool uref");
             uref_free(uref);
             return;
         }
         upipe_qsink_hold_sink(upipe, uref);
-        upipe_qsink_block_sink(upipe, upump);
+        upipe_qsink_block_sink(upipe, upump_p);
         upump_start(upipe_qsink->upump);
     }
 }

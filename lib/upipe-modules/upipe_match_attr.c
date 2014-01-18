@@ -86,10 +86,10 @@ UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump *upump)
+                                   struct upump **upump_p)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     enum ubase_err forward = UBASE_ERR_NONE;
@@ -116,7 +116,7 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (ubase_check(forward)) {
-        upipe_match_attr_output(upipe, uref, upump);
+        upipe_match_attr_output(upipe, uref, upump_p);
     } else {
         uref_free(uref);
     }

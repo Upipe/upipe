@@ -146,7 +146,7 @@ static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *upr
 
 /** helper phony pipe to test upipe_udpsrc */
 static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
 	uint8_t buf[BUF_SIZE], str[BUF_SIZE];
 	const uint8_t *rbuf;
@@ -226,7 +226,7 @@ static void genpackets2(struct upump *upump)
 		snprintf((char *)buf, BUF_SIZE, FORMAT, counter);
         uref_block_unmap(uref, 0);
 		counter++;
-        upipe_input(upipe_udpsink, uref, upump);
+        upipe_input(upipe_udpsink, uref, NULL);
 	}
 }
 

@@ -146,9 +146,9 @@ static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
 /** @internal @This flushes current thumbs gallery.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upump)
+static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     struct uref *gallery = upipe_sws_thumbs->gallery;
@@ -156,7 +156,7 @@ static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upu
     if (likely(gallery)) {
         upipe_sws_thumbs->counter = 0;
         upipe_sws_thumbs->gallery = NULL;
-        upipe_sws_thumbs_output(upipe, gallery, upump);
+        upipe_sws_thumbs_output(upipe, gallery, upump_p);
     }
 }
 
@@ -164,10 +164,10 @@ static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump *upu
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure describing the picture
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                       struct upump **upump_p)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     const char **planes;
@@ -300,7 +300,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     counter = counter % (thumbnum->hsize*thumbnum->vsize);
     upipe_sws_thumbs->counter = counter;
     if (unlikely(counter == 0)) {
-        upipe_sws_thumbs_flush(upipe, upump);
+        upipe_sws_thumbs_flush(upipe, upump_p);
     }
 }
 
@@ -308,10 +308,10 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure describing the picture
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                   struct upump **upump_p)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
 
@@ -337,10 +337,10 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
 
     /* process flush_next order */
     if (unlikely(upipe_sws_thumbs->flush)) {
-        upipe_sws_thumbs_flush(upipe, upump);
+        upipe_sws_thumbs_flush(upipe, upump_p);
     }
 
-    upipe_sws_thumbs_input_pic(upipe, uref, upump);
+    upipe_sws_thumbs_input_pic(upipe, uref, upump_p);
 }
 
 /** @internal @This sets output pictures size

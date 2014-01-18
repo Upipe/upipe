@@ -214,7 +214,9 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_fsrc->read_size))
         uref_block_resize(uref, 0, ret);
-    upipe_fsrc_output(upipe, uref, upump);
+    upipe_use(upipe);
+    upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
+    upipe_release(upipe);
 }
 
 /** @internal @This returns the path of the currently opened file.

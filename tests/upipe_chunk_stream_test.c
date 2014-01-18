@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -97,7 +97,7 @@ static struct upipe *chunk_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_chunk_stream */
 static void chunk_test_input(struct upipe *upipe, struct uref *uref,
-                             struct upump *upump)
+                             struct upump **upump_p)
 {
     assert(uref != NULL);
     const uint8_t *buffer;

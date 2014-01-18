@@ -512,9 +512,10 @@ static bool upipe_mpgaf_parse_header(struct upipe *upipe)
 /** @internal @This handles and outputs a frame.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
+static void upipe_mpgaf_output_frame(struct upipe *upipe,
+                                     struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
 
@@ -562,7 +563,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct upump *upump)
     if (unlikely(!ubase_check(uref_clock_set_duration(uref, duration))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
-    upipe_mpgaf_output(upipe, uref, upump);
+    upipe_mpgaf_output(upipe, uref, upump_p);
 }
 
 /** @internal @This is called back by @ref upipe_mpgaf_append_uref_stream
@@ -588,9 +589,9 @@ static void upipe_mpgaf_promote_uref(struct upipe *upipe)
 /** @internal @This tries to output frames from the queue of input buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_mpgaf_work(struct upipe *upipe, struct upump *upump)
+static void upipe_mpgaf_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     while (upipe_mpgaf->next_uref != NULL) {
@@ -631,7 +632,7 @@ static void upipe_mpgaf_work(struct upipe *upipe, struct upump *upump)
         }
 
         upipe_mpgaf_sync_acquired(upipe);
-        upipe_mpgaf_output_frame(upipe, upump);
+        upipe_mpgaf_output_frame(upipe, upump_p);
         upipe_mpgaf->next_frame_size = -1;
     }
 }
@@ -640,10 +641,10 @@ static void upipe_mpgaf_work(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_mpgaf_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
 
@@ -657,7 +658,7 @@ static void upipe_mpgaf_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_mpgaf_append_uref_stream(upipe, uref);
-    upipe_mpgaf_work(upipe, upump);
+    upipe_mpgaf_work(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -65,7 +65,7 @@
 
 /** @hidden */
 static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump);
+                                     struct upump **upump_p);
 /** @hidden */
 static void upipe_glx_sink_write_watcher(struct upump *upump);
 
@@ -385,10 +385,10 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump)
+                                     struct upump **upump_p)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
 
@@ -436,10 +436,10 @@ static void upipe_glx_sink_write_watcher(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
 
@@ -450,9 +450,9 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (!upipe_glx_sink_check_sink(upipe) ||
-        !upipe_glx_sink_input_pic(upipe, uref, upump)) {
+        !upipe_glx_sink_input_pic(upipe, uref, upump_p)) {
         upipe_glx_sink_hold_sink(upipe, uref);
-        upipe_glx_sink_block_sink(upipe, upump);
+        upipe_glx_sink_block_sink(upipe, upump_p);
     }
 }
 

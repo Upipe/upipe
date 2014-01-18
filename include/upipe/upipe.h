@@ -180,7 +180,7 @@ struct upipe_mgr {
                                  uint32_t, va_list);
     /** function to send a uref to an input - the uref then belongs to the
      * callee */
-    void (*upipe_input)(struct upipe *, struct uref *, struct upump *);
+    void (*upipe_input)(struct upipe *, struct uref *, struct upump **);
     /** control function for standard or local commands - all parameters
      * belong to the caller */
     enum ubase_err (*upipe_control)(struct upipe *,
@@ -895,15 +895,15 @@ static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure to send
- * @param upump pump that generated the buffer
+ * @param upump_p reference to the pump that generated the buffer
  */
 static inline void upipe_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     assert(upipe != NULL);
     assert(upipe->mgr->upipe_input != NULL);
     upipe_use(upipe);
-    upipe->mgr->upipe_input(upipe, uref, upump);
+    upipe->mgr->upipe_input(upipe, uref, upump_p);
     upipe_release(upipe);
 }
 

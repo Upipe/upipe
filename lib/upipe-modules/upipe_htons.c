@@ -82,10 +82,10 @@ UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
-                             struct upump *upump)
+                             struct upump **upump_p)
 {
     struct upipe_htons *upipe_htons = upipe_htons_from_upipe(upipe);
     struct ubuf *ubuf;
@@ -141,7 +141,7 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
         size -= bufsize;
     }
 
-    upipe_htons_output(upipe, uref, upump);
+    upipe_htons_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

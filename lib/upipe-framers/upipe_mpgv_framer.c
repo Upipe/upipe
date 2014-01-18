@@ -789,10 +789,11 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
 /** @internal @This handles and outputs a frame.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return false if the stream needs to be resync'd
  */
-static bool upipe_mpgvf_output_frame(struct upipe *upipe, struct upump *upump)
+static bool upipe_mpgvf_output_frame(struct upipe *upipe,
+                                     struct upump **upump_p)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     struct uref *uref = NULL;
@@ -859,7 +860,7 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe, struct upump *upump)
     else
         uref_clock_delete_dts_pts_delay(uref);
 
-    upipe_mpgvf_output(upipe, uref, upump);
+    upipe_mpgvf_output(upipe, uref, upump_p);
     return true;
 }
 
@@ -903,9 +904,9 @@ static void upipe_mpgvf_reset(struct upipe *upipe)
 /** @internal @This tries to output frames from the queue of input buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_mpgvf_work(struct upipe *upipe, struct upump *upump)
+static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     while (upipe_mpgvf->next_uref != NULL) {
@@ -968,7 +969,7 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump *upump)
         if (start != MP2VEND_START_CODE)
             upipe_mpgvf->next_frame_size -= 4;
 
-        if (unlikely(!upipe_mpgvf_output_frame(upipe, upump))) {
+        if (unlikely(!upipe_mpgvf_output_frame(upipe, upump_p))) {
             upipe_warn(upipe, "erroneous frame headers");
             upipe_mpgvf->next_frame_size = 0;
             upipe_mpgvf->scan_context = UINT32_MAX;
@@ -1005,10 +1006,10 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
 
@@ -1028,7 +1029,7 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_mpgvf_append_uref_stream(upipe, uref);
-    upipe_mpgvf_work(upipe, upump);
+    upipe_mpgvf_work(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

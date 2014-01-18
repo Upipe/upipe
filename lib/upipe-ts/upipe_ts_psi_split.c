@@ -230,10 +230,10 @@ static struct upipe *upipe_ts_psi_split_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump)
+                                     struct upump **upump_p)
 {
     struct upipe_ts_psi_split *upipe_ts_psi_split =
         upipe_ts_psi_split_from_upipe(upipe);
@@ -249,14 +249,14 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
             if (likely(uchain->next == NULL)) {
                 upipe_ts_psi_split_sub_output(
                         upipe_ts_psi_split_sub_to_upipe(output), uref,
-                        upump);
+                        upump_p);
                 uref = NULL;
             } else {
                 struct uref *new_uref = uref_dup(uref);
                 if (likely(new_uref != NULL))
                     upipe_ts_psi_split_sub_output(
                             upipe_ts_psi_split_sub_to_upipe(output), new_uref,
-                            upump);
+                            upump_p);
                 else {
                     uref_free(uref);
                     upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

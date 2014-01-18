@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -71,7 +71,7 @@ extern "C" {
  * is released.
  *
  * @item @code
- *  void upipe_foo_block_sink(struct upipe *upipe, struct upump *upump)
+ *  void upipe_foo_block_sink(struct upipe *upipe, struct upump **upump_p)
  * @end code
  * Called when you need to block a source pump.
  *
@@ -143,7 +143,7 @@ extern "C" {
  * @param BLOCKERS name of the @tt {struct uchain} field of
  * your private upipe structure, corresponding to a list of blockers
  * @param OUTPUT function to use to output urefs (struct upipe *, struct uref *,
- * struct upump *), returns false when the uref can't be written
+ * struct upump **), returns false when the uref can't be written
  */
 #define UPIPE_HELPER_SINK(STRUCTURE, UREFS, NB_UREFS, MAX_UREFS, BLOCKERS,  \
                           OUTPUT)                                           \
@@ -171,19 +171,19 @@ static void STRUCTURE##_block_sink_cb(struct upump_blocker *blocker)        \
 /** @internal @This blocks the given source pump.                           \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param upump source pump to block                                        \
+ * @param upump_p reference to source pump to block                         \
  */                                                                         \
-static void STRUCTURE##_block_sink(struct upipe *upipe, struct upump *upump)\
+static void STRUCTURE##_block_sink(struct upipe *upipe,                     \
+                                   struct upump **upump_p)                  \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (s->NB_UREFS <= s->MAX_UREFS)                                        \
+    if (upump_p == NULL || *upump_p == NULL ||                              \
+        s->NB_UREFS <= s->MAX_UREFS ||                                      \
+        upump_blocker_find(&s->BLOCKERS, *upump_p) != NULL)                 \
         return;                                                             \
-    if (upump != NULL &&                                                    \
-        upump_blocker_find(&s->BLOCKERS, upump) == NULL) {                  \
-        struct upump_blocker *blocker =                                     \
-            upump_blocker_alloc(upump, STRUCTURE##_block_sink_cb, upipe);   \
-        ulist_add(&s->BLOCKERS, upump_blocker_to_uchain(blocker));          \
-    }                                                                       \
+    struct upump_blocker *blocker =                                         \
+        upump_blocker_alloc(*upump_p, STRUCTURE##_block_sink_cb, upipe);    \
+    ulist_add(&s->BLOCKERS, upump_blocker_to_uchain(blocker));              \
 }                                                                           \
 /** @internal @This unblocks all source pumps.                              \
  *                                                                          \
@@ -247,7 +247,7 @@ static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->UREFS)) != NULL) {                       \
         s->NB_UREFS--;                                                      \
-        bool (*output)(struct upipe *, struct uref *, struct upump *) =     \
+        bool (*output)(struct upipe *, struct uref *, struct upump **) =    \
             OUTPUT;                                                         \
         if (output != NULL &&                                               \
             !output(upipe, uref_from_uchain(uchain), NULL)) {               \
@@ -293,6 +293,7 @@ static enum ubase_err STRUCTURE##_set_max_length(struct upipe *upipe,       \
 static void STRUCTURE##_clean_sink(struct upipe *upipe)                     \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s->NB_UREFS = 0;                                                        \
     STRUCTURE##_unblock_sink(upipe);                                        \
     struct uchain *uchain, *uchain_tmp;                                     \
     ulist_delete_foreach (&s->UREFS, uchain, uchain_tmp) {                  \

@@ -96,16 +96,16 @@ static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
 
     if (likely(upipe_setrap->systime_rap != UINT64_MAX))
         uref->rap_sys = upipe_setrap->systime_rap;
-    upipe_setrap_output(upipe, uref, upump);
+    upipe_setrap_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -120,11 +120,11 @@ static void upipe_ts_psim_flush(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref pointing to (part of) a PSI section
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  * @return false if the uref has been entirely consumed
  */
 static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     if (upipe_ts_psim->next_uref != NULL) {
@@ -177,7 +177,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
 
     UBASE_FATAL(upipe, uref_block_resize(upipe_ts_psim->next_uref, 0,
                 length + PSI_HEADER_SIZE));
-    upipe_ts_psim_output(upipe, upipe_ts_psim->next_uref, upump);
+    upipe_ts_psim_output(upipe, upipe_ts_psim->next_uref, upump_p);
     upipe_ts_psim->next_uref = NULL;
     if (length + PSI_HEADER_SIZE == size)
         return false;
@@ -193,10 +193,10 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_psim *upipe_ts_psim = upipe_ts_psim_from_upipe(upipe);
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
@@ -228,7 +228,7 @@ static void upipe_ts_psim_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    while (upipe_ts_psim_merge(upipe, uref, upump));
+    while (upipe_ts_psim_merge(upipe, uref, upump_p));
     uref_free(uref);
 }
 

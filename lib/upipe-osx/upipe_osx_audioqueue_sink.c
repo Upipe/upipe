@@ -108,10 +108,10 @@ static void upipe_osx_audioqueue_sink_remove(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_osx_audioqueue_sink_input_audio(struct upipe *upipe,
-                                        struct uref *uref, struct upump *upump)
+                                        struct uref *uref, struct upump **upump_p)
 {
     struct upipe_osx_audioqueue_sink *osx_audioqueue =
                  upipe_osx_audioqueue_sink_from_upipe(upipe);
@@ -145,10 +145,10 @@ static void upipe_osx_audioqueue_sink_input_audio(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
-                                        struct uref *uref, struct upump *upump)
+                                        struct uref *uref, struct upump **upump_p)
 {
     struct upipe_osx_audioqueue_sink *osx_audioqueue =
                 upipe_osx_audioqueue_sink_from_upipe(upipe);
@@ -166,7 +166,7 @@ static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
         return;
     }
 
-    upipe_osx_audioqueue_sink_input_audio(upipe, uref, upump);
+    upipe_osx_audioqueue_sink_input_audio(upipe, uref, upump_p);
 }
 
 /** @internal @This creates a new audioqueue

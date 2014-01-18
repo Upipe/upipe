@@ -83,12 +83,13 @@ UREF_ATTR_INT(avcenc, priv, "x.avcenc_priv", avcenc private pts)
 /** @hidden */
 static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
-                                      struct upump *upump);
+                                      struct upump **upump_p);
 /** @hidden */
-static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump);
+static void upipe_avcenc_encode_audio(struct upipe *upipe,
+                                      struct upump **upump_p);
 /** @hidden */
 static bool upipe_avcenc_encode(struct upipe *upipe,
-                                struct uref *uref, struct upump *upump);
+                                struct uref *uref, struct upump **upump_p);
 
 /** upipe_avcenc structure with avcenc parameters */ 
 struct upipe_avcenc {
@@ -331,12 +332,12 @@ static void upipe_avcenc_close(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param frame frame
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  * @return true when a packet has been output
  */
 static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
-                                      struct upump *upump)
+                                      struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -524,7 +525,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         uref_clock_delete_cr_dts_delay(uref);
     }
 
-    upipe_avcenc_output(upipe, uref, upump);
+    upipe_avcenc_output(upipe, uref, upump_p);
     return true;
 }
 
@@ -532,10 +533,10 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_avcenc_encode_video(struct upipe *upipe,
-                                      struct uref *uref, struct upump *upump)
+                                      struct uref *uref, struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -584,15 +585,16 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
 
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));
-    upipe_avcenc_encode_frame(upipe, frame, upump);
+    upipe_avcenc_encode_frame(upipe, frame, upump_p);
 }
 
 /** @internal @This encodes audio frames.
  *
  * @param upipe description structure of the pipe
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
-static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump)
+static void upipe_avcenc_encode_audio(struct upipe *upipe,
+                                      struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -682,7 +684,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump)
 
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(main_uref));
-    upipe_avcenc_encode_frame(upipe, frame, upump);
+    upipe_avcenc_encode_frame(upipe, frame, upump_p);
     free(buf);
 }
 
@@ -690,11 +692,11 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  * @return always true
  */
 static bool upipe_avcenc_encode(struct upipe *upipe,
-                                struct uref *uref, struct upump *upump)
+                                struct uref *uref, struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -702,7 +704,7 @@ static bool upipe_avcenc_encode(struct upipe *upipe,
     /* map input */
     switch (context->codec->type) {
         case AVMEDIA_TYPE_VIDEO:
-            upipe_avcenc_encode_video(upipe, uref, upump);
+            upipe_avcenc_encode_video(upipe, uref, upump_p);
             break;
 
         case AVMEDIA_TYPE_AUDIO: {
@@ -717,7 +719,7 @@ static bool upipe_avcenc_encode(struct upipe *upipe,
             upipe_avcenc->nb_samples += size;
 
             while (upipe_avcenc->nb_samples >= context->frame_size)
-                upipe_avcenc_encode_audio(upipe, upump);
+                upipe_avcenc_encode_audio(upipe, upump_p);
             break;
         }
         default:
@@ -731,16 +733,16 @@ static bool upipe_avcenc_encode(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
 
     while (unlikely(!avcodec_is_open(upipe_avcenc->context))) {
         if (upipe_avcenc->upump_av_deal != NULL) {
-            upipe_avcenc_block_sink(upipe, upump);
+            upipe_avcenc_block_sink(upipe, upump_p);
             upipe_avcenc_hold_sink(upipe, uref);
             return;
         }
@@ -748,7 +750,7 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
         upipe_avcenc_open(upipe);
     }
 
-    upipe_avcenc_encode(upipe, uref, upump);
+    upipe_avcenc_encode(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

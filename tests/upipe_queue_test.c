@@ -102,7 +102,7 @@ static struct upipe *queue_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_qsrc */
 static void queue_test_input(struct upipe *upipe, struct uref *uref,
-                             struct upump *upump)
+                             struct upump **upump_p)
 {
     assert(uref != NULL);
     upipe_notice_va(upipe, "loop %"PRIu8, counter);

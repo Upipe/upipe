@@ -76,10 +76,10 @@
 
 /** @hidden */
 static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
-                                      struct upump *upump);
+                                      struct upump **upump_p);
 /** @hidden */
 static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump);
+                                struct upump **upump_p);
 
 /** upipe_avcdec structure with avcdec parameters */ 
 struct upipe_avcdec {
@@ -702,9 +702,9 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param frame AVFrame structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
-static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
+static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
@@ -802,15 +802,16 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump *upump)
         }
     }
 
-    upipe_avcdec_output(upipe, uref, upump);
+    upipe_avcdec_output(upipe, uref, upump_p);
 }
 
 /** @internal @This outputs audio buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
-static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
+static void upipe_avcdec_output_sound(struct upipe *upipe,
+                                      struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
@@ -871,18 +872,18 @@ static void upipe_avcdec_output_sound(struct upipe *upipe, struct upump *upump)
     } else
         uref_free(flow_def_attr);
 
-    upipe_avcdec_output(upipe, uref, upump);
+    upipe_avcdec_output(upipe, uref, upump_p);
 }
 
 /** @internal @This decodes av packets.
  *
  * @param upipe description structure of the pipe
  * @param avpkt av packet
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  * @return true if a frame was output
  */
 static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
-                                      struct upump *upump)
+                                      struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     int gotframe = 0, len;
@@ -897,7 +898,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 
             /* output frame if any has been decoded */
             if (gotframe) {
-                upipe_avcdec_output_pic(upipe, upump);
+                upipe_avcdec_output_pic(upipe, upump_p);
             }
             break;
 
@@ -911,7 +912,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 
             /* output samples if any has been decoded */
             if (gotframe) {
-                upipe_avcdec_output_sound(upipe, upump);
+                upipe_avcdec_output_sound(upipe, upump_p);
             }
             break;
 
@@ -929,11 +930,11 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  * @return always true
  */
 static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     assert(upipe);
     assert(uref);
@@ -976,7 +977,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     uref_free(upipe_avcdec->uref);
     upipe_avcdec->uref = uref;
 
-    upipe_avcdec_decode_avpkt(upipe, &avpkt, upump);
+    upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
 
     free(avpkt.data);
     return true;
@@ -986,16 +987,16 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
 
     while (unlikely(!avcodec_is_open(upipe_avcdec->context))) {
         if (upipe_avcdec->upump_av_deal != NULL) {
-            upipe_avcdec_block_sink(upipe, upump);
+            upipe_avcdec_block_sink(upipe, upump_p);
             upipe_avcdec_hold_sink(upipe, uref);
             return;
         }
@@ -1003,7 +1004,7 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
         upipe_avcdec_open(upipe);
     }
 
-    upipe_avcdec_decode(upipe, uref, upump);
+    upipe_avcdec_decode(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -62,7 +62,8 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  void upipe_foo_output(struct upipe *upipe, struct uref *uref)
+ *  void upipe_foo_output(struct upipe *upipe, struct uref *uref,
+ *                        struct upump **upump_p)
  * @end code
  * Called whenever you need to send a packet to your output. It takes care
  * of sending the flow definition if necessary.
@@ -137,10 +138,10 @@ static void STRUCTURE##_init_output(struct upipe *upipe)                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param uref uref structure to send                                       \
- * @param upump pump that generated the buffer                              \
+ * @param upump_p reference to pump that generated the buffer               \
  */                                                                         \
 static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
-                               struct upump *upump)                         \
+                               struct upump **upump_p)                      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (unlikely(!STRUCTURE->FLOW_DEF_SENT)) {                              \
@@ -154,7 +155,7 @@ static void STRUCTURE##_output(struct upipe *upipe, struct uref *uref,      \
         return;                                                             \
     }                                                                       \
                                                                             \
-    upipe_input(STRUCTURE->OUTPUT, uref, upump);                            \
+    upipe_input(STRUCTURE->OUTPUT, uref, upump_p);                          \
 }                                                                           \
 /** @internal @This stores the flow definition to use on the output.        \
  *                                                                          \

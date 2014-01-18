@@ -220,7 +220,7 @@ static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_sws */
 static void sws_test_input(struct upipe *upipe, struct uref *uref,
-                           struct upump *upump)
+                           struct upump **upump_p)
 {
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     assert(uref != NULL);

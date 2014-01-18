@@ -349,10 +349,10 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
-                                        struct upump *upump)
+                                        struct upump **upump_p)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
@@ -449,7 +449,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_resize(ubuf, 0, pmt_size);
     uref_attach_ubuf(uref, ubuf);
     uref_block_set_start(uref);
-    upipe_ts_psig_program_output(upipe, uref, upump);
+    upipe_ts_psig_program_output(upipe, uref, upump_p);
 
     upipe_notice(upipe, "end PMT");
 }
@@ -668,10 +668,10 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     if (unlikely(!ubase_check(upipe_ts_psig_check_ubuf_mgr(upipe)))) {
@@ -785,7 +785,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         uref_attach_ubuf(output, ubuf);
         if (first)
             uref_block_set_start(uref);
-        upipe_ts_psig_output(upipe, output, upump);
+        upipe_ts_psig_output(upipe, output, upump_p);
         first = false;
     }
 }

@@ -100,10 +100,10 @@ UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
+                                    struct upump **upump_p)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
     struct ubuf *header, *payload;
@@ -156,7 +156,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     }
     uref_attach_ubuf(uref, header);
 
-    upipe_rtp_prepend_output(upipe, uref, upump);
+    upipe_rtp_prepend_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

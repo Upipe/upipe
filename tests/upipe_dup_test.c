@@ -83,7 +83,7 @@ static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_dup */
 static void dup_test_input(struct upipe *upipe, struct uref *uref,
-                           struct upump *upump)
+                           struct upump **upump_p)
 {
     assert(uref != NULL);
     counter++;

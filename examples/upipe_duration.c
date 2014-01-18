@@ -86,7 +86,7 @@ static struct upipe *count_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
 
 /** helper phony pipe to count pictures */
 static void count_input(struct upipe *upipe, struct uref *uref,
-                        struct upump *upump)
+                        struct upump **upump_p)
 {
     uint64_t uref_duration;
     if (ubase_check(uref_clock_get_duration(uref, &uref_duration)))

@@ -126,7 +126,7 @@ static void genpacket_idler(struct upump *upump)
 	uref_clock_set_cr_sys(uref, systime);
 
 	uref_block_unmap(uref, 0);
-	upipe_input(multicat_sink, uref, upump);
+	upipe_input(multicat_sink, uref, NULL);
 	systime += rotate/UREF_PER_SLICE;
 }
 

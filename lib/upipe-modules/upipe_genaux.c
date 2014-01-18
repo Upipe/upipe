@@ -87,10 +87,10 @@ UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     uint64_t systime = 0;
@@ -115,7 +115,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
     upipe_genaux_hton64(aux, systime);
     ubuf_block_unmap(dst, 0);
     uref_attach_ubuf(uref, dst);
-    upipe_genaux_output(upipe, uref, upump);
+    upipe_genaux_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -580,10 +580,10 @@ static void upipe_alsink_timer(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                               struct upump **upump_p)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     size_t uref_size;
@@ -612,7 +612,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
     upipe_alsink->urefs_duration += uref_duration;
     if (upipe_alsink->urefs_duration >= upipe_alsink->period_duration *
                                         BUFFER_PERIODS)
-        upipe_alsink_block_sink(upipe, upump);
+        upipe_alsink_block_sink(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

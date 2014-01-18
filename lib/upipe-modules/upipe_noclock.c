@@ -99,16 +99,16 @@ static struct upipe *upipe_noclock_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_noclock_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     enum uref_date_type type;
     uint64_t date;
     uref_clock_get_date_prog(uref, &date, &type);
     uref_clock_set_date_sys(uref, date, type);
-    upipe_noclock_output(upipe, uref, upump);
+    upipe_noclock_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

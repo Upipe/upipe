@@ -86,7 +86,7 @@ UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, flow_def_sent);
  * @param upump pump that generated the buffer
  */
 static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
-                                       struct upump *upump)
+                                       struct upump **upump_p)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     uint64_t systime = 0;
@@ -102,7 +102,7 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
         upipe_multicat_probe->idx = newidx;
     }
 
-    upipe_multicat_probe_output(upipe, uref, upump);
+    upipe_multicat_probe_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

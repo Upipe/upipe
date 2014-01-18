@@ -236,10 +236,10 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
-                            struct upump *upump)
+                            struct upump **upump_p)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct uchain *uchain;
@@ -248,7 +248,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
             upipe_dup_output_from_uchain(uchain);
         if (ulist_is_last(&upipe_dup->outputs, uchain)) {
             upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
-                                    uref, upump);
+                                    uref, upump_p);
             uref = NULL;
         } else {
             struct uref *new_uref = uref_dup(uref);
@@ -258,7 +258,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                 return;
             }
             upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
-                                    new_uref, upump);
+                                    new_uref, upump_p);
         }
     }
     if (uref != NULL)

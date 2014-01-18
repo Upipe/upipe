@@ -97,14 +97,14 @@ static struct upipe *upipe_setattr_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
     if (unlikely(upipe_setattr->dict == NULL)) {
-        upipe_setattr_output(upipe, uref, upump);
+        upipe_setattr_output(upipe, uref, upump_p);
         return;
     }
 
@@ -137,7 +137,7 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
     }
     if (upipe_setattr->dict->rap_sys != UINT64_MAX)
         uref->rap_sys = upipe_setattr->dict->rap_sys;
-    upipe_setattr_output(upipe, uref, upump);
+    upipe_setattr_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

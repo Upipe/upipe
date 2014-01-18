@@ -261,10 +261,10 @@ static void upipe_ts_patd_table_rap(struct upipe *upipe, struct uref *uref)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     assert(upipe_ts_patd->flow_def_input != NULL);

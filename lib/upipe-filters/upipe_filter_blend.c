@@ -151,10 +151,10 @@ static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump upump structure
+ * @param upump_p reference to upump structure
  */
 static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
-                               struct upump *upump)
+                                     struct upump **upump_p)
 {
     struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
     const uint8_t *in;
@@ -206,7 +206,7 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     // Attach new ubuf and output frame
     uref_attach_ubuf(uref, ubuf_deint);
 
-    upipe_filter_blend_output(upipe, uref, upump);
+    upipe_filter_blend_output(upipe, uref, upump_p);
     return;
 
 error:

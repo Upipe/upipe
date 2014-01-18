@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -335,9 +335,9 @@ static bool upipe_a52f_parse_header(struct upipe *upipe)
 /** @internal @This handles and outputs a frame.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_a52f_output_frame(struct upipe *upipe, struct upump *upump)
+static void upipe_a52f_output_frame(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
 
@@ -377,7 +377,7 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump *upump)
 
     uref_clock_set_dts_pts_delay(uref, 0);
 
-    upipe_a52f_output(upipe, uref, upump);
+    upipe_a52f_output(upipe, uref, upump_p);
 }
 
 /** @internal @This is called back by @ref upipe_a52f_append_uref_stream
@@ -403,9 +403,9 @@ static void upipe_a52f_promote_uref(struct upipe *upipe)
 /** @internal @This tries to output frames from the queue of input buffers.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_a52f_work(struct upipe *upipe, struct upump *upump)
+static void upipe_a52f_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     while (upipe_a52f->next_uref != NULL) {
@@ -439,7 +439,7 @@ static void upipe_a52f_work(struct upipe *upipe, struct upump *upump)
             return; /* not enough data */
 
         upipe_a52f_sync_acquired(upipe);
-        upipe_a52f_output_frame(upipe, upump);
+        upipe_a52f_output_frame(upipe, upump_p);
         upipe_a52f->next_frame_size = -1;
     }
 }
@@ -448,14 +448,14 @@ static void upipe_a52f_work(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     if (unlikely(uref->ubuf == NULL)) {
-        upipe_a52f_output(upipe, uref, upump);
+        upipe_a52f_output(upipe, uref, upump_p);
         return;
     }
 
@@ -469,7 +469,7 @@ static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_a52f_append_uref_stream(upipe, uref);
-    upipe_a52f_work(upipe, upump);
+    upipe_a52f_work(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

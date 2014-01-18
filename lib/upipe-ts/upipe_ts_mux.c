@@ -445,10 +445,10 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
-                                     struct upump *upump)
+                                     struct upump **upump_p)
 {
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         upipe_ts_mux_input_from_upipe(upipe);
@@ -471,7 +471,7 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    upipe_input(upipe_ts_mux_input->pes_encaps, uref, upump);
+    upipe_input(upipe_ts_mux_input->pes_encaps, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

@@ -124,9 +124,9 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
  * contain part of a PES header, and outputs it.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
+static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
@@ -206,7 +206,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
         return;
     }
 
-    upipe_ts_pese_output(upipe, uref, upump);
+    upipe_ts_pese_output(upipe, uref, upump_p);
 }
 
 /** @internal @This merges the new access unit into a possibly existing
@@ -214,10 +214,10 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     bool force = false;
@@ -229,7 +229,7 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
     if (upipe_ts_pese->next_pes != NULL) {
         if (unlikely(!ubase_check(uref_block_append(upipe_ts_pese->next_pes, uref->ubuf)))) {
             upipe_warn(upipe, "unable to merge a PES");
-            upipe_ts_pese_work(upipe, upump);
+            upipe_ts_pese_work(upipe, upump_p);
             upipe_ts_pese->next_pes = uref;
         } else {
             uref_detach_ubuf(uref);
@@ -258,24 +258,24 @@ static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
 
     if (force)
         upipe_dbg(upipe, "couldn't merge a PES");
-    upipe_ts_pese_work(upipe, upump);
+    upipe_ts_pese_work(upipe, upump_p);
 }
 
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
-                                struct upump *upump)
+                                struct upump **upump_p)
 {
     if (unlikely(!ubase_check(upipe_ts_pese_check_ubuf_mgr(upipe)))) {
         uref_free(uref);
         return;
     }
 
-    upipe_ts_pese_merge(upipe, uref, upump);
+    upipe_ts_pese_merge(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

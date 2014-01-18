@@ -86,7 +86,7 @@ static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_skip */
 static void skip_test_input(struct upipe *upipe, struct uref *uref,
-                            struct upump *upump)
+                            struct upump **upump_p)
 {
     struct skip_test *skip_test = skip_test_from_upipe(upipe);
     const uint8_t *buf;

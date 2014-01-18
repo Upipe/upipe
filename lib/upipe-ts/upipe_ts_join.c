@@ -116,7 +116,7 @@ UPIPE_HELPER_SUBPIPE(upipe_ts_join, upipe_ts_join_sub, sub, sub_mgr,
                      subs, uchain)
 
 /** @hidden */
-static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump);
+static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p);
 
 /** @internal @This allocates an input subpipe of a ts_join pipe.
  *
@@ -151,10 +151,10 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump *upump)
+                                    struct upump **upump_p)
 {
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
@@ -173,7 +173,7 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
 
     struct upipe_ts_join *upipe_ts_join =
         upipe_ts_join_from_sub_mgr(upipe->mgr);
-    upipe_ts_join_mux(upipe_ts_join_to_upipe(upipe_ts_join), upump);
+    upipe_ts_join_mux(upipe_ts_join_to_upipe(upipe_ts_join), upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -330,9 +330,9 @@ static struct upipe_ts_join_sub *upipe_ts_join_find_input(struct upipe *upipe)
 /** @internal @This muxes TS packets to the output.
  *
  * @param upipe description structure of the pipe
- * @param upump pump that generated the last buffer
+ * @param upump_p reference to pump that generated the last buffer
  */
-static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
+static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
     struct upipe_ts_join_sub *input;
@@ -367,7 +367,7 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump *upump)
             uref_clock_get_cr_sys(next_uref, &input->next_cr);
         }
 
-        upipe_ts_join_output(upipe, uref, upump);
+        upipe_ts_join_output(upipe, uref, upump_p);
     }
 }
 

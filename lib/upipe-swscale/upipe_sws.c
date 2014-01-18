@@ -104,10 +104,10 @@ UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr, flow_def_attr);
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure describing the picture
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
-                            struct upump *upump)
+                            struct upump **upump_p)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     int i;
@@ -236,7 +236,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
         urational_simplify(&sar);
         UBASE_FATAL(upipe, uref_pic_flow_set_sar(uref, sar))
     }
-    upipe_sws_output(upipe, uref, upump);
+    upipe_sws_output(upipe, uref, upump_p);
 }
 
 /** @internal @This amends a proposed flow format.

@@ -221,7 +221,7 @@ void source_idler(struct upump *upump)
 
     pic = uref_pic_alloc(uref_mgr, pic_mgr, WIDTH, HEIGHT);
     fill_pic(pic->ubuf);
-    upipe_input(avcenc, pic, upump);
+    upipe_input(avcenc, pic, NULL);
 
     if (thread->iteration > thread->limit) {
         upipe_release(thread->avcenc);

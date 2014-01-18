@@ -106,7 +106,7 @@ static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe to test upipe_rtp_prepend */
 static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump *upump)
+                              struct upump **upump_p)
 {
     struct rtp_prepend_test *rtp_prepend_test = rtp_prepend_test_from_upipe(upipe);
     uint16_t seqnum;

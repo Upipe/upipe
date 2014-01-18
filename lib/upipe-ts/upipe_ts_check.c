@@ -106,10 +106,10 @@ static struct upipe *upipe_ts_check_alloc(struct upipe_mgr *mgr,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     const uint8_t *buffer;
     int size = 1;
@@ -128,7 +128,7 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
         return false;
     }
 
-    upipe_ts_check_output(upipe, uref, upump);
+    upipe_ts_check_output(upipe, uref, upump_p);
     return true;
 }
 
@@ -136,10 +136,10 @@ static bool upipe_ts_check_check(struct upipe *upipe, struct uref *uref,
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump pump that generated the buffer
+ * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
-                                 struct upump *upump)
+                                 struct upump **upump_p)
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     size_t size;
@@ -157,7 +157,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        if (!upipe_ts_check_check(upipe, output, upump)) {
+        if (!upipe_ts_check_check(upipe, output, upump_p)) {
             uref_free(uref);
             return;
         }
@@ -166,7 +166,7 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
         size -= upipe_ts_check->ts_size;
     }
     if (size == upipe_ts_check->ts_size)
-        upipe_ts_check_check(upipe, uref, upump);
+        upipe_ts_check_check(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
