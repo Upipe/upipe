@@ -384,6 +384,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
     uref_pic_flow_set_hsize_visible(flow, hsize * cols);
     uref_pic_flow_set_vsize(flow, vsize * rows);
     uref_pic_flow_set_vsize_visible(flow, vsize * rows);
+    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow, 16))
 
     flow = upipe_sws_thumbs_store_flow_def_attr(upipe, flow);
     if (flow != NULL) {
