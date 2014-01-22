@@ -123,14 +123,15 @@ enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * @return an error code
  */
 enum ubase_err ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
-                                       int hsize, int vsize)
+                              int hsize, int vsize)
 {
     if (!ubuf)
         return UBASE_ERR_INVALID;
 
     bool ret = false;
     const char *chroma = NULL;
-    while (ubuf_pic_plane_iterate(ubuf, &chroma) && chroma != NULL) {
+    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+           chroma != NULL) {
         ret = ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
             hoffset, voffset, hsize, vsize)) || ret;
     }
