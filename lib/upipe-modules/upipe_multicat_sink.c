@@ -386,7 +386,6 @@ static enum ubase_err upipe_multicat_sink_control(struct upipe *upipe,
             return _upipe_multicat_sink_get_path(upipe, va_arg(args, char **), va_arg(args, char **));
         }
         default:
-            upipe_warn(upipe, "invalid command");
             return UBASE_ERR_UNHANDLED;
     }
 }
