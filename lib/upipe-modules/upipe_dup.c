@@ -315,7 +315,7 @@ static enum ubase_err upipe_dup_control(struct upipe *upipe,
         case UPIPE_AMEND_FLOW_FORMAT: {
             struct uref *flow_format = va_arg(args, struct uref *);
             upipe_dup_throw_sub_outputs(upipe, UPROBE_NEW_FLOW_FORMAT,
-                                        flow_format);
+                                        flow_format, NULL);
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
