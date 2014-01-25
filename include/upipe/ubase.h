@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -205,6 +205,20 @@ do {                                                                        \
     enum ubase_err ubase_err_tmp = command;                                 \
     if (unlikely(!ubase_check(ubase_err_tmp)))                              \
         upipe_throw_fatal(upipe, ubase_err_tmp);                            \
+} while (0);
+
+/** @This runs the given function, throws a fatal error and returns in case of
+ * failure.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define UBASE_FATAL_RETURN(upipe, command)                                  \
+do {                                                                        \
+    enum ubase_err ubase_err_tmp = command;                                 \
+    if (unlikely(!ubase_check(ubase_err_tmp))) {                            \
+        upipe_throw_fatal(upipe, ubase_err_tmp);                            \
+        return;                                                             \
+    }                                                                       \
 } while (0);
 
 /** @This runs the given function and throws an error in case of failure.
