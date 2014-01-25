@@ -798,6 +798,12 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     struct uref *uref = NULL;
 
+    if (unlikely(upipe_mpgvf->sequence_header == NULL &&
+                 !upipe_mpgvf->next_frame_sequence)) {
+        upipe_mpgvf_consume_uref_stream(upipe, upipe_mpgvf->next_frame_size);
+        return true;
+    }
+
     /* The PTS can be updated up to the first octet of the picture start code,
      * so any preceding structure must be extracted before, so that the PTS
      * can be properly promoted and taken into account. */
