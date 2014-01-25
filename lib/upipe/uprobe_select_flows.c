@@ -81,6 +81,9 @@ UBASE_FROM_TO(uprobe_selflow, urefcount, urefcount, urefcount)
 
 /** @This defines a potential subpipe. */
 struct uprobe_selflow_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** structure for double-linked lists */
     struct uchain uchain;
     /** pointer to super-probe */
@@ -95,9 +98,13 @@ struct uprobe_selflow_sub {
     struct uref *flow_def;
     /** pointer to optional subpipe, if the flow is selected */
     struct upipe *subpipe;
+    /** probe for optional subpipe, if the flow is selected */
+    struct uprobe uprobe;
 };
 
+UPROBE_HELPER_UPROBE(uprobe_selflow_sub, uprobe)
 UBASE_FROM_TO(uprobe_selflow_sub, uchain, uchain, uchain)
+UBASE_FROM_TO(uprobe_selflow_sub, urefcount, urefcount, urefcount)
 
 /** @internal @This checks if a flow definition matches our flow type.
  *
@@ -194,7 +201,7 @@ static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
         if (uprobe_selflow_check(uprobe, sub->flow_id, sub->flow_def)) {
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(sub->split_pipe,
-                    uprobe_pfx_alloc_va(uprobe_use(uprobe_selflow->subprobe),
+                    uprobe_pfx_alloc_va(uprobe_use(&sub->uprobe),
                                         UPROBE_LOG_DEBUG,
                                         "flow %"PRIu64, sub->flow_id),
                     sub->flow_def);
@@ -202,8 +209,9 @@ static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
                     error = UBASE_ERR_ALLOC;
             }
         } else if (sub->subpipe != NULL) {
-            upipe_release(sub->subpipe);
+            struct upipe *subpipe = sub->subpipe;
             sub->subpipe = NULL;
+            upipe_release(subpipe);
         }
     }
     return error;
@@ -245,6 +253,80 @@ static enum ubase_err uprobe_selflow_check_auto(struct uprobe *uprobe)
 
     struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
     return uprobe_selflow_set_internal_va(uprobe, "%"PRIu64",", sub->flow_id);
+}
+
+/** @internal @This catches events thrown by subpipes.
+ *
+ * @param uprobe pointer to probe
+ * @param subpipe pointer to pipe throwing the event
+ * @param event event thrown
+ * @param args optional event-specific parameters
+ * @return an error code
+ */
+static enum ubase_err uprobe_selflow_sub_throw(struct uprobe *uprobe,
+                                               struct upipe *subpipe,
+                                               enum uprobe_event event,
+                                               va_list args)
+{
+    if (event != UPROBE_SOURCE_END)
+        return uprobe_throw_next(uprobe, subpipe, event, args);
+
+    uprobe_throw_next(uprobe, subpipe, event, args);
+
+    struct uprobe_selflow_sub *sub =
+        uprobe_selflow_sub_from_uprobe(uprobe);
+    assert(subpipe == sub->subpipe);
+    ulist_delete(uprobe_selflow_sub_to_uchain(sub));
+    uref_free(sub->flow_def);
+    sub->subpipe = NULL;
+    upipe_release(subpipe);
+    uprobe_release(uprobe_selflow_sub_to_uprobe(sub));
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This frees a uprobe_selflow_sub structure.
+ *
+ * @param urefcount pointer to urefcount structure
+ */
+static void uprobe_selflow_sub_free(struct urefcount *urefcount)
+{
+    struct uprobe_selflow_sub *sub =
+        uprobe_selflow_sub_from_urefcount(urefcount);
+    uprobe_clean(uprobe_selflow_sub_to_uprobe(sub));
+    free(sub);
+}
+
+/** @internal @This allocates a subprobe for a flow.
+ *
+ * @param next next probe to test if this one doesn't catch the event
+ * @param uprobe_selflow pointer to super-probe
+ * @param split_pipe pointer to split pipe
+ * @param flow id flow ID
+ * @return pointer to uprobe, or NULL in case of error
+ */
+static struct uprobe *uprobe_selflow_sub_alloc(struct uprobe *next,
+        struct uprobe_selflow *uprobe_selflow, struct upipe *split_pipe,
+        uint64_t flow_id)
+{
+    struct uprobe_selflow_sub *sub = malloc(sizeof(struct uprobe_selflow_sub));
+    if (unlikely(sub == NULL)) {
+        uprobe_release(next);
+        return NULL;
+    }
+
+    struct uprobe *uprobe = uprobe_selflow_sub_to_uprobe(sub);
+    uprobe_init(uprobe, uprobe_selflow_sub_throw, next);
+
+    uchain_init(&sub->uchain);
+    sub->uprobe_selflow = uprobe_selflow;
+    sub->split_pipe = split_pipe;
+    sub->flow_id = flow_id;
+    sub->flow_def = NULL;
+    sub->subpipe = NULL;
+    urefcount_init(uprobe_selflow_sub_to_urefcount(sub),
+                   uprobe_selflow_sub_free);
+    uprobe->refcount = uprobe_selflow_sub_to_urefcount(sub);
+    return uprobe;
 }
 
 /** @internal @This catches events thrown by pipes.
@@ -294,17 +376,13 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
 
         if (sub == NULL) {
             /* Create a sub. */
-            sub = malloc(sizeof(struct uprobe_selflow_sub));
-            if (unlikely(sub == NULL))
+            struct uprobe *uprobe_selflow_sub =
+                uprobe_selflow_sub_alloc(uprobe_use(uprobe_selflow->subprobe),
+                                         uprobe_selflow, upipe, flow_id);
+            if (unlikely(uprobe_selflow_sub == NULL))
                 return UBASE_ERR_ALLOC;
 
-            uchain_init(&sub->uchain);
-            sub->uprobe_selflow = uprobe_selflow;
-            sub->split_pipe = upipe;
-            sub->flow_id = flow_id;
-            sub->flow_def = NULL;
-            sub->subpipe = NULL;
-
+            sub = uprobe_selflow_sub_from_uprobe(uprobe_selflow_sub);
             ulist_add(&uprobe_selflow->subs,
                       uprobe_selflow_sub_to_uchain(sub));
         } else if (sub->flow_def != NULL)
@@ -322,7 +400,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
         } else if (uprobe_selflow_check(uprobe, flow_id, sub->flow_def)) {
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(upipe,
-                    uprobe_pfx_alloc_va(uprobe_use(uprobe_selflow->subprobe),
+                    uprobe_pfx_alloc_va(uprobe_use(&sub->uprobe),
                                         UPROBE_LOG_DEBUG,
                                         "flow %"PRIu64, flow_id),
                     sub->flow_def);
@@ -330,8 +408,9 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
                     error = UBASE_ERR_ALLOC;
             }
         } else if (sub->subpipe != NULL) {
-            upipe_release(sub->subpipe);
+            struct upipe *subpipe = sub->subpipe;
             sub->subpipe = NULL;
+            upipe_release(subpipe);
         }
     }
 
@@ -355,11 +434,11 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
             ulist_delete(uchain);
             need_update = true;
 
-            if (likely(sub->flow_def != NULL))
-                uref_free(sub->flow_def);
-            if (sub->subpipe != NULL)
-                upipe_release(sub->subpipe);
-            free(sub);
+            uref_free(sub->flow_def);
+            struct upipe *subpipe = sub->subpipe;
+            sub->subpipe = NULL;
+            upipe_release(subpipe);
+            uprobe_release(uprobe_selflow_sub_to_uprobe(sub));
         }
     }
 
