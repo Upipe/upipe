@@ -19,6 +19,9 @@ struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
 
       The first two lines establish an event loop, which will be the event loop of our main thread. In the example we use the libev library. The umem_mgr, udict_mgr and uref_mgr structures are used by Upipe modules to allocate memory chunks, which will serve as certain purposes.
 
+    @end section
+    @section {File source}
+
       We then start building the pipeline from source to sink, beginning with the file source module:
 
       @code
@@ -37,6 +40,9 @@ if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))
       After the pipe has been allocated, there is no need for the file source manager anymore, so we can release it. In Upipe, most structures are refcounted so the object is not actually freed - it is still in use by the upipe_source object. It will only be freed when upipe_source is released. But the upipe_fsrc_mgr pointer should no longer be accessed after this point.
 
       The last command we send, @ref upipe_set_uri, sends a control command to the file source pipe, asking it to open the file srcpath. It returns an error code that should be UBASE_ERR_NONE if the file was opened, or any other documented error.
+
+    @end section
+    @section {TS demux}
 
       At this point we have opened a file, and as it is supposed to be a TS file, we would like to allocate a demux.
 
@@ -68,7 +74,12 @@ upipe_release(ts_demux);
 ev_loop(loop, 0);
       @end code
 
-      This is a libev instruction that starts watchers and triggers callbacks. So what happens now? The file source pipe has allocated an idler pump, that is called immediately to read data from the file. The data is then fed to the TS demux, which starts by looking for a PAT (a structure containing the list of programs in the file). When a PAT is found, it emits a @ref UPROBE_SPLIT_UPDATE event, and the list of programs can be read via @ref upipe_split_iterate. We have a probe that does just that: iterate on the list of programs, and select the one	we'd like to read. This is why we passed that to the TS demux:
+      This is a libev instruction that starts watchers and triggers callbacks.
+
+    @end section
+    @section {Elementary stream selection}
+
+      So what happens now? The file source pipe has allocated an idler pump, that is called immediately to read data from the file. The data is then fed to the TS demux, which starts by looking for a PAT (a structure containing the list of programs in the file). When a PAT is found, it emits a @ref UPROBE_SPLIT_UPDATE event, and the list of programs can be read via @ref upipe_split_iterate. We have a probe that does just that: iterate on the list of programs, and select the one	we'd like to read. This is why we passed that to the TS demux:
 
       @code
     uprobe_pfx_alloc(
@@ -83,6 +94,9 @@ ev_loop(loop, 0);
 	    uprobe_selflow_alloc(uprobe_use(logger), &uprobe_catch,
 		UPROBE_SELFLOW_PIC, "auto"),
       @end code
+
+    @end section
+    @section {Decoding pipeline}
 
       In all probes, the first argument is the next probe to call if the event wasn't caught. For selflow, the second argument is the probe to pass to subpipes when they are allocated. In that second case, we pass &uprobe_catch, an application-defined probe intialized earlier:
 
@@ -113,7 +127,12 @@ static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
 }
       @end code
 
-      This probe only catches @ref UPROBE_NEW_FLOW_DEF, which is thrown when the first picture out of the mpgv or h264 framer is sent. We allocate an avcodec decoder, with a special probe, defined as followed:
+      This probe only catches @ref UPROBE_NEW_FLOW_DEF, which is thrown when the first picture out of the mpgv or h264 framer is sent. We allocate an avcodec decoder.
+
+    @end section
+    @section {Video processing pipeline}
+
+      The avcodec decoder features a special probe, defined as followed:
 
       @code
 static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -201,6 +220,9 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
 
       This probe does the hard work. It allocates a deinterlacer, a scaler (on an as-needed basis), a JPEG encoder, an uref probe (more on this later) and a file sink. The pipes are released after allocation, so that a single call to @ref upipe_release on the avcodec decoder releases the rest of the pipeline. Note how we use a second flow definition packet (uref2) and @ref upipe_flow_alloc_output to specify the output format of the deinterlacer and scaler.
 
+    @end section
+    @section {End of processing}
+
       We said we wanted to output only the first frame, and quit afterwards. This magic is performed with the "urefprobe" pipe, allocated in the avcodec probe. This type of pipe throws a custom event (@ref UPROBE_PROBE_UREF) for each incoming uref. Then we just need to write a specific probe handler as follows:
 
       @code
@@ -239,6 +261,9 @@ static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
 
       When the event loop is over, you should release all pipes to which you have kept a pointer, clean all custom probe structures, and release all managers. The example shows how to do that.
 
+    @end section
+    @section {Global probes}
+
       There is one more thing we haven't talked about. All pipes we allocated have an argument (or a subsequently allocated probe) uprobe_use(logger). The logger object is allocated at the beginning of the program as follows:
 
       @code
@@ -261,6 +286,9 @@ assert(logger != NULL);
 uprobe_release(logger);
       @end code
 
+    @end section
+    @section {Output probes}
+
       Finally, we need to explain how the magic of connecting pipes together works, and the role of the uprobe_output probe. Upipe has two kinds of control messages :
 
       @list
@@ -278,6 +306,277 @@ uprobe_release(logger);
   @end section
 
   @section T {Pipe tutorial}
+
+    In this tutorial, we will write a pipe that accepts input packets, takes a number from an attribute, writes this number to a block ubuf, and outputs the new packet. Additionally, we will explore using a timer pump to trigger specific events.
+
+    The tutorial is heavily based on upipe_genaux.c.
+
+    @section {Manager declaration}
+
+      In order to allow applications to allocate our pipe, we only need to provide a @ref upipe_genaux_mgr_alloc function. The function returns a manager which will be used to allocate the pipes themselves.
+
+      @code
+static struct upipe_mgr upipe_genaux_mgr = {
+    .refcount = NULL,
+    .signature = UPIPE_GENAUX_SIGNATURE,
+
+    .upipe_alloc = upipe_genaux_alloc,
+    .upipe_input = upipe_genaux_input,
+    .upipe_control = upipe_genaux_control,
+
+    .upipe_mgr_control = NULL
+};
+
+struct upipe_mgr *upipe_genaux_mgr_alloc(void)
+{
+    return &upipe_genaux_mgr;
+}
+      @end code
+
+      Though the function is called _alloc, there is actually no allocation performed; the manager is a static structure, without refcounting. In some cases it may be interesting to allocate a dynamic structure, for instance when the allocation function takes an argument, or when the manager provides access to a shared resource - such as a PCI decoder or encoder card with a limited number of channels.
+
+      When declaring a manager, you must supply an allocation, an input, a control and a manager control functions. All functions, except upipe_alloc, may point to NULL. However, upipe_input may only be NULL if the pipe is a source; otherwise, calling @ref upipe_input on such a pipe will assert().
+
+    @end section
+    @section {Pipe declaration}
+
+      Here is how we declare our own private pipe structure:
+
+      @code
+struct upipe_genaux {
+    struct urefcount urefcount;
+
+    struct ubuf_mgr *ubuf_mgr;
+    struct upipe *output;
+    struct uref *flow_def;
+    bool flow_def_sent;
+
+    enum ubase_err (*getattr) (struct uref *, uint64_t *);
+
+    struct upipe upipe;
+};
+      @end code
+
+      The public structure is @ref upipe. It contains a pointer to the manager, a pointer to a refcount structure (which may be NULL if the object is not refcounted), a @ref uchain object and an opaque for use by the application, and a pointer to the probe hierarchy.
+
+      The @ref urefcount object is more or less mandatory in order to properly deallocate the structure when all references to it are released. Usually, upipe->refcount will point to this object, except when fancy things are needed (like separating the references count from the application from the references from internal objects such as subpipes, that need their super-pipe to outlive them). Other objects may also have a refcount that points to it (for instance if you embed a probe for inner pipes).
+
+      We will need to allocate buffers (@ref ubuf_mgr), we will output packets (so we need an output @ref upipe). The flow_def and flow_def_sent fields are used by the output helper, and contain respectively a pointer to the flow definition packet, and a flag indicating if it has already been thrown (using @ref upipe_throw_new_flow_def) or if it needs to be thrown at the next output packet.
+
+      The only specific field is the getattr function pointer, that will serve to get the attribute from incoming packets, so we can write it in the outgoing packets.
+
+    @end section
+    @section {Pipe helpers}
+
+      Standard structures have helpers that manage them in a standard way:
+
+      @code
+UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free)
+UPIPE_HELPER_VOID(upipe_genaux);
+UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, flow_def);
+UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
+      @end code
+
+      The first helper declares the function upipe_genaux_to_upipe and upipe_genaux_from_upipe, which take advantage of @ref #container_of to pass from the substructure to the big structure, and vice versa. The second helper initializes the refcount so that the function upipe_genaux_free is called when the object is entirely released. The third helper declares functions to help writing upipe_genaux_alloc. The fourth and last ones declare functions to manage the ubuf manager and the output pipe.
+
+    @end section
+    @section {Alloc and release}
+
+      The helpers need to be initialized and deinitialized:
+
+      @code
+static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
+                                        struct uprobe *uprobe,
+                                        uint32_t signature, va_list args)
+{
+    struct upipe *upipe = upipe_genaux_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
+
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    upipe_genaux_init_urefcount(upipe);
+    upipe_genaux_init_ubuf_mgr(upipe);
+    upipe_genaux_init_output(upipe);
+    upipe_genaux->getattr = uref_clock_get_cr_sys;
+    upipe_throw_ready(upipe);
+    return upipe;
+}
+
+static void upipe_genaux_free(struct upipe *upipe)
+{
+    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
+    upipe_throw_dead(upipe);
+
+    upipe_genaux_clean_ubuf_mgr(upipe);
+    upipe_genaux_clean_output(upipe);
+    upipe_genaux_clean_urefcount(upipe);
+    upipe_genaux_free_void(upipe);
+}
+      @end code
+
+      upipe_genaux_alloc_void is declared by @ref #UPIPE_HELPER_VOID, allocates the big structure, and checks and uses the arguments (such as the probe hierarchy) passed to upipe_genaux_alloc. The other helpers are initialized, along with the only specific member (getattr). When the pipe is ready to accept control commands, it must throw the @ref UPROBE_READY event.
+
+      On the contrary, when the pipe does not wish to receive control commands, it shall throw the @ref UPROBE_DEAD event. After that point it is not allowed to throw other events (including log messages), so that is why our call to @ref upipe_dbg_va is beforehands.
+
+      In Upipe, message logging is handled by functions @ref #upipe_err, @ref #upipe_warn, @ref #upipe_notice, @ref #upipe_dbg, and @ref #upipe_verbose, in the order of importance. Applications may elect to print messages that match a certain importance criterion. These functions only accept a plain string, but all have a _va counterpart (like many other functions in Upipe) which replaces the string with a printf-style string and additional arguments. Internally, message logging works by throwing a special @ref UPROBE_LOG event, that is caught by the application or the standard @ref uprobe_stdio probe.
+
+      upipe_genaux_free_void is declared by @ref #UPIPE_HELPER_VOID, releases the probes, and frees the big structure. Before that, the helpers must be deinitialized.
+
+    @end section
+    @section {Input and output}
+
+      The input function is not mandatory, but in our case we process incoming buffers:
+
+      @code
+static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
+                               struct upump **upump_p)
+{
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    uint64_t systime = 0;
+    int size;
+    struct ubuf *dst;
+    uint8_t *aux;
+
+    if (!ubase_check(upipe_genaux_check_ubuf_mgr(upipe)) ||
+        !ubase_check(upipe_genaux->getattr(uref, &systime))) {
+        uref_free(uref);
+        return;
+    }
+
+    size = sizeof(uint64_t);
+    dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
+    if (unlikely(dst == NULL)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    ubuf_block_write(dst, 0, &size, &aux);
+    upipe_genaux_hton64(aux, systime);
+    ubuf_block_unmap(dst, 0);
+    uref_attach_ubuf(uref, dst);
+    upipe_genaux_output(upipe, uref, upump_p);
+}
+      @end code
+
+      upipe_genaux_check_ubuf_mgr is declared by @ref #UPIPE_HELPER_UBUF_MGR, and checks whether a ubuf manager has already been set, otherwise throws a @ref UPROBE_NEW_FLOW_FORMAT event asking for a ubuf manager. The getattr function is supposed to have been previously set, and to return a uint64_t.
+
+      We allocate a @ref ubuf with @ref ubuf_block_alloc, of the size of a uint64_t. We call @ref ubuf_block_write to get a pointer to data (ubuf_block_alloc is supposed to return a contiguous memory space so there is no need to check for returned size), hton64 to write the buffer in network endianness, and @ref ubuf_block_unmap to invalidate the aux pointer. There must be a @ref ubuf_block_unmap for each @ref ubuf_block_write or @ref ubuf_block_read.
+
+      @ref uref_attach_ubuf releases the previous ubuf attached to the uref (containing the picture for instance), and reattaches the ubuf we have just allocated.
+
+      upipe_genaux_output is declared by @ref #UPIPE_HELPER_OUTPUT, and outputs the packet to the next pipe. If needed, it also does the magic with flow definitions.
+
+    @end section
+    @section {Controls}
+
+      The control function is not mandatory, but if we want to handle flow definitions we need one:
+
+      @code
+static enum ubase_err upipe_genaux_control(struct upipe *upipe,
+                                 enum upipe_command command, va_list args)
+{
+    switch (command) {
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_genaux_attach_ubuf_mgr(upipe);
+
+        case UPIPE_AMEND_FLOW_FORMAT:
+            return UBASE_ERR_NONE;
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_genaux_get_flow_def(upipe, p);
+        }
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_genaux_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_genaux_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_genaux_set_output(upipe, output);
+        }
+
+        case UPIPE_GENAUX_SET_GETATTR: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
+            return _upipe_genaux_set_getattr(upipe,
+                   va_arg(args, enum ubase_err (*)(struct uref*, uint64_t*)));
+        }
+        case UPIPE_GENAUX_GET_GETATTR: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
+            return _upipe_genaux_get_getattr(upipe,
+                   va_arg(args, enum ubase_err (**)(struct uref*, uint64_t*)));
+        }
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+      @end code
+
+      This function is generally just a big switch/case where we handle control commands one by one. @ref UPIPE_ATTACH_UBUF_MGR asks the pipe to release the ubuf manager and throw again a @ref UPROBE_NEW_FLOW_FORMAT event, so that a new ubuf manager is allocated. This can be useful if the downstream topography has changed and a pipe has special requirements on alignment or prepending/appending. There are attach commands for ubuf managers, uref managers (useful for source pipes), upump managers (useful for pipes that interact with the event loop) and uclock. Some structures are optional and the behaviour of the pipe changes whether they are set or not (for instance uclock). upipe_genaux_attach_ubuf_mgr is provided by @ref #UPIPE_HELPER_UBUF_MGR.
+
+      @ref UPIPE_AMEND_FLOW_FORMAT is called when the application needs to validate a new incoming flow format. With this control command you can typically change the flow format to improve the alignement, or add prepending/appending (picture and sound only). In our case we have no requirement on input ubufs.
+
+      @ref UPIPE_GET_FLOW_DEF is supposed to return our output flow definition. @ref #UPIPE_HELPER_OUTPUT provides a generic implementation. Same goes for @ref UPIPE_GET_OUTPUT and @ref UPIPE_SET_OUTPUT.
+
+      @ref UPIPE_SET_FLOW_DEF tells our pipe which input flow definition we must expect. It will be covered in the next chapter.
+
+      Finally, @ref UPIPE_GENAUX_SET_GETATTR and @ref UPIPE_GENAUX_GET_GETATTR show an example of local control commands. The first argument of such control commands must be the signature of the pipe, which must be checked with @ref #UBASE_SIGNATURE_CHECK.
+
+    @end section
+    @section {Flow definition handling}
+
+      This function is almost mandatory in all pipes that accept an input:
+
+        @code
+static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+    struct uref *flow_def_dup;
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
+        return UBASE_ERR_ALLOC;
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, "block.aux."))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    upipe_genaux_store_flow_def(upipe, flow_def_dup);
+    return UBASE_ERR_NONE;
+}
+      @end code
+
+      It must return UBASE_ERR_NONE if the input flow definition is compatible with our pipe, and accepted; otherwise an error code is returned. @ref UPIPE_SET_FLOW_DEF may be called at any point in the life of a pipe; the input flow definition may change at any moment. It is legal for a pipe to refuse to change a flow definition that would otherwise be compatible; in that case the application must deallocate/reallocate the same pipe type. It is mandatory to call @ref UPIPE_SET_FLOW_DEF before inputting any packet.
+
+      We accept all kinds of input flow definition. However, at the same time, we allocate our output flow definition and change the definition attribute. upipe_genaux_store_flow_def is provided by @ref #UPIPE_HELPER_OUTPUT.
+
+    @end section
+    @section {Using a pump}
+
+      The pipe we have written is pretty much finished (and the upipe_genaux.c file doesn't do anything else). However, for the purpose of the tutorial, let's suppose that we want to throw the @ref UPROBE_SOURCE_END event after a given timeout. We need to work with a upump manager, which represents the event loop of the thread. Fortunately there is the @ref #UPIPE_HELPER_UPUMP_MGR that works in pretty much the same way as the @ref #UPIPE_HELPER_UBUF_MGR we've just seen. Then, as soon as we have a upump manager (an example can be seen in upipe_file_source.c), we allocate a timer:
+
+      @code
+struct upump *upump = upump_alloc_timer(upipe_genaux->upump_mgr,
+                                        upipe_genaux_timer, upipe,
+                                        5 * UCLOCK_FREQ, 0);
+upump_start(upump);
+      @end code
+
+      The call-back upipe_genaux_timer will trigger after 5 seconds, and no longer afterwards; it may look like this:
+
+      @code
+static void upipe_genaux_timer(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    upipe_throw_source_end(upipe);
+    upump_free(upump);
+}
+      @end code
+
+      You may want to store pumps in your pipe structure, and Upipe provides @ref #UPIPE_HELPER_UPUMP for that. Pumps need to be freed before the pipe is deallocated, otherwise the opaque pointer of the pump points to an empty space.
+
+    @end section
+
   @end section
 
 @end section

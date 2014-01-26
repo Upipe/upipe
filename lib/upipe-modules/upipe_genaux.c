@@ -125,7 +125,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
  * @return an error code
  */
 static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
-                                      struct uref *flow_def)
+                                                struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -243,7 +243,6 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
     upipe_genaux->getattr = uref_clock_get_cr_sys;
-    upipe_genaux->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;
 }
