@@ -240,7 +240,7 @@ write_buffer:
             iovecs++;
         }
 
-        if (unlikely(!uref_block_iovec_read(uref, 0, -1, iovecs))) {
+        if (unlikely(!ubase_check(uref_block_iovec_read(uref, 0, -1, iovecs)))) {
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             break;
@@ -288,7 +288,11 @@ static void upipe_udpsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_udpsink_set_upump(upipe, NULL);
-    upipe_udpsink_output_sink(upipe);
+    if (upipe_udpsink_output_sink(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
+    }
     upipe_udpsink_unblock_sink(upipe);
 }
 
@@ -369,6 +373,9 @@ static enum ubase_err _upipe_udpsink_set_uri(struct upipe *upipe,
     free(upipe_udpsink->uri);
     upipe_udpsink->uri = NULL;
     upipe_udpsink_set_upump(upipe, NULL);
+    if (!upipe_udpsink_check_sink(upipe))
+        /* Release the pipe used in @ref upipe_udpsink_input. */
+        upipe_release(upipe);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
@@ -400,6 +407,9 @@ static enum ubase_err _upipe_udpsink_set_uri(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+    if (!upipe_udpsink_check_sink(upipe))
+        /* Use again the pipe that we previously released. */
+        upipe_use(upipe);
     upipe_notice_va(upipe, "opening uri %s in %s mode",
                     upipe_udpsink->uri, mode_desc);
     return UBASE_ERR_NONE;
