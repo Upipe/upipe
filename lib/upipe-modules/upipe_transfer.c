@@ -33,7 +33,6 @@
 #include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/upump.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -301,8 +300,6 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
     struct upipe_xfer_msg *msg = upipe_xfer_msg_from_uchain(uchain);
     switch (msg->type) {
         case UPIPE_XFER_ATTACH_UPUMP_MGR:
-            upipe_push_probe(msg->upipe_remote,
-                    uprobe_upump_mgr_alloc(NULL, xfer_mgr->upump_mgr));
             upipe_attach_upump_mgr(msg->upipe_remote);
             break;
         case UPIPE_XFER_SET_URI:
