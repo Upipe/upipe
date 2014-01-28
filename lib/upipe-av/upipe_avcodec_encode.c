@@ -55,6 +55,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
 #include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe/udict_dump.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -817,7 +818,7 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_INVALID;
         }
 
-        if (unlikely(!ubase_check(uref_flow_set_def(flow_def_check, def)) ||
+        if (unlikely(!ubase_check(uref_sound_flow_copy_format(flow_def_check, flow_def)) ||
                      !ubase_check(uref_sound_flow_set_channels(flow_def_check, channels)) ||
                      !ubase_check(uref_sound_flow_set_rate(flow_def_check, rate)))) {
             uref_free(flow_def_check);
@@ -834,7 +835,7 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
         /* Die if the attributes changed. */
         /* NB: this supposes that all attributes are in the udict, and that
          * the udict is never empty. */
-        if (!ubase_check(upipe_avcenc_check_flow_def_check(upipe, flow_def_check))) {
+        if (!upipe_avcenc_check_flow_def_check(upipe, flow_def_check)) {
             uref_free(flow_def_check);
             return UBASE_ERR_BUSY;
         }
