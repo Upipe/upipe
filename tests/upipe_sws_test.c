@@ -305,11 +305,8 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_flow_add_plane(pic_flow, 1, 1, 1, "y8"));
     ubase_assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "u8"));
     ubase_assert(uref_pic_flow_add_plane(pic_flow, 2, 2, 1, "v8"));
+    ubase_assert(uref_pic_flow_set_align(pic_flow, UBUF_ALIGN));
 //    uref_dump(pic_flow, mainlog);
-
-    /* try allocating */
-    assert(uref_pic_alloc(uref_mgr, ubuf_mgr, 31, 32) == NULL);
-    assert(uref_pic_alloc(uref_mgr, ubuf_mgr, 32, 31) == NULL);
 
     /* allocate reference picture */
     uref1 = uref_pic_alloc(uref_mgr, ubuf_mgr, SRCSIZE, SRCSIZE);
