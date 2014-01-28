@@ -97,6 +97,10 @@ struct uprobe *STRUCTURE##_alloc(ARGS_DECL)                                 \
         return NULL;                                                        \
     struct uprobe *uprobe =                                                 \
         STRUCTURE##_init(STRUCTURE##_alloc_to_##STRUCTURE(s), ARGS);        \
+    if (unlikely(uprobe == NULL)) {                                         \
+        free(s);                                                            \
+        return NULL;                                                        \
+    }                                                                       \
     urefcount_init(STRUCTURE##_alloc_to_urefcount(s), STRUCTURE##_free);    \
     uprobe->refcount = STRUCTURE##_alloc_to_urefcount(s);                   \
     return uprobe;                                                          \
