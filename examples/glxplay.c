@@ -81,7 +81,6 @@ graph {flow: east}
 #include <upipe/uprobe_output.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_dejitter.h>
@@ -113,6 +112,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_trickplay.h>
+#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
@@ -139,10 +139,6 @@ graph {flow: east}
 #define UBUF_SHARED_POOL_DEPTH 50
 #define UPUMP_POOL 10
 #define UPUMP_BLOCKER_POOL 10
-#define UBUF_PREPEND        0
-#define UBUF_APPEND         0
-#define UBUF_ALIGN          32
-#define UBUF_ALIGN_OFFSET   0
 #define DEJITTER_DIVIDER    100
 #define XFER_QUEUE          255
 #define XFER_POOL           20
@@ -154,7 +150,6 @@ struct upipe_glxplayer {
     enum uprobe_log_level loglevel;
     char *uri;
     bool upipe_ts;
-    struct upump_mgr *upump_mgr_main;
 
     /* managers */
     struct uclock *uclock;
@@ -189,14 +184,12 @@ struct upipe_glxplayer {
     bool paused;
 
     /* source thread state */
-    struct upump_mgr *upump_mgr_source;
     struct upipe_mgr *dec_xfer;
     struct upipe *upipe_dec_qsink;
     struct upipe *upipe_dec_qsrc_handle;
     pthread_t dec_thread_id;
 
     /* avcdec thread state */
-    struct upump_mgr *upump_mgr_dec;
     struct upipe *upipe_glx_qsink;
 };
 
@@ -210,13 +203,14 @@ static void *upipe_glxplayer_source_thread(void *_glxplayer)
     struct upipe_glxplayer *glxplayer = (struct upipe_glxplayer *)_glxplayer;
 
     struct ev_loop *loop = ev_loop_new(0);
-    glxplayer->upump_mgr_source =
+    struct upump_mgr *upump_mgr =
         upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
-    upipe_xfer_mgr_attach(glxplayer->src_xfer, glxplayer->upump_mgr_source);
+    upipe_xfer_mgr_attach(glxplayer->src_xfer, upump_mgr);
+    uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
+    upump_mgr_release(upump_mgr);
 
     ev_loop(loop, 0);
 
-    upump_mgr_release(glxplayer->upump_mgr_source);
     ev_loop_destroy(loop);
     printf("end of source thread\n");
     upipe_mgr_release(glxplayer->dec_xfer);
@@ -235,13 +229,14 @@ static void *upipe_glxplayer_dec_thread(void *_glxplayer)
     struct upipe_glxplayer *glxplayer = (struct upipe_glxplayer *)_glxplayer;
 
     struct ev_loop *loop = ev_loop_new(0);
-    glxplayer->upump_mgr_dec =
+    struct upump_mgr *upump_mgr =
         upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
-    upipe_xfer_mgr_attach(glxplayer->dec_xfer, glxplayer->upump_mgr_dec);
+    upipe_xfer_mgr_attach(glxplayer->dec_xfer, upump_mgr);
+    uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
+    upump_mgr_release(upump_mgr);
 
     ev_loop(loop, 0);
 
-    upump_mgr_release(glxplayer->upump_mgr_dec);
     ev_loop_destroy(loop);
     printf("end of avc thread\n");
 
@@ -302,6 +297,7 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
             upipe_dbg_va(upipe, "add flow %s", def);
 
             /* prepare a queue to deport avcodec to a new thread */
+            uprobe_pthread_upump_mgr_freeze(glxplayer->uprobe_logger);
             struct upipe *upipe_dec_qsrc =
                 upipe_qsrc_alloc(glxplayer->upipe_qsrc_mgr,
                     uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&glxplayer->uprobe_dec_qsrc_s)),
@@ -310,13 +306,12 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
             if (unlikely(upipe_dec_qsrc == NULL)) {
                 return UBASE_ERR_ALLOC;
             }
+            uprobe_pthread_upump_mgr_thaw(glxplayer->uprobe_logger);
 
             glxplayer->upipe_dec_qsink =
                 upipe_void_alloc_output(upipe, glxplayer->upipe_qsink_mgr,
                     uprobe_pfx_alloc_va(
-                        uprobe_upump_mgr_alloc(
                             uprobe_use(glxplayer->uprobe_logger),
-                            glxplayer->upump_mgr_source),
                             glxplayer->loglevel, "dec qsink"));
             if (unlikely(glxplayer->upipe_dec_qsink == NULL)) {
                 upipe_release(upipe_dec_qsrc);
@@ -400,10 +395,8 @@ static enum ubase_err upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
             struct upipe *avcdec = upipe_void_alloc_output(upipe,
                     glxplayer->upipe_avcdec_mgr,
                     uprobe_pfx_alloc_va(
-                        uprobe_upump_mgr_alloc(
-                            uprobe_output_alloc(
-                                uprobe_use(&glxplayer->uprobe_avcdec_s)),
-                            glxplayer->upump_mgr_dec),
+                        uprobe_output_alloc(
+                            uprobe_use(&glxplayer->uprobe_avcdec_s)),
                         glxplayer->loglevel, "avcdec"));
             if (unlikely(avcdec == NULL))
                 return UBASE_ERR_ALLOC;
@@ -467,10 +460,7 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
 
             glxplayer->upipe_glx_qsink =
                 upipe_void_alloc_output(yuvrgb, glxplayer->upipe_qsink_mgr,
-                    uprobe_pfx_alloc(
-                        uprobe_upump_mgr_alloc(
-                            uprobe_use(glxplayer->uprobe_logger),
-                            glxplayer->upump_mgr_dec),
+                    uprobe_pfx_alloc(uprobe_use(glxplayer->uprobe_logger),
                     glxplayer->loglevel, "glx qsink"));
             upipe_release(yuvrgb);
             if (unlikely(glxplayer->upipe_glx_qsink == NULL))
@@ -507,7 +497,6 @@ static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
             if (glxplayer->trickp)
                 upipe_release(glxplayer->upipe_trickp);
             free(glxplayer->uri);
-            upump_mgr_release(glxplayer->upump_mgr_main);
             return UBASE_ERR_NONE;
         }
         case UPROBE_NEW_FLOW_DEF: {
@@ -537,9 +526,7 @@ static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
                     glxplayer->upipe_glx_mgr,
                     uprobe_gl_sink_cube_alloc(
                          uprobe_pfx_alloc(
-                             uprobe_upump_mgr_alloc(
-                                 uprobe_use(&glxplayer->uprobe_glx_s),
-                                 glxplayer->upump_mgr_main),
+                             uprobe_use(&glxplayer->uprobe_glx_s),
                              glxplayer->loglevel, "glx")));
             if (glxplayer->trickp)
                 upipe_release(trickp_pic);
@@ -649,12 +636,13 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 
     /* probes common to all threads */
     glxplayer->uprobe_logger =
-        uprobe_ubuf_mem_alloc(
-            uprobe_uclock_alloc(
-                uprobe_uref_mgr_alloc(
-                     uprobe_stdio_alloc(NULL, stderr, glxplayer->loglevel),
-                     uref_mgr), glxplayer->uclock),
-            umem_mgr, UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
+        uprobe_pthread_upump_mgr_alloc(
+            uprobe_ubuf_mem_alloc(
+                uprobe_uclock_alloc(
+                    uprobe_uref_mgr_alloc(
+                         uprobe_stdio_alloc(NULL, stderr, glxplayer->loglevel),
+                         uref_mgr), glxplayer->uclock),
+                umem_mgr, UBUF_POOL_DEPTH, UBUF_POOL_DEPTH));
     if (unlikely(glxplayer->uprobe_logger == NULL))
         goto fail_probe_logger;
 
@@ -786,6 +774,8 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
                           bool upipe_ts)
 {
     struct upipe *upipe_src;
+    uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
+    uprobe_pthread_upump_mgr_freeze(glxplayer->uprobe_logger);
     if (!upipe_ts) {
         /* use avformat source (and internal demuxer) */
         struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
@@ -893,11 +883,11 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         uprobe_dejitter_set(glxplayer->uprobe_dejitter, DEJITTER_DIVIDER);
 
     /* prepare a queue source for the decoded video frames */
+    uprobe_pthread_upump_mgr_thaw(glxplayer->uprobe_logger);
     glxplayer->upipe_glx_qsrc = upipe_qsrc_alloc(glxplayer->upipe_qsrc_mgr,
             uprobe_pfx_alloc(
-                uprobe_upump_mgr_alloc(
-                    uprobe_output_alloc(
-                        uprobe_use(&glxplayer->uprobe_glx_qsrc_s)), upump_mgr),
+                uprobe_output_alloc(
+                    uprobe_use(&glxplayer->uprobe_glx_qsrc_s)),
                 glxplayer->loglevel, "glx qsrc"), GLX_QUEUE_LENGTH);
     if (unlikely(glxplayer->upipe_glx_qsrc == NULL)) {
         upipe_release(upipe_src);
@@ -935,8 +925,6 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
 
     glxplayer->upipe_ts = upipe_ts;
     glxplayer->uri = strdup(uri);
-    glxplayer->upump_mgr_main = upump_mgr;
-    upump_mgr_use(upump_mgr);
     return true;
 }
 
