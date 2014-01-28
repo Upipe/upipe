@@ -95,7 +95,7 @@ static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
     ubase_assert(uref_flow_get_def(flow_def, &def));
     if (!strcmp(def, "pic."))
         test_pipe->count_p = &count_pic;
-    else if (!strcmp(def, "block.pcm_s16le.sound."))
+    else if (!strcmp(def, "sound.s16."))
         test_pipe->count_p = &count_sound;
     else
         test_pipe->count_p = &count_subpic;
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    ubase_assert(uref_flow_set_def(uref, "block.pcm_s16le.sound."));
+    ubase_assert(uref_flow_set_def(uref, "sound.s16."));
 
     struct upipe *upipe_sink_sound = upipe_flow_alloc(&trickp_test_mgr,
                                                       uprobe_use(logger), uref);

@@ -291,7 +291,7 @@ int main(int argc, char **argv)
     assert(uprobe_selflow != NULL);
     upipe->uprobe = uprobe_use(uprobe_selflow);
 
-    flow_def = uref_sound_flow_alloc_def(uref_mgr, "pcm_s16l.", 1, 1);
+    flow_def = uref_sound_flow_alloc_def(uref_mgr, "s16.", 1, 1);
     assert(flow_def != NULL);
     ubase_assert(uref_flow_set_id(flow_def, 42));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
