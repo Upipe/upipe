@@ -27,6 +27,10 @@ LT_INIT([win32-dll])
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
 AC_SUBST(libadd_rt_lib)
+AX_PTHREAD(AM_CONDITIONAL(HAVE_PTHREAD, true),
+           AM_CONDITIONAL(HAVE_PTHREAD, false))
+AC_SUBST(PTHREAD_CFLAGS)
+AC_SUBST(PTHREAD_LIBS)
 
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
@@ -117,6 +121,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe/Makefile
                  include/upump-ev/Makefile
                  include/upipe-modules/Makefile
+                 include/upipe-pthread/Makefile
                  include/upipe-framers/Makefile
                  include/upipe-av/Makefile
                  include/upipe-swscale/Makefile
@@ -134,6 +139,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upump-ev/libupump_ev.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
+                 lib/upipe-pthread/Makefile
+                 lib/upipe-pthread/libupipe_pthread.pc
                  lib/upipe-framers/Makefile
                  lib/upipe-framers/libupipe_framers.pc
                  lib/upipe-av/Makefile

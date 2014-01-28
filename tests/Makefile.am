@@ -102,6 +102,13 @@ TESTS += \
 	upipe_udp_test \
 	upipe_transfer_test
 
+if HAVE_PTHREAD
+check_PROGRAMS += \
+	uprobe_pthread_upump_mgr_test
+TESTS += \
+	uprobe_pthread_upump_mgr_test
+endif
+
 # avcodec/avformat tests currently depend on ev
 if HAVE_AVFORMAT
 check_PROGRAMS += \
@@ -216,6 +223,7 @@ upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_queue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+uprobe_pthread_upump_mgr_test_LDADD = $(LDADD) -lev -lpthread $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la
 upipe_mpgv_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_mpga_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_a52_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
