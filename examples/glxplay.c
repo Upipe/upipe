@@ -152,7 +152,6 @@ struct upipe_glxplayer {
     bool upipe_ts;
 
     /* managers */
-    struct uclock *uclock;
     struct upipe_mgr *upipe_filter_blend_mgr;
     struct upipe_mgr *upipe_sws_mgr;
     struct upipe_mgr *upipe_qsink_mgr;
@@ -616,10 +615,6 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     glxplayer->upipe_ts = false;
     glxplayer->paused = false;
 
-    glxplayer->uclock = uclock_std_alloc(0);
-    if (unlikely(glxplayer->uclock == NULL))
-        goto fail_uclock;
-
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     if (unlikely(umem_mgr == NULL))
         goto fail_umem_mgr;
@@ -634,6 +629,10 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
     if (unlikely(uref_mgr == NULL))
         goto fail_uref_mgr;
 
+    struct uclock *uclock = uclock_std_alloc(0);
+    if (unlikely(uclock == NULL))
+        goto fail_probe_logger;
+
     /* probes common to all threads */
     glxplayer->uprobe_logger =
         uprobe_pthread_upump_mgr_alloc(
@@ -641,8 +640,9 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
                 uprobe_uclock_alloc(
                     uprobe_uref_mgr_alloc(
                          uprobe_stdio_alloc(NULL, stderr, glxplayer->loglevel),
-                         uref_mgr), glxplayer->uclock),
+                         uref_mgr), uclock),
                 umem_mgr, UBUF_POOL_DEPTH, UBUF_POOL_DEPTH));
+    uclock_release(uclock);
     if (unlikely(glxplayer->uprobe_logger == NULL))
         goto fail_probe_logger;
 
@@ -755,8 +755,6 @@ fail_uref_mgr:
 fail_udict_mgr:
     umem_mgr_release(umem_mgr);
 fail_umem_mgr:
-    uclock_release(glxplayer->uclock);
-fail_uclock:
     free(glxplayer);
     return NULL;
 }
@@ -953,7 +951,6 @@ void upipe_glxplayer_free(struct upipe_glxplayer *glxplayer)
     upipe_mgr_release(glxplayer->upipe_null_mgr);
     upipe_av_clean();
     uprobe_release(glxplayer->uprobe_logger);
-    uclock_release(glxplayer->uclock);
     free(glxplayer);
 }
 

@@ -33,6 +33,8 @@
 
       @item A pipe may send an empty uref (pointing to a NULL ubuf) to indicate minor flow definition changes (such as change of language). However it may not be the first packet output by the pipe. Reversely, a pipe is not required to deal with an empty uref if it is the first packet it receives.
 
+      @item A pipe shall not throw a @ref UPROBE_NEED_UPUMP_MGR event before receiving its first buffer. An exception is allowed for source pipes, but it is legal for the application to not give a upump_mgr right away, and the source pipe should not throw a fatal error if that happens.
+
     @end list
 
   @end section
