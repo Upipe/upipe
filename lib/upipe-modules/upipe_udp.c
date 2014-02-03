@@ -95,7 +95,11 @@ static void upipe_udp_raw_fill_headers(struct upipe *upipe,
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len)
 {
-    ip_set_len(raw_header, len + UDP_HEADER_SIZE + IP_HEADER_MINSIZE);
+    uint16_t iplen = len + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
+    #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
+    iplen = htons(iplen);
+    #endif
+    ip_set_len(raw_header, iplen);
     raw_header += IP_HEADER_MINSIZE;
     udp_set_len(raw_header, len + UDP_HEADER_SIZE);
 }
@@ -414,10 +418,6 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 if_addr = inet_addr(option);
                 free( option );
             } else if (IS_OPTION("srcaddr=")) {
-                #ifdef __APPLE__
-                    upipe_warn(upipe, "not supported on Darwin");
-                    return -1;
-                #endif
                 char *option = config_stropt(ARG_OPTION("srcaddr="));
                 src_addr = inet_addr(option);
                 free(option);
@@ -489,6 +489,16 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         upipe_err_va(upipe, "unable to open socket (%m)");
         return -1;
     }
+    #ifdef __APPLE__
+    if (*use_raw) {
+        int hincl = 1;
+        if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) < 0) {
+            upipe_err_va(upipe, "unable to set IP_HDRINCL");
+            close(fd);
+            return -1;
+        }
+    }
+    #endif
 
     i = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&i,
