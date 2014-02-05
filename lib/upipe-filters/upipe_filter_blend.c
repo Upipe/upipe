@@ -140,7 +140,8 @@ static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
 
     // Compute mean value for remaining lines
     while (out < out_end) {
-        upipe_filter_merge8bit(out, in, in+stride_in, stride_in);
+        upipe_filter_merge8bit(out, in, in+stride_in,
+           (stride_in < stride_out) ? stride_in : stride_out);
 
         out += stride_out;
         in += stride_in;

@@ -122,6 +122,7 @@ int main(int argc, char **argv)
     ubase_assert(upipe_null_dump_dict(nullpipe, true));
 
     struct uref *uref = uref_pic_flow_alloc_def(uref_mgr, 3);
+    ubase_assert(uref_pic_flow_add_plane(uref, 1, 1, 3, "r8g8b8"));
     assert(uref);
 
     /* blend */
