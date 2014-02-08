@@ -315,7 +315,7 @@ static void upipe_alsink_close(struct upipe *upipe)
 
     upipe_alsink_set_upump(upipe, NULL);
     upipe_alsink_unblock_sink(upipe);
-    if (!upipe_alsink_check_sink(upipe))
+    if (upipe_alsink_check_sink(upipe))
         /* Release the pipe used in @ref upipe_alsink_input. */
         upipe_release(upipe);
 }
