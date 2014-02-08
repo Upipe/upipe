@@ -76,7 +76,6 @@ UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 
 #define UPUMP_POOL 0
 #define UPUMP_BLOCKER_POOL 0
-
 #define UDICT_POOL_DEPTH    0
 #define UREF_POOL_DEPTH     0
 #define UBUF_POOL_DEPTH     0
@@ -84,12 +83,14 @@ UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define THREAD_NUM          4
 #define FRAMES_LIMIT        100
 #define THREAD_FRAMES_LIMIT (FRAMES_LIMIT / 8)
 #define WIDTH 120
 #define HEIGHT 90
+#define STREAM stdout
+
+enum uprobe_log_level loglevel = UPROBE_LOG_VERBOSE;
 
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
@@ -150,14 +151,14 @@ static enum ubase_err catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     /* decoder */
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
         uprobe_upump_mgr_alloc(
-            uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel,
                                 "avcdec %"PRId64, num), upump_mgr));
     assert(avcdec);
     upipe_release(avcdec);
 
     /* /dev/null */
     struct upipe *null = upipe_void_alloc(upipe_null_mgr,
-        uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
+        uprobe_pfx_alloc_va(uprobe_use(logger), loglevel,
                             "null %"PRId64, num));
     assert(null);
     upipe_null_dump_dict(null, true);
@@ -202,7 +203,7 @@ struct upipe *build_pipeline(const char *codec_def,
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
         uprobe_upump_mgr_alloc(
             uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_avcenc_s),
-                                UPROBE_LOG_LEVEL, "avcenc %d", num), upump_mgr),
+                                loglevel, "avcenc %d", num), upump_mgr),
         output_flow);
     uref_free(output_flow);
     assert(avcenc);
@@ -221,7 +222,7 @@ void source_idler(struct upump *upump)
 
     pic = uref_pic_alloc(uref_mgr, pic_mgr, WIDTH, HEIGHT);
     fill_pic(pic->ubuf);
-    upipe_input(avcenc, pic, NULL);
+    upipe_input(avcenc, pic, &upump);
 
     if (thread->iteration > thread->limit) {
         upipe_release(thread->avcenc);
@@ -236,7 +237,7 @@ void *thread_start(void *_thread)
 {
     struct thread *thread = _thread;
 
-    printf("Thread %d launched.\n", thread->num);
+    fprintf(STREAM, "Thread %d launched.\n", thread->num);
 
     struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
@@ -278,8 +279,11 @@ int main(int argc, char **argv)
     int thread_num = THREAD_NUM;
 
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
-    while ((opt = getopt(argc, argv, "hn:")) != -1) {
+    while ((opt = getopt(argc, argv, "dhn:")) != -1) {
         switch(opt) {
+            case 'd':
+                loglevel = UPROBE_LOG_VERBOSE;
+                break;
             case 'n':
                 thread_num = strtod(optarg, NULL);
                 break;
@@ -318,7 +322,7 @@ int main(int argc, char **argv)
     /* uprobe stuff */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
+    logger = uprobe_stdio_alloc(&uprobe, STREAM, loglevel);
     assert(logger != NULL);
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
