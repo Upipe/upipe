@@ -288,12 +288,13 @@ static void upipe_udpsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_udpsink_set_upump(upipe, NULL);
-    if (upipe_udpsink_output_sink(upipe)) {
+    upipe_udpsink_output_sink(upipe);
+    upipe_udpsink_unblock_sink(upipe);
+    if (upipe_udpsink_check_sink(upipe)) {
         /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_fsink_input. */
+         * used in @ref upipe_udpsink_input. */
         upipe_release(upipe);
     }
-    upipe_udpsink_unblock_sink(upipe);
 }
 
 /** @internal @This receives data.
