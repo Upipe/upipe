@@ -204,7 +204,7 @@ static void STRUCTURE##_unblock_sink(struct upipe *upipe)                   \
  * packets.                                                                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @return true if the sink holds urefs                                     \
+ * @return true if the sink is writable                                     \
  */                                                                         \
 static bool STRUCTURE##_check_sink(struct upipe *upipe)                     \
 {                                                                           \

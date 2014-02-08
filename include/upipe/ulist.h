@@ -51,6 +51,7 @@ static inline void ulist_init(struct uchain *ulist)
  *
  * @param ulist pointer to a ulist
  * @param element pointer to element
+ * @return true if the element is the last
  */
 static inline bool ulist_is_last(struct uchain *ulist, struct uchain *element)
 {
@@ -60,6 +61,7 @@ static inline bool ulist_is_last(struct uchain *ulist, struct uchain *element)
 /** @This checks if the list is empty.
  *
  * @param ulist pointer to a ulist
+ * @return true if the list is empty
  */
 static inline bool ulist_empty(struct uchain *ulist)
 {
@@ -69,6 +71,7 @@ static inline bool ulist_empty(struct uchain *ulist)
 /** @This calculates the depth of the list (suboptimal, only for debug).
  *
  * @param ulist pointer to a ulist
+ * @return the depth of the list
  */
 static inline size_t ulist_depth(struct uchain *ulist)
 {
