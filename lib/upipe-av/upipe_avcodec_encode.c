@@ -255,6 +255,9 @@ static void upipe_avcenc_cb_av_deal(struct upump *upump)
     else
         upipe_avcenc_flush_sink(upipe);
     upipe_avcenc_unblock_sink(upipe);
+    /* All packets have been output, release again the pipe that has been
+     * used in @ref upipe_avcenc_start_av_deal. */
+    upipe_release(upipe);
 }
 
 /** @internal @This is called to trigger avcodec_open() or avcodec_close().
@@ -287,6 +290,9 @@ static void upipe_avcenc_start_av_deal(struct upipe *upipe)
         return;
     }
     upipe_avcenc->upump_av_deal = upump_av_deal;
+    /* Increment upipe refcount to avoid disappearing before all packets
+     * have been sent. */
+    upipe_use(upipe);
     upipe_av_deal_start(upump_av_deal);
 }
 
@@ -743,8 +749,8 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
 
     while (unlikely(!avcodec_is_open(upipe_avcenc->context))) {
         if (upipe_avcenc->upump_av_deal != NULL) {
-            upipe_avcenc_block_sink(upipe, upump_p);
             upipe_avcenc_hold_sink(upipe, uref);
+            upipe_avcenc_block_sink(upipe, upump_p);
             return;
         }
 
