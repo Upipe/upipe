@@ -55,6 +55,9 @@
 
 #include <bitstream/atsc/a52.h>
 
+/** BS */
+#define A52_BS 5696
+
 /** @internal @This is the private context of an a52f pipe. */
 struct upipe_a52f {
     /** refcount management structure */
@@ -73,24 +76,14 @@ struct upipe_a52f {
     struct uref *flow_def_attr;
 
     /* sync parsing stuff */
-    /** number of octets in a frame */
-    size_t frame_size;
-    /** number of octets in a frame with padding enabled */
-    size_t frame_size_padding;
-    /** number of samples in a frame */
-    size_t samples;
     /** number of samples per second */
     size_t samplerate;
-    /** number of channels */
-    uint8_t channels;
-    /** octet rate */
-    uint64_t octetrate;
     /** residue of the duration in 27 MHz units */
     uint64_t duration_residue;
     /** true we have had a discontinuity recently */
     bool got_discontinuity;
     /** sync header */
-    uint8_t sync_header[6]; // FIXME
+    uint8_t sync_header[A52_SYNCINFO_SIZE];
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -234,18 +227,59 @@ static bool upipe_a52f_check_frame(struct upipe *upipe, bool *ready_p)
  * @param upipe description structure of the pipe
  * @return false in case the header is inconsistent
  */
-static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
+static bool upipe_a52f_parse_a52e(struct upipe *upipe)
+{
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
-    uint8_t header[6];
-    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
+    uint8_t header[A52_SYNCINFO_SIZE];
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
+                                                 A52_SYNCINFO_SIZE, header))))
+        return true; /* not enough data */
+
+    if (likely(a52e_sync_compare_formats(header, upipe_a52f->sync_header))) {
+        /* identical sync */
         return true;
+    }
+
+    /* sample rate */
+    uint64_t samplerate;
+    switch (a52e_get_fscod(header)) {
+        case A52_FSCOD_48KHZ:
+            samplerate = 48000;
+            break;
+        case A52_FSCOD_441KHZ:
+            samplerate = 44100;
+            break;
+        case A52_FSCOD_32KHZ:
+            samplerate = 32000;
+            break;
+        case A52_FSCOD_RESERVED:
+            switch (a52e_get_fscod2(header)) {
+                case A52E_FSCOD2_24KHZ:
+                    samplerate = 24000;
+                    break;
+                case A52E_FSCOD2_2205KHZ:
+                    samplerate = 22050;
+                    break;
+                case A52E_FSCOD2_16KHZ:
+                    samplerate = 16000;
+                    break;
+                default:
+                    upipe_warn(upipe, "reserved fscod2");
+                    return false;
+            }
+            break;
+        default: /* never reached */
+            return false;
+    }
 
     /* frame size */
     upipe_a52f->next_frame_size = a52e_get_frame_size(a52e_get_frmsiz(header));
 
-    if (likely(upipe_a52f->sync_header[0])) { /* FIXME */
-        return true;
-    }
+    uint64_t octetrate =
+          (upipe_a52f->next_frame_size * samplerate + A52_FRAME_SAMPLES - 1) /
+          A52_FRAME_SAMPLES;
+    memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE);
+    upipe_a52f->samplerate = samplerate;
 
     struct uref *flow_def = upipe_a52f_alloc_flow_def_attr(upipe);
     if (unlikely(!flow_def)) {
@@ -253,7 +287,12 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
         return false;
     }
 
-    uref_flow_set_def(flow_def, "block.eac3.sound.");
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
+    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, A52_BS))
+    upipe_a52f->bs_delay = upipe_a52f->next_frame_size * UCLOCK_FREQ /
+                           octetrate;
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
@@ -261,8 +300,6 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
         return false;
     }
     upipe_a52f_store_flow_def(upipe, flow_def);
-
-    upipe_a52f->sync_header[0] = header[0]; /* FIXME */
 
     return true;
 }
@@ -272,38 +309,62 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe) {
  * @param upipe description structure of the pipe
  * @return false in case the header is inconsistent
  */
-static bool upipe_a52f_parse_a52(struct upipe *upipe) {
+static bool upipe_a52f_parse_a52(struct upipe *upipe)
+{
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
-    uint8_t header[6];
-    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
+    uint8_t header[A52_SYNCINFO_SIZE];
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
+                                                 A52_SYNCINFO_SIZE, header))))
+        return true; /* not enough data */
+
+    if (likely(a52_sync_compare_formats(header, upipe_a52f->sync_header))) {
+        /* identical sync */
         return true;
+    }
+
+    /* sample rate */
+    uint64_t samplerate;
+    switch (a52_get_fscod(header)) {
+        case A52_FSCOD_48KHZ:
+            samplerate = 48000;
+            break;
+        case A52_FSCOD_441KHZ:
+            samplerate = 44100;
+            break;
+        case A52_FSCOD_32KHZ:
+            samplerate = 32000;
+            break;
+        default:
+            upipe_warn(upipe, "reserved fscod");
+            return false;
+    }
 
     /* frame size */
     upipe_a52f->next_frame_size = a52_get_frame_size(a52_get_fscod(header),
                                                 a52_get_frmsizecod(header));
 
-    if (likely(upipe_a52f->sync_header[0])) { /* FIXME */
-        return true;
-    }
-    
+    uint64_t octetrate = a52_bitrate_tab[a52_get_frmsizecod(header)] / 8;
+    memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE);
+    upipe_a52f->samplerate = samplerate;
+
     struct uref *flow_def = upipe_a52f_alloc_flow_def_attr(upipe);
     if (unlikely(!flow_def)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
 
-    uref_flow_set_def(flow_def, "block.ac3.sound.");
-    uref_block_flow_set_octetrate(flow_def,
-          a52_bitrate_tab[a52_get_frmsizecod(header)] / 8);
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
+    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, A52_BS))
+    upipe_a52f->bs_delay = upipe_a52f->next_frame_size * UCLOCK_FREQ /
+                           octetrate;
 
-    flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     upipe_a52f_store_flow_def(upipe, flow_def);
-
-    upipe_a52f->sync_header[0] = header[0]; /* FIXME */
 
     return true;
 }
@@ -317,7 +378,8 @@ static bool upipe_a52f_parse_header(struct upipe *upipe)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[6];
-    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0, 6, header))))
+    if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
+                        A52_SYNCINFO_SIZE + 1, header))))
         return true;
 
     switch (a52_get_bsid(header)) {
@@ -352,15 +414,11 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-#if 0
-    lldiv_t div = lldiv((uint64_t)upipe_a52f->samples * UCLOCK_FREQ +
+    lldiv_t div = lldiv(A52_FRAME_SAMPLES * UCLOCK_FREQ +
                         upipe_a52f->duration_residue,
                         upipe_a52f->samplerate);
     uint64_t duration = div.quot;
     upipe_a52f->duration_residue = div.rem;
-#else
-    uint64_t duration = 0;
-#endif
 
     /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
@@ -376,6 +434,10 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump **upump_p)
 #undef SET_DATE
 
     uref_clock_set_dts_pts_delay(uref, 0);
+
+    uref_clock_set_cr_dts_delay(uref, upipe_a52f->bs_delay);
+
+    UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
     upipe_a52f_output(upipe, uref, upump_p);
 }

@@ -547,6 +547,8 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     } else if (strstr(def, ".sound.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_AUDIO;
+        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
+
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
             UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
                                                PMT_STREAMTYPE_AUDIO_MPEG2));
@@ -569,10 +571,24 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             desc6a_clear_flags(ac3_descriptor);
             UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def_dup,
                     ac3_descriptor, DESC6A_HEADER_SIZE));
+            pes_min_duration = 0;
+        } else if (!ubase_ncmp(def, "block.eac3.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                               PMT_STREAMTYPE_PRIVATE_PES));
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_PRIVATE_1));
+            uint8_t eac3_descriptor[DESC7A_HEADER_SIZE];
+            desc7a_init(eac3_descriptor);
+            desc_set_length(eac3_descriptor,
+                            DESC7A_HEADER_SIZE - DESC_HEADER_SIZE);
+            desc7a_clear_flags(eac3_descriptor);
+            UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def_dup,
+                    eac3_descriptor, DESC7A_HEADER_SIZE));
+            pes_min_duration = 0;
         }
+
         UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO));
         UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def_dup, MAX_DELAY));
-        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
         if (!ubase_check(uref_ts_flow_get_pes_min_duration(flow_def_dup, &pes_min_duration)))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_min_duration(flow_def_dup,
                                                            pes_min_duration));

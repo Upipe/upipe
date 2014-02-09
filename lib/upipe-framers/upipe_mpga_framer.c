@@ -560,8 +560,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
     else
         uref_clock_set_cr_dts_delay(uref, 0);
 
-    if (unlikely(!ubase_check(uref_clock_set_duration(uref, duration))))
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
     upipe_mpgaf_output(upipe, uref, upump_p);
 }

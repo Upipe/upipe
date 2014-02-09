@@ -62,6 +62,7 @@
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
+#include <upipe-framers/upipe_a52_framer.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_noclock.h>
@@ -168,7 +169,8 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
 
                 struct upipe *output = NULL;
                 bool found = false;
-                while (upipe_iterate_sub(upipe, &output)) {
+                while (ubase_check(upipe_iterate_sub(upipe, &output)) &&
+                       output != NULL) {
                     struct uref *flow_def2;
                     uint64_t id2;
                     if (ubase_check(upipe_get_flow_def(output, &flow_def2)) &&
@@ -258,16 +260,21 @@ static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                 ubase_assert(uref_flow_get_id(flow_def, &flow_id));
 
                 struct upipe *program = NULL;
+                bool found = false;
                 while (ubase_check(upipe_iterate_sub(upipe, &program)) &&
                        program != NULL) {
                     struct uref *flow_def2;
                     uint64_t id2;
                     if (ubase_check(upipe_get_flow_def(program, &flow_def2)) &&
                         ubase_check(uref_flow_get_id(flow_def2, &id2)) &&
-                        flow_id == id2)
+                        flow_id == id2) {
                         /* We already have a program */
-                        return UBASE_ERR_NONE;
+                        found = true;
+                        break;
+                    }
                 }
+                if (found)
+                    continue;
 
                 program = upipe_flow_alloc_sub(upipe,
                     uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_demux_program_s),
@@ -344,6 +351,8 @@ int main(int argc, char *argv[])
     assert(upipe_h264f_mgr != NULL);
     struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
     assert(upipe_mpgaf_mgr != NULL);
+    struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
+    assert(upipe_a52f_mgr != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
@@ -353,6 +362,8 @@ int main(int argc, char *argv[])
                                                   upipe_h264f_mgr));
     ubase_assert(upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
                                                   upipe_mpgaf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr,
+                                                 upipe_a52f_mgr));
 
     struct upipe *upipe_ts_demux = upipe_void_alloc_output(upipe_fsrc,
             upipe_ts_demux_mgr,
@@ -363,6 +374,7 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_mpgvf_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
     upipe_mgr_release(upipe_mpgaf_mgr);
+    upipe_mgr_release(upipe_a52f_mgr);
     upipe_mgr_release(upipe_fsrc_mgr);
 
     upipe_release(upipe_ts_demux);

@@ -29,6 +29,7 @@
 
 #undef NDEBUG
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -64,6 +65,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static unsigned int nb_packets = 0;
+static uint64_t date = UCLOCK_FREQ;
 
 /** definition of our uprobe */
 static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -108,9 +110,11 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     ubase_assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
+    uint64_t duration;
     uref_clock_get_rap_sys(uref, &systime_rap);
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_dts_orig(uref, &dts_orig);
+    ubase_assert(uref_clock_get_duration(uref, &duration));
 
     uint8_t *buffer = malloc(size);
     assert(buffer);
@@ -119,8 +123,10 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(size == a52_get_frame_size(a52_get_fscod(buffer),
                                       a52_get_frmsizecod(buffer)));
     assert(systime_rap == 42);
-    assert(pts_orig == 27000000);
-    assert(dts_orig == 27000000);
+    assert(pts_orig == date);
+    assert(dts_orig == date);
+    assert(duration == A52_FRAME_SAMPLES * UCLOCK_FREQ / 48000);
+    date += duration;
 
     upipe_dbg_va(upipe, "frame size: %zu", size);
     free(buffer);
@@ -201,8 +207,8 @@ int main(int argc, char *argv[])
     }
 
     uref_block_unmap(uref, 0);
-    uref_clock_set_pts_orig(uref, 27000000);
-    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_pts_orig(uref, date);
+    uref_clock_set_dts_orig(uref, date);
     uref_clock_set_cr_sys(uref, 84);
     uref_clock_set_rap_sys(uref, 42);
     upipe_input(upipe_a52f, uref, NULL);

@@ -136,6 +136,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_pesd_mgr;
     /** pointer to mpgaf manager */
     struct upipe_mgr *mpgaf_mgr;
+    /** pointer to a52f manager */
+    struct upipe_mgr *a52f_mgr;
     /** pointer to mpgvf manager */
     struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
@@ -658,6 +660,21 @@ static enum ubase_err upipe_ts_demux_output_plumber(struct upipe *upipe,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "mpgaf"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if ((!ubase_ncmp(def, "block.ac3.") ||
+         !ubase_ncmp(def, "block.eac3.")) &&
+        ts_demux_mgr->a52f_mgr != NULL) {
+        /* allocate a52f inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->a52f_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "a52f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
         upipe_ts_demux_output_store_last_inner(upipe, output);
@@ -2161,6 +2178,8 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
         upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
     if (ts_demux_mgr->mpgaf_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->mpgaf_mgr);
+    if (ts_demux_mgr->a52f_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->a52f_mgr);
     if (ts_demux_mgr->mpgvf_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     if (ts_demux_mgr->h264f_mgr != NULL)
@@ -2214,6 +2233,7 @@ static enum ubase_err upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_pesd, TS_PESD)
 
         GET_SET_MGR(mpgaf, MPGAF)
+        GET_SET_MGR(a52f, A52F)
         GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
 #undef GET_SET_MGR
@@ -2248,6 +2268,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
 
     ts_demux_mgr->mpgaf_mgr = NULL;
+    ts_demux_mgr->a52f_mgr = NULL;
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
 
