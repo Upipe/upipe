@@ -213,6 +213,7 @@ struct bmd_wrap *bmd_wrap_alloc(void *opaque)
 
 
     /* configure input */
+    /* FIXME hardcoded parameters */
     deckLinkInput->EnableVideoInput(bmdModeHD1080i50, bmdFormat8BitYUV, 0);
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz, 16, 2);
 

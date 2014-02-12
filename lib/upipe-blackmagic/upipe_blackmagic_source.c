@@ -27,11 +27,12 @@
  * @short Upipe source module for BlackMagic Design SDI cards
  */
 
+/* TODO split using subpipes, add sound support */
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_dump.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
@@ -41,6 +42,7 @@
 #include <upipe/uqueue.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
@@ -63,10 +65,13 @@
 /** default size of buffers when unspecified */
 #define UBUF_DEFAULT_SIZE       4096
 #define MAX_QUEUE_LENGTH 255
-#define CHROMA "uyvy422"
+#define CHROMA "u8y8v8y8"
 
 /** @internal @This is the private context of a http source pipe. */
 struct upipe_bmd_src {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
@@ -102,10 +107,11 @@ struct upipe_bmd_src {
 };
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src, upipe, UPIPE_BMD_SRC_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_bmd_src, urefcount, upipe_bmd_src_free)
 UPIPE_HELPER_VOID(upipe_bmd_src)
 UPIPE_HELPER_UREF_MGR(upipe_bmd_src, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_bmd_src, ubuf_mgr)
+UPIPE_HELPER_UBUF_MGR(upipe_bmd_src, ubuf_mgr, output_flow)
 UPIPE_HELPER_OUTPUT(upipe_bmd_src, output, output_flow, output_flow_sent)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_src, upump_mgr)
@@ -113,7 +119,7 @@ UPIPE_HELPER_UPUMP(upipe_bmd_src, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_bmd_src, upump_init, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_bmd_src, uclock)
 
-/** @internal @This is called in blackmagic thread upon receiving video frames.
+/** @internal @This is called in blackmagic thread when receiving video frames.
  * @param _upipe description structure of the pipe
  * @param frame received frame
  */
@@ -172,7 +178,7 @@ static void upipe_bmd_src_video_cb(void *_upipe, struct bmd_frame *frame)
 
     /* set uclock timestamps */
     if (upipe_bmd_src->uclock) {
-        uref_clock_set_systime(uref, timestamp);
+        uref_clock_set_cr_sys(uref, timestamp);
     }
 
     /* TODO read timecode/duration from SDI */
@@ -193,25 +199,37 @@ void upipe_bmd_src_output_uref(struct upipe *upipe,
                                struct uref *uref, struct upump *upump)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
+    size_t hsize, vsize;
 
     /* output flow def */
     if (unlikely(!upipe_bmd_src->output_flow)) {
         struct uref *flow;
         uint8_t macropixel;
-        uref_pic_size(uref, NULL, NULL, &macropixel);
+        struct urational fps = {25, 1}; /* FIXME */
+        uref_pic_size(uref, &hsize, &vsize, &macropixel);
         flow = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, macropixel);
+        uref_pic_flow_add_plane(flow, 1, 1, 4, CHROMA);
+        uref_pic_flow_set_hsize(flow, hsize);
+        uref_pic_flow_set_vsize(flow, vsize);
+        uref_pic_flow_set_fps(flow, fps);
         upipe_bmd_src_store_flow_def(upipe, flow);
     }
 
-    upipe_bmd_src_output(upipe, uref, upump);
+    if (ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL))) {
+        upipe_verbose_va(upipe, "sending picture %zux%zu %p", hsize, vsize, uref);
+    } else {
+        upipe_verbose_va(upipe, "sending uref %p", uref);
+    }
+    upipe_bmd_src_output(upipe, uref, &upump);
 }
 
 /** @internal @This flushes the internal queue.
  *
  * @param upipe description structure of the pipe
+ * @param upump description structure of the pump
  * @return false in case of error
  */
-void upipe_bmd_src_flush(struct upipe *upipe)
+void upipe_bmd_src_flush(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     struct uchain *uchain;
@@ -220,7 +238,7 @@ void upipe_bmd_src_flush(struct upipe *upipe)
     /* unqueue urefs */
     while ((uchain = uqueue_pop(&upipe_bmd_src->uqueue))) {
         uref = uref_from_uchain(uchain);
-        upipe_bmd_src_output_uref(upipe, uref, NULL);
+        upipe_bmd_src_output_uref(upipe, uref, upump);
     }
 }
 
@@ -232,15 +250,7 @@ void upipe_bmd_src_flush(struct upipe *upipe)
 static void upipe_bmd_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
-    struct uref *uref;
-    struct uchain *uchain;
-
-    /* unqueue urefs */
-    while((uchain = uqueue_pop(&upipe_bmd_src->uqueue))) {
-        uref = uref_from_uchain(uchain);
-        upipe_bmd_src_output_uref(upipe, uref, upump);
-    }
+    upipe_bmd_src_flush(upipe, upump);
 }
 
 /** @internal @This is called (once) to start blackmagic streams.
@@ -252,55 +262,54 @@ static void upipe_bmd_src_init_cb(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
 
+    /* destroy pump */
+    upipe_bmd_src_set_upump_init(upipe, NULL);
+
+    /* FIXME move this to subpipe allocation when ready */
+    /* cannot send need_ubuf/uref_mgr from blackmagic thread ... */
+    if (unlikely(!ubase_check(upipe_bmd_src_check_uref_mgr(upipe)))) {
+        return;
+    }
+
+    /* FIXME move this too .... */
+    struct uref *flow;
+    flow = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 2);
+    uref_pic_flow_add_plane(flow, 1, 1, 4, CHROMA);
+    enum ubase_err ret = upipe_throw_new_flow_format(upipe, 
+                            flow, &upipe_bmd_src->ubuf_mgr);
+    uref_free(flow);
+    if (unlikely(!ubase_check(ret))) {
+        return;
+    }
+
+    upipe_dbg(upipe, "starting streams");
     /* start blackmagic streams */
     if (unlikely(!bmd_wrap_start(upipe_bmd_src->bmd_wrap))) {
         upipe_err(upipe, "could not start blackmagic streams");
     }
-
-    /* destroy pump */
-    upipe_bmd_src_set_upump_init(upipe, NULL);
 }
 
 /** @internal @This sets the upump manager and allocates read pump
  *
  * @param upipe description structure of the pipe
- * @param upump_mgr upump manager
  * @return false in case of error
  */
-static bool _upipe_bmd_src_set_upump_mgr(struct upipe *upipe,
-                                         struct upump_mgr *mgr)
+static enum ubase_err _upipe_bmd_src_attach_upump_mgr(struct upipe *upipe)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     struct upump *upump;
 
-    /* cannot send need_ubuf/uref_mgr from blackmagic thread ... */
-    if (unlikely(!upipe_bmd_src->uref_mgr)) {
-        upipe_throw_need_uref_mgr(upipe);
-        if (unlikely(!upipe_bmd_src->uref_mgr)) {
-            upipe_warn(upipe, "no uref manager defined");
-            return false;
-        }
-    }
-    if (unlikely(!upipe_bmd_src->ubuf_mgr)) {
-        upipe_throw_need_ubuf_mgr(upipe, NULL);
-        if (unlikely(!upipe_bmd_src->ubuf_mgr)) {
-            upipe_warn(upipe, "no ubuf manager defined");
-            return false;
-        }
-    }
-
-    /* set upump manager */
-    if (unlikely(!upipe_bmd_src_set_upump_mgr(upipe, mgr))) {
-        return false;
-    }
+    upipe_bmd_src_set_upump_init(upipe, NULL);
+    upipe_bmd_src_set_upump(upipe, NULL);
+    UBASE_RETURN(upipe_bmd_src_attach_upump_mgr(upipe))
 
     /* allocate new uqueue pump */
     upipe_bmd_src_set_upump(upipe, NULL);
-    upump = uqueue_upump_alloc_pop(&upipe_bmd_src->uqueue, mgr,
-                                   upipe_bmd_src_worker, upipe);
+    upump = uqueue_upump_alloc_pop(&upipe_bmd_src->uqueue,
+        upipe_bmd_src->upump_mgr, upipe_bmd_src_worker, upipe);
     if (unlikely(!upump)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
-        return false;
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return UBASE_ERR_UPUMP;
     }
 
     upipe_bmd_src_set_upump(upipe, upump);
@@ -308,17 +317,18 @@ static bool _upipe_bmd_src_set_upump_mgr(struct upipe *upipe,
 
     /* allocate new init pump */
     upipe_bmd_src_set_upump_init(upipe, NULL);
-    upump = upump_alloc_idler(mgr, upipe_bmd_src_init_cb, upipe);
+    upump = upump_alloc_idler(upipe_bmd_src->upump_mgr,
+                              upipe_bmd_src_init_cb, upipe);
 
     if (unlikely(!upump)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_UPUMP);
-        return false;
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return UBASE_ERR_UPUMP;
     }
 
     upipe_bmd_src_set_upump_init(upipe, upump);
     upump_start(upump);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a blackmagic source pipe.
@@ -328,27 +338,24 @@ static bool _upipe_bmd_src_set_upump_mgr(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static bool upipe_bmd_src_control(struct upipe *upipe, enum upipe_command command,
-                                va_list args)
+static enum ubase_err upipe_bmd_src_control(struct upipe *upipe,
+                                            enum upipe_command command,
+                                            va_list args)
 {
     switch (command) {
-        case UPIPE_GET_UREF_MGR: {
-            struct uref_mgr **p = va_arg(args, struct uref_mgr **);
-            return upipe_bmd_src_get_uref_mgr(upipe, p);
+        case UPIPE_ATTACH_UREF_MGR: {
+            return upipe_bmd_src_attach_uref_mgr(upipe);
         }
-        case UPIPE_SET_UREF_MGR: {
-            struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);
-            return upipe_bmd_src_set_uref_mgr(upipe, uref_mgr);
+        case UPIPE_ATTACH_UBUF_MGR: {
+            return upipe_bmd_src_attach_ubuf_mgr(upipe);
+        }
+        case UPIPE_ATTACH_UPUMP_MGR: {
+            return _upipe_bmd_src_attach_upump_mgr(upipe);
+        }
+        case UPIPE_ATTACH_UCLOCK: {
+            return upipe_bmd_src_attach_uclock(upipe);
         }
 
-        case UPIPE_GET_UBUF_MGR: {
-            struct ubuf_mgr **p = va_arg(args, struct ubuf_mgr **);
-            return upipe_bmd_src_get_ubuf_mgr(upipe, p);
-        }
-        case UPIPE_SET_UBUF_MGR: {
-            struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);
-            return upipe_bmd_src_set_ubuf_mgr(upipe, ubuf_mgr);
-        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_bmd_src_get_flow_def(upipe, p);
@@ -362,22 +369,6 @@ static bool upipe_bmd_src_control(struct upipe *upipe, enum upipe_command comman
             return upipe_bmd_src_set_output(upipe, output);
         }
 
-        case UPIPE_GET_UPUMP_MGR: {
-            struct upump_mgr **p = va_arg(args, struct upump_mgr **);
-            return upipe_bmd_src_get_upump_mgr(upipe, p);
-        }
-        case UPIPE_SET_UPUMP_MGR: {
-            struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
-            return _upipe_bmd_src_set_upump_mgr(upipe, upump_mgr);
-        }
-        case UPIPE_GET_UCLOCK: {
-            struct uclock **p = va_arg(args, struct uclock **);
-            return upipe_bmd_src_get_uclock(upipe, p);
-        }
-        case UPIPE_SET_UCLOCK: {
-            struct uclock *uclock = va_arg(args, struct uclock *);
-            return upipe_bmd_src_set_uclock(upipe, uclock);
-        }
         default:
             return false;
     }
@@ -393,7 +384,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
 
     bmd_wrap_free(upipe_bmd_src->bmd_wrap);
 
-    upipe_bmd_src_flush(upipe);
+    upipe_bmd_src_flush(upipe, NULL);
     uqueue_clean(&upipe_bmd_src->uqueue);
     free(upipe_bmd_src->queue_extra);
 
@@ -406,6 +397,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_clean_output(upipe);
     upipe_bmd_src_clean_ubuf_mgr(upipe);
     upipe_bmd_src_clean_uref_mgr(upipe);
+    upipe_bmd_src_clean_urefcount(upipe);
 
     upipe_bmd_src_free_void(upipe);
 }
@@ -430,7 +422,7 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     /* allocate blackmagic context */
     upipe_bmd_src->bmd_wrap = bmd_wrap_alloc(upipe);
     if (unlikely(!upipe_bmd_src->bmd_wrap)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_EXTERNAL);
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         upipe_bmd_src_free_void(upipe);
         return NULL;
     }
@@ -439,7 +431,7 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     /* init queue */
     upipe_bmd_src->queue_extra = malloc(ufifo_sizeof(MAX_QUEUE_LENGTH));
     if (unlikely(!upipe_bmd_src->queue_extra)) {
-        upipe_throw_fatal(upipe, UPROBE_ERR_ALLOC);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         bmd_wrap_free(upipe_bmd_src->bmd_wrap);
         upipe_bmd_src_free_void(upipe);
         return NULL;
@@ -447,6 +439,7 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
                 upipe_bmd_src->queue_extra);
 
+    upipe_bmd_src_init_urefcount(upipe);
     upipe_bmd_src_init_uref_mgr(upipe);
     upipe_bmd_src_init_ubuf_mgr(upipe);
     upipe_bmd_src_init_output(upipe);
@@ -456,19 +449,18 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src_init_uclock(upipe);
 
     upipe_throw_ready(upipe);
+
     return upipe;
 }
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_bmd_src_mgr = {
+    .refcount = NULL,
     .signature = UPIPE_BMD_SRC_SIGNATURE,
 
     .upipe_alloc = upipe_bmd_src_alloc,
     .upipe_input = NULL,
     .upipe_control = upipe_bmd_src_control,
-    .upipe_free = upipe_bmd_src_free,
-
-    .upipe_mgr_free = NULL
 };
 
 /** @This returns the management structure for all http source pipes.

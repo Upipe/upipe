@@ -28,7 +28,11 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_log.h>
+#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
+#include <upipe/uprobe_ubuf_mem.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -85,8 +89,8 @@ const char *codec = "mpeg2video";
 const char *sink_path = NULL;
 
 /* catch uprobes */
-static bool catch(struct uprobe *uprobe, struct upipe *upipe,
-                         enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
+                            enum uprobe_event event, va_list args)
 {
     switch(event) {
         default:
@@ -131,36 +135,21 @@ int main(int argc, char **argv)
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
-    block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                        UBUF_POOL_DEPTH, umem_mgr,
-                                        -1, -1, -1, 0);
-    yuv_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
-                                      UBUF_PREPEND, UBUF_APPEND,
-                                      UBUF_PREPEND, UBUF_APPEND,
-                                      UBUF_ALIGN, UBUF_ALIGN_OFFSET);
-    /* planar YUV (I420) */
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "y8", 1, 1, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "u8", 2, 2, 1);
-    ubuf_pic_mem_mgr_add_plane(yuv_mgr, "v8", 2, 2, 1);
 
-    uyvy_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 2,
-                                      UBUF_PREPEND, UBUF_APPEND,
-                                      UBUF_PREPEND, UBUF_APPEND,
-                                      UBUF_ALIGN, UBUF_ALIGN_OFFSET);
-    /* uyvy (packed 422) */
-    ubuf_pic_mem_mgr_add_plane(uyvy_mgr, "uyvy422", 1, 1, 4);
+    /* uclock */
+    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
 
-    /* log probes */
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(NULL, stdout, loglevel);
-    logger = uprobe_log_alloc(uprobe_stdio, loglevel);
+    /* main probe */
+    logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    logger = uprobe_uclock_alloc(logger, uclock);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
 
     /* generic probe */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, logger);
-
-    /* uclock */
-    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
 
     /* upipe-av */
     upipe_av_init(false, logger);
@@ -173,37 +162,37 @@ int main(int argc, char **argv)
 
     /* source */
     struct upipe *bmdsrc = upipe_void_alloc(upipe_bmd_src_mgr,
-        uprobe_pfx_adhoc_alloc(logger, loglevel, "bmdsrc"));
-    upipe_set_ubuf_mgr(bmdsrc, uyvy_mgr);
-    upipe_set_uclock(bmdsrc, uclock);
-    upipe_set_upump_mgr(bmdsrc, upump_mgr);
+        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            loglevel, "bmdsrc"));
+    upipe_attach_uclock(bmdsrc);
+    upipe_attach_upump_mgr(bmdsrc);
 
     /* convert picture */
-    flow = uref_pic_flow_alloc_def(uref_mgr, 2);
-    struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
-        uprobe_pfx_adhoc_alloc(logger, loglevel, "sws"), flow);
-    uref_free(flow);
-    upipe_set_ubuf_mgr(sws, yuv_mgr);
-    upipe_get_flow_def(sws, &flow);
-    upipe_set_output(bmdsrc, sws);
+    flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+    uref_pic_flow_add_plane(flow, 1, 1, 1, "y8");
+    uref_pic_flow_add_plane(flow, 2, 2, 1, "u8");
+    uref_pic_flow_add_plane(flow, 2, 2, 1, "v8");
+    struct upipe *sws = upipe_flow_alloc_output(bmdsrc, upipe_sws_mgr,
+        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            loglevel, "sws"), flow);
+    assert(sws);
     upipe_release(sws);
+    uref_free(flow);
 
     /* encode */
-    struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
-        uprobe_pfx_adhoc_alloc(logger, loglevel, "avcenc"), flow);
-    upipe_set_ubuf_mgr(avcenc, block_mgr);
-    upipe_avcenc_set_codec_by_name(avcenc, codec);
-    upipe_set_output(sws, avcenc);
+    flow = uref_block_flow_alloc_def(uref_mgr, "");
+    uref_flow_set_def_va(flow, "block.%s.pic.", codec);
+    struct upipe *avcenc = upipe_flow_alloc_output(sws, upipe_avcenc_mgr,
+        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            loglevel, "avcenc"), flow);
+    assert(avcenc);
     upipe_release(avcenc);
+    uref_free(flow);
     
     /* store */
-    flow = uref_block_flow_alloc_def(uref_mgr, "foo");
-    struct upipe *fsink = upipe_flow_alloc(upipe_fsink_mgr,
-            uprobe_pfx_adhoc_alloc(logger, loglevel, "fsink"), flow);
-    uref_free(flow);
-    upipe_set_upump_mgr(fsink, upump_mgr);
+    struct upipe *fsink = upipe_void_alloc_output(avcenc, upipe_fsink_mgr,
+        uprobe_pfx_alloc(logger, loglevel, "fsink"));
     upipe_fsink_set_path(fsink, sink_path, mode);
-    upipe_set_output(avcenc, fsink);
     upipe_release(fsink);
 
     ev_loop(loop, 0);
