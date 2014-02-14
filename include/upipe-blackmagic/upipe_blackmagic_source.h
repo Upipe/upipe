@@ -37,6 +37,7 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_BMD_SRC_SIGNATURE UBASE_FOURCC('b', 'm', 'd', 's')
+#define UPIPE_BMD_SRC_OUTPUT_SIGNATURE UBASE_FOURCC('b', 'm', 'd', 'o')
 
 /** @This returns the management structure for all alsa sinks.
  *

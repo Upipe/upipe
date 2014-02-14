@@ -26,9 +26,13 @@
 #include <upipe/ubase.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <DeckLinkAPI.h>
 #include <DeckLinkAPIDispatch.cpp>
 #include "blackmagic_wrap.h"
+
+#define __STDC_FORMAT_MACROS 1
+#include <inttypes.h>
 
 #ifndef NULL
 #define NULL 0
@@ -70,7 +74,36 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
                 BMDVideoInputFormatChangedEvents events,
                 IDeckLinkDisplayMode *mode, BMDDetectedVideoInputFormatFlags)
 {
-    printf("Caught input format changed\n");
+    struct urational fps;
+    BMDTimeValue frameDuration;
+    BMDTimeScale timeScale;
+    mode->GetFrameRate(&frameDuration, &timeScale);
+    fps.num = timeScale;
+    fps.den = frameDuration;
+    urational_simplify(&fps);
+
+    BMDFieldDominance field = mode->GetFieldDominance();
+
+    #if 1
+    char fourcc[5];
+    const char *modename = NULL;
+    mode->GetName(&modename);
+    if (!modename) {
+        modename = "(invalid)";
+    }
+    printf("Caught input format changed to %s\n", modename);
+
+    printf("fps: { %"PRId64", %"PRId64" }\n", fps.num, fps.den);
+
+    memcpy(fourcc, &field, 4);
+    fourcc[4] = 0;
+    printf("Field dominance: %s\n", fourcc);
+    #endif
+
+    bmd_wrap_stop(&wrap);
+    wrap.input->EnableVideoInput(mode->GetDisplayMode(), bmdFormat8BitYUV,
+                                    bmdVideoInputEnableFormatDetection);
+    bmd_wrap_start(&wrap);
     return S_OK;
 }
 
@@ -94,6 +127,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
                         IDeckLinkAudioInputPacket* audioFrame)
 {
     struct bmd_frame frame;
+    memset(&frame, 0, sizeof(struct bmd_frame));
 
 	/* handle video frame */
 	if(videoFrame && (! (videoFrame->GetFlags() & bmdFrameHasNoInputSource))
@@ -129,7 +163,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
  */
 bmd_wrap_cb bmd_wrap_set_video_cb(struct bmd_wrap *wrap, bmd_wrap_cb cb)
 {
-    bmd_wrap_cb old = wrap->video_cb;
+    bmd_wrap_cb old = wrap->audio_cb;
     wrap->video_cb = cb;
     return old;
 }
@@ -141,8 +175,8 @@ bmd_wrap_cb bmd_wrap_set_video_cb(struct bmd_wrap *wrap, bmd_wrap_cb cb)
  */
 bmd_wrap_cb bmd_wrap_set_audio_cb(struct bmd_wrap *wrap, bmd_wrap_cb cb)
 {
-    bmd_wrap_cb old = wrap->video_cb;
-    wrap->video_cb = cb;
+    bmd_wrap_cb old = wrap->audio_cb;
+    wrap->audio_cb = cb;
     return old;
 }
 
@@ -213,8 +247,9 @@ struct bmd_wrap *bmd_wrap_alloc(void *opaque)
 
 
     /* configure input */
-    /* FIXME hardcoded parameters */
-    deckLinkInput->EnableVideoInput(bmdModeHD1080i50, bmdFormat8BitYUV, 0);
+    /* FIXME hardcoded format and default mode */
+    deckLinkInput->EnableVideoInput(bmdModePAL, bmdFormat8BitYUV,
+                                    bmdVideoInputEnableFormatDetection);
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz, 16, 2);
 
     wrap = &delegate->wrap;

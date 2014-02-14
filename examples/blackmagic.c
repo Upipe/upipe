@@ -162,17 +162,24 @@ int main(int argc, char **argv)
 
     /* source */
     struct upipe *bmdsrc = upipe_void_alloc(upipe_bmd_src_mgr,
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
-            loglevel, "bmdsrc"));
-    upipe_attach_uclock(bmdsrc);
+        uprobe_pfx_alloc((logger), loglevel, "bmdsrc"));
     upipe_attach_upump_mgr(bmdsrc);
+
+    /* source video subpipe */
+    flow = uref_pic_flow_alloc_def(uref_mgr, 0);
+    struct upipe *bmdvideo = upipe_flow_alloc_sub(bmdsrc,
+        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            loglevel, "bmdvideo"), flow);
+    upipe_attach_uclock(bmdvideo);
+    upipe_attach_upump_mgr(bmdvideo);
+    uref_free(flow);
 
     /* convert picture */
     flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     uref_pic_flow_add_plane(flow, 1, 1, 1, "y8");
     uref_pic_flow_add_plane(flow, 2, 2, 1, "u8");
     uref_pic_flow_add_plane(flow, 2, 2, 1, "v8");
-    struct upipe *sws = upipe_flow_alloc_output(bmdsrc, upipe_sws_mgr,
+    struct upipe *sws = upipe_flow_alloc_output(bmdvideo, upipe_sws_mgr,
         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
             loglevel, "sws"), flow);
     assert(sws);
