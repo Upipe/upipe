@@ -318,7 +318,7 @@ static void upipe_avcenc_close(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
-    if (context == NULL) {
+    if ((context == NULL) || !avcodec_is_open(context)) {
         upipe_avcenc_free(upipe);
         return;
     }
