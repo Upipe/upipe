@@ -91,8 +91,6 @@
 #define READ_SIZE           4096
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 
-#define SAMPLERATE 48000 /* FIXME, fix upipe-swresample */
-
 struct es_conf {
     struct uchain uchain;
     uint64_t id;
@@ -263,8 +261,8 @@ static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             if (strstr(def, ".sound.")) {
                 /* resample */
                 struct uref *flow = uref_sound_flow_alloc_def(uref_mgr,
-                                                              "pcm_s16.", 2, 0);
-                uref_sound_flow_set_rate(flow, SAMPLERATE);
+                                                              "s16.", 2, 4);
+                uref_sound_flow_add_plane(flow, "lr");
                 struct upipe *swr = upipe_flow_alloc_output(decoder,
                         upipe_swr_mgr,
                         uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
