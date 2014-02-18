@@ -58,7 +58,7 @@ UREF_ATTR_UNSIGNED(sound_flow, samples, "s.samples", number of samples)
  * @param mgr uref management structure
  * @param format format string
  * @param channels number of channels
- * @param sample_size size in octets of a sample of an audio channel
+ * @param sample_size size in octets of a sample of an audio plane
  * @return pointer to uref control packet, or NULL in case of error
  */
 static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
