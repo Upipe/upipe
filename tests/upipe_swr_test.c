@@ -57,7 +57,7 @@
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 #define FRAMES_LIMIT        100
 
 /** definition of our uprobe */
@@ -115,12 +115,11 @@ int main(int argc, char **argv)
     assert(flow != NULL);
     ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
     ubase_assert(uref_sound_flow_set_rate(flow, 48000));
-    ubase_assert(uref_sound_flow_set_channels(flow, 2));
     struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "f32.", 2, 8);
     assert(flow_output != NULL);
     ubase_assert(uref_sound_flow_add_plane(flow_output, "lr"));
-    ubase_assert(uref_sound_flow_set_rate(flow_output, 48000));
-    ubase_assert(uref_sound_flow_set_channels(flow_output, 2));
+    /*ubase_assert(uref_sound_flow_set_rate(flow_output, 48000));*/
+    /*ubase_assert(uref_sound_flow_set_channels(flow_output, 2));*/
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "swr"),
         flow_output);
