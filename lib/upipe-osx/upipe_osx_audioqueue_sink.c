@@ -27,6 +27,8 @@
  * @short Upipe OSX_AUDIOQUEUE (OpenGL/X11) sink module
  */
 
+/* FIXME this pipe does NOT work (port me to latest upipe API please) */
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/ubuf.h>
@@ -39,7 +41,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_void.h>
 #include <upipe-osx/upipe_osx_audioqueue_sink.h>
 
 #include <stdlib.h>
@@ -135,7 +137,7 @@ static void upipe_osx_audioqueue_sink_input_audio(struct upipe *upipe,
     AudioQueueAllocateBuffer(osx_audioqueue->queue, size, &qbuf);
     uref_block_extract(uref, 0, -1, qbuf->mAudioData);
     qbuf->mAudioDataByteSize = size;
-    qbuf->mUserData = upump->mgr;
+    qbuf->mUserData = (*upump_p)->mgr;
     AudioQueueEnqueueBuffer(osx_audioqueue->queue, qbuf, 0, NULL);
 
     uref_free(uref);
