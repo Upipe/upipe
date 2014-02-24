@@ -237,6 +237,8 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
 
     if (likely(a52e_sync_compare_formats(header, upipe_a52f->sync_header))) {
         /* identical sync */
+        upipe_a52f->next_frame_size =
+            a52e_get_frame_size(a52e_get_frmsiz(header));
         return true;
     }
 
@@ -319,6 +321,9 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
 
     if (likely(a52_sync_compare_formats(header, upipe_a52f->sync_header))) {
         /* identical sync */
+        upipe_a52f->next_frame_size =
+            a52_get_frame_size(a52_get_fscod(header),
+                               a52_get_frmsizecod(header));
         return true;
     }
 
