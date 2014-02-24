@@ -90,8 +90,9 @@
 #define UINT33_MAX UINT64_C(8589934592)
 /** max resolution of PCR, PTS and DTS */
 #define TS_CLOCK_MAX (UINT33_MAX * UCLOCK_FREQ / 90000)
-/** max interval between PCRs (ISO/IEC 13818-1 2.7.2) */
-#define MAX_PCR_INTERVAL (UCLOCK_FREQ / 10)
+/** max interval between PCRs (ISO/IEC 13818-1 2.7.2) - could be 100 ms but
+ * allow higher tolerance */
+#define MAX_PCR_INTERVAL (UCLOCK_FREQ / 2)
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
 /** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
