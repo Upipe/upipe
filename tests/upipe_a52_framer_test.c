@@ -79,12 +79,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_SYNC_ACQUIRED:
         case UPROBE_SYNC_LOST:
+        case UPROBE_NEW_FLOW_DEF:
             break;
-        case UPROBE_NEW_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            uref_dump(flow_def, upipe->uprobe);
-            break;
-        }
     }
     return UBASE_ERR_NONE;
 }
