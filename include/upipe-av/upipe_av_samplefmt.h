@@ -62,6 +62,9 @@ static const struct {
     { AV_SAMPLE_FMT_NONE, NULL }
 };
 
+/** @This is the list of channels. FIXME channel ordering */
+#define UPIPE_AV_SAMPLEFMT_CHANNELS "lrcLRS12345689"
+
 /** @This allows to convert from av sample format to flow definition.
  *
  * @param flow_def overwritten flow definition
@@ -73,7 +76,9 @@ static inline enum ubase_err
     upipe_av_samplefmt_to_flow_def(struct uref *flow_def,
                                    enum AVSampleFormat fmt, uint8_t channels)
 {
-    char *channels_desc = "lrcLRS12345689"; /* FIXME channels ordering */
+    char channels_desc[sizeof(UPIPE_AV_SAMPLEFMT_CHANNELS)];
+    memcpy(channels_desc, UPIPE_AV_SAMPLEFMT_CHANNELS,
+           sizeof(UPIPE_AV_SAMPLEFMT_CHANNELS));
     assert(channels < strlen(channels_desc));
     UBASE_RETURN(uref_sound_flow_set_channels(flow_def, channels))
     UBASE_RETURN(uref_sound_flow_set_planes(flow_def, 0))
