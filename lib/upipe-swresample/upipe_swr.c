@@ -218,7 +218,10 @@ static enum ubase_err upipe_swr_set_flow_def(struct upipe *upipe,
     }
 
     av_opt_set_int(upipe_swr->swr, "in_sample_fmt", in_fmt, 0);
+    av_opt_set_int(upipe_swr->swr, "used_channel_count", 0, 0);
     av_opt_set_int(upipe_swr->swr, "in_channel_count", in_chan, 0);
+    av_opt_set_int(upipe_swr->swr, "in_channel_layout",
+                   av_get_default_channel_layout(in_chan), 0);
     av_opt_set_int(upipe_swr->swr, "in_sample_rate", in_rate, 0);
 
     /* set missing output options */
@@ -227,6 +230,8 @@ static enum ubase_err upipe_swr_set_flow_def(struct upipe *upipe,
     }
     if (upipe_swr->out_chan == 0) {
         av_opt_set_int(upipe_swr->swr, "out_channel_count", in_chan, 0);
+        av_opt_set_int(upipe_swr->swr, "out_channel_layout",
+                       av_get_default_channel_layout(in_chan), 0);
     }
     if (upipe_swr->out_rate == 0) {
         av_opt_set_int(upipe_swr->swr, "out_sample_rate", in_rate, 0);
