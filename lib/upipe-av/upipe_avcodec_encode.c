@@ -323,13 +323,15 @@ static void upipe_avcenc_close(struct upipe *upipe)
         return;
     }
 
-    if (!ulist_empty(&upipe_avcenc->sound_urefs))
-        /* Feed avcodec with the last incomplete uref (sound only). */
-        upipe_avcenc_encode_audio(upipe, NULL);
+    if (avcodec_is_open(context)) {
+        if (!ulist_empty(&upipe_avcenc->sound_urefs))
+            /* Feed avcodec with the last incomplete uref (sound only). */
+            upipe_avcenc_encode_audio(upipe, NULL);
 
-    if (context->codec->capabilities & CODEC_CAP_DELAY) {
-        /* Feed avcodec with NULL frames to output the remaining packets. */
-        while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
+        if (context->codec->capabilities & CODEC_CAP_DELAY) {
+            /* Feed avcodec with NULL frames to output the remaining packets. */
+            while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
+        }
     }
     upipe_avcenc->close = true;
     upipe_avcenc_start_av_deal(upipe);
@@ -891,7 +893,7 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else {
-        uint8_t channels;
+        uint8_t channels = 0;
         enum AVSampleFormat sample_fmt =
             upipe_av_samplefmt_from_flow_def(flow_def, &channels);
         const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
@@ -914,21 +916,22 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
 
         uint64_t rate;
         const int *supported_samplerates = codec->supported_samplerates;
-        if (!ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) ||
-            supported_samplerates == NULL) {
+        if (!ubase_check(uref_sound_flow_get_rate(flow_def, &rate))) {
             upipe_err_va(upipe, "unsupported sample rate");
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
-        while (*supported_samplerates != 0) {
-            if (*supported_samplerates == rate)
-                break;
-            supported_samplerates++;
-        }
-        if (*supported_samplerates == 0) {
-            upipe_err_va(upipe, "unsupported sample rate %"PRIu64, rate);
-            uref_free(flow_def_check);
-            return UBASE_ERR_INVALID;
+        if (supported_samplerates != NULL) {
+            while (*supported_samplerates != 0) {
+                if (*supported_samplerates == rate)
+                    break;
+                supported_samplerates++;
+            }
+            if (*supported_samplerates == 0) {
+                upipe_err_va(upipe, "unsupported sample rate %"PRIu64, rate);
+                uref_free(flow_def_check);
+                return UBASE_ERR_INVALID;
+            }
         }
         context->sample_rate = rate;
         context->time_base.num = 1;
@@ -967,6 +970,148 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
     uref_clock_get_latency(upipe_avcenc->flow_def_input,
                            &upipe_avcenc->input_latency);
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This suggests an input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static enum ubase_err upipe_avcenc_suggest_flow_def(struct upipe *upipe,
+                                                    struct uref *flow_def)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+    if (unlikely(context == NULL))
+        return UBASE_ERR_UNHANDLED;
+    const AVCodec *codec = context->codec;
+    if (unlikely(codec == NULL))
+        return UBASE_ERR_UNHANDLED;
+
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (!ubase_ncmp(def, "pic.")) {
+        if (unlikely(codec->pix_fmts == NULL || codec->pix_fmts[0] == -1))
+            return UBASE_ERR_INVALID;
+
+        const char *chroma_map[UPIPE_AV_MAX_PLANES];
+        enum AVPixelFormat pix_fmt = upipe_av_pixfmt_from_flow_def(flow_def,
+                    codec->pix_fmts, chroma_map);
+        if (pix_fmt == AV_PIX_FMT_NONE) {
+            uref_pic_flow_clear_format(flow_def);
+            UBASE_RETURN(upipe_av_pixfmt_to_flow_def(codec->pix_fmts[0],
+                                                     flow_def))
+        }
+
+        const AVRational *supported_framerates = codec->supported_framerates;
+        struct urational fps = {25, 1};
+        if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) &&
+            supported_framerates != NULL) {
+            int i;
+            int closest = -1;
+            float wanted_fps = (float)fps.num / (float)fps.den;
+            float diff_fps = UINT16_MAX; /* arbitrarily big */
+            for (i = 0; supported_framerates[i].num; i++) {
+                if (supported_framerates[i].num == fps.num &&
+                    supported_framerates[i].den == fps.den)
+                    break;
+                float this_fps = (float)supported_framerates[i].num /
+                                 (float)supported_framerates[i].den;
+                float this_diff_fps = this_fps > wanted_fps ?
+                    this_fps - wanted_fps : wanted_fps - this_fps;
+                if (this_diff_fps < diff_fps) {
+                    diff_fps = this_diff_fps;
+                    closest = i;
+                }
+            }
+            if (!supported_framerates[i].num) {
+                if (closest == -1)
+                    return UBASE_ERR_INVALID;
+                fps.num = supported_framerates[closest].num;
+                fps.den = supported_framerates[closest].den;
+                UBASE_RETURN(uref_pic_flow_set_fps(flow_def, fps))
+            }
+        }
+        return UBASE_ERR_NONE;
+
+    } else if (!ubase_ncmp(def, "sound.")) {
+        uint8_t channels = 0;
+        enum AVSampleFormat sample_fmt =
+            upipe_av_samplefmt_from_flow_def(flow_def, &channels);
+        const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
+        if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL)
+            return UBASE_ERR_INVALID;
+
+        while (*sample_fmts != -1) {
+            if (*sample_fmts == sample_fmt)
+                break;
+            sample_fmts++;
+        }
+        if (*sample_fmts == -1)
+            sample_fmt = codec->sample_fmts[0];
+
+        uint64_t rate;
+        const int *supported_samplerates = codec->supported_samplerates;
+        if (!ubase_check(uref_sound_flow_get_rate(flow_def, &rate)))
+            return UBASE_ERR_INVALID;
+
+        if (supported_samplerates != NULL) {
+            int i;
+            int closest = -1;
+            uint64_t diff_rate = UINT64_MAX; /* arbitrarily big */
+            for (i = 0; supported_samplerates[i]; i++) {
+                if (supported_samplerates[i] == rate)
+                    break;
+                uint64_t this_diff_rate = supported_samplerates[i] > rate ?
+                                          supported_samplerates[i] - rate :
+                                          rate - supported_samplerates[i];
+                if (this_diff_rate < diff_rate) {
+                    diff_rate = this_diff_rate;
+                    closest = i;
+                }
+            }
+            if (supported_samplerates[i] == 0) {
+                if (closest == -1)
+                    return UBASE_ERR_INVALID;
+                UBASE_RETURN(uref_sound_flow_set_rate(flow_def,
+                            codec->supported_samplerates[closest]))
+            }
+        }
+
+        const uint64_t *channel_layouts = codec->channel_layouts;
+        if (channel_layouts != NULL) {
+            int i;
+            int closest = -1;
+            uint64_t diff_channels = UINT64_MAX; /* arbitrarily big */
+            for (i = 0; av_get_channel_layout_nb_channels(channel_layouts[i]);
+                 i++) {
+                uint8_t this_channels =
+                    av_get_channel_layout_nb_channels(channel_layouts[i]);
+                if (this_channels == channels)
+                    break;
+                uint8_t this_diff_channels = this_channels > channels ?
+                                             this_channels - channels :
+                                             channels - this_channels;
+                if (this_diff_channels < diff_channels) {
+                    diff_channels = this_diff_channels;
+                    closest = i;
+                }
+            }
+            if (av_get_channel_layout_nb_channels(channel_layouts[i]) == 0) {
+                if (closest == -1)
+                    return UBASE_ERR_INVALID;
+                channels =
+                    av_get_channel_layout_nb_channels(channel_layouts[closest]);
+            }
+        }
+        uref_sound_flow_clear_format(flow_def);
+        uref_sound_flow_set_planes(flow_def, 0);
+        upipe_av_samplefmt_to_flow_def(flow_def, sample_fmt, channels);
+        return UBASE_ERR_NONE;
+
+    } else
+        return UBASE_ERR_INVALID;
 }
 
 /** @internal @This sets the content of an avcodec option. It only take effect
@@ -1027,6 +1172,10 @@ static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avcenc_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_SUGGEST_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avcenc_suggest_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);

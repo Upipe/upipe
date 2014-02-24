@@ -84,6 +84,8 @@ enum upipe_command {
     UPIPE_AMEND_FLOW_FORMAT,
     /** sets input flow definition (struct uref *) */
     UPIPE_SET_FLOW_DEF,
+    /** suggests an input flow definition (struct uref *) */
+    UPIPE_SUGGEST_FLOW_DEF,
 
     /*
      * Output-related commands
@@ -1068,6 +1070,19 @@ static inline enum ubase_err upipe_amend_flow_format(struct upipe *upipe,
                                                      struct uref *flow_format)
 {
     return upipe_control(upipe, UPIPE_AMEND_FLOW_FORMAT, flow_format);
+}
+
+/** @This asks the pipe to modify the given flow definition so that it would
+ * be acceptable by set_flow_def.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def proposed flow definition, to be modified by the pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_suggest_flow_def(struct upipe *upipe,
+                                                    struct uref *flow_def)
+{
+    return upipe_control(upipe, UPIPE_SUGGEST_FLOW_DEF, flow_def);
 }
 
 /** @This flushes all currently held buffers, and unblocks the sources.
