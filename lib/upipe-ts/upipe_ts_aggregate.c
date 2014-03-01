@@ -98,9 +98,11 @@ struct upipe_ts_agg {
     /** remainder of the uref_size / octetrate calculation */
     uint64_t next_cr_remainder;
     /** next segmented aggregation */
-    struct uref *next_uref;
-    /** next uref size */
-    size_t next_uref_size;
+    struct uchain next_urefs;
+    /** next urefs size */
+    size_t next_urefs_size;
+    /** latest departure time of the next_urefs */
+    uint64_t next_urefs_dts;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -144,8 +146,9 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg->last_cr_sys = UINT64_MAX;
     upipe_ts_agg->next_cr_prog = UINT64_MAX;
     upipe_ts_agg->next_cr_remainder = 0;
-    upipe_ts_agg->next_uref = NULL;
-    upipe_ts_agg->next_uref_size = 0;
+    ulist_init(&upipe_ts_agg->next_urefs);
+    upipe_ts_agg->next_urefs_size = 0;
+    upipe_ts_agg->next_urefs_dts = UINT64_MAX;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -168,7 +171,8 @@ static void upipe_ts_agg_init(struct upipe *upipe)
 
     uint8_t *buffer;
     int size = -1;
-    if (unlikely(!ubase_check(ubuf_block_write(upipe_ts_agg->padding, 0, &size, &buffer)))) {
+    if (unlikely(!ubase_check(ubuf_block_write(upipe_ts_agg->padding, 0, &size,
+                                               &buffer)))) {
         ubuf_free(upipe_ts_agg->padding);
         upipe_ts_agg->padding = NULL;
         return;
@@ -178,64 +182,30 @@ static void upipe_ts_agg_init(struct upipe *upipe)
     ubuf_block_unmap(upipe_ts_agg->padding, 0);
 }
 
-/** @internal @This outputs a buffer of mtu % TS_SIZE, using padding if
- * necessary, and rewrites PCR if necessary.
+/** @internal In capped VBR mode, @this checks if the next uref can be skipped
+ * by one or several ticks, and changes the clock references accordingly.
  *
  * @param upipe description structure of the pipe
- * @param upump_p reference to pump that generated the buffer
+ * @param cr_sys clock reference to which we'd like to move the next uref
  */
-static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
+static bool upipe_ts_agg_try_shift(struct upipe *upipe, uint64_t cr_sys)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
-    struct uref *uref = upipe_ts_agg->next_uref;
-    size_t uref_size = upipe_ts_agg->next_uref_size;
     uint64_t next_cr_sys = upipe_ts_agg->next_cr_sys;
+    uint64_t next_cr_remainder = upipe_ts_agg->next_cr_remainder;
 
-    if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR) {
+    while (cr_sys > next_cr_sys + upipe_ts_agg->interval) {
         lldiv_t q = lldiv((uint64_t)upipe_ts_agg->mtu * UCLOCK_FREQ +
-                          upipe_ts_agg->next_cr_remainder,
-                          upipe_ts_agg->octetrate);
-        upipe_ts_agg->next_cr_sys += q.quot;
-        upipe_ts_agg->next_cr_remainder = q.rem;
-    } else {
-        upipe_ts_agg->next_cr_sys = UINT64_MAX;
+                          next_cr_remainder, upipe_ts_agg->octetrate);
+        next_cr_sys += q.quot;
+        next_cr_remainder = q.rem;
     }
-    upipe_ts_agg->next_uref = NULL;
-    upipe_ts_agg->next_uref_size = 0;
 
-    if (uref == NULL) {
-        if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_CBR)
-            /* Do not output a packet. */
-            return;
-
-        if (unlikely(!ubase_check(upipe_ts_agg_check_uref_mgr(upipe))))
-            return;
-
-        uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
-                                0);
-        uref_clock_set_cr_sys(uref, next_cr_sys);
-    }
-    if (upipe_ts_agg->next_cr_prog != UINT64_MAX)
-        uref_clock_set_cr_prog(uref, upipe_ts_agg->next_cr_prog);
-
-    unsigned int padding = 0;
-    while (uref_size + TS_SIZE <= upipe_ts_agg->mtu) {
-        struct ubuf *ubuf = ubuf_dup(upipe_ts_agg->padding);
-        if (unlikely(ubuf == NULL)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        uref_block_append(uref, ubuf);
-        uref_size += TS_SIZE;
-        padding++;
-    }
-    if (padding)
-        upipe_verbose_va(upipe, "inserting %u padding at %"PRIu64, padding,
-                         next_cr_sys);
-
-    upipe_ts_agg_output(upipe, uref, upump_p);
+    if (next_cr_sys > upipe_ts_agg->next_urefs_dts)
+        return false;
+    upipe_ts_agg->next_cr_sys = next_cr_sys;
+    upipe_ts_agg->next_cr_remainder = next_cr_remainder;
+    return true;
 }
 
 /** @internal @This rewrites the PCR according to the new output date.
@@ -249,7 +219,7 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
     uint8_t ts_header[TS_HEADER_SIZE_PCR];
 
     if (unlikely(!ubase_check(uref_block_extract(uref, 0, TS_HEADER_SIZE_PCR,
-                                     ts_header)))) {
+                                                 ts_header)))) {
         uref_free(uref);
         upipe_warn_va(upipe, "couldn't read TS header from aggregate");
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
@@ -275,6 +245,96 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
             upipe_ts_agg->next_cr_prog = orig_cr_prog;
         }
     }
+}
+
+/** @internal @This outputs a buffer of mtu % TS_SIZE, using padding if
+ * necessary, and rewrites PCR if necessary.
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
+{
+    struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
+
+    if (upipe_ts_agg->next_cr_sys != UINT64_MAX) {
+        if (upipe_ts_agg->last_cr_sys != UINT64_MAX &&
+            upipe_ts_agg->next_cr_prog != UINT64_MAX)
+            upipe_ts_agg->next_cr_prog += upipe_ts_agg->next_cr_sys -
+                                          upipe_ts_agg->last_cr_sys;
+        upipe_ts_agg->last_cr_sys = upipe_ts_agg->next_cr_sys;
+    }
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_agg->next_urefs, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        if (ubase_check(uref_clock_get_ref(uref))) {
+            /* fix the PCR according to the new output date */
+            upipe_ts_agg_fix_pcr(upipe, uref);
+        }
+    }
+
+    uint64_t next_cr_sys = upipe_ts_agg->next_cr_sys;
+    if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR) {
+        lldiv_t q = lldiv((uint64_t)upipe_ts_agg->mtu * UCLOCK_FREQ +
+                          upipe_ts_agg->next_cr_remainder,
+                          upipe_ts_agg->octetrate);
+        upipe_ts_agg->next_cr_sys += q.quot;
+        upipe_ts_agg->next_cr_remainder = q.rem;
+    } else {
+        upipe_ts_agg->next_cr_sys = UINT64_MAX;
+    }
+
+    uchain = ulist_pop(&upipe_ts_agg->next_urefs);
+    struct uref *uref = uref_from_uchain(uchain);
+    if (uref == NULL) {
+        if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_CBR)
+            /* Do not output a packet. */
+            return;
+
+        if (unlikely(!ubase_check(upipe_ts_agg_check_uref_mgr(upipe))))
+            return;
+
+        uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
+                                0);
+    }
+    uref_clock_set_cr_sys(uref, next_cr_sys);
+    if (upipe_ts_agg->next_cr_prog != UINT64_MAX)
+        uref_clock_set_cr_prog(uref, upipe_ts_agg->next_cr_prog);
+
+    struct uchain *uchain_tmp;
+    ulist_delete_foreach (&upipe_ts_agg->next_urefs, uchain, uchain_tmp) {
+        struct uref *uref_append = uref_from_uchain(uchain);
+        ulist_delete(uchain);
+        struct ubuf *append = uref_detach_ubuf(uref_append);
+        uref_free(uref_append);
+        if (unlikely(!ubase_check(uref_block_append(uref, append)))) {
+            upipe_warn(upipe, "error appending packet");
+            ubuf_free(append);
+        }
+    }
+
+    unsigned int padding = 0;
+    while (upipe_ts_agg->next_urefs_size + TS_SIZE <= upipe_ts_agg->mtu) {
+        struct ubuf *ubuf = ubuf_dup(upipe_ts_agg->padding);
+        if (unlikely(ubuf == NULL)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        uref_block_append(uref, ubuf);
+        upipe_ts_agg->next_urefs_size += TS_SIZE;
+        padding++;
+    }
+    if (padding)
+        upipe_verbose_va(upipe, "inserting %u padding at %"PRIu64, padding,
+                         next_cr_sys);
+
+    upipe_ts_agg->next_urefs_size = 0;
+    upipe_ts_agg->next_urefs_dts = UINT64_MAX;
+
+    upipe_ts_agg_output(upipe, uref, upump_p);
 }
 
 /** @internal @This receives data.
@@ -348,41 +408,19 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     /* packet in the future that would arrive too early if muxed into this
      * aggregate */
     if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval)
-        upipe_ts_agg_complete(upipe, upump_p);
-
-    if (ubase_check(uref_clock_get_ref(uref))) {
-        /* fix the PCR according to the new output date */
-        upipe_ts_agg_fix_pcr(upipe, uref);
+        dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval) {
+        if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_CAPPED ||
+            !upipe_ts_agg_try_shift(upipe, dts_sys - delay))
+            upipe_ts_agg_complete(upipe, upump_p);
     }
 
-    /* keep or attach incoming packet */
-    if (unlikely(upipe_ts_agg->next_uref == NULL)) {
-        if (upipe_ts_agg->next_cr_sys != UINT64_MAX) {
-            uref_clock_set_cr_sys(uref, upipe_ts_agg->next_cr_sys);
-            if (upipe_ts_agg->last_cr_sys != UINT64_MAX &&
-                upipe_ts_agg->next_cr_prog != UINT64_MAX)
-                upipe_ts_agg->next_cr_prog += upipe_ts_agg->next_cr_sys -
-                                              upipe_ts_agg->last_cr_sys;
-            upipe_ts_agg->last_cr_sys = upipe_ts_agg->next_cr_sys;
-        }
-
-        upipe_ts_agg->next_uref = uref;
-        upipe_ts_agg->next_uref_size = size;
-
-    } else {
-        struct ubuf *append = uref_detach_ubuf(uref);
-        uref_free(uref);
-        if (unlikely(!ubase_check(uref_block_append(upipe_ts_agg->next_uref, append)))) {
-            upipe_warn(upipe, "error appending packet");
-            ubuf_free(append);
-            return;
-        };
-        upipe_ts_agg->next_uref_size += size;
-    }
+    if (dts_sys < upipe_ts_agg->next_urefs_dts)
+        upipe_ts_agg->next_urefs_dts = dts_sys;
+    ulist_add(&upipe_ts_agg->next_urefs, uref_to_uchain(uref));
 
     /* anticipate next packet size and flush now if necessary */
-    if (upipe_ts_agg->next_uref_size + TS_SIZE > mtu)
+    upipe_ts_agg->next_urefs_size += size;
+    if (upipe_ts_agg->next_urefs_size + TS_SIZE > mtu)
         upipe_ts_agg_complete(upipe, upump_p);
 }
 
@@ -504,7 +542,7 @@ static enum ubase_err upipe_ts_agg_set_mtu(struct upipe *upipe,
     if (unlikely(mtu < TS_SIZE))
         return UBASE_ERR_INVALID;
     mtu -= mtu % TS_SIZE;
-    if (mtu < upipe_ts_agg->next_uref_size + TS_SIZE)
+    if (mtu < upipe_ts_agg->next_urefs_size + TS_SIZE)
         upipe_ts_agg_complete(upipe, NULL);
     upipe_ts_agg->mtu = mtu;
     if (upipe_ts_agg->octetrate)
@@ -590,7 +628,7 @@ static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
 static void upipe_ts_agg_free(struct upipe *upipe)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
-    if (unlikely(upipe_ts_agg->next_uref != NULL))
+    if (unlikely(!ulist_empty(&upipe_ts_agg->next_urefs)))
         upipe_ts_agg_complete(upipe, NULL);
 
     upipe_throw_dead(upipe);
