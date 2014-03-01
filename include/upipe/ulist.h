@@ -25,6 +25,9 @@
 
 /** @file
  * @short Upipe implementation of lists of structures (NOT thread-safe)
+ *
+ * Please note that ulists cannot be assigned, as in:
+ * struct uchain mylist = mystruct->mylist;
  */
 
 #ifndef _UPIPE_ULIST_H_
