@@ -141,8 +141,6 @@ struct upipe_h264f {
     uint8_t dpb_output_delay_length;
     /** octet rate */
     uint64_t octet_rate;
-    /** CPB length in clock units */
-    uint64_t cpb_length;
     /** duration of a frame */
     uint64_t duration;
     /** true if picture structure is present */
@@ -153,8 +151,6 @@ struct upipe_h264f {
     struct urational sar;
 
     /* parsing results - slice */
-    /** field */
-    int64_t initial_cpb_removal_delay;
     /** picture structure */
     int pic_struct;
     /** frame number */
@@ -284,7 +280,6 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->systime_rap = UINT64_MAX;
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
-    upipe_h264f->initial_cpb_removal_delay = INT64_MAX;
     upipe_h264f->pic_struct = -1;
     upipe_h264f->got_discontinuity = false;
     upipe_h264f->scan_context = UINT32_MAX;
@@ -701,28 +696,66 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     ubuf_block_stream_skip_bits(s, 8);
     UBASE_FATAL(upipe, uref_h264_flow_set_level(flow_def, level))
 
-    uint64_t max_octetrate;
+    uint64_t max_octetrate, max_bs;
     switch (level) {
-        case 10: max_octetrate = 64000 / 8; break;
-        case 11: max_octetrate = 192000 / 8; break;
-        case 12: max_octetrate = 384000 / 8; break;
-        case 13: max_octetrate = 768000 / 8; break;
-        case 20: max_octetrate = 2000000 / 8; break;
+        case 10:
+            max_octetrate = 64000 / 8;
+            max_bs = 175000 / 8;
+            break;
+        case 11:
+            max_octetrate = 192000 / 8;
+            max_bs = 500000 / 8;
+            break;
+        case 12:
+            max_octetrate = 384000 / 8;
+            max_bs = 1000000 / 8;
+            break;
+        case 13:
+            max_octetrate = 768000 / 8;
+            max_bs = 2000000 / 8;
+            break;
+        case 20:
+            max_octetrate = 2000000 / 8;
+            max_bs = 2000000 / 8;
+            break;
         case 21:
-        case 22: max_octetrate = 4000000 / 8; break;
-        case 30: max_octetrate = 10000000 / 8; break;
-        case 31: max_octetrate = 14000000 / 8; break;
+        case 22:
+            max_octetrate = 4000000 / 8;
+            max_bs = 4000000 / 8;
+            break;
+        case 30:
+            max_octetrate = 10000000 / 8;
+            max_bs = 10000000 / 8;
+            break;
+        case 31:
+            max_octetrate = 14000000 / 8;
+            max_bs = 14000000 / 8;
+            break;
         case 32:
-        case 40: max_octetrate = 20000000 / 8; break;
+        case 40:
+            max_octetrate = 20000000 / 8;
+            max_bs = 20000000 / 8;
+            break;
         case 41:
-        case 42: max_octetrate = 50000000 / 8; break;
-        case 50: max_octetrate = 135000000 / 8; break;
+        case 42:
+            max_octetrate = 50000000 / 8;
+            max_bs = 62500000 / 8;
+            break;
+        case 50:
+            max_octetrate = 135000000 / 8;
+            max_bs = 135000000 / 8;
+            break;
         default:
             upipe_warn_va(upipe, "unknown level %"PRIu8, level);
             /* intended fall-through */
-        case 51: max_octetrate = 240000000 / 8; break;
+        case 51:
+        case 52:
+            max_octetrate = 240000000 / 8;
+            max_bs = 240000000 / 8;
+            break;
     }
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
+    UBASE_FATAL(upipe, uref_block_flow_set_max_buffer_size(flow_def, max_bs))
 
     upipe_h264f_stream_ue(s); /* sps_id */
     uint32_t chroma_idc = 1;
@@ -975,9 +1008,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         if (nal_hrd_present &&
             upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
             UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
-            UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, cpb_size))
+            UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def, cpb_size))
             upipe_h264f->octet_rate = octetrate;
-            upipe_h264f->cpb_length = cpb_size * UCLOCK_FREQ / octetrate;
         }
 
         upipe_h264f_stream_fill_bits(s, 1);
@@ -986,8 +1018,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         if (vcl_hrd_present &&
             upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
             UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
-            UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, cpb_size))
-            upipe_h264f->cpb_length = cpb_size * UCLOCK_FREQ / octetrate;
+            UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def, cpb_size))
         }
 
         if (nal_hrd_present || vcl_hrd_present) {
@@ -1067,7 +1098,6 @@ static bool upipe_h264f_activate_pps(struct upipe *upipe, uint32_t pps_id)
 static void upipe_h264f_handle_sei_buffering_period(struct upipe *upipe,
                                                     struct ubuf_block_stream *s)
 {
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     uint32_t sps_id = upipe_h264f_stream_ue(s);
     if (unlikely(sps_id >= H264SPS_ID_MAX)) {
         upipe_warn_va(upipe, "invalid SPS %"PRIu32" in SEI", sps_id);
@@ -1078,27 +1108,6 @@ static void upipe_h264f_handle_sei_buffering_period(struct upipe *upipe,
     if (!upipe_h264f_activate_sps(upipe, sps_id)) {
         ubuf_block_stream_clean(s);
         return;
-    }
-
-    if (upipe_h264f->hrd) {
-        size_t initial_cpb_removal_delay_length =
-            upipe_h264f->initial_cpb_removal_delay_length;
-        uint64_t initial_cpb_removal_delay = 0;
-        while (initial_cpb_removal_delay_length > 24) {
-            initial_cpb_removal_delay_length -= 24;
-            upipe_h264f_stream_fill_bits(s, 24);
-            initial_cpb_removal_delay |=
-                ubuf_block_stream_show_bits(s, 24) <<
-                    initial_cpb_removal_delay_length;
-            ubuf_block_stream_skip_bits(s, 24);
-        }
-        upipe_h264f_stream_fill_bits(s, initial_cpb_removal_delay_length);
-        initial_cpb_removal_delay |=
-            ubuf_block_stream_show_bits(s, initial_cpb_removal_delay_length);
-        ubuf_block_stream_skip_bits(s, initial_cpb_removal_delay_length);
-
-        upipe_h264f->initial_cpb_removal_delay = initial_cpb_removal_delay *
-                (UCLOCK_FREQ / 90000);
     }
 }
 
@@ -1318,27 +1327,6 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     if (upipe_h264f->au_vcl_offset > 0)
         UBASE_FATAL(upipe, uref_block_set_header_size(uref,
                                                upipe_h264f->au_vcl_offset))
-
-    if (upipe_h264f->initial_cpb_removal_delay != INT64_MAX &&
-        upipe_h264f->octet_rate > 0) {
-        upipe_h264f->initial_cpb_removal_delay += duration;
-        upipe_h264f->initial_cpb_removal_delay -=
-            upipe_h264f->au_size * UCLOCK_FREQ / upipe_h264f->octet_rate;
-
-        if (upipe_h264f->initial_cpb_removal_delay < 0) {
-            upipe_warn_va(upipe, "CPB underflow %"PRId64,
-                          -upipe_h264f->initial_cpb_removal_delay);
-            upipe_h264f->initial_cpb_removal_delay = 0;
-        } else if (upipe_h264f->initial_cpb_removal_delay >
-                        upipe_h264f->cpb_length) {
-            upipe_warn_va(upipe, "CPB overflow %"PRId64,
-                          upipe_h264f->initial_cpb_removal_delay - upipe_h264f->cpb_length);
-            upipe_h264f->initial_cpb_removal_delay = upipe_h264f->cpb_length;
-        }
-
-        uref_clock_set_cr_dts_delay(uref,
-                                    upipe_h264f->initial_cpb_removal_delay);
-    }
 
     upipe_h264f->au_size = 0;
     upipe_h264f->au_vcl_offset = -1;

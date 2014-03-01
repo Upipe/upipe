@@ -160,8 +160,9 @@ check_PROGRAMS += \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
 	upipe_ts_demux_test \
-	upipe_ts_test \
 	upipe_ts_aggregate_test \
+	upipe_ts_tstd_test \
+	upipe_ts_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -181,8 +182,9 @@ TESTS += \
 	upipe_ts_psi_split_test \
 	upipe_ts_pat_decoder_test \
 	upipe_ts_pmt_decoder_test \
-	upipe_ts_demux_test \
 	upipe_ts_aggregate_test \
+	upipe_ts_tstd_test \
+	upipe_ts_demux_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -258,6 +260,7 @@ upipe_ts_pmt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe
 upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_ts_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_ts_aggregate_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_tstd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 
 upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)

@@ -76,9 +76,6 @@
 
 #define PREFIX_FLOW "block."
 
-/** BS for <= 2 channels */
-#define AUDIO_BS 3584
-
 UREF_ATTR_INT(avcenc, priv, "x.avcenc_priv", avcenc private pts)
 
 /** @hidden */
@@ -138,12 +135,6 @@ struct upipe_avcenc {
 
     /** frame counter */
     uint64_t counter;
-    /** audio BS duration */
-    uint64_t audio_bs_duration;
-    /** audio BS leakage per frame */
-    uint64_t audio_bs_leakage;
-    /** audio BS delay */
-    int64_t audio_bs_delay;
     /** latency in the input flow */
     uint64_t input_latency;
     /** chroma map */
@@ -399,17 +390,8 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     if (context->bit_rate) {
         uref_block_flow_set_octetrate(flow_def_attr, context->bit_rate / 8);
         if (context->rc_buffer_size)
-            uref_block_flow_set_cpb_buffer(flow_def_attr,
-                                           context->rc_buffer_size / 8);
-        else if (codec->type == AVMEDIA_TYPE_AUDIO &&
-                 strcmp(codec->name, "mp2") && strcmp(codec->name, "mp3")) {
-            uref_block_flow_set_cpb_buffer(flow_def_attr, AUDIO_BS);
-            upipe_avcenc->audio_bs_duration = AUDIO_BS * UCLOCK_FREQ /
-                                              (context->bit_rate / 8);
-            upipe_avcenc->audio_bs_leakage = UCLOCK_FREQ *
-                context->frame_size / context->sample_rate;
-            upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
-        }
+            uref_block_flow_set_buffer_size(flow_def_attr,
+                                            context->rc_buffer_size / 8);
 
         if (codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0) {
             uref_sound_flow_set_samples(flow_def_attr, context->frame_size);
@@ -513,26 +495,6 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_clock_rebase_dts_sys(uref);
     uref_clock_rebase_dts_prog(uref);
     uref_clock_rebase_dts_orig(uref);
-
-    /* vbv delay */
-    if (context->vbv_delay) {
-        uref_clock_set_cr_dts_delay(uref, context->vbv_delay);
-    } else if (codec->type == AVMEDIA_TYPE_AUDIO &&
-               strcmp(codec->name, "mp2") && strcmp(codec->name, "mp3")) {
-        upipe_avcenc->audio_bs_delay += upipe_avcenc->audio_bs_leakage;
-        upipe_avcenc->audio_bs_delay -= size * UCLOCK_FREQ /
-                                 (context->bit_rate / 8);
-        if (upipe_avcenc->audio_bs_delay < 0) {
-            upipe_warn_va(upipe, "audio BS underflow %"PRId64,
-                          -upipe_avcenc->audio_bs_delay);
-            upipe_avcenc->audio_bs_delay = 0;
-        } else if (upipe_avcenc->audio_bs_delay >
-                   upipe_avcenc->audio_bs_duration)
-            upipe_avcenc->audio_bs_delay = upipe_avcenc->audio_bs_duration;
-        uref_clock_set_cr_dts_delay(uref, upipe_avcenc->audio_bs_delay);
-    } else {
-        uref_clock_delete_cr_dts_delay(uref);
-    }
 
     upipe_avcenc_output(upipe, uref, upump_p);
     return true;
@@ -1297,9 +1259,6 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     ulist_init(&upipe_avcenc->urefs_in_use);
     upipe_avcenc->avcpts = 1;
-    upipe_avcenc->audio_bs_duration = 0;
-    upipe_avcenc->audio_bs_leakage = 0;
-    upipe_avcenc->audio_bs_delay = 0;
 
     upipe_throw_ready(upipe);
     return upipe;

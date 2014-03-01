@@ -48,8 +48,10 @@ extern "C" {
 UREF_ATTR_UNSIGNED(block_flow, octetrate, "b.octetrate", octets per second)
 UREF_ATTR_UNSIGNED(block_flow, max_octetrate, "b.max_octetrate",
         maximum octets per second for profile/level)
-UREF_ATTR_UNSIGNED(block_flow, cpb_buffer, "b.cpb_buffer",
-        size of coded picture buffer in octets)
+UREF_ATTR_UNSIGNED(block_flow, buffer_size, "b.bs",
+        size of coded buffer in octets)
+UREF_ATTR_UNSIGNED(block_flow, max_buffer_size, "b.max_bs",
+        maximum size of coded buffer in octets)
 UREF_ATTR_UNSIGNED(block_flow, align, "b.align", alignment in octets)
 UREF_ATTR_INT(block_flow, align_offset, "b.align_offset",
         offset of the aligned octet)
@@ -101,7 +103,8 @@ static inline void uref_block_flow_clear_format(struct uref *uref)
 {
     uref_block_flow_delete_octetrate(uref);
     uref_block_flow_delete_max_octetrate(uref);
-    uref_block_flow_delete_cpb_buffer(uref);
+    uref_block_flow_delete_buffer_size(uref);
+    uref_block_flow_delete_max_buffer_size(uref);
 }
 
 #undef UREF_BLOCK_FLOW_DEF

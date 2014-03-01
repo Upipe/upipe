@@ -55,9 +55,6 @@
 
 #include <bitstream/atsc/a52.h>
 
-/** BS */
-#define A52_BS 5696
-
 /** @internal @This is the private context of an a52f pipe. */
 struct upipe_a52f {
     /** refcount management structure */
@@ -98,8 +95,6 @@ struct upipe_a52f {
     ssize_t next_frame_size;
     /** pseudo-packet containing date information for the next picture */
     struct uref au_uref_s;
-    /** delay due to the ADTS BS */
-    int64_t bs_delay;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -292,9 +287,6 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
-    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, A52_BS))
-    upipe_a52f->bs_delay = upipe_a52f->next_frame_size * UCLOCK_FREQ /
-                           octetrate;
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
@@ -361,9 +353,6 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
-    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, A52_BS))
-    upipe_a52f->bs_delay = upipe_a52f->next_frame_size * UCLOCK_FREQ /
-                           octetrate;
 
     if (unlikely(!flow_def)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -439,8 +428,6 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump **upump_p)
 #undef SET_DATE
 
     uref_clock_set_dts_pts_delay(uref, 0);
-
-    uref_clock_set_cr_dts_delay(uref, upipe_a52f->bs_delay);
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 

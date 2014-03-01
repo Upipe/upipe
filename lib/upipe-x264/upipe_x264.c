@@ -343,8 +343,8 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         uref_block_flow_set_octetrate(flow_def_attr,
                                       params->rc.i_bitrate * 125);
         if (params->rc.i_vbv_buffer_size)
-            uref_block_flow_set_cpb_buffer(flow_def_attr,
-                                           params->rc.i_vbv_buffer_size * 125);
+            uref_block_flow_set_buffer_size(flow_def_attr,
+                                            params->rc.i_vbv_buffer_size * 125);
     }
 
     /* find latency */
@@ -572,14 +572,6 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     if (pic.b_keyframe) {
         uref_flow_set_random(uref);
     }
-
-    if (pic.hrd_timing.cpb_final_arrival_time)
-        uref_clock_set_cr_dts_delay(uref,
-#ifndef HAVE_X264_OBE
-                UCLOCK_FREQ *
-#endif
-                (pic.hrd_timing.cpb_removal_time -
-                 pic.hrd_timing.cpb_final_arrival_time));
 
     upipe_x264_output(upipe, uref, upump_p);
 }

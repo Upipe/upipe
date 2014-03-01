@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -56,15 +56,6 @@
 
 #include <bitstream/mpeg/mpga.h>
 #include <bitstream/mpeg/aac.h>
-
-/** BS for <= 2 channels */
-#define ADTS_BS_2 3584
-/** BS for <= 8 channels */
-#define ADTS_BS_8 8976
-/** BS for <= 12 channels */
-#define ADTS_BS_12 12804
-/** BS for <= 48 channels */
-#define ADTS_BS_48 51216
 
 /** @This returns the octetrate / 1000 of an MPEG-1 or 2 audio stream. */
 static const uint8_t mpeg_octetrate_table[2][3][16] = {
@@ -133,10 +124,6 @@ struct upipe_mpgaf {
     bool got_discontinuity;
     /** sync header */
     uint8_t sync_header[MPGA_HEADER_SIZE + ADTS_HEADER_SIZE]; // to be sure
-    /** ADTS BS duration */
-    uint64_t adts_bs_duration;
-    /** ADTS BS leakage per frame */
-    uint64_t adts_bs_leakage;
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -151,8 +138,6 @@ struct upipe_mpgaf {
     ssize_t next_frame_size;
     /** pseudo-packet containing date information for the next picture */
     struct uref au_uref_s;
-    /** delay due to the ADTS BS */
-    int64_t bs_delay;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -383,7 +368,6 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     upipe_mpgaf->next_frame_size = padding ?
                                    upipe_mpgaf->frame_size_padding :
                                    upipe_mpgaf->frame_size;
-    upipe_mpgaf->bs_delay = 0;
     return true;
 }
 
@@ -450,21 +434,6 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     upipe_mpgaf->octetrate = octetrate;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
-    uint64_t adts_bs;
-    if (upipe_mpgaf->channels <= 2)
-        adts_bs = ADTS_BS_2;
-    else if (upipe_mpgaf->channels <= 8)
-        adts_bs = ADTS_BS_8;
-    else if (upipe_mpgaf->channels <= 12)
-        adts_bs = ADTS_BS_12;
-    else
-        adts_bs = ADTS_BS_48;
-    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def, adts_bs))
-    upipe_mpgaf->adts_bs_duration = adts_bs * UCLOCK_FREQ / octetrate;
-    upipe_mpgaf->adts_bs_leakage = UCLOCK_FREQ * upipe_mpgaf->samples /
-                                   upipe_mpgaf->samplerate;
-    upipe_mpgaf->bs_delay = upipe_mpgaf->adts_bs_duration;
-
     flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -474,15 +443,6 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
 upipe_mpgaf_parse_adts_shortcut:
     upipe_mpgaf->next_frame_size = adts_get_length(header);
-    upipe_mpgaf->bs_delay += upipe_mpgaf->adts_bs_leakage;
-    upipe_mpgaf->bs_delay -= upipe_mpgaf->next_frame_size * UCLOCK_FREQ /
-                             upipe_mpgaf->octetrate;
-    if (upipe_mpgaf->bs_delay < 0) {
-        upipe_warn_va(upipe, "ADTS BS underflow %"PRId64,
-                      -upipe_mpgaf->bs_delay);
-        upipe_mpgaf->bs_delay = 0;
-    } else if (upipe_mpgaf->bs_delay > upipe_mpgaf->adts_bs_duration)
-        upipe_mpgaf->bs_delay = upipe_mpgaf->adts_bs_duration;
     return true;
 }
 
@@ -554,11 +514,6 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
 
     /* PTS = DTS for MPEG audio */
     uref_clock_set_dts_pts_delay(uref, 0);
-
-    if (upipe_mpgaf->bs_delay)
-        uref_clock_set_cr_dts_delay(uref, upipe_mpgaf->bs_delay);
-    else
-        uref_clock_set_cr_dts_delay(uref, 0);
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 

@@ -18,4 +18,5 @@ myinclude_HEADERS = \
 	upipe_ts_psi_split.h \
 	upipe_ts_split.h \
 	upipe_ts_sync.h \
+	upipe_ts_tstd.h \
 	uref_ts_flow.h

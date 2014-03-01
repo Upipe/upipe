@@ -426,7 +426,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar))
     upipe_mpgvf->fps = frame_rate;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8))
-    UBASE_FATAL(upipe, uref_block_flow_set_cpb_buffer(flow_def,
+    UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def,
                                                 vbvbuffer * 16 * 1024 / 8))
 
     if (upipe_mpgvf->sequence_display != NULL) {
@@ -647,7 +647,6 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     }
     uint16_t temporalreference = mp2vpic_get_temporalreference(picture);
     uint8_t codingtype = mp2vpic_get_codingtype(picture);
-    uint16_t vbvdelay = mp2vpic_get_vbvdelay(picture);
     UBASE_FATAL(upipe, uref_block_peek_unmap(uref, upipe_mpgvf->next_frame_offset,
                                       picture_buffer, picture))
 
@@ -659,10 +658,6 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     }
     UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
     UBASE_FATAL(upipe, uref_mpgv_set_type(uref, codingtype))
-
-    if (vbvdelay != UINT16_MAX)
-        uref_clock_set_cr_dts_delay(uref,
-                                    (uint64_t)vbvdelay * UCLOCK_FREQ / 90000);
 
     *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
     if (upipe_mpgvf->next_frame_ext_offset != -1) {
