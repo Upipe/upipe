@@ -89,10 +89,10 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
 static inline enum ubase_err uref_sound_flow_add_plane(struct uref *uref,
            const char *channel)
 {
-    uint8_t plane;
+    uint8_t plane = 0;
     if (unlikely(channel == NULL))
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_sound_flow_get_planes(uref, &plane))
+    uref_sound_flow_get_planes(uref, &plane);
     UBASE_RETURN(uref_sound_flow_set_planes(uref, plane + 1))
     UBASE_RETURN(uref_sound_flow_set_channel(uref, channel, plane))
     return UBASE_ERR_NONE;
@@ -110,8 +110,8 @@ static inline enum ubase_err uref_sound_flow_find_channel(struct uref *uref,
                                                          uint8_t *plane_p)
 {
     assert(channel != NULL);
-    uint8_t planes;
-    UBASE_RETURN(uref_sound_flow_get_planes(uref, &planes))
+    uint8_t planes = 0;
+    uref_sound_flow_get_planes(uref, &planes);
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *plane_channel;
@@ -171,6 +171,7 @@ static inline enum ubase_err uref_sound_flow_copy_format(struct uref *uref_dst,
 static inline void uref_sound_flow_clear_format(struct uref *uref)
 {
     uint8_t planes;
+    uref_sound_flow_delete_sample_size(uref);
     if (unlikely(!ubase_check(uref_sound_flow_get_planes(uref, &planes))))
         return;
 
@@ -178,7 +179,6 @@ static inline void uref_sound_flow_clear_format(struct uref *uref)
         uref_sound_flow_delete_channel(uref, plane);
     }
     uref_sound_flow_delete_planes(uref);
-    uref_sound_flow_delete_sample_size(uref);
 }
 
 #ifdef __cplusplus

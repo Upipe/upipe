@@ -117,11 +117,11 @@ static inline enum ubase_err uref_pic_flow_add_plane(struct uref *uref,
            uint8_t hsub, uint8_t vsub, uint8_t macropixel_size,
            const char *chroma)
 {
-    uint8_t plane;
+    uint8_t plane = 0;
     if (unlikely(hsub == 0 || vsub == 0 || macropixel_size == 0 ||
                  chroma == NULL))
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_pic_flow_get_planes(uref, &plane))
+    uref_pic_flow_get_planes(uref, &plane);
     UBASE_RETURN(uref_pic_flow_set_planes(uref, plane + 1))
     UBASE_RETURN(uref_pic_flow_set_hsubsampling(uref, hsub, plane))
     UBASE_RETURN(uref_pic_flow_set_vsubsampling(uref, vsub, plane))
@@ -142,8 +142,8 @@ static inline enum ubase_err uref_pic_flow_find_chroma(struct uref *uref,
                                                        uint8_t *plane_p)
 {
     assert(chroma != NULL);
-    uint8_t planes;
-    UBASE_RETURN(uref_pic_flow_get_planes(uref, &planes))
+    uint8_t planes = 0;
+    uref_pic_flow_get_planes(uref, &planes);
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *plane_chroma;
@@ -219,6 +219,8 @@ static inline enum ubase_err uref_pic_flow_copy_format(struct uref *uref_dst,
  */
 static inline void uref_pic_flow_clear_format(struct uref *uref)
 {
+    uref_pic_flow_delete_macropixel(uref);
+
     uint8_t planes;
     if (unlikely(!ubase_check(uref_pic_flow_get_planes(uref, &planes))))
         return;
@@ -230,7 +232,6 @@ static inline void uref_pic_flow_clear_format(struct uref *uref)
         uref_pic_flow_delete_macropixel_size(uref, plane);
     }
     uref_pic_flow_delete_planes(uref);
-    uref_pic_flow_delete_macropixel(uref);
 }
 
 #ifdef __cplusplus
