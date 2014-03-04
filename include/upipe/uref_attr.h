@@ -300,7 +300,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
     enum ubase_err err = uref_attr_get_opaque_va(uref, &opaque,             \
                                                  UDICT_TYPE_OPAQUE,         \
                                                  format, args);             \
-    if (ubase_err(check)) {                                                 \
+    if (ubase_check(err)) {                                                 \
         *p = opaque.v;                                                      \
         *size_p = opaque.size;                                              \
     }                                                                       \
