@@ -93,8 +93,6 @@ struct upipe_ts_agg {
     uint64_t next_cr_sys;
     /** date of the previous uref (system time) */
     uint64_t last_cr_sys;
-    /** date of the next uref (program time, only for SPTS) */
-    uint64_t next_cr_prog;
     /** remainder of the uref_size / octetrate calculation */
     uint64_t next_cr_remainder;
     /** next segmented aggregation */
@@ -144,7 +142,6 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg->dropped = 0;
     upipe_ts_agg->next_cr_sys = UINT64_MAX;
     upipe_ts_agg->last_cr_sys = UINT64_MAX;
-    upipe_ts_agg->next_cr_prog = UINT64_MAX;
     upipe_ts_agg->next_cr_remainder = 0;
     ulist_init(&upipe_ts_agg->next_urefs);
     upipe_ts_agg->next_urefs_size = 0;
@@ -242,7 +239,6 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
             tsaf_set_pcr(buffer, (orig_cr_prog / 300) % UINT33_MAX);
             tsaf_set_pcrext(buffer, orig_cr_prog % 300);
             uref_block_unmap(uref, 0);
-            upipe_ts_agg->next_cr_prog = orig_cr_prog;
         }
     }
 }
@@ -257,13 +253,8 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
 
-    if (upipe_ts_agg->next_cr_sys != UINT64_MAX) {
-        if (upipe_ts_agg->last_cr_sys != UINT64_MAX &&
-            upipe_ts_agg->next_cr_prog != UINT64_MAX)
-            upipe_ts_agg->next_cr_prog += upipe_ts_agg->next_cr_sys -
-                                          upipe_ts_agg->last_cr_sys;
+    if (upipe_ts_agg->next_cr_sys != UINT64_MAX)
         upipe_ts_agg->last_cr_sys = upipe_ts_agg->next_cr_sys;
-    }
 
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_agg->next_urefs, uchain) {
@@ -299,8 +290,9 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
                                 0);
     }
     uref_clock_set_cr_sys(uref, next_cr_sys);
-    if (upipe_ts_agg->next_cr_prog != UINT64_MAX)
-        uref_clock_set_cr_prog(uref, upipe_ts_agg->next_cr_prog);
+    /* DVB-IPI does not require the RTP clock to be sync'ed to cr_prog, so
+     * sync it agains cr_sys. */
+    uref_clock_delete_date_prog(uref);
 
     struct uchain *uchain_tmp;
     ulist_delete_foreach (&upipe_ts_agg->next_urefs, uchain, uchain_tmp) {
