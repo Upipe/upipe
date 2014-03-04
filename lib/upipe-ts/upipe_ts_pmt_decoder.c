@@ -46,8 +46,11 @@
 #include <assert.h>
 
 #include <bitstream/mpeg/psi.h>
+#include <bitstream/mpeg/psi/desc_0a.h>
 #include <bitstream/dvb/si/desc_6a.h>
 #include <bitstream/dvb/si/desc_7a.h>
+#include <bitstream/dvb/si/desc_7b.h>
+#include <bitstream/dvb/si/desc_7c.h>
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspmt."
@@ -312,43 +315,76 @@ static bool upipe_ts_pmtd_compare_header(struct upipe *upipe,
     return compare;
 }
 
-/** @internal @This is a helper function to determine the maximum retention
- * delay of an h264 elementary stream.
+/** @internal @This is a helper function to parse the stream type of the
+ * elementary stream.
  *
- * @param descl pointer to descriptor list
- * @param desclength length of the decriptor list
- * @return max delay in 27 MHz time scale
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet to fill in
+ * @param streamtype MPEG stream type
  */
-static uint64_t upipe_ts_pmtd_h264_max_delay(const uint8_t *descl,
-                                             uint16_t desclength)
+static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
+                                           struct uref *flow_def,
+                                           uint8_t streamtype)
 {
-    bool still = true;
-    const uint8_t *desc;
-    int j = 0;
-
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL)
-        if (desc_get_tag(desc) == 0x28 && desc28_validate(desc))
+    switch (streamtype) {
+        case PMT_STREAMTYPE_VIDEO_MPEG1:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                            "block.mpeg1video.pic."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.mpeg1video.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_STILL))
             break;
 
-    if (desc != NULL)
-        still = desc28_get_avc_still_present(desc);
+        case PMT_STREAMTYPE_VIDEO_MPEG2:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                            "block.mpeg2video.pic."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.mpeg2video.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                             MAX_DELAY_STILL))
+            break;
 
-    return still ? MAX_DELAY_STILL : MAX_DELAY_14496;
+        case PMT_STREAMTYPE_AUDIO_MPEG1:
+        case PMT_STREAMTYPE_AUDIO_MPEG2:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp2.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.mp2.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
+            break;
+
+        case PMT_STREAMTYPE_AUDIO_ADTS:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.aac.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
+            break;
+
+        case PMT_STREAMTYPE_VIDEO_AVC:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.h264.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_STILL))
+            break;
+
+        default:
+            break;
+    }
 }
 
-/** @internal @This is a helper function to determine if the private PES
- * elementary stream is of type A/52.
+/** @internal @This is a helper function to parse descriptors and import
+ * the relevant ones into flow definition.
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet to fill in
  * @param descl pointer to descriptor list
  * @param desclength length of the decriptor list
- * @return true if the elementary stream is of type A/52
+ * @return an error code
  */
-static bool upipe_ts_pmtd_dvb_a52(struct upipe *upipe, struct uref *flow_def,
-                                  const uint8_t *descl, uint16_t desclength)
+static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
+                                      struct uref *flow_def,
+                                      const uint8_t *descl, uint16_t desclength)
 {
     const uint8_t *desc;
     int j = 0;
@@ -356,22 +392,137 @@ static bool upipe_ts_pmtd_dvb_a52(struct upipe *upipe, struct uref *flow_def,
     /* cast needed because biTStream expects an uint8_t * (but doesn't write
      * to it */
     while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
-        if (desc_get_tag(desc) == 0x6a && desc6a_validate(desc)) {
-            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
-            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                            "block.mpegts.mpegtspes.ac3.sound."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-            return true;
-        } else if (desc_get_tag(desc) == 0x7a && desc7a_validate(desc)) {
-            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
-            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                            "block.mpegts.mpegtspes.eac3.sound."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-            return true;
+        bool valid = false;
+        bool copy = false;
+        switch (desc_get_tag(desc)) {
+            case 0x2: /* Video stream descriptor */
+            case 0x3: /* Audio stream descriptor */
+            case 0x4: /* Hierarchy descriptor */
+            case 0x5: /* Registration descriptor */
+            case 0x6: /* Data stream alignment descriptor */
+                break;
+
+            case 0xa: /* ISO 639 language descriptor */
+                copy = true;
+                if ((valid = desc0a_validate(desc))) {
+                    uint8_t *lang = desc0a_get_language((uint8_t *)desc, 0);
+                    if (lang != NULL) {
+                        char code[4];
+                        memcpy(code, desc0an_get_code(lang), 3);
+                        code[3] = '\0';
+                        UBASE_FATAL(upipe, uref_flow_set_lang(flow_def, code))
+                    }
+                }
+                break;
+
+            case 0xc: /* Multiplex buffer utilization descriptor */
+            case 0xe: /* Maximum bitrate descriptor */
+            case 0x10: /* Smoothing buffer descriptor */
+            case 0x11: /* STD descriptor */
+            case 0x12: /* IBP descriptor */
+            case 0x1b: /* MPEG-4 video descriptor */
+            case 0x1c: /* MPEG-4 audio descriptor */
+            case 0x1d: /* IOD descriptor */
+            case 0x1e: /* SL descriptor */
+            case 0x1f: /* FMC descriptor */
+            case 0x20: /* External_ES_ID descriptor */
+            case 0x21: /* Muxcode descriptor */
+            case 0x22: /* FmxBufferSize descriptor */
+            case 0x23: /* MultiplexBuffer descriptor */
+            case 0x27: /* Metadata STD descriptor */
+                break;
+
+            case 0x28: /* AVC video descriptor */
+                if ((valid = desc28_validate(desc)))
+                    if (!desc28_get_avc_still_present(desc))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
+                break;
+
+            case 0x2a: /* AVC timing and HRD descriptor */
+            case 0x2b: /* MPEG-2 AAC descriptor */
+            case 0x2c: /* FlexMuxTiming descriptor */
+            case 0x2d: /* MPEG-4 test descriptor */
+            case 0x2e: /* MPEG-4 audio extension descriptor */
+            case 0x2f: /* Auxiliary video stream descriptor */
+            case 0x30: /* SVC extension descriptor */
+            case 0x31: /* MVC extension descriptor */
+            case 0x32: /* J2K video descriptor */
+            case 0x33: /* MVC operation point descriptor */
+            case 0x34: /* MPEG2_stereoscopic_video_format descriptor */
+            case 0x35: /* Stereoscopic_program_info descriptor */
+            case 0x36: /* Stereoscopic_video:info descriptor */
+                break;
+
+            /* DVB */
+            case 0x45: /* VBI data descriptor */
+            case 0x46: /* VBI teletext descriptor */
+            case 0x51: /* Mosaic descriptor */
+            case 0x52: /* Stream identifier descriptor */
+            case 0x56: /* Teletext descriptor FIXME */
+            case 0x59: /* Subtitling descriptor FIXME */
+                break;
+
+            case 0x6a: /* AC-3 descriptor */
+                if ((valid = desc6a_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.ac3.sound."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.ac3.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY))
+                }
+                break;
+
+            case 0x6b: /* Ancillary data descriptor */
+            case 0x70: /* Adaptation field data descriptor */
+                break;
+
+            case 0x7a: /* Enhanced AC-3 descriptor */
+                if ((valid = desc7a_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.eac3.sound."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.eac3.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY))
+                }
+                break;
+
+            case 0x7b: /* DTS descriptor */
+                if ((valid = desc7b_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.dts.sound."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.dts.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY))
+                }
+                break;
+
+            case 0x7c: /* AAC descriptor */
+                if ((valid = desc7c_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.aac.sound."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.aac.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                MAX_DELAY))
+                }
+                break;
+
+            default:
+                copy = true;
+                break;
+        }
+
+        if (!valid)
+            upipe_warn_va(upipe, "invalid descriptor 0x%x", desc_get_tag(desc));
+        if (copy) {
+            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def,
+                        desc, desc_get_length(desc) + DESC_HEADER_SIZE))
         }
     }
-
-    return false;
 }
 
 /** @internal @This parses a new PSI section.
@@ -424,7 +575,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
         }
         UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
         UBASE_FATAL(upipe, uref_ts_flow_set_pcr_pid(flow_def, pcrpid))
-        UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, header_desc,
+        UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def, header_desc,
                                                  header_desclength))
         upipe_ts_pmtd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
@@ -441,71 +592,19 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
 
     struct uref *flow_def = uref_dup(upipe_ts_pmtd->flow_def_input);
     if (likely(flow_def != NULL)) {
-        UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
-        UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
-        UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def, desc,
-                                                        desclength))
+        uref_flow_delete_def(flow_def);
+        upipe_ts_pmtd_parse_streamtype(upipe, flow_def, streamtype);
+        upipe_ts_pmtd_parse_descs(upipe, flow_def, desc, desclength);
+        const char *def;
+        if (ubase_check(uref_flow_get_def(flow_def, &def))) {
+            UBASE_FATAL(upipe, uref_flow_set_id(flow_def, pid))
+            UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
 
-        switch (streamtype) {
-            case PMT_STREAMTYPE_VIDEO_MPEG1:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
-                                "block.mpeg1video.pic."))
-                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mpeg1video.pic."))
-                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY_STILL))
-                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                break;
-
-            case PMT_STREAMTYPE_VIDEO_MPEG2:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
-                                "block.mpeg2video.pic."))
-                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mpeg2video.pic."))
-                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                 MAX_DELAY_STILL))
-                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                break;
-
-            case PMT_STREAMTYPE_AUDIO_MPEG1:
-            case PMT_STREAMTYPE_AUDIO_MPEG2:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp2.sound."))
-                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.mp2.sound."))
-                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                break;
-
-            case PMT_STREAMTYPE_AUDIO_ADTS:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
-                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.aac.sound."))
-                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                break;
-
-            case PMT_STREAMTYPE_VIDEO_AVC:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
-                UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                "block.mpegts.mpegtspes.h264.pic."))
-                UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                upipe_ts_pmtd_h264_max_delay(desc,
-                                    desclength)))
-                ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                break;
-
-            case PMT_STREAMTYPE_PRIVATE_PES:
-                if (upipe_ts_pmtd_dvb_a52(upipe, flow_def, desc, desclength)) {
-                    ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
-                    break;
-                }
-                /* intended pass-through */
-
-            default:
-                upipe_warn_va(upipe, "unhandled stream type %u for PID %u",
-                              streamtype, pid);
-                uref_free(flow_def);
-                break;
+            ulist_add(&upipe_ts_pmtd->flows, uref_to_uchain(flow_def));
+        } else {
+            upipe_warn_va(upipe, "unhandled stream type %u for PID %u",
+                          streamtype, pid);
+            uref_free(flow_def);
         }
     } else
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

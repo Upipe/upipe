@@ -97,8 +97,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
             ubase_assert(uref_ts_flow_get_pcr_pid(uref, &pmtd_pcrpid));
             const uint8_t *pmtd_desc;
             size_t pmtd_desc_size;
-            ubase_assert(uref_ts_flow_get_descriptors(uref, &pmtd_desc,
-                                                &pmtd_desc_size));
+            ubase_assert(uref_ts_flow_get_descriptor(uref, &pmtd_desc,
+                                                     &pmtd_desc_size, 0));
             fprintf(stdout, "ts probe: pipe %p detected new PMT header (PCR PID:%"PRIu64" descs: %zu)\n",
                     upipe, pmtd_pcrpid, pmtd_desc_size);
             assert(pmtd_pcrpid == pcrpid);
@@ -113,9 +113,9 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
                 uint64_t id;
                 ubase_assert(uref_flow_get_id(flow_def, &id));
                 const uint8_t *pmtd_desc;
-                size_t pmtd_desc_size;
-                ubase_assert(uref_ts_flow_get_descriptors(flow_def, &pmtd_desc,
-                                                    &pmtd_desc_size));
+                size_t pmtd_desc_size = 0;
+                uref_ts_flow_get_descriptor(flow_def, &pmtd_desc,
+                                            &pmtd_desc_size, 0);
                 pid_sum -= id;
                 desc_size_sum -= pmtd_desc_size;
             }

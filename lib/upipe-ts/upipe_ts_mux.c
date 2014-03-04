@@ -619,7 +619,7 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             desc_set_length(ac3_descriptor,
                             DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc6a_clear_flags(ac3_descriptor);
-            UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def_dup,
+            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
                     ac3_descriptor, DESC6A_HEADER_SIZE));
             pes_min_duration = 0;
         } else if (!ubase_ncmp(def, "block.eac3.")) {
@@ -633,7 +633,7 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             desc_set_length(eac3_descriptor,
                             DESC7A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc7a_clear_flags(eac3_descriptor);
-            UBASE_FATAL(upipe, uref_ts_flow_set_descriptors(flow_def_dup,
+            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
                     eac3_descriptor, DESC7A_HEADER_SIZE));
             pes_min_duration = 0;
         } else {

@@ -109,7 +109,7 @@ struct upipe_ts_psig_program {
     /** PCR PID */
     uint16_t pcr_pid;
     /** descriptors */
-    const uint8_t *descriptors;
+    uint8_t *descriptors;
     /** descriptors size */
     size_t descriptors_size;
 
@@ -148,7 +148,7 @@ struct upipe_ts_psig_flow {
     /** stream type */
     uint8_t stream_type;
     /** descriptors */
-    const uint8_t *descriptors;
+    uint8_t *descriptors;
     /** descriptors size */
     size_t descriptors_size;
 
@@ -210,9 +210,9 @@ static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
     UBASE_RETURN(uref_ts_flow_get_stream_type(flow_def, &stream_type))
     UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
-    const uint8_t *descriptors = NULL;
-    size_t descriptors_size = 0;
-    uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
+    size_t descriptors_size = uref_ts_flow_size_descriptors(flow_def);
+    uint8_t *descriptors = malloc(descriptors_size);
+    uref_ts_flow_extract_descriptors(flow_def, descriptors);
 
     struct upipe_ts_psig_flow *upipe_ts_psig_flow =
         upipe_ts_psig_flow_from_upipe(upipe);
@@ -223,25 +223,24 @@ static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
          memcmp(descriptors, upipe_ts_psig_flow->descriptors,
                 descriptors_size))) {
         struct uref *flow_def_dup;
-        if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+        if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+            free(descriptors);
             return UBASE_ERR_ALLOC;
+        }
         if (upipe_ts_psig_flow->flow_def_input != NULL)
             uref_free(upipe_ts_psig_flow->flow_def_input);
         upipe_ts_psig_flow->flow_def_input = flow_def_dup;
         upipe_ts_psig_flow->pid = pid;
         upipe_ts_psig_flow->stream_type = stream_type;
-        upipe_ts_psig_flow->descriptors_size = 0;
-        upipe_ts_psig_flow->descriptors = NULL;
-        /* We can't use descriptors as it points to flow_def which we do not
-         * own. */
-        uref_ts_flow_get_descriptors(flow_def_dup,
-                                     &upipe_ts_psig_flow->descriptors,
-                                     &upipe_ts_psig_flow->descriptors_size);
+        upipe_ts_psig_flow->descriptors_size = descriptors_size;
+        free(upipe_ts_psig_flow->descriptors);
+        upipe_ts_psig_flow->descriptors = descriptors;
 
         struct upipe_ts_psig_program *upipe_ts_psig_program =
             upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
         upipe_ts_psig_program->pmt_version++;
-    }
+    } else
+        free(descriptors);
     return UBASE_ERR_NONE;
 }
 
@@ -285,6 +284,7 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
 
     if (upipe_ts_psig_flow->flow_def_input != NULL)
         uref_free(upipe_ts_psig_flow->flow_def_input);
+    free(upipe_ts_psig_flow->descriptors);
     upipe_ts_psig_flow_clean_sub(upipe);
     upipe_ts_psig_program->pmt_version++;
     upipe_ts_psig_flow_clean_urefcount(upipe);
@@ -469,9 +469,9 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
     UBASE_RETURN(uref_flow_get_id(flow_def, &program_number))
     UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
-    const uint8_t *descriptors = NULL;
-    size_t descriptors_size = 0;
-    uref_ts_flow_get_descriptors(flow_def, &descriptors, &descriptors_size);
+    size_t descriptors_size = uref_ts_flow_size_descriptors(flow_def);
+    uint8_t *descriptors = malloc(descriptors_size);
+    uref_ts_flow_extract_descriptors(flow_def, descriptors);
 
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
@@ -483,13 +483,13 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
                 descriptors_size))) {
         struct uref *flow_def_dup;
         if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            free(descriptors);
             return UBASE_ERR_ALLOC;
         }
         if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup,
                                         "block.mpegtspsi.mpegtspmt.")))) {
+            free(descriptors);
             uref_free(flow_def);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
 
@@ -498,18 +498,15 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
         upipe_ts_psig_program->pmt_pid = pid;
         uref_ts_flow_get_psi_version(flow_def,
                                      &upipe_ts_psig_program->pmt_version);
-        upipe_ts_psig_program->descriptors = NULL;
-        upipe_ts_psig_program->descriptors_size = 0;
-        /* We can't use descriptors as it points to flow_def which we do not
-         * own. */
-        uref_ts_flow_get_descriptors(flow_def_dup,
-                                     &upipe_ts_psig_program->descriptors,
-                                     &upipe_ts_psig_program->descriptors_size);
+        upipe_ts_psig_program->descriptors_size = descriptors_size;
+        free(upipe_ts_psig_program->descriptors);
+        upipe_ts_psig_program->descriptors = descriptors;
 
         struct upipe_ts_psig *upipe_ts_psig =
             upipe_ts_psig_from_program_mgr(upipe->mgr);
         upipe_ts_psig->pat_version++;
-    }
+    } else
+        free(descriptors);
     return UBASE_ERR_NONE;
 }
 
@@ -607,6 +604,8 @@ static enum ubase_err upipe_ts_psig_program_control(struct upipe *upipe,
  */
 static void upipe_ts_psig_program_free(struct upipe *upipe)
 {
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
     struct upipe_ts_psig *upipe_ts_psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
@@ -614,6 +613,7 @@ static void upipe_ts_psig_program_free(struct upipe *upipe)
     upipe_ts_psig_program_clean_sub_flows(upipe);
     upipe_ts_psig_program_clean_sub(upipe);
     upipe_ts_psig_program_clean_output(upipe);
+    free(upipe_ts_psig_program->descriptors);
     upipe_ts_psig->pat_version++;
     upipe_ts_psig_program_clean_urefcount(upipe);
     upipe_ts_psig_program_free_void(upipe);

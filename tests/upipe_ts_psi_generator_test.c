@@ -276,7 +276,7 @@ int main(int argc, char *argv[])
     desc0an_set_code(descn, (const uint8_t *)"eng");
     desc0an_set_audiotype(descn, DESC0A_TYPE_CLEAN);
     assert(desc0a_validate(desc));
-    ubase_assert(uref_ts_flow_set_descriptors(uref, desc, sizeof(desc)));
+    ubase_assert(uref_ts_flow_add_descriptor(uref, desc, sizeof(desc)));
     struct upipe *upipe_ts_psig_flow68 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
