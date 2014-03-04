@@ -82,6 +82,15 @@ static inline void uref_clock_set_date_##dv(struct uref *uref,              \
     uref->date_##dv = date;                                                 \
     uref->flags &= ~(UINT64_C(0x3) << UREF_FLAG_DATE_##DV##_SHIFT);         \
     uref->flags |= ((uint64_t)type << UREF_FLAG_DATE_##DV##_SHIFT);         \
+}                                                                           \
+/** @This deletes the dv date.                                              \
+ *                                                                          \
+ * @param uref uref structure                                               \
+ */                                                                         \
+static inline void uref_clock_delete_date_##dv(struct uref *uref)           \
+{                                                                           \
+    uref->date_##dv = UINT64_MAX;                                           \
+    uref->flags &= ~(UINT64_C(0x3) << UREF_FLAG_DATE_##DV##_SHIFT);         \
 }
 
 UREF_CLOCK_TEMPLATE(sys, SYS)
