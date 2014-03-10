@@ -68,6 +68,8 @@ struct upipe_ts_tstd {
     /** portion of the buffer that has not been distributed to frames, in
      * octets */
     int64_t fullness;
+    /** previous DTS */
+    uint64_t last_dts;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -88,6 +90,18 @@ static void upipe_ts_tstd_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
+    uint64_t dts;
+    if (ubase_check(uref_clock_get_dts_prog(uref, &dts))) {
+        if (upipe_ts_tstd->last_dts != UINT64_MAX) {
+            uint64_t duration = dts - upipe_ts_tstd->last_dts;
+            lldiv_t q = lldiv(duration * upipe_ts_tstd->octetrate +
+                              upipe_ts_tstd->remainder, UCLOCK_FREQ);
+            upipe_ts_tstd->fullness += q.quot;
+            upipe_ts_tstd->remainder = q.rem;
+        }
+        upipe_ts_tstd->last_dts = dts;
+    }
+
     size_t uref_size = 0;
     uref_block_size(uref, &uref_size);
     upipe_ts_tstd->fullness -= uref_size;
@@ -104,13 +118,6 @@ static void upipe_ts_tstd_input(struct upipe *upipe, struct uref *uref,
     uint64_t delay = (upipe_ts_tstd->fullness * UCLOCK_FREQ) /
                      upipe_ts_tstd->octetrate;
     uref_clock_set_cr_dts_delay(uref, delay);
-
-    uint64_t duration = 0;
-    uref_clock_get_duration(uref, &duration);
-    lldiv_t q = lldiv(duration * upipe_ts_tstd->octetrate +
-                      upipe_ts_tstd->remainder, UCLOCK_FREQ);
-    upipe_ts_tstd->fullness += q.quot;
-    upipe_ts_tstd->remainder = q.rem;
 
     upipe_ts_tstd_output(upipe, uref, upump_p);
 }
@@ -210,6 +217,7 @@ static struct upipe *upipe_ts_tstd_alloc(struct upipe_mgr *mgr,
     upipe_ts_tstd_init_output(upipe);
     struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
     upipe_ts_tstd->bs = upipe_ts_tstd->fullness = 0;
+    upipe_ts_tstd->last_dts = UINT64_MAX;
     upipe_throw_ready(upipe);
     return upipe;
 }
