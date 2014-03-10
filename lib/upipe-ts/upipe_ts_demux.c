@@ -143,6 +143,10 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
     struct upipe_mgr *h264f_mgr;
+    /** pointer to telxf manager */
+    struct upipe_mgr *telxf_mgr;
+    /** pointer to dvbsubf manager */
+    struct upipe_mgr *dvbsubf_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -699,12 +703,40 @@ static enum ubase_err upipe_ts_demux_output_plumber(struct upipe *upipe,
 
     if (!ubase_ncmp(def, "block.h264.") &&
         ts_demux_mgr->h264f_mgr != NULL) {
-        /* allocate mpgvf inner */
+        /* allocate h264f inner */
         struct upipe *output =
             upipe_void_alloc_output(inner, ts_demux_mgr->h264f_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "h264f"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.dvb_teletext.") &&
+        ts_demux_mgr->telxf_mgr != NULL) {
+        /* allocate telxf inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->telxf_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "telxf"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_last_inner(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.dvb_subtitle.") &&
+        ts_demux_mgr->dvbsubf_mgr != NULL) {
+        /* allocate dvbsubf inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->dvbsubf_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "dvbsubf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
         upipe_ts_demux_output_store_last_inner(upipe, output);
@@ -2185,6 +2217,10 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
         upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     if (ts_demux_mgr->h264f_mgr != NULL)
         upipe_mgr_release(ts_demux_mgr->h264f_mgr);
+    if (ts_demux_mgr->telxf_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->telxf_mgr);
+    if (ts_demux_mgr->dvbsubf_mgr != NULL)
+        upipe_mgr_release(ts_demux_mgr->dvbsubf_mgr);
 
     urefcount_clean(urefcount);
     free(ts_demux_mgr);
@@ -2237,6 +2273,8 @@ static enum ubase_err upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(a52f, A52F)
         GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
+        GET_SET_MGR(telxf, TELXF)
+        GET_SET_MGR(dvbsubf, DVBSUBF)
 #undef GET_SET_MGR
 
         default:
@@ -2272,6 +2310,8 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->a52f_mgr = NULL;
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
+    ts_demux_mgr->telxf_mgr = NULL;
+    ts_demux_mgr->dvbsubf_mgr = NULL;
 
     urefcount_init(upipe_ts_demux_mgr_to_urefcount(ts_demux_mgr),
                    upipe_ts_demux_mgr_free);

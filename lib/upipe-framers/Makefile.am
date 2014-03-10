@@ -8,7 +8,9 @@ libupipe_framers_la_SOURCES = \
 	upipe_h264_framer.c \
 	upipe_mpgv_framer.c \
 	upipe_a52_framer.c \
-	upipe_mpga_framer.c
+	upipe_mpga_framer.c \
+	upipe_telx_framer.c \
+	upipe_dvbsub_framer.c
 libupipe_framers_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_framers_la_CFLAGS = -Wall
 libupipe_framers_la_LDFLAGS = -no-undefined

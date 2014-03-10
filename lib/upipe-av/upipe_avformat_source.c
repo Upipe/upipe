@@ -726,8 +726,10 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         AVDictionaryEntry *lang = av_dict_get(stream->metadata, "language",
                                               NULL, 0);
-        if (lang != NULL && lang->value != NULL)
-            UBASE_FATAL(upipe, uref_flow_set_lang(flow_def, lang->value))
+        if (lang != NULL && lang->value != NULL) {
+            UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, 1))
+            UBASE_FATAL(upipe, uref_flow_set_language(flow_def, lang->value, 0))
+        }
         if (codec->extradata_size)
             UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, codec->extradata,
                                                      codec->extradata_size))

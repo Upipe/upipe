@@ -354,7 +354,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    ubase_assert(uref_flow_set_lang(flow_def, "eng"));
+    ubase_assert(uref_flow_set_languages(flow_def, 1));
+    ubase_assert(uref_flow_set_language(flow_def, "eng", 0));
     ubase_assert(uref_flow_set_id(flow_def, 46));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);
@@ -365,7 +366,8 @@ int main(int argc, char **argv)
 
     flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow_def != NULL);
-    ubase_assert(uref_flow_set_lang(flow_def, "fra"));
+    ubase_assert(uref_flow_set_languages(flow_def, 1));
+    ubase_assert(uref_flow_set_language(flow_def, "fra", 0));
     ubase_assert(uref_flow_set_id(flow_def, 47));
     ulist_add(&flow_defs, uref_to_uchain(flow_def));
     upipe_split_throw_update(upipe);

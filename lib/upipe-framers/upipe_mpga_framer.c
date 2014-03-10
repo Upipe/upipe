@@ -45,8 +45,6 @@
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 
-#include "upipe_framers_common.h"
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>

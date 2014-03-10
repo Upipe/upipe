@@ -80,8 +80,8 @@ enum udict_type {
     UDICT_TYPE_FLOW_ID,
     /** f.rawdef */
     UDICT_TYPE_FLOW_RAWDEF,
-    /** f.lang */
-    UDICT_TYPE_FLOW_LANG,
+    /** f.langs */
+    UDICT_TYPE_FLOW_LANGUAGES,
 
     /** k.duration */
     UDICT_TYPE_CLOCK_DURATION,

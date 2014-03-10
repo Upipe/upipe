@@ -96,6 +96,8 @@ struct upipe_ts_join_sub {
 
     /** input latency of the subpipe */
     uint64_t latency;
+    /** true if the sub flow is subpicture */
+    bool subpic;
 
     /** temporary uref storage */
     struct uchain urefs;
@@ -142,6 +144,7 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_join_sub->urefs);
     upipe_ts_join_sub->next_cr = upipe_ts_join_sub->last_cr = UINT64_MAX;
     upipe_ts_join_sub->latency = 0;
+    upipe_ts_join_sub->subpic = false;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -187,10 +190,14 @@ static enum ubase_err upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
+        return UBASE_ERR_INVALID;
 
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
+    upipe_ts_join_sub->subpic = !!strstr(def, "pic.sub.");
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
     /* we never lower latency */
@@ -314,7 +321,7 @@ static struct upipe_ts_join_sub *upipe_ts_join_find_input(struct upipe *upipe)
     struct upipe_ts_join_sub *earliest_input = NULL;
     ulist_foreach (&upipe_ts_join->subs, uchain) {
         struct upipe_ts_join_sub *input = upipe_ts_join_sub_from_uchain(uchain);
-        if (input->next_cr == UINT64_MAX)
+        if (input->next_cr == UINT64_MAX && !input->subpic)
             return NULL;
         if (input->next_cr < earliest_cr) {
             earliest_cr = input->next_cr;

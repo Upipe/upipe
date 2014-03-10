@@ -47,6 +47,8 @@
 
 #include <bitstream/mpeg/psi.h>
 #include <bitstream/mpeg/psi/desc_0a.h>
+#include <bitstream/dvb/si/desc_56.h>
+#include <bitstream/dvb/si/desc_59.h>
 #include <bitstream/dvb/si/desc_6a.h>
 #include <bitstream/dvb/si/desc_7a.h>
 #include <bitstream/dvb/si/desc_7b.h>
@@ -54,12 +56,6 @@
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspmt."
-/** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
-#define MAX_DELAY UCLOCK_FREQ
-/** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
-#define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
-/** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
-#define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 
 /** @internal @This is the private context of a ts_pmtd pipe. */
 struct upipe_ts_pmtd {
@@ -332,8 +328,6 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpeg1video.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mpeg1video.pic."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                            MAX_DELAY_STILL))
             break;
 
         case PMT_STREAMTYPE_VIDEO_MPEG2:
@@ -341,8 +335,6 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpeg2video.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mpeg2video.pic."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                             MAX_DELAY_STILL))
             break;
 
         case PMT_STREAMTYPE_AUDIO_MPEG1:
@@ -350,22 +342,18 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp2.sound."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mp2.sound."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             break;
 
         case PMT_STREAMTYPE_AUDIO_ADTS:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.aac.sound."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             break;
 
         case PMT_STREAMTYPE_VIDEO_AVC:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.h264.pic."))
-            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                            MAX_DELAY_STILL))
             break;
 
         default:
@@ -403,15 +391,29 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                 break;
 
             case 0xa: /* ISO 639 language descriptor */
-                copy = true;
                 if ((valid = desc0a_validate(desc))) {
-                    uint8_t *lang = desc0a_get_language((uint8_t *)desc, 0);
-                    if (lang != NULL) {
+                    uint8_t j = 0;
+                    uint8_t *language;
+                    while ((language = desc0a_get_language((uint8_t *)desc,
+                                                           j)) != NULL) {
                         char code[4];
-                        memcpy(code, desc0an_get_code(lang), 3);
+                        memcpy(code, desc0an_get_code(language), 3);
                         code[3] = '\0';
-                        UBASE_FATAL(upipe, uref_flow_set_lang(flow_def, code))
+                        UBASE_FATAL(upipe, uref_flow_set_language(flow_def,
+                                                                  code, j))
+                        switch (desc0an_get_audiotype(language)) {
+                            case DESC0A_TYPE_HEARING_IMP:
+                                UBASE_FATAL(upipe, uref_flow_set_hearing_impaired(flow_def, j))
+                                break;
+                            case DESC0A_TYPE_VISUAL_IMP:
+                                UBASE_FATAL(upipe, uref_flow_set_visual_impaired(flow_def, j))
+                                break;
+                            default:
+                                break;
+                        }
+                        j++;
                     }
+                    UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, j))
                 }
                 break;
 
@@ -433,12 +435,6 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                 break;
 
             case 0x28: /* AVC video descriptor */
-                if ((valid = desc28_validate(desc)))
-                    if (!desc28_get_avc_still_present(desc))
-                        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                    MAX_DELAY))
-                break;
-
             case 0x2a: /* AVC timing and HRD descriptor */
             case 0x2b: /* MPEG-2 AAC descriptor */
             case 0x2c: /* FlexMuxTiming descriptor */
@@ -459,8 +455,62 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
             case 0x46: /* VBI teletext descriptor */
             case 0x51: /* Mosaic descriptor */
             case 0x52: /* Stream identifier descriptor */
-            case 0x56: /* Teletext descriptor FIXME */
-            case 0x59: /* Subtitling descriptor FIXME */
+                break;
+
+            case 0x56: /* Teletext descriptor */
+                if ((valid = desc56_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.dvb_teletext.pic.sub."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.dvb_teletext.pic.sub."))
+
+                    uint8_t j = 0;
+                    uint8_t *language;
+                    while ((language = desc56_get_language((uint8_t *)desc,
+                                                           j)) != NULL) {
+                        char code[4];
+                        memcpy(code, desc56n_get_code(language), 3);
+                        code[3] = '\0';
+                        UBASE_FATAL(upipe, uref_flow_set_language(flow_def,
+                                                                  code, j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_telx_type(flow_def,
+                                    desc56n_get_teletexttype(language), j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_telx_magazine(flow_def,
+                                    desc56n_get_teletextmagazine(language), j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_telx_page(flow_def,
+                                    desc56n_get_teletextpage(language), j))
+                        j++;
+                    }
+                    UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, j))
+                }
+                break;
+
+            case 0x59: /* Subtitling descriptor */
+                if ((valid = desc59_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.dvb_subtitle.pic.sub."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.dvb_subtitle.pic.sub."))
+
+                    uint8_t j = 0;
+                    uint8_t *language;
+                    while ((language = desc59_get_language((uint8_t *)desc,
+                                                           j)) != NULL) {
+                        char code[4];
+                        memcpy(code, desc59n_get_code(language), 3);
+                        code[3] = '\0';
+                        UBASE_FATAL(upipe, uref_flow_set_language(flow_def,
+                                                                  code, j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_sub_type(flow_def,
+                                    desc59n_get_subtitlingtype(language), j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_sub_composition(flow_def,
+                                    desc59n_get_compositionpage(language), j))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_sub_ancillary(flow_def,
+                                    desc59n_get_ancillarypage(language), j))
+                        j++;
+                    }
+                    UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, j))
+                }
                 break;
 
             case 0x6a: /* AC-3 descriptor */
@@ -469,8 +519,6 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.ac3.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.ac3.sound."))
-                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY))
                 }
                 break;
 
@@ -484,8 +532,6 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.eac3.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.eac3.sound."))
-                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY))
                 }
                 break;
 
@@ -495,8 +541,6 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.dts.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.dts.sound."))
-                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY))
                 }
                 break;
 
@@ -506,8 +550,6 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.aac.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.aac.sound."))
-                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                MAX_DELAY))
                 }
                 break;
 

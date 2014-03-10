@@ -164,10 +164,17 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
             if (found == flow_id)
                 return true;
         } else if (!strcmp(attr, "lang")) {
-            const char *lang;
-            if (ubase_check(uref_flow_get_lang(flow_def, &lang)) &&
-                !strcmp(lang, value))
-                return true;
+            uint8_t languages;
+            if (ubase_check(uref_flow_get_languages(flow_def, &languages)) &&
+                languages) {
+                for (uint8_t j = 0; j < languages; j++) {
+                    const char *lang;
+                    if (ubase_check(uref_flow_get_language(flow_def, &lang,
+                                                           j)) &&
+                        !strcmp(lang, value))
+                        return true;
+                }
+            }
         } else if (!strcmp(attr, "name")) {
             const char *name;
             if (ubase_check(uref_program_flow_get_name(flow_def, &name)) &&

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,6 +57,18 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu8"]", descriptor,
         uint8_t nb, nb)
 UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_type, "t.telxtype[%"PRIu8"]",
+        teletext type according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_magazine, "t.telxmag[%"PRIu8"]",
+        teletext magazine according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_page, "t.telxpage[%"PRIu8"]",
+        teletext page according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_type, "t.subtype[%"PRIu8"]",
+        subtitling type according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%"PRIu8"]",
+        subtitling composition page according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
+        subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
 
 /** @This returns the value of a PSI section filter.
  *
