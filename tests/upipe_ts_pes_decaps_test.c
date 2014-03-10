@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -66,6 +66,7 @@ static unsigned int nb_packets = 0;
 static uint64_t pts = 0x112121212;
 static uint64_t dts = 0x112121212 - 1080000;
 static enum ubase_err dataalignment = UBASE_ERR_NONE;
+static enum ubase_err end = UBASE_ERR_NONE;
 static size_t payload_size = 12;
 static bool expect_lost = false;
 static bool expect_acquired = true;
@@ -125,6 +126,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     ubase_assert(uref_block_size(uref, &size));
     assert(size == payload_size);
     assert(dataalignment == uref_block_get_start(uref));
+    assert(end == uref_block_get_end(uref));
     uref_free(uref);
     nb_packets--;
 }
@@ -216,6 +218,7 @@ int main(int argc, char *argv[])
     pes_set_length(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE_NOPTS);
     dataalignment = UBASE_ERR_INVALID;
+    end = UBASE_ERR_INVALID;
     pes_set_pts(buffer, pts);
     uref_block_unmap(uref, 0);
     payload_size = 0;
@@ -237,6 +240,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     payload_size = 42;
     dataalignment = UBASE_ERR_INVALID;
+    end = UBASE_ERR_INVALID;
     pts = dts = 0;
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);
@@ -263,6 +267,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     payload_size = 42;
     dataalignment = UBASE_ERR_INVALID;
+    end = UBASE_ERR_INVALID;
     pts = dts = 0;
     /* do not increment nb_packets */
     upipe_input(upipe_ts_pesd, uref, NULL);
@@ -278,6 +283,7 @@ int main(int argc, char *argv[])
     pes_set_length(buffer, PES_HEADER_SIZE_NOPTS + 12 - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, 0);
     dataalignment = UBASE_ERR_INVALID;
+    end = UBASE_ERR_INVALID;
     uref_block_unmap(uref, 0);
     uref_block_set_start(uref);
     payload_size = 12;
@@ -286,6 +292,36 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_pesd, uref, NULL);
     assert(!nb_packets);
     assert(!expect_acquired);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE_NOPTS);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == PES_HEADER_SIZE_NOPTS);
+    pes_init(buffer);
+    pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
+    pes_set_length(buffer, 42 - PES_HEADER_SIZE);
+    pes_set_headerlength(buffer, 0);
+    pes_set_dataalignment(buffer);
+    uref_block_unmap(uref, 0);
+    payload_size = 0;
+    expect_lost = false;
+    dataalignment = UBASE_ERR_NONE;
+    uref_block_set_start(uref);
+    nb_packets++;
+    upipe_input(upipe_ts_pesd, uref, NULL);
+    assert(!nb_packets);
+    assert(!expect_lost);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 - PES_HEADER_SIZE_NOPTS);
+    assert(uref != NULL);
+    payload_size = 42 - PES_HEADER_SIZE_NOPTS;
+    dataalignment = UBASE_ERR_INVALID;
+    end = UBASE_ERR_NONE;
+    nb_packets++;
+    upipe_input(upipe_ts_pesd, uref, NULL);
+    assert(!nb_packets);
+    assert(!expect_lost);
 
     upipe_release(upipe_ts_pesd);
     upipe_mgr_release(upipe_ts_pesd_mgr); // nop
