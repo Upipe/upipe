@@ -162,48 +162,48 @@ int main(int argc, char *argv[])
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 10);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 0);
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ - UCLOCK_FREQ / 10);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 50);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 2);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 10);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 2 * UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 2);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 50);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 3 * UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 10);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 10);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 4 * UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 10);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 5);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 5 * UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 10 + UCLOCK_FREQ / 20);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 5);
     assert(uref != NULL);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ / 10));
+    uref_clock_set_dts_prog(uref, 6 * UCLOCK_FREQ / 10);
     cr_dts_delay = UINT64_MAX;
     upipe_input(upipe_ts_tstd, uref, NULL);
     assert(cr_dts_delay == UCLOCK_FREQ / 5);
