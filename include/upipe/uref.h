@@ -65,8 +65,10 @@ enum uref_flag {
     UREF_FLAG_FLOW_DISC = 0x2,
     /** the block is a starting point */
     UREF_FLAG_BLOCK_START = 0x4,
+    /** the block is an ending point */
+    UREF_FLAG_BLOCK_END = 0x8,
     /** the block contains a clock reference */
-    UREF_FLAG_CLOCK_REF = 0x8,
+    UREF_FLAG_CLOCK_REF = 0x10,
 
     /** position of the bitfield for the type of sys date */
     UREF_FLAG_DATE_SYS = 0x0400000000000000,
