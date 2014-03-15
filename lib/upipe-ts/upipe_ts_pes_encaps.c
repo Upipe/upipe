@@ -69,6 +69,8 @@ struct upipe_ts_pese {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /** PES stream ID */
     uint8_t pes_id;
@@ -78,7 +80,11 @@ struct upipe_ts_pese {
     uint64_t pes_min_duration;
 
     /** buffered incomplete PES */
-    struct uref *next_pes;
+    struct uchain next_pes;
+    /** size of the upcoming PES */
+    size_t next_pes_size;
+    /** duration of the upcoming PES */
+    uint64_t next_pes_duration;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -112,16 +118,18 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
     upipe_ts_pese_init_urefcount(upipe);
     upipe_ts_pese_init_ubuf_mgr(upipe);
     upipe_ts_pese_init_output(upipe);
+    upipe_ts_pese->input_latency = 0;
     upipe_ts_pese->pes_id = 0;
     upipe_ts_pese->pes_header_size = 0;
     upipe_ts_pese->pes_min_duration = 0;
-    upipe_ts_pese->next_pes = NULL;
+    ulist_init(&upipe_ts_pese->next_pes);
+    upipe_ts_pese->next_pes_size = 0;
+    upipe_ts_pese->next_pes_duration = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-/** @internal @This takes the payload of a TS packet, checks if it may
- * contain part of a PES header, and outputs it.
+/** @internal @This prepends a PES header to a logical unit.
  *
  * @param upipe description structure of the pipe
  * @param upump_p reference to pump that generated the buffer
@@ -129,16 +137,11 @@ static struct upipe *upipe_ts_pese_alloc(struct upipe_mgr *mgr,
 static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
-    uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
-    struct uref *uref = upipe_ts_pese->next_pes;
-    upipe_ts_pese->next_pes = NULL;
-
-    size_t uref_size;
-    if (!ubase_check(uref_block_size(uref, &uref_size)) || !uref_size) {
-        upipe_warn_va(upipe, "empty packet received");
-        uref_free(uref);
+    if (ulist_empty(&upipe_ts_pese->next_pes))
         return;
-    }
+
+    uint64_t pts = UINT64_MAX, dts = UINT64_MAX;
+    struct uref *uref = uref_from_uchain(ulist_pop(&upipe_ts_pese->next_pes));
 
     size_t header_size;
     if (upipe_ts_pese->pes_id != PES_STREAM_ID_PRIVATE_2) {
@@ -160,29 +163,29 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_pese->ubuf_mgr, header_size);
     if (unlikely(ubuf == NULL)) {
-        uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+        goto upipe_ts_pese_work_err;
     }
 
     uint8_t *buffer;
     int size = -1;
-    if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
-        uref_free(uref);
+    if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer)))) {
         ubuf_free(ubuf);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+        goto upipe_ts_pese_work_err;
     }
 
     pes_init(buffer);
     pes_set_streamid(buffer, upipe_ts_pese->pes_id);
-    if (uref_size + header_size - PES_HEADER_SIZE > UINT16_MAX) {
+    size_t pes_length = upipe_ts_pese->next_pes_size + header_size -
+                        PES_HEADER_SIZE;
+    if (pes_length > UINT16_MAX) {
         if (unlikely((upipe_ts_pese->pes_id & PES_STREAM_ID_VIDEO_MPEG) != 
                      PES_STREAM_ID_VIDEO_MPEG))
-            upipe_warn(upipe, "PES size > 65535 for a non-video stream");
+            upipe_warn(upipe, "PES length > 65535 for a non-video stream");
         pes_set_length(buffer, 0);
     } else
-        pes_set_length(buffer, uref_size + header_size - PES_HEADER_SIZE);
+        pes_set_length(buffer, pes_length);
 
     if (upipe_ts_pese->pes_id != PES_STREAM_ID_PRIVATE_2) {
         pes_set_headerlength(buffer, header_size - PES_HEADER_SIZE_NOPTS);
@@ -206,62 +209,19 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
+    /* intended pass-through */
+upipe_ts_pese_work_err:
     upipe_ts_pese_output(upipe, uref, upump_p);
+
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&upipe_ts_pese->next_pes)) != NULL)
+        upipe_ts_pese_output(upipe, uref_from_uchain(uchain), upump_p);
+    upipe_ts_pese->next_pes_size = 0;
+    upipe_ts_pese->next_pes_duration = 0;
 }
 
 /** @internal @This merges the new access unit into a possibly existing
  * incomplete PES, and outputs the PES if possible.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
- */
-static void upipe_ts_pese_merge(struct upipe *upipe, struct uref *uref,
-                                struct upump **upump_p)
-{
-    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
-    bool force = false;
-    uint64_t uref_duration = UINT64_MAX;
-    if (!ubase_check(uref_clock_get_duration(uref, &uref_duration)) &&
-        upipe_ts_pese->pes_min_duration)
-        force = true;
-
-    if (upipe_ts_pese->next_pes != NULL) {
-        if (unlikely(!ubase_check(uref_block_append(upipe_ts_pese->next_pes, uref->ubuf)))) {
-            upipe_warn(upipe, "unable to merge a PES");
-            upipe_ts_pese_work(upipe, upump_p);
-            upipe_ts_pese->next_pes = uref;
-        } else {
-            uref_detach_ubuf(uref);
-            uref_free(uref);
-            if (!force) {
-                uint64_t pes_duration;
-                if (ubase_check(uref_clock_get_duration(upipe_ts_pese->next_pes,
-                                            &pes_duration))) {
-                    pes_duration += uref_duration;
-                    if (!ubase_check(uref_clock_set_duration(upipe_ts_pese->next_pes,
-                                                 pes_duration)))
-                        force = true;
-                }
-            }
-        }
-    } else
-        upipe_ts_pese->next_pes = uref;
-
-    if (upipe_ts_pese->pes_min_duration && !force) {
-        uint64_t duration;
-        if (ubase_check(uref_clock_get_duration(upipe_ts_pese->next_pes,
-                                    &duration)) &&
-            duration < upipe_ts_pese->pes_min_duration)
-            return;
-    }
-
-    if (force)
-        upipe_dbg(upipe, "couldn't merge a PES");
-    upipe_ts_pese_work(upipe, upump_p);
-}
-
-/** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -275,7 +235,18 @@ static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_ts_pese_merge(upipe, uref, upump_p);
+    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
+    uint64_t uref_duration = upipe_ts_pese->pes_min_duration;
+    uref_clock_get_duration(uref, &uref_duration);
+    size_t uref_size = 0;
+    uref_block_size(uref, &uref_size);
+
+    ulist_add(&upipe_ts_pese->next_pes, uref_to_uchain(uref));
+    upipe_ts_pese->next_pes_duration += uref_duration;
+    upipe_ts_pese->next_pes_size += uref_size;
+
+    if (upipe_ts_pese->next_pes_duration >= upipe_ts_pese->pes_min_duration)
+        upipe_ts_pese_work(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -300,10 +271,12 @@ static enum ubase_err upipe_ts_pese_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    upipe_ts_pese_work(upipe, NULL);
+
     if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.mpegtspes.%s",
                                        def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    upipe_ts_pese_store_flow_def(upipe, flow_def_dup);
     struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
     upipe_ts_pese->pes_id = pes_id;
     upipe_ts_pese->pes_header_size = 0;
@@ -311,6 +284,13 @@ static enum ubase_err upipe_ts_pese_set_flow_def(struct upipe *upipe,
     upipe_ts_pese->pes_min_duration = 0;
     uref_ts_flow_get_pes_min_duration(flow_def,
                                       &upipe_ts_pese->pes_min_duration);
+    upipe_ts_pese->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_ts_pese->input_latency);
+    if (unlikely(!ubase_check(uref_clock_set_latency(flow_def_dup,
+                                    upipe_ts_pese->input_latency +
+                                    upipe_ts_pese->pes_min_duration))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    upipe_ts_pese_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
 
@@ -356,9 +336,7 @@ static enum ubase_err upipe_ts_pese_control(struct upipe *upipe,
  */
 static void upipe_ts_pese_free(struct upipe *upipe)
 {
-    struct upipe_ts_pese *upipe_ts_pese = upipe_ts_pese_from_upipe(upipe);
-    if (upipe_ts_pese->next_pes != NULL)
-        upipe_ts_pese_work(upipe, NULL);
+    upipe_ts_pese_work(upipe, NULL);
 
     upipe_throw_dead(upipe);
 

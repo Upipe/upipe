@@ -67,8 +67,9 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static uint8_t stream_id = PES_STREAM_ID_VIDEO_MPEG;
-static size_t total_size = 0;
+static ssize_t total_size = 0;
 static size_t header_size = 0;
+static uint16_t pes_size = 0;
 
 /** definition of our uprobe */
 static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -106,41 +107,41 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     uref_clock_get_pts_prog(uref, &pts);
     uref_clock_get_dts_prog(uref, &dts);
 
-    /* check header */
-    uint16_t pes_size;
-    int size = -1;
-    const uint8_t *buffer;
-    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
-    header_size = size;
-    assert(size >= PES_HEADER_SIZE);
-    assert(pes_validate(buffer));
-    assert(pes_get_streamid(buffer) == stream_id);
-    pes_size = pes_get_length(buffer);
-    if (stream_id != PES_STREAM_ID_PRIVATE_2) {
-        assert(size >= PES_HEADER_SIZE_NOPTS);
-        assert(pes_validate_header(buffer));
-        assert(pes_get_dataalignment(buffer));
-        assert(size == pes_get_headerlength(buffer) + PES_HEADER_SIZE_NOPTS);
+    if (!total_size) {
+        /* check header */
+        int size = -1;
+        const uint8_t *buffer;
+        ubase_assert(uref_block_read(uref, 0, &size, &buffer));
+        header_size = size;
+        assert(size >= PES_HEADER_SIZE);
+        assert(pes_validate(buffer));
+        assert(pes_get_streamid(buffer) == stream_id);
+        pes_size = pes_get_length(buffer);
+        if (stream_id != PES_STREAM_ID_PRIVATE_2) {
+            assert(size >= PES_HEADER_SIZE_NOPTS);
+            assert(pes_validate_header(buffer));
+            assert(pes_get_dataalignment(buffer));
+            assert(size == pes_get_headerlength(buffer) + PES_HEADER_SIZE_NOPTS);
 
-        if (pes_has_pts(buffer)) {
-            assert(size >= PES_HEADER_SIZE_PTS);
-            assert(pes_validate_pts(buffer));
-            assert(pts / 300 == pes_get_pts(buffer));
-            if (pes_has_dts(buffer)) {
-                assert(size >= PES_HEADER_SIZE_PTSDTS);
-                assert(pes_validate_dts(buffer));
-                assert(dts / 300 == pes_get_dts(buffer));
+            if (pes_has_pts(buffer)) {
+                assert(size >= PES_HEADER_SIZE_PTS);
+                assert(pes_validate_pts(buffer));
+                assert(pts / 300 == pes_get_pts(buffer));
+                if (pes_has_dts(buffer)) {
+                    assert(size >= PES_HEADER_SIZE_PTSDTS);
+                    assert(pes_validate_dts(buffer));
+                    assert(dts / 300 == pes_get_dts(buffer));
+                }
             }
         }
+        uref_block_unmap(uref, 0);
+        total_size -= size;
     }
-    uref_block_unmap(uref, 0);
 
     /* check payload */
     size_t uref_size;
     ubase_assert(uref_block_size(uref, &uref_size));
-    if (pes_size != 0)
-        assert(uref_size == pes_size + PES_HEADER_SIZE);
-    total_size += uref_size - size;
+    total_size += uref_size;
     uref_free(uref);
 }
 
