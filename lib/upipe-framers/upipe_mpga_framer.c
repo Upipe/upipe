@@ -102,6 +102,8 @@ struct upipe_mpgaf {
     struct uref *flow_def_input;
     /** attributes in the sequence header */
     struct uref *flow_def_attr;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /* sync parsing stuff */
     /** number of octets in a frame */
@@ -195,6 +197,8 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf_init_uref_stream(upipe);
     upipe_mpgaf_init_output(upipe);
     upipe_mpgaf_init_flow_def(upipe);
+    upipe_mpgaf->input_latency = 0;
+    upipe_mpgaf->samplerate = 0;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
     upipe_mpgaf_flush_dates(upipe);
@@ -347,6 +351,9 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
+    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                upipe_mpgaf->input_latency +
+                UCLOCK_FREQ * upipe_mpgaf->samples / upipe_mpgaf->samplerate))
     upipe_mpgaf->octetrate = (uint64_t)octetrate * 1000;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
                                                upipe_mpgaf->octetrate))
@@ -631,6 +638,17 @@ static enum ubase_err upipe_mpgaf_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    upipe_mpgaf->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_mpgaf->input_latency);
+
+    if (unlikely(upipe_mpgaf->samplerate &&
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                    upipe_mpgaf->input_latency +
+                                    UCLOCK_FREQ * upipe_mpgaf->samples /
+                                    upipe_mpgaf->samplerate))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     flow_def = upipe_mpgaf_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_mpgaf_store_flow_def(upipe, flow_def);

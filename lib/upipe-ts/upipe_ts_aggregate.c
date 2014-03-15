@@ -29,6 +29,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -73,6 +74,8 @@ struct upipe_ts_agg {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /** mux octetrate */
     uint64_t octetrate;
@@ -134,8 +137,9 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     upipe_ts_agg_init_uref_mgr(upipe);
     upipe_ts_agg_init_ubuf_mgr(upipe);
     upipe_ts_agg_init_output(upipe);
+    upipe_ts_agg->input_latency = 0;
     upipe_ts_agg->octetrate = 0;
-    upipe_ts_agg->interval = UINT64_MAX;
+    upipe_ts_agg->interval = 0;
     upipe_ts_agg->mode = UPIPE_TS_MUX_MODE_VBR;
     upipe_ts_agg->mtu = DEFAULT_MTU;
     upipe_ts_agg->padding = NULL;
@@ -429,11 +433,20 @@ static enum ubase_err upipe_ts_agg_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
-    }
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, "block.mpegtsaligned."))))
+
+    struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
+    upipe_ts_agg->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_ts_agg->input_latency);
+
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup,
+                                                "block.mpegtsaligned.")) ||
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                upipe_ts_agg->input_latency +
+                                upipe_ts_agg->interval)) ||
+                 !ubase_check(uref_block_flow_set_octetrate(flow_def_dup,
+                                upipe_ts_agg->octetrate))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
@@ -474,6 +487,16 @@ static enum ubase_err upipe_ts_agg_set_octetrate(struct upipe *upipe,
                     upipe_ts_agg->mode == UPIPE_TS_MUX_MODE_VBR ? "VBR" :
                     upipe_ts_agg->mode == UPIPE_TS_MUX_MODE_CBR ? "CBR" :
                     "capped VBR", octetrate * 8);
+
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(upipe_ts_agg->flow_def)) == NULL ||
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                upipe_ts_agg->input_latency +
+                                upipe_ts_agg->interval)) ||
+                 !ubase_check(uref_block_flow_set_octetrate(flow_def_dup,
+                                upipe_ts_agg->octetrate))))
+        return UBASE_ERR_ALLOC;
+    upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
 

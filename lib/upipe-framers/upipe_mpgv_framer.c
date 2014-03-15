@@ -100,6 +100,8 @@ struct upipe_mpgvf {
     uint64_t systime_rap;
     /** random access point of the last ref */
     uint64_t systime_rap_ref;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /* picture parsing stuff */
     /** last output picture number */
@@ -216,9 +218,11 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_init_flow_def(upipe);
     upipe_mpgvf->systime_rap = UINT64_MAX;
     upipe_mpgvf->systime_rap_ref = UINT64_MAX;
+    upipe_mpgvf->input_latency = 0;
     upipe_mpgvf->last_picture_number = 0;
     upipe_mpgvf->last_temporal_reference = -1;
     upipe_mpgvf->got_discontinuity = false;
+    upipe_mpgvf->fps.num = 0;
     upipe_mpgvf->insert_sequence = false;
     upipe_mpgvf->scan_context = UINT32_MAX;
     upipe_mpgvf->next_frame_size = 0;
@@ -367,6 +371,9 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         upipe_mpgvf->progressive_sequence = true;
 
     UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
+    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                        upipe_mpgvf->input_latency +
+                        UCLOCK_FREQ * frame_rate.den / frame_rate.num))
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
     upipe_mpgvf->progressive_sequence = progressive;
     UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
@@ -1050,6 +1057,17 @@ static enum ubase_err upipe_mpgvf_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    upipe_mpgvf->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_mpgvf->input_latency);
+
+    if (unlikely(upipe_mpgvf->fps.num &&
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                    upipe_mpgvf->input_latency +
+                                    UCLOCK_FREQ * upipe_mpgvf->fps.den /
+                                    upipe_mpgvf->fps.num))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     flow_def = upipe_mpgvf_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_mpgvf_store_flow_def(upipe, flow_def);

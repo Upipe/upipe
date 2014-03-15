@@ -97,6 +97,8 @@ struct upipe_h264f {
     struct uref *flow_def_attr;
     /** last random access point */
     uint64_t systime_rap;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /* picture parsing stuff */
     /** last output picture number */
@@ -278,9 +280,11 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f_init_output(upipe);
     upipe_h264f_init_flow_def(upipe);
     upipe_h264f->systime_rap = UINT64_MAX;
+    upipe_h264f->input_latency = 0;
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
     upipe_h264f->pic_struct = -1;
+    upipe_h264f->duration = 0;
     upipe_h264f->got_discontinuity = false;
     upipe_h264f->scan_context = UINT32_MAX;
     upipe_h264f->au_size = 0;
@@ -994,9 +998,13 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 };
                 urational_simplify(&frame_rate);
                 UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
-                if (frame_rate.num)
+                if (frame_rate.num) {
                     upipe_h264f->duration = UCLOCK_FREQ * frame_rate.den /
                                             frame_rate.num / 2;
+                    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                                upipe_h264f->input_latency +
+                                upipe_h264f->duration))
+                }
             }
             ubuf_block_stream_skip_bits(s, 1);
         }
@@ -1673,6 +1681,16 @@ static enum ubase_err upipe_h264f_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    upipe_h264f->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_h264f->input_latency);
+
+    if (unlikely(upipe_h264f->duration &&
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                    upipe_h264f->input_latency +
+                                    upipe_h264f->duration))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     flow_def = upipe_h264f_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_h264f_store_flow_def(upipe, flow_def);

@@ -69,6 +69,8 @@ struct upipe_a52f {
     struct uref *flow_def_input;
     /** attributes in the sequence header */
     struct uref *flow_def_attr;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /* sync parsing stuff */
     /** number of samples per second */
@@ -152,6 +154,8 @@ static struct upipe *upipe_a52f_alloc(struct upipe_mgr *mgr,
     upipe_a52f_init_uref_stream(upipe);
     upipe_a52f_init_output(upipe);
     upipe_a52f_init_flow_def(upipe);
+    upipe_a52f->input_latency = 0;
+    upipe_a52f->samplerate = 0;
     upipe_a52f->got_discontinuity = false;
     upipe_a52f->next_frame_size = -1;
     upipe_a52f_flush_dates(upipe);
@@ -283,7 +287,11 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
     }
 
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
+    UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, A52_FRAME_SAMPLES))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                upipe_a52f->input_latency +
+                UCLOCK_FREQ * A52_FRAME_SAMPLES / samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
@@ -541,6 +549,17 @@ static enum ubase_err upipe_a52f_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
+    upipe_a52f->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_a52f->input_latency);
+
+    if (unlikely(upipe_a52f->samplerate &&
+                 !ubase_check(uref_clock_set_latency(flow_def_dup,
+                                    upipe_a52f->input_latency +
+                                    UCLOCK_FREQ * A52_FRAME_SAMPLES /
+                                    upipe_a52f->samplerate))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     flow_def = upipe_a52f_store_flow_def_input(upipe, flow_def_dup);
     if (flow_def != NULL)
         upipe_a52f_store_flow_def(upipe, flow_def);
