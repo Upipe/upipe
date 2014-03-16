@@ -108,6 +108,8 @@ struct upipe_ts_psii_sub {
 
     /** latest table */
     struct uchain table;
+    /** false if the table is not yet complete */
+    bool complete;
     /** date (in system time) of the next table occurrence */
     uint64_t next_cr_sys;
 
@@ -179,6 +181,7 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_psii_sub->table);
     upipe_ts_psii_sub->next_cr_sys = UINT64_MAX;
     ulist_init(&upipe_ts_psii_sub->table);
+    upipe_ts_psii_sub->complete = true;
     upipe_ts_psii_sub->encaps = NULL;
 
     uprobe_init(&upipe_ts_psii_sub->probe, upipe_ts_psii_sub_probe, NULL);
@@ -233,10 +236,10 @@ static void upipe_ts_psii_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
 
-    if (ubase_check(uref_block_get_start(uref)) ||
-        ulist_empty(&upipe_ts_psii_sub->table)) {
+    if (upipe_ts_psii_sub->complete) {
         upipe_dbg(upipe, "new table");
         upipe_ts_psii_sub_clean(upipe);
+        upipe_ts_psii_sub->complete = false;
 
         uint64_t cr_sys;
         if (ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))
@@ -248,6 +251,8 @@ static void upipe_ts_psii_sub_input(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "large table");
 
     ulist_add(&upipe_ts_psii_sub->table, uref_to_uchain(uref));
+    if (ubase_check(uref_block_get_end(uref)))
+        upipe_ts_psii_sub->complete = true;
 }
 
 /** @internal @This outputs a PSI table.

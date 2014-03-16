@@ -269,6 +269,7 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_prog(uref, 27000000 + 27000000);
     uref_clock_set_dts_sys(uref, 270000000 + 27000000);
     uref_clock_set_cr_dts_delay(uref, 27000000);
+    uref_block_set_start(uref);
     uref_flow_set_discontinuity(uref);
     ubase_assert(uref_flow_set_random(uref));
     dts = 27000000;
@@ -311,6 +312,7 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     uref_clock_set_dts_prog(uref, 27000000);
     uref_clock_set_dts_sys(uref, 270000000);
+    uref_block_set_start(uref);
     uref_flow_set_discontinuity(uref);
     ubase_assert(uref_flow_set_random(uref));
     dts = 27000000;
@@ -354,6 +356,7 @@ int main(int argc, char *argv[])
     dts_step = 27000000 / nb_ts;
     psi = true;
     psi_first = true;
+    uref_block_set_start(uref);
     upipe_input(upipe_ts_encaps, uref, NULL);
     assert(total_size == 1024);
     assert(nb_ts == 0);

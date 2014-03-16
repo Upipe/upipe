@@ -752,7 +752,6 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
     upipe_notice_va(upipe, "end PAT (%u sections)", nb_sections);
 
     struct uchain *section_chain;
-    bool first = true;
     while ((section_chain = ulist_pop(&sections)) != NULL) {
         bool last = ulist_empty(&sections);
         struct ubuf *ubuf = ubuf_from_uchain(section_chain);
@@ -783,10 +782,10 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             }
         }
         uref_attach_ubuf(output, ubuf);
-        if (first)
-            uref_block_set_start(uref);
+        uref_block_set_start(output);
+        if (last)
+            uref_block_set_end(output);
         upipe_ts_psig_output(upipe, output, upump_p);
-        first = false;
     }
 }
 

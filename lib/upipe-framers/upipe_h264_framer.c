@@ -1513,6 +1513,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
             uint64_t systime_rap;
             if (ubase_check(uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap)))
                 upipe_h264f->systime_rap = systime_rap;
+            UBASE_FATAL(upipe, uref_flow_set_random(upipe_h264f->next_uref))
         }
         return;
     }

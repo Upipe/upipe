@@ -259,12 +259,8 @@ static enum ubase_err upipe_dvbsubf_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
     flow_def = upipe_dvbsubf_store_flow_def_input(upipe, flow_def_dup);
-    if (flow_def != NULL) {
+    if (flow_def != NULL)
         upipe_dvbsubf_store_flow_def(upipe, flow_def);
-        /* Force sending flow def because it can take a while before we get
-         * a packet. */
-        upipe_throw_new_flow_def(upipe, flow_def);
-    }
     return UBASE_ERR_NONE;
 }
 

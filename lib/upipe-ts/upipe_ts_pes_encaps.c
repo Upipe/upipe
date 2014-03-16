@@ -211,6 +211,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
 
     /* intended pass-through */
 upipe_ts_pese_work_err:
+    uref_block_set_start(uref);
     upipe_ts_pese_output(upipe, uref, upump_p);
 
     struct uchain *uchain;

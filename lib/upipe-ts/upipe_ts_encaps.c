@@ -331,6 +331,7 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    bool start = ubase_check(uref_block_get_start(uref));
     bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
 
     uint64_t duration = (uint64_t)size * UCLOCK_FREQ /
@@ -405,8 +406,9 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                        (dts_prog + muxdate - dts_sys -
                         upipe_ts_encaps->ts_delay) : 0;
         struct uref *output =
-            upipe_ts_encaps_splice(upipe, uref, i == nb_ts - 1, pcr,
+            upipe_ts_encaps_splice(upipe, uref, start, pcr,
                                    random, discontinuity);
+        start = false;
         if (unlikely(output == NULL))
             /* This can happen if the last packet was only planned to contain
              * a PCR. In this case we will catch up next time. */
