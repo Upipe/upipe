@@ -78,6 +78,9 @@
 
 UREF_ATTR_INT(avcenc, priv, "x.avcenc_priv", avcenc private pts)
 
+/** start offset of avcodec PTS */
+#define AVCPTS_INIT 1
+
 /** @hidden */
 static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
@@ -397,12 +400,21 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
             uref_sound_flow_set_samples(flow_def_attr, context->frame_size);
         }
     }
-    struct urational fps;
-    if (ubase_check(uref_pic_flow_get_fps(upipe_avcenc->flow_def_input, &fps)) &&
-        context->delay)
-        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
-                upipe_avcenc->input_latency +
-                context->delay * UCLOCK_FREQ * fps.num / fps.den));
+    if (context->delay) {
+        struct urational fps;
+        uint64_t rate;
+        if (ubase_check(uref_pic_flow_get_fps(upipe_avcenc->flow_def_input,
+                                              &fps))) {
+            UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
+                    upipe_avcenc->input_latency +
+                    context->delay * UCLOCK_FREQ * fps.num / fps.den));
+        } else if (ubase_check(uref_sound_flow_get_rate(
+                        upipe_avcenc->flow_def_input, &rate))) {
+            UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
+                    upipe_avcenc->input_latency +
+                    context->delay * UCLOCK_FREQ / rate));
+        }
+    }
 
     if (unlikely(upipe_avcenc->ubuf_mgr == NULL)) {
         upipe_throw_new_flow_format(upipe, flow_def_attr,
@@ -446,6 +458,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     av_free_packet(&avpkt);
 
     /* find uref corresponding to avpkt */
+    upipe_verbose_va(upipe, "output pts %"PRId64, avpkt.pts);
     struct uchain *uchain;
     struct uchain *uchain_tmp;
     struct uref *uref = NULL;
@@ -496,6 +509,9 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_clock_rebase_dts_prog(uref);
     uref_clock_rebase_dts_orig(uref);
 
+    if (avpkt.flags & AV_PKT_FLAG_KEY)
+        uref_flow_set_random(uref);
+
     upipe_avcenc_output(upipe, uref, upump_p);
     return true;
 }
@@ -540,6 +556,7 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     }
 
     /* set pts (needed for uref/avpkt mapping) */
+    upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
     frame->pts = upipe_avcenc->avcpts++;
     if (unlikely(!ubase_check(uref_avcenc_set_priv(uref, frame->pts)))) {
         uref_free(uref);
@@ -645,6 +662,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     }
 
     /* set pts (needed for uref/avpkt mapping) */
+    upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
     frame->pts = upipe_avcenc->avcpts++;
     if (unlikely(!ubase_check(uref_avcenc_set_priv(main_uref, frame->pts)))) {
         uref_free(main_uref);
@@ -1258,7 +1276,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->nb_samples = 0;
 
     ulist_init(&upipe_avcenc->urefs_in_use);
-    upipe_avcenc->avcpts = 1;
+    upipe_avcenc->avcpts = AVCPTS_INIT;
 
     upipe_throw_ready(upipe);
     return upipe;
