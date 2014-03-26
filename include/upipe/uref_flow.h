@@ -64,6 +64,7 @@ UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 UREF_ATTR_VOID(flow, copyright, "f.copyright", copyrighted content)
 UREF_ATTR_VOID(flow, original, "f.original", original or copy)
 UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
+UREF_ATTR_STRING(flow, name, "f.name", flow name)
 
 /** @This sets the flow definition attribute of a uref, with printf-style
  * generation.
