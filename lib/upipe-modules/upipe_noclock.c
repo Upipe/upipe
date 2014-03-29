@@ -104,7 +104,7 @@ static struct upipe *upipe_noclock_alloc(struct upipe_mgr *mgr,
 static void upipe_noclock_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
-    enum uref_date_type type;
+    int type;
     uint64_t date;
     uref_clock_get_date_prog(uref, &date, &type);
     uref_clock_set_date_sys(uref, date, type);

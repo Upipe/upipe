@@ -179,7 +179,7 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
 
     uref_clock_set_rate(uref, upipe_trickp->rate);
     uint64_t date;
-    enum uref_date_type type;
+    int type;
     uref_clock_get_date_prog(uref, &date, &type);
     if (likely(type != UREF_DATE_NONE))
         uref_clock_set_date_sys(uref,
@@ -386,7 +386,7 @@ static void upipe_trickp_check_start(struct upipe *upipe)
                 return; /* not ready */
             struct uref *uref = uref_from_uchain(uchain2);
             uint64_t ts;
-            enum uref_date_type type;
+            int type;
             uref_clock_get_date_prog(uref, &ts, &type);
             if (unlikely(type == UREF_DATE_NONE)) {
                 upipe_warn(upipe, "non-dated uref");

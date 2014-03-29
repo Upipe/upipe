@@ -63,8 +63,7 @@ UREF_ATTR_UNSIGNED_SH(clock, latency, UDICT_TYPE_CLOCK_LATENCY,
  * @param type_p filled in with the type of date                            \
  */                                                                         \
 static inline void uref_clock_get_date_##dv(const struct uref *uref,        \
-                                            uint64_t *date_p,               \
-                                            enum uref_date_type *type_p)    \
+                                            uint64_t *date_p, int *type_p)  \
 {                                                                           \
     *date_p = uref->date_##dv;                                              \
     *type_p = (uref->flags >> UREF_FLAG_DATE_##DV##_SHIFT) & 0x3;           \
@@ -76,8 +75,7 @@ static inline void uref_clock_get_date_##dv(const struct uref *uref,        \
  * @param type type of date                                                 \
  */                                                                         \
 static inline void uref_clock_set_date_##dv(struct uref *uref,              \
-                                            uint64_t date,                  \
-                                            enum uref_date_type type)       \
+                                            uint64_t date, int type)        \
 {                                                                           \
     uref->date_##dv = date;                                                 \
     uref->flags &= ~(UINT64_C(0x3) << UREF_FLAG_DATE_##DV##_SHIFT);         \
@@ -136,7 +134,7 @@ static inline enum ubase_err uref_clock_get_pts_##dv(struct uref *uref,     \
                                                      uint64_t *date_p)      \
 {                                                                           \
     uint64_t date, delay;                                                   \
-    enum uref_date_type type;                                               \
+    int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
         /* intended pass-throughs */                                        \
@@ -174,7 +172,7 @@ static inline enum ubase_err uref_clock_get_dts_##dv(struct uref *uref,     \
                                                      uint64_t *date_p)      \
 {                                                                           \
     uint64_t date, delay;                                                   \
-    enum uref_date_type type;                                               \
+    int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
         /* intended pass-throughs */                                        \
@@ -213,7 +211,7 @@ static inline enum ubase_err uref_clock_get_cr_##dv(struct uref *uref,      \
                                                     uint64_t *date_p)       \
 {                                                                           \
     uint64_t date, delay;                                                   \
-    enum uref_date_type type;                                               \
+    int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
         /* intended pass-throughs */                                        \

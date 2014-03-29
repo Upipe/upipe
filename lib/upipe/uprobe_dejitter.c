@@ -131,7 +131,7 @@ static enum ubase_err uprobe_dejitter_clock_ts(struct uprobe *uprobe,
         return UBASE_ERR_INVALID;
 
     uint64_t date;
-    enum uref_date_type type;
+    int type;
     uref_clock_get_date_prog(uref, &date, &type);
     if (type == UREF_DATE_NONE)
         return UBASE_ERR_INVALID;

@@ -66,7 +66,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
 
 #define UREF_DUMP_DATE(name, member)                                        \
     {                                                                       \
-        enum uref_date_type type;                                           \
+        int type;                                                           \
         uint64_t date;                                                      \
         uref_clock_get_date_##member(uref, &date, &type);                   \
         switch (type) {                                                     \
