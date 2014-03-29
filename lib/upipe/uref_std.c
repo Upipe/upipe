@@ -47,6 +47,9 @@ struct uref_std_mgr {
 
     /** common management structure */
     struct uref_mgr mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
 
 UBASE_FROM_TO(uref_std_mgr, uref_mgr, uref_mgr, mgr)
@@ -168,8 +171,7 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     if (unlikely(std_mgr == NULL))
         return NULL;
 
-    upool_init(&std_mgr->uref_pool, uref_pool_depth,
-               (void *)std_mgr + sizeof(struct uref_std_mgr),
+    upool_init(&std_mgr->uref_pool, uref_pool_depth, std_mgr->upool_extra,
                uref_std_alloc_inner, uref_std_free_inner);
 
     std_mgr->mgr.control_attr_size = control_attr_size;

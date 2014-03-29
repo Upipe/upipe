@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -49,6 +49,9 @@ struct upump_ev_mgr {
 
     /** common structure */
     struct upump_common_mgr common_mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
 
 UBASE_FROM_TO(upump_ev_mgr, upump_mgr, upump_mgr, common_mgr.mgr)
@@ -313,7 +316,7 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
 
     struct upump_mgr *mgr = upump_ev_mgr_to_upump_mgr(ev_mgr);
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
-                          (void *)ev_mgr + sizeof(struct upump_ev_mgr),
+                          ev_mgr->upool_extra,
                           upump_ev_real_start, upump_ev_real_stop,
                           upump_ev_alloc_inner, upump_ev_free_inner);
 
