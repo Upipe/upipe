@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,6 +44,10 @@ extern "C" {
 #include <string.h>
 #include <sys/uio.h>
 #include <assert.h>
+
+/** @This is a simple signature to make sure the ubuf_alloc internal API
+ * is used properly. */
+#define UBUF_ALLOC_BLOCK UBASE_FOURCC('b','l','c','k')
 
 /** @internal @This is a common section of block ubuf, allowing to segment
  * data. In an opaque area you would typically store a pointer to shared
@@ -95,7 +99,7 @@ static inline struct ubuf *ubuf_block_alloc(struct ubuf_mgr *mgr, int size)
  */
 static inline enum ubase_err ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
     if (likely(size_p != NULL)) {
         struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
@@ -157,7 +161,7 @@ static inline struct ubuf *ubuf_block_get(struct ubuf *ubuf, int *offset_p,
 static inline enum ubase_err ubuf_block_size_linear(struct ubuf *ubuf,
                                                     int offset, size_t *size_p)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
         return UBASE_ERR_INVALID;
 
@@ -186,7 +190,7 @@ static inline enum ubase_err ubuf_block_read(struct ubuf *ubuf, int offset,
                                              int *size_p,
                                              const uint8_t **buffer_p)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
         return UBASE_ERR_INVALID;
 
@@ -221,7 +225,7 @@ static inline enum ubase_err ubuf_block_read(struct ubuf *ubuf, int offset,
 static inline enum ubase_err ubuf_block_write(struct ubuf *ubuf, int offset,
                                               int *size_p, uint8_t **buffer_p)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
         return UBASE_ERR_INVALID;
 
@@ -249,7 +253,7 @@ static inline enum ubase_err ubuf_block_write(struct ubuf *ubuf, int offset,
  */
 static inline enum ubase_err ubuf_block_unmap(struct ubuf *ubuf, int offset)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
         return UBASE_ERR_INVALID;
 
@@ -269,8 +273,8 @@ static inline enum ubase_err ubuf_block_unmap(struct ubuf *ubuf, int offset)
 static inline enum ubase_err ubuf_block_append(struct ubuf *ubuf,
                                                struct ubuf *append)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
-                 append->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
+                 append->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
@@ -329,8 +333,8 @@ static inline enum ubase_err ubuf_block_split(struct ubuf *ubuf, int offset)
 static inline enum ubase_err ubuf_block_insert(struct ubuf *ubuf, int offset,
                                                struct ubuf *insert)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
-                 insert->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
+                 insert->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
@@ -361,7 +365,7 @@ static inline enum ubase_err ubuf_block_insert(struct ubuf *ubuf, int offset,
 static inline enum ubase_err ubuf_block_delete(struct ubuf *ubuf, int offset,
                                                int size)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
@@ -412,7 +416,7 @@ ubuf_block_delete_done:
  */
 static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
@@ -457,7 +461,7 @@ static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
 static inline enum ubase_err ubuf_block_resize(struct ubuf *ubuf, int offset,
                                                int new_size)
 {
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
@@ -493,7 +497,7 @@ static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
                                              int size)
 {
     struct ubuf *new_ubuf;
-    if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK ||
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, &size)) == NULL ||
                  !ubase_check(ubuf_control(ubuf, UBUF_SPLICE_BLOCK,
                                            &new_ubuf, offset, size))))
@@ -518,7 +522,7 @@ static inline enum ubase_err ubuf_block_check_size(struct ubuf *ubuf,
         if (*offset_p < 0)
             *size_p = -*offset_p;
         else {
-            if (unlikely(ubuf->mgr->type != UBUF_ALLOC_BLOCK))
+            if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
                 return UBASE_ERR_INVALID;
 
             struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);

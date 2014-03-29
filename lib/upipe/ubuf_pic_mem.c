@@ -100,6 +100,9 @@ struct ubuf_pic_mem_mgr {
 
     /** common picture management structure */
     struct ubuf_pic_common_mgr common_mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
 
 UBASE_FROM_TO(ubuf_pic_mem_mgr, ubuf_mgr, ubuf_mgr, common_mgr.mgr)
@@ -116,10 +119,11 @@ UBUF_MEM_MGR_HELPER_POOL(ubuf_pic_mem, ubuf_pool, shared_pool, shared)
  * @return pointer to ubuf or NULL in case of allocation error
  */
 static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
-                                       enum ubuf_alloc_type alloc_type,
-                                       va_list args)
+                                       uint32_t signature, va_list args)
 {
-    assert(alloc_type == UBUF_ALLOC_PICTURE);
+    if (unlikely(signature != UBUF_ALLOC_PICTURE))
+        return NULL;
+
     int hsize = va_arg(args, int);
     int vsize = va_arg(args, int);
 
@@ -468,8 +472,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
         return NULL;
 
     ubuf_pic_mem_mgr_init_pool(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr),
-            ubuf_pool_depth, shared_pool_depth,
-            (void *)pic_mgr + sizeof(struct ubuf_pic_mem_mgr),
+            ubuf_pool_depth, shared_pool_depth, pic_mgr->upool_extra,
             ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
 
     pic_mgr->umem_mgr = umem_mgr;
@@ -491,7 +494,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                    ubuf_pic_mem_mgr_free);
     pic_mgr->common_mgr.mgr.refcount = ubuf_pic_mem_mgr_to_urefcount(pic_mgr);
 
-    mgr->type = UBUF_ALLOC_PICTURE;
+    mgr->signature = UBUF_ALLOC_PICTURE;
     mgr->ubuf_alloc = ubuf_pic_mem_alloc;
     mgr->ubuf_control = ubuf_pic_mem_control;
     mgr->ubuf_free = ubuf_pic_mem_free;
@@ -562,9 +565,9 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1) ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 2, 1) ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 2, 1)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1)) ||
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 2, 1)) ||
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 2, 1))))
             goto fourcc_err;
 
     } else if (!strcmp(fcc, "YV16")) {
@@ -573,9 +576,9 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1) ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 1, 1) ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 1, 1)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1)) ||
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 1, 1)) ||
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 1, 1))))
             goto fourcc_err;
 
     /* YUV packed formats */
@@ -586,7 +589,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "y8u8y8v8", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "y8u8y8v8", 1, 1, 4))))
             goto fourcc_err;
 
     } else if (!strcmp(fcc, "UYVY")) {
@@ -595,7 +598,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "u8y8v8y8", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "u8y8v8y8", 1, 1, 4))))
             goto fourcc_err;
 
     } else if (!strcmp(fcc, "YVYU")) {
@@ -604,7 +607,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "y8v8y8u8", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "y8v8y8u8", 1, 1, 4))))
             goto fourcc_err;
 
     } else if (!strcmp(fcc, "AYUV")) {
@@ -613,7 +616,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "a8y8u8v8", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "a8y8u8v8", 1, 1, 4))))
             goto fourcc_err;
 
     } else if (!strcmp(fcc, "V410")) {
@@ -622,7 +625,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "u10y10v10", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "u10y10v10", 1, 1, 4))))
             goto fourcc_err;
 
     /* RGB packed formats */
@@ -632,7 +635,7 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc_fourcc(uint16_t ubuf_pool_depth,
                                      hmprepend, hmappend, vprepend, vappend,
                                      align, align_hmoffset);
         if (unlikely(mgr == NULL ||
-                     !ubuf_pic_mem_mgr_add_plane(mgr, "a8r8g8b8", 1, 1, 4)))
+                     !ubase_check(ubuf_pic_mem_mgr_add_plane(mgr, "a8r8g8b8", 1, 1, 4))))
             goto fourcc_err;
     }
 

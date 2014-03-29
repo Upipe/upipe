@@ -40,6 +40,10 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
+/** @This is a simple signature to make sure the ubuf_alloc internal API
+ * is used properly. */
+#define UBUF_ALLOC_SOUND UBASE_FOURCC('s','n','d',' ')
+
 /** @This returns a new ubuf from a sound allocator.
  *
  * @param mgr management structure for this ubuf type
@@ -269,7 +273,7 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
     uint8_t sample_size;
     if (unlikely(!ubase_check(ubuf_sound_size(ubuf, &ubuf_size,
                                               &sample_size)) ||
-                 skip >= ubuf_size || skip + new_size <= 0))
+                 skip >= (int)ubuf_size || skip + new_size <= 0))
         return NULL;
     if (new_size == -1)
         new_size = ubuf_size - skip;
@@ -279,12 +283,14 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
         return NULL;
 
     uint8_t new_sample_size;
+    int extract_offset, extract_skip;
+    int extract_size;
+    const char *channel = NULL;
     if (unlikely(!ubase_check(ubuf_sound_size(new_ubuf, NULL,
                                               &new_sample_size)) ||
                  new_sample_size != sample_size))
         goto ubuf_sound_copy_err;
 
-    int extract_offset, extract_skip;
     if (skip < 0) {
         extract_offset = -skip;
         extract_skip = 0;
@@ -292,11 +298,10 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
         extract_offset = 0;
         extract_skip = skip;
     }
-    int extract_size =
-        new_size - extract_offset <= ubuf_size - extract_skip ?
-        new_size - extract_offset : ubuf_size - extract_skip;
+    extract_size =
+        new_size - extract_offset <= (int)ubuf_size - extract_skip ?
+        new_size - extract_offset : (int)ubuf_size - extract_skip;
 
-    const char *channel = NULL;
     while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
            channel != NULL) {
         uint8_t *new_buffer;

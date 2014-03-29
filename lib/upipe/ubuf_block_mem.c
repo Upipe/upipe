@@ -79,6 +79,9 @@ struct ubuf_block_mem_mgr {
 
     /** common management structure */
     struct ubuf_mgr mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
 
 UBASE_FROM_TO(ubuf_block_mem_mgr, ubuf_mgr, ubuf_mgr, mgr)
@@ -95,10 +98,11 @@ UBUF_MEM_MGR_HELPER_POOL(ubuf_block_mem, ubuf_pool, shared_pool, shared)
  * @return pointer to ubuf or NULL in case of allocation error
  */
 static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
-                                         enum ubuf_alloc_type alloc_type,
-                                         va_list args)
+                                         uint32_t signature, va_list args)
 {
-    assert(alloc_type == UBUF_ALLOC_BLOCK);
+    if (unlikely(signature != UBUF_ALLOC_BLOCK))
+        return NULL;
+
     int size = va_arg(args, int);
     assert(size >= 0);
 
@@ -352,8 +356,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
         return NULL;
 
     ubuf_block_mem_mgr_init_pool(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr),
-            ubuf_pool_depth, shared_pool_depth,
-            (void *)block_mem_mgr + sizeof(struct ubuf_block_mem_mgr),
+            ubuf_pool_depth, shared_pool_depth, block_mem_mgr->upool_extra,
             ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
 
     block_mem_mgr->umem_mgr = umem_mgr;
@@ -366,7 +369,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                    ubuf_block_mem_mgr_free);
     block_mem_mgr->mgr.refcount =
         ubuf_block_mem_mgr_to_urefcount(block_mem_mgr);
-    block_mem_mgr->mgr.type = UBUF_ALLOC_BLOCK;
+    block_mem_mgr->mgr.signature = UBUF_ALLOC_BLOCK;
     block_mem_mgr->mgr.ubuf_alloc = ubuf_block_mem_alloc;
     block_mem_mgr->mgr.ubuf_control = ubuf_block_mem_control;
     block_mem_mgr->mgr.ubuf_free = ubuf_block_mem_free;

@@ -57,20 +57,6 @@ struct ubuf {
 
 UBASE_FROM_TO(ubuf, uchain, uchain, uchain)
 
-/** @This is a simple signature to make sure the ubuf_alloc internal API
- * is used properly. */
-enum ubuf_alloc_type {
-    /** block (int) */
-    UBUF_ALLOC_BLOCK,
-    /** picture (int, int) */
-    UBUF_ALLOC_PICTURE,
-    /** picture (int) */
-    UBUF_ALLOC_SOUND,
-
-    /** non-standard ubuf allocators can start from there */
-    UBUF_ALLOC_LOCAL = 0x8000
-};
-
 /** @This defines standard commands which ubuf managers may implement. */
 enum ubuf_command {
     /*
@@ -158,13 +144,12 @@ enum ubuf_mgr_command {
 struct ubuf_mgr {
     /** pointer to refcount management structure */
     struct urefcount *refcount;
-    /** type of allocator */
-    enum ubuf_alloc_type type;
+    /** signature of the API (block, pic, sound, other) */
+    uint32_t signature;
 
     /** function to allocate a new ubuf, with optional arguments depending
      * on the ubuf manager */
-    struct ubuf *(*ubuf_alloc)(struct ubuf_mgr *, enum ubuf_alloc_type,
-                               va_list);
+    struct ubuf *(*ubuf_alloc)(struct ubuf_mgr *, uint32_t signature, va_list);
     /** control function for standard or local commands */
     enum ubase_err (*ubuf_control)(struct ubuf *, enum ubuf_command, va_list);
     /** function to free a ubuf */
@@ -179,18 +164,18 @@ struct ubuf_mgr {
  * arguments can be passed at the end.
  *
  * @param mgr management structure for this ubuf type
- * @param alloc_type sentinel defining the type of buffer to allocate,
+ * @param signature sentinel defining the type of buffer to allocate,
  * followed by optional arguments to the ubuf manager
  * @return pointer to ubuf or NULL in case of failure
  */
 static inline struct ubuf *ubuf_alloc(struct ubuf_mgr *mgr,
-                                      enum ubuf_alloc_type alloc_type, ...)
+                                      uint32_t signature, ...)
 {
     assert(mgr != NULL);
     struct ubuf *ubuf;
     va_list args;
-    va_start(args, alloc_type);
-    ubuf = mgr->ubuf_alloc(mgr, alloc_type, args);
+    va_start(args, signature);
+    ubuf = mgr->ubuf_alloc(mgr, signature, args);
     va_end(args);
     return ubuf;
 }

@@ -33,6 +33,7 @@
 #include <upipe/upool.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
+#include <upipe/ubuf_sound.h>
 #include <upipe/ubuf_sound_common.h>
 #include <upipe/ubuf_sound_mem.h>
 #include <upipe/ubuf_mem_common.h>
@@ -78,6 +79,9 @@ struct ubuf_sound_mem_mgr {
 
     /** common sound management structure */
     struct ubuf_sound_common_mgr common_mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
 
 UBASE_FROM_TO(ubuf_sound_mem_mgr, ubuf_mgr, ubuf_mgr, common_mgr.mgr)
@@ -94,10 +98,11 @@ UBUF_MEM_MGR_HELPER_POOL(ubuf_sound_mem, ubuf_pool, shared_pool, shared)
  * @return pointer to ubuf or NULL in case of allocation error
  */
 static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
-                                         enum ubuf_alloc_type alloc_type,
-                                         va_list args)
+                                         uint32_t signature, va_list args)
 {
-    assert(alloc_type == UBUF_ALLOC_SOUND);
+    if (unlikely(signature != UBUF_ALLOC_SOUND))
+        return NULL;
+
     int size = va_arg(args, int);
 
     struct ubuf_sound_mem_mgr *sound_mgr =
@@ -373,8 +378,7 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
         return NULL;
 
     ubuf_sound_mem_mgr_init_pool(ubuf_sound_mem_mgr_to_ubuf_mgr(sound_mgr),
-            ubuf_pool_depth, shared_pool_depth,
-            (void *)sound_mgr + sizeof(struct ubuf_sound_mem_mgr),
+            ubuf_pool_depth, shared_pool_depth, sound_mgr->upool_extra,
             ubuf_sound_mem_alloc_inner, ubuf_sound_mem_free_inner);
 
     sound_mgr->umem_mgr = umem_mgr;
@@ -387,7 +391,7 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                    ubuf_sound_mem_mgr_free);
     sound_mgr->common_mgr.mgr.refcount = ubuf_sound_mem_mgr_to_urefcount(sound_mgr);
 
-    mgr->type = UBUF_ALLOC_SOUND;
+    mgr->signature = UBUF_ALLOC_SOUND;
     mgr->ubuf_alloc = ubuf_sound_mem_alloc;
     mgr->ubuf_control = ubuf_sound_mem_control;
     mgr->ubuf_free = ubuf_sound_mem_free;

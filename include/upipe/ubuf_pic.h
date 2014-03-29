@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,6 +39,10 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+
+/** @This is a simple signature to make sure the ubuf_alloc internal API
+ * is used properly. */
+#define UBUF_ALLOC_PICTURE UBASE_FOURCC('p','i','c','t')
 
 /** @This returns a new ubuf from a picture allocator.
  *
@@ -351,12 +355,15 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
         return NULL;
 
     uint8_t new_macropixel;
+    int extract_hoffset, extract_hskip;
+    int extract_voffset, extract_vskip;
+    int extract_hsize, extract_vsize;
+    const char *chroma = NULL;
     if (unlikely(!ubase_check(ubuf_pic_size(new_ubuf, NULL, NULL,
                                             &new_macropixel)) ||
                  new_macropixel != macropixel))
         goto ubuf_pic_copy_err;
 
-    int extract_hoffset, extract_hskip;
     if (hskip < 0) {
         extract_hoffset = -hskip;
         extract_hskip = 0;
@@ -364,11 +371,10 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
         extract_hoffset = 0;
         extract_hskip = hskip;
     }
-    int extract_hsize =
-        new_hsize - extract_hoffset <= ubuf_hsize - extract_hskip ?
-        new_hsize - extract_hoffset : ubuf_hsize - extract_hskip;
+    extract_hsize =
+        new_hsize - extract_hoffset <= (int)ubuf_hsize - extract_hskip ?
+        new_hsize - extract_hoffset : (int)ubuf_hsize - extract_hskip;
 
-    int extract_voffset, extract_vskip;
     if (vskip < 0) {
         extract_voffset = -vskip;
         extract_vskip = 0;
@@ -376,11 +382,10 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
         extract_voffset = 0;
         extract_vskip = vskip;
     }
-    int extract_vsize =
-        new_vsize - extract_voffset <= ubuf_vsize - extract_vskip ?
-        new_vsize - extract_voffset : ubuf_vsize - extract_vskip;
+    extract_vsize =
+        new_vsize - extract_voffset <= (int)ubuf_vsize - extract_vskip ?
+        new_vsize - extract_voffset : (int)ubuf_vsize - extract_vskip;
 
-    const char *chroma = NULL;
     while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
            chroma != NULL) {
         size_t stride;
