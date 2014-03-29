@@ -48,10 +48,10 @@ static inline enum ubase_err uref_attr_import(struct uref *uref,
                                               struct uref *uref_attr)
 {
     if (uref_attr->udict == NULL)
-        return true;
+        return UBASE_ERR_NONE;
     if (uref->udict == NULL) {
         uref->udict = udict_dup(uref_attr->udict);
-        return uref->udict != NULL;
+        return uref->udict != NULL ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
     }
     return udict_import(uref->udict, uref_attr->udict);
 }
