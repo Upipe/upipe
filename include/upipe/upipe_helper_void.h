@@ -75,7 +75,8 @@ static struct upipe *STRUCTURE##_alloc_void(struct upipe_mgr *mgr,          \
 {                                                                           \
     if (signature != UPIPE_VOID_SIGNATURE)                                  \
         return NULL;                                                        \
-    struct STRUCTURE *s = malloc(sizeof(struct STRUCTURE));                 \
+    struct STRUCTURE *s =                                                   \
+        (struct STRUCTURE *)malloc(sizeof(struct STRUCTURE));               \
     if (unlikely(s == NULL))                                                \
         return NULL;                                                        \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \

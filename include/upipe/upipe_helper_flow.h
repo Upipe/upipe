@@ -100,7 +100,8 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
                 return NULL;                                                \
         }                                                                   \
     }                                                                       \
-    struct STRUCTURE *s = malloc(sizeof(struct STRUCTURE));                 \
+    struct STRUCTURE *s =                                                   \
+        (struct STRUCTURE *)malloc(sizeof(struct STRUCTURE));               \
     if (unlikely(s == NULL)) {                                              \
         if (flow_def_p != NULL)                                             \
             uref_free(*flow_def_p);                                         \
