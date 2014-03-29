@@ -293,11 +293,11 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
 {
     struct upipe_mgr *mgr = upump_get_opaque(upump, struct upipe_mgr *);
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    struct uchain *uchain = uqueue_pop(&xfer_mgr->uqueue);
-    if (unlikely(uchain == NULL))
+    struct upipe_xfer_msg *msg = uqueue_pop(&xfer_mgr->uqueue,
+                                            struct upipe_xfer_msg *);
+    if (unlikely(msg == NULL))
         return;
 
-    struct upipe_xfer_msg *msg = upipe_xfer_msg_from_uchain(uchain);
     switch (msg->type) {
         case UPIPE_XFER_ATTACH_UPUMP_MGR:
             upipe_attach_upump_mgr(msg->upipe_remote);
@@ -344,8 +344,7 @@ static enum ubase_err upipe_xfer_mgr_send(struct upipe_mgr *mgr,
     msg->upipe_remote = upipe_remote;
     msg->arg = arg;
 
-    if (unlikely(!uqueue_push(&xfer_mgr->uqueue,
-                              upipe_xfer_msg_to_uchain(msg)))) {
+    if (unlikely(!uqueue_push(&xfer_mgr->uqueue, msg))) {
         upipe_xfer_msg_free(mgr, msg);
         return UBASE_ERR_EXTERNAL;
     }

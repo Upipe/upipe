@@ -140,7 +140,7 @@ static void *push_thread(void *_thread)
 
 static void pop(struct upump *upump)
 {
-    struct uchain *uchain = uqueue_pop(&uqueue);
+    struct uchain *uchain = uqueue_pop(&uqueue, struct uchain *);
     if (likely(uchain != NULL)) {
         struct elem *elem = container_of(uchain, struct elem, uchain);
         assert(elem->loop == loop[elem->thread]);

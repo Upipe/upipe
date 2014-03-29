@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -125,7 +125,7 @@ static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
  * @param element pointer to element to push
  * @return false if the queue is full and the element couldn't be queued
  */
-static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
+static inline bool uqueue_push(struct uqueue *uqueue, void *element)
 {
     if (unlikely(!ufifo_push(&uqueue->fifo, element))) {
         /* signal that we are full */
@@ -144,21 +144,21 @@ static inline bool uqueue_push(struct uqueue *uqueue, struct uchain *element)
     return true;
 }
 
-/** @This pops an element from the queue.
+/** @internal @This pops an element from the queue.
  *
  * @param uqueue pointer to a uqueue structure
  * @return pointer to element, or NULL if the LIFO is empty
  */
-static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
+static inline void *uqueue_pop_internal(struct uqueue *uqueue)
 {
-    struct uchain *uchain = ufifo_pop(&uqueue->fifo, struct uchain *);
-    if (unlikely(uchain == NULL)) {
+    void *element = ufifo_pop(&uqueue->fifo, void *);
+    if (unlikely(element == NULL)) {
         /* signal that we starve */
         ueventfd_read(&uqueue->event_pop);
 
         /* double-check */
-        uchain = ufifo_pop(&uqueue->fifo, struct uchain *);
-        if (likely(uchain == NULL))
+        element = ufifo_pop(&uqueue->fifo, void *);
+        if (likely(element == NULL))
             return NULL;
 
         /* signal that we're alright again */
@@ -167,8 +167,16 @@ static inline struct uchain *uqueue_pop(struct uqueue *uqueue)
 
     if (unlikely(uatomic_fetch_sub(&uqueue->counter, 1) == uqueue->length))
         ueventfd_write(&uqueue->event_push);
-    return uchain;
+    return element;
 }
+
+/** @This pops an element from the queue with type checking.
+ *
+ * @param uqueue pointer to a uqueue structure
+ * @param type type of the opaque pointer
+ * @return pointer to element, or NULL if the LIFO is empty
+ */
+#define uqueue_pop(uqueue, type) (type)uqueue_pop_internal(uqueue)
 
 /** @This returns the number of elements in the queue.
  *

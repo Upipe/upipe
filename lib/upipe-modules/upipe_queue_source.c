@@ -154,9 +154,9 @@ static void upipe_qsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
-    struct uchain *uchain = uqueue_pop(upipe_queue(upipe));
-    if (likely(uchain != NULL))
-        upipe_qsrc_input(upipe, uref_from_uchain(uchain), &upipe_qsrc->upump);
+    struct uref *uref = uqueue_pop(upipe_queue(upipe), struct uref *);
+    if (likely(uref != NULL))
+        upipe_qsrc_input(upipe, uref, &upipe_qsrc->upump);
 }
 
 /** @internal @This returns the maximum length of the queue.
@@ -274,9 +274,9 @@ static enum ubase_err upipe_qsrc_control(struct upipe *upipe,
 static void upipe_qsrc_free(struct upipe *upipe)
 {
     struct uqueue *uqueue = upipe_queue(upipe);
-    struct uchain *uchain;
-    while ((uchain = uqueue_pop(uqueue)) != NULL)
-        upipe_qsrc_input(upipe, uref_from_uchain(uchain), NULL);
+    struct uref *uref;
+    while ((uref = uqueue_pop(uqueue, struct uref *)) != NULL)
+        upipe_qsrc_input(upipe, uref, NULL);
 
     upipe_notice_va(upipe, "freeing queue %p", upipe);
     upipe_throw_dead(upipe);
