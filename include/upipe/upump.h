@@ -129,8 +129,7 @@ struct upump_mgr {
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upump_mgr_control)(struct upump_mgr *,
-                                        enum upump_mgr_command, va_list);
+    enum ubase_err (*upump_mgr_control)(struct upump_mgr *, int, va_list);
 };
 
 UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
@@ -322,7 +321,7 @@ static inline void upump_mgr_set_opaque(struct upump_mgr *upump_mgr,
  */
 static inline enum ubase_err
     upump_mgr_control_va(struct upump_mgr *mgr,
-                         enum upump_mgr_command command, va_list args)
+                         int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->upump_mgr_control == NULL)
@@ -342,7 +341,7 @@ static inline enum ubase_err
  */
 static inline enum ubase_err
     upump_mgr_control(struct upump_mgr *mgr,
-                      enum upump_mgr_command command, ...)
+                      int command, ...)
 {
     enum ubase_err err;
     va_list args;
