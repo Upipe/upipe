@@ -239,8 +239,7 @@ static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
  * @return an error code
  */
 static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
-                                           enum ubuf_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -400,8 +399,7 @@ static void ubuf_pic_mem_free_inner(struct upool *upool, void *_pic_mem)
  * @return an error code
  */
 static enum ubase_err ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
-                                               enum ubuf_mgr_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {

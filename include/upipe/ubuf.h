@@ -151,13 +151,12 @@ struct ubuf_mgr {
      * on the ubuf manager */
     struct ubuf *(*ubuf_alloc)(struct ubuf_mgr *, uint32_t signature, va_list);
     /** control function for standard or local commands */
-    enum ubase_err (*ubuf_control)(struct ubuf *, enum ubuf_command, va_list);
+    enum ubase_err (*ubuf_control)(struct ubuf *, int, va_list);
     /** function to free a ubuf */
     void (*ubuf_free)(struct ubuf *);
 
     /** manager control function for standard or local commands */
-    enum ubase_err (*ubuf_mgr_control)(struct ubuf_mgr *,
-                                       enum ubuf_mgr_command, va_list);
+    enum ubase_err (*ubuf_mgr_control)(struct ubuf_mgr *, int, va_list);
 };
 
 /** @internal @This returns a new ubuf. Optional ubuf manager
@@ -188,8 +187,7 @@ static inline struct ubuf *ubuf_alloc(struct ubuf_mgr *mgr,
  * @return an error code
  */
 static inline enum ubase_err ubuf_control_va(struct ubuf *ubuf,
-                                              enum ubuf_command command,
-                                              va_list args)
+                                              int command, va_list args)
 {
     assert(ubuf != NULL);
     if (ubuf->mgr->ubuf_control == NULL)
@@ -206,7 +204,7 @@ static inline enum ubase_err ubuf_control_va(struct ubuf *ubuf,
  * @return an error code
  */
 static inline enum ubase_err ubuf_control(struct ubuf *ubuf,
-                                          enum ubuf_command command, ...)
+                                          int command, ...)
 {
     enum ubase_err err;
     va_list args;
@@ -274,7 +272,7 @@ static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
  */
 static inline enum ubase_err
     ubuf_mgr_control_va(struct ubuf_mgr *mgr,
-                        enum ubuf_mgr_command command, va_list args)
+                        int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->ubuf_mgr_control == NULL)
@@ -292,7 +290,7 @@ static inline enum ubase_err
  * @return an error code
  */
 static inline enum ubase_err
-    ubuf_mgr_control(struct ubuf_mgr *mgr, enum ubuf_mgr_command command, ...)
+    ubuf_mgr_control(struct ubuf_mgr *mgr, int command, ...)
 {
     enum ubase_err err;
     va_list args;
