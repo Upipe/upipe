@@ -65,8 +65,8 @@
 static unsigned int nb_packets = 0;
 static uint64_t pts = 0x112121212;
 static uint64_t dts = 0x112121212 - 1080000;
-static enum int dataalignment = UBASE_ERR_NONE;
-static enum int end = UBASE_ERR_NONE;
+static int dataalignment = UBASE_ERR_NONE;
+static int end = UBASE_ERR_NONE;
 static size_t payload_size = 12;
 static bool expect_lost = false;
 static bool expect_acquired = true;
