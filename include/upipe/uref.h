@@ -144,8 +144,7 @@ struct uref_mgr {
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*uref_mgr_control)(struct uref_mgr *,
-                                       enum uref_mgr_command, va_list);
+    enum ubase_err (*uref_mgr_control)(struct uref_mgr *, int, va_list);
 };
 
 /** @This frees a uref and other sub-structures.
@@ -324,7 +323,7 @@ static inline void uref_mgr_release(struct uref_mgr *mgr)
  */
 static inline enum ubase_err
     uref_mgr_control_va(struct uref_mgr *mgr,
-                         enum uref_mgr_command command, va_list args)
+                         int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->uref_mgr_control == NULL)
@@ -343,7 +342,7 @@ static inline enum ubase_err
  */
 static inline enum ubase_err
     uref_mgr_control(struct uref_mgr *mgr,
-                      enum uref_mgr_command command, ...)
+                      int command, ...)
 {
     enum ubase_err err;
     va_list args;
