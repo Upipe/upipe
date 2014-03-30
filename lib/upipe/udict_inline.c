@@ -501,8 +501,7 @@ static enum ubase_err udict_inline_name(enum udict_type type,
  * @return an error code
  */
 static enum ubase_err udict_inline_control(struct udict *udict,
-                                           enum udict_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UDICT_DUP: {
@@ -606,8 +605,7 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
  * @return an error code
  */
 static enum ubase_err udict_inline_mgr_control(struct udict_mgr *mgr,
-                                               enum udict_mgr_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         case UDICT_MGR_VACUUM:

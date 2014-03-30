@@ -180,15 +180,13 @@ struct udict_mgr {
     /** function to allocate a udict with a given initial size */
     struct udict *(*udict_alloc)(struct udict_mgr *, size_t);
     /** control function for standard or local commands */
-    enum ubase_err (*udict_control)(struct udict *,
-                                    enum udict_command, va_list);
+    enum ubase_err (*udict_control)(struct udict *, int, va_list);
     /** function to free a udict */
     void (*udict_free)(struct udict *);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*udict_mgr_control)(struct udict_mgr *,
-                                        enum udict_mgr_command, va_list);
+    enum ubase_err (*udict_mgr_control)(struct udict_mgr *, int, va_list);
 };
 
 /** @This allocates and initializes a new udict.
@@ -211,7 +209,7 @@ static inline struct udict *udict_alloc(struct udict_mgr *mgr, size_t size)
  */
 static inline enum ubase_err
     udict_control_va(struct udict *udict,
-                     enum udict_mgr_command command, va_list args)
+                     int command, va_list args)
 {
     assert(udict != NULL);
     if (udict->mgr->udict_mgr_control == NULL)
@@ -228,7 +226,7 @@ static inline enum ubase_err
  * @return an error code
  */
 static inline enum ubase_err udict_control(struct udict *udict,
-                                           enum udict_command command, ...)
+                                           int command, ...)
 {
     enum ubase_err err;
     va_list args;
@@ -940,7 +938,7 @@ static inline void udict_mgr_release(struct udict_mgr *mgr)
  */
 static inline enum ubase_err
     udict_mgr_control_va(struct udict_mgr *mgr,
-                         enum udict_mgr_command command, va_list args)
+                         int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->udict_mgr_control == NULL)
@@ -959,7 +957,7 @@ static inline enum ubase_err
  */
 static inline enum ubase_err
     udict_mgr_control(struct udict_mgr *mgr,
-                      enum udict_mgr_command command, ...)
+                      int command, ...)
 {
     enum ubase_err err;
     va_list args;
