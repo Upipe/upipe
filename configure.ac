@@ -63,11 +63,6 @@ AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBO
 
 AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
 
-# BlackMagic Design API is in C++
-AC_LANG_PUSH([C++])
-AC_CHECK_HEADERS([DeckLinkAPI.h], AM_CONDITIONAL(HAVE_BLACKMAGIC, true), AM_CONDITIONAL(HAVE_BLACKMAGIC, false))
-AC_LANG_POP([C++])
-
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])

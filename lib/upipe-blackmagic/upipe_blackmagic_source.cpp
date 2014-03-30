@@ -4,9 +4,6 @@
  * Authors: Benjamin Cohen
  *          Christophe Massiot
  *
- * Heavily based on code by Steinar H. Gunderson <steinar+vlc@gunderson.no>
- * for the VideoLAN project.
- *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -56,6 +53,8 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-blackmagic/upipe_blackmagic_source.h>
+#include <upipe-blackmagic/ubuf_pic_blackmagic.h>
+#include <upipe-blackmagic/ubuf_sound_blackmagic.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -77,7 +76,7 @@
 /** lowest possible prog PTS (just an arbitrarily high time) */
 #define BMD_CLOCK_MIN UINT32_MAX
 /** fixed sample rate FIXME */
-#define BMD_SAMPLE_RATE 48000
+#define BMD_SAMPLERATE 48000
 
 /** @internal @This is the class that retrieves frames in a private thread. */
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
@@ -146,7 +145,6 @@ struct upipe_bmd_src_output {
 };
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src_output, upipe, UPIPE_BMD_SRC_OUTPUT_SIGNATURE)
-UPIPE_HELPER_VOID(upipe_bmd_src_output)
 UPIPE_HELPER_OUTPUT(upipe_bmd_src_output, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_bmd_src_output, ubuf_mgr, flow_def)
 
@@ -166,7 +164,7 @@ struct upipe_bmd_src {
     struct uclock *uclock;
 
     /** subpipe manager */
-    struct upipe_mgr *sub_mgr;
+    struct upipe_mgr sub_mgr;
     /** pic subpipe */
     struct upipe_bmd_src_output pic_subpipe;
     /** sound subpipe */
@@ -225,7 +223,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
     upipe_bmd_src->deckLinkInput->StartStreams();
 
     struct uref *flow_def_video =
-        uref_dup(upipe_bmd_src->pic_subpipe->flow_def);
+        uref_dup(upipe_bmd_src->pic_subpipe.flow_def);
 
     uref_pic_flow_set_hsize(flow_def_video, mode->GetWidth());
     uref_pic_flow_set_vsize(flow_def_video, mode->GetHeight());
@@ -265,22 +263,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             break;
     }
 
-    if (unlikely(!upipe_bmd_src_output->flow_def)) {
-        struct uref *flow;
-        uint8_t macropixel;
-        struct urational fps = {25, 1}; /* FIXME */
-        uref_pic_size(uref, &hsize, &vsize, &macropixel);
-        flow = uref_pic_flow_alloc_def(upipe_bmd_src_output->uref_mgr,
-                                       macropixel);
-        uref_pic_flow_add_plane(flow, 1, 1, 4, CHROMA);
-        uref_pic_flow_set_hsize(flow, hsize);
-        uref_pic_flow_set_vsize(flow, vsize);
-        uref_pic_flow_set_fps(flow, fps);
-        upipe_bmd_src_output_store_flow_def(upipe, flow);
-    }
-
-    if (!uqueue_push(upipe_bmd_src->uqueue, flow_def_video))
+    if (unlikely(!uqueue_push(&upipe_bmd_src->uqueue, flow_def_video)))
         uref_free(flow_def_video);
+    return S_OK;
 }
 
 /** @internal @This is called when receiving a video or audio frame.
@@ -308,7 +293,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             uref_attr_set_priv(uref, UPIPE_BMD_SRC_PIC);
 
             if (cr_sys != UINT64_MAX)
-                uref_clock_set_cr_sys(uref, pts_sys);
+                uref_clock_set_cr_sys(uref, cr_sys);
             BMDTimeValue FrameTime, FrameDuration;
             VideoFrame->GetStreamTime(&FrameTime, &FrameDuration, UCLOCK_FREQ);
             uref_clock_set_pts_orig(uref, FrameTime);
@@ -321,7 +306,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             else if (upipe_bmd_src->tff)
                 uref_pic_set_tff(uref);
 
-            if (!uqueue_push(upipe_bmd_src->uqueue, uref))
+            if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
         }
     }
@@ -329,23 +314,23 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
     if (AudioPacket) {
         struct ubuf *ubuf =
             ubuf_sound_bmd_alloc(upipe_bmd_src->sound_subpipe.ubuf_mgr,
-                                 AudioFrame);
+                                 AudioPacket);
         if (likely(ubuf != NULL)) {
             struct uref *uref = uref_alloc(upipe_bmd_src->uref_mgr);
             uref_attach_ubuf(uref, ubuf);
             uref_attr_set_priv(uref, UPIPE_BMD_SRC_SOUND);
 
             if (cr_sys != UINT64_MAX)
-                uref_clock_set_cr_sys(uref, pts_sys);
+                uref_clock_set_cr_sys(uref, cr_sys);
             BMDTimeValue PacketTime;
-            AudioFrame->GetPacketTime(&PacketTime, UCLOCK_FREQ);
+            AudioPacket->GetPacketTime(&PacketTime, UCLOCK_FREQ);
             uref_clock_set_pts_orig(uref, PacketTime);
             uref_clock_set_pts_prog(uref, PacketTime + BMD_CLOCK_MIN);
             uref_clock_set_dts_pts_delay(uref, 0);
-            uref_clock_set_duration(uref, AudioFrame->GetSampleCount() *
+            uref_clock_set_duration(uref, AudioPacket->GetSampleFrameCount() *
                                           UCLOCK_FREQ / BMD_SAMPLERATE);
 
-            if (!uqueue_push(upipe_bmd_src->uqueue, uref))
+            if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
         }
     }
@@ -365,14 +350,10 @@ static void upipe_bmd_src_output_init(struct upipe *upipe,
     upipe_init(upipe, sub_mgr, uprobe);
     upipe->refcount = &upipe_bmd_src->urefcount;
 
-    struct upipe_bmd_src_output *upipe_bmd_src_output =
-           upipe_bmd_src_output_from_upipe(upipe);
-
     upipe_bmd_src_output_init_ubuf_mgr(upipe);
     upipe_bmd_src_output_init_output(upipe);
 
     upipe_throw_ready(upipe);
-    return upipe;
 }
 
 /** @internal @This processes control commands on a blackmagic output pipe.
@@ -382,9 +363,8 @@ static void upipe_bmd_src_output_init(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_bmd_src_output_control(struct upipe *upipe,
-                                                   enum upipe_command command,
-                                                   va_list args)
+static int upipe_bmd_src_output_control(struct upipe *upipe,
+                                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR: {
@@ -421,11 +401,6 @@ static enum ubase_err upipe_bmd_src_output_control(struct upipe *upipe,
  */
 static void upipe_bmd_src_output_clean(struct upipe *upipe)
 {
-    struct upipe_bmd_src *upipe_bmd_src =
-           upipe_bmd_src_from_sub_mgr(upipe->mgr);
-    struct upipe_bmd_src_output *upipe_bmd_src_output =
-           upipe_bmd_src_output_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
     upipe_bmd_src_output_clean_output(upipe);
@@ -468,28 +443,37 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     struct uprobe *uprobe_sound = va_arg(args, struct uprobe *);
     struct uprobe *uprobe_subpic = va_arg(args, struct uprobe *);
 
-    struct upipe_bmd_src *upipe_bmd_src = malloc(sizeof(struct upipe_bmd_src) +
-                                            uqueue_sizeof(MAX_QUEUE_LENGTH));
-    if (unlikely(upipe == NULL))
+    struct upipe_bmd_src *upipe_bmd_src =
+        (struct upipe_bmd_src *)malloc(sizeof(struct upipe_bmd_src) +
+                                       uqueue_sizeof(MAX_QUEUE_LENGTH));
+    if (unlikely(upipe_bmd_src == NULL)) {
+        uprobe_release(uprobe_pic);
+        uprobe_release(uprobe_sound);
+        uprobe_release(uprobe_subpic);
         return NULL;
+    }
 
     struct upipe *upipe = upipe_bmd_src_to_upipe(upipe_bmd_src);
     upipe_init(upipe, mgr, uprobe);
-    upipe_bmd_src_output_init(upipe_bmd_src_to_pic_subpipe(upipe_bmd_src),
+    upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
+                                upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_pic);
-    upipe_bmd_src_output_init(upipe_bmd_src_to_sound_subpipe(upipe_bmd_src),
+    upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
+                                upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_sound);
-    upipe_bmd_src_output_init(upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src),
+    upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
+                                upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_subpic);
 
     upipe_bmd_src_init_urefcount(upipe);
     upipe_bmd_src_init_uref_mgr(upipe);
     upipe_bmd_src_init_uclock(upipe);
     upipe_bmd_src_init_upump_mgr(upipe);
-    upipe_bmd_src_init_upump_init(upipe);
+    upipe_bmd_src_init_upump(upipe);
+    upipe_bmd_src_init_sub_mgr(upipe);
 
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
-                (void *)upipe_bmd_src + sizeof(struct upipe_bmd_src));
+                upipe_bmd_src->uqueue_extra);
     upipe_bmd_src->deckLink = NULL;
     upipe_bmd_src->deckLinkInput = NULL;
     upipe_bmd_src->deckLinkCaptureDelegate = NULL;
@@ -507,15 +491,15 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
  */
 void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
 {
-    struct upipe_bmd_src_output *upipe_bmd_src_output =
-           upipe_bmd_src_output_from_upipe(upipe);
+    struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     struct uref *uref;
 
     /* unqueue urefs */
-    while ((uref = uqueue_pop(&upipe_bmd_src_output->uqueue, struct uref *))) {
+    while ((uref = uqueue_pop(&upipe_bmd_src->uqueue, struct uref *))) {
         uint64_t type;
         struct upipe *subpipe;
         if (unlikely(!ubase_check(uref_attr_get_priv(uref, &type)))) {
+            upipe_throw_error(upipe, UBASE_ERR_UNKNOWN);
             uref_free(uref);
             continue;
         }
@@ -524,35 +508,35 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         switch (type) {
             case UPIPE_BMD_SRC_PIC:
                 subpipe = upipe_bmd_src_output_to_upipe(
-                        upipe_bmd_src_to_pic_sub(upipe));
+                        upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
                 break;
             case UPIPE_BMD_SRC_SOUND:
                 subpipe = upipe_bmd_src_output_to_upipe(
-                        upipe_bmd_src_to_sound_sub(upipe));
+                        upipe_bmd_src_to_sound_subpipe(upipe_bmd_src));
                 break;
             case UPIPE_BMD_SRC_SUBPIC:
                 subpipe = upipe_bmd_src_output_to_upipe(
-                        upipe_bmd_src_to_subpic_sub(upipe));
+                        upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src));
                 break;
             default:
-                upipe_throw_error(upipe, UBASE_ERR_INTERNAL);
+                upipe_throw_error(upipe, UBASE_ERR_UNKNOWN);
                 uref_free(uref);
                 continue;
         }
 
         const char *def;
         if (unlikely(uref_flow_get_def(uref, &def))) {
-            upipe_bdm_src_output_store_flow_def(subpipe, uref);
+            upipe_bmd_src_output_store_flow_def(subpipe, uref);
             continue;
         }
 
         if (type == UPIPE_BMD_SRC_PIC) {
             uint64_t cr_sys;
-            if (likely(uref_clock_get_cr_sys(uref)))
+            if (likely(ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
                 upipe_throw_clock_ref(subpipe, uref, cr_sys, 0);
         }
         upipe_throw_clock_ts(subpipe, uref);
-        upipe_bmd_src_output_output(subpipe, uref, upump);
+        upipe_bmd_src_output_output(subpipe, uref, &upipe_bmd_src->upump);
     }
 }
 
@@ -573,8 +557,7 @@ static void upipe_bmd_src_worker(struct upump *upump)
  * @param uri_p filled in with the currently opened device
  * @return an error code
  */
-static enum ubase_err upipe_bmd_src_get_uri(struct upipe *upipe,
-                                            const char **uri_p)
+static int upipe_bmd_src_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -588,8 +571,7 @@ static enum ubase_err upipe_bmd_src_get_uri(struct upipe *upipe,
  * @param uri URI
  * @return an error code
  */
-static enum ubase_err upipe_bmd_src_set_uri(struct upipe *upipe,
-                                            const char *uri)
+static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
 
@@ -618,8 +600,8 @@ static enum ubase_err upipe_bmd_src_set_uri(struct upipe *upipe,
     }
 
     /* get decklink input handler */
-    HRESULT result = S_ERR;
-    for (int i = 0; i <= upipe_bmd_src->card_idx, i++) {
+    HRESULT result = E_NOINTERFACE;
+    for (int i = 0; i <= upipe_bmd_src->card_idx; i++) {
         if (deckLink)
             deckLink->Release();
         result = deckLinkIterator->Next(&deckLink);
@@ -687,23 +669,24 @@ static enum ubase_err upipe_bmd_src_set_uri(struct upipe *upipe,
 
     /* flow definitions */
     struct uref *flow_def =
-        uref_pic_flow_alloc_def(upipe_bmd_src_output->uref_mgr, 1);
+        uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
     uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
     upipe_bmd_src_output_store_flow_def(
-            upipe_bmd_src_output_to_upipe(upipe_bmd_src_to_pic_subpipe(upipe)),
+            upipe_bmd_src_output_to_upipe(
+                upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
             flow_def);
-    flow_def = uref_sound_flow_alloc_def(upipe_bmd_src_output->uref_mgr, "s16.",
-                                         2, 2);
+    flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.", 2, 2);
     uref_sound_flow_add_plane(flow_def, "lr");
     upipe_bmd_src_output_store_flow_def(
-            upipe_bmd_src_output_to_upipe(&upipe_bmd_src_to_sound_subpipe(upipe)),
+            upipe_bmd_src_output_to_upipe(
+                upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)),
             flow_def);
     /* TODO subpic */
 
     upipe_bmd_src->deckLink = deckLink;
     upipe_bmd_src->deckLinkInput = deckLinkInput;
     /* callback helper */
-    upipe_bmd_src->deckLinkCaptureDelegate = new DeckLinkCaptureDelegate();
+    upipe_bmd_src->deckLinkCaptureDelegate = new DeckLinkCaptureDelegate(upipe);
     deckLinkInput->SetCallback(upipe_bmd_src->deckLinkCaptureDelegate);
 
     if (deckLinkInput->StartStreams() != S_OK) {
@@ -721,16 +704,15 @@ static enum ubase_err upipe_bmd_src_set_uri(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_bmd_src_control(struct upipe *upipe,
-                                             enum upipe_command command,
-                                             va_list args)
+static int _upipe_bmd_src_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR: {
-            return upipe_bmd_src_output_attach_uref_mgr(upipe);
+            return upipe_bmd_src_attach_uref_mgr(upipe);
         }
         case UPIPE_ATTACH_UCLOCK: {
-            return upipe_bmd_src_output_attach_uclock(upipe);
+            return upipe_bmd_src_attach_uclock(upipe);
         }
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_bmd_src_set_upump(upipe, NULL);
@@ -748,17 +730,26 @@ static enum ubase_err _upipe_bmd_src_control(struct upipe *upipe,
         case UPIPE_BMD_SRC_GET_PIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SRC_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);
-            return upipe_bmd_src_to_pic_subpipe(upipe_bmd_src_from_upipe(upipe));
+            *upipe_p = upipe_bmd_src_output_to_upipe(
+                    upipe_bmd_src_to_pic_subpipe(
+                        upipe_bmd_src_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
         }
         case UPIPE_BMD_SRC_GET_SOUND_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SRC_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);
-            return upipe_bmd_src_to_sound_subpipe(upipe_bmd_src_from_upipe(upipe));
+            *upipe_p = upipe_bmd_src_output_to_upipe(
+                    upipe_bmd_src_to_sound_subpipe(
+                        upipe_bmd_src_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
         }
         case UPIPE_BMD_SRC_GET_SUBPIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SRC_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);
-            return upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src_from_upipe(upipe));
+            *upipe_p = upipe_bmd_src_output_to_upipe(
+                    upipe_bmd_src_to_subpic_subpipe(
+                        upipe_bmd_src_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -773,9 +764,7 @@ static enum ubase_err _upipe_bmd_src_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_bmd_src_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+static int upipe_bmd_src_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_bmd_src_control(upipe, command, args));
     upipe_bmd_src_check_upump_mgr(upipe);
@@ -784,7 +773,7 @@ static enum ubase_err upipe_bmd_src_control(struct upipe *upipe,
     if (upipe_bmd_src->upump_mgr != NULL && upipe_bmd_src->uri != NULL &&
         upipe_bmd_src->upump == NULL) {
         struct upump *upump =
-            uqueue_upump_alloc_pop(upipe_queue(upipe),
+            uqueue_upump_alloc_pop(&upipe_bmd_src->uqueue,
                                    upipe_bmd_src->upump_mgr,
                                    upipe_bmd_src_worker, upipe);
         if (unlikely(upump == NULL)) {
@@ -815,33 +804,36 @@ static void upipe_bmd_src_free(struct upipe *upipe)
         upipe_bmd_src->deckLinkCaptureDelegate->Release();
     uqueue_clean(&upipe_bmd_src->uqueue);
 
-    upipe_bmd_src_output_clean(upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
-    upipe_bmd_src_output_clean(upipe_bmd_src_to_sound_subpipe(upipe_bmd_src));
-    upipe_bmd_src_output_clean(upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src));
+    upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
+                upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)));
+    upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
+                upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)));
+    upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
+                upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src)));
 
     upipe_throw_dead(upipe);
 
     upipe_bmd_src_clean_uref_mgr(upipe);
     upipe_bmd_src_clean_upump(upipe);
     upipe_bmd_src_clean_upump_mgr(upipe);
-
-    urefcount_clean(urefcount_real);
     upipe_bmd_src_clean_urefcount(upipe);
 
     free(upipe_bmd_src);
 }
 
+extern "C" {
 /** module manager static descriptor */
 static struct upipe_mgr upipe_bmd_src_mgr = {
-    .refcount = NULL,
-    .signature = UPIPE_BMD_SRC_SIGNATURE,
+    /* .refcount = */ NULL,
+    /* .signature = */ UPIPE_BMD_SRC_SIGNATURE,
 
-    .upipe_alloc = upipe_bmd_src_alloc,
-    .upipe_input = NULL,
-    .upipe_control = upipe_bmd_src_control,
+    /* .upipe_alloc = */ upipe_bmd_src_alloc,
+    /* .upipe_input = */ NULL,
+    /* .upipe_control = */ upipe_bmd_src_control,
 
-    .upipe_mgr_control = NULL
+    /* .upipe_mgr_control = */ NULL
 };
+}
 
 /** @This returns the management structure for all bmd source pipes.
  *
