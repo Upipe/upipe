@@ -483,8 +483,7 @@ static inline void upipe_clean(struct upipe *upipe)
  * @return an error code
  */
 static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
-                                            enum uprobe_event event,
-                                            va_list args)
+                                            int event, va_list args)
 {
     return uprobe_throw_va(upipe->uprobe, upipe, event, args);
 }
@@ -496,7 +495,7 @@ static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_throw(struct upipe *upipe,
-                                         enum uprobe_event event, ...)
+                                         int event, ...)
 {
     va_list args;
     va_start(args, event);
@@ -877,8 +876,7 @@ static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
  */
 static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
                                                struct upipe *inner,
-                                               enum uprobe_event event,
-                                               va_list args)
+                                               int event, va_list args)
 {
     if (event != UPROBE_READY && event != UPROBE_DEAD)
         return upipe_throw_va(upipe, event, args);

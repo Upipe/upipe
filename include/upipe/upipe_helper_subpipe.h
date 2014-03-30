@@ -135,7 +135,7 @@ extern "C" {
  *
  * @item @code
  *  void upipe_foo_throw_sub_outputs(struct upipe *upipe,
- *                                   enum uprobe_event event, ...)
+ *                                   int event, ...)
  * @end code
  * Throws the given event from all subpipes.                              
  *
@@ -304,7 +304,7 @@ static enum ubase_err STRUCTURE##_iterate_sub(struct upipe *upipe,          \
  * @param event event to throw, followed by arguments                       \
  */                                                                         \
 static void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,             \
-                                           enum uprobe_event event, ...)    \
+                                           int event, ...)                  \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain;                                                  \

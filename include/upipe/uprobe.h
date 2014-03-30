@@ -118,7 +118,7 @@ enum uprobe_log_level {
 
 /** @This is the call-back type for uprobe events. */
 typedef enum ubase_err (*uprobe_throw_func)(struct uprobe *, struct upipe *,
-                                            enum uprobe_event, va_list);
+                                            int, va_list);
 
 /** @This is a structure passed to a module upon initializing a new pipe. */
 struct uprobe {
@@ -221,8 +221,7 @@ static inline void uprobe_clean(struct uprobe *uprobe)
  */
 static inline enum ubase_err uprobe_throw_va(struct uprobe *uprobe,
                                              struct upipe *upipe,
-                                             enum uprobe_event event,
-                                             va_list args)
+                                             int event, va_list args)
 {
     if (unlikely(uprobe == NULL))
         return UBASE_ERR_UNHANDLED;
@@ -238,7 +237,7 @@ static inline enum ubase_err uprobe_throw_va(struct uprobe *uprobe,
  */
 static inline enum ubase_err uprobe_throw(struct uprobe *uprobe,
                                           struct upipe *upipe,
-                                          enum uprobe_event event, ...)
+                                          int event, ...)
 {
     va_list args;
     va_start(args, event);
@@ -257,8 +256,7 @@ static inline enum ubase_err uprobe_throw(struct uprobe *uprobe,
  */
 static inline enum ubase_err uprobe_throw_next(struct uprobe *uprobe,
                                                struct upipe *upipe,
-                                               enum uprobe_event event,
-                                               va_list args)
+                                               int event, va_list args)
 {
     return uprobe_throw_va(uprobe->next, upipe, event, args);
 }
@@ -439,7 +437,7 @@ static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param def_p filled in with the flow definition
  * @return false if the event cannot be handled by a plumber
  */
-static inline bool uprobe_plumber(enum uprobe_event event, va_list args,
+static inline bool uprobe_plumber(int event, va_list args,
                                   struct uref **flow_def_p, const char **def_p)
 {
     if (event != UPROBE_NEW_FLOW_DEF)

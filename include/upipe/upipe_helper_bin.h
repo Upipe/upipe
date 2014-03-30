@@ -59,7 +59,7 @@ extern "C" {
  * @item @code
  *  enum ubase_err upipe_foo_probe_bin(struct uprobe *uprobe,
  *                                     struct upipe *inner,
- *                                     enum uprobe_event event, va_list args)
+ *                                     int event, va_list args)
  * @end @code
  * Probe to set on the last inner pipe. It attaches all events (proxy) to the
  * bin pipe. The @tt {struct uprobe} member is set to point to this probe during
@@ -108,8 +108,7 @@ extern "C" {
  */                                                                         \
 static enum ubase_err STRUCTURE##_probe_bin(struct uprobe *uprobe,          \
                                             struct upipe *inner,            \
-                                            enum uprobe_event event,        \
-                                            va_list args)                   \
+                                            int event, va_list args)        \
 {                                                                           \
     struct STRUCTURE *s = container_of(uprobe, struct STRUCTURE,            \
                                        LAST_INNER_PROBE);                   \

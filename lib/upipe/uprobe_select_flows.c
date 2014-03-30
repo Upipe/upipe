@@ -272,8 +272,7 @@ static enum ubase_err uprobe_selflow_check_auto(struct uprobe *uprobe)
  */
 static enum ubase_err uprobe_selflow_sub_throw(struct uprobe *uprobe,
                                                struct upipe *subpipe,
-                                               enum uprobe_event event,
-                                               va_list args)
+                                               int event, va_list args)
 {
     if (event != UPROBE_SOURCE_END)
         return uprobe_throw_next(uprobe, subpipe, event, args);
@@ -346,8 +345,7 @@ static struct uprobe *uprobe_selflow_sub_alloc(struct uprobe *next,
  */
 static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
                                            struct upipe *upipe,
-                                           enum uprobe_event event,
-                                           va_list args)
+                                           int event, va_list args)
 {
     if (event != UPROBE_SPLIT_UPDATE)
         return uprobe_throw_next(uprobe, upipe, event, args);

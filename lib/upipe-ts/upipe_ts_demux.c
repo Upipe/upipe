@@ -544,8 +544,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe);
  */
 static enum ubase_err upipe_ts_demux_output_clock_ref(struct upipe *upipe,
                                                       struct upipe *inner,
-                                                      enum uprobe_event event,
-                                                      va_list args)
+                                                      int event, va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -573,8 +572,7 @@ static enum ubase_err upipe_ts_demux_output_clock_ref(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_output_clock_ts(struct upipe *upipe,
                                                      struct upipe *inner,
-                                                     enum uprobe_event event,
-                                                     va_list args)
+                                                     int event, va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -612,8 +610,7 @@ static enum ubase_err upipe_ts_demux_output_clock_ts(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_output_plumber(struct upipe *upipe,
                                                     struct upipe *inner,
-                                                    enum uprobe_event event,
-                                                    va_list args)
+                                                    int event, va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
@@ -757,8 +754,7 @@ static enum ubase_err upipe_ts_demux_output_plumber(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_output_probe(struct uprobe *uprobe,
                                                   struct upipe *inner,
-                                                  enum uprobe_event event,
-                                                  va_list args)
+                                                  int event, va_list args)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         container_of(uprobe, struct upipe_ts_demux_output, probe);
@@ -982,8 +978,7 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
  */
 static enum ubase_err upipe_ts_demux_program_plumber(struct uprobe *uprobe,
                                                      struct upipe *inner,
-                                                     enum uprobe_event event,
-                                                     va_list args)
+                                                     int event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, plumber);
@@ -1024,8 +1019,7 @@ static enum ubase_err upipe_ts_demux_program_plumber(struct uprobe *uprobe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_program_pmtd_new_flow_def(
-        struct upipe *upipe, struct upipe *pmtd, enum uprobe_event event,
-        va_list args)
+        struct upipe *upipe, struct upipe *pmtd, int event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
@@ -1057,7 +1051,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_new_flow_def(
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
-        struct upipe *pmtd, enum uprobe_event event, va_list args)
+        struct upipe *pmtd, int event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
@@ -1105,8 +1099,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
                                                         struct upipe *pmtd,
-                                                        enum uprobe_event event,
-                                                        va_list args)
+                                                        int event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, pmtd_probe);
@@ -1141,8 +1134,7 @@ static enum ubase_err upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_demux_program_pcr_probe(struct uprobe *uprobe,
                                                        struct upipe *inner,
-                                                       enum uprobe_event event,
-                                                       va_list args)
+                                                       int event, va_list args)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         container_of(uprobe, struct upipe_ts_demux_program, pcr_probe);
@@ -1511,8 +1503,7 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
  */
 static enum ubase_err upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
                                                      struct upipe *inner,
-                                                     enum uprobe_event event,
-                                                     va_list args)
+                                                     int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, psi_pid_plumber);
@@ -1564,8 +1555,7 @@ static enum ubase_err upipe_ts_demux_psi_pid_plumber(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_demux_psim_probe(struct uprobe *uprobe,
                                                 struct upipe *psim,
-                                                enum uprobe_event event,
-                                                va_list args)
+                                                int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, psim_probe);
@@ -1631,8 +1621,7 @@ static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
  */
 static enum ubase_err upipe_ts_demux_patd_new_rap(struct upipe *upipe,
                                                   struct upipe *patd,
-                                                  enum uprobe_event event,
-                                                  va_list args)
+                                                  int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
@@ -1654,8 +1643,7 @@ static enum ubase_err upipe_ts_demux_patd_new_rap(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
                                                  struct upipe *patd,
-                                                 enum uprobe_event event,
-                                                 va_list args)
+                                                 int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
 
@@ -1705,8 +1693,7 @@ static enum ubase_err upipe_ts_demux_patd_update(struct upipe *upipe,
  */
 static enum ubase_err upipe_ts_demux_patd_probe(struct uprobe *uprobe,
                                                 struct upipe *patd,
-                                                enum uprobe_event event,
-                                                va_list args)
+                                                int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, patd_probe);
@@ -1732,8 +1719,7 @@ static enum ubase_err upipe_ts_demux_patd_probe(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_demux_input_probe(struct uprobe *uprobe,
                                                  struct upipe *inner,
-                                                 enum uprobe_event event,
-                                                 va_list args)
+                                                 int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, input_probe);
@@ -1759,8 +1745,7 @@ static enum ubase_err upipe_ts_demux_input_probe(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_demux_split_probe(struct uprobe *uprobe,
                                                  struct upipe *inner,
-                                                 enum uprobe_event event,
-                                                 va_list args)
+                                                 int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, split_probe);
@@ -1784,8 +1769,7 @@ static enum ubase_err upipe_ts_demux_split_probe(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_demux_proxy_probe(struct uprobe *uprobe,
                                                  struct upipe *inner,
-                                                 enum uprobe_event event,
-                                                 va_list args)
+                                                 int event, va_list args)
 {
     struct upipe_ts_demux *upipe_ts_demux =
         container_of(uprobe, struct upipe_ts_demux, proxy_probe);

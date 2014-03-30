@@ -124,7 +124,7 @@ static struct upipe_mgr skip_test_mgr = {
 
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:

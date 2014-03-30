@@ -50,8 +50,7 @@
  */
 static enum ubase_err uprobe_ubuf_mem_throw(struct uprobe *uprobe,
                                             struct upipe *upipe,
-                                            enum uprobe_event event,
-                                            va_list args)
+                                            int event, va_list args)
 {
     struct uprobe_ubuf_mem *uprobe_ubuf_mem =
         uprobe_ubuf_mem_from_uprobe(uprobe);

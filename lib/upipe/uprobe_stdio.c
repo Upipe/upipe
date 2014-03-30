@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -48,7 +48,7 @@
  */
 static enum ubase_err uprobe_stdio_throw(struct uprobe *uprobe,
                                          struct upipe *upipe,
-                                         enum uprobe_event event, va_list args)
+                                         int event, va_list args)
 {
     struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
     if (event != UPROBE_LOG)

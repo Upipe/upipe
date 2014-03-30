@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -70,7 +70,7 @@ static uint64_t systime = UINT32_MAX;
 
 /** definition of our uprobe */
 static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            enum uprobe_event event, va_list args)
+                            int event, va_list args)
 {
     switch (event) {
         default:

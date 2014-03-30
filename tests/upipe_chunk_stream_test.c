@@ -70,7 +70,7 @@ unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
 static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            enum uprobe_event event, va_list args)
+                            int event, va_list args)
 {
     switch (event) {
         default:

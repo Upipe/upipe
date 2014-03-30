@@ -144,8 +144,7 @@ static void upipe_ts_psii_sub_free(struct urefcount *urefcount_real);
  */
 static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
                                               struct upipe *inner,
-                                              enum uprobe_event event,
-                                              va_list args)
+                                              int event, va_list args)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         container_of(uprobe, struct upipe_ts_psii_sub, probe);

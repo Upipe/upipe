@@ -222,7 +222,7 @@ static void uprobe_gl_sink_cube_init2(struct uprobe *uprobe, struct upipe *upipe
  * @return an error code
  */
 static enum ubase_err uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
-                        struct upipe *upipe, enum uprobe_event event, va_list args)
+                        struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {

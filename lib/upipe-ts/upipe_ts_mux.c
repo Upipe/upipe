@@ -380,8 +380,7 @@ static void upipe_ts_mux_input_free(struct urefcount *urefcount_real);
  */
 static enum ubase_err upipe_ts_mux_input_probe(struct uprobe *uprobe,
                                                struct upipe *inner,
-                                               enum uprobe_event event,
-                                               va_list args)
+                                               int event, va_list args)
 {
     struct upipe_ts_mux_input *upipe_ts_mux_input =
         container_of(uprobe, struct upipe_ts_mux_input, probe);
@@ -956,8 +955,7 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
  */
 static enum ubase_err upipe_ts_mux_program_probe(struct uprobe *uprobe,
                                                  struct upipe *inner,
-                                                 enum uprobe_event event,
-                                                 va_list args)
+                                                 int event, va_list args)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         container_of(uprobe, struct upipe_ts_mux_program, probe);
@@ -1444,8 +1442,7 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  */
 static enum ubase_err upipe_ts_mux_agg_probe(struct uprobe *uprobe,
                                              struct upipe *inner,
-                                             enum uprobe_event event,
-                                             va_list args)
+                                             int event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, agg_probe);
@@ -1464,7 +1461,7 @@ static enum ubase_err upipe_ts_mux_agg_probe(struct uprobe *uprobe,
  */
 static enum ubase_err upipe_ts_mux_probe(struct uprobe *uprobe,
                                          struct upipe *inner,
-                                         enum uprobe_event event, va_list args)
+                                         int event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, probe);

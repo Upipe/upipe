@@ -95,8 +95,7 @@ static void uprobe_pthread_upump_mgr_destr(void *_tls)
  */
 static enum ubase_err uprobe_pthread_upump_mgr_throw(struct uprobe *uprobe,
                                                      struct upipe *upipe,
-                                                     enum uprobe_event event,
-                                                     va_list args)
+                                                     int event, va_list args)
 {
     if (event != UPROBE_NEED_UPUMP_MGR)
         return uprobe_throw_next(uprobe, upipe, event, args);
