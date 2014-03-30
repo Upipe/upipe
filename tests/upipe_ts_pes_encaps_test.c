@@ -72,8 +72,8 @@ static size_t header_size = 0;
 static uint16_t pes_size = 0;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

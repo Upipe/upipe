@@ -165,8 +165,8 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
-                                                     struct uref *flow_def)
+static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -194,9 +194,8 @@ static enum ubase_err upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
  * according to rfc 3551 if null)
  * @return an error code
  */
-static enum ubase_err _upipe_rtp_prepend_set_type(struct upipe *upipe,
-                                                  uint8_t type,
-                                                  uint32_t clockrate)
+static int _upipe_rtp_prepend_set_type(struct upipe *upipe,
+                                       uint8_t type, uint32_t clockrate)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend =
         upipe_rtp_prepend_from_upipe(upipe);
@@ -220,9 +219,8 @@ static enum ubase_err _upipe_rtp_prepend_set_type(struct upipe *upipe,
  * @param rate_p rtp timestamp clock rate
  * @return an error code
  */
-static enum ubase_err _upipe_rtp_prepend_get_type(struct upipe *upipe,
-                                                  uint8_t *type,
-                                                  uint32_t *clockrate)
+static int _upipe_rtp_prepend_get_type(struct upipe *upipe,
+                                       uint8_t *type, uint32_t *clockrate)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend =
                        upipe_rtp_prepend_from_upipe(upipe);
@@ -242,8 +240,8 @@ static enum ubase_err _upipe_rtp_prepend_get_type(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_rtp_prepend_control(struct upipe *upipe,
-                                                int command, va_list args)
+static int upipe_rtp_prepend_control(struct upipe *upipe,
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:

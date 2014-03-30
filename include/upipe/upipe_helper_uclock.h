@@ -55,7 +55,7 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_attach_uclock(struct upipe *upipe)
+ *  int upipe_foo_attach_uclock(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -65,7 +65,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_check_uclock(struct upipe *upipe)
+ *  int upipe_foo_check_uclock(struct upipe *upipe)
  * @end code
  * Checks if the uclock is available, and asks for it otherwise.
  *
@@ -94,7 +94,7 @@ static void STRUCTURE##_init_uclock(struct upipe *upipe)                    \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_attach_uclock(struct upipe *upipe)        \
+static int STRUCTURE##_attach_uclock(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     uclock_release(s->UCLOCK);                                              \
@@ -107,7 +107,7 @@ static enum ubase_err STRUCTURE##_attach_uclock(struct upipe *upipe)        \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_check_uclock(struct upipe *upipe)         \
+static int STRUCTURE##_check_uclock(struct upipe *upipe)                    \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (unlikely(s->UCLOCK == NULL))                                        \

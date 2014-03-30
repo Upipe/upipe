@@ -149,7 +149,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_output_alloc(struct upipe *upipe)
+static int _upipe_multicat_sink_output_alloc(struct upipe *upipe)
 {
     struct upipe *fsink = NULL;
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
@@ -164,7 +164,7 @@ static enum ubase_err _upipe_multicat_sink_output_alloc(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    enum ubase_err err;
+    int err;
     if (upipe_multicat_sink->flow_def != NULL &&
         (err = upipe_set_flow_def(fsink, upipe_multicat_sink->flow_def)) !=
         UBASE_ERR_NONE) {
@@ -181,8 +181,8 @@ static enum ubase_err _upipe_multicat_sink_output_alloc(struct upipe *upipe)
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_multicat_sink_set_flow_def(struct upipe *upipe,
-                                             struct uref *flow_def)
+static int upipe_multicat_sink_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -208,7 +208,7 @@ static enum ubase_err upipe_multicat_sink_set_flow_def(struct upipe *upipe,
  * @param suffix file suffix
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path, const char *suffix)
+static int _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path, const char *suffix)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(!upipe_multicat_sink->fsink)) {
@@ -239,7 +239,7 @@ static enum ubase_err _upipe_multicat_sink_set_path(struct upipe *upipe, const c
  * @param rotate new rotate interval
  * @return an error code
  */
-static enum ubase_err  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
+static int  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
         uint64_t rotate)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
@@ -258,7 +258,7 @@ static enum ubase_err  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
  * @param rotate_p filled in with the current rotate interval
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
+static int _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
         struct upipe_mgr **fsink_mgr)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
@@ -273,7 +273,7 @@ static enum ubase_err _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
  * @param rotate_p filled in with the current rotate interval
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_get_rotate(struct upipe *upipe,
+static int _upipe_multicat_sink_get_rotate(struct upipe *upipe,
         uint64_t *rotate_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
@@ -289,7 +289,7 @@ static enum ubase_err _upipe_multicat_sink_get_rotate(struct upipe *upipe,
  * @param suffix_p filled in with the current rotate interval
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_sink_get_path(struct upipe *upipe,
+static int _upipe_multicat_sink_get_path(struct upipe *upipe,
         char **path_p, char **suffix_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
@@ -307,7 +307,7 @@ static enum ubase_err _upipe_multicat_sink_get_path(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_multicat_sink_attach_upump_mgr(struct upipe *upipe)
+static int upipe_multicat_sink_attach_upump_mgr(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
@@ -321,7 +321,7 @@ static enum ubase_err upipe_multicat_sink_attach_upump_mgr(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_multicat_sink_attach_uclock(struct upipe *upipe)
+static int upipe_multicat_sink_attach_uclock(struct upipe *upipe)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (! upipe_multicat_sink->fsink) {
@@ -338,8 +338,8 @@ static enum ubase_err upipe_multicat_sink_attach_uclock(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_multicat_sink_control(struct upipe *upipe,
-        int command, va_list args)
+static int upipe_multicat_sink_control(struct upipe *upipe,
+                                       int command, va_list args)
 {
     struct upipe_multicat_sink *upipe_multicat_sink =
         upipe_multicat_sink_from_upipe(upipe);

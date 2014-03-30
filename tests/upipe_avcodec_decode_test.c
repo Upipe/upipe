@@ -125,7 +125,7 @@ static void pgm_save(const uint8_t *buf, int wrap, int xsize, int ysize, int num
 }
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:

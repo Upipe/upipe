@@ -56,11 +56,11 @@ enum upipe_avcenc_command {
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content content of the option
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_avcenc_set_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char *content)
+static inline int upipe_avcenc_set_option(struct upipe *upipe,
+                                          const char *option,
+                                          const char *content)
 {
     return upipe_control(upipe, UPIPE_AVCENC_SET_OPTION, UPIPE_AVCENC_SIGNATURE,
                          option, content);
@@ -88,9 +88,9 @@ enum upipe_avcenc_mgr_command {
  * @param name codec name
  * @return an error code
  */
-enum ubase_err upipe_avcenc_mgr_set_flow_def_from_name(struct upipe_mgr *mgr,
-                                                       struct uref *flow_def,
-                                                       const char *name)
+int upipe_avcenc_mgr_set_flow_def_from_name(struct upipe_mgr *mgr,
+                                            struct uref *flow_def,
+                                            const char *name)
 {
     return upipe_mgr_control(mgr, UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME,
                              UPIPE_AVCENC_SIGNATURE, flow_def, name);

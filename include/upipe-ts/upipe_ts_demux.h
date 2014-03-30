@@ -61,7 +61,7 @@ enum upipe_ts_demux_command {
  * @param conformance_p filled in with the conformance
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_demux_get_conformance(struct upipe *upipe,
                                    enum upipe_ts_conformance *conformance_p)
 {
@@ -75,7 +75,7 @@ static inline enum ubase_err
  * @param conformance conformance mode
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_demux_set_conformance(struct upipe *upipe,
                                    enum upipe_ts_conformance conformance)
 {
@@ -129,7 +129,7 @@ enum upipe_ts_demux_mgr_command {
  * @param p filled in with the name manager                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err                                                \
+static inline int                                                           \
     upipe_ts_demux_mgr_get_##name##_mgr(struct upipe_mgr *mgr,              \
                                         struct upipe_mgr *p)                \
 {                                                                           \
@@ -143,7 +143,7 @@ static inline enum ubase_err                                                \
  * @param m pointer to name manager                                         \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err                                                \
+static inline int                                                           \
     upipe_ts_demux_mgr_set_##name##_mgr(struct upipe_mgr *mgr,              \
                                         struct upipe_mgr *m)                \
 {                                                                           \

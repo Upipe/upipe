@@ -226,8 +226,8 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_trickp_sub_set_flow_def(struct upipe *upipe,
-                                                   struct uref *flow_def)
+static int upipe_trickp_sub_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -261,8 +261,8 @@ static enum ubase_err upipe_trickp_sub_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_trickp_sub_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_trickp_sub_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {
@@ -447,8 +447,8 @@ static void upipe_trickp_reset_uclock(struct upipe *upipe)
  * @param rate_p filled with the current rate
  * @return an error code
  */
-static inline enum ubase_err _upipe_trickp_get_rate(struct upipe *upipe,
-                                                    struct urational *rate_p)
+static inline int _upipe_trickp_get_rate(struct upipe *upipe,
+                                         struct urational *rate_p)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     *rate_p = upipe_trickp->rate;
@@ -461,8 +461,8 @@ static inline enum ubase_err _upipe_trickp_get_rate(struct upipe *upipe,
  * @param rate new rate (1/1 = normal play, 0 = pause)
  * @return an error code
  */
-static inline enum ubase_err _upipe_trickp_set_rate(struct upipe *upipe,
-                                                    struct urational rate)
+static inline int _upipe_trickp_set_rate(struct upipe *upipe,
+                                         struct urational rate)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     upipe_trickp->rate = rate;
@@ -478,8 +478,7 @@ static inline enum ubase_err _upipe_trickp_set_rate(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_trickp_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_trickp_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:

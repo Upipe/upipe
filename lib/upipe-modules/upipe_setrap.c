@@ -114,8 +114,7 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_setrap_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_setrap_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -132,7 +131,7 @@ static enum ubase_err upipe_setrap_set_flow_def(struct upipe *upipe,
  * @param rap_p filled with the current systime_rap
  * @return an error code
  */
-static enum ubase_err _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_p)
+static int _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_p)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
     *rap_p = upipe_setrap->systime_rap;
@@ -145,7 +144,7 @@ static enum ubase_err _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_p
  * @param rap systime_rap to set
  * @return an error code
  */
-static enum ubase_err _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
+static int _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
     upipe_setrap->systime_rap = rap;
@@ -159,8 +158,7 @@ static enum ubase_err _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_setrap_control(struct upipe *upipe,
-                                int command, va_list args)
+static int upipe_setrap_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

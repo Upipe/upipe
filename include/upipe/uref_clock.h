@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -130,8 +130,8 @@ UREF_CLOCK_SET(orig, pts, PTS)
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_clock_get_pts_##dv(struct uref *uref,     \
-                                                     uint64_t *date_p)      \
+static inline int uref_clock_get_pts_##dv(struct uref *uref,                \
+                                          uint64_t *date_p)                 \
 {                                                                           \
     uint64_t date, delay;                                                   \
     int type;                                                               \
@@ -168,8 +168,8 @@ UREF_CLOCK_GET_PTS(orig)
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_clock_get_dts_##dv(struct uref *uref,     \
-                                                     uint64_t *date_p)      \
+static inline int uref_clock_get_dts_##dv(struct uref *uref,                \
+                                          uint64_t *date_p)                 \
 {                                                                           \
     uint64_t date, delay;                                                   \
     int type;                                                               \
@@ -207,8 +207,8 @@ UREF_CLOCK_GET_DTS(orig)
  * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_clock_get_cr_##dv(struct uref *uref,      \
-                                                    uint64_t *date_p)       \
+static inline int uref_clock_get_cr_##dv(struct uref *uref,                 \
+                                         uint64_t *date_p)                  \
 {                                                                           \
     uint64_t date, delay;                                                   \
     int type;                                                               \
@@ -244,8 +244,7 @@ UREF_CLOCK_GET_CR(orig)
  * @param uref uref structure                                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err                                                \
-    uref_clock_rebase_##dt##_##dv(struct uref *uref)                        \
+static inline int uref_clock_rebase_##dt##_##dv(struct uref *uref)          \
 {                                                                           \
     uint64_t date;                                                          \
     UBASE_RETURN(uref_clock_get_##dt##_##dv(uref, &date))                   \

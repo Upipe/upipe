@@ -56,7 +56,7 @@ enum upipe_chunk_stream_command {
  * @param align_p filled in with the configured alignement, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_chunk_stream_get_mtu(struct upipe *upipe,
+static inline int upipe_chunk_stream_get_mtu(struct upipe *upipe,
                                unsigned int *mtu_p, unsigned int *align_p)
 {
     return upipe_control(upipe, UPIPE_CHUNK_STREAM_GET_MTU,
@@ -69,7 +69,7 @@ static inline enum ubase_err upipe_chunk_stream_get_mtu(struct upipe *upipe,
  * @param align packet chunk alignement, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_chunk_stream_set_mtu(struct upipe *upipe,
+static inline int upipe_chunk_stream_set_mtu(struct upipe *upipe,
                                unsigned int mtu, unsigned int align)
 {
     return upipe_control(upipe, UPIPE_CHUNK_STREAM_SET_MTU,

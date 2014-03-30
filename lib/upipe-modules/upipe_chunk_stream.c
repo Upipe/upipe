@@ -131,8 +131,8 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_chunk_stream_set_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
+static int upipe_chunk_stream_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -205,9 +205,8 @@ static bool _upipe_chunk_stream_set_mtu(struct upipe *upipe,
  * @param align_p filled in with the configured alignement, in octets
  * @return an error code
  */
-static enum ubase_err _upipe_chunk_stream_get_mtu(struct upipe *upipe,
-                                                  unsigned int *mtu,
-                                                  unsigned int *align)
+static int _upipe_chunk_stream_get_mtu(struct upipe *upipe,
+                                       unsigned int *mtu, unsigned int *align)
 {
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
@@ -227,8 +226,8 @@ static enum ubase_err _upipe_chunk_stream_get_mtu(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_chunk_stream_control(struct upipe *upipe,
-                                                 int command, va_list args)
+static int upipe_chunk_stream_control(struct upipe *upipe,
+                                      int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

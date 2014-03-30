@@ -185,8 +185,8 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
-                                           struct uref *flow_def)
+static int upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -221,8 +221,8 @@ static enum ubase_err upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static enum ubase_err upipe_ts_join_sub_control(struct upipe *upipe,
-                                                int command, va_list args)
+static int upipe_ts_join_sub_control(struct upipe *upipe,
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -384,8 +384,8 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_ts_join_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int _upipe_ts_join_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -446,8 +446,7 @@ static void upipe_ts_join_build_flow_def(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_join_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_ts_join_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_ts_join_control(upipe, command, args))
 

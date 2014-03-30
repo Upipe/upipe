@@ -198,8 +198,8 @@ static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
 }
 
 /* main uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:
@@ -213,8 +213,8 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /* catch demux events */
-static enum ubase_err catch_demux(struct uprobe *uprobe, struct upipe *upipe,
-                                  int event, va_list args)
+static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
 {
     if (event != UPROBE_SPLIT_UPDATE) {
         return uprobe_throw_next(uprobe, upipe, event, args);

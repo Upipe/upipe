@@ -324,8 +324,8 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static enum ubase_err upipe_udpsink_set_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+static int upipe_udpsink_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -344,7 +344,7 @@ static enum ubase_err upipe_udpsink_set_flow_def(struct upipe *upipe,
  * @param uri_p filled in with the uri of the socket
  * @return an error code
  */
-static enum ubase_err _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
+static int _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -359,9 +359,8 @@ static enum ubase_err _upipe_udpsink_get_uri(struct upipe *upipe, const char **u
  * @param mode mode of opening the socket
  * @return an error code
  */
-static enum ubase_err _upipe_udpsink_set_uri(struct upipe *upipe,
-                                             const char *uri,
-                                             enum upipe_udpsink_mode mode)
+static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
+                                  enum upipe_udpsink_mode mode)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
@@ -422,7 +421,7 @@ static enum ubase_err _upipe_udpsink_set_uri(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_udpsink_flush(struct upipe *upipe)
+static int upipe_udpsink_flush(struct upipe *upipe)
 {
     if (upipe_udpsink_flush_sink(upipe)) {
         upipe_udpsink_set_upump(upipe, NULL);
@@ -440,8 +439,8 @@ static enum ubase_err upipe_udpsink_flush(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_udpsink_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int _upipe_udpsink_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -490,8 +489,7 @@ static enum ubase_err _upipe_udpsink_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_udpsink_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_udpsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_udpsink_control(upipe, command, args));
 

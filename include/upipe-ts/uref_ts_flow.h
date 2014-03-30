@@ -78,7 +78,7 @@ UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
  * @param size_p size of the filter, written on execution
  * @return an error code
  */
-static inline enum ubase_err uref_ts_flow_get_psi_filter(struct uref *uref,
+static inline int uref_ts_flow_get_psi_filter(struct uref *uref,
         const uint8_t **filter_p, const uint8_t **mask_p, size_t *size_p)
 {
     const uint8_t *attr;
@@ -100,7 +100,7 @@ static inline enum ubase_err uref_ts_flow_get_psi_filter(struct uref *uref,
  * @param size size (in octets) of filter and mask
  * @return an error code
  */
-static inline enum ubase_err uref_ts_flow_set_psi_filter(struct uref *uref,
+static inline int uref_ts_flow_set_psi_filter(struct uref *uref,
         const uint8_t *filter, const uint8_t *mask, size_t size)
 {
     uint8_t attr[2 * size];
@@ -114,7 +114,7 @@ static inline enum ubase_err uref_ts_flow_set_psi_filter(struct uref *uref,
  * @param uref pointer to the uref
  * @return an error code
  */
-static inline enum ubase_err uref_ts_flow_delete_psi_filter(struct uref *uref)
+static inline int uref_ts_flow_delete_psi_filter(struct uref *uref)
 {
     return uref_ts_flow_delete_psi_filter_internal(uref);
 }

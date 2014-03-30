@@ -273,8 +273,7 @@ static void upipe_http_src_worker(struct upump *upump)
  * @param url_p filled in with the url of the http
  * @return an error code
  */
-static enum ubase_err upipe_http_src_get_uri(struct upipe *upipe,
-                                             const char **url_p)
+static int upipe_http_src_get_uri(struct upipe *upipe, const char **url_p)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     assert(url_p != NULL);
@@ -376,7 +375,7 @@ static int upipe_http_src_open_url(struct upipe *upipe, const char *url)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_http_src_send_request(struct upipe *upipe)
+static int upipe_http_src_send_request(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     const char *url = upipe_http_src->url;
@@ -415,8 +414,7 @@ static enum ubase_err upipe_http_src_send_request(struct upipe *upipe)
  * @param url relative or absolute url of the http
  * @return an error code
  */
-static enum ubase_err upipe_http_src_set_uri(struct upipe *upipe,
-                                             const char *url)
+static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
@@ -464,7 +462,7 @@ static enum ubase_err upipe_http_src_set_uri(struct upipe *upipe,
     }
     upipe_notice_va(upipe, "opening url %s", upipe_http_src->url);
 
-    enum ubase_err err;
+    int err;
     if (unlikely((err = upipe_http_src_send_request(upipe)) !=
                  UBASE_ERR_NONE)) {
         /* FIXME: build write pump */
@@ -482,8 +480,8 @@ static enum ubase_err upipe_http_src_set_uri(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_http_src_control(struct upipe *upipe,
-                                              int command, va_list args)
+static int _upipe_http_src_control(struct upipe *upipe,
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -540,8 +538,8 @@ static enum ubase_err _upipe_http_src_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_http_src_control(struct upipe *upipe, int command,
-                               va_list args)
+static int upipe_http_src_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     UBASE_RETURN(_upipe_http_src_control(upipe, command, args));
 

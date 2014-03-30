@@ -63,9 +63,9 @@ struct upipe_match_attr {
     bool flow_def_sent;
 
     /** match uint8_t */
-    enum ubase_err (*match_uint8_t) (struct uref*, uint8_t, uint8_t);
+    int (*match_uint8_t) (struct uref*, uint8_t, uint8_t);
     /** match uint64_t */
-    enum ubase_err (*match_uint64_t) (struct uref*, uint64_t, uint64_t);
+    int (*match_uint64_t) (struct uref*, uint64_t, uint64_t);
     /** mode */
     enum upipe_match_attr_type mode;
     /** min */
@@ -92,7 +92,7 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
-    enum ubase_err forward = UBASE_ERR_NONE;
+    int forward = UBASE_ERR_NONE;
     uint64_t min = upipe_match_attr->min;
     uint64_t max = upipe_match_attr->max;
 
@@ -128,8 +128,8 @@ static void upipe_match_attr_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_match_attr_set_flow_def(struct upipe *upipe,
-                                                    struct uref *flow_def)
+static int upipe_match_attr_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -147,8 +147,8 @@ static enum ubase_err upipe_match_attr_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_match_attr_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_match_attr_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     switch (command) {
@@ -176,14 +176,14 @@ static enum ubase_err upipe_match_attr_control(struct upipe *upipe,
         case UPIPE_MATCH_ATTR_SET_UINT8_T: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MATCH_ATTR_SIGNATURE)
             upipe_match_attr->match_uint8_t = va_arg(args,
-                    enum ubase_err (*)(struct uref*, uint8_t, uint8_t));
+                    int (*)(struct uref*, uint8_t, uint8_t));
             upipe_match_attr->mode = UPIPE_MATCH_ATTR_UINT8_T;
             return UBASE_ERR_NONE;
         }
         case UPIPE_MATCH_ATTR_SET_UINT64_T: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MATCH_ATTR_SIGNATURE)
             upipe_match_attr->match_uint64_t = va_arg(args,
-                    enum ubase_err (*)(struct uref*, uint64_t, uint64_t));
+                    int (*)(struct uref*, uint64_t, uint64_t));
             upipe_match_attr->mode = UPIPE_MATCH_ATTR_UINT64_T;
             return UBASE_ERR_NONE;
         }

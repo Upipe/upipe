@@ -79,7 +79,7 @@ struct upipe_mgr *upipe_multicat_sink_mgr_alloc(void);
  * @param path_p filled in with the path of the file
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_get_path(struct upipe *upipe,
                                  const char **path_p, const char **suffix_p)
 {
@@ -93,7 +93,7 @@ static inline enum ubase_err
  * @param path relative or absolute path of the node
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_set_path(struct upipe *upipe,
                                  const char *path, const char *suffix)
 {
@@ -107,7 +107,7 @@ static inline enum ubase_err
  * @param interval_p filled in with the rotate interval in 27Mhz
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_get_rotate(struct upipe *upipe, uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_GET_ROTATE,
@@ -121,7 +121,7 @@ static inline enum ubase_err
  * @param interval rotate interval in 27Mhz
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_set_rotate(struct upipe *upipe, uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_MULTICAT_SINK_SET_ROTATE,
@@ -136,7 +136,7 @@ static inline enum ubase_err
  * @param mode fsink mode
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_set_mode(struct upipe *upipe,
                                  enum upipe_fsink_mode mode)
 {
@@ -150,7 +150,7 @@ static inline enum ubase_err
  * @param fsink_mgr fsink manager 
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
                                       struct upipe_mgr *fsink_mgr)
 {
@@ -164,7 +164,7 @@ static inline enum ubase_err
  * @param fsink_mgr fsink manager 
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_multicat_sink_set_fsink_mgr(struct upipe *upipe,
                                       struct upipe_mgr *fsink_mgr)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -113,7 +113,7 @@ static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
  * @param chroma chroma type (see chroma reference)
  * @return an error code
  */
-static inline enum ubase_err uref_pic_flow_add_plane(struct uref *uref,
+static inline int uref_pic_flow_add_plane(struct uref *uref,
            uint8_t hsub, uint8_t vsub, uint8_t macropixel_size,
            const char *chroma)
 {
@@ -137,9 +137,9 @@ static inline enum ubase_err uref_pic_flow_add_plane(struct uref *uref,
  * @param plane_p written with the matching plane number
  * @return an error code
  */
-static inline enum ubase_err uref_pic_flow_find_chroma(struct uref *uref,
-                                                       const char *chroma,
-                                                       uint8_t *plane_p)
+static inline int uref_pic_flow_find_chroma(struct uref *uref,
+                                            const char *chroma,
+                                            uint8_t *plane_p)
 {
     assert(chroma != NULL);
     uint8_t planes = 0;
@@ -165,7 +165,7 @@ static inline enum ubase_err uref_pic_flow_find_chroma(struct uref *uref,
  * @param chroma chroma type
  * @return an error code
  */
-static inline enum ubase_err uref_pic_flow_check_chroma(struct uref *uref,
+static inline int uref_pic_flow_check_chroma(struct uref *uref,
           uint8_t hsub, uint8_t vsub, uint8_t mpixel_size,
           const char *chroma)
 {
@@ -185,8 +185,8 @@ static inline enum ubase_err uref_pic_flow_check_chroma(struct uref *uref,
  * @param uref_src source uref
  * @return an error code
  */
-static inline enum ubase_err uref_pic_flow_copy_format(struct uref *uref_dst,
-                                                       struct uref *uref_src)
+static inline int uref_pic_flow_copy_format(struct uref *uref_dst,
+                                            struct uref *uref_src)
 {
     const char *def;
     uint8_t planes, macropixel;

@@ -86,7 +86,7 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p);
  * automatically select the first flow, or "all"
  * @return an error code
  */
-enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
+int uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
 
 /** @This changes the flows selected by this probe, with printf-style
  * syntax.
@@ -95,8 +95,7 @@ enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
  * @param format format of the syntax, followed by optional arguments
  * @return an error code
  */
-enum ubase_err uprobe_selflow_set_va(struct uprobe *uprobe,
-                                     const char *format, ...);
+int uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...);
 
 #ifdef __cplusplus
 }

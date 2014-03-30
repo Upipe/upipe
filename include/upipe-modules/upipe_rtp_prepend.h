@@ -57,7 +57,7 @@ enum upipe_rtp_prepend_command {
  * @param clockrate_p rtp timestamp clock rate
  * @return an error code
  */
-static inline enum ubase_err upipe_rtp_prepend_get_type(struct upipe *upipe,
+static inline int upipe_rtp_prepend_get_type(struct upipe *upipe,
                                                         uint8_t *type_p,
                                                         uint32_t *clockrate_p)
 {
@@ -73,9 +73,9 @@ static inline enum ubase_err upipe_rtp_prepend_get_type(struct upipe *upipe,
  * according to rfc 3551 if null)
  * @return an error code
  */
-static inline enum ubase_err upipe_rtp_prepend_set_type(struct upipe *upipe,
-                                                        uint8_t type,
-                                                        uint32_t clockrate)
+static inline int upipe_rtp_prepend_set_type(struct upipe *upipe,
+                                             uint8_t type,
+                                             uint32_t clockrate)
 {
     return upipe_control(upipe, UPIPE_RTP_PREPEND_SET_TYPE,
                          UPIPE_RTP_PREPEND_SIGNATURE, type, clockrate);

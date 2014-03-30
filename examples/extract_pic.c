@@ -116,8 +116,8 @@ static void usage(const char *argv0) {
 }
 
 /** catch probes from probe_uref */
-static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                 int event, va_list args)
+static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
+                      int event, va_list args)
 {
     if (event != UPROBE_PROBE_UREF)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -145,8 +145,8 @@ static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** avcdec callback */
-static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                   int event, va_list args)
+static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
+                        int event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -229,8 +229,8 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** split callback */
-static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                  int event, va_list args)
+static int split_catch(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);

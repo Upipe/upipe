@@ -142,7 +142,7 @@ static void upipe_ts_psii_sub_free(struct urefcount *urefcount_real);
  * @param args arguments of the event
  * @return an error code
  */
-static enum ubase_err upipe_ts_psii_sub_probe(struct uprobe *uprobe,
+static int upipe_ts_psii_sub_probe(struct uprobe *uprobe,
                                               struct upipe *inner,
                                               int event, va_list args)
 {
@@ -297,8 +297,8 @@ static void upipe_ts_psii_sub_output(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static enum ubase_err upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
-                                           struct uref *flow_def)
+static int upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -316,8 +316,8 @@ static enum ubase_err upipe_ts_psii_sub_set_flow_def(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_psii_sub_get_interval(struct upipe *upipe,
-                                                      uint64_t *interval_p)
+static int _upipe_ts_psii_sub_get_interval(struct upipe *upipe,
+                                           uint64_t *interval_p)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
@@ -332,8 +332,8 @@ static enum ubase_err _upipe_ts_psii_sub_get_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
-                                                      uint64_t interval)
+static int _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
+                                           uint64_t interval)
 {
     struct upipe_ts_psii_sub *upipe_ts_psii_sub =
         upipe_ts_psii_sub_from_upipe(upipe);
@@ -351,8 +351,8 @@ static enum ubase_err _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psii_sub_control(struct upipe *upipe,
-                                                int command, va_list args)
+static int upipe_ts_psii_sub_control(struct upipe *upipe,
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -490,8 +490,8 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static enum ubase_err upipe_ts_psii_set_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+static int upipe_ts_psii_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -516,7 +516,7 @@ static enum ubase_err upipe_ts_psii_set_flow_def(struct upipe *upipe,
  * @param output new output
  * @return an error code
  */
-static enum ubase_err _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
+static int _upipe_ts_psii_set_output(struct upipe *upipe, struct upipe *output)
 {
     UBASE_RETURN(upipe_ts_psii_set_output(upipe, output));
 
@@ -537,8 +537,8 @@ static enum ubase_err _upipe_ts_psii_set_output(struct upipe *upipe, struct upip
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psii_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_ts_psii_control(struct upipe *upipe,
+                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -606,8 +606,8 @@ static void upipe_ts_psii_mgr_free(struct urefcount *urefcount)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psii_mgr_control(struct upipe_mgr *mgr,
-                                                int command, va_list args)
+static int upipe_ts_psii_mgr_control(struct upipe_mgr *mgr,
+                                     int command, va_list args)
 {
     struct upipe_ts_psii_mgr *ts_psii_mgr =
         upipe_ts_psii_mgr_from_upipe_mgr(mgr);

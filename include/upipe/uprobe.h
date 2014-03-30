@@ -51,11 +51,11 @@ enum uprobe_event {
     /** something occurred, and the pipe send a textual message
      * (enum uprobe_log_level, const char *) */
     UPROBE_LOG,
-    /** a fatal error occurred, data may be lost (enum ubase_err);
+    /** a fatal error occurred, data may be lost (int);
      * from now on the behaviour of the pipe is undefined, except
      * @ref upipe_release */
     UPROBE_FATAL,
-    /** an error occurred, data may be lost (enum ubase_err); the
+    /** an error occurred, data may be lost (int); the
      * module probably needs to be reinitialized */
     UPROBE_ERROR,
     /** a pipe is ready to accept input and respond to control commands
@@ -117,7 +117,7 @@ enum uprobe_log_level {
 };
 
 /** @This is the call-back type for uprobe events. */
-typedef enum ubase_err (*uprobe_throw_func)(struct uprobe *, struct upipe *,
+typedef int (*uprobe_throw_func)(struct uprobe *, struct upipe *,
                                             int, va_list);
 
 /** @This is a structure passed to a module upon initializing a new pipe. */
@@ -219,9 +219,8 @@ static inline void uprobe_clean(struct uprobe *uprobe)
  * @param args list of arguments
  * @return an error code
  */
-static inline enum ubase_err uprobe_throw_va(struct uprobe *uprobe,
-                                             struct upipe *upipe,
-                                             int event, va_list args)
+static inline int uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
+                                  int event, va_list args)
 {
     if (unlikely(uprobe == NULL))
         return UBASE_ERR_UNHANDLED;
@@ -235,13 +234,12 @@ static inline enum ubase_err uprobe_throw_va(struct uprobe *uprobe,
  * @param event event to throw, followed with optional arguments
  * @return an error code
  */
-static inline enum ubase_err uprobe_throw(struct uprobe *uprobe,
-                                          struct upipe *upipe,
-                                          int event, ...)
+static inline int uprobe_throw(struct uprobe *uprobe, struct upipe *upipe,
+                               int event, ...)
 {
     va_list args;
     va_start(args, event);
-    enum ubase_err err = uprobe_throw_va(uprobe, upipe, event, args);
+    int err = uprobe_throw_va(uprobe, upipe, event, args);
     va_end(args);
     return err;
 }
@@ -254,9 +252,8 @@ static inline enum ubase_err uprobe_throw(struct uprobe *uprobe,
  * @param args list of arguments
  * @return an error code
  */
-static inline enum ubase_err uprobe_throw_next(struct uprobe *uprobe,
-                                               struct upipe *upipe,
-                                               int event, va_list args)
+static inline int uprobe_throw_next(struct uprobe *uprobe, struct upipe *upipe,
+                                    int event, va_list args)
 {
     return uprobe_throw_va(uprobe->next, upipe, event, args);
 }

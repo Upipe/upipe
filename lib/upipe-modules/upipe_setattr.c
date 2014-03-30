@@ -146,8 +146,8 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_setattr_set_flow_def(struct upipe *upipe,
-                                                 struct uref *flow_def)
+static int upipe_setattr_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -164,8 +164,7 @@ static enum ubase_err upipe_setattr_set_flow_def(struct upipe *upipe,
  * @param dict_p filled with the current dictionary
  * @return an error code
  */
-static enum ubase_err _upipe_setattr_get_dict(struct upipe *upipe,
-                                              struct uref **dict_p)
+static int _upipe_setattr_get_dict(struct upipe *upipe, struct uref **dict_p)
 {
     struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
     *dict_p = upipe_setattr->dict;
@@ -178,8 +177,7 @@ static enum ubase_err _upipe_setattr_get_dict(struct upipe *upipe,
  * @param dict dictionary to set
  * @return an error code
  */
-static enum ubase_err _upipe_setattr_set_dict(struct upipe *upipe,
-                                              struct uref *dict)
+static int _upipe_setattr_set_dict(struct upipe *upipe, struct uref *dict)
 {
     struct upipe_setattr *upipe_setattr = upipe_setattr_from_upipe(upipe);
     if (upipe_setattr->dict != NULL)
@@ -202,8 +200,7 @@ static enum ubase_err _upipe_setattr_set_dict(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_setattr_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_setattr_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

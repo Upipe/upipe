@@ -52,8 +52,8 @@
 #define UREF_POOL_DEPTH 0
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

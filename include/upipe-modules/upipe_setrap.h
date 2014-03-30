@@ -60,8 +60,8 @@ struct upipe_mgr *upipe_setrap_mgr_alloc(void);
  * @param rap_p filled with the current systime_rap
  * @return an error code
  */
-static inline enum ubase_err upipe_setrap_get_rap(struct upipe *upipe,
-                                                  uint64_t *rap_p)
+static inline int upipe_setrap_get_rap(struct upipe *upipe,
+                                       uint64_t *rap_p)
 {
     return upipe_control(upipe, UPIPE_SETRAP_GET_RAP,
                          UPIPE_SETRAP_SIGNATURE, rap_p);
@@ -73,8 +73,8 @@ static inline enum ubase_err upipe_setrap_get_rap(struct upipe *upipe,
  * @param rap systime_rap to set
  * @return an error code
  */
-static inline enum ubase_err upipe_setrap_set_rap(struct upipe *upipe,
-                                                  uint64_t rap)
+static inline int upipe_setrap_set_rap(struct upipe *upipe,
+                                       uint64_t rap)
 {
     return upipe_control(upipe, UPIPE_SETRAP_SET_RAP,
                          UPIPE_SETRAP_SIGNATURE, rap);

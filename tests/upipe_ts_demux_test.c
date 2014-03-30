@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -77,8 +77,8 @@ static uint64_t wanted_flow_id;
 static bool expect_new_flow_def = false;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

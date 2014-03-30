@@ -146,8 +146,8 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_dup_output_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_dup_output_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -270,7 +270,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def new flow definition
  * @return an error code
  */
-static enum ubase_err upipe_dup_set_flow_def(struct upipe *upipe,
+static int upipe_dup_set_flow_def(struct upipe *upipe,
                                              struct uref *flow_def)
 {
     if (flow_def == NULL)
@@ -306,8 +306,7 @@ static enum ubase_err upipe_dup_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_dup_control(struct upipe *upipe,
-                                        int command, va_list args)
+static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

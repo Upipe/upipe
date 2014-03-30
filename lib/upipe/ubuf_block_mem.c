@@ -148,7 +148,7 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
  * ubuf
  * @return an error code
  */
-static enum ubase_err ubuf_block_mem_dup(struct ubuf *ubuf,
+static int ubuf_block_mem_dup(struct ubuf *ubuf,
                                          struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
@@ -175,7 +175,7 @@ static enum ubase_err ubuf_block_mem_dup(struct ubuf *ubuf,
  * @param ubuf pointer to ubuf
  * @return an error code
  */
-static enum ubase_err ubuf_block_mem_single(struct ubuf *ubuf)
+static int ubuf_block_mem_single(struct ubuf *ubuf)
 {
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
     return ubuf_mem_shared_single(block_mem->shared) ?
@@ -191,7 +191,7 @@ static enum ubase_err ubuf_block_mem_single(struct ubuf *ubuf)
  * @param size final size of the buffer
  * @return an error code
  */
-static enum ubase_err ubuf_block_mem_splice(struct ubuf *ubuf,
+static int ubuf_block_mem_splice(struct ubuf *ubuf,
                                             struct ubuf **new_ubuf_p,
                                             int offset, int size)
 {
@@ -222,7 +222,7 @@ static enum ubase_err ubuf_block_mem_splice(struct ubuf *ubuf,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_block_mem_control(struct ubuf *ubuf,
+static int ubuf_block_mem_control(struct ubuf *ubuf,
                                              int command, va_list args)
 {
     switch (command) {
@@ -299,8 +299,8 @@ static void ubuf_block_mem_free_inner(struct upool *upool, void *_block_mem)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
-                                                 int command, va_list args)
+static int ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
+                                      int command, va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -129,7 +129,7 @@ struct upump_mgr {
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upump_mgr_control)(struct upump_mgr *, int, va_list);
+    int (*upump_mgr_control)(struct upump_mgr *, int, va_list);
 };
 
 UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
@@ -319,9 +319,8 @@ static inline void upump_mgr_set_opaque(struct upump_mgr *upump_mgr,
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    upump_mgr_control_va(struct upump_mgr *mgr,
-                         int command, va_list args)
+static inline int upump_mgr_control_va(struct upump_mgr *mgr,
+                                       int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->upump_mgr_control == NULL)
@@ -339,11 +338,9 @@ static inline enum ubase_err
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    upump_mgr_control(struct upump_mgr *mgr,
-                      int command, ...)
+static inline int upump_mgr_control(struct upump_mgr *mgr, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = upump_mgr_control_va(mgr, command, args);
@@ -357,7 +354,7 @@ static inline enum ubase_err
  * @param mgr pointer to upump manager
  * @return an error code
  */
-static inline enum ubase_err upump_mgr_vacuum(struct upump_mgr *mgr)
+static inline int upump_mgr_vacuum(struct upump_mgr *mgr)
 {
     return upump_mgr_control(mgr, UPUMP_MGR_VACUUM);
 }

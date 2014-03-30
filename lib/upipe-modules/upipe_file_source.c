@@ -225,7 +225,7 @@ static void upipe_fsrc_worker(struct upump *upump)
  * @param path_p filled in with the path of the file
  * @return an error code
  */
-static enum ubase_err upipe_fsrc_get_uri(struct upipe *upipe,
+static int upipe_fsrc_get_uri(struct upipe *upipe,
                                          const char **path_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
@@ -240,7 +240,7 @@ static enum ubase_err upipe_fsrc_get_uri(struct upipe *upipe,
  * @param path relative or absolute path of the file
  * @return an error code
  */
-static enum ubase_err upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
+static int upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
 
@@ -301,7 +301,7 @@ static enum ubase_err upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
  * @param size_p filled in with the size of the file, in octets
  * @return an error code
  */
-static enum ubase_err _upipe_fsrc_get_size(struct upipe *upipe,
+static int _upipe_fsrc_get_size(struct upipe *upipe,
                                            uint64_t *size_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
@@ -321,7 +321,7 @@ static enum ubase_err _upipe_fsrc_get_size(struct upipe *upipe,
  * @param position_p filled in with the reading position, in octets
  * @return an error code
  */
-static enum ubase_err _upipe_fsrc_get_position(struct upipe *upipe,
+static int _upipe_fsrc_get_position(struct upipe *upipe,
                                                uint64_t *position_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
@@ -341,7 +341,7 @@ static enum ubase_err _upipe_fsrc_get_position(struct upipe *upipe,
  * @param position new reading position, in octets (between 0 and the size)
  * @return an error code
  */
-static enum ubase_err _upipe_fsrc_set_position(struct upipe *upipe,
+static int _upipe_fsrc_set_position(struct upipe *upipe,
                                                uint64_t position)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
@@ -358,7 +358,7 @@ static enum ubase_err _upipe_fsrc_set_position(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_fsrc_control(struct upipe *upipe,
+static int _upipe_fsrc_control(struct upipe *upipe,
                                           int command, va_list args)
 {
     switch (command) {
@@ -432,8 +432,7 @@ static enum ubase_err _upipe_fsrc_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_fsrc_control(struct upipe *upipe,
-                                         int command, va_list args)
+static int upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_fsrc_control(upipe, command, args))
 

@@ -153,7 +153,7 @@ static void upipe_x264_log(void *_upipe, int loglevel,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err _upipe_x264_reconfigure(struct upipe *upipe)
+static int _upipe_x264_reconfigure(struct upipe *upipe)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret;
@@ -168,7 +168,7 @@ static enum ubase_err _upipe_x264_reconfigure(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err _upipe_x264_set_default(struct upipe *upipe)
+static int _upipe_x264_set_default(struct upipe *upipe)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_default(&upipe_x264->params);
@@ -182,7 +182,7 @@ static enum ubase_err _upipe_x264_set_default(struct upipe *upipe)
  * @param tuning x264 tuning
  * @return an error code
  */
-static enum ubase_err _upipe_x264_set_default_preset(struct upipe *upipe,
+static int _upipe_x264_set_default_preset(struct upipe *upipe,
                                 const char *preset, const char *tune)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
@@ -197,7 +197,7 @@ static enum ubase_err _upipe_x264_set_default_preset(struct upipe *upipe,
  * @param profile x264 profile
  * @return an error code
  */
-static enum ubase_err _upipe_x264_set_profile(struct upipe *upipe,
+static int _upipe_x264_set_profile(struct upipe *upipe,
                                               const char *profile)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
@@ -214,7 +214,7 @@ static enum ubase_err _upipe_x264_set_profile(struct upipe *upipe,
  * @param content content of the option
  * @return an error code
  */
-static enum ubase_err _upipe_x264_set_option(struct upipe *upipe,
+static int _upipe_x264_set_option(struct upipe *upipe,
                                              const char *option,
                                              const char *content)
 {
@@ -235,7 +235,7 @@ static enum ubase_err _upipe_x264_set_option(struct upipe *upipe,
  * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
  * @return an error code
  */
-static enum ubase_err _upipe_x264_set_sc_latency(struct upipe *upipe,
+static int _upipe_x264_set_sc_latency(struct upipe *upipe,
                                                  uint64_t sc_latency)
 {
 #ifndef HAVE_X264_OBE
@@ -582,8 +582,8 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
-                                    struct uref *flow_def)
+static int upipe_x264_set_flow_def(struct upipe *upipe,
+                                   struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -675,8 +675,7 @@ static enum ubase_err upipe_x264_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_x264_control(struct upipe *upipe,
-                                         int command, va_list args)
+static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:

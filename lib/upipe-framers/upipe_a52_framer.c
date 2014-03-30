@@ -511,7 +511,7 @@ static void upipe_a52f_work(struct upipe *upipe, struct upump **upump_p)
  * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+                             struct upump **upump_p)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     if (unlikely(uref->ubuf == NULL)) {
@@ -538,8 +538,7 @@ static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_a52f_set_flow_def(struct upipe *upipe,
-                                              struct uref *flow_def)
+static int upipe_a52f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -573,9 +572,7 @@ static enum ubase_err upipe_a52f_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_a52f_control(struct upipe *upipe,
-                                         int command,
-                                         va_list args)
+static int upipe_a52f_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

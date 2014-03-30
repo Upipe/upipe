@@ -271,8 +271,8 @@ static void upump_ev_free_inner(struct upool *upool, void *upump_ev)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upump_ev_mgr_control(struct upump_mgr *mgr,
-                                           int command, va_list args)
+static int upump_ev_mgr_control(struct upump_mgr *mgr,
+                                int command, va_list args)
 {
     switch (command) {
         case UPUMP_MGR_VACUUM:

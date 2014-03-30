@@ -68,9 +68,8 @@ static inline struct uref *uref_sound_alloc(struct uref_mgr *uref_mgr,
 }
 
 /** @see ubuf_sound_size */
-static inline enum ubase_err uref_sound_size(struct uref *uref,
-                                             size_t *size_p,
-                                             uint8_t *sample_size_p)
+static inline int uref_sound_size(struct uref *uref, size_t *size_p,
+                                  uint8_t *sample_size_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -78,8 +77,8 @@ static inline enum ubase_err uref_sound_size(struct uref *uref,
 }
 
 /** @see ubuf_sound_plane_iterate */
-static inline enum ubase_err uref_sound_plane_iterate(struct uref *uref,
-                                                      const char **channel_p)
+static inline int uref_sound_plane_iterate(struct uref *uref,
+                                           const char **channel_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -87,8 +86,8 @@ static inline enum ubase_err uref_sound_plane_iterate(struct uref *uref,
 }
 
 /** @see ubuf_sound_plane_unmap */
-static inline enum ubase_err uref_sound_plane_unmap(struct uref *uref,
-        const char *channel, int offset, int size)
+static inline int uref_sound_plane_unmap(struct uref *uref, const char *channel,
+                                         int offset, int size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -96,8 +95,8 @@ static inline enum ubase_err uref_sound_plane_unmap(struct uref *uref,
 }
 
 /** @see ubuf_sound_unmap */
-static inline enum ubase_err uref_sound_unmap(struct uref *uref,
-        int offset, int size, uint8_t planes)
+static inline int uref_sound_unmap(struct uref *uref, int offset, int size,
+                                   uint8_t planes)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -106,7 +105,7 @@ static inline enum ubase_err uref_sound_unmap(struct uref *uref,
 
 #define UREF_SOUND_MAP_TEMPLATE(type)                                       \
 /** @see ubuf_sound_plane_read_##type */                                    \
-static inline enum ubase_err uref_sound_plane_read_##type(struct uref *uref,\
+static inline int uref_sound_plane_read_##type(struct uref *uref,           \
         const char *channel, int offset, int size, const type **buffer_p)   \
 {                                                                           \
     if (uref->ubuf == NULL)                                                 \
@@ -115,7 +114,7 @@ static inline enum ubase_err uref_sound_plane_read_##type(struct uref *uref,\
                                         buffer_p);                          \
 }                                                                           \
 /** @see ubuf_sound_plane_write_##type */                                   \
-static inline enum ubase_err uref_sound_plane_write_##type(struct uref *uref,\
+static inline int uref_sound_plane_write_##type(struct uref *uref,          \
         const char *channel, int offset, int size, type **buffer_p)         \
 {                                                                           \
     if (uref->ubuf == NULL)                                                 \
@@ -124,7 +123,7 @@ static inline enum ubase_err uref_sound_plane_write_##type(struct uref *uref,\
                                          buffer_p);                         \
 }                                                                           \
 /** @see ubuf_sound_read_##type */                                          \
-static inline enum ubase_err uref_sound_read_##type(struct uref *uref,      \
+static inline int uref_sound_read_##type(struct uref *uref,                 \
         int offset, int size, const type *buffers_p[], uint8_t planes)      \
 {                                                                           \
     if (uref->ubuf == NULL)                                                 \
@@ -133,7 +132,7 @@ static inline enum ubase_err uref_sound_read_##type(struct uref *uref,      \
                                   planes);                                  \
 }                                                                           \
 /** @see ubuf_sound_write_##type */                                         \
-static inline enum ubase_err uref_sound_write_##type(struct uref *uref,     \
+static inline int uref_sound_write_##type(struct uref *uref,                \
         int offset, int size, type *buffers_p[], uint8_t planes)            \
 {                                                                           \
     if (uref->ubuf == NULL)                                                 \
@@ -150,8 +149,7 @@ UREF_SOUND_MAP_TEMPLATE(double)
 #undef UREF_SOUND_MAP_TEMPLATE
 
 /** @see ubuf_sound_resize */
-static inline enum ubase_err uref_sound_resize(struct uref *uref,
-        int skip, int new_size)
+static inline int uref_sound_resize(struct uref *uref, int skip, int new_size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -170,7 +168,7 @@ static inline enum ubase_err uref_sound_resize(struct uref *uref,
  * to -1, keep same end)
  * @return an error code
  */
-static inline enum ubase_err uref_sound_replace(struct uref *uref,
+static inline int uref_sound_replace(struct uref *uref,
         struct ubuf_mgr *ubuf_mgr, int skip, int new_size)
 {
     if (uref->ubuf == NULL)

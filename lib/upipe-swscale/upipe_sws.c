@@ -245,7 +245,7 @@ static void upipe_sws_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_sws_amend_flow_format(struct upipe *upipe,
+static int upipe_sws_amend_flow_format(struct upipe *upipe,
                                                   struct uref *flow_format)
 {
     if (flow_format == NULL)
@@ -268,8 +268,7 @@ static enum ubase_err upipe_sws_amend_flow_format(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_sws_set_flow_def(struct upipe *upipe,
-                                             struct uref *flow_def)
+static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -317,7 +316,7 @@ static enum ubase_err upipe_sws_set_flow_def(struct upipe *upipe,
  * @param flags_p filled in with the swscale flags
  * @return an error code
  */
-static enum ubase_err _upipe_sws_get_flags(struct upipe *upipe, int *flags_p)
+static int _upipe_sws_get_flags(struct upipe *upipe, int *flags_p)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     *flags_p = upipe_sws->flags;
@@ -330,7 +329,7 @@ static enum ubase_err _upipe_sws_get_flags(struct upipe *upipe, int *flags_p)
  * @param flags swscale flags
  * @return an error code
  */
-static enum ubase_err _upipe_sws_set_flags(struct upipe *upipe, int flags)
+static int _upipe_sws_set_flags(struct upipe *upipe, int flags)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     upipe_sws->flags = flags;
@@ -345,8 +344,7 @@ static enum ubase_err _upipe_sws_set_flags(struct upipe *upipe, int flags)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_sws_control(struct upipe *upipe,
-                                        int command, va_list args)
+static int upipe_sws_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         /* generic commands */

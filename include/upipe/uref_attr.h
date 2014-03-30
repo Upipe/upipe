@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,8 +44,7 @@ extern "C" {
  * @param uref_attr uref containing attributes to fetch
  * @return an error code
  */
-static inline enum ubase_err uref_attr_import(struct uref *uref,
-                                              struct uref *uref_attr)
+static inline int uref_attr_import(struct uref *uref, struct uref *uref_attr)
 {
     if (uref_attr->udict == NULL)
         return UBASE_ERR_NONE;
@@ -65,7 +64,7 @@ static inline enum ubase_err uref_attr_import(struct uref *uref,
  * @param name name of the attribute                                        \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_attr_get_##utype(struct uref *uref,       \
+static inline int uref_attr_get_##utype(struct uref *uref,                  \
         ctype *p, enum udict_type type, const char *name)                   \
 {                                                                           \
     if (uref->udict == NULL)                                                \
@@ -82,7 +81,7 @@ static inline enum ubase_err uref_attr_get_##utype(struct uref *uref,       \
  * variable list of arguments                                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_attr_get_##utype##_va(struct uref *uref,  \
+static inline int uref_attr_get_##utype##_va(struct uref *uref,             \
         ctype *p, enum udict_type type, const char *format, ...)            \
 {                                                                           \
     UBASE_VARARG(uref_attr_get_##utype(uref, p, type, string))              \
@@ -95,7 +94,7 @@ static inline enum ubase_err uref_attr_get_##utype##_va(struct uref *uref,  \
  * @param name name of the attribute                                        \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_attr_set_##utype(struct uref *uref,       \
+static inline int uref_attr_set_##utype(struct uref *uref,                  \
         ctype v, enum udict_type type, const char *name)                    \
 {                                                                           \
     if (uref->udict == NULL) {                                              \
@@ -115,7 +114,7 @@ static inline enum ubase_err uref_attr_set_##utype(struct uref *uref,       \
  * variable list of arguments                                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_attr_set_##utype##_va(struct uref *uref,  \
+static inline int uref_attr_set_##utype##_va(struct uref *uref,             \
         ctype v, enum udict_type type, const char *format, ...)             \
 {                                                                           \
     UBASE_VARARG(uref_attr_set_##utype(uref, v, type, string))              \
@@ -140,9 +139,8 @@ UREF_ATTR_TEMPLATE(rational, struct urational)
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err uref_attr_delete(struct uref *uref,
-                                              enum udict_type type,
-                                              const char *name)
+static inline int uref_attr_delete(struct uref *uref, enum udict_type type,
+                                   const char *name)
 {
     if (uref->udict == NULL)
         return UBASE_ERR_INVALID;
@@ -157,14 +155,12 @@ static inline enum ubase_err uref_attr_delete(struct uref *uref,
  * variable list of arguments
  * @return an error code
  */
-static inline enum ubase_err uref_attr_delete_va(struct uref *uref,
-                                                 enum udict_type type,
-                                                 const char *format, ...)
+static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                      const char *format, ...)
                    __attribute__ ((format(printf, 3, 4)));
 /** @hidden */
-static inline enum ubase_err uref_attr_delete_va(struct uref *uref,
-                                                 enum udict_type type,
-                                                 const char *format, ...)
+static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                      const char *format, ...)
 {
     UBASE_VARARG(uref_attr_delete(uref, type, string))
 }
@@ -187,13 +183,12 @@ static inline enum ubase_err uref_attr_delete_va(struct uref *uref,
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const uint8_t **p,   \
-                                                       size_t *size_p)      \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const uint8_t **p,              \
+                                            size_t *size_p)                 \
 {                                                                           \
     struct udict_opaque opaque;                                             \
-    enum ubase_err err = uref_attr_get_opaque(uref, &opaque,                \
-                                              UDICT_TYPE_OPAQUE, name);     \
+    int err = uref_attr_get_opaque(uref, &opaque, UDICT_TYPE_OPAQUE, name); \
     if (ubase_check(err)) {                                                 \
         *p = opaque.v;                                                      \
         *size_p = opaque.size;                                              \
@@ -206,9 +201,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const uint8_t *v,    \
-                                                       size_t size)         \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const uint8_t *v, size_t size)  \
 {                                                                           \
     struct udict_opaque opaque;                                             \
     opaque.v = v;                                                           \
@@ -220,7 +214,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_OPAQUE, name);                 \
 }
@@ -239,12 +233,12 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const uint8_t **p,   \
-                                                       size_t *size_p)      \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const uint8_t **p,              \
+                                            size_t *size_p)                 \
 {                                                                           \
     struct udict_opaque opaque;                                             \
-    enum ubase_err err = uref_attr_get_opaque(uref, &opaque, type, NULL);   \
+    int err = uref_attr_get_opaque(uref, &opaque, type, NULL);              \
     if (ubase_check(err)) {                                                 \
         *p = opaque.v;                                                      \
         *size_p = opaque.size;                                              \
@@ -257,9 +251,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const uint8_t *v,    \
-                                                       size_t size)         \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const uint8_t *v, size_t size)  \
 {                                                                           \
     struct udict_opaque opaque;                                             \
     opaque.v = v;                                                           \
@@ -271,7 +264,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }
@@ -291,15 +284,13 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const uint8_t **p,   \
-                                                       size_t *size_p,      \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const uint8_t **p,              \
+                                            size_t *size_p, args_decl)      \
 {                                                                           \
     struct udict_opaque opaque;                                             \
-    enum ubase_err err = uref_attr_get_opaque_va(uref, &opaque,             \
-                                                 UDICT_TYPE_OPAQUE,         \
-                                                 format, args);             \
+    int err = uref_attr_get_opaque_va(uref, &opaque, UDICT_TYPE_OPAQUE,     \
+                                      format, args);                        \
     if (ubase_check(err)) {                                                 \
         *p = opaque.v;                                                      \
         *size_p = opaque.size;                                              \
@@ -312,10 +303,9 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const uint8_t *v,    \
-                                                       size_t size,         \
-                                                       args_decl)           \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const uint8_t *v, size_t size,  \
+                                            args_decl)                      \
 {                                                                           \
     struct udict_opaque opaque;                                             \
     opaque.v = v;                                                           \
@@ -328,8 +318,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_OPAQUE, format, args);      \
 }
@@ -353,8 +342,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const char **p)      \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const char **p)                 \
 {                                                                           \
     return uref_attr_get_string(uref, p, UDICT_TYPE_STRING, name);          \
 }                                                                           \
@@ -364,8 +353,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const char *v)       \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const char *v)                  \
 {                                                                           \
     return uref_attr_set_string(uref, v, UDICT_TYPE_STRING, name);          \
 }                                                                           \
@@ -374,7 +363,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_STRING, name);                 \
 }                                                                           \
@@ -384,8 +373,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param prefix prefix to match                                            \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref  *uref,\
-                                                         const char *prefix)\
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              const char *prefix)           \
 {                                                                           \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -406,8 +395,8 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref  *uref,\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const char **p)      \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const char **p)                 \
 {                                                                           \
     return uref_attr_get_string(uref, p, type, NULL);                       \
 }                                                                           \
@@ -417,8 +406,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const char *v)       \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const char *v)                  \
 {                                                                           \
     return uref_attr_set_string(uref, v, type, NULL);                       \
 }                                                                           \
@@ -427,7 +416,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
@@ -437,8 +426,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param prefix prefix to match                                            \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         const char *prefix)\
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              const char *prefix)           \
 {                                                                           \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -460,9 +449,8 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       const char **p,      \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            const char **p, args_decl)      \
 {                                                                           \
     return uref_attr_get_string_va(uref, p, UDICT_TYPE_STRING,              \
                                    format, args);                           \
@@ -473,20 +461,19 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       const char *v,       \
-                                                       args_decl)           \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            const char *v, args_decl)       \
 {                                                                           \
     return uref_attr_set_string_va(uref, v, UDICT_TYPE_STRING,              \
-                                  format, args);                            \
+                                   format, args);                           \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref,           \
+                                               args_decl)                   \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_STRING, format, args);      \
 }                                                                           \
@@ -496,9 +483,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param prefix prefix to match                                            \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref  *uref,\
-                                                         const char *prefix,\
-                                                         args_decl)         \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              const char *prefix, args_decl)\
 {                                                                           \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
@@ -523,7 +509,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref  *uref,\
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref)   \
+static inline int uref_##group##_get_##attr(struct uref *uref)              \
 {                                                                           \
     return uref_attr_get_void(uref, NULL, UDICT_TYPE_VOID, name);           \
 }                                                                           \
@@ -532,7 +518,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref)   \
+static inline int uref_##group##_set_##attr(struct uref *uref)              \
 {                                                                           \
     return uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, name);           \
 }                                                                           \
@@ -541,7 +527,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_VOID, name);                   \
 }
@@ -559,7 +545,7 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref)   \
+static inline int uref_##group##_get_##attr(struct uref *uref)              \
 {                                                                           \
     return uref_attr_get_void(uref, NULL, type, NULL);                      \
 }                                                                           \
@@ -568,7 +554,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref)   \
+static inline int uref_##group##_set_##attr(struct uref *uref)              \
 {                                                                           \
     return uref_attr_set_void(uref, NULL, type, NULL);                      \
 }                                                                           \
@@ -577,7 +563,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }
@@ -596,8 +582,7 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref, args_decl)   \
 {                                                                           \
     return uref_attr_get_void_va(uref, NULL, UDICT_TYPE_VOID,               \
                                  format, args);                             \
@@ -607,8 +592,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param uref_p reference to the pointer to the uref (possibly modified)   \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       args_decl)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, args_decl)   \
 {                                                                           \
     return uref_attr_set_void_va(uref, NULL, UDICT_TYPE_VOID,               \
                                  format, args);                             \
@@ -618,8 +602,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_VOID, format, args);        \
 }
@@ -638,7 +621,7 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref)   \
+static inline int uref_##group##_get_##attr(struct uref *uref)              \
 {                                                                           \
     return (uref->flags & flag) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;       \
 }                                                                           \
@@ -678,8 +661,7 @@ static inline void uref_##group##_delete_##attr(struct uref *uref)          \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint8_t *p)          \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint8_t *p)  \
 {                                                                           \
     return uref_attr_get_small_unsigned(uref, p,                            \
                                         UDICT_TYPE_SMALL_UNSIGNED, name);   \
@@ -690,8 +672,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       uint8_t v)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v)   \
 {                                                                           \
     return uref_attr_set_small_unsigned(uref, v,                            \
                                         UDICT_TYPE_SMALL_UNSIGNED, name);   \
@@ -701,7 +682,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
 }                                                                           \
@@ -712,9 +693,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint8_t min,       \
-                                                         uint8_t max)       \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint8_t min, uint8_t max)     \
 {                                                                           \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -736,8 +716,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint8_t *p)          \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint8_t *p)  \
 {                                                                           \
     return uref_attr_get_small_unsigned(uref, p, type, NULL);               \
 }                                                                           \
@@ -747,8 +726,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       uint8_t v)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v)   \
 {                                                                           \
     return uref_attr_set_small_unsigned(uref, v, type, NULL);               \
 }                                                                           \
@@ -757,7 +735,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
@@ -768,9 +746,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint8_t min,       \
-                                                         uint8_t max)       \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint8_t min, uint8_t max)     \
 {                                                                           \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -794,9 +771,8 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint8_t *p,          \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint8_t *p,  \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_get_small_unsigned_va(uref, p,                         \
                                            UDICT_TYPE_SMALL_UNSIGNED,       \
@@ -808,8 +784,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       uint8_t v, args_decl)\
+static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v,   \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_set_small_unsigned_va(uref, v,                         \
                                            UDICT_TYPE_SMALL_UNSIGNED,       \
@@ -820,8 +796,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_SMALL_UNSIGNED,             \
                                format, args);                               \
@@ -833,10 +808,9 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint8_t min,       \
-                                                         uint8_t max,       \
-                                                         args_decl)         \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint8_t min, uint8_t max,     \
+                                              args_decl)                    \
 {                                                                           \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
@@ -861,8 +835,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint64_t *p)         \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint64_t *p) \
 {                                                                           \
     return uref_attr_get_unsigned(uref, p, UDICT_TYPE_UNSIGNED, name);      \
 }                                                                           \
@@ -872,8 +845,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       uint64_t v)          \
+static inline int uref_##group##_set_##attr(struct uref *uref, uint64_t v)  \
 {                                                                           \
     return uref_attr_set_unsigned(uref, v, UDICT_TYPE_UNSIGNED, name);      \
 }                                                                           \
@@ -882,7 +854,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
 }                                                                           \
@@ -893,9 +865,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint64_t min,      \
-                                                         uint64_t max)      \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint64_t min, uint64_t max)   \
 {                                                                           \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -916,8 +887,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint64_t *p)         \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint64_t *p) \
 {                                                                           \
     return uref_attr_get_unsigned(uref, p, type, NULL);                     \
 }                                                                           \
@@ -927,8 +897,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                             uint64_t v)                    \
+static inline int uref_##group##_set_##attr(struct uref *uref, uint64_t v)  \
 {                                                                           \
     return uref_attr_set_unsigned(uref, v, type, NULL);                     \
 }                                                                           \
@@ -937,7 +906,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
@@ -948,9 +917,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint64_t min,      \
-                                                         uint64_t max)      \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint64_t min, uint64_t max)   \
 {                                                                           \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -973,9 +941,8 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint64_t *p,         \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint64_t *p, \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_get_unsigned_va(uref, p, UDICT_TYPE_UNSIGNED,          \
                                      format, args);                         \
@@ -986,9 +953,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       uint64_t v,          \
-                                                       args_decl)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, uint64_t v,  \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_set_unsigned_va(uref, v, UDICT_TYPE_UNSIGNED,          \
                                      format, args);                         \
@@ -998,8 +964,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_UNSIGNED, format, args);    \
 }                                                                           \
@@ -1010,10 +975,9 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint8_t min,       \
-                                                         uint8_t max,       \
-                                                         args_decl)         \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint8_t min, uint8_t max,     \
+                                              args_decl)                    \
 {                                                                           \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
@@ -1035,8 +999,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       uint64_t *p)         \
+static inline int uref_##group##_get_##attr(struct uref *uref, uint64_t *p) \
 {                                                                           \
     if (uref->member != UINT64_MAX) {                                       \
         *p = uref->member;                                                  \
@@ -1069,9 +1032,8 @@ static inline void uref_##group##_delete_##attr(struct uref *uref)          \
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
-                                                         uint8_t min,       \
-                                                         uint8_t max)       \
+static inline int uref_##group##_match_##attr(struct uref *uref,            \
+                                              uint8_t min, uint8_t max)     \
 {                                                                           \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -1098,8 +1060,7 @@ static inline enum ubase_err uref_##group##_match_##attr(struct uref *uref, \
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       int64_t *p)          \
+static inline int uref_##group##_get_##attr(struct uref *uref, int64_t *p)  \
 {                                                                           \
     return uref_attr_get_int(uref, p, UDICT_TYPE_INT, name);                \
 }                                                                           \
@@ -1109,8 +1070,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       int64_t v)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v)   \
 {                                                                           \
     return uref_attr_set_int(uref, v, UDICT_TYPE_INT, name);                \
 }                                                                           \
@@ -1119,7 +1079,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
 }
@@ -1138,8 +1098,7 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       int64_t *p)          \
+static inline int uref_##group##_get_##attr(struct uref *uref, int64_t *p)  \
 {                                                                           \
     return uref_attr_get_int(uref, p, type, NULL);                          \
 }                                                                           \
@@ -1149,8 +1108,7 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       int64_t v)           \
+static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v)   \
 {                                                                           \
     return uref_attr_set_int(uref, v, type, NULL);                          \
 }                                                                           \
@@ -1159,7 +1117,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }
@@ -1179,9 +1137,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       int64_t *p,          \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref, int64_t *p,  \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_get_int_va(uref, p, UDICT_TYPE_INT, format, args);     \
 }                                                                           \
@@ -1191,8 +1148,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       int64_t v, args_decl)\
+static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v,   \
+                                            args_decl)                      \
 {                                                                           \
     return uref_attr_set_int_va(uref, v, UDICT_TYPE_INT, format, args);     \
 }                                                                           \
@@ -1201,8 +1158,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_INT, format, args);         \
 }
@@ -1226,8 +1182,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       struct urational *p) \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            struct urational *p)            \
 {                                                                           \
     return uref_attr_get_rational(uref, p, UDICT_TYPE_RATIONAL, name);      \
 }                                                                           \
@@ -1237,8 +1193,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       struct urational v)  \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            struct urational v)             \
 {                                                                           \
     return uref_attr_set_rational(uref, v, UDICT_TYPE_RATIONAL, name);      \
 }                                                                           \
@@ -1247,7 +1203,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_RATIONAL, name);               \
 }
@@ -1266,8 +1222,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       struct urational *p) \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            struct urational *p)            \
 {                                                                           \
     return uref_attr_get_rational(uref, p, type, NULL);                     \
 }                                                                           \
@@ -1277,8 +1233,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       struct urational v)  \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            struct urational v)             \
 {                                                                           \
     return uref_attr_set_rational(uref, v, type, NULL);                     \
 }                                                                           \
@@ -1287,7 +1243,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }
@@ -1307,9 +1263,8 @@ static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref)\
  * @param p pointer to the retrieved value (modified during execution)      \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
-                                                       struct urational *p, \
-                                                       args_decl)           \
+static inline int uref_##group##_get_##attr(struct uref *uref,              \
+                                            struct urational *p, args_decl) \
 {                                                                           \
     return uref_attr_get_rational_va(uref, p, UDICT_TYPE_RATIONAL,          \
                                    format, args);                           \
@@ -1320,9 +1275,8 @@ static inline enum ubase_err uref_##group##_get_##attr(struct uref *uref,   \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
-                                                       struct urational v,  \
-                                                       args_decl)           \
+static inline int uref_##group##_set_##attr(struct uref *uref,              \
+                                            struct urational v, args_decl)  \
 {                                                                           \
     return uref_attr_set_rational_va(uref, v, UDICT_TYPE_RATIONAL,          \
                                    format, args);                           \
@@ -1332,8 +1286,7 @@ static inline enum ubase_err uref_##group##_set_##attr(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err uref_##group##_delete_##attr(struct uref *uref,\
-                                                          args_decl)        \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_RATIONAL, format, args);    \
 }

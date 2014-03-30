@@ -378,7 +378,7 @@ static void upipe_ts_mux_input_free(struct urefcount *urefcount_real);
  * @param args arguments of the event
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_input_probe(struct uprobe *uprobe,
+static int upipe_ts_mux_input_probe(struct uprobe *uprobe,
                                                struct upipe *inner,
                                                int event, va_list args)
 {
@@ -514,8 +514,8 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
+static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -862,8 +862,8 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_input_control(struct upipe *upipe,
-                                                 int command, va_list args)
+static int upipe_ts_mux_input_control(struct upipe *upipe,
+                                      int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -953,9 +953,9 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
  * @param args arguments of the event
  * @return true if the event was caught
  */
-static enum ubase_err upipe_ts_mux_program_probe(struct uprobe *uprobe,
-                                                 struct upipe *inner,
-                                                 int event, va_list args)
+static int upipe_ts_mux_program_probe(struct uprobe *uprobe,
+                                      struct upipe *inner,
+                                      int event, va_list args)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         container_of(uprobe, struct upipe_ts_mux_program, probe);
@@ -1163,8 +1163,8 @@ static void upipe_ts_mux_program_start(struct upipe *upipe)
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
-                                                        struct uref *flow_def)
+static int upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
+                                             struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1242,9 +1242,8 @@ static enum ubase_err upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err
-    upipe_ts_mux_program_get_pmt_interval(struct upipe *upipe,
-                                          uint64_t *interval_p)
+static int upipe_ts_mux_program_get_pmt_interval(struct upipe *upipe,
+                                                 uint64_t *interval_p)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1260,9 +1259,8 @@ static enum ubase_err
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err
-    upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
-                                          uint64_t interval)
+static int upipe_ts_mux_program_set_pmt_interval(struct upipe *upipe,
+                                                 uint64_t interval)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1280,9 +1278,8 @@ static enum ubase_err
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err
-    upipe_ts_mux_program_get_pcr_interval(struct upipe *upipe,
-                                          uint64_t *interval_p)
+static int upipe_ts_mux_program_get_pcr_interval(struct upipe *upipe,
+                                                 uint64_t *interval_p)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1298,9 +1295,8 @@ static enum ubase_err
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err
-    upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
-                                          uint64_t interval)
+static int upipe_ts_mux_program_set_pcr_interval(struct upipe *upipe,
+                                                 uint64_t interval)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1324,8 +1320,8 @@ static enum ubase_err
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_program_control(struct upipe *upipe,
-                                                   int command, va_list args)
+static int upipe_ts_mux_program_control(struct upipe *upipe,
+                                        int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1440,9 +1436,8 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
  * @param args arguments of the event
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_agg_probe(struct uprobe *uprobe,
-                                             struct upipe *inner,
-                                             int event, va_list args)
+static int upipe_ts_mux_agg_probe(struct uprobe *uprobe, struct upipe *inner,
+                                  int event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, agg_probe);
@@ -1459,9 +1454,8 @@ static enum ubase_err upipe_ts_mux_agg_probe(struct uprobe *uprobe,
  * @param args arguments of the event
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_probe(struct uprobe *uprobe,
-                                         struct upipe *inner,
-                                         int event, va_list args)
+static int upipe_ts_mux_probe(struct uprobe *uprobe, struct upipe *inner,
+                              int event, va_list args)
 {
     struct upipe_ts_mux *upipe_ts_mux =
         container_of(uprobe, struct upipe_ts_mux, probe);
@@ -1724,8 +1718,7 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_ts_mux_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1746,7 +1739,7 @@ static enum ubase_err upipe_ts_mux_set_flow_def(struct upipe *upipe,
     UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI));
     UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, 0));
 
-    enum ubase_err err = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
+    int err = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
     uref_free(flow_def_dup);
     return err;
 }
@@ -1758,8 +1751,7 @@ static enum ubase_err upipe_ts_mux_set_flow_def(struct upipe *upipe,
  * @param conformance_p filled in with the conformance
  * @return an error code
  */
-static enum ubase_err
-    _upipe_ts_mux_get_conformance(struct upipe *upipe,
+static int _upipe_ts_mux_get_conformance(struct upipe *upipe,
                                   enum upipe_ts_conformance *conformance_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
@@ -1774,9 +1766,8 @@ static enum ubase_err
  * @param conformance conformance mode
  * @return an error code
  */
-static enum ubase_err
-    _upipe_ts_mux_set_conformance(struct upipe *upipe,
-                                  enum upipe_ts_conformance conformance)
+static int _upipe_ts_mux_set_conformance(struct upipe *upipe,
+                                         enum upipe_ts_conformance conformance)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     uint64_t max_psi_interval = UINT64_MAX;
@@ -1818,8 +1809,8 @@ static enum ubase_err
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
-                                                     uint64_t *interval_p)
+static int _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
@@ -1834,8 +1825,8 @@ static enum ubase_err _upipe_ts_mux_get_pat_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
-                                                     uint64_t interval)
+static int _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
+                                          uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pat_interval = interval;
@@ -1851,8 +1842,8 @@ static enum ubase_err _upipe_ts_mux_set_pat_interval(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
-                                                     uint64_t *interval_p)
+static int _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
@@ -1867,8 +1858,8 @@ static enum ubase_err _upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
-                                                     uint64_t interval)
+static int _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
+                                          uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pmt_interval = interval;
@@ -1889,8 +1880,8 @@ static enum ubase_err _upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
-                                                     uint64_t *interval_p)
+static int _upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(interval_p != NULL);
@@ -1904,8 +1895,8 @@ static enum ubase_err _upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
-                                                     uint64_t interval)
+static int _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
+                                          uint64_t interval)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->pcr_interval = interval;
@@ -1926,8 +1917,8 @@ static enum ubase_err _upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
  * @param octetrate_p filled in with the octetrate
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
-                                                          uint64_t *octetrate_p)
+static int _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
+                                               uint64_t *octetrate_p)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     assert(octetrate_p != NULL);
@@ -1941,8 +1932,8 @@ static enum ubase_err _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
  * @param octetrate new octetrate
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
-                                                          uint64_t octetrate)
+static int _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
+                                               uint64_t octetrate)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->padding_octetrate = octetrate;
@@ -1956,8 +1947,7 @@ static enum ubase_err _upipe_ts_mux_set_padding_octetrate(struct upipe *upipe,
  * @param octetrate new octetrate
  * @return an error code
  */
-static enum ubase_err _upipe_ts_mux_set_octetrate(struct upipe *upipe,
-                                                  uint64_t octetrate)
+static int _upipe_ts_mux_set_octetrate(struct upipe *upipe, uint64_t octetrate)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     if (upipe_ts_mux->agg == NULL)
@@ -1979,8 +1969,8 @@ static enum ubase_err _upipe_ts_mux_set_octetrate(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_ts_mux_control(struct upipe *upipe,
+                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR: {
@@ -2142,8 +2132,8 @@ static void upipe_ts_mux_mgr_free(struct urefcount *urefcount)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
-                                               int command, va_list args)
+static int upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
+                                    int command, va_list args)
 {
     struct upipe_ts_mux_mgr *ts_mux_mgr = upipe_ts_mux_mgr_from_upipe_mgr(mgr);
 

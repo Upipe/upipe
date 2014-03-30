@@ -110,8 +110,8 @@ static struct upipe_mgr count_mgr = {
 };
 
 /** catch callback (demux subpipes for flows) */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);

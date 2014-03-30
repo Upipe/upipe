@@ -95,8 +95,8 @@ static struct uprobe uprobe_demux_output_s;
 static struct uprobe uprobe_demux_program_s;
 
 /** generic probe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:
@@ -119,9 +119,9 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** probe to catch events from the TS demux outputs */
-static enum ubase_err catch_ts_demux_output(struct uprobe *uprobe,
-                                            struct upipe *upipe,
-                                            int event, va_list args)
+static int catch_ts_demux_output(struct uprobe *uprobe,
+                                 struct upipe *upipe,
+                                 int event, va_list args)
 {
     if (event == UPROBE_SOURCE_END) {
         upipe_release(upipe);
@@ -132,9 +132,9 @@ static enum ubase_err catch_ts_demux_output(struct uprobe *uprobe,
 }
 
 /** probe to catch events from the TS demux programs */
-static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
-                                             struct upipe *upipe,
-                                             int event, va_list args)
+static int catch_ts_demux_program(struct uprobe *uprobe,
+                                  struct upipe *upipe,
+                                  int event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END:
@@ -215,8 +215,8 @@ static enum ubase_err catch_ts_demux_program(struct uprobe *uprobe,
 }
 
 /** probe to catch events from the TS demux */
-static enum ubase_err catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
-                                     int event, va_list args)
+static int catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
+                          int event, va_list args)
 {
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {

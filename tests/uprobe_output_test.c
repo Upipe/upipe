@@ -50,12 +50,12 @@
 #define UREF_POOL_DEPTH 0
 
 static struct upipe *output = NULL;
-static enum ubase_err set_flow_def_answer = UBASE_ERR_NONE;
+static int set_flow_def_answer = UBASE_ERR_NONE;
 static bool expect_new_flow_def = true;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:
@@ -69,7 +69,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-static enum ubase_err test_control(struct upipe *upipe,
+static int test_control(struct upipe *upipe,
                                    int command, va_list args)
 {
     switch (command) {
@@ -100,8 +100,7 @@ static struct upipe_mgr test_mgr = {
     .upipe_control = test_control
 };
 
-static enum ubase_err output_control(struct upipe *upipe,
-                                     int command, va_list args)
+static int output_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:

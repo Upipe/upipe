@@ -403,7 +403,7 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
  * @param vsize_p vertical size
  * @return an error code
  */
-static enum ubase_err _upipe_sws_thumbs_get_size(struct upipe *upipe,
+static int _upipe_sws_thumbs_get_size(struct upipe *upipe,
                            int *hsize_p, int *vsize_p, int *cols_p, int *rows_p)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
@@ -432,8 +432,8 @@ static enum ubase_err _upipe_sws_thumbs_get_size(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_sws_thumbs_amend_flow_format(struct upipe *upipe,
-        struct uref *flow_format)
+static int upipe_sws_thumbs_amend_flow_format(struct upipe *upipe,
+                                              struct uref *flow_format)
 {
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
@@ -455,8 +455,8 @@ static enum ubase_err upipe_sws_thumbs_amend_flow_format(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
-                                                    struct uref *flow_def)
+static int upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -493,8 +493,8 @@ static enum ubase_err upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_sws_thumbs_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_sws_thumbs_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
         /* generic commands */

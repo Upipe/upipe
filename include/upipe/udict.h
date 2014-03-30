@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -180,13 +180,13 @@ struct udict_mgr {
     /** function to allocate a udict with a given initial size */
     struct udict *(*udict_alloc)(struct udict_mgr *, size_t);
     /** control function for standard or local commands */
-    enum ubase_err (*udict_control)(struct udict *, int, va_list);
+    int (*udict_control)(struct udict *, int, va_list);
     /** function to free a udict */
     void (*udict_free)(struct udict *);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*udict_mgr_control)(struct udict_mgr *, int, va_list);
+    int (*udict_mgr_control)(struct udict_mgr *, int, va_list);
 };
 
 /** @This allocates and initializes a new udict.
@@ -207,9 +207,8 @@ static inline struct udict *udict_alloc(struct udict_mgr *mgr, size_t size)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    udict_control_va(struct udict *udict,
-                     int command, va_list args)
+static inline int udict_control_va(struct udict *udict,
+                                   int command, va_list args)
 {
     assert(udict != NULL);
     if (udict->mgr->udict_mgr_control == NULL)
@@ -225,10 +224,9 @@ static inline enum ubase_err
  * parameters
  * @return an error code
  */
-static inline enum ubase_err udict_control(struct udict *udict,
-                                           int command, ...)
+static inline int udict_control(struct udict *udict, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = udict_control_va(udict, command, args);
@@ -259,9 +257,8 @@ static inline struct udict *udict_dup(struct udict *udict)
  * UDICT_TYPE_END at the end of the iteration; start with UDICT_TYPE_END as well
  * @return an error code
  */
-static inline enum ubase_err udict_iterate(struct udict *udict,
-                                           const char **name_p,
-                                           enum udict_type *type_p)
+static inline int udict_iterate(struct udict *udict, const char **name_p,
+                                enum udict_type *type_p)
 {
     return udict_control(udict, UDICT_ITERATE, name_p, type_p);
 }
@@ -276,9 +273,9 @@ static inline enum ubase_err udict_iterate(struct udict *udict,
  * @param p pointer to the value of the found attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get(struct udict *udict, const char *name,
-                                       enum udict_type type, size_t *size_p,
-                                       const uint8_t **p)
+static inline int udict_get(struct udict *udict, const char *name,
+                            enum udict_type type, size_t *size_p,
+                            const uint8_t **p)
 {
     return udict_control(udict, UDICT_GET, name, type, size_p, p);
 }
@@ -292,10 +289,8 @@ static inline enum ubase_err udict_get(struct udict *udict, const char *name,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_opaque(struct udict *udict,
-                                              struct udict_opaque *p,
-                                              enum udict_type type,
-                                              const char *name)
+static inline int udict_get_opaque(struct udict *udict, struct udict_opaque *p,
+                                   enum udict_type type, const char *name)
 {
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &p->size, &attr));
@@ -311,10 +306,8 @@ static inline enum ubase_err udict_get_opaque(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_string(struct udict *udict,
-                                              const char **p,
-                                              enum udict_type type,
-                                              const char *name)
+static inline int udict_get_string(struct udict *udict, const char **p,
+                                   enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -332,9 +325,8 @@ static inline enum ubase_err udict_get_string(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_void(struct udict *udict, void *p,
-                                            enum udict_type type,
-                                            const char *name)
+static inline int udict_get_void(struct udict *udict, void *p,
+                                 enum udict_type type, const char *name)
 {
     UBASE_RETURN(udict_get(udict, name, type, NULL, NULL));
     return UBASE_ERR_NONE;
@@ -348,9 +340,8 @@ static inline enum ubase_err udict_get_void(struct udict *udict, void *p,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_bool(struct udict *udict, bool *p,
-                                            enum udict_type type,
-                                            const char *name)
+static inline int udict_get_bool(struct udict *udict, bool *p,
+                                 enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -368,10 +359,9 @@ static inline enum ubase_err udict_get_bool(struct udict *udict, bool *p,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_small_unsigned(struct udict *udict,
-                                                      uint8_t *p,
-                                                      enum udict_type type,
-                                                      const char *name)
+static inline int udict_get_small_unsigned(struct udict *udict, uint8_t *p,
+                                           enum udict_type type,
+                                           const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -389,9 +379,8 @@ static inline enum ubase_err udict_get_small_unsigned(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_small_int(struct udict *udict, int8_t *p,
-                                                 enum udict_type type,
-                                                 const char *name)
+static inline int udict_get_small_int(struct udict *udict, int8_t *p,
+                                      enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -439,10 +428,8 @@ static inline int64_t udict_get_int64(const uint8_t *attr)
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_unsigned(struct udict *udict,
-                                                uint64_t *p,
-                                                enum udict_type type,
-                                                const char *name)
+static inline int udict_get_unsigned(struct udict *udict, uint64_t *p,
+                                     enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -460,9 +447,8 @@ static inline enum ubase_err udict_get_unsigned(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_int(struct udict *udict, int64_t *p,
-                                           enum udict_type type,
-                                           const char *name)
+static inline int udict_get_int(struct udict *udict, int64_t *p,
+                                enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -480,9 +466,8 @@ static inline enum ubase_err udict_get_int(struct udict *udict, int64_t *p,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_float(struct udict *udict, double *p,
-                                             enum udict_type type,
-                                             const char *name)
+static inline int udict_get_float(struct udict *udict, double *p,
+                                  enum udict_type type, const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
@@ -506,10 +491,8 @@ static inline enum ubase_err udict_get_float(struct udict *udict, double *p,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_get_rational(struct udict *udict,
-                                                struct urational *p,
-                                                enum udict_type type,
-                                                const char *name)
+static inline int udict_get_rational(struct udict *udict, struct urational *p,
+                                     enum udict_type type, const char *name)
 {
     size_t size;
     const uint8_t *attr;
@@ -528,9 +511,9 @@ static inline enum ubase_err udict_get_rational(struct udict *udict,
  * @param attr_size size needed to store the value of the attribute
  * @param p pointer to the value of the attribute
  */
-static inline enum ubase_err udict_set(struct udict *udict, const char *name,
-                                       enum udict_type type, size_t attr_size,
-                                       uint8_t **p)
+static inline int udict_set(struct udict *udict, const char *name,
+                            enum udict_type type, size_t attr_size,
+                            uint8_t **p)
 {
     return udict_control(udict, UDICT_SET, name, type, attr_size, p);
 }
@@ -543,10 +526,9 @@ static inline enum ubase_err udict_set(struct udict *udict, const char *name,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_opaque(struct udict *udict,
-                                              struct udict_opaque value,
-                                              enum udict_type type,
-                                              const char *name)
+static inline int udict_set_opaque(struct udict *udict,
+                                   struct udict_opaque value,
+                                   enum udict_type type, const char *name)
 {
     /* copy the opaque it case in points to us */
     uint8_t v[value.size];
@@ -565,10 +547,8 @@ static inline enum ubase_err udict_set_opaque(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_string(struct udict *udict,
-                                              const char *value,
-                                              enum udict_type type,
-                                              const char *name)
+static inline int udict_set_string(struct udict *udict, const char *value,
+                                   enum udict_type type, const char *name)
 {
     size_t attr_size = strlen(value) + 1;
     /* copy the string it case in points to us */
@@ -588,9 +568,8 @@ static inline enum ubase_err udict_set_string(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_void(struct udict *udict, void *value,
-                                            enum udict_type type,
-                                            const char *name)
+static inline int udict_set_void(struct udict *udict, void *value,
+                                 enum udict_type type, const char *name)
 {
     UBASE_RETURN(udict_set(udict, name, type, 0, NULL));
     return UBASE_ERR_NONE;
@@ -604,9 +583,8 @@ static inline enum ubase_err udict_set_void(struct udict *udict, void *value,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_bool(struct udict *udict, bool value,
-                                           enum udict_type type,
-                                           const char *name)
+static inline int udict_set_bool(struct udict *udict, bool value,
+                                 enum udict_type type, const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
@@ -622,10 +600,9 @@ static inline enum ubase_err udict_set_bool(struct udict *udict, bool value,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_small_unsigned(struct udict *udict,
-                                                     uint8_t value,
-                                                     enum udict_type type,
-                                                     const char *name)
+static inline int udict_set_small_unsigned(struct udict *udict, uint8_t value,
+                                           enum udict_type type,
+                                           const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
@@ -641,10 +618,8 @@ static inline enum ubase_err udict_set_small_unsigned(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_small_int(struct udict *udict,
-                                                 int8_t value,
-                                                 enum udict_type type,
-                                                 const char *name)
+static inline int udict_set_small_int(struct udict *udict, int8_t value,
+                                      enum udict_type type, const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 1, &attr));
@@ -694,10 +669,8 @@ static inline void udict_set_int64(uint8_t *attr, int64_t value)
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_unsigned(struct udict *udict,
-                                                uint64_t value,
-                                                enum udict_type type,
-                                                const char *name)
+static inline int udict_set_unsigned(struct udict *udict, uint64_t value,
+                                     enum udict_type type, const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 8, &attr));
@@ -713,9 +686,8 @@ static inline enum ubase_err udict_set_unsigned(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_int(struct udict *udict, uint64_t value,
-                                           enum udict_type type,
-                                           const char *name)
+static inline int udict_set_int(struct udict *udict, uint64_t value,
+                                enum udict_type type, const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 8, &attr));
@@ -731,9 +703,8 @@ static inline enum ubase_err udict_set_int(struct udict *udict, uint64_t value,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_float(struct udict *udict, double value,
-                                             enum udict_type type,
-                                             const char *name)
+static inline int udict_set_float(struct udict *udict, double value,
+                                  enum udict_type type, const char *name)
 {
     /* FIXME: this is probably not portable */
     union {
@@ -755,10 +726,9 @@ static inline enum ubase_err udict_set_float(struct udict *udict, double value,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_set_rational(struct udict *udict,
-                                                struct urational value,
-                                                enum udict_type type,
-                                                const char *name)
+static inline int udict_set_rational(struct udict *udict,
+                                     struct urational value,
+                                     enum udict_type type, const char *name)
 {
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, 16, &attr));
@@ -774,9 +744,8 @@ static inline enum ubase_err udict_set_rational(struct udict *udict,
  * @param name name of the attribute
  * @return an error code
  */
-static inline enum ubase_err udict_delete(struct udict *udict,
-                                          enum udict_type type,
-                                          const char *name)
+static inline int udict_delete(struct udict *udict, enum udict_type type,
+                               const char *name)
 {
     return udict_control(udict, UDICT_DELETE, name, type);
 }
@@ -789,10 +758,8 @@ static inline enum ubase_err udict_delete(struct udict *udict,
  * @param base_type_p filled in with the base type of the shorthand attribute
  * @return an error code
  */
-static inline enum ubase_err udict_name(struct udict *udict,
-                                        enum udict_type type,
-                                        const char **name_p,
-                                        enum udict_type *base_type_p)
+static inline int udict_name(struct udict *udict, enum udict_type type,
+                             const char **name_p, enum udict_type *base_type_p)
 {
     return udict_control(udict, UDICT_NAME, type, name_p, base_type_p);
 }
@@ -812,8 +779,7 @@ static inline void udict_free(struct udict *udict)
  * @param udict_attr udict containing attributes to fetch
  * @return an error code
  */
-static inline enum ubase_err udict_import(struct udict *udict,
-                                          struct udict *udict_attr)
+static inline int udict_import(struct udict *udict, struct udict *udict_attr)
 {
     const char *name = NULL;
     enum udict_type type = UDICT_TYPE_END;
@@ -936,9 +902,8 @@ static inline void udict_mgr_release(struct udict_mgr *mgr)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    udict_mgr_control_va(struct udict_mgr *mgr,
-                         int command, va_list args)
+static inline int udict_mgr_control_va(struct udict_mgr *mgr,
+                                       int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->udict_mgr_control == NULL)
@@ -955,11 +920,9 @@ static inline enum ubase_err
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    udict_mgr_control(struct udict_mgr *mgr,
-                      int command, ...)
+static inline int udict_mgr_control(struct udict_mgr *mgr, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = udict_mgr_control_va(mgr, command, args);
@@ -973,7 +936,7 @@ static inline enum ubase_err
  * @param mgr pointer to udict manager
  * @return an error code
  */
-static inline enum ubase_err udict_mgr_vacuum(struct udict_mgr *mgr)
+static inline int udict_mgr_vacuum(struct udict_mgr *mgr)
 {
     return udict_mgr_control(mgr, UDICT_MGR_VACUUM);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -192,8 +192,7 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
  * comma, or "auto" to automatically select the first flow, or "all"
  * @return an error code
  */
-static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
-                                                  const char *flows)
+static int uprobe_selflow_set_internal(struct uprobe *uprobe, const char *flows)
 {
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     free(uprobe_selflow->flows);
@@ -201,7 +200,7 @@ static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
     if (unlikely(uprobe_selflow->flows == NULL))
         return UBASE_ERR_ALLOC;
 
-    enum ubase_err error = UBASE_ERR_NONE;
+    int error = UBASE_ERR_NONE;
     struct uchain *uchain;
     ulist_foreach (&uprobe_selflow->subs, uchain) {
         struct uprobe_selflow_sub *sub = uprobe_selflow_sub_from_uchain(uchain);
@@ -229,8 +228,8 @@ static enum ubase_err uprobe_selflow_set_internal(struct uprobe *uprobe,
  * @param uprobe pointer to probe
  * @param format of the syntax, followed by optional arguments
  */
-static enum ubase_err uprobe_selflow_set_internal_va(struct uprobe *uprobe,
-                                                     const char *format, ...)
+static int uprobe_selflow_set_internal_va(struct uprobe *uprobe,
+                                          const char *format, ...)
 {
     UBASE_VARARG(uprobe_selflow_set_internal(uprobe, string))
 }
@@ -240,7 +239,7 @@ static enum ubase_err uprobe_selflow_set_internal_va(struct uprobe *uprobe,
  *
  * @param uprobe pointer to probe
  */
-static enum ubase_err uprobe_selflow_check_auto(struct uprobe *uprobe)
+static int uprobe_selflow_check_auto(struct uprobe *uprobe)
 {
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     struct uchain *uchain;
@@ -270,9 +269,9 @@ static enum ubase_err uprobe_selflow_check_auto(struct uprobe *uprobe)
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_selflow_sub_throw(struct uprobe *uprobe,
-                                               struct upipe *subpipe,
-                                               int event, va_list args)
+static int uprobe_selflow_sub_throw(struct uprobe *uprobe,
+                                    struct upipe *subpipe,
+                                    int event, va_list args)
 {
     if (event != UPROBE_SOURCE_END)
         return uprobe_throw_next(uprobe, subpipe, event, args);
@@ -343,9 +342,8 @@ static struct uprobe *uprobe_selflow_sub_alloc(struct uprobe *next,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
-                                           struct upipe *upipe,
-                                           int event, va_list args)
+static int uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
+                                int event, va_list args)
 {
     if (event != UPROBE_SPLIT_UPDATE)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -353,7 +351,7 @@ static enum ubase_err uprobe_selflow_throw(struct uprobe *uprobe,
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     bool need_update = false;
 
-    enum ubase_err error = UBASE_ERR_NONE;
+    int error = UBASE_ERR_NONE;
     /* Iterate over existing flows. */
     struct uref *flow_def = NULL;
     while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
@@ -523,7 +521,7 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p)
  * automatically select the first flow, or "all"
  * @return an error code
  */
-enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
+int uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
 {
     struct uprobe_selflow *uprobe_selflow =
         uprobe_selflow_from_uprobe(uprobe);
@@ -540,8 +538,7 @@ enum ubase_err uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
  * @param uprobe pointer to probe
  * @param format format of the syntax, followed by optional arguments
  */
-enum ubase_err uprobe_selflow_set_va(struct uprobe *uprobe,
-                                     const char *format, ...)
+int uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...)
 {
     UBASE_VARARG(uprobe_selflow_set(uprobe, string))
 }

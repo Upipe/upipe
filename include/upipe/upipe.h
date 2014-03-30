@@ -185,11 +185,11 @@ struct upipe_mgr {
     void (*upipe_input)(struct upipe *, struct uref *, struct upump **);
     /** control function for standard or local commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upipe_control)(struct upipe *, int, va_list);
+    int (*upipe_control)(struct upipe *, int, va_list);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upipe_mgr_control)(struct upipe_mgr *, int, va_list);
+    int (*upipe_mgr_control)(struct upipe_mgr *, int, va_list);
 };
 
 /** @This increments the reference count of a upipe manager.
@@ -224,8 +224,8 @@ static inline void upipe_mgr_release(struct upipe_mgr *mgr)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err upipe_mgr_control_va(struct upipe_mgr *mgr,
-                                                  int command, va_list args)
+static inline int upipe_mgr_control_va(struct upipe_mgr *mgr,
+                                       int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->upipe_mgr_control == NULL)
@@ -243,10 +243,9 @@ static inline enum ubase_err upipe_mgr_control_va(struct upipe_mgr *mgr,
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err upipe_mgr_control(struct upipe_mgr *mgr,
-                                               int command, ...)
+static inline int upipe_mgr_control(struct upipe_mgr *mgr, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = upipe_mgr_control_va(mgr, command, args);
@@ -260,7 +259,7 @@ static inline enum ubase_err upipe_mgr_control(struct upipe_mgr *mgr,
  * @param mgr pointer to upipe manager
  * @return an error code
  */
-static inline enum ubase_err upipe_mgr_vacuum(struct upipe_mgr *mgr)
+static inline int upipe_mgr_vacuum(struct upipe_mgr *mgr)
 {
     return upipe_mgr_control(mgr, UPIPE_MGR_VACUUM);
 }
@@ -482,8 +481,7 @@ static inline void upipe_clean(struct upipe *upipe)
  * @param args arguments
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
-                                            int event, va_list args)
+static inline int upipe_throw_va(struct upipe *upipe, int event, va_list args)
 {
     return uprobe_throw_va(upipe->uprobe, upipe, event, args);
 }
@@ -494,12 +492,11 @@ static inline enum ubase_err upipe_throw_va(struct upipe *upipe,
  * @param event event to throw, followed by arguments
  * @return an error code
  */
-static inline enum ubase_err upipe_throw(struct upipe *upipe,
-                                         int event, ...)
+static inline int upipe_throw(struct upipe *upipe, int event, ...)
 {
     va_list args;
     va_start(args, event);
-    enum ubase_err err = upipe_throw_va(upipe, event, args);
+    int err = upipe_throw_va(upipe, event, args);
     va_end(args);
     return err;
 }
@@ -644,7 +641,7 @@ static inline void upipe_verbose_va(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_ready(struct upipe *upipe)
+static inline int upipe_throw_ready(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw ready event");
     return upipe_throw(upipe, UPROBE_READY);
@@ -657,7 +654,7 @@ static inline enum ubase_err upipe_throw_ready(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_dead(struct upipe *upipe)
+static inline int upipe_throw_dead(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw dead event");
     return upipe_throw(upipe, UPROBE_DEAD);
@@ -670,7 +667,7 @@ static inline enum ubase_err upipe_throw_dead(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_source_end(struct upipe *upipe)
+static inline int upipe_throw_source_end(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw source end");
     return upipe_throw(upipe, UPROBE_SOURCE_END);
@@ -682,7 +679,7 @@ static inline enum ubase_err upipe_throw_source_end(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
+static inline int upipe_throw_sink_end(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sink end");
     return upipe_throw(upipe, UPROBE_SINK_END);
@@ -696,11 +693,11 @@ static inline enum ubase_err upipe_throw_sink_end(struct upipe *upipe)
  * @param uref_mgr_p filled in with a pointer to the uref manager
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe,
+static inline int upipe_throw_need_uref_mgr(struct upipe *upipe,
         struct uref_mgr **uref_mgr_p)
 {
     upipe_dbg(upipe, "throw need uref mgr");
-    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UREF_MGR, uref_mgr_p);
+    int err = upipe_throw(upipe, UPROBE_NEED_UREF_MGR, uref_mgr_p);
     upipe_dbg_va(upipe, "got uref_mgr %p with error code 0x%x",
                  *uref_mgr_p, err);
     return err;
@@ -714,11 +711,11 @@ static inline enum ubase_err upipe_throw_need_uref_mgr(struct upipe *upipe,
  * @param upump_mgr_p filled in with a pointer to the upump manager
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe,
+static inline int upipe_throw_need_upump_mgr(struct upipe *upipe,
         struct upump_mgr **upump_mgr_p)
 {
     upipe_dbg(upipe, "throw need upump mgr");
-    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR, upump_mgr_p);
+    int err = upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR, upump_mgr_p);
     upipe_dbg_va(upipe, "got upump_mgr %p with error code 0x%x",
                  *upump_mgr_p, err);
     return err;
@@ -732,11 +729,11 @@ static inline enum ubase_err upipe_throw_need_upump_mgr(struct upipe *upipe,
  * @param uclock_p filled in with a pointer to the uclock
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe,
+static inline int upipe_throw_need_uclock(struct upipe *upipe,
         struct uclock **uclock_p)
 {
     upipe_dbg(upipe, "throw need uclock");
-    enum ubase_err err = upipe_throw(upipe, UPROBE_NEED_UCLOCK, uclock_p);
+    int err = upipe_throw(upipe, UPROBE_NEED_UCLOCK, uclock_p);
     upipe_dbg_va(upipe, "got uclock %p with error code 0x%x", *uclock_p, err);
     return err;
 }
@@ -751,7 +748,7 @@ static inline enum ubase_err upipe_throw_need_uclock(struct upipe *upipe,
  * @param ubuf_mgr_p filled in with a pointer to an ubuf_mgr, if not NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_new_flow_format(struct upipe *upipe,
+static inline int upipe_throw_new_flow_format(struct upipe *upipe,
         struct uref *flow_format, struct ubuf_mgr **ubuf_mgr_p)
 {
     if (flow_format == NULL || flow_format->udict == NULL)
@@ -760,7 +757,7 @@ static inline enum ubase_err upipe_throw_new_flow_format(struct upipe *upipe,
         upipe_dbg(upipe, "throw new flow format");
         udict_dump(flow_format->udict, upipe->uprobe);
     }
-    enum ubase_err err = upipe_throw(upipe, UPROBE_NEW_FLOW_FORMAT, flow_format,
+    int err = upipe_throw(upipe, UPROBE_NEW_FLOW_FORMAT, flow_format,
                                      ubuf_mgr_p);
     if (ubuf_mgr_p != NULL)
         upipe_dbg_va(upipe, "got ubuf_mgr %p with error code 0x%x", *ubuf_mgr_p,
@@ -774,8 +771,8 @@ static inline enum ubase_err upipe_throw_new_flow_format(struct upipe *upipe,
  * @param flow_def definition for this flow
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
+static inline int upipe_throw_new_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
 {
     if (flow_def == NULL || flow_def->udict == NULL)
         upipe_dbg(upipe, "throw new flow def (NULL)");
@@ -792,8 +789,7 @@ static inline enum ubase_err upipe_throw_new_flow_def(struct upipe *upipe,
  * @param uref uref containing the random access point
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_new_rap(struct upipe *upipe,
-                                                 struct uref *uref)
+static inline int upipe_throw_new_rap(struct upipe *upipe, struct uref *uref)
 {
     return upipe_throw(upipe, UPROBE_NEW_RAP, uref);
 }
@@ -804,7 +800,7 @@ static inline enum ubase_err upipe_throw_new_rap(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_split_throw_update(struct upipe *upipe)
+static inline int upipe_split_throw_update(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw split update");
     return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
@@ -815,7 +811,7 @@ static inline enum ubase_err upipe_split_throw_update(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_sync_acquired(struct upipe *upipe)
+static inline int upipe_throw_sync_acquired(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sync acquired");
     return upipe_throw(upipe, UPROBE_SYNC_ACQUIRED);
@@ -827,7 +823,7 @@ static inline enum ubase_err upipe_throw_sync_acquired(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_sync_lost(struct upipe *upipe)
+static inline int upipe_throw_sync_lost(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw sync lost");
     return upipe_throw(upipe, UPROBE_SYNC_LOST);
@@ -841,10 +837,8 @@ static inline enum ubase_err upipe_throw_sync_lost(struct upipe *upipe)
  * @param discontinuity 1 if there is a suspicion of discontinuity
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_clock_ref(struct upipe *upipe,
-                                                   struct uref *uref,
-                                                   uint64_t clock_ref,
-                                                   int discontinuity)
+static inline int upipe_throw_clock_ref(struct upipe *upipe, struct uref *uref,
+                                        uint64_t clock_ref, int discontinuity)
 {
     return upipe_throw(upipe, UPROBE_CLOCK_REF, uref, clock_ref, discontinuity);
 }
@@ -859,8 +853,7 @@ static inline enum ubase_err upipe_throw_clock_ref(struct upipe *upipe,
  * @param uref uref carrying a presentation and/or a decoding timestamp
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
-                                                  struct uref *uref)
+static inline int upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
 {
     return upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
@@ -874,9 +867,8 @@ static inline enum ubase_err upipe_throw_clock_ts(struct upipe *upipe,
  * @param args optional arguments of the event
  * @return an error code
  */
-static inline enum ubase_err upipe_throw_proxy(struct upipe *upipe,
-                                               struct upipe *inner,
-                                               int event, va_list args)
+static inline int upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
+                                    int event, va_list args)
 {
     if (event != UPROBE_READY && event != UPROBE_DEAD)
         return upipe_throw_va(upipe, event, args);
@@ -913,14 +905,14 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err upipe_control_va(struct upipe *upipe,
-                                              int command, va_list args)
+static inline int upipe_control_va(struct upipe *upipe,
+                                   int command, va_list args)
 {
     assert(upipe != NULL);
     if (upipe->mgr->upipe_control == NULL)
         return UBASE_ERR_UNHANDLED;
 
-    enum ubase_err err;
+    int err;
     upipe_use(upipe);
     err = upipe->mgr->upipe_control(upipe, command, args);
     upipe_release(upipe);
@@ -940,10 +932,9 @@ static inline enum ubase_err upipe_control_va(struct upipe *upipe,
  * parameters
  * @return an error code
  */
-static inline enum ubase_err upipe_control(struct upipe *upipe,
-                                           int command, ...)
+static inline int upipe_control(struct upipe *upipe, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = upipe_control_va(upipe, command, args);
@@ -967,8 +958,7 @@ static inline enum ubase_err upipe_control(struct upipe *upipe,
  * @param p reference to a value, will be modified                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err group##_get_##name(struct upipe *upipe,        \
-                                                type *p)                    \
+static inline int group##_get_##name(struct upipe *upipe, type *p)          \
 {                                                                           \
     return upipe_control(upipe, GROUP##_GET_##NAME, p);                     \
 }                                                                           \
@@ -978,7 +968,7 @@ static inline enum ubase_err group##_get_##name(struct upipe *upipe,        \
  * @param s new value                                                       \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err group##_set_##name(struct upipe *upipe, type s)\
+static inline int group##_set_##name(struct upipe *upipe, type s)           \
 {                                                                           \
     return upipe_control(upipe, GROUP##_SET_##NAME, s);                     \
 }
@@ -1006,7 +996,7 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_attach_uref_mgr(struct upipe *upipe)
+static inline int upipe_attach_uref_mgr(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_ATTACH_UREF_MGR);
 }
@@ -1016,7 +1006,7 @@ static inline enum ubase_err upipe_attach_uref_mgr(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_attach_upump_mgr(struct upipe *upipe)
+static inline int upipe_attach_upump_mgr(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_ATTACH_UPUMP_MGR);
 }
@@ -1026,7 +1016,7 @@ static inline enum ubase_err upipe_attach_upump_mgr(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_attach_uclock(struct upipe *upipe)
+static inline int upipe_attach_uclock(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_ATTACH_UCLOCK);
 }
@@ -1036,7 +1026,7 @@ static inline enum ubase_err upipe_attach_uclock(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_attach_ubuf_mgr(struct upipe *upipe)
+static inline int upipe_attach_ubuf_mgr(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_ATTACH_UBUF_MGR);
 }
@@ -1059,8 +1049,8 @@ static inline enum ubase_err upipe_attach_ubuf_mgr(struct upipe *upipe)
  * optionally its outputs)
  * @return an error code
  */
-static inline enum ubase_err upipe_amend_flow_format(struct upipe *upipe,
-                                                     struct uref *flow_format)
+static inline int upipe_amend_flow_format(struct upipe *upipe,
+                                          struct uref *flow_format)
 {
     return upipe_control(upipe, UPIPE_AMEND_FLOW_FORMAT, flow_format);
 }
@@ -1072,8 +1062,8 @@ static inline enum ubase_err upipe_amend_flow_format(struct upipe *upipe,
  * @param flow_def proposed flow definition, to be modified by the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_suggest_flow_def(struct upipe *upipe,
-                                                    struct uref *flow_def)
+static inline int upipe_suggest_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
     return upipe_control(upipe, UPIPE_SUGGEST_FLOW_DEF, flow_def);
 }
@@ -1083,7 +1073,7 @@ static inline enum ubase_err upipe_suggest_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_sink_flush(struct upipe *upipe)
+static inline int upipe_sink_flush(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_SINK_FLUSH);
 }
@@ -1094,8 +1084,7 @@ static inline enum ubase_err upipe_sink_flush(struct upipe *upipe)
  * @param p filled in with the next flow def, initialize at NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_split_iterate(struct upipe *upipe,
-                                                 struct uref **p)
+static inline int upipe_split_iterate(struct upipe *upipe, struct uref **p)
 {
     return upipe_control(upipe, UPIPE_SPLIT_ITERATE, p);
 }
@@ -1106,8 +1095,7 @@ static inline enum ubase_err upipe_split_iterate(struct upipe *upipe,
  * @param p filled in with a pointer to the subpipe manager
  * @return an error code
  */
-static inline enum ubase_err upipe_get_sub_mgr(struct upipe *upipe,
-                                               struct upipe_mgr **p)
+static inline int upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
 {
     return upipe_control(upipe, UPIPE_GET_SUB_MGR, p);
 }
@@ -1118,8 +1106,7 @@ static inline enum ubase_err upipe_get_sub_mgr(struct upipe *upipe,
  * @param p filled in with a pointer to the next subpipe, initialize at NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_iterate_sub(struct upipe *upipe,
-                                               struct upipe **p)
+static inline int upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_ITERATE_SUB, p);
 }
@@ -1130,8 +1117,7 @@ static inline enum ubase_err upipe_iterate_sub(struct upipe *upipe,
  * @param p filled in with a pointer to the super-pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_sub_get_super(struct upipe *upipe,
-                                                 struct upipe **p)
+static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }

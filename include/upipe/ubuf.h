@@ -151,12 +151,12 @@ struct ubuf_mgr {
      * on the ubuf manager */
     struct ubuf *(*ubuf_alloc)(struct ubuf_mgr *, uint32_t signature, va_list);
     /** control function for standard or local commands */
-    enum ubase_err (*ubuf_control)(struct ubuf *, int, va_list);
+    int (*ubuf_control)(struct ubuf *, int, va_list);
     /** function to free a ubuf */
     void (*ubuf_free)(struct ubuf *);
 
     /** manager control function for standard or local commands */
-    enum ubase_err (*ubuf_mgr_control)(struct ubuf_mgr *, int, va_list);
+    int (*ubuf_mgr_control)(struct ubuf_mgr *, int, va_list);
 };
 
 /** @internal @This returns a new ubuf. Optional ubuf manager
@@ -186,8 +186,7 @@ static inline struct ubuf *ubuf_alloc(struct ubuf_mgr *mgr,
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err ubuf_control_va(struct ubuf *ubuf,
-                                              int command, va_list args)
+static inline int ubuf_control_va(struct ubuf *ubuf, int command, va_list args)
 {
     assert(ubuf != NULL);
     if (ubuf->mgr->ubuf_control == NULL)
@@ -203,10 +202,9 @@ static inline enum ubase_err ubuf_control_va(struct ubuf *ubuf,
  * parameters
  * @return an error code
  */
-static inline enum ubase_err ubuf_control(struct ubuf *ubuf,
-                                          int command, ...)
+static inline int ubuf_control(struct ubuf *ubuf, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = ubuf_control_va(ubuf, command, args);
@@ -270,9 +268,8 @@ static inline void ubuf_mgr_release(struct ubuf_mgr *mgr)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    ubuf_mgr_control_va(struct ubuf_mgr *mgr,
-                        int command, va_list args)
+static inline int ubuf_mgr_control_va(struct ubuf_mgr *mgr,
+                                      int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->ubuf_mgr_control == NULL)
@@ -289,10 +286,9 @@ static inline enum ubase_err
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    ubuf_mgr_control(struct ubuf_mgr *mgr, int command, ...)
+static inline int ubuf_mgr_control(struct ubuf_mgr *mgr, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = ubuf_mgr_control_va(mgr, command, args);
@@ -306,7 +302,7 @@ static inline enum ubase_err
  * @param mgr pointer to ubuf manager
  * @return an error code
  */
-static inline enum ubase_err ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
+static inline int ubuf_mgr_vacuum(struct ubuf_mgr *mgr)
 {
     return ubuf_mgr_control(mgr, UBUF_MGR_VACUUM);
 }

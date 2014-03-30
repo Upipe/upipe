@@ -297,8 +297,7 @@ static void upipe_fsink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_fsink_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
+static int upipe_fsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -317,8 +316,7 @@ static enum ubase_err upipe_fsink_set_flow_def(struct upipe *upipe,
  * @param path_p filled in with the path of the file
  * @return an error code
  */
-static enum ubase_err _upipe_fsink_get_path(struct upipe *upipe,
-                                            const char **path_p)
+static int _upipe_fsink_get_path(struct upipe *upipe, const char **path_p)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     assert(path_p != NULL);
@@ -333,9 +331,8 @@ static enum ubase_err _upipe_fsink_get_path(struct upipe *upipe,
  * @param mode mode of opening the file
  * @return an error code
  */
-static enum ubase_err _upipe_fsink_set_path(struct upipe *upipe,
-                                            const char *path,
-                                            enum upipe_fsink_mode mode)
+static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
+                                 enum upipe_fsink_mode mode)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
 
@@ -419,7 +416,7 @@ static enum ubase_err _upipe_fsink_set_path(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_fsink_flush(struct upipe *upipe)
+static int upipe_fsink_flush(struct upipe *upipe)
 {
     if (upipe_fsink_flush_sink(upipe)) {
         upipe_fsink_set_upump(upipe, NULL);
@@ -437,8 +434,7 @@ static enum ubase_err upipe_fsink_flush(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err  _upipe_fsink_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -487,8 +483,7 @@ static enum ubase_err  _upipe_fsink_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_fsink_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int upipe_fsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_fsink_control(upipe, command, args));
 

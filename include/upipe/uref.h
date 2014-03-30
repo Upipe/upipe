@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -144,7 +144,7 @@ struct uref_mgr {
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*uref_mgr_control)(struct uref_mgr *, int, va_list);
+    int (*uref_mgr_control)(struct uref_mgr *, int, va_list);
 };
 
 /** @This frees a uref and other sub-structures.
@@ -321,9 +321,8 @@ static inline void uref_mgr_release(struct uref_mgr *mgr)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    uref_mgr_control_va(struct uref_mgr *mgr,
-                         int command, va_list args)
+static inline int uref_mgr_control_va(struct uref_mgr *mgr,
+                                      int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->uref_mgr_control == NULL)
@@ -340,11 +339,9 @@ static inline enum ubase_err
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    uref_mgr_control(struct uref_mgr *mgr,
-                      int command, ...)
+static inline int uref_mgr_control(struct uref_mgr *mgr, int command, ...)
 {
-    enum ubase_err err;
+    int err;
     va_list args;
     va_start(args, command);
     err = uref_mgr_control_va(mgr, command, args);
@@ -358,7 +355,7 @@ static inline enum ubase_err
  * @param mgr pointer to uref manager
  * @return an error code
  */
-static inline enum ubase_err uref_mgr_vacuum(struct uref_mgr *mgr)
+static inline int uref_mgr_vacuum(struct uref_mgr *mgr)
 {
     return uref_mgr_control(mgr, UREF_MGR_VACUUM);
 }

@@ -65,15 +65,15 @@
 static unsigned int nb_packets = 0;
 static uint64_t pts = 0x112121212;
 static uint64_t dts = 0x112121212 - 1080000;
-static enum ubase_err dataalignment = UBASE_ERR_NONE;
-static enum ubase_err end = UBASE_ERR_NONE;
+static enum int dataalignment = UBASE_ERR_NONE;
+static enum int end = UBASE_ERR_NONE;
 static size_t payload_size = 12;
 static bool expect_lost = false;
 static bool expect_acquired = true;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

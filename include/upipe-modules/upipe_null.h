@@ -52,8 +52,7 @@ enum upipe_null_command {
  * @param enable enable or disable
  * @return an error code
  */
-static inline enum ubase_err upipe_null_dump_dict(struct upipe *upipe,
-                                                  bool enable)
+static inline int upipe_null_dump_dict(struct upipe *upipe, bool enable)
 {
     return upipe_control(upipe, UPIPE_NULL_DUMP_DICT, UPIPE_NULL_SIGNATURE, (enable ? 1 : 0));
 }

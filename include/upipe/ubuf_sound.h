@@ -64,9 +64,8 @@ static inline struct ubuf *ubuf_sound_alloc(struct ubuf_mgr *mgr, int size)
  * sample of a plane if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_size(struct ubuf *ubuf,
-                                             size_t *size_p,
-                                             uint8_t *sample_size_p)
+static inline int ubuf_sound_size(struct ubuf *ubuf, size_t *size_p,
+                                  uint8_t *sample_size_p)
 {
     return ubuf_control(ubuf, UBUF_SIZE_SOUND, size_p, sample_size_p);
 }
@@ -80,8 +79,8 @@ static inline enum ubase_err ubuf_sound_size(struct ubuf *ubuf,
  * @param channel_p reference written with channel type of the next plane
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_plane_iterate(struct ubuf *ubuf,
-                                                      const char **channel_p)
+static inline int ubuf_sound_plane_iterate(struct ubuf *ubuf,
+                                           const char **channel_p)
 {
     return ubuf_control(ubuf, UBUF_ITERATE_SOUND_PLANE, channel_p);
 }
@@ -96,8 +95,8 @@ static inline enum ubase_err ubuf_sound_plane_iterate(struct ubuf *ubuf,
  * @param size number of samples wanted, or -1 for until the end
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_plane_unmap(struct ubuf *ubuf,
-        const char *channel, int offset, int size)
+static inline int ubuf_sound_plane_unmap(struct ubuf *ubuf, const char *channel,
+                                         int offset, int size)
 {
     return ubuf_control(ubuf, UBUF_UNMAP_SOUND_PLANE, channel, offset, size);
 }
@@ -112,8 +111,8 @@ static inline enum ubase_err ubuf_sound_plane_unmap(struct ubuf *ubuf,
  * @param planes number of planes mapped
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_unmap(struct ubuf *ubuf,
-        int offset, int size, uint8_t planes)
+static inline int ubuf_sound_unmap(struct ubuf *ubuf, int offset, int size,
+                                   uint8_t planes)
 {
     const char *channel = NULL;
     unsigned int i = 0;
@@ -142,7 +141,7 @@ static inline enum ubase_err ubuf_sound_unmap(struct ubuf *ubuf,
  * NULL                                                                     \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err ubuf_sound_plane_read_##type(struct ubuf *ubuf,\
+static inline int ubuf_sound_plane_read_##type(struct ubuf *ubuf,           \
         const char *channel, int offset, int size, const type **buffer_p)   \
 {                                                                           \
     return ubuf_control(ubuf, UBUF_READ_SOUND_PLANE, channel,               \
@@ -161,7 +160,7 @@ static inline enum ubase_err ubuf_sound_plane_read_##type(struct ubuf *ubuf,\
  * NULL                                                                     \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err ubuf_sound_plane_write_##type(struct ubuf *ubuf,\
+static inline int ubuf_sound_plane_write_##type(struct ubuf *ubuf,          \
         const char *channel, int offset, int size, type **buffer_p)         \
 {                                                                           \
     return ubuf_control(ubuf, UBUF_WRITE_SOUND_PLANE, channel,              \
@@ -180,7 +179,7 @@ static inline enum ubase_err ubuf_sound_plane_write_##type(struct ubuf *ubuf,\
  * @param planes number of elements allocated in array buffers_p            \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err ubuf_sound_read_##type(struct ubuf *ubuf,      \
+static inline int ubuf_sound_read_##type(struct ubuf *ubuf,                 \
         int offset, int size, const type *buffers_p[], uint8_t planes)      \
 {                                                                           \
     const char *channel = NULL;                                             \
@@ -212,7 +211,7 @@ static inline enum ubase_err ubuf_sound_read_##type(struct ubuf *ubuf,      \
  * @param planes number of elements allocated in array buffers_p            \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err ubuf_sound_write_##type(struct ubuf *ubuf,     \
+static inline int ubuf_sound_write_##type(struct ubuf *ubuf,                \
         int offset, int size, type *buffers_p[], uint8_t planes)            \
 {                                                                           \
     const char *channel = NULL;                                             \
@@ -248,8 +247,7 @@ UBUF_SOUND_MAP_TEMPLATE(double, double-precision floats)
  * to -1, keep same end)
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_resize(struct ubuf *ubuf,
-                                               int offset, int new_size)
+static inline int ubuf_sound_resize(struct ubuf *ubuf, int offset, int new_size)
 {
     return ubuf_control(ubuf, UBUF_RESIZE_SOUND, offset, new_size);
 }
@@ -347,8 +345,8 @@ ubuf_sound_copy_err:
  * to -1, keep same end)
  * @return an error code
  */
-static inline enum ubase_err ubuf_sound_replace(struct ubuf_mgr *mgr,
-        struct ubuf **ubuf_p, int skip, int new_size)
+static inline int ubuf_sound_replace(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
+                                     int skip, int new_size)
 {
     struct ubuf *new_ubuf = ubuf_sound_copy(mgr, *ubuf_p, skip, new_size);
     if (unlikely(new_ubuf == NULL))

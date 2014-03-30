@@ -147,8 +147,7 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
  * ubuf
  * @return an error code
  */
-static enum ubase_err ubuf_sound_mem_dup(struct ubuf *ubuf,
-                                         struct ubuf **new_ubuf_p)
+static int ubuf_sound_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf_sound_mem *new_sound = ubuf_sound_mem_alloc_pool(ubuf->mgr);
@@ -183,8 +182,7 @@ static enum ubase_err ubuf_sound_mem_dup(struct ubuf *ubuf,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_sound_mem_control(struct ubuf *ubuf,
-                                           int command, va_list args)
+static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -205,7 +203,7 @@ static enum ubase_err ubuf_sound_mem_control(struct ubuf *ubuf,
             int offset = va_arg(args, int);
             int size = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
-            enum ubase_err err =
+            int err =
                 ubuf_sound_common_plane_map(ubuf, chroma, offset,
                                             size, buffer_p);
 #ifndef NDEBUG
@@ -224,7 +222,7 @@ static enum ubase_err ubuf_sound_mem_control(struct ubuf *ubuf,
             struct ubuf_sound_mem *sound = ubuf_sound_mem_from_ubuf(ubuf);
             if (!ubuf_mem_shared_single(sound->shared))
                 return UBASE_ERR_BUSY;
-            enum ubase_err err =
+            int err =
                 ubuf_sound_common_plane_map(ubuf, chroma, offset,
                                             size, buffer_p);
 #ifndef NDEBUG
@@ -321,8 +319,8 @@ static void ubuf_sound_mem_free_inner(struct upool *upool, void *_sound_mem)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_sound_mem_mgr_control(struct ubuf_mgr *mgr,
-                                               int command, va_list args)
+static int ubuf_sound_mem_mgr_control(struct ubuf_mgr *mgr,
+                                      int command, va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {
@@ -406,8 +404,7 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param channel channel type (see channel reference)
  * @return an error code
  */
-enum ubase_err ubuf_sound_mem_mgr_add_plane(struct ubuf_mgr *mgr,
-                                            const char *channel)
+int ubuf_sound_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *channel)
 {
     assert(mgr != NULL);
     ubuf_sound_mem_mgr_vacuum_pool(mgr);

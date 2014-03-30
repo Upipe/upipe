@@ -114,8 +114,7 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_null_control(struct upipe *upipe,
-                                         int command, va_list args)
+static int upipe_null_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     switch (command) {

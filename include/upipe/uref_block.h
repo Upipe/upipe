@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,7 +74,7 @@ static inline struct uref *uref_block_alloc(struct uref_mgr *uref_mgr,
 }
 
 /** @see ubuf_block_size */
-static inline enum ubase_err uref_block_size(struct uref *uref, size_t *size_p)
+static inline int uref_block_size(struct uref *uref, size_t *size_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -82,8 +82,8 @@ static inline enum ubase_err uref_block_size(struct uref *uref, size_t *size_p)
 }
 
 /** @see ubuf_block_size_linear */
-static inline enum ubase_err uref_block_size_linear(struct uref *uref,
-                                                    int offset, size_t *size_p)
+static inline int uref_block_size_linear(struct uref *uref, int offset,
+                                         size_t *size_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -91,9 +91,8 @@ static inline enum ubase_err uref_block_size_linear(struct uref *uref,
 }
 
 /** @see ubuf_block_read */
-static inline enum ubase_err uref_block_read(struct uref *uref, int offset,
-                                             int *size_p,
-                                             const uint8_t **buffer_p)
+static inline int uref_block_read(struct uref *uref, int offset, int *size_p,
+                                  const uint8_t **buffer_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -101,8 +100,8 @@ static inline enum ubase_err uref_block_read(struct uref *uref, int offset,
 }
 
 /** @see ubuf_block_write */
-static inline enum ubase_err uref_block_write(struct uref *uref, int offset,
-                                              int *size_p, uint8_t **buffer_p)
+static inline int uref_block_write(struct uref *uref, int offset, int *size_p,
+                                   uint8_t **buffer_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -110,7 +109,7 @@ static inline enum ubase_err uref_block_write(struct uref *uref, int offset,
 }
 
 /** @see ubuf_block_unmap */
-static inline enum ubase_err uref_block_unmap(struct uref *uref, int offset)
+static inline int uref_block_unmap(struct uref *uref, int offset)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -118,8 +117,8 @@ static inline enum ubase_err uref_block_unmap(struct uref *uref, int offset)
 }
 
 /** @see ubuf_block_insert */
-static inline enum ubase_err uref_block_insert(struct uref *uref, int offset,
-                                               struct ubuf *insert)
+static inline int uref_block_insert(struct uref *uref, int offset,
+                                    struct ubuf *insert)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -127,8 +126,7 @@ static inline enum ubase_err uref_block_insert(struct uref *uref, int offset,
 }
 
 /** @see ubuf_block_append */
-static inline enum ubase_err uref_block_append(struct uref *uref,
-                                               struct ubuf *append)
+static inline int uref_block_append(struct uref *uref, struct ubuf *append)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -136,7 +134,7 @@ static inline enum ubase_err uref_block_append(struct uref *uref,
 }
 
 /** @see ubuf_block_delete */
-static inline enum ubase_err uref_block_delete(struct uref *uref, int offset, int size)
+static inline int uref_block_delete(struct uref *uref, int offset, int size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -144,7 +142,7 @@ static inline enum ubase_err uref_block_delete(struct uref *uref, int offset, in
 }
 
 /** @see ubuf_block_truncate */
-static inline enum ubase_err uref_block_truncate(struct uref *uref, int offset)
+static inline int uref_block_truncate(struct uref *uref, int offset)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -152,8 +150,7 @@ static inline enum ubase_err uref_block_truncate(struct uref *uref, int offset)
 }
 
 /** @see ubuf_block_resize */
-static inline enum ubase_err uref_block_resize(struct uref *uref, int skip,
-                                               int new_size)
+static inline int uref_block_resize(struct uref *uref, int skip, int new_size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -189,9 +186,9 @@ static inline const uint8_t *uref_block_peek(struct uref *uref,
 }
 
 /** @see ubuf_block_peek_unmap */
-static inline enum ubase_err uref_block_peek_unmap(struct uref *uref,
-                                                   int offset, uint8_t *buffer,
-                                                   const uint8_t *read_buffer)
+static inline int uref_block_peek_unmap(struct uref *uref, int offset,
+                                        uint8_t *buffer,
+                                        const uint8_t *read_buffer)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -199,8 +196,8 @@ static inline enum ubase_err uref_block_peek_unmap(struct uref *uref,
 }
 
 /** @see ubuf_block_extract */
-static inline enum ubase_err uref_block_extract(struct uref *uref, int offset,
-                                                int size, uint8_t *buffer)
+static inline int uref_block_extract(struct uref *uref, int offset, int size,
+                                     uint8_t *buffer)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -217,9 +214,8 @@ static inline int uref_block_iovec_count(struct uref *uref,
 }
 
 /** @see ubuf_block_iovec_read */
-static inline enum ubase_err uref_block_iovec_read(struct uref *uref,
-                                                   int offset, int size,
-                                                   struct iovec *iovecs)
+static inline int uref_block_iovec_read(struct uref *uref, int offset, int size,
+                                        struct iovec *iovecs)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -227,9 +223,9 @@ static inline enum ubase_err uref_block_iovec_read(struct uref *uref,
 }
 
 /** @see ubuf_block_iovec_unmap */
-static inline enum ubase_err uref_block_iovec_unmap(struct uref *uref,
-                                                    int offset, int size,
-                                                    struct iovec *iovecs)
+static inline int uref_block_iovec_unmap(struct uref *uref,
+                                         int offset, int size,
+                                         struct iovec *iovecs)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -248,9 +244,8 @@ static inline enum ubase_err uref_block_iovec_unmap(struct uref *uref,
  * of the block
  * @return an error code
  */
-static inline enum ubase_err uref_block_merge(struct uref *uref,
-                                              struct ubuf_mgr *ubuf_mgr,
-                                              int skip, int new_size)
+static inline int uref_block_merge(struct uref *uref, struct ubuf_mgr *ubuf_mgr,
+                                   int skip, int new_size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -258,8 +253,8 @@ static inline enum ubase_err uref_block_merge(struct uref *uref,
 }
 
 /** @see ubuf_block_compare */
-static inline enum ubase_err uref_block_compare(struct uref *uref, int offset,
-                                                struct uref *uref_small)
+static inline int uref_block_compare(struct uref *uref, int offset,
+                                     struct uref *uref_small)
 {
     if (uref->ubuf == NULL || uref_small->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -267,8 +262,7 @@ static inline enum ubase_err uref_block_compare(struct uref *uref, int offset,
 }
 
 /** @see ubuf_block_equal */
-static inline enum ubase_err uref_block_equal(struct uref *uref1,
-                                              struct uref *uref2)
+static inline int uref_block_equal(struct uref *uref1, struct uref *uref2)
 {
     if (uref1->ubuf == NULL || uref2->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -276,9 +270,8 @@ static inline enum ubase_err uref_block_equal(struct uref *uref1,
 }
 
 /** @see ubuf_block_match */
-static inline enum ubase_err uref_block_match(struct uref *uref,
-                                              const uint8_t *filter,
-                                              const uint8_t *mask, size_t size)
+static inline int uref_block_match(struct uref *uref, const uint8_t *filter,
+                                   const uint8_t *mask, size_t size)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -286,8 +279,8 @@ static inline enum ubase_err uref_block_match(struct uref *uref,
 }
 
 /** @see ubuf_block_scan */
-static inline enum ubase_err uref_block_scan(struct uref *uref,
-                                             size_t *offset_p, uint8_t word)
+static inline int uref_block_scan(struct uref *uref, size_t *offset_p,
+                                  uint8_t word)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -295,10 +288,8 @@ static inline enum ubase_err uref_block_scan(struct uref *uref,
 }
 
 /** @see ubuf_block_find_va */
-static inline enum ubase_err uref_block_find_va(struct uref *uref,
-                                                size_t *offset_p,
-                                                unsigned int nb_octets,
-                                                va_list args)
+static inline int uref_block_find_va(struct uref *uref, size_t *offset_p,
+                                     unsigned int nb_octets, va_list args)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -306,13 +297,12 @@ static inline enum ubase_err uref_block_find_va(struct uref *uref,
 }
 
 /** @see ubuf_block_find */
-static inline enum ubase_err uref_block_find(struct uref *uref,
-                                             size_t *offset_p,
-                                             unsigned int nb_octets, ...)
+static inline int uref_block_find(struct uref *uref, size_t *offset_p,
+                                  unsigned int nb_octets, ...)
 {
     va_list args;
     va_start(args, nb_octets);
-    enum ubase_err ret = uref_block_find_va(uref, offset_p, nb_octets, args);
+    int ret = uref_block_find_va(uref, offset_p, nb_octets, args);
     va_end(args);
     return ret;
 }

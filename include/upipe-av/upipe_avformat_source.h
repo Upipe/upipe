@@ -68,9 +68,9 @@ struct upipe_mgr *upipe_avfsrc_mgr_alloc(void);
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsrc_get_option(struct upipe *upipe,
-                                                     const char *option,
-                                                     const char **content_p)
+static inline int upipe_avfsrc_get_option(struct upipe *upipe,
+                                          const char *option,
+                                          const char **content_p)
 {
     return upipe_control(upipe, UPIPE_AVFSRC_GET_OPTION, UPIPE_AVFSRC_SIGNATURE,
                          option, content_p);
@@ -84,9 +84,9 @@ static inline enum ubase_err upipe_avfsrc_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsrc_set_option(struct upipe *upipe,
-                                                     const char *option,
-                                                     const char *content)
+static inline int upipe_avfsrc_set_option(struct upipe *upipe,
+                                          const char *option,
+                                          const char *content)
 {
     return upipe_control(upipe, UPIPE_AVFSRC_SET_OPTION, UPIPE_AVFSRC_SIGNATURE,
                          option, content);
@@ -98,8 +98,7 @@ static inline enum ubase_err upipe_avfsrc_set_option(struct upipe *upipe,
  * @param time_p filled in with the reading time, in clock units
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsrc_get_time(struct upipe *upipe,
-                                                   uint64_t *time_p)
+static inline int upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
 {
     return upipe_control(upipe, UPIPE_AVFSRC_GET_TIME, UPIPE_AVFSRC_SIGNATURE,
                          time_p);
@@ -111,8 +110,7 @@ static inline enum ubase_err upipe_avfsrc_get_time(struct upipe *upipe,
  * @param time new reading time, in clock units
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsrc_set_time(struct upipe *upipe,
-                                                   uint64_t time)
+static inline int upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 {
     return upipe_control(upipe, UPIPE_AVFSRC_SET_TIME, UPIPE_AVFSRC_SIGNATURE,
                          time);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,10 +52,8 @@
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_dejitter_clock_ref(struct uprobe *uprobe,
-                                                struct upipe *upipe,
-                                                enum uprobe_event event,
-                                                va_list args)
+static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
+                                     enum uprobe_event event, va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
@@ -119,10 +117,8 @@ static enum ubase_err uprobe_dejitter_clock_ref(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_dejitter_clock_ts(struct uprobe *uprobe,
-                                               struct upipe *upipe,
-                                               enum uprobe_event event,
-                                               va_list args)
+static int uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
+                                    enum uprobe_event event, va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
@@ -150,9 +146,8 @@ static enum ubase_err uprobe_dejitter_clock_ts(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_dejitter_throw(struct uprobe *uprobe,
-                                            struct upipe *upipe,
-                                            int event, va_list args)
+static int uprobe_dejitter_throw(struct uprobe *uprobe, struct upipe *upipe,
+                                 int event, va_list args)
 {
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);

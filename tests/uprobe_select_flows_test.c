@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -60,8 +60,8 @@ static uint64_t add_flows, del_flows;
 static struct uchain flow_defs;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:
@@ -135,8 +135,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 }
 
 /** helper phony pipe to test uprobe_select_flows */
-static enum ubase_err test_control(struct upipe *upipe,
-                                   int command, va_list args)
+static int test_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {

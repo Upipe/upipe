@@ -81,10 +81,9 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param macropixel_size size of a macropixel in octets
  * @return an error code
  */
-enum ubase_err ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr,
-                                          const char *chroma,
-                                          uint8_t hsub, uint8_t vsub,
-                                          uint8_t macropixel_size);
+int ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
+                               uint8_t hsub, uint8_t vsub,
+                               uint8_t macropixel_size);
 
 /** @This allocates a new instance of the ubuf manager for picture formats
  * using umem, from a fourcc image format.

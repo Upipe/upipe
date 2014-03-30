@@ -426,8 +426,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_ts_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -458,8 +457,8 @@ static enum ubase_err upipe_ts_agg_set_flow_def(struct upipe *upipe,
  * @param octetrate_p filled in with the octetrate
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_get_octetrate(struct upipe *upipe,
-                                                 uint64_t *octetrate_p)
+static int upipe_ts_agg_get_octetrate(struct upipe *upipe,
+                                      uint64_t *octetrate_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(octetrate_p != NULL);
@@ -473,8 +472,7 @@ static enum ubase_err upipe_ts_agg_get_octetrate(struct upipe *upipe,
  * @param octetrate new octetrate
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_set_octetrate(struct upipe *upipe,
-                                                 uint64_t octetrate)
+static int upipe_ts_agg_set_octetrate(struct upipe *upipe, uint64_t octetrate)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(octetrate != 0);
@@ -506,8 +504,8 @@ static enum ubase_err upipe_ts_agg_set_octetrate(struct upipe *upipe,
  * @param mode_p filled in with the mode
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_get_mode(struct upipe *upipe,
-                                            enum upipe_ts_mux_mode *mode_p)
+static int upipe_ts_agg_get_mode(struct upipe *upipe,
+                                 enum upipe_ts_mux_mode *mode_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(mode_p != NULL);
@@ -521,8 +519,8 @@ static enum ubase_err upipe_ts_agg_get_mode(struct upipe *upipe,
  * @param mode new mode
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_set_mode(struct upipe *upipe,
-                                            enum upipe_ts_mux_mode mode)
+static int upipe_ts_agg_set_mode(struct upipe *upipe,
+                                 enum upipe_ts_mux_mode mode)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     upipe_ts_agg->mode = mode;
@@ -535,8 +533,7 @@ static enum ubase_err upipe_ts_agg_set_mode(struct upipe *upipe,
  * @param mtu_p filled in with the configured mtu, in octets
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_get_mtu(struct upipe *upipe,
-                                           unsigned int *mtu_p)
+static int upipe_ts_agg_get_mtu(struct upipe *upipe, unsigned int *mtu_p)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     assert(mtu_p != NULL);
@@ -550,8 +547,7 @@ static enum ubase_err upipe_ts_agg_get_mtu(struct upipe *upipe,
  * @param mtu configured mtu, in octets
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_set_mtu(struct upipe *upipe,
-                                           unsigned int mtu)
+static int upipe_ts_agg_set_mtu(struct upipe *upipe, unsigned int mtu)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     if (unlikely(mtu < TS_SIZE))
@@ -573,8 +569,7 @@ static enum ubase_err upipe_ts_agg_set_mtu(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_ts_agg_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:

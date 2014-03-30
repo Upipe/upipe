@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -176,9 +176,8 @@ static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
  * @param flow description structure of the flow
  * @return an error code
  */
-static enum ubase_err
-    upipe_osx_audioqueue_sink_set_flow_def(struct upipe *upipe,
-                                           struct uref *flow)
+static int upipe_osx_audioqueue_sink_set_flow_def(struct upipe *upipe,
+                                                  struct uref *flow)
 {
     OSStatus status;
     uint64_t sample_rate = 0; /* hush gcc */
@@ -235,8 +234,8 @@ static enum ubase_err
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_osx_audioqueue_sink_control(struct upipe *upipe,
-                                      enum upipe_command command, va_list args)
+static int upipe_osx_audioqueue_sink_control(struct upipe *upipe,
+                                             int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {

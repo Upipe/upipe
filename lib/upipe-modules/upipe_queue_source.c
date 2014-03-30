@@ -165,8 +165,8 @@ static void upipe_qsrc_worker(struct upump *upump)
  * @param length_p filled in with the maximum length of the queue
  * @return an error code
  */
-static enum ubase_err _upipe_qsrc_get_max_length(struct upipe *upipe,
-                                                 unsigned int *length_p)
+static int _upipe_qsrc_get_max_length(struct upipe *upipe,
+                                      unsigned int *length_p)
 {
     struct upipe_qsrc *upipe_qsrc = upipe_qsrc_from_upipe(upipe);
     assert(length_p != NULL);
@@ -183,8 +183,7 @@ static enum ubase_err _upipe_qsrc_get_max_length(struct upipe *upipe,
  * @param length_p filled in with the current length of the queue
  * @return an error code
  */
-static enum ubase_err _upipe_qsrc_get_length(struct upipe *upipe,
-                                             unsigned int *length_p)
+static int _upipe_qsrc_get_length(struct upipe *upipe, unsigned int *length_p)
 {
     assert(length_p != NULL);
     *length_p = uqueue_length(upipe_queue(upipe));
@@ -198,8 +197,7 @@ static enum ubase_err _upipe_qsrc_get_length(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int _upipe_qsrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -241,8 +239,7 @@ static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_qsrc_control(struct upipe *upipe,
-                                         int command, va_list args)
+static int upipe_qsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_qsrc_control(upipe, command, args));
     upipe_qsrc_check_upump_mgr(upipe);

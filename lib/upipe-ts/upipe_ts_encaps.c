@@ -513,8 +513,8 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_encaps_set_flow_def(struct upipe *upipe,
-                                         struct uref *flow_def)
+static int upipe_ts_encaps_set_flow_def(struct upipe *upipe,
+                                        struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -559,7 +559,7 @@ static enum ubase_err upipe_ts_encaps_set_flow_def(struct upipe *upipe,
  * @param pcr_interval_p filled in with the PCR interval
  * @return an error code
  */
-static enum ubase_err upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
+static int upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
                                             uint64_t *pcr_interval_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
@@ -575,7 +575,7 @@ static enum ubase_err upipe_ts_encaps_get_pcr_interval(struct upipe *upipe,
  * @param pcr_interval new PCR interval
  * @return an error code
  */
-static enum ubase_err upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
+static int upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
                                             uint64_t pcr_interval)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
@@ -591,8 +591,8 @@ static enum ubase_err upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_encaps_control(struct upipe *upipe,
-                                     int command, va_list args)
+static int upipe_ts_encaps_control(struct upipe *upipe,
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:

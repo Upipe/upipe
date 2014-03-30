@@ -669,8 +669,8 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+static int upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -693,8 +693,7 @@ static enum ubase_err upipe_ts_pmtd_set_flow_def(struct upipe *upipe,
  * @param p filled in with the next flow definition, initialize with NULL
  * @return an error code
  */
-static enum ubase_err upipe_ts_pmtd_iterate(struct upipe *upipe,
-                                            struct uref **p)
+static int upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_ts_pmtd *upipe_ts_pmtd = upipe_ts_pmtd_from_upipe(upipe);
     assert(p != NULL);
@@ -718,8 +717,7 @@ static enum ubase_err upipe_ts_pmtd_iterate(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_pmtd_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_ts_pmtd_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

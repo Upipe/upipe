@@ -93,9 +93,9 @@ static void uprobe_pthread_upump_mgr_destr(void *_tls)
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_pthread_upump_mgr_throw(struct uprobe *uprobe,
-                                                     struct upipe *upipe,
-                                                     int event, va_list args)
+static int uprobe_pthread_upump_mgr_throw(struct uprobe *uprobe,
+                                          struct upipe *upipe,
+                                          int event, va_list args)
 {
     if (event != UPROBE_NEED_UPUMP_MGR)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -163,8 +163,8 @@ UPROBE_HELPER_ALLOC(uprobe_pthread_upump_mgr)
  * @param upump_mgr new upump manager to provide to pipes
  * @return an error code
  */
-enum ubase_err uprobe_pthread_upump_mgr_set(struct uprobe *uprobe,
-                                            struct upump_mgr *upump_mgr)
+int uprobe_pthread_upump_mgr_set(struct uprobe *uprobe,
+                                 struct upump_mgr *upump_mgr)
 {
     struct uprobe_pthread_upump_mgr_local *tls =
         uprobe_pthread_upump_mgr_tls(uprobe);
@@ -180,7 +180,7 @@ enum ubase_err uprobe_pthread_upump_mgr_set(struct uprobe *uprobe,
  * @param uprobe pointer to probe
  * @return an error code
  */
-enum ubase_err uprobe_pthread_upump_mgr_freeze(struct uprobe *uprobe)
+int uprobe_pthread_upump_mgr_freeze(struct uprobe *uprobe)
 {
     struct uprobe_pthread_upump_mgr_local *tls =
         uprobe_pthread_upump_mgr_tls(uprobe);
@@ -195,7 +195,7 @@ enum ubase_err uprobe_pthread_upump_mgr_freeze(struct uprobe *uprobe)
  * @param uprobe pointer to probe
  * @return an error code
  */
-enum ubase_err uprobe_pthread_upump_mgr_thaw(struct uprobe *uprobe)
+int uprobe_pthread_upump_mgr_thaw(struct uprobe *uprobe)
 {
     struct uprobe_pthread_upump_mgr_local *tls =
         uprobe_pthread_upump_mgr_tls(uprobe);

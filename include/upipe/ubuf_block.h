@@ -64,7 +64,7 @@ struct ubuf_block {
     size_t total_size;
 
     /** true if UBUF_MAP_BLOCK & UBUF_UNMAP_BLOCK need to be called */
-    enum ubase_err map;
+    bool map;
     /** mapped buffer */
     uint8_t *buffer;
 
@@ -97,7 +97,7 @@ static inline struct ubuf *ubuf_block_alloc(struct ubuf_mgr *mgr, int size)
  * @param size_p reference written with the size of the buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
+static inline int ubuf_block_size(struct ubuf *ubuf, size_t *size_p)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
@@ -158,8 +158,8 @@ static inline struct ubuf *ubuf_block_get(struct ubuf *ubuf, int *offset_p,
  * @param size_p reference written with the size of the buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_size_linear(struct ubuf *ubuf,
-                                                    int offset, size_t *size_p)
+static inline int ubuf_block_size_linear(struct ubuf *ubuf,
+                                         int offset, size_t *size_p)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
@@ -186,9 +186,8 @@ static inline enum ubase_err ubuf_block_size_linear(struct ubuf *ubuf,
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_read(struct ubuf *ubuf, int offset,
-                                             int *size_p,
-                                             const uint8_t **buffer_p)
+static inline int ubuf_block_read(struct ubuf *ubuf, int offset,
+                                  int *size_p, const uint8_t **buffer_p)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
@@ -222,8 +221,8 @@ static inline enum ubase_err ubuf_block_read(struct ubuf *ubuf, int offset,
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_write(struct ubuf *ubuf, int offset,
-                                              int *size_p, uint8_t **buffer_p)
+static inline int ubuf_block_write(struct ubuf *ubuf, int offset,
+                                   int *size_p, uint8_t **buffer_p)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, size_p)) == NULL))
@@ -251,7 +250,7 @@ static inline enum ubase_err ubuf_block_write(struct ubuf *ubuf, int offset,
  * octets, negative values start from the end
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_unmap(struct ubuf *ubuf, int offset)
+static inline int ubuf_block_unmap(struct ubuf *ubuf, int offset)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  (ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
@@ -270,8 +269,7 @@ static inline enum ubase_err ubuf_block_unmap(struct ubuf *ubuf, int offset)
  * afterwards as it becomes included in the segmented ubuf
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_append(struct ubuf *ubuf,
-                                               struct ubuf *append)
+static inline int ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  append->mgr->signature != UBUF_ALLOC_BLOCK))
@@ -299,7 +297,7 @@ static inline enum ubase_err ubuf_block_append(struct ubuf *ubuf,
  * @param offset offset at which to split
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_split(struct ubuf *ubuf, int offset)
+static inline int ubuf_block_split(struct ubuf *ubuf, int offset)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf *next = block->next_ubuf;
@@ -330,8 +328,8 @@ static inline enum ubase_err ubuf_block_split(struct ubuf *ubuf, int offset)
  * no longer be used afterwards as it becomes included in the segmented ubuf
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_insert(struct ubuf *ubuf, int offset,
-                                               struct ubuf *insert)
+static inline int ubuf_block_insert(struct ubuf *ubuf, int offset,
+                                    struct ubuf *insert)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK ||
                  insert->mgr->signature != UBUF_ALLOC_BLOCK))
@@ -362,8 +360,7 @@ static inline enum ubase_err ubuf_block_insert(struct ubuf *ubuf, int offset,
  * @param size number of octets to delete
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_delete(struct ubuf *ubuf, int offset,
-                                               int size)
+static inline int ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
@@ -414,7 +411,7 @@ ubuf_block_delete_done:
  * @param offset offset at which to truncate data
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
+static inline int ubuf_block_truncate(struct ubuf *ubuf, int offset)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
@@ -458,8 +455,7 @@ static inline enum ubase_err ubuf_block_truncate(struct ubuf *ubuf, int offset)
  * end)
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_resize(struct ubuf *ubuf, int offset,
-                                               int new_size)
+static inline int ubuf_block_resize(struct ubuf *ubuf, int offset, int new_size)
 {
     if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
         return UBASE_ERR_INVALID;
@@ -515,8 +511,8 @@ static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
  * or -1 for the end of the block (may not be NULL)
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_check_size(struct ubuf *ubuf,
-                                                   int *offset_p, int *size_p)
+static inline int ubuf_block_check_size(struct ubuf *ubuf,
+                                        int *offset_p, int *size_p)
 {
     if (*size_p == -1) {
         if (*offset_p < 0)
@@ -590,9 +586,9 @@ static inline const uint8_t *ubuf_block_peek(struct ubuf *ubuf,
  * @param read_buffer buffer returned by @ref ubuf_block_peek
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_peek_unmap(struct ubuf *ubuf,
-                                                   int offset, uint8_t *buffer,
-                                                   const uint8_t *read_buffer)
+static inline int ubuf_block_peek_unmap(struct ubuf *ubuf,
+                                        int offset, uint8_t *buffer,
+                                        const uint8_t *read_buffer)
 {
     if (buffer == read_buffer)
         return UBASE_ERR_NONE;
@@ -610,9 +606,8 @@ static inline enum ubase_err ubuf_block_peek_unmap(struct ubuf *ubuf,
  * @param buffer pointer to buffer space of at least size octets
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_extract(struct ubuf *ubuf,
-                                                int offset, int size,
-                                                uint8_t *buffer)
+static inline int ubuf_block_extract(struct ubuf *ubuf,
+                                     int offset, int size, uint8_t *buffer)
 {
     UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
 
@@ -670,9 +665,9 @@ static inline int ubuf_block_iovec_count(struct ubuf *ubuf,
  * @param iovecs iovec structures array
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_iovec_read(struct ubuf *ubuf,
-                                                   int offset, int size,
-                                                   struct iovec *iovecs)
+static inline int ubuf_block_iovec_read(struct ubuf *ubuf,
+                                        int offset, int size,
+                                        struct iovec *iovecs)
 {
     int count = 0;
     UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
@@ -701,9 +696,9 @@ static inline enum ubase_err ubuf_block_iovec_read(struct ubuf *ubuf,
  * @param iovec iovec structures array
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_iovec_unmap(struct ubuf *ubuf,
-                                                    int offset, int size,
-                                                    struct iovec *iovecs)
+static inline int ubuf_block_iovec_unmap(struct ubuf *ubuf,
+                                         int offset, int size,
+                                         struct iovec *iovecs)
 {
     int count = 0;
     UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
@@ -804,9 +799,8 @@ ubuf_block_copy_err:
  * of the block
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_merge(struct ubuf_mgr *mgr,
-                                              struct ubuf **ubuf_p,
-                                              int skip, int new_size)
+static inline int ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
+                                   int skip, int new_size)
 {
     struct ubuf *new_ubuf = ubuf_block_copy(mgr, *ubuf_p, skip, new_size);
     if (unlikely(new_ubuf == NULL))
@@ -824,8 +818,8 @@ static inline enum ubase_err ubuf_block_merge(struct ubuf_mgr *mgr,
  * @param ubuf_small pointer to small ubuf
  * @return UBASE_ERR_NONE if the small ubuf matches the larger ubuf
  */
-static inline enum ubase_err ubuf_block_compare(struct ubuf *ubuf, int offset,
-                                                struct ubuf *ubuf_small)
+static inline int ubuf_block_compare(struct ubuf *ubuf, int offset,
+                                     struct ubuf *ubuf_small)
 {
     size_t ubuf_size, ubuf_size_small;
     UBASE_RETURN(ubuf_block_size(ubuf, &ubuf_size))
@@ -864,8 +858,7 @@ static inline enum ubase_err ubuf_block_compare(struct ubuf *ubuf, int offset,
  * @param ubuf2 pointer to second ubuf
  * @return UBASE_ERR_NONE if the two ubufs are identical
  */
-static inline enum ubase_err ubuf_block_equal(struct ubuf *ubuf1,
-                                              struct ubuf *ubuf2)
+static inline int ubuf_block_equal(struct ubuf *ubuf1, struct ubuf *ubuf2)
 {
     size_t ubuf_size1, ubuf_size2;
     UBASE_RETURN(ubuf_block_size(ubuf1, &ubuf_size1))
@@ -885,9 +878,8 @@ static inline enum ubase_err ubuf_block_equal(struct ubuf *ubuf1,
  * @param size size (in octets) of filter and mask
  * @return UBASE_ERR_NONE if the ubuf matches
  */
-static inline enum ubase_err ubuf_block_match(struct ubuf *ubuf,
-                                              const uint8_t *filter,
-                                              const uint8_t *mask, size_t size)
+static inline int ubuf_block_match(struct ubuf *ubuf, const uint8_t *filter,
+                                   const uint8_t *mask, size_t size)
 {
     size_t ubuf_size;
     UBASE_RETURN(ubuf_block_size(ubuf, &ubuf_size))
@@ -920,8 +912,8 @@ static inline enum ubase_err ubuf_block_match(struct ubuf *ubuf,
  * @param word word to scan for
  * @return UBASE_ERR_NONE if the word was found
  */
-static inline enum ubase_err ubuf_block_scan(struct ubuf *ubuf,
-                                             size_t *offset_p, uint8_t word)
+static inline int ubuf_block_scan(struct ubuf *ubuf, size_t *offset_p,
+                                  uint8_t word)
 {
     const uint8_t *buffer;
     int size = -1;
@@ -950,10 +942,8 @@ static inline enum ubase_err ubuf_block_scan(struct ubuf *ubuf,
  * @param args list of octets composing the word, in big-endian ordering
  * @return UBASE_ERR_NONE if the word was found
  */
-static inline enum ubase_err ubuf_block_find_va(struct ubuf *ubuf,
-                                                size_t *offset_p,
-                                                unsigned int nb_octets,
-                                                va_list args)
+static inline int ubuf_block_find_va(struct ubuf *ubuf, size_t *offset_p,
+                                     unsigned int nb_octets, va_list args)
 {
     assert(nb_octets > 0);
     unsigned int sync = va_arg(args, unsigned int);
@@ -995,13 +985,12 @@ static inline enum ubase_err ubuf_block_find_va(struct ubuf *ubuf,
  * of octets composing the word, in big-endian ordering
  * @return UBASE_ERR_NONE if the word was found
  */
-static inline enum ubase_err ubuf_block_find(struct ubuf *ubuf,
-                                             size_t *offset_p,
-                                             unsigned int nb_octets, ...)
+static inline int ubuf_block_find(struct ubuf *ubuf, size_t *offset_p,
+                                  unsigned int nb_octets, ...)
 {
     va_list args;
     va_start(args, nb_octets);
-    enum ubase_err err = ubuf_block_find_va(ubuf, offset_p, nb_octets, args);
+    int err = ubuf_block_find_va(ubuf, offset_p, nb_octets, args);
     va_end(args);
     return err;
 }

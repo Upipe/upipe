@@ -85,8 +85,8 @@ UPIPE_HELPER_OUTPUT(upipe_nodemux, output, flow_def, flow_def_sent)
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_nodemux_alloc(struct upipe_mgr *mgr,
-                                        struct uprobe *uprobe,
-                                        uint32_t signature, va_list args)
+                                         struct uprobe *uprobe,
+                                         uint32_t signature, va_list args)
 {
     struct upipe *upipe = upipe_nodemux_alloc_void(mgr, uprobe, signature,
                                                    args);
@@ -108,7 +108,7 @@ static struct upipe *upipe_nodemux_alloc(struct upipe_mgr *mgr,
  * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_nodemux_input(struct upipe *upipe, struct uref *uref,
-                               struct upump **upump_p)
+                                struct upump **upump_p)
 {
     struct upipe_nodemux *upipe_nodemux = upipe_nodemux_from_upipe(upipe);
 
@@ -124,8 +124,8 @@ static void upipe_nodemux_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_nodemux_set_flow_def(struct upipe *upipe,
-                                                 struct uref *flow_def)
+static int upipe_nodemux_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -143,8 +143,7 @@ static enum ubase_err upipe_nodemux_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_nodemux_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_nodemux_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

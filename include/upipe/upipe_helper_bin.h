@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,9 +57,8 @@ extern "C" {
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  enum ubase_err upipe_foo_probe_bin(struct uprobe *uprobe,
- *                                     struct upipe *inner,
- *                                     int event, va_list args)
+ *  int upipe_foo_probe_bin(struct uprobe *uprobe, struct upipe *inner,
+ *                          int event, va_list args)
  * @end @code
  * Probe to set on the last inner pipe. It attaches all events (proxy) to the
  * bin pipe. The @tt {struct uprobe} member is set to point to this probe during
@@ -76,8 +75,8 @@ extern "C" {
  * Called whenever you change the last inner pipe of this bin.
  *
  * @item @code
- *  bool upipe_foo_control_bin(struct upipe *upipe, enum upipe_command command,
-                               va_list args)
+ *  int upipe_foo_control_bin(struct upipe *upipe, enum upipe_command command,
+                              va_list args)
  * @end code
  * Typically called from your upipe_foo_control() handler. It handles the
  * set_output commands internally, and then acts as a proxy for other commands.
@@ -106,7 +105,7 @@ extern "C" {
  * @param args arguments of the event                                       \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_probe_bin(struct uprobe *uprobe,          \
+static int STRUCTURE##_probe_bin(struct uprobe *uprobe,          \
                                             struct upipe *inner,            \
                                             int event, va_list args)        \
 {                                                                           \
@@ -151,7 +150,7 @@ static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
  * @param args optional control command arguments                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_control_bin(struct upipe *upipe,          \
+static int STRUCTURE##_control_bin(struct upipe *upipe,                     \
                                               enum upipe_command command,   \
                                               va_list args)                 \
 {                                                                           \
@@ -167,7 +166,7 @@ static enum ubase_err STRUCTURE##_control_bin(struct upipe *upipe,          \
             upipe_release(s->OUTPUT);                                       \
             s->OUTPUT = NULL;                                               \
                                                                             \
-            enum ubase_err err;                                             \
+            int err;                                                        \
             if (unlikely(s->LAST_INNER != NULL &&                           \
                          (err = upipe_set_output(s->LAST_INNER, output)) != \
                          UBASE_ERR_NONE))                                   \

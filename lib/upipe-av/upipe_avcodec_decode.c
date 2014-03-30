@@ -1019,8 +1019,7 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_avcdec_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1146,9 +1145,8 @@ static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static enum ubase_err _upipe_avcdec_set_option(struct upipe *upipe,
-                                               const char *option,
-                                               const char *content)
+static int _upipe_avcdec_set_option(struct upipe *upipe,
+                                    const char *option, const char *content)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     if (upipe_avcdec->context == NULL || avcodec_is_open(upipe_avcdec->context))
@@ -1177,8 +1175,7 @@ static enum ubase_err _upipe_avcdec_set_option(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avcdec_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_avcdec_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:

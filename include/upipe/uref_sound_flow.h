@@ -86,8 +86,8 @@ static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
  * @param channel channel type (see channel reference)
  * @return an error code
  */
-static inline enum ubase_err uref_sound_flow_add_plane(struct uref *uref,
-           const char *channel)
+static inline int uref_sound_flow_add_plane(struct uref *uref,
+                                            const char *channel)
 {
     uint8_t plane = 0;
     if (unlikely(channel == NULL))
@@ -105,9 +105,9 @@ static inline enum ubase_err uref_sound_flow_add_plane(struct uref *uref,
  * @param plane_p written with the matching plane number
  * @return an error code
  */
-static inline enum ubase_err uref_sound_flow_find_channel(struct uref *uref,
-                                                         const char *channel,
-                                                         uint8_t *plane_p)
+static inline int uref_sound_flow_find_channel(struct uref *uref,
+                                               const char *channel,
+                                               uint8_t *plane_p)
 {
     assert(channel != NULL);
     uint8_t planes = 0;
@@ -130,7 +130,7 @@ static inline enum ubase_err uref_sound_flow_find_channel(struct uref *uref,
  * @param channel channel type
  * @return an error code
  */
-static inline enum ubase_err uref_sound_flow_check_channel(struct uref *uref,
+static inline int uref_sound_flow_check_channel(struct uref *uref,
           const char *channel)
 {
     uint8_t plane;
@@ -144,8 +144,8 @@ static inline enum ubase_err uref_sound_flow_check_channel(struct uref *uref,
  * @param uref_src source uref
  * @return an error code
  */
-static inline enum ubase_err uref_sound_flow_copy_format(struct uref *uref_dst,
-                                                         struct uref *uref_src)
+static inline int uref_sound_flow_copy_format(struct uref *uref_dst,
+                                              struct uref *uref_src)
 {
     const char *def;
     uint8_t planes, sample_size;

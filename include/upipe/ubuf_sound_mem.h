@@ -62,8 +62,7 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param channel channel type (see channel reference)
  * @return an error code
  */
-enum ubase_err ubuf_sound_mem_mgr_add_plane(struct ubuf_mgr *mgr,
-                                            const char *channel);
+int ubuf_sound_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *channel);
 
 #ifdef __cplusplus
 }

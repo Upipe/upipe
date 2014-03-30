@@ -39,7 +39,7 @@
  * @param new_ubuf pointer to ubuf to overwrite
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf)
+int ubuf_sound_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf)
 {
     struct ubuf_sound_common *common = ubuf_sound_common_from_ubuf(ubuf);
     struct ubuf_sound_common *new_common =
@@ -57,9 +57,8 @@ enum ubase_err ubuf_sound_common_dup(struct ubuf *ubuf, struct ubuf *new_ubuf)
  * @param plane index of the plane
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_plane_dup(struct ubuf *ubuf,
-                                           struct ubuf *new_ubuf,
-                                           uint8_t plane)
+int ubuf_sound_common_plane_dup(struct ubuf *ubuf, struct ubuf *new_ubuf,
+                                uint8_t plane)
 {
     struct ubuf_sound_common *common = ubuf_sound_common_from_ubuf(ubuf);
     struct ubuf_sound_common *new_common =
@@ -77,8 +76,8 @@ enum ubase_err ubuf_sound_common_plane_dup(struct ubuf *ubuf,
  * sample of a plane if not NULL
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_size(struct ubuf *ubuf,
-                                      size_t *size_p, uint8_t *sample_size_p)
+int ubuf_sound_common_size(struct ubuf *ubuf, size_t *size_p,
+                           uint8_t *sample_size_p)
 {
     struct ubuf_sound_common_mgr *common_mgr =
         ubuf_sound_common_mgr_from_ubuf_mgr(ubuf->mgr);
@@ -99,8 +98,7 @@ enum ubase_err ubuf_sound_common_size(struct ubuf *ubuf,
  * @param channel_p reference written with channel type of the next plane
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_plane_iterate(struct ubuf *ubuf,
-                                             const char **channel_p)
+int ubuf_sound_common_plane_iterate(struct ubuf *ubuf, const char **channel_p)
 {
     struct ubuf_sound_common_mgr *common_mgr =
         ubuf_sound_common_mgr_from_ubuf_mgr(ubuf->mgr);
@@ -133,10 +131,8 @@ enum ubase_err ubuf_sound_common_plane_iterate(struct ubuf *ubuf,
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_plane_map(struct ubuf *ubuf,
-                                           const char *channel,
-                                           int offset, int size,
-                                           uint8_t **buffer_p)
+int ubuf_sound_common_plane_map(struct ubuf *ubuf, const char *channel,
+                                int offset, int size, uint8_t **buffer_p)
 {
     assert(channel != NULL);
     struct ubuf_sound_common_mgr *common_mgr =
@@ -171,8 +167,7 @@ enum ubase_err ubuf_sound_common_plane_map(struct ubuf *ubuf,
  * to -1, keep same end)
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_resize(struct ubuf *ubuf, int offset,
-                                        int new_size)
+int ubuf_sound_common_resize(struct ubuf *ubuf, int offset, int new_size)
 {
     struct ubuf_sound_common_mgr *common_mgr =
         ubuf_sound_common_mgr_from_ubuf_mgr(ubuf->mgr);
@@ -239,8 +234,7 @@ void ubuf_sound_common_mgr_init(struct ubuf_mgr *mgr, uint8_t sample_size)
  * @param channel channel type (see channel reference)
  * @return an error code
  */
-enum ubase_err ubuf_sound_common_mgr_add_plane(struct ubuf_mgr *mgr,
-                                               const char *channel)
+int ubuf_sound_common_mgr_add_plane(struct ubuf_mgr *mgr, const char *channel)
 {
     assert(channel != NULL);
     assert(mgr->refcount == NULL || urefcount_single(mgr->refcount));

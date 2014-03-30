@@ -175,8 +175,8 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_check_set_flow_def(struct upipe *upipe,
-                                                  struct uref *flow_def)
+static int upipe_ts_check_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -199,7 +199,7 @@ static enum ubase_err upipe_ts_check_set_flow_def(struct upipe *upipe,
  * @param size_p filled in with the configured size, in octets
  * @return an error code
  */
-static enum ubase_err _upipe_ts_check_get_size(struct upipe *upipe, int *size_p)
+static int _upipe_ts_check_get_size(struct upipe *upipe, int *size_p)
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     assert(size_p != NULL);
@@ -219,7 +219,7 @@ static enum ubase_err _upipe_ts_check_get_size(struct upipe *upipe, int *size_p)
  * @param size configured size, in octets
  * @return an error code
  */
-static enum ubase_err _upipe_ts_check_set_size(struct upipe *upipe, int size)
+static int _upipe_ts_check_set_size(struct upipe *upipe, int size)
 {
     struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     if (size < 0)
@@ -236,8 +236,8 @@ static enum ubase_err _upipe_ts_check_set_size(struct upipe *upipe, int size)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_check_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int upipe_ts_check_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

@@ -102,8 +102,7 @@ extern "C" {
  * Outputs urefs that have been held.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_max_length(struct upipe *upipe,
- *                                          unsigned int *p)
+ *  int upipe_foo_get_max_length(struct upipe *upipe, unsigned int *p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -114,8 +113,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_max_length(struct upipe *upipe,
- *                                          unsigned int max_length)
+ *  int upipe_foo_set_max_length(struct upipe *upipe, unsigned int max_length)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -264,8 +262,8 @@ static bool STRUCTURE##_output_sink(struct upipe *upipe)                    \
  * @param p filled in with the length                                       \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_max_length(struct upipe *upipe,       \
-                                                 unsigned int *p)           \
+static int STRUCTURE##_get_max_length(struct upipe *upipe,                  \
+                                      unsigned int *p)                      \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
@@ -278,8 +276,8 @@ static enum ubase_err STRUCTURE##_get_max_length(struct upipe *upipe,       \
  * @param length new length                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_max_length(struct upipe *upipe,       \
-                                                 unsigned int length)       \
+static int STRUCTURE##_set_max_length(struct upipe *upipe,                  \
+                                      unsigned int length)                  \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->MAX_UREFS = length;                                          \

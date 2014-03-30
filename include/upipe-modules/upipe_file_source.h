@@ -63,8 +63,8 @@ struct upipe_mgr *upipe_fsrc_mgr_alloc(void);
  * @param size_p filled in with the size of the file, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_fsrc_get_size(struct upipe *upipe,
-                                                 uint64_t *size_p)
+static inline int upipe_fsrc_get_size(struct upipe *upipe,
+                                      uint64_t *size_p)
 {
     return upipe_control(upipe, UPIPE_FSRC_GET_SIZE, UPIPE_FSRC_SIGNATURE,
                          size_p);
@@ -76,8 +76,8 @@ static inline enum ubase_err upipe_fsrc_get_size(struct upipe *upipe,
  * @param position_p filled in with the reading position, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_fsrc_get_position(struct upipe *upipe,
-                                                     uint64_t *position_p)
+static inline int upipe_fsrc_get_position(struct upipe *upipe,
+                                          uint64_t *position_p)
 {
     return upipe_control(upipe, UPIPE_FSRC_GET_POSITION, UPIPE_FSRC_SIGNATURE,
                          position_p);
@@ -89,8 +89,8 @@ static inline enum ubase_err upipe_fsrc_get_position(struct upipe *upipe,
  * @param position new reading position, in octets (between 0 and the size)
  * @return an error code
  */
-static inline enum ubase_err upipe_fsrc_set_position(struct upipe *upipe,
-                                                     uint64_t position)
+static inline int upipe_fsrc_set_position(struct upipe *upipe,
+                                          uint64_t position)
 {
     return upipe_control(upipe, UPIPE_FSRC_SET_POSITION, UPIPE_FSRC_SIGNATURE,
                          position);

@@ -72,8 +72,8 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
  * @param upump_mgr event loop to attach
  * @return an error code
  */
-static inline enum ubase_err upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
-                                                   struct upump_mgr *upump_mgr)
+static inline int upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
+                                        struct upump_mgr *upump_mgr)
 
 {
     return upipe_mgr_control(mgr, UPIPE_XFER_MGR_ATTACH, UPIPE_XFER_SIGNATURE,

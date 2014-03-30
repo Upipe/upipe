@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -221,7 +221,7 @@ static void uprobe_gl_sink_cube_init2(struct uprobe *uprobe, struct upipe *upipe
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
+static int uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
                         struct upipe *upipe, int event, va_list args)
 {
     switch (event) {

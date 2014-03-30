@@ -85,7 +85,7 @@ UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
  * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
-                             struct upump **upump_p)
+                              struct upump **upump_p)
 {
     struct upipe_htons *upipe_htons = upipe_htons_from_upipe(upipe);
     struct ubuf *ubuf;
@@ -150,8 +150,7 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_htons_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
+static int upipe_htons_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -170,8 +169,7 @@ static enum ubase_err upipe_htons_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_htons_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int upipe_htons_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
@@ -210,8 +208,8 @@ static enum ubase_err upipe_htons_control(struct upipe *upipe,
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_htons_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe,
-                                      uint32_t signature, va_list args)
+                                       struct uprobe *uprobe,
+                                       uint32_t signature, va_list args)
 {
     struct upipe *upipe = upipe_htons_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))

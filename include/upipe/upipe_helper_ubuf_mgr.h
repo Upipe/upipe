@@ -60,7 +60,7 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  enum ubase_err upipe_foo_attach_ubuf_mgr(struct upipe *upipe)
+ *  int upipe_foo_attach_ubuf_mgr(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -70,7 +70,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_check_ubuf_mgr(struct upipe *upipe)
+ *  int upipe_foo_check_ubuf_mgr(struct upipe *upipe)
  * @end code
  * Checks if the ubuf manager is available, and asks for it otherwise.
  *
@@ -101,7 +101,7 @@ static void STRUCTURE##_init_ubuf_mgr(struct upipe *upipe)                  \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)      \
+static int STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ubuf_mgr_release(s->UBUF_MGR);                                          \
@@ -116,7 +116,7 @@ static enum ubase_err STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)      \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)       \
+static int STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)                  \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (likely(s->UBUF_MGR != NULL))                                        \

@@ -64,14 +64,14 @@
 
 static unsigned int nb_packets;
 static uint64_t pcr = 0;
-static enum ubase_err transporterror = UBASE_ERR_INVALID;
-static enum ubase_err discontinuity = UBASE_ERR_NONE;
-static enum ubase_err start = UBASE_ERR_NONE;
+static int transporterror = UBASE_ERR_INVALID;
+static int discontinuity = UBASE_ERR_NONE;
+static int start = UBASE_ERR_NONE;
 static size_t payload_size = 184;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

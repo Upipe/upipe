@@ -124,8 +124,7 @@ static void uref_std_mgr_vacuum(struct uref_mgr *mgr)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err uref_std_mgr_control(struct uref_mgr *mgr,
-                                           int command, va_list args)
+static int uref_std_mgr_control(struct uref_mgr *mgr, int command, va_list args)
 {
     switch (command) {
         case UREF_MGR_VACUUM:

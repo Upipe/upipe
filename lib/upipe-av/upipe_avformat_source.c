@@ -240,8 +240,8 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avfsrc_sub_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_avfsrc_sub_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
@@ -747,7 +747,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
  * @param p filled in with the next flow definition, initialize with NULL
  * @return an error code
  */
-static enum ubase_err upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
+static int upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     if (urefcount_dead(upipe->refcount)) {
@@ -784,8 +784,8 @@ static enum ubase_err upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static enum ubase_err _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
-                                     const char **content_p)
+static int _upipe_avfsrc_get_option(struct upipe *upipe, const char *option,
+                                    const char **content_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(option != NULL);
@@ -806,8 +806,8 @@ static enum ubase_err _upipe_avfsrc_get_option(struct upipe *upipe, const char *
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static enum ubase_err _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
-                                     const char *content)
+static int _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
+                                    const char *content)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(option != NULL);
@@ -827,7 +827,7 @@ static enum ubase_err _upipe_avfsrc_set_option(struct upipe *upipe, const char *
  * @param url_p filled in with the URL
  * @return an error code
  */
-static enum ubase_err upipe_avfsrc_get_uri(struct upipe *upipe, const char **url_p)
+static int upipe_avfsrc_get_uri(struct upipe *upipe, const char **url_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(url_p != NULL);
@@ -841,7 +841,7 @@ static enum ubase_err upipe_avfsrc_get_uri(struct upipe *upipe, const char **url
  * @param url URL to open
  * @return an error code
  */
-static enum ubase_err upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
+static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
 
@@ -887,7 +887,7 @@ static enum ubase_err upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
  * @param time_p filled in with the reading time, in clock units
  * @return an error code
  */
-static enum ubase_err _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
+static int _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time_p)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     assert(time_p != NULL);
@@ -905,7 +905,7 @@ static enum ubase_err _upipe_avfsrc_get_time(struct upipe *upipe, uint64_t *time
  * @param time new reading time, in clock units
  * @return an error code
  */
-static enum ubase_err _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
+static int _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 {
     //struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     return UBASE_ERR_UNHANDLED;
@@ -918,8 +918,8 @@ static enum ubase_err _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int _upipe_avfsrc_control(struct upipe *upipe,
+                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -987,8 +987,7 @@ static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avfsrc_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_avfsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_avfsrc_control(upipe, command, args));
 

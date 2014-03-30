@@ -748,7 +748,7 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
+static int upipe_avcenc_set_flow_def(struct upipe *upipe,
                                                 struct uref *flow_def)
 {
     if (flow_def == NULL)
@@ -958,7 +958,7 @@ static enum ubase_err upipe_avcenc_set_flow_def(struct upipe *upipe,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_avcenc_suggest_flow_def(struct upipe *upipe,
+static int upipe_avcenc_suggest_flow_def(struct upipe *upipe,
                                                     struct uref *flow_def)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
@@ -1102,7 +1102,7 @@ static enum ubase_err upipe_avcenc_suggest_flow_def(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static enum ubase_err _upipe_avcenc_set_option(struct upipe *upipe,
+static int _upipe_avcenc_set_option(struct upipe *upipe,
                                                const char *option,
                                                const char *content)
 {
@@ -1127,7 +1127,7 @@ static enum ubase_err _upipe_avcenc_set_option(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
+static int upipe_avcenc_control(struct upipe *upipe,
                                            int command, va_list args)
 {
     switch (command) {
@@ -1288,8 +1288,8 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
  * @param name codec name
  * @return an erorr code
  */
-enum ubase_err _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
-                                                        const char *name)
+int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
+                                             const char *name)
 {
     if (name == NULL)
         return UBASE_ERR_INVALID;
@@ -1309,8 +1309,8 @@ enum ubase_err _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avcenc_mgr_control(struct upipe_mgr *mgr,
-                                               int command, va_list args)
+static int upipe_avcenc_mgr_control(struct upipe_mgr *mgr,
+                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME:

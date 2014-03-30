@@ -53,9 +53,8 @@ extern "C" {
  * @param flow_def overwritten flow definition
  * @return an error code
  */
-static inline enum ubase_err
-    upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
-                                struct uref *flow_def)
+static inline int upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
+                                              struct uref *flow_def)
 {
     UBASE_RETURN(uref_pic_flow_set_planes(flow_def, 0))
     switch (pix_fmt) {

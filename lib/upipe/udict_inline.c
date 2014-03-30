@@ -167,8 +167,7 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
  * udict
  * @return an error code
  */
-static enum ubase_err udict_inline_dup(struct udict *udict,
-                                       struct udict **new_udict_p)
+static int udict_inline_dup(struct udict *udict, struct udict **new_udict_p)
 {
     assert(new_udict_p != NULL);
     struct udict_inline *inl = udict_inline_from_udict(udict);
@@ -231,7 +230,7 @@ static uint8_t *udict_inline_next(uint8_t *attr)
  * @return pointer to the attribute, or NULL
  */
 static uint8_t *udict_inline_find(struct udict *udict, const char *name,
-                                   enum udict_type type)
+                                  enum udict_type type)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
 #ifdef STATS
@@ -339,9 +338,9 @@ static uint8_t *_udict_inline_get(struct udict *udict, const char *name,
  * execution
  * @return an error code
  */
-static enum ubase_err udict_inline_get(struct udict *udict, const char *name,
-                                       enum udict_type type, size_t *size_p,
-                                       const uint8_t **attr_p)
+static int udict_inline_get(struct udict *udict, const char *name,
+                            enum udict_type type, size_t *size_p,
+                            const uint8_t **attr_p)
 {
     uint8_t *attr = _udict_inline_get(udict, name, type, size_p);
     if (unlikely(attr == NULL))
@@ -358,8 +357,8 @@ static enum ubase_err udict_inline_get(struct udict *udict, const char *name,
  * @param type type of the attribute
  * @return an error code
  */
-static enum ubase_err udict_inline_delete(struct udict *udict, const char *name,
-                                          enum udict_type type)
+static int udict_inline_delete(struct udict *udict, const char *name,
+                               enum udict_type type)
 {
     assert(type != UDICT_TYPE_END);
     struct udict_inline *inl = udict_inline_from_udict(udict);
@@ -382,9 +381,9 @@ static enum ubase_err udict_inline_delete(struct udict *udict, const char *name,
  * @param attr_p pointer to the value of the attribute
  * @return an error code
  */
-static enum ubase_err udict_inline_set(struct udict *udict, const char *name,
-                                       enum udict_type type, size_t attr_size,
-                                       uint8_t **attr_p)
+static int udict_inline_set(struct udict *udict, const char *name,
+                            enum udict_type type, size_t attr_size,
+                            uint8_t **attr_p)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
     const struct inline_shorthand *shorthand = NULL;
@@ -477,9 +476,8 @@ static enum ubase_err udict_inline_set(struct udict *udict, const char *name,
  * @param base_type_p filled in with the base type of the shorthand attribute
  * @return an error code
  */
-static enum ubase_err udict_inline_name(enum udict_type type,
-                                        const char **name_p,
-                                        enum udict_type *base_type_p)
+static int udict_inline_name(enum udict_type type, const char **name_p,
+                             enum udict_type *base_type_p)
 {
     if (type <= UDICT_TYPE_SHORTHAND)
         return UBASE_ERR_INVALID;
@@ -500,8 +498,7 @@ static enum ubase_err udict_inline_name(enum udict_type type,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err udict_inline_control(struct udict *udict,
-                                           int command, va_list args)
+static int udict_inline_control(struct udict *udict, int command, va_list args)
 {
     switch (command) {
         case UDICT_DUP: {
@@ -604,8 +601,8 @@ static void udict_inline_mgr_vacuum(struct udict_mgr *mgr)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err udict_inline_mgr_control(struct udict_mgr *mgr,
-                                               int command, va_list args)
+static int udict_inline_mgr_control(struct udict_mgr *mgr,
+                                    int command, va_list args)
 {
     switch (command) {
         case UDICT_MGR_VACUUM:

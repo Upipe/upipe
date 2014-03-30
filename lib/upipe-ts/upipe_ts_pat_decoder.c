@@ -404,8 +404,8 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_patd_set_flow_def(struct upipe *upipe,
-                                                 struct uref *flow_def)
+static int upipe_ts_patd_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -428,8 +428,7 @@ static enum ubase_err upipe_ts_patd_set_flow_def(struct upipe *upipe,
  * @param p filled in with the next flow definition, initialize with NULL
  * @return an error code
  */
-static enum ubase_err upipe_ts_patd_iterate(struct upipe *upipe,
-                                            struct uref **p)
+static int upipe_ts_patd_iterate(struct upipe *upipe, struct uref **p)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     assert(p != NULL);
@@ -452,8 +451,7 @@ static enum ubase_err upipe_ts_patd_iterate(struct upipe *upipe,
  * @param p filled in with the flow definition of the NIT
  * @return an error code
  */
-static enum ubase_err _upipe_ts_patd_get_nit(struct upipe *upipe,
-                                             struct uref **p)
+static int _upipe_ts_patd_get_nit(struct upipe *upipe, struct uref **p)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     if (upipe_ts_patd->nit != NULL) {
@@ -470,8 +468,7 @@ static enum ubase_err _upipe_ts_patd_get_nit(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_patd_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_ts_patd_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

@@ -108,8 +108,8 @@ uprobe_init(&uprobe_catch, split_catch, uprobe_use(logger));
       Where split_catch is a callback:
 
       @code
-static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                  enum uprobe_event event, va_list args)
+static int split_catch(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -135,8 +135,8 @@ static enum ubase_err split_catch(struct uprobe *uprobe, struct upipe *upipe,
       The avcodec decoder features a special probe, defined as followed:
 
       @code
-static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                   enum uprobe_event event, va_list args)
+static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
+                        int event, va_list args)
 {
     if (event != UPROBE_NEW_FLOW_DEF)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -226,8 +226,8 @@ static enum ubase_err avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
       We said we wanted to output only the first frame, and quit afterwards. This magic is performed with the "urefprobe" pipe, allocated in the avcodec probe. This type of pipe throws a custom event (@ref UPROBE_PROBE_UREF) for each incoming uref. Then we just need to write a specific probe handler as follows:
 
       @code
-static enum ubase_err uref_catch(struct uprobe *uprobe, struct upipe *upipe,
-                                 enum uprobe_event event, va_list args)
+static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
+                      int event, va_list args)
 {
     if (event != UPROBE_PROBE_UREF)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -351,7 +351,7 @@ struct upipe_genaux {
     struct uref *flow_def;
     bool flow_def_sent;
 
-    enum ubase_err (*getattr) (struct uref *, uint64_t *);
+    int (*getattr) (struct uref *, uint64_t *);
 
     struct upipe upipe;
 };
@@ -473,8 +473,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
       The control function is not mandatory, but if we want to handle flow definitions we need one:
 
       @code
-static enum ubase_err upipe_genaux_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+static int upipe_genaux_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
@@ -502,12 +501,12 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
         case UPIPE_GENAUX_SET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_set_getattr(upipe,
-                   va_arg(args, enum ubase_err (*)(struct uref*, uint64_t*)));
+                   va_arg(args, int (*)(struct uref*, uint64_t*)));
         }
         case UPIPE_GENAUX_GET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_get_getattr(upipe,
-                   va_arg(args, enum ubase_err (**)(struct uref*, uint64_t*)));
+                   va_arg(args, int (**)(struct uref*, uint64_t*)));
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -531,8 +530,7 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
       This function is almost mandatory in all pipes that accept an input:
 
         @code
-static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_genaux_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;

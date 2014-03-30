@@ -61,8 +61,8 @@ struct upipe_mgr *upipe_setattr_mgr_alloc(void);
  * @param dict_p filled with the current dictionary
  * @return an error code
  */
-static inline enum ubase_err upipe_setattr_get_dict(struct upipe *upipe,
-                                                    struct uref **dict_p)
+static inline int upipe_setattr_get_dict(struct upipe *upipe,
+                                         struct uref **dict_p)
 {
     return upipe_control(upipe, UPIPE_SETATTR_GET_DICT,
                          UPIPE_SETATTR_SIGNATURE, dict_p);
@@ -74,8 +74,8 @@ static inline enum ubase_err upipe_setattr_get_dict(struct upipe *upipe,
  * @param dict dictionary to set
  * @return an error code
  */
-static inline enum ubase_err upipe_setattr_set_dict(struct upipe *upipe,
-                                                    struct uref *dict)
+static inline int upipe_setattr_set_dict(struct upipe *upipe,
+                                         struct uref *dict)
 {
     return upipe_control(upipe, UPIPE_SETATTR_SET_DICT,
                          UPIPE_SETATTR_SIGNATURE, dict);

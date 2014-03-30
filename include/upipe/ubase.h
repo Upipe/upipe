@@ -180,7 +180,7 @@ enum ubase_err {
  * @param err error code
  * @return true if no error happened
  */
-static inline bool ubase_check(enum ubase_err err)
+static inline bool ubase_check(int err)
 {
     return err == UBASE_ERR_NONE;
 }
@@ -191,7 +191,7 @@ static inline bool ubase_check(enum ubase_err err)
  */
 #define UBASE_RETURN(command)                                               \
 do {                                                                        \
-    enum ubase_err ubase_err_tmp = command;                                 \
+    int ubase_err_tmp = command;                                            \
     if (unlikely(!ubase_check(ubase_err_tmp)))                              \
         return ubase_err_tmp;                                               \
 } while (0);
@@ -202,7 +202,7 @@ do {                                                                        \
  */
 #define UBASE_FATAL(upipe, command)                                         \
 do {                                                                        \
-    enum ubase_err ubase_err_tmp = command;                                 \
+    int ubase_err_tmp = command;                                            \
     if (unlikely(!ubase_check(ubase_err_tmp)))                              \
         upipe_throw_fatal(upipe, ubase_err_tmp);                            \
 } while (0);
@@ -214,7 +214,7 @@ do {                                                                        \
  */
 #define UBASE_FATAL_RETURN(upipe, command)                                  \
 do {                                                                        \
-    enum ubase_err ubase_err_tmp = command;                                 \
+    int ubase_err_tmp = command;                                            \
     if (unlikely(!ubase_check(ubase_err_tmp))) {                            \
         upipe_throw_fatal(upipe, ubase_err_tmp);                            \
         return;                                                             \
@@ -227,7 +227,7 @@ do {                                                                        \
  */
 #define UBASE_ERROR(upipe, command)                                         \
 do {                                                                        \
-    enum ubase_err ubase_err_tmp = command;                                 \
+    int ubase_err_tmp = command;                                            \
     if (unlikely(!ubase_check(ubase_err_tmp)))                              \
         upipe_throw_error(upipe, ubase_err_tmp);                            \
 } while (0);

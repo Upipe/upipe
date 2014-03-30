@@ -91,7 +91,7 @@ enum upipe_ts_mux_command {
  * @param conformance_p filled in with the conformance
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_mux_get_conformance(struct upipe *upipe,
                                  enum upipe_ts_conformance *conformance_p)
 {
@@ -105,7 +105,7 @@ static inline enum ubase_err
  * @param conformance conformance mode
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_mux_set_conformance(struct upipe *upipe,
                                  enum upipe_ts_conformance conformance)
 {
@@ -119,8 +119,8 @@ static inline enum ubase_err
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_get_pat_interval(struct upipe *upipe,
-                                                 uint64_t *interval_p)
+static inline int upipe_ts_mux_get_pat_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PAT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval_p);
@@ -133,8 +133,8 @@ static inline enum ubase_err upipe_ts_mux_get_pat_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_pat_interval(struct upipe *upipe,
-                                                           uint64_t interval)
+static inline int upipe_ts_mux_set_pat_interval(struct upipe *upipe,
+                                                uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PAT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -146,8 +146,8 @@ static inline enum ubase_err upipe_ts_mux_set_pat_interval(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
-                                                           uint64_t *interval_p)
+static inline int upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PMT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval_p);
@@ -160,8 +160,8 @@ static inline enum ubase_err upipe_ts_mux_get_pmt_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
-                                                           uint64_t interval)
+static inline int upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
+                                                uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PMT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -173,8 +173,8 @@ static inline enum ubase_err upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
  * @param interval_p filled in with the interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
-                                                           uint64_t *interval_p)
+static inline int upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_PCR_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval_p);
@@ -186,8 +186,8 @@ static inline enum ubase_err upipe_ts_mux_get_pcr_interval(struct upipe *upipe,
  * @param interval new interval
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
-                                                           uint64_t interval)
+static inline int upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
+                                                uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PCR_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
@@ -200,8 +200,8 @@ static inline enum ubase_err upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
  * @param octetrate_p filled in with the octetrate
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_get_octetrate(struct upipe *upipe,
-                                                        uint64_t *octetrate_p)
+static inline int upipe_ts_mux_get_octetrate(struct upipe *upipe,
+                                             uint64_t *octetrate_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate_p);
@@ -213,8 +213,8 @@ static inline enum ubase_err upipe_ts_mux_get_octetrate(struct upipe *upipe,
  * @param octetrate new octetrate
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_octetrate(struct upipe *upipe,
-                                                        uint64_t octetrate)
+static inline int upipe_ts_mux_set_octetrate(struct upipe *upipe,
+                                             uint64_t octetrate)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
@@ -226,7 +226,7 @@ static inline enum ubase_err upipe_ts_mux_set_octetrate(struct upipe *upipe,
  * @param octetrate_p filled in with the octetrate
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
                                        uint64_t *octetrate_p)
 {
@@ -240,7 +240,7 @@ static inline enum ubase_err
  * @param octetrate new octetrate
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_mux_set_padding_octetrate(struct upipe *upipe, uint64_t octetrate)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
@@ -254,7 +254,7 @@ static inline enum ubase_err
  * @param mode_p filled in with the mode
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_ts_mux_get_mode(struct upipe *upipe, enum upipe_ts_mux_mode *mode_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_MODE,
@@ -267,8 +267,8 @@ static inline enum ubase_err
  * @param mode new mode
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_mode(struct upipe *upipe,
-                                                   enum upipe_ts_mux_mode mode)
+static inline int upipe_ts_mux_set_mode(struct upipe *upipe,
+                                        enum upipe_ts_mux_mode mode)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MODE,
                          UPIPE_TS_MUX_SIGNATURE, mode);
@@ -281,8 +281,7 @@ static inline enum ubase_err upipe_ts_mux_set_mode(struct upipe *upipe,
  * @param mtu_p filled in with the configured mtu, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_get_mtu(struct upipe *upipe,
-                                                  unsigned int *mtu_p)
+static inline int upipe_ts_mux_get_mtu(struct upipe *upipe, unsigned int *mtu_p)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_GET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu_p);
@@ -295,8 +294,7 @@ static inline enum ubase_err upipe_ts_mux_get_mtu(struct upipe *upipe,
  * @param mtu configured mtu, in octets
  * @return an error code
  */
-static inline enum ubase_err upipe_ts_mux_set_mtu(struct upipe *upipe,
-                                                  unsigned int mtu)
+static inline int upipe_ts_mux_set_mtu(struct upipe *upipe, unsigned int mtu)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu);
@@ -336,7 +334,7 @@ enum upipe_ts_mux_mgr_command {
  * @param p filled in with the name manager                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err                                                \
+static inline int                                                           \
     upipe_ts_mux_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                \
                                       struct upipe_mgr *p)                  \
 {                                                                           \
@@ -349,7 +347,7 @@ static inline enum ubase_err                                                \
  * @param m pointer to name manager                                         \
  * @return an error code                                                    \
  */                                                                         \
-static inline enum ubase_err                                                \
+static inline int                                                           \
     upipe_ts_mux_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                \
                                       struct upipe_mgr *m)                  \
 {                                                                           \

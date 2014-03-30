@@ -74,7 +74,7 @@ extern "C" {
  * Called whenever you change the flow definition on this output.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_flow_def(struct upipe *upipe, struct uref **p)
+ *  int upipe_foo_get_flow_def(struct upipe *upipe, struct uref **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -85,7 +85,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_output(struct upipe *upipe, struct upipe **p)
+ *  int upipe_foo_get_output(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -96,8 +96,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_output(struct upipe *upipe,
- *                                      struct upipe *output)
+ *  int upipe_foo_set_output(struct upipe *upipe, struct upipe *output)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -179,8 +178,7 @@ static void STRUCTURE##_store_flow_def(struct upipe *upipe,                 \
  * @param p filled in with the flow definition (to use on the output)       \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_flow_def(struct upipe *upipe,         \
-                                               struct uref **p)             \
+static int STRUCTURE##_get_flow_def(struct upipe *upipe, struct uref **p)   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
@@ -196,8 +194,7 @@ static enum ubase_err STRUCTURE##_get_flow_def(struct upipe *upipe,         \
  * @param p filled in with the output                                       \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_output(struct upipe *upipe,           \
-                                             struct upipe **p)              \
+static int STRUCTURE##_get_output(struct upipe *upipe, struct upipe **p)    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
@@ -210,8 +207,7 @@ static enum ubase_err STRUCTURE##_get_output(struct upipe *upipe,           \
  * @param output new output                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_set_output(struct upipe *upipe,           \
-                                             struct upipe *output)          \
+static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     upipe_release(STRUCTURE->OUTPUT);                                       \

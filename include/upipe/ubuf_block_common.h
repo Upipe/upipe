@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -97,8 +97,8 @@ static inline void ubuf_block_common_set_buffer(struct ubuf *ubuf,
  * @param new_ubuf pointer to ubuf to overwrite
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_common_dup(struct ubuf *ubuf,
-                                                   struct ubuf *new_ubuf)
+static inline int ubuf_block_common_dup(struct ubuf *ubuf,
+                                        struct ubuf *new_ubuf)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);
@@ -124,9 +124,9 @@ static inline enum ubase_err ubuf_block_common_dup(struct ubuf *ubuf,
  * @param size final size of the buffer
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_common_splice(struct ubuf *ubuf,
-                                                      struct ubuf *new_ubuf,
-                                                      int offset, int size)
+static inline int ubuf_block_common_splice(struct ubuf *ubuf,
+                                           struct ubuf *new_ubuf,
+                                           int offset, int size)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);

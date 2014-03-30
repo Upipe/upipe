@@ -91,8 +91,8 @@ static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_probe_uref_set_flow_def(struct upipe *upipe,
-                                                    struct uref *flow_def)
+static int upipe_probe_uref_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -111,8 +111,8 @@ static enum ubase_err upipe_probe_uref_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_probe_uref_control(struct upipe *upipe,
-                                               int command, va_list args)
+static int upipe_probe_uref_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

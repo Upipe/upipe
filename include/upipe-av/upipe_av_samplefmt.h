@@ -72,7 +72,7 @@ static const struct {
  * @param channels number of channels
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     upipe_av_samplefmt_to_flow_def(struct uref *flow_def,
                                    enum AVSampleFormat fmt, uint8_t channels)
 {

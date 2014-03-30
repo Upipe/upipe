@@ -201,8 +201,8 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
+static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
+                                           struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -251,8 +251,8 @@ static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_flow_control(struct upipe *upipe,
-                                                 int command, va_list args)
+static int upipe_ts_psig_flow_control(struct upipe *upipe,
+                                      int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -459,8 +459,8 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
-                                                         struct uref *flow_def)
+static int upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
+                                              struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -515,8 +515,8 @@ static enum ubase_err upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
  * @param pcr_pid_p filled in with the pcr_pid
  * @return an error code
  */
-static enum ubase_err _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
-                                               unsigned int *pcr_pid_p)
+static int _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
+                                              unsigned int *pcr_pid_p)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
@@ -531,8 +531,8 @@ static enum ubase_err _upipe_ts_psig_program_get_pcr_pid(struct upipe *upipe,
  * @param pcr_pid pcr_pid
  * @return an error code
  */
-static enum ubase_err _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
-                                               unsigned int pcr_pid)
+static int _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
+                                              unsigned int pcr_pid)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
@@ -547,8 +547,8 @@ static enum ubase_err _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_program_control(struct upipe *upipe,
-                                                    int command, va_list args)
+static int upipe_ts_psig_program_control(struct upipe *upipe,
+                                         int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -793,8 +793,8 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_set_flow_def(struct upipe *upipe,
-                                                 struct uref *flow_def)
+static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -824,8 +824,7 @@ static enum ubase_err upipe_ts_psig_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_psig_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:

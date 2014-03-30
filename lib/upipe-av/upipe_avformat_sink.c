@@ -141,8 +141,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p);
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe,
-                                            uint32_t signature, va_list args)
+                                             struct uprobe *uprobe,
+                                             uint32_t signature, va_list args)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_sub_mgr(mgr);
     if (upipe_avfsink->opened)
@@ -207,8 +207,8 @@ static void upipe_avfsink_sub_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
-                                                     struct uref *flow_def)
+static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -374,8 +374,8 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avfsink_sub_control(struct upipe *upipe,
-                                                int command, va_list args)
+static int upipe_avfsink_sub_control(struct upipe *upipe,
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -602,9 +602,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_get_option(struct upipe *upipe,
-                                                const char *option,
-                                                const char **content_p)
+static int _upipe_avfsink_get_option(struct upipe *upipe,
+                                     const char *option, const char **content_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -625,9 +624,8 @@ static enum ubase_err _upipe_avfsink_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_set_option(struct upipe *upipe,
-                                                const char *option,
-                                                const char *content)
+static int _upipe_avfsink_set_option(struct upipe *upipe,
+                                     const char *option, const char *content)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -647,8 +645,7 @@ static enum ubase_err _upipe_avfsink_set_option(struct upipe *upipe,
  * @param mime_p filled in with the currently configured MIME type
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_get_mime(struct upipe *upipe,
-                                              const char **mime_p)
+static int _upipe_avfsink_get_mime(struct upipe *upipe, const char **mime_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(mime_p != NULL);
@@ -663,8 +660,7 @@ static enum ubase_err _upipe_avfsink_get_mime(struct upipe *upipe,
  * @param mime MIME type
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_set_mime(struct upipe *upipe,
-                                              const char *mime)
+static int _upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     free(upipe_avfsink->mime);
@@ -685,8 +681,7 @@ static enum ubase_err _upipe_avfsink_set_mime(struct upipe *upipe,
  * @param format_p filled in with the currently configured format name
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_get_format(struct upipe *upipe,
-                                                const char **format_p)
+static int _upipe_avfsink_get_format(struct upipe *upipe, const char **format_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(format_p != NULL);
@@ -701,8 +696,7 @@ static enum ubase_err _upipe_avfsink_get_format(struct upipe *upipe,
  * @param format format name
  * @return an error code
  */
-static enum ubase_err _upipe_avfsink_set_format(struct upipe *upipe,
-                                                const char *format)
+static int _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     free(upipe_avfsink->format);
@@ -723,8 +717,7 @@ static enum ubase_err _upipe_avfsink_set_format(struct upipe *upipe,
  * @param uri_p filled in with the URI
  * @return an error code
  */
-static enum ubase_err upipe_avfsink_get_uri(struct upipe *upipe,
-                                            const char **uri_p)
+static int upipe_avfsink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -738,8 +731,7 @@ static enum ubase_err upipe_avfsink_get_uri(struct upipe *upipe,
  * @param uri URI to open
  * @return an error code
  */
-static enum ubase_err upipe_avfsink_set_uri(struct upipe *upipe,
-                                            const char *uri)
+static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
 
@@ -788,8 +780,7 @@ static enum ubase_err upipe_avfsink_set_uri(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_avfsink_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {

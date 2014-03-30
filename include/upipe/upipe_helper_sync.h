@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -55,12 +55,12 @@ extern "C" {
  * Initializes the acquired field.
  *
  * @item @code
- *  enum ubase_err upipe_foo_sync_lost(struct upipe_foo *s)
+ *  int upipe_foo_sync_lost(struct upipe_foo *s)
  * @end code
  * Throws the @ref UPROBE_SYNC_LOST event, if it hasn't been thrown before.
  *
  * @item @code
- *  enum ubase_err upipe_foo_sync_acquired(struct upipe_foo *s)
+ *  int upipe_foo_sync_acquired(struct upipe_foo *s)
  * @end code
  * Throws the @ref UPROBE_SYNC_ACQUIRED event, if it hasn't been thrown before.
  *
@@ -89,7 +89,7 @@ static void STRUCTURE##_init_sync(struct upipe *upipe)                      \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static enum ubase_err STRUCTURE##_sync_lost(struct upipe *upipe)            \
+static int STRUCTURE##_sync_lost(struct upipe *upipe)                       \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (STRUCTURE->ACQUIRED) {                                              \
@@ -103,7 +103,7 @@ static enum ubase_err STRUCTURE##_sync_lost(struct upipe *upipe)            \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static enum ubase_err STRUCTURE##_sync_acquired(struct upipe *upipe)        \
+static int STRUCTURE##_sync_acquired(struct upipe *upipe)                   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (!STRUCTURE->ACQUIRED) {                                             \

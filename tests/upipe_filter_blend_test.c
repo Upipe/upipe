@@ -66,8 +66,8 @@ struct ubuf_mgr *ubuf_mgr;
 struct uref_mgr *uref_mgr;
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
-                            int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
 {
     switch (event) {
         default:

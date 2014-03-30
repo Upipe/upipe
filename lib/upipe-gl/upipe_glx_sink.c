@@ -238,7 +238,7 @@ static bool upipe_glx_sink_init_watcher(struct upipe *upipe)
  * @param height window height
  * @return an error code
  */
-static enum ubase_err upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width, int height)
+static int upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width, int height)
 {
     int doubleBufferV[] =
     {
@@ -462,8 +462,8 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_glx_sink_set_flow_def(struct upipe *upipe,
-                                        struct uref *flow_def)
+static int upipe_glx_sink_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -499,8 +499,8 @@ static enum ubase_err upipe_glx_sink_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_glx_sink_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int upipe_glx_sink_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:

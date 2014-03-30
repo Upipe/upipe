@@ -68,9 +68,9 @@ static inline struct ubuf *ubuf_pic_alloc(struct ubuf_mgr *mgr,
  * macropixel if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_size(struct ubuf *ubuf,
-                                 size_t *hsize_p, size_t *vsize_p,
-                                 uint8_t *mpixel_p)
+static inline int ubuf_pic_size(struct ubuf *ubuf,
+                                size_t *hsize_p, size_t *vsize_p,
+                                uint8_t *mpixel_p)
 {
     return ubuf_control(ubuf, UBUF_SIZE_PICTURE, hsize_p, vsize_p, mpixel_p);
 }
@@ -84,8 +84,8 @@ static inline enum ubase_err ubuf_pic_size(struct ubuf *ubuf,
  * @param chroma_p reference written with chroma type of the next plane
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_plane_iterate(struct ubuf *ubuf,
-                                                    const char **chroma_p)
+static inline int ubuf_pic_plane_iterate(struct ubuf *ubuf,
+                                         const char **chroma_p)
 {
     return ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE, chroma_p);
 }
@@ -104,7 +104,7 @@ static inline enum ubase_err ubuf_pic_plane_iterate(struct ubuf *ubuf,
  * octets for this plane if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_plane_size(struct ubuf *ubuf,
+static inline int ubuf_pic_plane_size(struct ubuf *ubuf,
         const char *chroma, size_t *stride_p, uint8_t *hsub_p, uint8_t *vsub_p,
         uint8_t *macropixel_size_p)
 
@@ -130,7 +130,7 @@ static inline enum ubase_err ubuf_pic_plane_size(struct ubuf *ubuf,
  * or -1 for until the last line (may be NULL)
  * @return UBASE_ERR_INVALID when the parameters are invalid
  */
-static inline enum ubase_err ubuf_pic_plane_check_offset(struct ubuf *ubuf,
+static inline int ubuf_pic_plane_check_offset(struct ubuf *ubuf,
        const char *chroma, int *hoffset_p, int *voffset_p,
        int *hsize_p, int *vsize_p)
 {
@@ -178,7 +178,7 @@ static inline enum ubase_err ubuf_pic_plane_check_offset(struct ubuf *ubuf,
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_plane_read(struct ubuf *ubuf,
+static inline int ubuf_pic_plane_read(struct ubuf *ubuf,
         const char *chroma, int hoffset, int voffset, int hsize, int vsize,
         const uint8_t **buffer_p)
 {
@@ -207,7 +207,7 @@ static inline enum ubase_err ubuf_pic_plane_read(struct ubuf *ubuf,
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_plane_write(struct ubuf *ubuf,
+static inline int ubuf_pic_plane_write(struct ubuf *ubuf,
         const char *chroma, int hoffset, int voffset, int hsize, int vsize,
         uint8_t **buffer_p)
 {
@@ -235,7 +235,7 @@ static inline enum ubase_err ubuf_pic_plane_write(struct ubuf *ubuf,
  * last line
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_plane_unmap(struct ubuf *ubuf,
+static inline int ubuf_pic_plane_unmap(struct ubuf *ubuf,
         const char *chroma, int hoffset, int voffset, int hsize, int vsize)
 {
     UBASE_RETURN(ubuf_pic_plane_check_offset(ubuf, chroma, &hoffset, &voffset,
@@ -264,7 +264,7 @@ static inline enum ubase_err ubuf_pic_plane_unmap(struct ubuf *ubuf,
  * (may be NULL)
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_check_resize(struct ubuf *ubuf,
+static inline int ubuf_pic_check_resize(struct ubuf *ubuf,
         int *hskip_p, int *vskip_p, int *new_hsize_p, int *new_vsize_p,
         size_t *ubuf_hsize_p, size_t *ubuf_vsize_p, uint8_t *macropixel_p)
 {
@@ -314,8 +314,8 @@ static inline enum ubase_err ubuf_pic_check_resize(struct ubuf *ubuf,
  * to -1, keep same last line)
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_resize(struct ubuf *ubuf,
-        int hskip, int vskip, int new_hsize, int new_vsize)
+static inline int ubuf_pic_resize(struct ubuf *ubuf, int hskip, int vskip,
+                                  int new_hsize, int new_vsize)
 {
     UBASE_RETURN(ubuf_pic_check_resize(ubuf, &hskip, &vskip,
                                        &new_hsize, &new_vsize,
@@ -463,9 +463,9 @@ ubuf_pic_copy_err:
  * to -1, keep same last line)
  * @return an error code
  */
-static inline enum ubase_err ubuf_pic_replace(struct ubuf_mgr *mgr,
-        struct ubuf **ubuf_p, int hskip, int vskip,
-        int new_hsize, int new_vsize)
+static inline int ubuf_pic_replace(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
+                                   int hskip, int vskip,
+                                   int new_hsize, int new_vsize)
 {
     struct ubuf *new_ubuf = ubuf_pic_copy(mgr, *ubuf_p, hskip, vskip,
                                           new_hsize, new_vsize);
@@ -494,9 +494,8 @@ static inline enum ubase_err ubuf_pic_replace(struct ubuf_mgr *mgr,
  * last line
  * @return an error code
  */
-enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
-                          int hoffset, int voffset,
-                          int hsize, int vsize);
+int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
+                         int hoffset, int voffset, int hsize, int vsize);
 
 /** @This clears (part of) the specified picture, depending on plane type
  * and size (set U/V chroma to 0x80 instead of 0 for instance)
@@ -514,8 +513,8 @@ enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * last line
  * @return an error code
  */
-enum ubase_err ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
-                                       int hsize, int vsize);
+int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
+                   int hsize, int vsize);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -49,7 +49,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:

@@ -621,7 +621,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
-static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -758,7 +758,7 @@ static enum ubase_err upipe_alsink_set_flow_def(struct upipe *upipe, struct uref
  * @param uri_p filled in with the device name
  * @return an error code
  */
-static enum ubase_err upipe_alsink_get_uri(struct upipe *upipe, const char **uri_p)
+static int upipe_alsink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -772,7 +772,7 @@ static enum ubase_err upipe_alsink_get_uri(struct upipe *upipe, const char **uri
  * @param uri name of the ALSA device
  * @return an error code
  */
-static enum ubase_err upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
+static int upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
 
@@ -797,7 +797,7 @@ static enum ubase_err upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_alsink_flush(struct upipe *upipe)
+static int upipe_alsink_flush(struct upipe *upipe)
 {
     if (upipe_alsink_flush_sink(upipe))
         /* All packets have been output, release again the pipe that has been
@@ -813,8 +813,7 @@ static enum ubase_err upipe_alsink_flush(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_alsink_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_alsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:

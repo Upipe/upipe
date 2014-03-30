@@ -250,9 +250,9 @@ static void *upipe_glxplayer_dec_thread(void *_glxplayer)
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_source(struct uprobe *uprobe,
-                                                   struct upipe *upipe,
-                                                   int event, va_list args)
+static int upipe_glxplayer_catch_source(struct uprobe *uprobe,
+                                        struct upipe *upipe,
+                                        int event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END: {
@@ -275,9 +275,9 @@ static enum ubase_err upipe_glxplayer_catch_source(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
-                                                         struct upipe *upipe,
-                                                         int event, va_list args)
+static int upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
+                                              struct upipe *upipe,
+                                              int event, va_list args)
 {
     struct upipe_glxplayer *glxplayer =
         container_of(uprobe, struct upipe_glxplayer, uprobe_demux_output_s);
@@ -373,9 +373,9 @@ static enum ubase_err upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
-                                                     struct upipe *upipe,
-                                                     int event, va_list args)
+static int upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
+                                          struct upipe *upipe,
+                                          int event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END: {
@@ -413,9 +413,9 @@ static enum ubase_err upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
-                                                   struct upipe *upipe,
-                                                   int event, va_list args)
+static int upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
+                                        struct upipe *upipe,
+                                        int event, va_list args)
 {
     switch (event) {
         case UPROBE_NEW_FLOW_DEF: {
@@ -477,9 +477,9 @@ static enum ubase_err upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
-                                                     struct upipe *upipe,
-                                                     int event, va_list args)
+static int upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
+                                          struct upipe *upipe,
+                                          int event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END: {
@@ -544,9 +544,9 @@ static enum ubase_err upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err upipe_glxplayer_catch_glx(struct uprobe *uprobe,
-                                                struct upipe *upipe,
-                                                int event, va_list args)
+static int upipe_glxplayer_catch_glx(struct uprobe *uprobe,
+                                     struct upipe *upipe,
+                                     int event, va_list args)
 {
     switch (event) {
         case UPROBE_GLX_SINK_KEYPRESS: {

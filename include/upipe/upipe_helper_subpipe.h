@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -88,8 +88,7 @@ extern "C" {
  * adds the output to the list in upipe_foo.
  *
  * @item @code
- *  enum ubase_err upipe_foo_output_get_super(struct upipe *upipe,
- *                                            struct upipe **p)
+ *  int upipe_foo_output_get_super(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -111,8 +110,7 @@ extern "C" {
  * Initializes the list in upipe_foo.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_sub_mgr(struct upipe *upipe,
- *                                       struct upipe_mgr **p)
+ *  int upipe_foo_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -123,7 +121,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
+ *  int upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
  * @end code
  * Typically called from your upipe_foo_output_control() handler, such as:
  * @code
@@ -225,8 +223,7 @@ static void STRUCTURE_SUB##_init_sub(struct upipe *upipe)                   \
  * @param p filled in with a pointer to the super-pipe                      \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE_SUB##_get_super(struct upipe *upipe,        \
-                                                struct upipe **p)           \
+static int STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p) \
 {                                                                           \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
@@ -265,8 +262,8 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
  * @param p filled in with a pointer to the subpipe manager                 \
  * @return an error code                                                    \
  */                                                                         \
-static enum ubase_err STRUCTURE##_get_sub_mgr(struct upipe *upipe,          \
-                                              struct upipe_mgr **p)         \
+static int STRUCTURE##_get_sub_mgr(struct upipe *upipe,                     \
+                                   struct upipe_mgr **p)                    \
 {                                                                           \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
@@ -279,8 +276,7 @@ static enum ubase_err STRUCTURE##_get_sub_mgr(struct upipe *upipe,          \
  * @param p filled in with the next subpipe, initialize with NULL           \
  * return an error code                                                     \
  */                                                                         \
-static enum ubase_err STRUCTURE##_iterate_sub(struct upipe *upipe,          \
-                                              struct upipe **p)             \
+static int STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     assert(p != NULL);                                                      \

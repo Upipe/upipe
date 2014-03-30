@@ -90,10 +90,9 @@ enum upipe_xfer_command {
 };
 
 /** @hidden */
-static enum ubase_err upipe_xfer_mgr_send(struct upipe_mgr *mgr,
-                                          enum upipe_xfer_command type,
-                                          struct upipe *upipe_remote,
-                                          void *arg);
+static int upipe_xfer_mgr_send(struct upipe_mgr *mgr,
+                               enum upipe_xfer_command type,
+                               struct upipe *upipe_remote, void *arg);
 
 /** @This stores a message to send.
  */
@@ -207,8 +206,7 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_xfer_control(struct upipe *upipe,
-                                         int command, va_list args)
+static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_URI: {
@@ -329,10 +327,9 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
  * @paral arg optional argument
  * @return an error code
  */
-static enum ubase_err upipe_xfer_mgr_send(struct upipe_mgr *mgr,
-                                          enum upipe_xfer_command type,
-                                          struct upipe *upipe_remote,
-                                          void *arg)
+static int upipe_xfer_mgr_send(struct upipe_mgr *mgr,
+                               enum upipe_xfer_command type,
+                               struct upipe *upipe_remote, void *arg)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     struct upipe_xfer_msg *msg = upipe_xfer_msg_alloc(mgr);
@@ -378,8 +375,8 @@ static void upipe_xfer_mgr_detach(struct urefcount *urefcount)
  * @param upump_mgr event loop to attach
  * @return an error code
  */
-static enum ubase_err _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
-                                             struct upump_mgr *upump_mgr)
+static int _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
+                                  struct upump_mgr *upump_mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     if (unlikely(xfer_mgr->upump_mgr != NULL))
@@ -404,8 +401,8 @@ static enum ubase_err _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_xfer_mgr_control(struct upipe_mgr *mgr,
-                                             int command, va_list args)
+static int upipe_xfer_mgr_control(struct upipe_mgr *mgr,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_XFER_MGR_ATTACH: {

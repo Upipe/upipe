@@ -202,8 +202,7 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
  * ubuf
  * @return an error code
  */
-static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
-                                       struct ubuf **new_ubuf_p)
+static int ubuf_pic_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf_pic_mem *new_pic = ubuf_pic_mem_alloc_pool(ubuf->mgr);
@@ -238,8 +237,7 @@ static enum ubase_err ubuf_pic_mem_dup(struct ubuf *ubuf,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
-                                           int command, va_list args)
+static int ubuf_pic_mem_control(struct ubuf *ubuf, int command, va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -273,7 +271,7 @@ static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
             int hsize = va_arg(args, int);
             int vsize = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
-            enum ubase_err err =
+            int err =
                 ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
                                           hsize, vsize, buffer_p);
 #ifndef NDEBUG
@@ -294,7 +292,7 @@ static enum ubase_err ubuf_pic_mem_control(struct ubuf *ubuf,
             struct ubuf_pic_mem *pic = ubuf_pic_mem_from_ubuf(ubuf);
             if (!ubuf_mem_shared_single(pic->shared))
                 return UBASE_ERR_BUSY;
-            enum ubase_err err =
+            int err =
                 ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
                                           hsize, vsize, buffer_p);
 #ifndef NDEBUG
@@ -398,8 +396,8 @@ static void ubuf_pic_mem_free_inner(struct upool *upool, void *_pic_mem)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
-                                               int command, va_list args)
+static int ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
+                                    int command, va_list args)
 {
     switch (command) {
         case UBUF_MGR_VACUUM: {
@@ -512,10 +510,9 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
  * @param macropixel_size size of a macropixel in octets
  * @return an error code
  */
-enum ubase_err ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr,
-                                          const char *chroma,
-                                          uint8_t hsub, uint8_t vsub,
-                                          uint8_t macropixel_size)
+int ubuf_pic_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *chroma,
+                               uint8_t hsub, uint8_t vsub,
+                               uint8_t macropixel_size)
 {
     assert(mgr != NULL);
     ubuf_pic_mem_mgr_vacuum_pool(mgr);

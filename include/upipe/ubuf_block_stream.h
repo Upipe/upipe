@@ -71,9 +71,8 @@ struct ubuf_block_stream {
  * @param offset start offset
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_stream_init(struct ubuf_block_stream *s,
-                                                    struct ubuf *ubuf,
-                                                    int offset)
+static inline int ubuf_block_stream_init(struct ubuf_block_stream *s,
+                                         struct ubuf *ubuf, int offset)
 {
     s->size = -1;
     UBASE_RETURN(ubuf_block_read(ubuf, offset, &s->size, &s->buffer))
@@ -91,7 +90,7 @@ static inline enum ubase_err ubuf_block_stream_init(struct ubuf_block_stream *s,
  * @param s helper structure
  * @return an error code
  */
-static inline enum ubase_err
+static inline int
     ubuf_block_stream_clean(struct ubuf_block_stream *s)
 {
     if (s->ubuf != NULL)
@@ -105,8 +104,8 @@ static inline enum ubase_err
  * @param octet_t filled in with the read octet
  * @return an error code
  */
-static inline enum ubase_err ubuf_block_stream_get(struct ubuf_block_stream *s,
-                                                   uint8_t *octet_p)
+static inline int ubuf_block_stream_get(struct ubuf_block_stream *s,
+                                        uint8_t *octet_p)
 {
     if (s->ubuf == NULL)
         return UBASE_ERR_INVALID;

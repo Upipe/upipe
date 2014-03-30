@@ -227,7 +227,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
  * @param uri_p filled in with the uri of the udp socket
  * @return an error code
  */
-static enum ubase_err upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
+static int upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
     assert(uri_p != NULL);
@@ -241,7 +241,7 @@ static enum ubase_err upipe_udpsrc_get_uri(struct upipe *upipe, const char **uri
  * @param uri relative or absolute uri of the udp socket
  * @return an error code
  */
-static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
+static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 {
     bool use_tcp = 0;
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
@@ -299,8 +299,8 @@ static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int _upipe_udpsrc_control(struct upipe *upipe,
+                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -357,8 +357,7 @@ static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_udpsrc_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int upipe_udpsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_udpsrc_control(upipe, command, args));
 

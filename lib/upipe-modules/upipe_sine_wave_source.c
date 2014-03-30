@@ -208,8 +208,8 @@ static void upipe_sinesrc_idler(struct upump *upump)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int _upipe_sinesrc_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -249,8 +249,7 @@ static enum ubase_err _upipe_sinesrc_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_sinesrc_control(struct upipe *upipe,
-                                            int command, va_list args)
+static int upipe_sinesrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_sinesrc_control(upipe, command, args));
 

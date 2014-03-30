@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -71,9 +71,9 @@ struct upipe_mgr *upipe_avfsink_mgr_alloc(void);
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_get_option(struct upipe *upipe,
-                                                      const char *option,
-                                                      const char **content_p)
+static inline int upipe_avfsink_get_option(struct upipe *upipe,
+                                           const char *option,
+                                           const char **content_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_OPTION,
                          UPIPE_AVFSINK_SIGNATURE,
@@ -88,9 +88,9 @@ static inline enum ubase_err upipe_avfsink_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_set_option(struct upipe *upipe,
-                                                      const char *option,
-                                                      const char *content)
+static inline int upipe_avfsink_set_option(struct upipe *upipe,
+                                           const char *option,
+                                           const char *content)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_OPTION,
                          UPIPE_AVFSINK_SIGNATURE, option, content);
@@ -102,8 +102,8 @@ static inline enum ubase_err upipe_avfsink_set_option(struct upipe *upipe,
  * @param mime_p filled in with the currently configured MIME type
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_get_mime(struct upipe *upipe,
-                                                    const char **mime_p)
+static inline int upipe_avfsink_get_mime(struct upipe *upipe,
+                                         const char **mime_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_MIME, UPIPE_AVFSINK_SIGNATURE,
                          mime_p);
@@ -116,8 +116,7 @@ static inline enum ubase_err upipe_avfsink_get_mime(struct upipe *upipe,
  * @param mime MIME type
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_set_mime(struct upipe *upipe,
-                                                    const char *mime)
+static inline int upipe_avfsink_set_mime(struct upipe *upipe, const char *mime)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_MIME, UPIPE_AVFSINK_SIGNATURE,
                          mime);
@@ -129,8 +128,8 @@ static inline enum ubase_err upipe_avfsink_set_mime(struct upipe *upipe,
  * @param format_p filled in with the currently configured format name
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_get_format(struct upipe *upipe,
-                                                      const char **format_p)
+static inline int upipe_avfsink_get_format(struct upipe *upipe,
+                                           const char **format_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_FORMAT,
                          UPIPE_AVFSINK_SIGNATURE, format_p);
@@ -143,8 +142,8 @@ static inline enum ubase_err upipe_avfsink_get_format(struct upipe *upipe,
  * @param format format name
  * @return an error code
  */
-static inline enum ubase_err upipe_avfsink_set_format(struct upipe *upipe,
-                                                      const char *format)
+static inline int upipe_avfsink_set_format(struct upipe *upipe,
+                                           const char *format)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_FORMAT,
                          UPIPE_AVFSINK_SIGNATURE, format);

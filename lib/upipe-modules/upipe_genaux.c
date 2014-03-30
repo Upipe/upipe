@@ -71,7 +71,7 @@ struct upipe_genaux {
     bool flow_def_sent;
 
     /** get attr */
-    enum ubase_err (*getattr) (struct uref *, uint64_t *);
+    int (*getattr) (struct uref *, uint64_t *);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -124,8 +124,7 @@ static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_genaux_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -144,8 +143,8 @@ static enum ubase_err upipe_genaux_set_flow_def(struct upipe *upipe,
  * @param get callback
  * @return an error code
  */
-static inline enum ubase_err _upipe_genaux_set_getattr(struct upipe *upipe,
-                            enum ubase_err (*get)(struct uref*, uint64_t*))
+static inline int _upipe_genaux_set_getattr(struct upipe *upipe,
+                            int (*get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
@@ -162,8 +161,8 @@ static inline enum ubase_err _upipe_genaux_set_getattr(struct upipe *upipe,
  * @param get callback pointer
  * @return an error code
  */
-static inline enum ubase_err _upipe_genaux_get_getattr(struct upipe *upipe,
-                            enum ubase_err (**get)(struct uref*, uint64_t*))
+static inline int _upipe_genaux_get_getattr(struct upipe *upipe,
+                            int (**get)(struct uref*, uint64_t*))
 {
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
     if (unlikely(!get)) {
@@ -181,8 +180,8 @@ static inline enum ubase_err _upipe_genaux_get_getattr(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_genaux_control(struct upipe *upipe,
-                                 int command, va_list args)
+static int upipe_genaux_control(struct upipe *upipe,
+                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
@@ -210,12 +209,12 @@ static enum ubase_err upipe_genaux_control(struct upipe *upipe,
         case UPIPE_GENAUX_SET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_set_getattr(upipe,
-                   va_arg(args, enum ubase_err (*)(struct uref*, uint64_t*)));
+                   va_arg(args, int (*)(struct uref*, uint64_t*)));
         }
         case UPIPE_GENAUX_GET_GETATTR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_GENAUX_SIGNATURE)
             return _upipe_genaux_get_getattr(upipe,
-                   va_arg(args, enum ubase_err (**)(struct uref*, uint64_t*)));
+                   va_arg(args, int (**)(struct uref*, uint64_t*)));
         }
         default:
             return UBASE_ERR_UNHANDLED;

@@ -99,8 +99,8 @@ struct upipe_mgr *upipe_qsrc_mgr_alloc(void);
  * @param length_p filled in with the maximum length of the queue
  * @return an error code
  */
-static inline enum ubase_err upipe_qsrc_get_max_length(struct upipe *upipe,
-                                                       unsigned int *length_p)
+static inline int upipe_qsrc_get_max_length(struct upipe *upipe,
+                                            unsigned int *length_p)
 {
     return upipe_control(upipe, UPIPE_QSRC_GET_MAX_LENGTH,
                          UPIPE_QSRC_SIGNATURE, length_p);
@@ -115,8 +115,8 @@ static inline enum ubase_err upipe_qsrc_get_max_length(struct upipe *upipe,
  * @param length_p filled in with the current length of the queue
  * @return an error code
  */
-static inline enum ubase_err upipe_qsrc_get_length(struct upipe *upipe,
-                                                   unsigned int *length_p)
+static inline int upipe_qsrc_get_length(struct upipe *upipe,
+                                        unsigned int *length_p)
 {
     return upipe_control(upipe, UPIPE_QSRC_GET_LENGTH,
                          UPIPE_QSRC_SIGNATURE, length_p);

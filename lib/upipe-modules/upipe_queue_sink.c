@@ -235,7 +235,7 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
  * @param p filled in with a pointer to the pseudo-output
  * @return an error code
  */
-static enum ubase_err upipe_qsink_get_output(struct upipe *upipe, struct upipe **p)
+static int upipe_qsink_get_output(struct upipe *upipe, struct upipe **p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     assert(p != NULL);
@@ -249,7 +249,7 @@ static enum ubase_err upipe_qsink_get_output(struct upipe *upipe, struct upipe *
  * @param output pointer to the pseudo-output
  * @return an error code
  */
-static enum ubase_err upipe_qsink_set_output(struct upipe *upipe, struct upipe *output)
+static int upipe_qsink_set_output(struct upipe *upipe, struct upipe *output)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
@@ -269,8 +269,7 @@ static enum ubase_err upipe_qsink_set_output(struct upipe *upipe, struct upipe *
  * @param uref flow definition
  * @return an error code
  */
-static enum ubase_err upipe_qsink_set_flow_def(struct upipe *upipe,
-                                               struct uref *uref)
+static int upipe_qsink_set_flow_def(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (unlikely(uref == NULL))
@@ -293,8 +292,7 @@ static enum ubase_err upipe_qsink_set_flow_def(struct upipe *upipe,
  * @param queue_p filled in with a pointer to the queue source
  * @return an error code
  */
-static enum ubase_err _upipe_qsink_get_qsrc(struct upipe *upipe,
-                                            struct upipe **qsrc_p)
+static int _upipe_qsink_get_qsrc(struct upipe *upipe, struct upipe **qsrc_p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     assert(qsrc_p != NULL);
@@ -308,8 +306,7 @@ static enum ubase_err _upipe_qsink_get_qsrc(struct upipe *upipe,
  * @param queue pointer to the queue source
  * @return an error code
  */
-static enum ubase_err _upipe_qsink_set_qsrc(struct upipe *upipe,
-                                            struct upipe *qsrc)
+static int _upipe_qsink_set_qsrc(struct upipe *upipe, struct upipe *qsrc)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
@@ -332,7 +329,7 @@ static enum ubase_err _upipe_qsink_set_qsrc(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static enum ubase_err upipe_qsink_flush(struct upipe *upipe)
+static int upipe_qsink_flush(struct upipe *upipe)
 {
     if (upipe_qsink_flush_sink(upipe)) {
         struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
@@ -348,8 +345,7 @@ static enum ubase_err upipe_qsink_flush(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
-                                           int command, va_list args)
+static int _upipe_qsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -402,8 +398,7 @@ static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_qsink_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int upipe_qsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_qsink_control(upipe, command, args));
 

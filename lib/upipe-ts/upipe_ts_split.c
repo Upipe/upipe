@@ -171,8 +171,8 @@ static struct upipe *upipe_ts_split_sub_alloc(struct upipe_mgr *mgr,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_split_sub_control(struct upipe *upipe,
-                                                 int command, va_list args)
+static int upipe_ts_split_sub_control(struct upipe *upipe,
+                                      int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -388,8 +388,8 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_ts_split_set_flow_def(struct upipe *upipe,
-                                                  struct uref *flow_def)
+static int upipe_ts_split_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -403,8 +403,8 @@ static enum ubase_err upipe_ts_split_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_ts_split_control(struct upipe *upipe,
-                                             int command, va_list args)
+static int upipe_ts_split_control(struct upipe *upipe,
+                                  int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {

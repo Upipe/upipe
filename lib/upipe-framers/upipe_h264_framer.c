@@ -373,7 +373,7 @@ static inline void upipe_h264f_stream_init(struct upipe_h264f_stream *f)
  * @param offset start offset
  * @return an error code
  */
-static inline enum ubase_err upipe_h264f_stream_get(struct ubuf_block_stream *s,
+static inline int upipe_h264f_stream_get(struct ubuf_block_stream *s,
                                                     uint8_t *octet_p)
 {
     UBASE_RETURN(ubuf_block_stream_get(s, octet_p))
@@ -1671,8 +1671,7 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_h264f_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
+static int upipe_h264f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1705,8 +1704,7 @@ static enum ubase_err upipe_h264f_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_h264f_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int upipe_h264f_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

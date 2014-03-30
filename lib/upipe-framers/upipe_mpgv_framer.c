@@ -1046,8 +1046,7 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_mpgvf_set_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
+static int upipe_mpgvf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1080,8 +1079,7 @@ static enum ubase_err upipe_mpgvf_set_flow_def(struct upipe *upipe,
  * @param val_p filled with the current setting
  * @return an error code
  */
-static enum ubase_err _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
-                                                          int *val_p)
+static int _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe, int *val_p)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     *val_p = upipe_mpgvf->insert_sequence ? 1 : 0;
@@ -1096,8 +1094,7 @@ static enum ubase_err _upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
  * @param val true for sequence header insertion
  * @return an error code
  */
-static enum ubase_err _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
-                                                          int val)
+static int _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe, int val)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     upipe_mpgvf->insert_sequence = !!val;
@@ -1111,8 +1108,7 @@ static enum ubase_err _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_mpgvf_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int upipe_mpgvf_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

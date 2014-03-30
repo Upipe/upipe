@@ -46,9 +46,8 @@
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_upump_mgr_throw(struct uprobe *uprobe,
-                                             struct upipe *upipe,
-                                             int event, va_list args)
+static int uprobe_upump_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
+                                  int event, va_list args)
 {
     struct uprobe_upump_mgr *uprobe_upump_mgr =
         uprobe_upump_mgr_from_uprobe(uprobe);

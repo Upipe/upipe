@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
- *
- * Authors: Christophe Massiot
- *
+ * Copyright (C) 2012-2014444444444444444444444
+44
+444444444444444444444444444444
+44
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -57,7 +57,7 @@ extern "C" {
  * parameter is used for initialization.
  *
  * @item @code
- *  enum ubase_err upipe_foo_get_read_size(struct upipe *upipe, unsigned int *p)
+ *  int upipe_foo_get_read_size(struct upipe *upipe, unsigned int *p)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -68,8 +68,7 @@ extern "C" {
  * @end code
  *
  * @item @code
- *  enum ubase_err upipe_foo_set_read_size(struct upipe *upipe,
- *                                         unsigned int read_size)
+ *  int upipe_foo_set_read_size(struct upipe *upipe, unsigned int read_size)
  * @end code
  * Typically called from your upipe_foo_control() handler, such as:
  * @code
@@ -107,7 +106,7 @@ static void STRUCTURE##_init_read_size(struct upipe *upipe,                 \
  * @param p filled in with the read size                                    \
  * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_get_read_size(struct upipe *upipe, unsigned int *p) \
+static int STRUCTURE##_get_read_size(struct upipe *upipe, unsigned int *p)  \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(p != NULL);                                                      \
@@ -120,8 +119,8 @@ static bool STRUCTURE##_get_read_size(struct upipe *upipe, unsigned int *p) \
  * @param read_size new read size                                           \
  * @return an error code                                                    \
  */                                                                         \
-static bool STRUCTURE##_set_read_size(struct upipe *upipe,                  \
-                                      unsigned int read_size)               \
+static int STRUCTURE##_set_read_size(struct upipe *upipe,                   \
+                                     unsigned int read_size)                \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     STRUCTURE->READ_SIZE = read_size;                                       \

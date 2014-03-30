@@ -46,9 +46,8 @@
  * @param args optional event-specific parameters
  * @return an error code
  */
-static enum ubase_err uprobe_stdio_throw(struct uprobe *uprobe,
-                                         struct upipe *upipe,
-                                         int event, va_list args)
+static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
+                              int event, va_list args)
 {
     struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
     if (event != UPROBE_LOG)

@@ -50,9 +50,8 @@
  * last line
  * @return an error code
  */
-enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
-                                    int hoffset, int voffset,
-                                    int hsize, int vsize)
+int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
+                         int hoffset, int voffset, int hsize, int vsize)
 {
     size_t stride, width, height;
     uint8_t hsub, vsub, macropixel_size, macropixel;
@@ -122,8 +121,8 @@ enum ubase_err ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * last line
  * @return an error code
  */
-enum ubase_err ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
-                              int hsize, int vsize)
+int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
+                   int hsize, int vsize)
 {
     if (!ubuf)
         return UBASE_ERR_INVALID;

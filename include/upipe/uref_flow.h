@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -73,8 +73,8 @@ UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
  * variable list of arguments
  * @return an error code
  */
-static inline enum ubase_err uref_flow_set_def_va(struct uref *uref,
-                                                  const char *format, ...)
+static inline int uref_flow_set_def_va(struct uref *uref,
+                                       const char *format, ...)
 {
     UBASE_VARARG(uref_flow_set_def(uref, string))
 }

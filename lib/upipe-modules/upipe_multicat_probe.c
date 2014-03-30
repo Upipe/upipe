@@ -111,8 +111,8 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_multicat_probe_set_flow_def(struct upipe *upipe,
-                                              struct uref *flow_def)
+static int upipe_multicat_probe_set_flow_def(struct upipe *upipe,
+                                             struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -129,7 +129,7 @@ static enum ubase_err upipe_multicat_probe_set_flow_def(struct upipe *upipe,
  * @param rotate new rotate interval
  * @return an error code
  */
-static enum ubase_err  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate)
+static int  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     if (unlikely(rotate < 1)) {
@@ -147,7 +147,7 @@ static enum ubase_err  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uin
  * @param rotate_p filled in with the current rotate interval
  * @return an error code
  */
-static enum ubase_err _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
+static int _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     assert(rotate_p != NULL);
@@ -163,8 +163,8 @@ static enum ubase_err _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_multicat_probe_control(struct upipe *upipe,
-                                                   int command, va_list args)
+static int upipe_multicat_probe_control(struct upipe *upipe,
+                                        int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

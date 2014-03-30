@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,8 +46,7 @@ static inline bool upipe_ts_psid_check_crc(struct uref *section)
     assert(section_header != NULL);
     uint16_t size = psi_get_length(section_header) +
                     PSI_HEADER_SIZE - PSI_CRC_SIZE;
-    enum ubase_err err = uref_block_peek_unmap(section, 0, buffer,
-                                               section_header);
+    int err = uref_block_peek_unmap(section, 0, buffer, section_header);
     ubase_assert(err);
 
     uint32_t crc = 0xffffffff;
@@ -92,8 +91,7 @@ static inline bool upipe_ts_psid_validate(struct uref *section)
     bool checked = !psi_get_syntax(section_header) ||
                    psi_get_length(section_header) >= PSI_HEADER_SIZE_SYNTAX1 -
                                                 PSI_HEADER_SIZE + PSI_CRC_SIZE;
-    enum ubase_err err = uref_block_peek_unmap(section, 0, buffer,
-                                               section_header);
+    int err = uref_block_peek_unmap(section, 0, buffer, section_header);
     ubase_assert(err);
 
     return checked;
@@ -174,7 +172,7 @@ static inline uint8_t upipe_ts_psid_table_get_lastsection(struct uref **sections
                                                     buffer);
     assert(section_header != NULL);
     uint8_t last_section = psi_get_lastsection(section_header);
-    enum ubase_err err = uref_block_peek_unmap(sections[0], 0, buffer,
+    int err = uref_block_peek_unmap(sections[0], 0, buffer,
                                                section_header);
     ubase_assert(err);
     return last_section;
@@ -201,7 +199,7 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
     uint8_t last_section = psi_get_lastsection(section_header);
     uint8_t version = psi_get_version(section_header);
     uint16_t tableidext = psi_get_tableidext(section_header);
-    enum ubase_err err = uref_block_peek_unmap(uref, 0, buffer, section_header);
+    int err = uref_block_peek_unmap(uref, 0, buffer, section_header);
     ubase_assert(err);
 
     if (unlikely(sections[section] != NULL))

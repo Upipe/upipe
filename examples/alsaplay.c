@@ -84,8 +84,8 @@ struct upump_mgr *upump_mgr;
 struct uclock *uclock;
 bool inited = false;
 
-static enum ubase_err catch_src(struct uprobe *uprobe, struct upipe *upipe,
-                                int event, va_list args)
+static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
+                     int event, va_list args)
 {
     switch (event) {
         case UPROBE_SOURCE_END:
@@ -96,8 +96,8 @@ static enum ubase_err catch_src(struct uprobe *uprobe, struct upipe *upipe,
     }
 }
 
-static enum ubase_err catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
-                                  int event, va_list args)
+static int catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
 {
     struct uref *flow_def;
     const char *def;
@@ -126,8 +126,8 @@ static enum ubase_err catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-static enum ubase_err catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
-                                   int event, va_list args)
+static int catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
+                        int event, va_list args)
 {
     struct uref *flow_def;
     const char *def;
