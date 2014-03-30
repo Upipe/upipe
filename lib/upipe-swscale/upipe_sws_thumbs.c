@@ -494,8 +494,7 @@ static enum ubase_err upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_sws_thumbs_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         /* generic commands */

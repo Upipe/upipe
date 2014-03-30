@@ -719,8 +719,7 @@ static enum ubase_err upipe_ts_pmtd_iterate(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_pmtd_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

@@ -574,8 +574,7 @@ static enum ubase_err upipe_ts_agg_set_mtu(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_agg_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:

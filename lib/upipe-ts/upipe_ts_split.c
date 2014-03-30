@@ -172,8 +172,7 @@ static struct upipe *upipe_ts_split_sub_alloc(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_ts_split_sub_control(struct upipe *upipe,
-                                                 enum upipe_command command,
-                                                 va_list args)
+                                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -405,8 +404,7 @@ static enum ubase_err upipe_ts_split_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_split_control(struct upipe *upipe,
-                                             enum upipe_command command,
-                                             va_list args)
+                                             int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {

@@ -1112,8 +1112,7 @@ static enum ubase_err _upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_mpgvf_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+                                          int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

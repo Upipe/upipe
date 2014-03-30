@@ -349,8 +349,7 @@ static enum ubase_err upipe_qsink_flush(struct upipe *upipe)
  * @return an error code
  */
 static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
-                                 enum upipe_command command,
-                                 va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -404,8 +403,7 @@ static enum ubase_err _upipe_qsink_control(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_qsink_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+                                          int command, va_list args)
 {
     UBASE_RETURN(_upipe_qsink_control(upipe, command, args));
 

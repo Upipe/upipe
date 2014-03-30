@@ -346,8 +346,7 @@ static enum ubase_err _upipe_sws_set_flags(struct upipe *upipe, int flags)
  * @return an error code
  */
 static enum ubase_err upipe_sws_control(struct upipe *upipe,
-                                        enum upipe_command command,
-                                        va_list args)
+                                        int command, va_list args)
 {
     switch (command) {
         /* generic commands */

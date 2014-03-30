@@ -243,8 +243,7 @@ static enum ubase_err _upipe_rtp_prepend_get_type(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_rtp_prepend_control(struct upipe *upipe,
-                                                enum upipe_command command,
-                                                va_list args)
+                                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:

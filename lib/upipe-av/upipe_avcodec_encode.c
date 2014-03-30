@@ -1128,8 +1128,7 @@ static enum ubase_err _upipe_avcenc_set_option(struct upipe *upipe,
  * @return false in case of error
  */
 static enum ubase_err upipe_avcenc_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -1311,8 +1310,7 @@ enum ubase_err _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
  * @return an error code
  */
 static enum ubase_err upipe_avcenc_mgr_control(struct upipe_mgr *mgr,
-                                               enum upipe_mgr_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         case UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME:

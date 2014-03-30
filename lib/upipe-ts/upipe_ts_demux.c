@@ -898,8 +898,7 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_output_control(struct upipe *upipe,
-                                                    enum upipe_command command,
-                                                    va_list args)
+                                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_SUB_GET_SUPER: {
@@ -1402,8 +1401,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_program_control(struct upipe *upipe,
-                                                     enum upipe_command command,
-                                                     va_list args)
+                                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {
@@ -2086,7 +2084,7 @@ static enum ubase_err _upipe_ts_demux_set_conformance(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -2234,8 +2232,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
  * @return an error code
  */
 static enum ubase_err upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
-                                                 enum upipe_mgr_command command,
-                                                 va_list args)
+                                                 int command, va_list args)
 {
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(mgr);

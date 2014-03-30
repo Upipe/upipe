@@ -136,7 +136,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe)
 
 /** helper phony pipe to test uprobe_select_flows */
 static enum ubase_err test_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {

@@ -663,8 +663,7 @@ static enum ubase_err upipe_mpgaf_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_mpgaf_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+                                          int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

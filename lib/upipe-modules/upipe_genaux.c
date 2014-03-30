@@ -182,7 +182,7 @@ static inline enum ubase_err _upipe_genaux_get_getattr(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_genaux_control(struct upipe *upipe,
-                                 enum upipe_command command, va_list args)
+                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:

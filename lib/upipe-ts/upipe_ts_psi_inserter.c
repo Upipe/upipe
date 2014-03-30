@@ -353,8 +353,7 @@ static enum ubase_err _upipe_ts_psii_sub_set_interval(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_psii_sub_control(struct upipe *upipe,
-                                                enum upipe_command command,
-                                                va_list args)
+                                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -540,8 +539,7 @@ static enum ubase_err _upipe_ts_psii_set_output(struct upipe *upipe, struct upip
  * @return an error code
  */
 static enum ubase_err upipe_ts_psii_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -610,8 +608,7 @@ static void upipe_ts_psii_mgr_free(struct urefcount *urefcount)
  * @return an error code
  */
 static enum ubase_err upipe_ts_psii_mgr_control(struct upipe_mgr *mgr,
-                                                enum upipe_mgr_command command,
-                                                va_list args)
+                                                int command, va_list args)
 {
     struct upipe_ts_psii_mgr *ts_psii_mgr =
         upipe_ts_psii_mgr_from_upipe_mgr(mgr);

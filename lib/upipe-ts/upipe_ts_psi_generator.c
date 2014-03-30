@@ -252,8 +252,7 @@ static enum ubase_err upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_psig_flow_control(struct upipe *upipe,
-                                                 enum upipe_command command,
-                                                 va_list args)
+                                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -549,8 +548,7 @@ static enum ubase_err _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_psig_program_control(struct upipe *upipe,
-                                                    enum upipe_command command,
-                                                    va_list args)
+                                                    int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -827,8 +825,7 @@ static enum ubase_err upipe_ts_psig_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_psig_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:

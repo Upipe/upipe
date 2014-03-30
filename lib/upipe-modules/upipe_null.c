@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -115,8 +115,7 @@ static void upipe_null_input(struct upipe *upipe, struct uref *uref, struct upum
  * @return an error code
  */
 static enum ubase_err upipe_null_control(struct upipe *upipe,
-                                         enum upipe_command command,
-                                         va_list args)
+                                         int command, va_list args)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     switch (command) {

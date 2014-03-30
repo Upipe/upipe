@@ -70,7 +70,7 @@ static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 static enum ubase_err test_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_OUTPUT: {
@@ -101,7 +101,7 @@ static struct upipe_mgr test_mgr = {
 };
 
 static enum ubase_err output_control(struct upipe *upipe,
-                                     enum upipe_command command, va_list args)
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:

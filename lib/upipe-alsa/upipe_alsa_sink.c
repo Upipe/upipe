@@ -814,8 +814,7 @@ static enum ubase_err upipe_alsink_flush(struct upipe *upipe)
  * @return an error code
  */
 static enum ubase_err upipe_alsink_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:

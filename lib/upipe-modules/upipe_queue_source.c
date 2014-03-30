@@ -199,8 +199,7 @@ static enum ubase_err _upipe_qsrc_get_length(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
-                                          enum upipe_command command,
-                                          va_list args)
+                                          int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -243,8 +242,7 @@ static enum ubase_err _upipe_qsrc_control(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_qsrc_control(struct upipe *upipe,
-                                         enum upipe_command command,
-                                         va_list args)
+                                         int command, va_list args)
 {
     UBASE_RETURN(_upipe_qsrc_control(upipe, command, args));
     upipe_qsrc_check_upump_mgr(upipe);

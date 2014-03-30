@@ -185,13 +185,11 @@ struct upipe_mgr {
     void (*upipe_input)(struct upipe *, struct uref *, struct upump **);
     /** control function for standard or local commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upipe_control)(struct upipe *,
-                                    enum upipe_command, va_list);
+    enum ubase_err (*upipe_control)(struct upipe *, int, va_list);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
-    enum ubase_err (*upipe_mgr_control)(struct upipe_mgr *,
-                                        enum upipe_mgr_command, va_list);
+    enum ubase_err (*upipe_mgr_control)(struct upipe_mgr *, int, va_list);
 };
 
 /** @This increments the reference count of a upipe manager.
@@ -226,9 +224,8 @@ static inline void upipe_mgr_release(struct upipe_mgr *mgr)
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    upipe_mgr_control_va(struct upipe_mgr *mgr,
-                         enum upipe_mgr_command command, va_list args)
+static inline enum ubase_err upipe_mgr_control_va(struct upipe_mgr *mgr,
+                                                  int command, va_list args)
 {
     assert(mgr != NULL);
     if (mgr->upipe_mgr_control == NULL)
@@ -246,9 +243,8 @@ static inline enum ubase_err
  * or write parameters
  * @return an error code
  */
-static inline enum ubase_err
-    upipe_mgr_control(struct upipe_mgr *mgr,
-                      enum upipe_mgr_command command, ...)
+static inline enum ubase_err upipe_mgr_control(struct upipe_mgr *mgr,
+                                               int command, ...)
 {
     enum ubase_err err;
     va_list args;
@@ -920,8 +916,7 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
  * @return an error code
  */
 static inline enum ubase_err upipe_control_va(struct upipe *upipe,
-                                              enum upipe_command command,
-                                              va_list args)
+                                              int command, va_list args)
 {
     assert(upipe != NULL);
     if (upipe->mgr->upipe_control == NULL)
@@ -948,7 +943,7 @@ static inline enum ubase_err upipe_control_va(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_control(struct upipe *upipe,
-                                           enum upipe_command command, ...)
+                                           int command, ...)
 {
     enum ubase_err err;
     va_list args;

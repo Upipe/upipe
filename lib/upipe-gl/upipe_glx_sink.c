@@ -500,8 +500,7 @@ static enum ubase_err upipe_glx_sink_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_glx_sink_control(struct upipe *upipe,
-                                             enum upipe_command command,
-                                             va_list args)
+                                             int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:

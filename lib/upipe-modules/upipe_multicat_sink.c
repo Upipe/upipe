@@ -339,7 +339,7 @@ static enum ubase_err upipe_multicat_sink_attach_uclock(struct upipe *upipe)
  * @return an error code
  */
 static enum ubase_err upipe_multicat_sink_control(struct upipe *upipe,
-        enum upipe_command command, va_list args)
+        int command, va_list args)
 {
     struct upipe_multicat_sink *upipe_multicat_sink =
         upipe_multicat_sink_from_upipe(upipe);

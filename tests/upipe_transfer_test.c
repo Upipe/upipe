@@ -85,7 +85,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr,
 
 /** helper phony pipe */
 static enum ubase_err test_control(struct upipe *upipe,
-                                   enum upipe_command command, va_list args)
+                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {

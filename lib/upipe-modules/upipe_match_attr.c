@@ -148,8 +148,7 @@ static enum ubase_err upipe_match_attr_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_match_attr_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     switch (command) {

@@ -574,7 +574,7 @@ static enum ubase_err upipe_a52f_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_a52f_control(struct upipe *upipe,
-                                         enum upipe_command command,
+                                         int command,
                                          va_list args)
 {
     switch (command) {

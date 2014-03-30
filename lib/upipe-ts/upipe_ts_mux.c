@@ -864,8 +864,7 @@ static enum ubase_err upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_mux_input_control(struct upipe *upipe,
-                                                 enum upipe_command command,
-                                                 va_list args)
+                                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1328,8 +1327,7 @@ static enum ubase_err
  * @return an error code
  */
 static enum ubase_err upipe_ts_mux_program_control(struct upipe *upipe,
-                                                   enum upipe_command command,
-                                                   va_list args)
+                                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1985,8 +1983,7 @@ static enum ubase_err _upipe_ts_mux_set_octetrate(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_mux_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR: {
@@ -2149,8 +2146,7 @@ static void upipe_ts_mux_mgr_free(struct urefcount *urefcount)
  * @return an error code
  */
 static enum ubase_err upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
-                                               enum upipe_mgr_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     struct upipe_ts_mux_mgr *ts_mux_mgr = upipe_ts_mux_mgr_from_upipe_mgr(mgr);
 

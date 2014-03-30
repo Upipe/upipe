@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -237,8 +237,7 @@ static enum ubase_err _upipe_ts_check_set_size(struct upipe *upipe, int size)
  * @return an error code
  */
 static enum ubase_err upipe_ts_check_control(struct upipe *upipe,
-                                             enum upipe_command command,
-                                             va_list args)
+                                             int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

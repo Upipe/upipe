@@ -375,8 +375,7 @@ static enum ubase_err upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_avfsink_sub_control(struct upipe *upipe,
-                                                enum upipe_command command,
-                                                va_list args)
+                                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -790,8 +789,7 @@ static enum ubase_err upipe_avfsink_set_uri(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_avfsink_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_SUB_MGR: {

@@ -241,8 +241,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_avfsrc_sub_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
@@ -920,8 +919,7 @@ static enum ubase_err _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
  * @return an error code
  */
 static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -990,8 +988,7 @@ static enum ubase_err _upipe_avfsrc_control(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_avfsrc_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     UBASE_RETURN(_upipe_avfsrc_control(upipe, command, args));
 

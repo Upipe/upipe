@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -164,8 +164,7 @@ static enum ubase_err _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint
  * @return an error code
  */
 static enum ubase_err upipe_multicat_probe_control(struct upipe *upipe,
-                                                   enum upipe_command command,
-                                                   va_list args)
+                                                   int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {

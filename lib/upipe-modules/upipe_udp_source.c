@@ -300,8 +300,7 @@ static enum ubase_err upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
  * @return an error code
  */
 static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
@@ -359,8 +358,7 @@ static enum ubase_err _upipe_udpsrc_control(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_udpsrc_control(struct upipe *upipe,
-                                           enum upipe_command command,
-                                           va_list args)
+                                           int command, va_list args)
 {
     UBASE_RETURN(_upipe_udpsrc_control(upipe, command, args));
 

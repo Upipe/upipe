@@ -228,8 +228,7 @@ static enum ubase_err _upipe_chunk_stream_get_mtu(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_chunk_stream_control(struct upipe *upipe,
-                                                 enum upipe_command command,
-                                                 va_list args)
+                                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

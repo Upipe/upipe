@@ -160,7 +160,7 @@ static enum ubase_err _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
  * @return an error code
  */
 static enum ubase_err upipe_setrap_control(struct upipe *upipe,
-                                enum upipe_command command, va_list args)
+                                int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

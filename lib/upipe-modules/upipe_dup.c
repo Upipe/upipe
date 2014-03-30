@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -147,8 +147,7 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_dup_output_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+                                               int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
@@ -308,8 +307,7 @@ static enum ubase_err upipe_dup_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_dup_control(struct upipe *upipe,
-                                        enum upipe_command command,
-                                        va_list args)
+                                        int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -123,8 +123,7 @@ static enum ubase_err upipe_skip_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_skip_control(struct upipe *upipe,
-                                         enum upipe_command command,
-                                         va_list args)
+                                         int command, va_list args)
 {
     switch (command) {
         case UPIPE_AMEND_FLOW_FORMAT: {

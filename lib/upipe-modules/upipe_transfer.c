@@ -208,8 +208,7 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_xfer_control(struct upipe *upipe,
-                                         enum upipe_command command,
-                                         va_list args)
+                                         int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_URI: {
@@ -406,8 +405,7 @@ static enum ubase_err _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
  * @return an error code
  */
 static enum ubase_err upipe_xfer_mgr_control(struct upipe_mgr *mgr,
-                                             enum upipe_mgr_command command,
-                                             va_list args)
+                                             int command, va_list args)
 {
     switch (command) {
         case UPIPE_XFER_MGR_ATTACH: {

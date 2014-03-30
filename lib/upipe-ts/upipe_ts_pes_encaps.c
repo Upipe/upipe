@@ -303,8 +303,7 @@ static enum ubase_err upipe_ts_pese_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static enum ubase_err upipe_ts_pese_control(struct upipe *upipe,
-                                            enum upipe_command command,
-                                            va_list args)
+                                            int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UBUF_MGR:
