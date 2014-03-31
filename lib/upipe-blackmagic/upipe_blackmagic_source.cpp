@@ -263,6 +263,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             break;
     }
 
+    uref_attr_set_priv(flow_def_video, UPIPE_BMD_SRC_PIC);
+
     if (unlikely(!uqueue_push(&upipe_bmd_src->uqueue, flow_def_video)))
         uref_free(flow_def_video);
     return S_OK;
@@ -455,6 +457,14 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
 
     struct upipe *upipe = upipe_bmd_src_to_upipe(upipe_bmd_src);
     upipe_init(upipe, mgr, uprobe);
+
+    upipe_bmd_src_init_urefcount(upipe);
+    upipe_bmd_src_init_uref_mgr(upipe);
+    upipe_bmd_src_init_uclock(upipe);
+    upipe_bmd_src_init_upump_mgr(upipe);
+    upipe_bmd_src_init_upump(upipe);
+    upipe_bmd_src_init_sub_mgr(upipe);
+
     upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
                                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_pic);
@@ -464,13 +474,6 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
                                 upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_subpic);
-
-    upipe_bmd_src_init_urefcount(upipe);
-    upipe_bmd_src_init_uref_mgr(upipe);
-    upipe_bmd_src_init_uclock(upipe);
-    upipe_bmd_src_init_upump_mgr(upipe);
-    upipe_bmd_src_init_upump(upipe);
-    upipe_bmd_src_init_sub_mgr(upipe);
 
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
                 upipe_bmd_src->uqueue_extra);
@@ -525,7 +528,7 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         }
 
         const char *def;
-        if (unlikely(uref_flow_get_def(uref, &def))) {
+        if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
             upipe_bmd_src_output_store_flow_def(subpipe, uref);
             continue;
         }
@@ -591,7 +594,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     upipe_notice_va(upipe, "opening device %s", upipe_bmd_src->uri);
 
     IDeckLinkIterator *deckLinkIterator;
-    IDeckLink *deckLink;
+    IDeckLink *deckLink = NULL;
 
     deckLinkIterator = CreateDeckLinkIteratorInstance();
     if (!deckLinkIterator) {
@@ -667,16 +670,23 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_ALLOC;
     }
 
-    /* flow definitions */
+    /* default flow definitions (FIXME hardcoded according to format/mode) */
+    struct urational fps = {25, 1};
     struct uref *flow_def =
         uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
     uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
+    uref_pic_flow_set_macropixel(flow_def, 2);
+    uref_pic_flow_set_fps(flow_def, fps);
+    uref_pic_flow_set_hsize(flow_def, 720);
+    uref_pic_flow_set_vsize(flow_def, 576);
+
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
             flow_def);
     flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.", 2, 2);
     uref_sound_flow_add_plane(flow_def, "lr");
+    uref_sound_flow_set_rate(flow_def, BMD_SAMPLERATE);
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)),
