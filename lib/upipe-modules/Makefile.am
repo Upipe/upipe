@@ -28,6 +28,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_setattr.c \
 	upipe_match_attr.c \
 	upipe_setrap.c \
+	upipe_videocont.c \
 	upipe_sine_wave_source.c
 
 if HAVE_BITSTREAM
