@@ -34,6 +34,7 @@
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -55,6 +56,7 @@
 
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/mathematics.h>
 #include <libswresample/swresample.h>
 
 /** upipe_swr structure with swresample parameters */ 
@@ -115,6 +117,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     size_t in_samples;
     uint64_t out_samples;
     uint8_t out_planes;
+    int64_t in_rate, out_rate;
     int ret;
 
     /* check ubuf manager */
@@ -127,9 +130,23 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    /* TODO compute out samples and accurate pts.
-     * This is fine with format conversion but not with resampling. */
-    out_samples = in_samples;
+
+    /* conversion sample rates */
+    av_opt_get_int(upipe_swr->swr, "in_sample_rate", 0, &in_rate);
+    av_opt_get_int(upipe_swr->swr, "out_sample_rate", 0, &out_rate);
+
+    /* out samples (needed for resampling) */
+    out_samples = av_rescale_rnd(
+                    swr_get_delay(upipe_swr->swr, in_rate) + in_samples,
+                    out_rate, in_rate, AV_ROUND_UP);
+    //upipe_verbose_va(upipe, "in: %zu out: %"PRIu64, in_samples, out_samples);
+
+    /* compute pts for next samples (see swresample.h for timebase) */
+    uint64_t pts = 0;
+    if (likely(ubase_check(uref_clock_get_pts_sys(uref, &pts)))) {
+        pts = swr_next_pts(upipe_swr->swr, pts * in_rate * out_rate / UCLOCK_FREQ)
+              * UCLOCK_FREQ / in_rate / out_rate;
+    }
 
     const uint8_t *in_buf[upipe_swr->in_planes];
     if (unlikely(!ubase_check(uref_sound_read_uint8_t(uref, 0, -1, in_buf,
@@ -181,6 +198,12 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     /* set new samples count and resize ubuf */
     uref_sound_flow_set_samples(uref, out_samples);
     uref_sound_resize(uref, 0, out_samples);
+
+    /* set new pts and rebase */
+    if (likely(pts)) {
+        uref_clock_set_pts_sys(uref, pts);
+        uref_clock_rebase_pts_sys(uref);
+    }
 
     upipe_swr_output(upipe, uref, upump_p);
 }

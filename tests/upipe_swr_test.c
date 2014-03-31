@@ -32,6 +32,7 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/upipe.h>
+#include <upipe/uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -45,6 +46,7 @@
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
+#include <upipe/uref_clock.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-modules/upipe_null.h>
 
@@ -59,6 +61,8 @@
 #define UBUF_ALIGN_OFFSET   0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 #define FRAMES_LIMIT        100
+#define INPUT_RATE          48000
+#define OUTPUT_RATE         44100
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -114,11 +118,11 @@ int main(int argc, char **argv)
     struct uref *flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 4);
     assert(flow != NULL);
     ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
-    ubase_assert(uref_sound_flow_set_rate(flow, 48000));
+    ubase_assert(uref_sound_flow_set_rate(flow, INPUT_RATE));
     struct uref *flow_output = uref_sound_flow_alloc_def(uref_mgr, "f32.", 2, 8);
     assert(flow_output != NULL);
     ubase_assert(uref_sound_flow_add_plane(flow_output, "lr"));
-    /*ubase_assert(uref_sound_flow_set_rate(flow_output, 48000));*/
+    ubase_assert(uref_sound_flow_set_rate(flow_output, OUTPUT_RATE));
     /*ubase_assert(uref_sound_flow_set_channels(flow_output, 2));*/
     struct upipe *swr = upipe_flow_alloc(upipe_swr_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "swr"),
@@ -139,14 +143,19 @@ int main(int argc, char **argv)
     struct uref *sound;
     int i;
 
+    uint64_t next_pts = UCLOCK_FREQ;
     for (i=0; i < FRAMES_LIMIT; i++) {
         uint8_t *buf = NULL;
         int samples = (1024+i-FRAMES_LIMIT/2);
+        //int samples = 1024;
         sound = uref_sound_alloc(uref_mgr, sound_mgr, samples);
         assert(sound != NULL);
         ubase_assert(uref_sound_plane_write_uint8_t(sound, "lr", 0, -1, &buf));
         memset(buf, 0, 2*2*samples);
         ubase_assert(uref_sound_plane_unmap(sound, "lr", 0, -1));
+
+        uref_clock_set_pts_sys(sound, next_pts);
+        next_pts += samples * UCLOCK_FREQ / INPUT_RATE;
         upipe_input(swr, sound, NULL);
     }
 
