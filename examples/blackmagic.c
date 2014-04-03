@@ -54,6 +54,7 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe-av/upipe_avformat_sink.h>
 #include <upipe-blackmagic/upipe_blackmagic_source.h>
 #include <upipe-swscale/upipe_sws.h>
 
@@ -80,14 +81,11 @@ enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uprobe *logger;
 
 struct uref_mgr *uref_mgr;
-struct ubuf_mgr *yuv_mgr;
-struct ubuf_mgr *uyvy_mgr;
-struct ubuf_mgr *block_mgr;
 struct upump_mgr *upump_mgr;
 
-const char *codec = "mpeg2video";
-const char *sink_path = NULL;
-const char *audio_sink_path = NULL;
+const char *video_codec = "mpeg2video";
+const char *audio_codec = NULL;
+const char *sink_uri = NULL;
 
 /* catch uprobes */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -101,7 +99,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 void usage(const char *argv0)
 {
-    printf("Usage: %s [-c codec] file.video\n", argv0);
+    printf("Usage: %s [-d] [-f format] [-m mime] [-c video_codec] [-a audio_codec] sink_uri\n", argv0);
     exit(-1);
 }
 
@@ -109,16 +107,29 @@ int main(int argc, char **argv)
 {
     int opt;
     struct uref *flow;
+    const char *mime = NULL, *format = NULL;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dc:")) != -1) {
+    while ((opt = getopt(argc, argv, "dm:f:c:v:a:")) != -1) {
         switch (opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
                 break;
-            case 'c':
-                codec = optarg;
+            case 'm':
+                mime = optarg;
                 break;
+            case 'f':
+                format = optarg;
+                break;
+
+            case 'c':
+            case 'v':
+                video_codec = optarg;
+                break;
+            case 'a':
+                audio_codec = optarg;
+                break;
+                
             default:
                 usage(argv[0]);
         }
@@ -127,10 +138,7 @@ int main(int argc, char **argv)
         usage(argv[0]);
     }
 
-    sink_path = argv[optind++];
-    if (argc - optind > 0) { 
-        audio_sink_path = argv[optind++];
-    }
+    sink_uri = argv[optind++];
 
     /* upipe env */
     struct ev_loop *loop = ev_default_loop(0);
@@ -164,10 +172,23 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
+    struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
 
     /* /dev/null */
     struct upipe *devnull = upipe_void_alloc(upipe_null_mgr,
         uprobe_pfx_alloc(logger, loglevel, "devnull"));
+
+    /* avformat sink */
+    struct upipe *avfsink = upipe_void_alloc(upipe_avfsink_mgr,
+        uprobe_pfx_alloc(uprobe_use(logger), loglevel, "avfsink"));
+    upipe_attach_uclock(avfsink);
+
+    upipe_avfsink_set_mime(avfsink, mime);
+    upipe_avfsink_set_format(avfsink, format);
+    if (unlikely(!ubase_check(upipe_set_uri(avfsink, sink_uri)))) {
+        fprintf(stderr, "error: could not open dest uri\n");
+        exit(EXIT_FAILURE);
+    }
 
     /* blackmagic source */
     struct upipe *bmdsrc = upipe_bmd_src_alloc(upipe_bmd_src_mgr,
@@ -183,7 +204,7 @@ int main(int argc, char **argv)
     upipe_attach_uclock(bmdsrc);
     upipe_set_uri(bmdsrc, "0");
    
-    /* source video subpipe */
+    /* video source subpipe */
     struct upipe *bmdvideo = NULL;
     upipe_bmd_src_get_pic_sub(bmdsrc, &bmdvideo);
     assert(bmdvideo);
@@ -203,7 +224,7 @@ int main(int argc, char **argv)
 
     /* encode */
     flow = uref_block_flow_alloc_def(uref_mgr, "");
-    uref_flow_set_def_va(flow, "block.%s.pic.", codec);
+    uref_avcenc_set_codec_name(flow, video_codec);
     struct upipe *avcenc = upipe_flow_alloc_output(sws, upipe_avcenc_mgr,
         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
             loglevel, "avcenc"), flow);
@@ -211,21 +232,22 @@ int main(int argc, char **argv)
     upipe_release(avcenc);
     uref_free(flow);
     
-    /* store */
-    struct upipe *fsink = upipe_void_alloc_output(avcenc, upipe_fsink_mgr,
-        uprobe_pfx_alloc(logger, loglevel, "fsink"));
-    upipe_fsink_set_path(fsink, sink_path, mode);
-    upipe_release(fsink);
+    /* mux input */
+    struct upipe *sink = upipe_void_alloc_output_sub(avcenc, avfsink,
+        uprobe_pfx_alloc(uprobe_use(logger), loglevel, "videosink"));
+    assert(sink);
+    upipe_release(sink);
  
-    /* source audio subpipe */
+    /* audio source subpipe */
     struct upipe *bmdaudio = NULL;
     upipe_bmd_src_get_sound_sub(bmdsrc, &bmdaudio);
     assert(bmdaudio);
     upipe_use(bmdaudio);
 
-    if (audio_sink_path) {
+    if (audio_codec) {
         /* encode */
-        flow = uref_block_flow_alloc_def(uref_mgr, "mp2.sound.");
+        flow = uref_block_flow_alloc_def(uref_mgr, "");
+        uref_avcenc_set_codec_name(flow, audio_codec);
         struct upipe *audioenc = upipe_flow_alloc_output(bmdaudio,
             upipe_avcenc_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
@@ -234,12 +256,11 @@ int main(int argc, char **argv)
         upipe_release(audioenc);
         uref_free(flow);
         
-        /* store */
-        struct upipe *audiosink = upipe_void_alloc_output(audioenc,
-            upipe_fsink_mgr,
-            uprobe_pfx_alloc(logger, loglevel, "audiosink"));
-        upipe_fsink_set_path(audiosink, audio_sink_path, mode);
-        upipe_release(audiosink);
+        /* mux input */
+        struct upipe *sink = upipe_void_alloc_output_sub(audioenc, avfsink,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "audiosink"));
+        assert(sink);
+        upipe_release(sink);
     }
     else {
         upipe_set_output(bmdaudio, devnull);

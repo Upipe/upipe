@@ -228,6 +228,13 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
     uref_pic_flow_set_hsize(flow_def_video, mode->GetWidth());
     uref_pic_flow_set_vsize(flow_def_video, mode->GetHeight());
 
+    /* TODO get aspect-ratio from WSS or user */
+    struct urational sar;
+    sar.num = 16 * mode->GetHeight();
+    sar.den =  9 * mode->GetWidth();
+    urational_simplify(&sar);
+    uref_pic_flow_set_sar(flow_def_video, sar);
+
     struct urational fps;
     BMDTimeValue frameDuration;
     BMDTimeScale timeScale;
@@ -307,6 +314,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
                 uref_pic_set_progressive(uref);
             else if (upipe_bmd_src->tff)
                 uref_pic_set_tff(uref);
+
+            /* TODO read aspect-ratio from WSS */
 
             if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
@@ -675,9 +684,13 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
     uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
     uref_pic_flow_set_macropixel(flow_def, 2);
-    uref_pic_flow_set_fps(flow_def, {25, 1});
+    struct urational fps = {25, 1};
+    uref_pic_flow_set_fps(flow_def, fps);
     uref_pic_flow_set_hsize(flow_def, 720);
     uref_pic_flow_set_vsize(flow_def, 576);
+    struct urational sar = {16*576, 9*720};
+    urational_simplify(&sar);
+    uref_pic_flow_set_sar(flow_def, sar);
 
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
