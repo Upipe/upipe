@@ -229,6 +229,7 @@ int main(int argc, char **argv)
         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
             loglevel, "avcenc"), flow);
     assert(avcenc);
+    upipe_avcenc_set_option(avcenc, "b", "12000000");
     upipe_release(avcenc);
     uref_free(flow);
     

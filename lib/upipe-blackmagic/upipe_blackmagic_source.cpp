@@ -605,13 +605,14 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     IDeckLinkIterator *deckLinkIterator;
     IDeckLink *deckLink = NULL;
 
+    /* decklink interface interator */
     deckLinkIterator = CreateDeckLinkIteratorInstance();
     if (!deckLinkIterator) {
         upipe_err(upipe, "decklink drivers not found");
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* get decklink input handler */
+    /* get decklink interface handler */
     HRESULT result = E_NOINTERFACE;
     for (int i = 0; i <= upipe_bmd_src->card_idx; i++) {
         if (deckLink)
@@ -634,6 +635,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     if (deckLink->GetModelName(&model_name) == S_OK)
         upipe_notice_va(upipe, "detected card type %s", model_name);
 
+    /* get decklink input handler */
     IDeckLinkInput *deckLinkInput;
     if (deckLink->QueryInterface(IID_IDeckLinkInput,
                                  (void**)&deckLinkInput) != S_OK) {
@@ -643,6 +645,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
 #if 0
+    /* decklink input connection */
     IDeckLinkConfiguration *deckLinkConfiguration;
     if (deckLink->QueryInterface(IID_IDeckLinkConfiguration,
                                  (void**)&deckLinkConfiguration) != S_OK) {
@@ -652,13 +655,28 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* TODO set pic and sound connection */
+    deckLinkConfiguration->SetInt(bmdDeckLinkConfigVideoInputConnection,
+                                  bmdVideoConnectionHDMI);
 #endif
+
+    /* format detection available ? */
+    IDeckLinkAttributes *deckLinkAttr = NULL;
+    if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
+                                 (void**)&deckLinkAttr) != S_OK) {
+        deckLinkInput->Release();
+        deckLink->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    bool detectFormat = false;
+    deckLinkAttr->GetFlag(BMDDeckLinkSupportsInputFormatDetection,
+                          &detectFormat);
+    deckLinkAttr->Release();
 
     /* configure input */
     /* FIXME hardcoded format and default mode */
-    deckLinkInput->EnableVideoInput(bmdModePAL, bmdFormat8BitYUV,
-                                    bmdVideoInputEnableFormatDetection);
+    deckLinkInput->EnableVideoInput(bmdModeHD1080i50, bmdFormat8BitYUV,
+                    (detectFormat ? bmdVideoInputEnableFormatDetection : 0));
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
                                     bmdAudioSampleType16bitInteger, 2);
 
@@ -686,16 +704,16 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     uref_pic_flow_set_macropixel(flow_def, 2);
     struct urational fps = {25, 1};
     uref_pic_flow_set_fps(flow_def, fps);
-    uref_pic_flow_set_hsize(flow_def, 720);
-    uref_pic_flow_set_vsize(flow_def, 576);
-    struct urational sar = {16*576, 9*720};
+    uref_pic_flow_set_hsize(flow_def, 1920);
+    uref_pic_flow_set_vsize(flow_def, 1080);
+    struct urational sar = {1, 1};
     urational_simplify(&sar);
     uref_pic_flow_set_sar(flow_def, sar);
-
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
             flow_def);
+
     flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.", 2, 2);
     uref_sound_flow_add_plane(flow_def, "lr");
     uref_sound_flow_set_rate(flow_def, BMD_SAMPLERATE);
