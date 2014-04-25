@@ -161,6 +161,11 @@ static void upipe_videocont_sub_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    if (unlikely(!uref->ubuf)) {
+        upipe_warn_va(upipe, "received empty packet");
+        uref_free(uref);
+        return;
+    }
 
     ulist_add(&upipe_videocont_sub->urefs, uref_to_uchain(uref));
 }
@@ -215,9 +220,8 @@ static enum ubase_err upipe_videocont_sub_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return false in case of error
  */
-static enum ubase_err upipe_videocont_sub_control(struct upipe *upipe,
-                                                  enum upipe_command command,
-                                                  va_list args)
+static int upipe_videocont_sub_control(struct upipe *upipe,
+                                       int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -339,6 +343,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* clean old urefs first */
+    int subs = 0;
     ulist_foreach(&upipe_videocont->subs, uchain_sub) {
         struct upipe_videocont_sub *sub =
                upipe_videocont_sub_from_uchain(uchain_sub);
@@ -346,27 +351,39 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
             uint64_t pts = 0;
             struct uref *uref_uchain = uref_from_uchain(uchain);
             uref_clock_get_pts_sys(uref_uchain, &pts);
-            if (pts < next_pts + upipe_videocont->tolerance) {
+            if (pts + upipe_videocont->tolerance < next_pts) {
+                upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
+                                 subs, uref_uchain, pts);
                 ulist_delete(uchain);
                 uref_free(uref_uchain);
             }
         }
+        subs++;
     }
 
     /* attach next ubuf from current input */
-    if (likely(upipe_videocont->input_cur)) {
-        struct upipe_videocont_sub *input = 
-               upipe_videocont_sub_from_upipe(upipe_videocont->input_cur);
-        if (likely(!ulist_empty(&input->urefs))) {
-            struct uref *next_uref = uref_from_uchain(ulist_pop(&input->urefs));
-            if (likely(next_uref->ubuf)) {
-                upipe_verbose_va(upipe, "attached ubuf %p", next_uref->ubuf);
-                uref_attach_ubuf(uref, uref_detach_ubuf(next_uref));
-            }
-            uref_free(next_uref);
-        }
+    if (unlikely(!upipe_videocont->input_cur)) {
+        goto output;
+    }
+    struct upipe_videocont_sub *input = 
+           upipe_videocont_sub_from_upipe(upipe_videocont->input_cur);
+    if (unlikely(ulist_empty(&input->urefs))) {
+        goto output;
     }
 
+    struct uref *next_uref = uref_from_uchain(ulist_peek(&input->urefs));
+    uint64_t pts = 0;
+    uref_clock_get_pts_sys(next_uref, &pts);
+
+    if (pts < next_pts + upipe_videocont->tolerance) {
+        upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64")",
+                         next_uref->ubuf, pts);
+        uref_attach_ubuf(uref, uref_detach_ubuf(next_uref));
+        next_uref = NULL;
+        uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
+    }
+
+output:
     upipe_videocont_output(upipe, uref, upump_p);
 }
 
@@ -465,9 +482,8 @@ static inline enum ubase_err _upipe_videocont_get_current_input(
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_videocont_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+static int _upipe_videocont_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     switch (command) {
@@ -535,9 +551,8 @@ static enum ubase_err _upipe_videocont_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err upipe_videocont_control(struct upipe *upipe,
-                                              enum upipe_command command,
-                                              va_list args)
+static int upipe_videocont_control(struct upipe *upipe,
+                                   int command, va_list args)
 {
     UBASE_RETURN(_upipe_videocont_control(upipe, command, args))
 

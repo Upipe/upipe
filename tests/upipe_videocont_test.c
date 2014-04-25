@@ -58,7 +58,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 /** definition of our uprobe */
-static enum ubase_err catch(struct uprobe *uprobe, struct upipe *upipe, enum uprobe_event event, va_list args)
+static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
         case UPROBE_READY:
@@ -157,7 +157,8 @@ int main(int argc, char **argv)
     for (j=0; j < INPUT_NUM; j++) {
         for (i=0; i < 2 * ITERATIONS + j; i++) {
             struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 42, 42);
-            uref_clock_set_pts_sys(uref, UCLOCK_FREQ + i * TOLERANCE * 5);
+            uref_clock_set_pts_sys(uref, UCLOCK_FREQ - TOLERANCE / 2
+                                         + 5 * i * TOLERANCE);
             upipe_input(subpipe[j], uref, NULL);
         }
     }
