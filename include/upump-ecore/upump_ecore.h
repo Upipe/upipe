@@ -1,9 +1,8 @@
-/*****************************************************************************
- * upump_ev.h: declarations for a upipe main loop using libev
- *****************************************************************************
- * Copyright (C) 2013
+/*
+ * Copyright (C) 2014 OpenHeadend S.A.R.L.
  *
- * Authors: Cedric Bail <cedric.bail@free.fr>
+ * Authors: Benjamin Cohen
+ *          Cedric Bail <cedric.bail@free.fr>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +22,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** &file
+ * @short declarations for a Upipe main loop using Ecore
+ */
 
 #ifndef _UPIPE_ECORE_UPUMP_ECORE_H_
 /** @hidden */
@@ -31,14 +34,14 @@
 
 #include <upipe/upump.h>
 
-#include <Ecore.h>
-
-/** @This allocates and initializes a upump_mgr structure with libev
- * support.
+/** @This allocates and initializes a upump_ecore_mgr structure.
  *
- * @param ev_loop pointer to an ev loop
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
  * @return pointer to the wrapped upump_mgr structure
  */
-struct upump_mgr *upump_ecore_mgr_alloc(void);
+struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
+                                        uint16_t upump_blocker_pool_depth);
 
 #endif

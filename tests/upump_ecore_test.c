@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,6 +30,7 @@
 #undef NDEBUG
 
 #include <upipe/upump.h>
+#include <upipe/upump_blocker.h>
 #include <upump-ecore/upump_ecore.h>
 
 #include <stdio.h>
@@ -40,6 +41,9 @@
 #include <assert.h>
 
 #include <Ecore.h>
+
+#define UPUMP_POOL 1
+#define UPUMP_BLOCKER_POOL 1
 
 static uint64_t timeout = UINT64_C(27000000); /* 1 s */
 static const char *padding = "This is an initialized bit of space used to pad sufficiently !";
@@ -53,16 +57,23 @@ static struct upump *write_idler;
 static struct upump *read_timer;
 static struct upump *write_watcher;
 static struct upump *read_watcher;
+static struct upump_blocker *blocker = NULL;
 static ssize_t bytes_written = 0, bytes_read = 0;
 
-static void write_idler_cb(struct upump *unused)
+static void blocker_cb(struct upump_blocker *blocker)
+{
+    upump_blocker_free(blocker);
+}
+
+static void write_idler_cb(struct upump *upump)
 {
     ssize_t ret = write(pipefd[1], padding, strlen(padding) + 1);
     if (ret == -1 && (errno == EWOULDBLOCK || errno == EAGAIN)) {
         printf("write idler blocked\n");
-        upump_mgr_sink_block(mgr);
-        assert(upump_start(write_watcher));
-        assert(upump_start(read_timer));
+        blocker = upump_blocker_alloc(write_idler, blocker_cb, NULL);
+        assert(blocker != NULL);
+        upump_start(write_watcher);
+        upump_start(read_timer);
     } else {
         assert(ret != -1);
         bytes_written += ret;
@@ -72,14 +83,16 @@ static void write_idler_cb(struct upump *unused)
 static void write_watcher_cb(struct upump *unused)
 {
     printf("write watcher passed\n");
-    upump_mgr_sink_unblock(mgr);
-    assert(upump_stop(write_watcher));
+    if (blocker) {
+        upump_blocker_free(blocker);
+    }
+    upump_stop(write_watcher);
 }
 
 static void read_timer_cb(struct upump *unused)
 {
     printf("read timer passed\n");
-    assert(upump_start(read_watcher));
+    upump_start(read_watcher);
     /* The timer is automatically stopped */
 }
 
@@ -90,9 +103,12 @@ static void read_watcher_cb(struct upump *unused)
     assert(ret != -1);
     bytes_read += ret;
     if (bytes_read > MIN_READ) {
-        printf("read watcher passed\n");
         upump_stop(write_idler);
-        upump_stop(read_watcher);
+        if (bytes_read >= bytes_written) {
+            printf("read watcher passed\n");
+            upump_stop(read_watcher);
+            ecore_main_loop_quit();
+        }
     }
 }
 
@@ -100,7 +116,7 @@ int main(int argc, char **argv)
 {
     long flags;
     assert(ecore_init());
-    mgr = upump_ecore_mgr_alloc();
+    mgr = upump_ecore_mgr_alloc(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(mgr != NULL);
 
     /* Create a pipe with non-blocking write */
@@ -111,21 +127,21 @@ int main(int argc, char **argv)
     assert(fcntl(pipefd[1], F_SETFL, flags) != -1);
 
     /* Create watchers */
-    write_idler = upump_alloc_idler(mgr, write_idler_cb, NULL, true);
+    write_idler = upump_alloc_idler(mgr, write_idler_cb, NULL);
     assert(write_idler != NULL);
-    write_watcher = upump_alloc_fd_write(mgr, write_watcher_cb, NULL, false,
+    write_watcher = upump_alloc_fd_write(mgr, write_watcher_cb, NULL,
                                          pipefd[1]);
     assert(write_watcher != NULL);
-    read_timer = upump_alloc_timer(mgr, read_timer_cb, NULL, false, timeout, 0);
+    read_timer = upump_alloc_timer(mgr, read_timer_cb, NULL, timeout, 0);
     assert(read_timer != NULL);
-    read_watcher = upump_alloc_fd_read(mgr, read_watcher_cb, NULL, false,
-                                       pipefd[0]);
+    read_watcher = upump_alloc_fd_read(mgr, read_watcher_cb, NULL, pipefd[0]);
     assert(read_watcher != NULL);
 
     /* Start tests */
-    assert(upump_start(write_idler));
+    upump_start(write_idler);
 
     ecore_main_loop_begin();
+    printf("\nread: \t%zd\nwrite: \t%zd\n", bytes_read, bytes_written);
     assert(bytes_read);
     assert(bytes_read == bytes_written);
 

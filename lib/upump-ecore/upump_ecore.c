@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2013
+ * Copyright (C) 2014 OpenHeadend S.A.R.L.
  *
- * Authors: Cedric Bail
+ * Authors: Benjamin Cohen
+ *          Cedric Bail <cedric.bail@free.fr>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -41,99 +42,88 @@
 /** @This stores management parameters and local structures.
  */
 struct upump_ecore_mgr {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
     /** common structure */
     struct upump_common_mgr common_mgr;
+
+    /** extra space for upool */
+    uint8_t upool_extra[];
 };
+
+UBASE_FROM_TO(upump_ecore_mgr, upump_mgr, upump_mgr, common_mgr.mgr)
+UBASE_FROM_TO(upump_ecore_mgr, urefcount, urefcount, urefcount)
 
 /** @This stores local structures.
  */
 struct upump_ecore {
-    /** common structure */
-    struct upump upump;
-    /** ev private structure */
+    /** type of event to watch */
+    enum upump_type event;
+
+    /** Ecore private structure */
     union {
         Ecore_Fd_Handler *io;
         Ecore_Timer *timer;
         Ecore_Idler *idle;
     };
     uint64_t repeat;
+    bool repeated;
 
-    /** type of event to watch */
-    enum upump_watcher event;
-    /** true for a source watcher */
-    bool source;
+    /** common structure */
+    struct upump_common common;
 };
 
-/** @internal @This returns the high-level upump_mgr structure.
+UBASE_FROM_TO(upump_ecore, upump, upump, common.upump)
+
+/** @This dispatches an event to a pump for type Ecore_Fd_Handler.
  *
- * @param ev_mgr pointer to the upump_ecore_mgr structure
- * @return pointer to the upump_mgr structure
+ * @param _upump_ecore upump_ecore private structure pointer
+ * @param fd_handler Ecore fd handler
+ * @return EINA_TRUE
  */
-static inline struct upump_mgr *upump_ecore_mgr_to_upump_mgr(struct upump_ecore_mgr *ev_mgr)
+static Eina_Bool upump_ecore_dispatch_fd(void *_upump_ecore, Ecore_Fd_Handler *fd_handler)
 {
-    return upump_common_mgr_to_upump_mgr(&ev_mgr->common_mgr);
-}
-
-/** @internal @This returns the private upump_ecore_mgr structure.
- *
- * @param mgr pointer to the upump_mgr structure
- * @return pointer to the upump_ecore_mgr structure
- */
-static inline struct upump_ecore_mgr *upump_ecore_mgr_from_upump_mgr(struct upump_mgr *mgr)
-{
-    struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
-    return container_of(common_mgr, struct upump_ecore_mgr, common_mgr);
-}
-
-/** @internal @This returns the high-level upump structure.
- *
- * @param ev pointer to the upump_ecore structure
- * @return pointer to the upump structure
- */
-static inline struct upump *upump_ecore_to_upump(struct upump_ecore *upump_ecore)
-{
-    return &upump_ecore->upump;
-}
-
-/** @internal @This returns the private upump_ecore structure.
- *
- * @param mgr pointer to the upump structure
- * @return pointer to the upump_ecore structure
- */
-static inline struct upump_ecore *upump_ecore_from_upump(struct upump *upump)
-{
-    return container_of(upump, struct upump_ecore, upump);
-}
-
-static Eina_Bool
-_ecore_upump_idler_dispatch(void *data)
-{
-    struct upump_ecore *upump_ecore = data;
-
-    upump_common_dispatch(&upump_ecore->upump);
+    struct upump_ecore *upump_ecore = _upump_ecore;
+    struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    upump_common_dispatch(upump);
     return EINA_TRUE;
 }
 
-static Eina_Bool
-_ecore_upump_timer_dispatch(void *data)
+/** @This dispatches an event to a pump for type Ecore_Timer.
+ *
+ * @param _upump_ecore upump_ecore private structure pointer
+ * @return EINA_TRUE
+ */
+static Eina_Bool upump_ecore_dispatch_timer(void *_upump_ecore)
 {
-    struct upump_ecore *upump_ecore = data;
+    struct upump_ecore *upump_ecore = _upump_ecore;
+    struct upump *upump = upump_ecore_to_upump(upump_ecore);
 
-    if (upump_ecore->repeat > 0) {
-        ecore_timer_interval_set(upump_ecore->timer, (double) upump_ecore->repeat / UCLOCK_FREQ);
-	upump_ecore->repeat = 0;
+    if (unlikely(!upump_ecore->repeat)) {
+        ecore_timer_freeze(upump_ecore->timer);
+    } else if (unlikely(!upump_ecore->repeated)) {
+        ecore_timer_interval_set(upump_ecore->timer,
+                    (double) upump_ecore->repeat / UCLOCK_FREQ);
+        upump_ecore->repeated = true;
     }
 
-    upump_common_dispatch(&upump_ecore->upump);
+    upump_common_dispatch(upump);
+
     return EINA_TRUE;
 }
 
-static Eina_Bool
-_ecore_upump_fd_dispatch(void *data, Ecore_Fd_Handler *fd_handler)
+/** @This dispatches an event to a pump for type Ecore_Idler.
+ *
+ * @param _upump_ecore upump_ecore private structure pointer
+ * @return EINA_TRUE
+ */
+static Eina_Bool upump_ecore_dispatch_idle(void *_upump_ecore)
 {
-    struct upump_ecore *upump_ecore = data;
+    struct upump_ecore *upump_ecore = _upump_ecore;
+    struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    upump_common_dispatch(upump);
 
-    upump_common_dispatch(&upump_ecore->upump);
     return EINA_TRUE;
 }
 
@@ -141,166 +131,216 @@ _ecore_upump_fd_dispatch(void *data, Ecore_Fd_Handler *fd_handler)
  *
  * @param mgr pointer to a upump_mgr structure wrapped into a
  * upump_ecore_mgr structure
- * @param source true if this watcher is a source and should block when sinks
- * are blocked
  * @param event type of event to watch for
  * @param args optional parameters depending on event type
- * @return pointer to allocated watcher, or NULL in case of failure
+ * @return pointer to allocated pump, or NULL in case of failure
  */
-static struct upump *upump_ecore_alloc(struct upump_mgr *mgr, bool source,
-				       enum upump_watcher event, va_list args)
+static struct upump *upump_ecore_alloc(struct upump_mgr *mgr,
+                                    enum upump_type event, va_list args)
 {
-    struct upump_ecore *upump_ecore = malloc(sizeof(struct upump_ecore));
-    if (unlikely(upump_ecore == NULL)) return NULL;
+    struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_upump_mgr(mgr);
+    struct upump_ecore *upump_ecore = upool_alloc(&ecore_mgr->common_mgr.upump_pool,
+                                            struct upump_ecore *);
+    if (unlikely(upump_ecore == NULL))
+        return NULL;
+    struct upump *upump = upump_ecore_to_upump(upump_ecore);
 
     switch (event) {
-        case UPUMP_WATCHER_IDLER:
+        case UPUMP_TYPE_IDLER:
             break;
-        case UPUMP_WATCHER_TIMER: {
+        case UPUMP_TYPE_TIMER: {
             uint64_t after = va_arg(args, uint64_t);
             uint64_t repeat = va_arg(args, uint64_t);
-	    upump_ecore->timer = ecore_timer_add((double) after / UCLOCK_FREQ, _ecore_upump_timer_dispatch, upump_ecore);
-	    ecore_timer_freeze(upump_ecore->timer);
-	    upump_ecore->repeat = repeat;
+
+            upump_ecore->timer = ecore_timer_add((double) after / UCLOCK_FREQ,
+                                     upump_ecore_dispatch_timer, upump_ecore);
+            assert(upump_ecore->timer);
+            ecore_timer_freeze(upump_ecore->timer);
+            upump_ecore->repeat = repeat;
+            upump_ecore->repeated = false;
             break;
         }
-        case UPUMP_WATCHER_FD_READ:
-        case UPUMP_WATCHER_FD_WRITE: {
+        case UPUMP_TYPE_FD_READ: {
             int fd = va_arg(args, int);
-	    upump_ecore->io = ecore_main_fd_handler_add(fd, 0, _ecore_upump_fd_dispatch, upump_ecore, NULL, NULL);
+            upump_ecore->io = ecore_main_fd_handler_add(fd, ECORE_FD_READ,
+                        upump_ecore_dispatch_fd, upump_ecore, NULL, NULL);
+            ecore_main_fd_handler_active_set(upump_ecore->io, 0);
+            assert(upump_ecore->io);
+            break;
+        }
+        case UPUMP_TYPE_FD_WRITE: {
+            int fd = va_arg(args, int);
+            upump_ecore->io = ecore_main_fd_handler_add(fd, ECORE_FD_WRITE,
+                        upump_ecore_dispatch_fd, upump_ecore, NULL, NULL);
+            ecore_main_fd_handler_active_set(upump_ecore->io, 0);
+            assert(upump_ecore->io);
             break;
         }
         default:
             free(upump_ecore);
             return NULL;
     }
-
-    upump_mgr_use(mgr);
-
-    upump_ecore->source = source;
     upump_ecore->event = event;
 
-    return upump_ecore_to_upump(upump_ecore);
+    upump_mgr_use(mgr);
+    upump_common_init(upump);
+
+    return upump;
 }
 
-/** @This starts a watcher, or adds a source watcher to the list.
+/** @This starts a pump.
  *
- * @param upump description structure of the watcher
- * @param start_source when false source watchers will not be started, but
- * added to the list
- * @return false in case of failure
+ * @param upump description structure of the pump
  */
-static bool upump_ecore_start(struct upump *upump, bool start_source)
+static void upump_ecore_real_start(struct upump *upump)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
-    if (unlikely(upump_ecore->source && !start_source))
-        return upump_common_start_source(upump);
 
     switch (upump_ecore->event) {
-        case UPUMP_WATCHER_IDLER:
-	    upump_ecore->idle = ecore_idler_add(_ecore_upump_idler_dispatch, upump_ecore);
+        case UPUMP_TYPE_IDLER:
+            upump_ecore->idle = ecore_idler_add(upump_ecore_dispatch_idle,
+                                                upump_ecore);
             break;
-        case UPUMP_WATCHER_TIMER:
-	    ecore_timer_thaw(upump_ecore->timer);
+        case UPUMP_TYPE_TIMER:
+            ecore_timer_thaw(upump_ecore->timer);
             break;
-        case UPUMP_WATCHER_FD_READ:
-	    ecore_main_fd_handler_active_set(upump_ecore->io, ECORE_FD_READ);
-	    break;
-        case UPUMP_WATCHER_FD_WRITE:
-	    ecore_main_fd_handler_active_set(upump_ecore->io, ECORE_FD_WRITE);
+        case UPUMP_TYPE_FD_READ:
+            ecore_main_fd_handler_active_set(upump_ecore->io, ECORE_FD_READ);
+            break;
+        case UPUMP_TYPE_FD_WRITE:
+            ecore_main_fd_handler_active_set(upump_ecore->io, ECORE_FD_WRITE);
             break;
         default:
-            return false;
+            break;
     }
-    return true;
 }
 
-/** @This stop a watcher, or removes a source watcher from the list.
+/** @This stop a pump.
  *
- * @param upump description structure of the watcher
- * @param stop_source when false source watchers will not be stopped, but
- * removed from the list
- * @return false in case of failure
+ * @param upump description structure of the pump
  */
-static bool upump_ecore_stop(struct upump *upump, bool stop_source)
+static void upump_ecore_real_stop(struct upump *upump)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
-    if (unlikely(upump_ecore->source && !stop_source))
-        return upump_common_stop_source(upump);
 
     switch (upump_ecore->event) {
-        case UPUMP_WATCHER_IDLER:
-	    ecore_idler_del(upump_ecore->idle);
-	    upump_ecore->idle = NULL;
+        case UPUMP_TYPE_IDLER:
+            if (upump_ecore->idle) {
+                ecore_idler_del(upump_ecore->idle);
+            }
+            upump_ecore->idle = NULL;
             break;
-        case UPUMP_WATCHER_TIMER:
-	    ecore_timer_freeze(upump_ecore->timer);
+        case UPUMP_TYPE_TIMER:
+            ecore_timer_freeze(upump_ecore->timer);
             break;
-        case UPUMP_WATCHER_FD_READ:
-        case UPUMP_WATCHER_FD_WRITE:
-	    ecore_main_fd_handler_active_set(upump_ecore->io, 0);
+        case UPUMP_TYPE_FD_READ:
+        case UPUMP_TYPE_FD_WRITE:
+            ecore_main_fd_handler_active_set(upump_ecore->io, 0);
             break;
         default:
-            return false;
+            break;
     }
-    return true;
 }
 
-/** @This frees the memory space previously used by a watcher.
- * Please note that the watcher must be stopped before.
+/** @This released the memory space previously used by a pump.
+ * Please note that the pump must be stopped before.
  *
- * @param upump description structure of the watcher
- * @param stop_source when false source watchers will not be stopped, but
- * removed from the list
- * @return false in case of failure
+ * @param upump description structure of the pump
  */
 static void upump_ecore_free(struct upump *upump)
 {
+    struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_upump_mgr(upump->mgr);
+    upump_stop(upump);
+    upump_common_clean(upump);
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
-    switch (upump_ecore->event) {
-        case UPUMP_WATCHER_IDLER:
-	    if (upump_ecore->idle) ecore_idler_del(upump_ecore->idle);
-	    upump_ecore->idle = NULL;
-            break;
-        case UPUMP_WATCHER_TIMER:
-	    ecore_timer_del(upump_ecore->timer);
-            break;
-        case UPUMP_WATCHER_FD_READ:
-        case UPUMP_WATCHER_FD_WRITE:
-	    ecore_main_fd_handler_del(upump_ecore->io);
-            break;
-    }
-    upump_mgr_release(upump->mgr);
+    upool_free(&ecore_mgr->common_mgr.upump_pool, upump_ecore);
+    upump_mgr_release(&ecore_mgr->common_mgr.mgr);
+}
+
+/** @internal @This allocates the data structure.
+ *
+ * @param upool pointer to upool
+ * @return pointer to upump_ecore or NULL in case of allocation error
+ */
+static void *upump_ecore_alloc_inner(struct upool *upool)
+{
+    struct upump_common_mgr *common_mgr =
+        upump_common_mgr_from_upump_pool(upool);
+    struct upump_ecore *upump_ecore = malloc(sizeof(struct upump_ecore));
+    if (unlikely(upump_ecore == NULL))
+        return NULL;
+    struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    upump->mgr = upump_common_mgr_to_upump_mgr(common_mgr);
+    return upump_ecore;
+}
+
+/** @internal @This frees a upump_ecore.
+ *
+ * @param upool pointer to upool
+ * @param upump_ecore pointer to a upump_ecore structure to free
+ */
+static void upump_ecore_free_inner(struct upool *upool, void *upump_ecore)
+{
     free(upump_ecore);
+}
+
+/** @This processes control commands on a upump_ecore_mgr.
+ *
+ * @param mgr pointer to a upump_mgr structure
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upump_ecore_mgr_control(struct upump_mgr *mgr,
+                                int command, va_list args)
+{
+    switch (command) {
+        case UPUMP_MGR_VACUUM:
+            upump_common_mgr_vacuum(mgr);
+            return UBASE_ERR_NONE;
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @This frees a upump manager.
  *
- * @param mgr pointer to upump manager
+ * @param urefcount pointer to urefcount
  */
-static void upump_ecore_mgr_free(struct upump_mgr *mgr)
+static void upump_ecore_mgr_free(struct urefcount *urefcount)
 {
-    struct upump_ecore_mgr *ev_mgr = upump_ecore_mgr_from_upump_mgr(mgr);
-    upump_common_mgr_clean(mgr);
-    free(ev_mgr);
+    struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_urefcount(urefcount);
+    upump_common_mgr_clean(upump_ecore_mgr_to_upump_mgr(ecore_mgr));
+    free(ecore_mgr);
 }
 
 /** @This allocates and initializes a upump_ecore_mgr structure.
  *
- * @param ev_loop pointer to an ev loop
- * @return pointer to the wrapped struct upump_mgr structure
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
+ * @return pointer to the wrapped upump_mgr structure
  */
-struct upump_mgr *upump_ecore_mgr_alloc(void)
+struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
+                                        uint16_t upump_blocker_pool_depth)
 {
-    struct upump_ecore_mgr *ev_mgr = malloc(sizeof(struct upump_ecore_mgr));
-    if (unlikely(ev_mgr == NULL)) return NULL;
+    struct upump_ecore_mgr *ecore_mgr =
+        malloc(sizeof(struct upump_ecore_mgr) +
+               upump_common_mgr_sizeof(upump_pool_depth,
+                                       upump_blocker_pool_depth));
+    if (unlikely(ecore_mgr == NULL))
+        return NULL;
 
-    upump_common_mgr_init(&ev_mgr->common_mgr.mgr);
+    struct upump_mgr *mgr = upump_ecore_mgr_to_upump_mgr(ecore_mgr);
+    upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
+                          ecore_mgr->upool_extra,
+                          upump_ecore_real_start, upump_ecore_real_stop,
+                          upump_ecore_alloc_inner, upump_ecore_free_inner);
 
-    ev_mgr->common_mgr.mgr.upump_alloc = upump_ecore_alloc;
-    ev_mgr->common_mgr.mgr.upump_start = upump_ecore_start;
-    ev_mgr->common_mgr.mgr.upump_stop = upump_ecore_stop;
-    ev_mgr->common_mgr.mgr.upump_free = upump_ecore_free;
-    ev_mgr->common_mgr.mgr.upump_mgr_free = upump_ecore_mgr_free;
-    return upump_ecore_mgr_to_upump_mgr(ev_mgr);
+    urefcount_init(upump_ecore_mgr_to_urefcount(ecore_mgr), upump_ecore_mgr_free);
+    ecore_mgr->common_mgr.mgr.refcount = upump_ecore_mgr_to_urefcount(ecore_mgr);
+    ecore_mgr->common_mgr.mgr.upump_alloc = upump_ecore_alloc;
+    ecore_mgr->common_mgr.mgr.upump_free = upump_ecore_free;
+    ecore_mgr->common_mgr.mgr.upump_mgr_control = upump_ecore_mgr_control;
+    return mgr;
 }
