@@ -25,4 +25,5 @@ myinclude_HEADERS = \
 	upipe_http_source.h \
 	upipe_rtp_prepend.h \
 	upipe_videocont.h \
+	upipe_audiocont.h \
 	upipe_sine_wave_source.h
