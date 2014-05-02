@@ -93,6 +93,7 @@ check_PROGRAMS += \
 	upipe_multicat_test \
 	upipe_http_src_test \
 	upipe_udp_test \
+	upipe_blank_source_test \
 	upipe_transfer_test
 
 TESTS += \
@@ -104,6 +105,7 @@ TESTS += \
 	upipe_queue_test \
 	upipe_multicat_test.sh \
 	upipe_udp_test \
+	upipe_blank_source_test \
 	upipe_transfer_test
 
 if HAVE_PTHREAD
@@ -220,6 +222,7 @@ upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_transfer_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lpthread
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

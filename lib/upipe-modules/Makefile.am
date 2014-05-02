@@ -30,6 +30,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_setrap.c \
 	upipe_videocont.c \
 	upipe_audiocont.c \
+	upipe_blank_source.c \
 	upipe_sine_wave_source.c
 
 if HAVE_BITSTREAM
