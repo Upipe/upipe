@@ -28,6 +28,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -104,6 +105,9 @@ int main(int argc, char **argv)
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                                     UBUF_POOL_DEPTH);
+    assert(logger != NULL);
 
     /* build audiocont pipe */
     struct upipe_mgr *upipe_audiocont_mgr = upipe_audiocont_mgr_alloc();
@@ -162,6 +166,8 @@ int main(int argc, char **argv)
     ubase_assert(upipe_audiocont_get_current_input(audiocont, &input_name));
     assert(input_name != NULL);
 
+    printf("packets duration : %"PRIu64"\n", DURATION);
+
     /* input urefs */
     for (j=0; j < INPUT_NUM; j++) {
         for (i=0; i < ITERATIONS + j; i++) {
@@ -177,7 +183,12 @@ int main(int argc, char **argv)
         struct uref *uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
         uref_clock_set_pts_sys(uref, UCLOCK_FREQ + i * DURATION);
         uref_clock_set_duration(uref, DURATION);
+        struct uref *dup = NULL;
+        if (i % 2 == 0) {
+            dup = uref_dup(uref);
+        }
         upipe_input(audiocont, uref, NULL);
+        if (dup) uref_free(dup);
     }
 
     for (i=0; i < INPUT_NUM; i++) {

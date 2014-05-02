@@ -41,9 +41,9 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_audiocont.h>
 
 #include <stdlib.h>
@@ -62,6 +62,8 @@ struct upipe_audiocont {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
@@ -95,6 +97,7 @@ UPIPE_HELPER_UPIPE(upipe_audiocont, upipe, UPIPE_AUDIOCONT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audiocont, urefcount, upipe_audiocont_free)
 UPIPE_HELPER_VOID(upipe_audiocont)
 UPIPE_HELPER_OUTPUT(upipe_audiocont, output, flow_def, flow_def_sent)
+UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, flow_def)
 
 /** @internal @This is the private context of an input of a videocont pipe. */
 struct upipe_audiocont_sub {
@@ -224,7 +227,7 @@ static enum ubase_err upipe_audiocont_sub_set_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param command type of command to process
  * @param args arguments of the command
- * @return false in case of error
+ * @return an error code
  */
 static int upipe_audiocont_sub_control(struct upipe *upipe,
                                        int command,
@@ -310,6 +313,7 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     upipe_audiocont_init_urefcount(upipe);
+    upipe_audiocont_init_ubuf_mgr(upipe);
     upipe_audiocont_init_output(upipe);
     upipe_audiocont_init_sub_mgr(upipe);
     upipe_audiocont_init_sub_subs(upipe);
@@ -326,18 +330,29 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This resizes a sound uref.
+ *
+ * @param uref uref structure
+ * @param offset number of samples to drop from uref
+ * @param samplerate flow samplerate
+ * @return an error code
+ */
 static inline int upipe_audiocont_resize_uref(struct uref *uref, size_t offset,
                                               uint64_t samplerate)
 {
-    uref_sound_resize(uref, offset, -1);
-    uint64_t duration = (uint64_t)offset * UCLOCK_FREQ / samplerate;
+    size_t size;
+    ubase_assert(uref_sound_resize(uref, offset, -1));
+    uref_sound_size(uref, &size, NULL);
+    uint64_t duration = (uint64_t)size * UCLOCK_FREQ / samplerate;
+    uint64_t ts_offset = (uint64_t)offset * UCLOCK_FREQ / samplerate;
     uint64_t pts;
+    uref_clock_set_duration(uref, duration);
     if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
-        uref_clock_set_pts_prog(uref, pts + duration);
+        uref_clock_set_pts_prog(uref, pts + ts_offset);
     if (ubase_check(uref_clock_get_pts_sys(uref, &pts)))
-        uref_clock_set_pts_sys(uref, pts + duration);
+        uref_clock_set_pts_sys(uref, pts + ts_offset);
     if (ubase_check(uref_clock_get_pts_orig(uref, &pts)))
-        uref_clock_set_pts_orig(uref, pts + duration);
+        uref_clock_set_pts_orig(uref, pts + ts_offset);
 
     return UBASE_ERR_NONE;
 }
@@ -357,6 +372,11 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(!upipe_audiocont->flow_def)) {
         upipe_warn_va(upipe, "need to define flow def first");
+        uref_free(uref);
+        return;
+    }
+
+    if (unlikely(!ubase_check(upipe_audiocont_check_ubuf_mgr(upipe)))) {
         uref_free(uref);
         return;
     }
@@ -437,11 +457,23 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     struct upipe_audiocont_sub *input =
         upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur);
 
+    /* map reference uref */
     if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0,
                                 -1, ref_buffers, planes)))) {
-        upipe_warn_va(upipe, "could not map ref packet");
-        uref_free(uref);
-        return;
+        struct ubuf *ubuf = ubuf_sound_copy(upipe_audiocont->ubuf_mgr,
+                                            uref->ubuf, 0, -1);
+        if (unlikely(!ubuf)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
+        uref_attach_ubuf(uref, ubuf);
+        if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0,
+                                         -1, ref_buffers, planes)))) {
+            upipe_warn_va(upipe, "could not map ref packet");
+            uref_free(uref);
+            return;
+        }
     }
 
     /* copy input sound buffer to output stream */
@@ -453,12 +485,12 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
         }
         struct uref *input_uref = uref_from_uchain(uchain);
         size_t size;
-        uref_sound_size(uref, &size, NULL);
+        uref_sound_size(input_uref, &size, NULL);
 
         size_t extracted = ((ref_size - offset) < size ) ?
                            (ref_size - offset) : size;
-        upipe_verbose_va(upipe, "%p off %zu ext %zu size %zu",
-                         input_uref, offset, extracted, size);
+        upipe_verbose_va(upipe, "%p off %zu ext %zu size %zu ref %zu",
+                         input_uref, offset, extracted, size, ref_size);
         const uint8_t *in_buffers[planes];
         if (unlikely(!ubase_check(uref_sound_read_uint8_t(input_uref, 0,
                                        extracted, in_buffers, planes)))) {
@@ -601,6 +633,8 @@ static enum ubase_err _upipe_audiocont_control(struct upipe *upipe,
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     switch (command) {
+        case UPIPE_ATTACH_UBUF_MGR:
+            return upipe_audiocont_attach_ubuf_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_set_flow_def(upipe, flow_def);
@@ -687,6 +721,7 @@ static void upipe_audiocont_free(struct upipe *upipe)
 
     upipe_audiocont_clean_sub_subs(upipe);
     upipe_audiocont_clean_output(upipe);
+    upipe_audiocont_clean_ubuf_mgr(upipe);
     upipe_audiocont_clean_urefcount(upipe);
     upipe_audiocont_free_void(upipe);
 }
