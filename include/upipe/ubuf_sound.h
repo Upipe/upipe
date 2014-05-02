@@ -269,12 +269,15 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
 {
     size_t ubuf_size;
     uint8_t sample_size;
-    if (unlikely(!ubase_check(ubuf_sound_size(ubuf, &ubuf_size,
-                                              &sample_size)) ||
-                 skip >= (int)ubuf_size || skip + new_size <= 0))
+    if (unlikely(!ubase_check(ubuf_sound_size(ubuf, &ubuf_size, &sample_size))
+                 || skip >= (int)ubuf_size))
         return NULL;
     if (new_size == -1)
         new_size = ubuf_size - skip;
+
+    if (unlikely(skip + new_size <= 0)) {
+        return NULL;
+    }
 
     struct ubuf *new_ubuf = ubuf_sound_alloc(mgr, new_size);
     if (unlikely(new_ubuf == NULL))
