@@ -35,6 +35,7 @@ libupipe_modules_la_SOURCES = \
 
 if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \
+	upipe_rtp_decaps.c \
 	upipe_rtp_prepend.c
 endif
 

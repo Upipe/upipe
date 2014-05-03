@@ -172,6 +172,7 @@ check_PROGRAMS += \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
+	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test
 TESTS += \
 	upipe_ts_sync_test \
@@ -194,6 +195,7 @@ TESTS += \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
+	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test
 endif
 
@@ -233,6 +235,7 @@ upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupip
 upipe_probe_uref_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_multicat_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_rtp_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
