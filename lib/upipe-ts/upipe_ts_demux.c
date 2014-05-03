@@ -87,9 +87,9 @@
 /** maximum number of PIDs */
 #define MAX_PIDS 8192
 /** 2^33 (max resolution of PCR, PTS and DTS) */
-#define UINT33_MAX UINT64_C(8589934592)
+#define POW2_33 UINT64_C(8589934592)
 /** max resolution of PCR, PTS and DTS */
-#define TS_CLOCK_MAX (UINT33_MAX * UCLOCK_FREQ / 90000)
+#define TS_CLOCK_MAX (POW2_33 * UCLOCK_FREQ / 90000)
 /** max interval between PCRs (ISO/IEC 13818-1 2.7.2) - could be 100 ms but
  * allow higher tolerance */
 #define MAX_PCR_INTERVAL (UCLOCK_FREQ / 2)
@@ -2234,7 +2234,6 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
                 return UBASE_ERR_BUSY;                                      \
             struct upipe_mgr *m = va_arg(args, struct upipe_mgr *);         \
             upipe_mgr_release(ts_demux_mgr->name##_mgr);                    \
-            upipe_mgr_use(m);                                               \
             ts_demux_mgr->name##_mgr = upipe_mgr_use(m);                    \
             return UBASE_ERR_NONE;                                          \
         }

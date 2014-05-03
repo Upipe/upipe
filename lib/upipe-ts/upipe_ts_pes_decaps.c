@@ -51,7 +51,7 @@
  * start is true */
 #define EXPECTED_FLOW_DEF "block.mpegtspes."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
-#define UINT33_MAX UINT64_C(8589934592)
+#define POW2_33 UINT64_C(8589934592)
 
 /** @internal @This is the private context of a ts_pesd pipe. */
 struct upipe_ts_pesd {
@@ -266,7 +266,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
 #endif
         }
 
-        uint64_t dts_pts_delay = (UINT33_MAX + pts - dts) % UINT33_MAX;
+        uint64_t dts_pts_delay = (POW2_33 + pts - dts) % POW2_33;
         dts_pts_delay *= UCLOCK_FREQ / 90000;
         dts *= UCLOCK_FREQ / 90000;
         uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts);

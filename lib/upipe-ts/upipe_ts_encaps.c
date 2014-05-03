@@ -54,7 +54,7 @@
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
-#define UINT33_MAX UINT64_C(8589934592)
+#define POW2_33 UINT64_C(8589934592)
 /** T-STD standard max retention time - 1 s */
 #define T_STD_MAX_RETENTION UCLOCK_FREQ
 
@@ -175,7 +175,7 @@ static struct uref *upipe_ts_encaps_pad_pcr(struct upipe *upipe, uint64_t pcr)
     /* Do not increase continuity counter on packets containing no payload */
     ts_set_cc(buffer, upipe_ts_encaps->last_cc);
     ts_set_adaptation(buffer, TS_SIZE - TS_HEADER_SIZE - 1);
-    tsaf_set_pcr(buffer, (pcr / 300) % UINT33_MAX);
+    tsaf_set_pcr(buffer, (pcr / 300) % POW2_33);
     tsaf_set_pcrext(buffer, pcr % 300);
 
     uref_block_unmap(output, 0);
@@ -252,7 +252,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
         if (random)
             tsaf_set_randomaccess(buffer);
         if (pcr) {
-            tsaf_set_pcr(buffer, (pcr / 300) % UINT33_MAX);
+            tsaf_set_pcr(buffer, (pcr / 300) % POW2_33);
             tsaf_set_pcrext(buffer, pcr % 300);
         }
     }

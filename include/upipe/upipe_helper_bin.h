@@ -105,9 +105,9 @@ extern "C" {
  * @param args arguments of the event                                       \
  * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_probe_bin(struct uprobe *uprobe,          \
-                                            struct upipe *inner,            \
-                                            int event, va_list args)        \
+static int STRUCTURE##_probe_bin(struct uprobe *uprobe,                     \
+                                 struct upipe *inner,                       \
+                                 int event, va_list args)                   \
 {                                                                           \
     struct STRUCTURE *s = container_of(uprobe, struct STRUCTURE,            \
                                        LAST_INNER_PROBE);                   \
@@ -123,6 +123,7 @@ static void STRUCTURE##_init_bin(struct upipe *upipe,                       \
                                  struct urefcount *refcount)                \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    /* NULL is the reason why we don't need to uprobe_clean() it */         \
     uprobe_init(&s->LAST_INNER_PROBE, STRUCTURE##_probe_bin, NULL);         \
     s->LAST_INNER_PROBE.refcount = refcount;                                \
     s->LAST_INNER = NULL;                                                   \
@@ -151,8 +152,7 @@ static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
  * @return an error code                                                    \
  */                                                                         \
 static int STRUCTURE##_control_bin(struct upipe *upipe,                     \
-                                              enum upipe_command command,   \
-                                              va_list args)                 \
+                                   enum upipe_command command, va_list args)\
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     switch (command) {                                                      \

@@ -51,7 +51,7 @@
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
-#define UINT33_MAX UINT64_C(8589934592)
+#define POW2_33 UINT64_C(8589934592)
 /** ratio between Upipe freq and MPEG freq */
 #define CLOCK_SCALE (UCLOCK_FREQ / 90000)
 
@@ -149,8 +149,8 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
         uref_clock_get_dts_prog(uref, &dts);
         if (pts != UINT64_MAX) {
             if (dts != UINT64_MAX &&
-                ((pts / CLOCK_SCALE) % UINT33_MAX) !=
-                    ((dts / CLOCK_SCALE) % UINT33_MAX))
+                ((pts / CLOCK_SCALE) % POW2_33) !=
+                    ((dts / CLOCK_SCALE) % POW2_33))
                 header_size = PES_HEADER_SIZE_PTSDTS;
             else
                 header_size = PES_HEADER_SIZE_PTS;
@@ -191,11 +191,11 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
         pes_set_headerlength(buffer, header_size - PES_HEADER_SIZE_NOPTS);
         pes_set_dataalignment(buffer);
         if (pts != UINT64_MAX) {
-            pes_set_pts(buffer, (pts / CLOCK_SCALE) % UINT33_MAX);
+            pes_set_pts(buffer, (pts / CLOCK_SCALE) % POW2_33);
             if (dts != UINT64_MAX &&
-                ((pts / CLOCK_SCALE) % UINT33_MAX) !=
-                    ((dts / CLOCK_SCALE) % UINT33_MAX))
-                pes_set_dts(buffer, (dts / CLOCK_SCALE) % UINT33_MAX);
+                ((pts / CLOCK_SCALE) % POW2_33) !=
+                    ((dts / CLOCK_SCALE) % POW2_33))
+                pes_set_dts(buffer, (dts / CLOCK_SCALE) % POW2_33);
         }
     }
     ubuf_block_unmap(ubuf, 0);

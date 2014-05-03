@@ -341,8 +341,7 @@ static int _upipe_fsrc_get_position(struct upipe *upipe,
  * @param position new reading position, in octets (between 0 and the size)
  * @return an error code
  */
-static int _upipe_fsrc_set_position(struct upipe *upipe,
-                                               uint64_t position)
+static int _upipe_fsrc_set_position(struct upipe *upipe, uint64_t position)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (unlikely(upipe_fsrc->fd == -1))
@@ -358,8 +357,7 @@ static int _upipe_fsrc_set_position(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int _upipe_fsrc_control(struct upipe *upipe,
-                                          int command, va_list args)
+static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:

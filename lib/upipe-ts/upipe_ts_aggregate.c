@@ -54,7 +54,7 @@
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegts."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
-#define UINT33_MAX UINT64_C(8589934592)
+#define POW2_33 UINT64_C(8589934592)
 /** default MTU */
 #define DEFAULT_MTU (7 * TS_SIZE)
 
@@ -240,7 +240,7 @@ static void upipe_ts_agg_fix_pcr(struct upipe *upipe, struct uref *uref)
             upipe_warn_va(upipe, "couldn't fix PCR");
         else {
             orig_cr_prog += upipe_ts_agg->next_cr_sys - orig_cr_sys;
-            tsaf_set_pcr(buffer, (orig_cr_prog / 300) % UINT33_MAX);
+            tsaf_set_pcr(buffer, (orig_cr_prog / 300) % POW2_33);
             tsaf_set_pcrext(buffer, orig_cr_prog % 300);
             uref_block_unmap(uref, 0);
         }

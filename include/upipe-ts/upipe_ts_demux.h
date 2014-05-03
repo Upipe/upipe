@@ -95,10 +95,10 @@ enum upipe_ts_demux_mgr_command {
 
 /** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR(name, NAME)                          \
-    /** returns the current manager for name subpipes                       \
+    /** returns the current manager for name inner pipes                    \
      * (struct upipe_mgr **) */                                             \
     UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR,                                    \
-    /** sets the manager for name subpipes (struct upipe_mgr *) */          \
+    /** sets the manager for name inner pipes (struct upipe_mgr *) */       \
     UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR,
 
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(null, NULL)
@@ -123,7 +123,7 @@ enum upipe_ts_demux_mgr_command {
 
 /** @hidden */
 #define UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(name, NAME)                         \
-/** @This returns the current manager for name subpipes.                    \
+/** @This returns the current manager for name inner pipes.                 \
  *                                                                          \
  * @param mgr pointer to manager                                            \
  * @param p filled in with the name manager                                 \
@@ -136,7 +136,7 @@ static inline int                                                           \
     return upipe_mgr_control(mgr, UPIPE_TS_DEMUX_MGR_GET_##NAME##_MGR,      \
                              UPIPE_TS_DEMUX_SIGNATURE, p);                  \
 }                                                                           \
-/** @This sets the manager for name subpipes. This may only be called       \
+/** @This sets the manager for name inner pipes. This may only be called    \
  * before any pipe has been allocated.                                      \
  *                                                                          \
  * @param mgr pointer to manager                                            \
