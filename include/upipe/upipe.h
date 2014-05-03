@@ -76,6 +76,10 @@ enum upipe_command {
     UPIPE_GET_URI,
     /** sets uniform resource identifier (const char *) */
     UPIPE_SET_URI,
+    /** gets a string option (const char *, const char **) */
+    UPIPE_GET_OPTION,
+    /** sets a string option (const char *, const char *) */
+    UPIPE_SET_OPTION,
 
     /*
      * Input-related commands
@@ -990,6 +994,32 @@ UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, max_length, MAX_LENGTH,
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
                        delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
+
+/** @This gets a string option.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param value_p filled with the value of the option
+ * @return an error code
+ */
+static inline int upipe_get_option(struct upipe *upipe, const char *option,
+                                   const char **value_p)
+{
+    return upipe_control(upipe, UPIPE_GET_OPTION, option, value_p);
+}
+
+/** @This sets a string option.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param value value of the option
+ * @return an error code
+ */
+static inline int upipe_set_option(struct upipe *upipe, const char *option,
+                                   const char *value)
+{
+    return upipe_control(upipe, UPIPE_SET_OPTION, option, value);
+}
 
 /** @This sends a probe to attach a uref manager.
  *
