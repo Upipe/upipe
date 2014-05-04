@@ -284,10 +284,7 @@ static inline struct upipe *upipe_alloc_va(struct upipe_mgr *mgr,
                                            struct uprobe *uprobe,
                                            uint32_t signature, va_list args)
 {
-    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
-        uprobe_release(uprobe);
-    return upipe;
+    return mgr->upipe_alloc(mgr, uprobe, signature, args);
 }
 
 /** @internal @This allocates and initializes a pipe with a variable list of

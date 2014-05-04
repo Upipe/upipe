@@ -175,20 +175,20 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
                                        uint32_t signature, va_list args)
 {
     if (signature != UPIPE_XFER_SIGNATURE)
-        return NULL;
+        goto upipe_xfer_alloc_err;
     struct upipe *upipe_remote = va_arg(args, struct upipe *);
     if (unlikely(upipe_remote == NULL))
-        return NULL;
+        goto upipe_xfer_alloc_err;
 
     struct upipe_xfer *upipe_xfer = malloc(sizeof(struct upipe_xfer));
     if (unlikely(upipe_xfer == NULL))
-        return NULL;
+        goto upipe_xfer_alloc_err;
 
     if (unlikely(!ubase_check(upipe_xfer_mgr_send(mgr,
                                                   UPIPE_XFER_ATTACH_UPUMP_MGR,
                                                   upipe_remote, NULL)))) {
         free(upipe_xfer);
-        return NULL;
+        goto upipe_xfer_alloc_err;
     }
 
     struct upipe *upipe = upipe_xfer_to_upipe(upipe_xfer);
@@ -197,6 +197,10 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
     upipe_xfer->upipe_remote = upipe_remote;
     upipe_throw_ready(upipe);
     return upipe;
+
+upipe_xfer_alloc_err:
+    uprobe_release(uprobe);
+    return NULL;
 }
 
 /** @This processes control commands.

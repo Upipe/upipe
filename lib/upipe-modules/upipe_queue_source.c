@@ -91,22 +91,22 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
                                        uint32_t signature, va_list args)
 {
     if (signature != UPIPE_QSRC_SIGNATURE)
-        return NULL;
+        goto upipe_qsrc_alloc_err;
     unsigned int length = va_arg(args, unsigned int);
     if (!length || length > UINT8_MAX)
-        return NULL;
+        goto upipe_qsrc_alloc_err;
 
     struct upipe_qsrc *upipe_qsrc = malloc(sizeof(struct upipe_qsrc) +
                                            uqueue_sizeof(length));
     if (unlikely(upipe_qsrc == NULL))
-        return NULL;
+        goto upipe_qsrc_alloc_err;
 
     struct upipe *upipe = upipe_qsrc_to_upipe(upipe_qsrc);
     upipe_init(upipe, mgr, uprobe);
     if (unlikely(!uqueue_init(upipe_queue(upipe), length,
                               upipe_qsrc->uqueue_extra))) {
         free(upipe_qsrc);
-        return NULL;
+        goto upipe_qsrc_alloc_err;
     }
 
     upipe_qsrc_init_urefcount(upipe);
@@ -118,6 +118,10 @@ static struct upipe *_upipe_qsrc_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     return upipe;
+
+upipe_qsrc_alloc_err:
+    uprobe_release(uprobe);
+    return NULL;
 }
 
 /** @internal @This takes data as input.

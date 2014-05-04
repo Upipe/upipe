@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -83,21 +83,21 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
                                             struct uref **flow_def_p)       \
 {                                                                           \
     if (signature != UPIPE_FLOW_SIGNATURE)                                  \
-        return NULL;                                                        \
+        goto STRUCTURE##_alloc_flow_err;                                    \
     if (EXPECTED_FLOW_DEF != NULL || flow_def_p != NULL) {                  \
         struct uref *flow_def = va_arg(args, struct uref *);                \
         if (unlikely(flow_def == NULL))                                     \
-            return NULL;                                                    \
+            goto STRUCTURE##_alloc_flow_err;                                \
         if (EXPECTED_FLOW_DEF != NULL) {                                    \
             const char *def;                                                \
             if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) || \
                          ubase_ncmp(def, EXPECTED_FLOW_DEF)))               \
-                return NULL;                                                \
+                goto STRUCTURE##_alloc_flow_err;                            \
         }                                                                   \
         if (flow_def_p != NULL) {                                           \
             *flow_def_p = uref_dup(flow_def);                               \
             if (unlikely(*flow_def_p == NULL))                              \
-                return NULL;                                                \
+                goto STRUCTURE##_alloc_flow_err;                            \
         }                                                                   \
     }                                                                       \
     struct STRUCTURE *s =                                                   \
@@ -105,11 +105,14 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
     if (unlikely(s == NULL)) {                                              \
         if (flow_def_p != NULL)                                             \
             uref_free(*flow_def_p);                                         \
-        return NULL;                                                        \
+        goto STRUCTURE##_alloc_flow_err;                                    \
     }                                                                       \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
     upipe_init(upipe, mgr, uprobe);                                         \
     return upipe;                                                           \
+STRUCTURE##_alloc_flow_err:                                                 \
+    uprobe_release(uprobe);                                                 \
+    return NULL;                                                            \
 }                                                                           \
 /** @internal @This frees the private structure.                            \
  *                                                                          \

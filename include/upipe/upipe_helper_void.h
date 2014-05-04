@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,14 +74,17 @@ static struct upipe *STRUCTURE##_alloc_void(struct upipe_mgr *mgr,          \
                                             va_list args)                   \
 {                                                                           \
     if (signature != UPIPE_VOID_SIGNATURE)                                  \
-        return NULL;                                                        \
+        goto STRUCTURE##_alloc_void_err;                                    \
     struct STRUCTURE *s =                                                   \
         (struct STRUCTURE *)malloc(sizeof(struct STRUCTURE));               \
     if (unlikely(s == NULL))                                                \
-        return NULL;                                                        \
+        goto STRUCTURE##_alloc_void_err;                                    \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
     upipe_init(upipe, mgr, uprobe);                                         \
     return upipe;                                                           \
+STRUCTURE##_alloc_void_err:                                                 \
+    uprobe_release(uprobe);                                                 \
+    return NULL;                                                            \
 }                                                                           \
 /** @internal @This frees the private structure.                            \
  *                                                                          \
