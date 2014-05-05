@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -23,7 +23,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-
 /** @file
  * @short Upipe ebur128
  */
@@ -31,6 +30,9 @@
 #ifndef _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
 /** @hidden */
 #define _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/upipe.h>
 #include <upipe/uref_attr.h>
@@ -44,4 +46,7 @@
  */
 struct upipe_mgr *upipe_filter_ebur128_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
