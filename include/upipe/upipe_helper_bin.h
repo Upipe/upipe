@@ -152,7 +152,7 @@ static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
  * @return an error code                                                    \
  */                                                                         \
 static int STRUCTURE##_control_bin(struct upipe *upipe,                     \
-                                   enum upipe_command command, va_list args)\
+                                   int command, va_list args)               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     switch (command) {                                                      \
