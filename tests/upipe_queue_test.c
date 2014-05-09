@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -77,8 +78,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEED_UREF_MGR:
-        case UPROBE_NEED_UPUMP_MGR:
         case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_SOURCE_END:
@@ -151,6 +150,8 @@ int main(int argc, char *argv[])
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
 
@@ -197,6 +198,20 @@ int main(int argc, char *argv[])
     ev_loop(loop, 0);
 
     assert(counter == 2);
+
+    /* check that they are correctly released even if no flow def is input */
+    upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "queue source"), QUEUE_LENGTH);
+    assert(upipe_qsrc != NULL);
+
+    upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "queue sink"));
+    assert(upipe_qsink != NULL);
+    ubase_assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
+    upipe_release(upipe_qsrc);
+    upipe_release(upipe_qsink);
 
     upipe_mgr_release(upipe_qsink_mgr); // nop
     upipe_mgr_release(upipe_qsrc_mgr); // nop

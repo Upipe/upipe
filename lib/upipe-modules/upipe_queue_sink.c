@@ -38,6 +38,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_sink.h>
@@ -62,6 +63,8 @@ struct upipe_qsink {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** write watcher */
@@ -92,6 +95,7 @@ struct upipe_qsink {
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_qsink, urefcount, upipe_qsink_no_input)
 UPIPE_HELPER_VOID(upipe_qsink)
+UPIPE_HELPER_UREF_MGR(upipe_qsink, uref_mgr)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
 UPIPE_HELPER_SINK(upipe_qsink, urefs, nb_urefs, max_urefs, blockers, upipe_qsink_output)
@@ -117,6 +121,7 @@ static struct upipe *upipe_qsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     upipe_qsink_init_urefcount(upipe);
+    upipe_qsink_init_uref_mgr(upipe);
     upipe_qsink_init_upump_mgr(upipe);
     upipe_qsink_init_upump(upipe);
     upipe_qsink_init_sink(upipe);
@@ -348,6 +353,8 @@ static int upipe_qsink_flush(struct upipe *upipe)
 static int _upipe_qsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UREF_MGR:
+            return upipe_qsink_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_qsink_set_upump(upipe, NULL);
             return upipe_qsink_attach_upump_mgr(upipe);
@@ -403,9 +410,10 @@ static int upipe_qsink_control(struct upipe *upipe, int command, va_list args)
     UBASE_RETURN(_upipe_qsink_control(upipe, command, args));
 
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    upipe_qsink_check_watcher(upipe);
-    if (unlikely(!upipe_qsink_check_sink(upipe)))
+    if (unlikely(!upipe_qsink_check_sink(upipe))) {
+        upipe_qsink_check_watcher(upipe);
         upump_start(upipe_qsink->upump);
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -429,6 +437,7 @@ static void upipe_qsink_free(struct upipe *upipe)
         uref_free(upipe_qsink->flow_def);
     upipe_qsink_clean_upump(upipe);
     upipe_qsink_clean_upump_mgr(upipe);
+    upipe_qsink_clean_uref_mgr(upipe);
     upipe_qsink_clean_sink(upipe);
     upipe_qsink_clean_urefcount(upipe);
     upipe_qsink_free_void(upipe);
@@ -441,13 +450,22 @@ static void upipe_qsink_free(struct upipe *upipe)
 static void upipe_qsink_no_input(struct upipe *upipe)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (upipe_qsink->qsrc == NULL || upipe_qsink->flow_def == NULL) {
+    if (upipe_qsink->qsrc == NULL) {
         upipe_qsink_free(upipe);
         return;
     }
 
     /* play flow end */
-    struct uref *uref = uref_dup(upipe_qsink->flow_def);
+    struct uref *uref;
+    if (upipe_qsink->flow_def == NULL) {
+        if (unlikely(!ubase_check(upipe_qsink_check_uref_mgr(upipe)))) {
+            upipe_qsink_free(upipe);
+            return;
+        }
+        uref = uref_alloc(upipe_qsink->uref_mgr);
+    } else
+        uref = uref_dup(upipe_qsink->flow_def);
+
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         upipe_qsink_free(upipe);
