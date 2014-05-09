@@ -360,6 +360,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
+    flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
     if (unlikely(!flow_def)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
@@ -383,12 +384,11 @@ static bool upipe_a52f_parse_header(struct upipe *upipe)
         return true;
 
     switch (a52_get_bsid(header)) {
-        case A52_BSID:
-            return upipe_a52f_parse_a52(upipe);
         case A52_BSID_ANNEX_E:
             return upipe_a52f_parse_a52e(upipe);
+        case A52_BSID:
         default:
-            return false;
+            return upipe_a52f_parse_a52(upipe);
     }
 
     return false; /* never reached */
