@@ -144,8 +144,7 @@ static void upipe_swr_input(struct upipe *upipe, struct uref *uref,
     /* compute pts for next samples (see swresample.h for timebase) */
     uint64_t pts = 0;
     if (likely(ubase_check(uref_clock_get_pts_sys(uref, &pts)))) {
-        pts = swr_next_pts(upipe_swr->swr, pts * in_rate * out_rate / UCLOCK_FREQ)
-              * UCLOCK_FREQ / in_rate / out_rate;
+        pts -= swr_get_delay(upipe_swr->swr, UCLOCK_FREQ);
     }
 
     const uint8_t *in_buf[upipe_swr->in_planes];
