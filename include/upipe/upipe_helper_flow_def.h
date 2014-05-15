@@ -120,7 +120,7 @@ static struct uref *STRUCTURE##_alloc_flow_def_attr(struct upipe *upipe)    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->FLOW_DEF_INPUT == NULL)                                          \
         return NULL;                                                        \
-    return uref_alloc_control(s->FLOW_DEF_INPUT->mgr);                      \
+    return uref_sibling_alloc_control(s->FLOW_DEF_INPUT);                   \
 }                                                                           \
 /** @internal @This builds a new flow definition packet from the input      \
  * flow definition, and flow definition attributes.                         \

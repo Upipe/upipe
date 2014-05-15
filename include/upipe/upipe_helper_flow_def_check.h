@@ -105,7 +105,7 @@ static struct uref *                                                        \
     STRUCTURE##_alloc_flow_def_check(struct upipe *upipe,                   \
                                      struct uref *flow_def_input)           \
 {                                                                           \
-    return uref_alloc_control(flow_def_input->mgr);                         \
+    return uref_sibling_alloc_control(flow_def_input);                      \
 }                                                                           \
 /** @internal @This checks a flow definition check packet derived from      \
  * a new input flow definition, against the stored flow def check uref.     \

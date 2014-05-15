@@ -188,6 +188,17 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     return uref;
 }
 
+/** @This allocates and initializes a new uref, allocated with a manager from
+ * an existing uref.
+ *
+ * @param uref existing uref
+ * @return allocated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_sibling_alloc(struct uref *uref)
+{
+    return uref_alloc(uref->mgr);
+}
+
 /** @This returns a new uref with extra attributes space.
  * This is typically useful for control messages.
  *
@@ -207,6 +218,18 @@ static inline struct uref *uref_alloc_control(struct uref_mgr *mgr)
     }
 
     return uref;
+}
+
+/** @This returns a new uref with extra attributes space, allocated with a
+ * manager from an existing uref.
+ * This is typically useful for control messages.
+ *
+ * @param uref existing uref
+ * @return allocated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_sibling_alloc_control(struct uref *uref)
+{
+    return uref_alloc_control(uref->mgr);
 }
 
 /** @internal @This duplicates a uref without duplicating the ubuf.
