@@ -33,6 +33,7 @@ Makefile
 # built files
 *.o
 *.log
+*.trs
 *.swp
 *~
 .libs
