@@ -73,7 +73,15 @@ static int uprobe_output_throw(struct uprobe *uprobe, struct upipe *upipe,
                     return UBASE_ERR_NONE;
                 upipe_set_output(upipe, NULL);
             }
-            return uprobe_throw_next(uprobe, upipe, event, args);
+            UBASE_RETURN(uprobe_throw_next(uprobe, upipe, event, args))
+            /* try again */
+            if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
+                       output != NULL)) {
+                if (likely(ubase_check(upipe_set_flow_def(output, flow_def))))
+                    return UBASE_ERR_NONE;
+                upipe_set_output(upipe, NULL);
+            }
+            return UBASE_ERR_UNHANDLED;
         }
 
         case UPROBE_NEW_FLOW_FORMAT: {
