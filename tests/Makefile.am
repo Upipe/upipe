@@ -94,7 +94,10 @@ check_PROGRAMS += \
 	upipe_http_src_test \
 	upipe_udp_test \
 	upipe_blank_source_test \
-	upipe_transfer_test
+	upipe_transfer_test \
+	upipe_worker_linear_test \
+	upipe_worker_sink_test \
+	upipe_worker_source_test
 
 TESTS += \
 	upump_ev_test \
@@ -106,7 +109,10 @@ TESTS += \
 	upipe_multicat_test.sh \
 	upipe_udp_test \
 	upipe_blank_source_test \
-	upipe_transfer_test
+	upipe_transfer_test \
+	upipe_worker_linear_test \
+	upipe_worker_sink_test \
+	upipe_worker_source_test
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -222,6 +228,9 @@ uprobe_upump_mgr_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupum
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_udp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_transfer_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lpthread
+upipe_worker_linear_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
+upipe_worker_sink_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
+upipe_worker_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

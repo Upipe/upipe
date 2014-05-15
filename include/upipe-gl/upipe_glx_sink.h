@@ -52,9 +52,9 @@ extern "C" {
 enum uprobe_glx_sink_event {
     UPROBE_GLX_SINK_SENTINEL = UPROBE_GL_SINK_LOCAL,
 
-    /** received keypress event (long keysym) */
+    /** received keypress event (unsigned long keysym) */
     UPROBE_GLX_SINK_KEYPRESS,
-    /** received keyrelease event (long keysym) */
+    /** received keyrelease event (unsigned long keysym) */
     UPROBE_GLX_SINK_KEYRELEASE,
 };
 

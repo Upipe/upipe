@@ -12,6 +12,9 @@ myinclude_HEADERS = \
 	upipe_nodemux.h \
 	upipe_null.h \
 	upipe_skip.h \
+	upipe_worker_linear.h \
+	upipe_worker_sink.h \
+	upipe_worker_source.h \
 	upipe_htons.h \
 	upipe_chunk_stream.h \
 	upipe_queue_sink.h \
