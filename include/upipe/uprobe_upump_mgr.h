@@ -37,6 +37,8 @@ extern "C" {
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 
+#include <stdbool.h>
+
 /** @hidden */
 struct upump_mgr;
 
@@ -45,6 +47,8 @@ struct upump_mgr;
 struct uprobe_upump_mgr {
     /** pointer to upump_mgr to provide */
     struct upump_mgr *upump_mgr;
+    /** true if the probe is frozen on this thread */
+    bool frozen;
 
     /** structure exported to modules */
     struct uprobe uprobe;

@@ -152,7 +152,7 @@ int main(int argc, char **argv)
     uprobe = uprobe_upump_mgr_alloc(uprobe, upump_mgr);
     assert(uprobe != NULL);
     uprobe = uprobe_ubuf_mem_alloc(uprobe, umem_mgr, UBUF_POOL_DEPTH,
-                                   UBUF_POOL_DEPTH);
+                                   UBUF_SHARED_POOL_DEPTH);
     assert(uprobe != NULL);
     uref_mgr_release(uref_mgr);
     upump_mgr_release(upump_mgr);

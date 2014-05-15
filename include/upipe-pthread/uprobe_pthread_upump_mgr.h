@@ -86,20 +86,6 @@ struct uprobe *uprobe_pthread_upump_mgr_alloc(struct uprobe *next);
 int uprobe_pthread_upump_mgr_set(struct uprobe *uprobe,
                                  struct upump_mgr *upump_mgr);
 
-/** @This keeps the probe from giving a upump manager on the current thread.
- *
- * @param uprobe pointer to probe
- * @return an error code
- */
-int uprobe_pthread_upump_mgr_freeze(struct uprobe *uprobe);
-
-/** @This tells the probe to resume giving upump manager on the current thread.
- *
- * @param uprobe pointer to probe
- * @return an error code
- */
-int uprobe_pthread_upump_mgr_thaw(struct uprobe *uprobe);
-
 #ifdef __cplusplus
 }
 #endif

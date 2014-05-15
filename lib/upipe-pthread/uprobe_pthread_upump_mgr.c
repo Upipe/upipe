@@ -97,8 +97,23 @@ static int uprobe_pthread_upump_mgr_throw(struct uprobe *uprobe,
                                           struct upipe *upipe,
                                           int event, va_list args)
 {
-    if (event != UPROBE_NEED_UPUMP_MGR)
-        return uprobe_throw_next(uprobe, upipe, event, args);
+    switch (event) {
+        default:
+            return uprobe_throw_next(uprobe, upipe, event, args);
+
+        case UPROBE_FREEZE_UPUMP_MGR:
+        case UPROBE_THAW_UPUMP_MGR: {
+            struct uprobe_pthread_upump_mgr_local *tls =
+                uprobe_pthread_upump_mgr_tls(uprobe);
+            if (unlikely(tls == NULL))
+                return UBASE_ERR_ALLOC;
+            tls->frozen = event == UPROBE_FREEZE_UPUMP_MGR;
+            return UBASE_ERR_NONE;
+        }
+
+        case UPROBE_NEED_UPUMP_MGR:
+            break;
+    }
 
     struct uprobe_pthread_upump_mgr_local *tls =
         uprobe_pthread_upump_mgr_tls(uprobe);
@@ -172,35 +187,5 @@ int uprobe_pthread_upump_mgr_set(struct uprobe *uprobe,
         return UBASE_ERR_ALLOC;
     upump_mgr_release(tls->upump_mgr);
     tls->upump_mgr = upump_mgr_use(upump_mgr);
-    return UBASE_ERR_NONE;
-}
-
-/** @This keeps the probe from giving a upump manager on the current thread.
- *
- * @param uprobe pointer to probe
- * @return an error code
- */
-int uprobe_pthread_upump_mgr_freeze(struct uprobe *uprobe)
-{
-    struct uprobe_pthread_upump_mgr_local *tls =
-        uprobe_pthread_upump_mgr_tls(uprobe);
-    if (unlikely(tls == NULL))
-        return UBASE_ERR_ALLOC;
-    tls->frozen = true;
-    return UBASE_ERR_NONE;
-}
-
-/** @This tells the probe to resume giving upump manager on the current thread.
- *
- * @param uprobe pointer to probe
- * @return an error code
- */
-int uprobe_pthread_upump_mgr_thaw(struct uprobe *uprobe)
-{
-    struct uprobe_pthread_upump_mgr_local *tls =
-        uprobe_pthread_upump_mgr_tls(uprobe);
-    if (unlikely(tls == NULL))
-        return UBASE_ERR_ALLOC;
-    tls->frozen = false;
     return UBASE_ERR_NONE;
 }

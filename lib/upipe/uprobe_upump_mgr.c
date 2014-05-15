@@ -51,7 +51,20 @@ static int uprobe_upump_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uprobe_upump_mgr *uprobe_upump_mgr =
         uprobe_upump_mgr_from_uprobe(uprobe);
-    if (event != UPROBE_NEED_UPUMP_MGR || uprobe_upump_mgr->upump_mgr == NULL)
+    switch (event) {
+        default:
+            return uprobe_throw_next(uprobe, upipe, event, args);
+
+        case UPROBE_FREEZE_UPUMP_MGR:
+        case UPROBE_THAW_UPUMP_MGR:
+            uprobe_upump_mgr->frozen = event == UPROBE_FREEZE_UPUMP_MGR;
+            return UBASE_ERR_NONE;
+
+        case UPROBE_NEED_UPUMP_MGR:
+            break;
+    }
+
+    if (uprobe_upump_mgr->frozen || uprobe_upump_mgr->upump_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct upump_mgr **upump_mgr_p = va_arg(args, struct upump_mgr **);
@@ -73,6 +86,7 @@ struct uprobe *uprobe_upump_mgr_init(struct uprobe_upump_mgr *uprobe_upump_mgr,
     assert(uprobe_upump_mgr != NULL);
     struct uprobe *uprobe = uprobe_upump_mgr_to_uprobe(uprobe_upump_mgr);
     uprobe_upump_mgr->upump_mgr = upump_mgr_use(upump_mgr);
+    uprobe_upump_mgr->frozen = false;
     uprobe_init(uprobe, uprobe_upump_mgr_throw, next);
     return uprobe;
 }

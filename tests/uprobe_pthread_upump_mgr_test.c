@@ -97,12 +97,12 @@ static void *thread(void *unused)
     uprobe_test_free(upipe);
     upump_mgr_set_opaque(upump_mgr, NULL);
 
-    uprobe_pthread_upump_mgr_freeze(uprobe);
+    uprobe_throw(uprobe, NULL, UPROBE_FREEZE_UPUMP_MGR);
     upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe_use(uprobe));
     assert(upump_mgr_get_opaque(upump_mgr, struct upipe *) == NULL);
     uprobe_test_free(upipe);
 
-    uprobe_pthread_upump_mgr_thaw(uprobe);
+    uprobe_throw(uprobe, NULL, UPROBE_THAW_UPUMP_MGR);
     upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe_use(uprobe));
     assert(upump_mgr_get_opaque(upump_mgr, struct upipe *) == upipe);
     uprobe_test_free(upipe);

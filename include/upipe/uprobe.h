@@ -74,6 +74,10 @@ enum uprobe_event {
     UPROBE_NEED_UREF_MGR,
     /** a upump manager is necessary to operate (struct upump_mgr **) */
     UPROBE_NEED_UPUMP_MGR,
+    /** upump manager probe is forbidden to answer (void) */
+    UPROBE_FREEZE_UPUMP_MGR,
+    /** upump manager probe is allowed to answer (void) */
+    UPROBE_THAW_UPUMP_MGR,
     /** a uclock is necessary to operate (struct uclock **) */
     UPROBE_NEED_UCLOCK,
     /** a new flow format is proposed, ubuf_mgr may be required (struct uref *,
@@ -117,8 +121,7 @@ enum uprobe_log_level {
 };
 
 /** @This is the call-back type for uprobe events. */
-typedef int (*uprobe_throw_func)(struct uprobe *, struct upipe *,
-                                            int, va_list);
+typedef int (*uprobe_throw_func)(struct uprobe *, struct upipe *, int, va_list);
 
 /** @This is a structure passed to a module upon initializing a new pipe. */
 struct uprobe {

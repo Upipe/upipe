@@ -722,6 +722,32 @@ static inline int upipe_throw_need_upump_mgr(struct upipe *upipe,
     return err;
 }
 
+/** @This throws an event asking to freeze the upump manager of the current
+ * thread. This allows to prepare pipes that will be deported later.
+ * @see upipe_throw_thaw_upump_mgr
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_freeze_upump_mgr(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw freeze upump mgr");
+    return upipe_throw(upipe, UPROBE_FREEZE_UPUMP_MGR);
+}
+
+/** @This throws an event asking to thaw the upump manager of the current
+ * thread. This allows to prepare pipes that will be deported later.
+ * @see upipe_throw_freeze_upump_mgr
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_thaw_upump_mgr(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw thaw upump mgr");
+    return upipe_throw(upipe, UPROBE_THAW_UPUMP_MGR);
+}
+
 /** @This throws an event asking for a uclock. Note that all parameters
  * belong to the caller, so there is no need to @ref uclock_use the given
  * uclock.
