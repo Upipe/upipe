@@ -207,7 +207,9 @@ static bool upipe_alsink_open(struct upipe *upipe)
     }
 
     if (snd_pcm_hw_params_set_access(upipe_alsink->handle, hwparams,
-                                     SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
+                                     upipe_alsink->planes == 1 ?
+                                     SND_PCM_ACCESS_RW_INTERLEAVED :
+                                     SND_PCM_ACCESS_RW_NONINTERLEAVED) < 0) {
         upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
         goto open_error;
     }
@@ -340,20 +342,25 @@ static bool upipe_alsink_recover(struct upipe *upipe, int err)
     return true;
 }
 
-/** @internal @This is called to output raw interleaved data to alsa.
+/** @internal @This is called to output raw data to alsa.
  *
  * @param upipe description structure of the pipe
- * @param buffer pointer to buffer
+ * @param buffers pointer to array of buffers
  * @param buffer_frames number of frames in buffer
  * @return the number of frames effectively written, or -1 in case of error
  */
-static snd_pcm_sframes_t upipe_alsink_output_interleave(struct upipe *upipe,
-        const void *buffer, snd_pcm_uframes_t buffer_frames)
+static snd_pcm_sframes_t upipe_alsink_output_frames(struct upipe *upipe,
+        const void **buffers, snd_pcm_uframes_t buffer_frames)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     snd_pcm_sframes_t frames;
     for ( ; ; ) {
-        frames = snd_pcm_writei(upipe_alsink->handle, buffer, buffer_frames);
+        if (upipe_alsink->planes == 1)
+            frames = snd_pcm_writei(upipe_alsink->handle, buffers[0],
+                                    buffer_frames);
+        else /* ALSA doesn't know about const */
+            frames = snd_pcm_writen(upipe_alsink->handle, (void **)buffers,
+                                    buffer_frames);
         if (frames >= 0)
             break;
         if (frames == -EAGAIN) {
@@ -382,33 +389,13 @@ static snd_pcm_sframes_t upipe_alsink_output(struct upipe *upipe,
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     /* FIXME fix planes order */
-    const void *buffer[upipe_alsink->planes];
-    if (unlikely(!ubase_check(uref_sound_read_void(uref, 0, -1, buffer,
+    const void *buffers[upipe_alsink->planes];
+    if (unlikely(!ubase_check(uref_sound_read_void(uref, 0, -1, buffers,
                                                    upipe_alsink->planes))))
         return -1;
 
-    snd_pcm_sframes_t frames;
-    if (upipe_alsink->planes == 1)
-        frames = upipe_alsink_output_interleave(upipe, buffer[0],
-                                                buffer_frames);
-    else {
-        for ( ; ; ) {
-            frames = snd_pcm_writei(upipe_alsink->handle,
-                                    buffer, buffer_frames);
-            if (frames >= 0)
-                break;
-            if (frames == -EAGAIN) {
-                upipe_warn_va(upipe, "ALSA FIFO full, skipping tick");
-                frames = 0;
-                break;
-            }
-            if (unlikely(!upipe_alsink_recover(upipe, frames))) {
-                frames = -1;
-                break;
-            }
-        }
-    }
-
+    snd_pcm_sframes_t frames = upipe_alsink_output_frames(upipe, buffers,
+                                                          buffer_frames);
     uref_sound_unmap(uref, 0, -1, upipe_alsink->planes);
     return frames;
 }
@@ -423,10 +410,26 @@ static snd_pcm_sframes_t upipe_alsink_silence(struct upipe *upipe,
                                               snd_pcm_uframes_t silence_frames)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    uint8_t buffer[snd_pcm_frames_to_bytes(upipe_alsink->handle,
-                                           silence_frames)];
+    if (upipe_alsink->planes == 1) {
+        uint8_t buffer[snd_pcm_frames_to_bytes(upipe_alsink->handle,
+                                               silence_frames)];
+        snd_pcm_format_set_silence(upipe_alsink->format, buffer,
+                                   silence_frames * upipe_alsink->channels);
+        uint8_t *buffers[1];
+        buffers[0] = buffer;
+        return upipe_alsink_output_frames(upipe, (const void **)buffers,
+                                          silence_frames);
+    }
+
+    uint8_t buffer[snd_pcm_samples_to_bytes(upipe_alsink->handle,
+                                            silence_frames)];
     snd_pcm_format_set_silence(upipe_alsink->format, buffer, silence_frames);
-    return upipe_alsink_output_interleave(upipe, buffer, silence_frames);
+    uint8_t *buffers[upipe_alsink->planes];
+    int i;
+    for (i = 0; i < upipe_alsink->planes; i++)
+        buffers[i] = buffer;
+    return upipe_alsink_output_frames(upipe, (const void **)buffers,
+                                      silence_frames);
 }
 
 /** @internal @This is called to consume frames out of the first buffered uref.
