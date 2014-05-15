@@ -52,7 +52,7 @@ enum upipe_xfer_mgr_command {
  * structure can be allocated in any thread, but must be attached in the
  * same thread as the one running the upump manager.
  *
- * @param queue_length maximum length of the internal queue of commands
+ * @param queue_length maximum length of the internal queues
  * @param msg_pool_depth maximum number of messages in the pool
  * @return pointer to manager
  */

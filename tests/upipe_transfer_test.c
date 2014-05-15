@@ -29,6 +29,11 @@
 
 #undef NDEBUG
 
+#include <upipe/uprobe.h>
+#include <upipe/uprobe_stdio.h>
+#include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_transfer.h>
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/upump.h>
@@ -53,6 +58,7 @@
 static struct upump_mgr *upump_mgr = NULL;
 static bool transferred = false;
 static bool got_uri = false;
+static uatomic_uint32_t source_end;
 
 /** helper phony pipe */
 struct test_pipe {
@@ -84,8 +90,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe */
-static int test_control(struct upipe *upipe,
-                                   int command, va_list args)
+static int test_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
@@ -96,6 +101,7 @@ static int test_control(struct upipe *upipe,
             const char *uri = va_arg(args, const char *);
             assert(!strcmp(uri, "toto"));
             got_uri = true;
+            upipe_throw_source_end(upipe);
             return UBASE_ERR_NONE;
         }
         default:
@@ -131,9 +137,45 @@ static void *thread(void *_upipe_xfer_mgr)
     return NULL;
 }
 
+/** definition of our uprobe */
+static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
+{
+    switch (event) {
+        case UPROBE_READY:
+        case UPROBE_DEAD:
+            break;
+        case UPROBE_SOURCE_END:
+            uatomic_fetch_add(&source_end, 1);;
+            break;
+        default:
+            assert(0);
+            break;
+    }
+    return UBASE_ERR_NONE;
+}
+
 int main(int argc, char **argv)
 {
-    struct upipe *upipe_test = upipe_void_alloc(&test_mgr, NULL);
+    struct ev_loop *loop = ev_default_loop(0);
+    struct upump_mgr *upump_mgr =
+        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+
+    struct uprobe uprobe;
+    uprobe_init(&uprobe, catch, NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_DEBUG);
+    assert(uprobe_stdio != NULL);
+    struct uprobe *uprobe_upump_mgr =
+        uprobe_upump_mgr_alloc(uprobe_use(uprobe_stdio), upump_mgr);
+
+    uatomic_init(&source_end, 0);
+
+    struct uprobe *uprobe_xfer = uprobe_xfer_alloc(uprobe_use(uprobe_stdio));
+    assert(uprobe_xfer != NULL);
+    ubase_assert(uprobe_xfer_add(uprobe_xfer, UPROBE_XFER_VOID,
+                                 UPROBE_SOURCE_END, 0));
+    struct upipe *upipe_test = upipe_void_alloc(&test_mgr,
+            uprobe_pfx_alloc(uprobe_xfer, UPROBE_LOG_VERBOSE, "test"));
     assert(upipe_test != NULL);
 
     struct upipe_mgr *upipe_xfer_mgr =
@@ -144,17 +186,27 @@ int main(int argc, char **argv)
     upipe_mgr_use(upipe_xfer_mgr);
     assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
 
-    struct upipe *upipe_handle = upipe_xfer_alloc(upipe_xfer_mgr, NULL,
-                                                  upipe_test);
+    struct upipe *upipe_handle = upipe_xfer_alloc(upipe_xfer_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_upump_mgr), UPROBE_LOG_VERBOSE,
+                             "xfer"),
+            upipe_test);
     /* from now on upipe_test shouldn't be accessed from this thread */
     assert(upipe_handle != NULL);
+    ubase_assert(upipe_attach_upump_mgr(upipe_handle));
     ubase_assert(upipe_set_uri(upipe_handle, "toto"));
     upipe_release(upipe_handle);
 
     upipe_mgr_release(upipe_xfer_mgr);
 
+    ev_loop(loop, 0);
+
     assert(!pthread_join(id, NULL));
     assert(transferred);
+    assert(uatomic_load(&source_end) == 1);
 
+    uprobe_release(uprobe_stdio);
+    uprobe_release(uprobe_upump_mgr);
+    upump_mgr_release(upump_mgr);
+    ev_default_destroy();
     return 0;
 }
