@@ -66,6 +66,7 @@
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_worker_linear.h>
+#include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
@@ -99,6 +100,7 @@
 #define SRC_OUT_QUEUE_LENGTH    10000
 #define DEC_IN_QUEUE_LENGTH     5
 #define DEC_OUT_QUEUE_LENGTH    2
+#define SOUND_QUEUE_LENGTH      10
 
 /* true if we receive raw udp */
 bool udp = false;
@@ -120,6 +122,8 @@ struct uprobe uprobe_glx_s;
 struct upipe_mgr *upipe_wsrc_mgr = NULL;
 /* decoder thread */
 struct upipe_mgr *upipe_wlin_mgr = NULL;
+/* sink thread */
+struct upipe_mgr *upipe_wsink_mgr = NULL;
 /* trick play */
 struct upipe *trickp = NULL;
 /* source pipe */
@@ -239,12 +243,13 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     upipe_mgr_release(upipe_sws_mgr);
     upipe_release(yuvrgb);
 
+    /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "wlin"),
+                             UPROBE_LOG_VERBOSE, "wlin video"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "wlin_x"),
+                             UPROBE_LOG_VERBOSE, "wlin_x video"),
             DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
     assert(avcdec != NULL);
     upipe_set_output(upipe, avcdec);
@@ -285,12 +290,13 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
 
+    /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "wlin"),
+                             UPROBE_LOG_VERBOSE, "wlin audio"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "wlin_x"),
+                             UPROBE_LOG_VERBOSE, "wlin_x audio"),
             DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
     assert(avcdec != NULL);
     upipe_set_output(upipe, avcdec);
@@ -300,21 +306,34 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                 uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
                                  UPROBE_LOG_VERBOSE, "trickp audio"));
 
+    struct upipe *sink;
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
-    avcdec = upipe_void_chain_output(avcdec, upipe_alsink_mgr,
+    sink = upipe_void_alloc(upipe_alsink_mgr,
                     uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                      UPROBE_LOG_VERBOSE, "alsink"));
     upipe_mgr_release(upipe_alsink_mgr);
-    upipe_attach_uclock(avcdec);
+    upipe_attach_uclock(sink);
 #else
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
-    avcdec = upipe_void_chain_output(avcdec, upipe_null_mgr,
+    sink = upipe_void_alloc(upipe_null_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
                              UPROBE_LOG_VERBOSE, "null"));
     upipe_mgr_release(upipe_null_mgr);
 #endif
+
+    /* deport to the sink thread */
+    sink = upipe_wsink_alloc(upipe_wsink_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wsink audio"),
+            sink,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wsink_x audio"),
+            SOUND_QUEUE_LENGTH);
+    assert(sink != NULL);
+    upipe_set_output(avcdec, sink);
     upipe_release(avcdec);
+    upipe_release(sink);
     return UBASE_ERR_NONE;
 }
 
@@ -405,7 +424,7 @@ static void uplay_start(struct upump *upump)
         upipe_attach_uclock(trickp);
     }
 
-    /* transfer source to worker thread */
+    /* deport to the source thread */
     upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src_s)),
                              UPROBE_LOG_VERBOSE, "wsrc"),
@@ -466,6 +485,8 @@ static void uplay_stop(struct upump *upump)
     upipe_wsrc_mgr = NULL;
     upipe_mgr_release(upipe_wlin_mgr);
     upipe_wlin_mgr = NULL;
+    upipe_mgr_release(upipe_wsink_mgr);
+    upipe_wsink_mgr = NULL;
     upipe_release(trickp);
     trickp = NULL;
     uprobe_release(uprobe_main);
@@ -551,8 +572,8 @@ int main(int argc, char **argv)
     }
 
     /* worker threads */
-    pthread_t src_thread, dec_thread;
-    struct upipe_mgr *src_xfer_mgr, *dec_xfer_mgr;
+    pthread_t src_thread, dec_thread, sink_thread;
+    struct upipe_mgr *src_xfer_mgr, *dec_xfer_mgr, *sink_xfer_mgr;
 
     src_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
     assert(src_xfer_mgr != NULL);
@@ -568,6 +589,15 @@ int main(int argc, char **argv)
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
     if (pthread_create(&dec_thread, NULL, thread, dec_xfer_mgr)) {
+        uprobe_err(uprobe_main, NULL, "unable to spawn thread");
+        exit(EXIT_FAILURE);
+    }
+
+    sink_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    assert(sink_xfer_mgr != NULL);
+    upipe_wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
+    assert(upipe_wsink_mgr != NULL);
+    if (pthread_create(&sink_thread, NULL, thread, sink_xfer_mgr)) {
         uprobe_err(uprobe_main, NULL, "unable to spawn thread");
         exit(EXIT_FAILURE);
     }
