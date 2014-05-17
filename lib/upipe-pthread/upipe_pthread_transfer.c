@@ -30,6 +30,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
+#include <upipe/ueventfd.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/upump.h>
@@ -63,6 +64,10 @@ struct upipe_pthread_ctx {
     upipe_pthread_upump_mgr_work upump_mgr_work;
     /** callback freeing the event loop in the new thread */
     upipe_pthread_upump_mgr_free upump_mgr_free;
+    /** thread ID */
+    pthread_t pthread_id;
+    /** eventfd used for thread termination */
+    struct ueventfd event;
 };
 
 /** @internal @This is the main function of the new thread.
@@ -102,8 +107,24 @@ static void *upipe_pthread_start(void *_pthread_ctx)
     upump_mgr_release(upump_mgr);
     pthread_ctx->upump_mgr_free(upump_mgr);
 
-    free(pthread_ctx);
+    ueventfd_write(&pthread_ctx->event);
     return NULL;
+}
+
+/** @internal @This is called on the main thread when the thread dies.
+ *
+ * @param upump pointer to pump watching the eventfd
+ */
+static void upipe_pthread_stop(struct upump *upump)
+{
+    struct upipe_pthread_ctx *pthread_ctx =
+        upump_get_opaque(upump, struct upipe_pthread_ctx *);
+    upump_stop(upump);
+    upump_free(upump);
+
+    pthread_join(pthread_ctx->pthread_id, NULL);
+    ueventfd_clean(&pthread_ctx->event);
+    free(pthread_ctx);
 }
 
 /** @This returns a management structure for transfer pipes, using a new
@@ -116,7 +137,6 @@ static void *upipe_pthread_start(void *_pthread_ctx)
  * @param upump_mgr_alloc callback creating the event loop in the new thread
  * @param upump_mgr_work callback running the event loop in the new thread
  * @param upump_mgr_free callback freeing the event loop in the new thread
- * @param thread filled in with pthread ID
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
@@ -125,35 +145,54 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
         upipe_pthread_upump_mgr_work upump_mgr_work,
         upipe_pthread_upump_mgr_free upump_mgr_free,
-        pthread_t *restrict thread, const pthread_attr_t *restrict attr)
+        const pthread_attr_t *restrict attr)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         malloc(sizeof(struct upipe_pthread_ctx));
-    if (unlikely(pthread_ctx == NULL)) {
-        uprobe_release(uprobe_pthread_upump_mgr);
-        return NULL;
-    }
+    if (unlikely(pthread_ctx == NULL))
+        goto upipe_pthread_xfer_mgr_alloc_err1;
 
+    if (unlikely(!ueventfd_init(&pthread_ctx->event, false)))
+        goto upipe_pthread_xfer_mgr_alloc_err2;
+
+    struct upump_mgr *upump_mgr = NULL;
+    uprobe_throw(uprobe_pthread_upump_mgr, NULL, UPROBE_NEED_UPUMP_MGR, &upump_mgr);
+    if (unlikely(upump_mgr == NULL))
+        goto upipe_pthread_xfer_mgr_alloc_err3;
+
+    struct upump *upump = ueventfd_upump_alloc(&pthread_ctx->event, upump_mgr,
+                                               upipe_pthread_stop, pthread_ctx);
+    upump_mgr_release(upump_mgr);
+    if (unlikely(upump == NULL))
+        goto upipe_pthread_xfer_mgr_alloc_err3;
+
+    struct upipe_mgr *xfer_mgr = upipe_xfer_mgr_alloc(queue_length, msg_pool_depth);
+    if (unlikely(xfer_mgr == NULL))
+        goto upipe_pthread_xfer_mgr_alloc_err4;
+
+    pthread_ctx->xfer_mgr = upipe_mgr_use(xfer_mgr);
     pthread_ctx->uprobe_pthread_upump_mgr = uprobe_pthread_upump_mgr;
     pthread_ctx->upump_mgr_alloc = upump_mgr_alloc;
     pthread_ctx->upump_mgr_work = upump_mgr_work;
     pthread_ctx->upump_mgr_free = upump_mgr_free;
-    pthread_ctx->xfer_mgr = upipe_xfer_mgr_alloc(queue_length, msg_pool_depth);
-    if (unlikely(pthread_ctx->xfer_mgr == NULL)) {
-        uprobe_release(pthread_ctx->uprobe_pthread_upump_mgr);
-        free(pthread_ctx);
-        return NULL;
-    }
 
-    struct upipe_mgr *xfer_mgr = upipe_mgr_use(pthread_ctx->xfer_mgr);
-    if (unlikely(pthread_create(thread, attr, upipe_pthread_start,
-                                pthread_ctx) != 0)) {
-        upipe_mgr_release(pthread_ctx->xfer_mgr);
-        upipe_mgr_release(xfer_mgr);
-        uprobe_release(pthread_ctx->uprobe_pthread_upump_mgr);
-        free(pthread_ctx);
-        return NULL;
-    }
+    if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr, upipe_pthread_start,
+                                pthread_ctx) != 0))
+        goto upipe_pthread_xfer_mgr_alloc_err5;
 
+    upump_start(upump);
     return xfer_mgr;
+
+upipe_pthread_xfer_mgr_alloc_err5:
+    upipe_mgr_release(pthread_ctx->xfer_mgr);
+    upipe_mgr_release(xfer_mgr);
+upipe_pthread_xfer_mgr_alloc_err4:
+    upump_free(upump);
+upipe_pthread_xfer_mgr_alloc_err3:
+    ueventfd_clean(&pthread_ctx->event);
+upipe_pthread_xfer_mgr_alloc_err2:
+    free(pthread_ctx);
+upipe_pthread_xfer_mgr_alloc_err1:
+    uprobe_release(uprobe_pthread_upump_mgr);
+    return NULL;
 }

@@ -62,7 +62,6 @@ typedef void (*upipe_pthread_upump_mgr_free)(struct upump_mgr *);
  * @param upump_mgr_alloc callback creating the event loop in the new thread
  * @param upump_mgr_work callback running the event loop in the new thread
  * @param upump_mgr_free callback freeing the event loop in the new thread
- * @param thread filled in with pthread ID
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
@@ -71,7 +70,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
         upipe_pthread_upump_mgr_work upump_mgr_work,
         upipe_pthread_upump_mgr_free upump_mgr_free,
-        pthread_t *restrict thread, const pthread_attr_t *restrict attr);
+        const pthread_attr_t *restrict attr);
 
 #ifdef __cplusplus
 }
