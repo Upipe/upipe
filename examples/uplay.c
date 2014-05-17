@@ -55,6 +55,7 @@
 #include <upipe/uclock_std.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
+#include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_file_source.h>
@@ -130,34 +131,6 @@ struct upipe *trickp = NULL;
 struct upipe *upipe_src = NULL;
 
 static void uplay_stop(struct upump *upump);
-
-static void *thread(void *_upipe_xfer_mgr)
-{
-    struct upipe_mgr *upipe_xfer_mgr = (struct upipe_mgr *)_upipe_xfer_mgr;
-
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    int err = uprobe_pthread_upump_mgr_set(uprobe_main, upump_mgr);
-    if (unlikely(!ubase_check(err))) {
-        uprobe_err_va(uprobe_main, NULL, "unable to attach upump_mgr (%d)", err);
-        exit(EXIT_FAILURE);
-    }
-
-    err = upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr);
-    if (unlikely(!ubase_check(err))) {
-        uprobe_err_va(uprobe_main, NULL, "unable to attach xfer (%d)", err);
-        exit(EXIT_FAILURE);
-    }
-    upipe_mgr_release(upipe_xfer_mgr);
-
-    ev_loop(loop, 0);
-
-    upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
-
-    return NULL;
-}
 
 /* probe for glx sink */
 static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
@@ -497,6 +470,28 @@ static void uplay_stop(struct upump *upump)
     main_upump_mgr = NULL;
 }
 
+static struct upump_mgr *upump_mgr_alloc(void)
+{
+    struct ev_loop *loop = ev_loop_new(0);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
+    assert(upump_mgr != NULL);
+    upump_mgr_set_opaque(upump_mgr, loop);
+    return upump_mgr;
+}
+
+static void upump_mgr_work(struct upump_mgr *upump_mgr)
+{
+    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
+    ev_loop(loop, 0);
+}
+
+static void upump_mgr_free(struct upump_mgr *upump_mgr)
+{
+    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
+    ev_loop_destroy(loop);
+}
+
 static void usage(const char *argv0) {
     fprintf(stderr, "Usage: %s [-d] [-q] [-u] <source>\n", argv0);
     exit(EXIT_FAILURE);
@@ -573,34 +568,29 @@ int main(int argc, char **argv)
 
     /* worker threads */
     pthread_t src_thread, dec_thread, sink_thread;
-    struct upipe_mgr *src_xfer_mgr, *dec_xfer_mgr, *sink_xfer_mgr;
-
-    src_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
+            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
+            upump_mgr_work, upump_mgr_free, &src_thread, NULL);
     assert(src_xfer_mgr != NULL);
     upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
     assert(upipe_wsrc_mgr != NULL);
-    if (pthread_create(&src_thread, NULL, thread, src_xfer_mgr)) {
-        uprobe_err(uprobe_main, NULL, "unable to spawn thread");
-        exit(EXIT_FAILURE);
-    }
+    upipe_mgr_release(src_xfer_mgr);
 
-    dec_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
+            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
+            upump_mgr_work, upump_mgr_free, &dec_thread, NULL);
     assert(dec_xfer_mgr != NULL);
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
-    if (pthread_create(&dec_thread, NULL, thread, dec_xfer_mgr)) {
-        uprobe_err(uprobe_main, NULL, "unable to spawn thread");
-        exit(EXIT_FAILURE);
-    }
+    upipe_mgr_release(dec_xfer_mgr);
 
-    sink_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    struct upipe_mgr *sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
+            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
+            upump_mgr_work, upump_mgr_free, &sink_thread, NULL);
     assert(sink_xfer_mgr != NULL);
     upipe_wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);
-    if (pthread_create(&sink_thread, NULL, thread, sink_xfer_mgr)) {
-        uprobe_err(uprobe_main, NULL, "unable to spawn thread");
-        exit(EXIT_FAILURE);
-    }
+    upipe_mgr_release(sink_xfer_mgr);
 
     /* start */
     struct upump *idler_start = upump_alloc_idler(main_upump_mgr, uplay_start,
@@ -612,6 +602,7 @@ int main(int argc, char **argv)
 
     pthread_join(src_thread, NULL);
     pthread_join(dec_thread, NULL);
+    pthread_join(sink_thread, NULL);
 
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
