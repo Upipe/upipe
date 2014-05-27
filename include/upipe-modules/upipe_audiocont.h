@@ -50,10 +50,6 @@ enum upipe_audiocont_command {
     UPIPE_AUDIOCONT_GET_INPUT,
     /** sets the grid input by its name (const char *) */
     UPIPE_AUDIOCONT_SET_INPUT,
-    /** returns the current pts tolerance (int *) */
-    UPIPE_AUDIOCONT_GET_TOLERANCE,
-    /** sets the pts tolerance (int) */
-    UPIPE_AUDIOCONT_SET_TOLERANCE,
 };
 
 /** @This returns the current input name if any.
@@ -93,32 +89,6 @@ static inline enum ubase_err upipe_audiocont_set_input(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_SET_INPUT,
                          UPIPE_AUDIOCONT_SIGNATURE, name);
-}
-
-/** @This returns the current pts tolerance.
- *
- * @param upipe description structure of the pipe
- * @param tolerance_p filled with current pts tolerance
- * @return an error code
- */
-static inline enum ubase_err upipe_audiocont_get_tolerance(struct upipe *upipe,
-                                                           uint64_t *tolerance_p)
-{
-    return upipe_control(upipe, UPIPE_AUDIOCONT_GET_TOLERANCE,
-                         UPIPE_AUDIOCONT_SIGNATURE, tolerance_p);
-}
-
-/** @This sets the pts tolerance.
- *
- * @param upipe description structure of the pipe
- * @param tolerance pts tolerance
- * @return an error code
- */
-static inline enum ubase_err upipe_audiocont_set_tolerance(struct upipe *upipe,
-                                                       uint64_t tolerance)
-{
-    return upipe_control(upipe, UPIPE_AUDIOCONT_SET_TOLERANCE,
-                         UPIPE_AUDIOCONT_SIGNATURE, tolerance);
 }
 
 /** @This returns the management structure for all ts_join pipes.

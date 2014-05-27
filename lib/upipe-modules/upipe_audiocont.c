@@ -54,8 +54,6 @@
 
 /** only accept sound */
 #define EXPECTED_FLOW_DEF "sound."
-/** default pts tolerance (late packets) */
-#define TOLERANCE (UCLOCK_FREQ / 1000)
 
 /** @internal @This is the private context of a ts join pipe. */
 struct upipe_audiocont {
@@ -70,6 +68,8 @@ struct upipe_audiocont {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** input flow definition packet */
+    struct uref *flow_def_input;
     /** number of planes */
     uint8_t planes;
     /** samplerate */
@@ -82,9 +82,6 @@ struct upipe_audiocont {
     struct upipe *input_cur;
     /** next input */
     char *input_name;
-
-    /** pts tolerance */
-    uint64_t tolerance;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -99,7 +96,7 @@ UPIPE_HELPER_VOID(upipe_audiocont)
 UPIPE_HELPER_OUTPUT(upipe_audiocont, output, flow_def, flow_def_sent)
 UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, flow_def)
 
-/** @internal @This is the private context of an input of a videocont pipe. */
+/** @internal @This is the private context of an input of a audiocont pipe. */
 struct upipe_audiocont_sub {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -123,7 +120,11 @@ UPIPE_HELPER_VOID(upipe_audiocont_sub)
 UPIPE_HELPER_SUBPIPE(upipe_audiocont, upipe_audiocont_sub, sub, sub_mgr,
                      subs, uchain)
 
-/** @internal @This allocates an input subpipe of a videocont pipe.
+/** @hidden */
+static enum ubase_err upipe_audiocont_switch_input(struct upipe *upipe,
+                                                   struct upipe *input);
+
+/** @internal @This allocates an input subpipe of a audiocont pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -214,14 +215,14 @@ static enum ubase_err upipe_audiocont_sub_set_flow_def(struct upipe *upipe,
     if (upipe_audiocont->input_name
         && likely(ubase_check(uref_flow_get_name(flow_def, &name)))
         && !strcmp(upipe_audiocont->input_name, name)) {
-        upipe_audiocont->input_cur = upipe;
-        upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, upipe);
+        upipe_audiocont_switch_input(upipe_audiocont_to_upipe(upipe_audiocont),
+                                     upipe);
     }
 
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This processes control commands on a subpipe of a videocont
+/** @internal @This processes control commands on a subpipe of a audiocont
  * pipe.
  *
  * @param upipe description structure of the pipe
@@ -279,7 +280,7 @@ static void upipe_audiocont_sub_dead(struct upipe *upipe)
     upipe_audiocont_sub_free_void(upipe);
 }
 
-/** @internal @This initializes the input manager for a videocont pipe.
+/** @internal @This initializes the input manager for a audiocont pipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -295,7 +296,7 @@ static void upipe_audiocont_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-/** @internal @This allocates a videocont pipe.
+/** @internal @This allocates a audiocont pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -321,13 +322,43 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     upipe_audiocont->input_cur = NULL;
     upipe_audiocont->input_name = NULL;
-    upipe_audiocont->tolerance = TOLERANCE;
+    upipe_audiocont->flow_def_input = NULL;
     upipe_audiocont->planes = 0;
     upipe_audiocont->samplerate = 0;
 
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This switches to a new input.
+ *
+ * @param upipe description structure of the pipe
+ * @param input description structure of the input pipe
+ * @return an error code
+ */
+static enum ubase_err upipe_audiocont_switch_input(struct upipe *upipe,
+                                                   struct upipe *input)
+{
+    struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
+    upipe_audiocont->input_cur = input;
+    upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
+                    upipe_audiocont->input_name, input);
+
+    struct uref *flow_def = uref_dup(upipe_audiocont->flow_def_input);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    uref_sound_flow_clear_format(flow_def);
+    uref_sound_flow_copy_format(flow_def,
+                    upipe_audiocont_sub_from_upipe(input)->flow_def);
+    upipe_audiocont_store_flow_def(upipe, flow_def);
+
+    uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
+    uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This resizes a sound uref.
@@ -393,9 +424,8 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     }
 
     size_t ref_size = 0;
-    uint8_t ref_sample_size = 0;
-    if (unlikely(!ubase_check(uref_sound_size(uref,
-                              &ref_size, &ref_sample_size)))) {
+    uint8_t sample_size = 0;
+    if (unlikely(!ubase_check(uref_sound_size(uref, &ref_size, NULL)))) {
         upipe_warn_va(upipe, "invalid ref packet");
         uref_free(uref);
         return;
@@ -457,23 +487,29 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     struct upipe_audiocont_sub *input =
         upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur);
 
-    /* map reference uref */
+    /* alloc ubuf and attach to reference uref */
+    struct ubuf *ubuf = ubuf_sound_alloc(upipe_audiocont->ubuf_mgr, ref_size);
+    if (unlikely(!ubuf)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
+        return;
+    }
+    uref_attach_ubuf(uref, ubuf);
+    uref_sound_size(uref, NULL, &sample_size);
+    /* clear sound buffer */
+    const char *channel = NULL;
+    uint8_t *buf;
+    while (ubase_check(uref_sound_plane_iterate(uref, &channel)) && channel) {
+        uref_sound_plane_write_uint8_t(uref, channel, 0, -1, &buf);
+        memset(buf, 0, sample_size * ref_size);
+        uref_sound_plane_unmap(uref, channel, 0, -1);
+    }
+
     if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0,
-                                -1, ref_buffers, planes)))) {
-        struct ubuf *ubuf = ubuf_sound_copy(upipe_audiocont->ubuf_mgr,
-                                            uref->ubuf, 0, -1);
-        if (unlikely(!ubuf)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(uref);
-            return;
-        }
-        uref_attach_ubuf(uref, ubuf);
-        if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0,
-                                         -1, ref_buffers, planes)))) {
-            upipe_warn_va(upipe, "could not map ref packet");
-            uref_free(uref);
-            return;
-        }
+                                     -1, ref_buffers, planes)))) {
+        upipe_warn_va(upipe, "could not map ref packet");
+        uref_free(uref);
+        return;
     }
 
     /* copy input sound buffer to output stream */
@@ -500,8 +536,8 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
         }
         int i;
         for (i=0; (i < planes) && ref_buffers[i] && in_buffers[i]; i++) {
-            memcpy(ref_buffers[i] + offset * ref_sample_size, in_buffers[i],
-                   extracted * ref_sample_size);
+            memcpy(ref_buffers[i] + offset * sample_size, in_buffers[i],
+                   extracted * sample_size);
         }
         uref_sound_unmap(input_uref, 0, extracted, planes);
 
@@ -543,14 +579,32 @@ static enum ubase_err upipe_audiocont_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+    /* local copy of input (ref) flow def */
+    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    upipe_audiocont_store_flow_def(upipe, flow_def_dup);
-    upipe_audiocont->planes = planes;
-    upipe_audiocont->samplerate = rate;
+    if (upipe_audiocont->flow_def_input) {
+        uref_free(upipe_audiocont->flow_def_input);
+    }
+    upipe_audiocont->flow_def_input = flow_def;
+
+    /* output flow def */
+    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    if (upipe_audiocont->input_cur &&
+        upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur)->flow_def) {
+        uref_sound_flow_clear_format(flow_def);
+        uref_sound_flow_copy_format(flow_def, upipe_audiocont_sub_from_upipe(
+                                        upipe_audiocont->input_cur)->flow_def);
+    }
+    upipe_audiocont_store_flow_def(upipe, flow_def);
+
+    uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
+    uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
 
     return UBASE_ERR_NONE;
 }
@@ -582,9 +636,7 @@ static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
             if (sub->flow_def
                 && likely(ubase_check(uref_flow_get_name(sub->flow_def, &flow_name)))
                 && !strcmp(name_dup, flow_name)) {
-                upipe_audiocont->input_cur = upipe_audiocont_sub_to_upipe(sub);
-                upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
-                                name_dup, upipe_audiocont->input_cur);
+                upipe_audiocont_switch_input(upipe, upipe_audiocont_sub_to_upipe(sub));
                 break;
             }
         }
@@ -670,16 +722,6 @@ static enum ubase_err _upipe_audiocont_control(struct upipe *upipe,
             *va_arg(args, const char**) = upipe_audiocont->input_name;
             return UBASE_ERR_NONE;
         }
-        case UPIPE_AUDIOCONT_SET_TOLERANCE: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
-            upipe_audiocont->tolerance = va_arg(args, uint64_t);
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_AUDIOCONT_GET_TOLERANCE: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
-            *va_arg(args, uint64_t *) = upipe_audiocont->tolerance;
-            return UBASE_ERR_NONE;
-        }
         case UPIPE_AUDIOCONT_GET_CURRENT_INPUT: {
             assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
             const char **name_p = va_arg(args, const char **);
@@ -718,6 +760,9 @@ static void upipe_audiocont_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_audiocont->input_name);
+    if (upipe_audiocont->flow_def_input) {
+        uref_free(upipe_audiocont->flow_def_input);
+    }
 
     upipe_audiocont_clean_sub_subs(upipe);
     upipe_audiocont_clean_output(upipe);
@@ -738,7 +783,7 @@ static struct upipe_mgr upipe_audiocont_mgr = {
     .upipe_mgr_control = NULL
 };
 
-/** @This returns the management structure for all videocont pipes.
+/** @This returns the management structure for all audiocont pipes.
  *
  * @return pointer to manager
  */

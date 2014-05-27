@@ -55,7 +55,6 @@
 #define UBUF_POOL_DEPTH     0
 #define ITERATIONS          5
 #define INPUT_NUM           7
-#define TOLERANCE           UCLOCK_FREQ / 1000
 #define INPUT_RATE          48000
 #define SAMPLES             1024
 #define DURATION            SAMPLES * UCLOCK_FREQ / INPUT_RATE
@@ -121,7 +120,6 @@ int main(int argc, char **argv)
     assert(input_name == NULL);
 
     ubase_assert(upipe_audiocont_set_input(audiocont, "bar3"));
-    ubase_assert(upipe_audiocont_set_tolerance(audiocont, TOLERANCE));
 
     ubase_assert(upipe_audiocont_get_input(audiocont, &input_name));
     assert(input_name != NULL);

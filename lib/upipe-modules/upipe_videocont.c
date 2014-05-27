@@ -33,7 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -67,6 +67,10 @@ struct upipe_videocont {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** true if subinput format has been copied to output flow def */
+    bool flow_input_format;
+    /** input flow definition packet */
+    struct uref *flow_def_input;
 
     /** list of input subpipes */
     struct uchain subs;
@@ -114,6 +118,10 @@ UPIPE_HELPER_VOID(upipe_videocont_sub)
 
 UPIPE_HELPER_SUBPIPE(upipe_videocont, upipe_videocont_sub, sub, sub_mgr,
                      subs, uchain)
+
+/** @hidden */
+static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
+                                                   struct upipe *input);
 
 /** @internal @This allocates an input subpipe of a videocont pipe.
  *
@@ -205,8 +213,8 @@ static enum ubase_err upipe_videocont_sub_set_flow_def(struct upipe *upipe,
     if (upipe_videocont->input_name
         && likely(ubase_check(uref_flow_get_name(flow_def, &name)))
         && !strcmp(upipe_videocont->input_name, name)) {
-        upipe_videocont->input_cur = upipe;
-        upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, upipe);
+        upipe_videocont_switch_input(upipe_videocont_to_upipe(upipe_videocont),
+                                     upipe);
     }
 
     return UBASE_ERR_NONE;
@@ -311,10 +319,41 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
     upipe_videocont->input_cur = NULL;
     upipe_videocont->input_name = NULL;
     upipe_videocont->tolerance = TOLERANCE;
+    upipe_videocont->flow_def_input = NULL;
+    upipe_videocont->flow_input_format = false;
 
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This switches to a new input.
+ *
+ * @param upipe description structure of the pipe
+ * @param input description structure of the input pipe
+ * @return an error code
+ */
+static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
+                                                   struct upipe *input)
+{
+    struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
+    upipe_videocont->input_cur = input;
+    upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
+                    upipe_videocont->input_name, input);
+
+    struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    uref_pic_flow_clear_format(flow_def);
+    uref_pic_flow_copy_format(flow_def,
+                    upipe_videocont_sub_from_upipe(input)->flow_def);
+    upipe_videocont->flow_input_format = true;
+    upipe_videocont_store_flow_def(upipe, flow_def);
+
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes reference ("clock") input.
@@ -329,6 +368,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     struct uchain *uchain, *uchain_sub, *uchain_tmp;
     uint64_t next_pts = 0;
+    bool sub_attached = false;
 
     if (unlikely(!upipe_videocont->flow_def)) {
         upipe_warn_va(upipe, "need to define flow def first");
@@ -379,11 +419,27 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64")",
                          next_uref->ubuf, pts);
         uref_attach_ubuf(uref, uref_detach_ubuf(next_uref));
+        sub_attached = true;
         next_uref = NULL;
-        uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
+        /* do NOT pop/free from list so that we can dup frame if needed */
     }
 
 output:
+    if (unlikely(upipe_videocont->flow_input_format != sub_attached)) {
+        struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
+        if (unlikely(!flow_def)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
+        if (sub_attached) {
+            uref_pic_flow_clear_format(flow_def);
+            uref_pic_flow_copy_format(flow_def,
+                        upipe_videocont_sub_from_upipe(
+                                upipe_videocont->input_cur)->flow_def);
+        }
+        upipe_videocont_store_flow_def(upipe, flow_def);
+    }
     upipe_videocont_output(upipe, uref, upump_p);
 }
 
@@ -396,16 +452,35 @@ output:
 static enum ubase_err upipe_videocont_set_flow_def(struct upipe *upipe,
                                                    struct uref *flow_def)
 {
-    if (flow_def == NULL)
+    struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
+    if (flow_def == NULL) {
         return UBASE_ERR_INVALID;
+    }
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+    /* local copy of input (ref) flow def */
+    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    upipe_videocont_store_flow_def(upipe, flow_def_dup);
+    if (upipe_videocont->flow_def_input) {
+        uref_free(upipe_videocont->flow_def_input);
+    }
+    upipe_videocont->flow_def_input = flow_def;
+
+    /* output flow def */
+    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    if (upipe_videocont->input_cur &&
+        upipe_videocont_sub_from_upipe(upipe_videocont->input_cur)->flow_def) {
+        uref_pic_flow_clear_format(flow_def);
+        uref_pic_flow_copy_format(flow_def, upipe_videocont_sub_from_upipe(
+                                        upipe_videocont->input_cur)->flow_def);
+        upipe_videocont->flow_input_format = true;
+    }
+    upipe_videocont_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
@@ -437,9 +512,7 @@ static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
             if (sub->flow_def
                 && likely(ubase_check(uref_flow_get_name(sub->flow_def, &flow_name)))
                 && !strcmp(name_dup, flow_name)) {
-                upipe_videocont->input_cur = upipe_videocont_sub_to_upipe(sub);
-                upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
-                                name_dup, upipe_videocont->input_cur);
+                upipe_videocont_switch_input(upipe, upipe_videocont_sub_to_upipe(sub));
                 break;
             }
         }
@@ -569,6 +642,9 @@ static void upipe_videocont_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_videocont->input_name);
+    if (likely(upipe_videocont->flow_def_input)) {
+        uref_free(upipe_videocont->flow_def_input);
+    }
 
     upipe_videocont_clean_sub_subs(upipe);
     upipe_videocont_clean_output(upipe);
