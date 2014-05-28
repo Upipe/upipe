@@ -193,12 +193,57 @@ static void upipe_blksrc_worker(struct upump *upump)
     }
 
     struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
+    uref_clock_set_duration(uref, upipe_blksrc->interval);
     uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
     upipe_blksrc->pts += upipe_blksrc->interval;
 
     upipe_use(upipe);
     upipe_blksrc_output(upipe, uref, &upipe_blksrc->upump);
     upipe_release(upipe);
+}
+
+/** @internal @This handles input.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_blksrc_input(struct upipe *upipe, struct uref *uref,
+                               struct upump **upump_p)
+{
+    struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
+    if (likely(upipe_blksrc->blank_uref)) {
+        uref_free(upipe_blksrc->blank_uref);
+    }
+    upipe_blksrc->blank_uref = uref;
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static enum ubase_err upipe_blksrc_set_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
+{
+    struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
+    if (flow_def == NULL) {
+        return UBASE_ERR_INVALID;
+    }
+
+    /* copy output flow def */
+    struct uref *flow_def_dup = uref_dup(upipe_blksrc->flow_def);
+    if (unlikely(flow_def_dup == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    uref_pic_flow_clear_format(flow_def_dup);
+    uref_pic_flow_copy_format(flow_def_dup, flow_def);
+    upipe_blksrc_store_flow_def(upipe, flow_def_dup);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a blank source pipe.
@@ -220,6 +265,10 @@ static int _upipe_blksrc_control(struct upipe *upipe,
         case UPIPE_ATTACH_UBUF_MGR:
             return upipe_blksrc_attach_ubuf_mgr(upipe);
 
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_blksrc_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_blksrc_get_flow_def(upipe, p);
@@ -362,7 +411,7 @@ static struct upipe_mgr upipe_blksrc_mgr = {
     .signature = UPIPE_BLKSRC_SIGNATURE,
 
     .upipe_alloc = upipe_blksrc_alloc,
-    .upipe_input = NULL,
+    .upipe_input = upipe_blksrc_input,
     .upipe_control = upipe_blksrc_control,
 
     .upipe_mgr_control = NULL

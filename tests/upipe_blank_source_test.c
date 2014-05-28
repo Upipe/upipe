@@ -44,6 +44,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upipe.h>
@@ -74,6 +75,9 @@
 
 /** blank source */
 struct upipe *blksrc;
+
+/** uref manager */
+struct uref_mgr *uref_mgr; 
 
 /** phony pipe to test upipe_blksrc */
 struct blksrc_test {
@@ -117,6 +121,18 @@ static void blksrc_test_input(struct upipe *upipe, struct uref *uref,
     blksrc_test->next_pts += duration;
     blksrc_test->counter++;
     uref_free(uref);
+
+    if (unlikely(blksrc_test->counter == 1)) {
+        struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
+        assert(flow);
+        ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 3, "r8g8b8"));
+        upipe_set_flow_def(blksrc, flow);
+        uref_free(flow);
+
+        struct uref *uref = uref_alloc(uref_mgr);
+        uref_pic_set_progressive(uref);
+        upipe_input(blksrc, uref, NULL);
+    }
 
     if (unlikely(blksrc_test->counter > LIMIT)) {
         upipe_release(blksrc);
@@ -172,8 +188,7 @@ int main(int argc, char **argv)
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH,
-                                                   udict_mgr, 0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     struct uprobe uprobe;
