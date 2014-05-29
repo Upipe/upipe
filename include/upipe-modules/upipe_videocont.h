@@ -38,9 +38,10 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_VIDEOCONT_SIGNATURE UBASE_FOURCC('v','i','d','c')
-#define UPIPE_VIDEOCONT_INPUT_SIGNATURE UBASE_FOURCC('v','i','d','i')
+#define UPIPE_VIDEOCONT_SUB_SIGNATURE UBASE_FOURCC('v','i','d','i')
 
-/** @This extends upipe_command with specific commands for upipe_videocont pipes. */
+/** @This extends upipe_command with specific commands for upipe_videocont
+ * pipes. */
 enum upipe_videocont_command {
     UPIPE_VIDEOCONT_SENTINEL = UPIPE_CONTROL_LOCAL,
 
@@ -54,6 +55,15 @@ enum upipe_videocont_command {
     UPIPE_VIDEOCONT_GET_TOLERANCE,
     /** sets the pts tolerance (int) */
     UPIPE_VIDEOCONT_SET_TOLERANCE,
+};
+
+/** @This extends upipe_command with specific commands for upipe_videocont
+ * subpipes. */
+enum upipe_videocont_sub_command {
+    UPIPE_VIDEOCONT_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** This sets a videocont subpipe as its grandpipe input () */
+    UPIPE_VIDEOCONT_SUB_SET_INPUT,
 };
 
 /** @This returns the current input name if any.
@@ -102,7 +112,7 @@ static inline enum ubase_err upipe_videocont_set_input(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_videocont_get_tolerance(struct upipe *upipe,
-                                                           uint64_t *tolerance_p)
+                                                       uint64_t *tolerance_p)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_GET_TOLERANCE,
                          UPIPE_VIDEOCONT_SIGNATURE, tolerance_p);
@@ -119,6 +129,17 @@ static inline enum ubase_err upipe_videocont_set_tolerance(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_SET_TOLERANCE,
                          UPIPE_VIDEOCONT_SIGNATURE, tolerance);
+}
+
+/** @This sets a videocont subpipe as its grandpipe input.
+ *
+ * @param upipe description structure of the (sub)pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_videocont_sub_set_input(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_VIDEOCONT_SUB_SET_INPUT,
+                         UPIPE_VIDEOCONT_SUB_SIGNATURE);
 }
 
 /** @This returns the management structure for all ts_join pipes.

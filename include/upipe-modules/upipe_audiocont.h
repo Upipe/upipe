@@ -38,9 +38,10 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_AUDIOCONT_SIGNATURE UBASE_FOURCC('a','u','d','c')
-#define UPIPE_AUDIOCONT_INPUT_SIGNATURE UBASE_FOURCC('a','u','d','i')
+#define UPIPE_AUDIOCONT_SUB_SIGNATURE UBASE_FOURCC('a','u','d','i')
 
-/** @This extends upipe_command with specific commands for upipe_audiocont pipes. */
+/** @This extends upipe_command with specific commands for upipe_audiocont
+ * pipes. */
 enum upipe_audiocont_command {
     UPIPE_AUDIOCONT_SENTINEL = UPIPE_CONTROL_LOCAL,
 
@@ -50,6 +51,15 @@ enum upipe_audiocont_command {
     UPIPE_AUDIOCONT_GET_INPUT,
     /** sets the grid input by its name (const char *) */
     UPIPE_AUDIOCONT_SET_INPUT,
+};
+
+/** @This extends upipe_command with specific commands for upipe_audiocont
+ * subpipes. */
+enum upipe_audiocont_sub_command {
+    UPIPE_AUDIOCONT_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** This sets a audiocont subpipe as its grandpipe input () */
+    UPIPE_AUDIOCONT_SUB_SET_INPUT,
 };
 
 /** @This returns the current input name if any.
@@ -89,6 +99,17 @@ static inline enum ubase_err upipe_audiocont_set_input(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_SET_INPUT,
                          UPIPE_AUDIOCONT_SIGNATURE, name);
+}
+
+/** @This sets a audiocont subpipe as its grandpipe input.
+ *
+ * @param upipe description structure of the (sub)pipe
+ * @return an error code
+ */
+static inline enum ubase_err upipe_audiocont_sub_set_input(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_AUDIOCONT_SUB_SET_INPUT,
+                         UPIPE_AUDIOCONT_SUB_SIGNATURE);
 }
 
 /** @This returns the management structure for all ts_join pipes.

@@ -113,7 +113,7 @@ struct upipe_audiocont_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_audiocont_sub, upipe, UPIPE_AUDIOCONT_INPUT_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_audiocont_sub, upipe, UPIPE_AUDIOCONT_SUB_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audiocont_sub, urefcount, upipe_audiocont_sub_dead)
 UPIPE_HELPER_VOID(upipe_audiocont_sub)
 
@@ -222,6 +222,21 @@ static enum ubase_err upipe_audiocont_sub_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets a audiocont subpipe as its grandpipe input.
+ *
+ * @param upipe description structure of the (sub)pipe
+ * @return an error code
+ */
+static inline enum ubase_err _upipe_audiocont_sub_set_input(struct upipe *upipe)
+{
+    struct upipe_audiocont *upipe_audiocont =
+                            upipe_audiocont_from_sub_mgr(upipe->mgr);
+    struct upipe *grandpipe = upipe_audiocont_to_upipe(upipe_audiocont);
+    free(upipe_audiocont->input_name);
+    upipe_audiocont->input_name = NULL;
+    return upipe_audiocont_switch_input(grandpipe, upipe);
+}
+
 /** @internal @This processes control commands on a subpipe of a audiocont
  * pipe.
  *
@@ -242,6 +257,11 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_audiocont_sub_get_super(upipe, p);
+        }
+
+        case UPIPE_AUDIOCONT_SUB_SET_INPUT: {
+            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SUB_SIGNATURE);
+            return _upipe_audiocont_sub_set_input(upipe);
         }
 
         default:
@@ -289,7 +309,7 @@ static void upipe_audiocont_init_sub_mgr(struct upipe *upipe)
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_audiocont->sub_mgr;
     sub_mgr->refcount = upipe_audiocont_to_urefcount(upipe_audiocont);
-    sub_mgr->signature = UPIPE_AUDIOCONT_INPUT_SIGNATURE;
+    sub_mgr->signature = UPIPE_AUDIOCONT_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_audiocont_sub_alloc;
     sub_mgr->upipe_input = upipe_audiocont_sub_input;
     sub_mgr->upipe_control = upipe_audiocont_sub_control;
@@ -341,9 +361,10 @@ static enum ubase_err upipe_audiocont_switch_input(struct upipe *upipe,
                                                    struct upipe *input)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
+    char *name = upipe_audiocont->input_name ?
+                 upipe_audiocont->input_name : "(noname)";
     upipe_audiocont->input_cur = input;
-    upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
-                    upipe_audiocont->input_name, input);
+    upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
 
     struct uref *flow_def = uref_dup(upipe_audiocont->flow_def_input);
     if (unlikely(flow_def == NULL)) {

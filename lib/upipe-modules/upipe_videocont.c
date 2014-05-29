@@ -112,7 +112,7 @@ struct upipe_videocont_sub {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_videocont_sub, upipe, UPIPE_VIDEOCONT_INPUT_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_videocont_sub, upipe, UPIPE_VIDEOCONT_SUB_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_videocont_sub, urefcount, upipe_videocont_sub_dead)
 UPIPE_HELPER_VOID(upipe_videocont_sub)
 
@@ -220,6 +220,21 @@ static enum ubase_err upipe_videocont_sub_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets a videocont subpipe as its grandpipe input.
+ *
+ * @param upipe description structure of the (sub)pipe
+ * @return an error code
+ */
+static inline enum ubase_err _upipe_videocont_sub_set_input(struct upipe *upipe)
+{
+    struct upipe_videocont *upipe_videocont =
+                            upipe_videocont_from_sub_mgr(upipe->mgr);
+    struct upipe *grandpipe = upipe_videocont_to_upipe(upipe_videocont);
+    free(upipe_videocont->input_name);
+    upipe_videocont->input_name = NULL;
+    return upipe_videocont_switch_input(grandpipe, upipe);
+}
+
 /** @internal @This processes control commands on a subpipe of a videocont
  * pipe.
  *
@@ -239,6 +254,11 @@ static int upipe_videocont_sub_control(struct upipe *upipe,
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_videocont_sub_get_super(upipe, p);
+        }
+
+        case UPIPE_VIDEOCONT_SUB_SET_INPUT: {
+            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SUB_SIGNATURE);
+            return _upipe_videocont_sub_set_input(upipe);
         }
 
         default:
@@ -286,7 +306,7 @@ static void upipe_videocont_init_sub_mgr(struct upipe *upipe)
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_videocont->sub_mgr;
     sub_mgr->refcount = upipe_videocont_to_urefcount(upipe_videocont);
-    sub_mgr->signature = UPIPE_VIDEOCONT_INPUT_SIGNATURE;
+    sub_mgr->signature = UPIPE_VIDEOCONT_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_videocont_sub_alloc;
     sub_mgr->upipe_input = upipe_videocont_sub_input;
     sub_mgr->upipe_control = upipe_videocont_sub_control;
@@ -337,9 +357,10 @@ static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
                                                    struct upipe *input)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
+    char *name = upipe_videocont->input_name ?
+                 upipe_videocont->input_name : "(noname)";
     upipe_videocont->input_cur = input;
-    upipe_notice_va(upipe, "switched to input \"%s\" (%p)",
-                    upipe_videocont->input_name, input);
+    upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
 
     struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
     if (unlikely(flow_def == NULL)) {
