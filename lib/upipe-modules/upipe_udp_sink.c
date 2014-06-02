@@ -157,6 +157,11 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 static void upipe_udpsink_poll(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    if (unlikely(!ubase_check(upipe_udpsink_check_upump_mgr(upipe)))) {
+        upipe_err_va(upipe, "can't get upump_mgr");
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
+    }
     struct upump *watcher = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
                                                  upipe_udpsink_watcher, upipe,
                                                  upipe_udpsink->fd);
@@ -380,7 +385,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    UBASE_RETURN(upipe_udpsink_check_upump_mgr(upipe))
+    upipe_udpsink_check_upump_mgr(upipe);
 
     const char *mode_desc = NULL; /* hush gcc */
     switch (mode) {
@@ -461,6 +466,15 @@ static int _upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_SINK_SET_MAX_LENGTH: {
             unsigned int max_length = va_arg(args, unsigned int);
             return upipe_udpsink_set_max_length(upipe, max_length);
+        }
+
+        case UPIPE_GET_URI: {
+            const char **uri_p = va_arg(args, const char **);
+            return _upipe_udpsink_get_uri(upipe, uri_p);
+        }
+        case UPIPE_SET_URI: {
+            const char *uri = va_arg(args, const char *);
+            return _upipe_udpsink_set_uri(upipe, uri, UPIPE_UDPSINK_NONE);
         }
 
         case UPIPE_UDPSINK_GET_URI: {
