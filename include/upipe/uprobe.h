@@ -89,6 +89,8 @@ enum uprobe_event {
     UPROBE_NEW_RAP,
     /** a split pipe declares a new output flow list (void) */
     UPROBE_SPLIT_UPDATE,
+    /** a filter pipe asks to validate the output flow def (struct uref *) */
+    UPROBE_FILTER_SUGGEST_FLOW_DEF,
     /** a pipe got synchronized with its input (void) */
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */

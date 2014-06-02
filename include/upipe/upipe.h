@@ -833,6 +833,24 @@ static inline int upipe_split_throw_update(struct upipe *upipe)
     return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
 }
 
+/** @This throws an event asking to validate the output flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def proposed output flow definition
+ * @return an error code
+ */
+static inline int upipe_filter_throw_suggest_flow_def(struct upipe *upipe,
+                                                      struct uref *flow_def)
+{
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw suggest flow def (NULL)");
+    else {
+        upipe_dbg(upipe, "throw suggest flow def");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
+    return upipe_throw(upipe, UPROBE_FILTER_SUGGEST_FLOW_DEF, flow_def);
+}
+
 /** @This throws an event telling that a pipe synchronized on its input.
  *
  * @param upipe description structure of the pipe
@@ -1498,6 +1516,31 @@ static inline struct upipe *upipe_void_alloc_input(struct upipe *upipe,
     return input;
 }
 
+/** @This allocates a new pipe from the given manager, designed to accept no
+ * argument, sets it as the input of the given pipe, and releases it.
+ *
+ * Please note that the output pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
+ *
+ * @param upipe description structure of the pipe (released afterwards)
+ * @param upipe_mgr manager for the output pipe
+ * @return pointer to allocated output pipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *upipe_void_chain_input(struct upipe *upipe,
+                                                   struct upipe_mgr *upipe_mgr,
+                                                   struct uprobe *uprobe)
+{
+    if (unlikely(upipe == NULL))
+        return NULL;
+    struct upipe *input = upipe_void_alloc_input(upipe, upipe_mgr, uprobe);
+    upipe_release(upipe);
+    return input;
+}
+
 /** @This allocates a new pipe from the given manager, designed to accept an
  * output flow definition, and sets it as the input of the given pipe.
  *
@@ -1532,6 +1575,35 @@ static inline struct upipe *upipe_flow_alloc_input(struct upipe *upipe,
         return NULL;
     }
 
+    return input;
+}
+
+/** @This allocates a new pipe from the given manager, designed to accept an
+ * output flow definition, sets it as the input of the given pipe, and releases
+ * it.
+ *
+ * Please note that the output pipe must accept @ref upipe_set_flow_def control
+ * command.
+ *
+ * Please note that this function does not _use() the probe, so if you want
+ * to reuse an existing probe, you have to use it first.
+ *
+ * @param upipe description structure of the pipe
+ * @param upipe_mgr manager for the output pipe
+ * @param flow_def_output flow definition of the output
+ * @return pointer to allocated output pipe (which must be stored or released),
+ * or NULL in case of failure
+ */
+static inline struct upipe *upipe_flow_chain_input(struct upipe *upipe,
+                                                   struct upipe_mgr *upipe_mgr,
+                                                   struct uprobe *uprobe,
+                                                   struct uref *flow_def_output)
+{
+    if (unlikely(upipe == NULL))
+        return NULL;
+    struct upipe *input = upipe_flow_alloc_input(upipe, upipe_mgr, uprobe,
+                                                 flow_def_output);
+    upipe_release(upipe);
     return input;
 }
 
