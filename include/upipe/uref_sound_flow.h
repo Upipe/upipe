@@ -181,6 +181,29 @@ static inline void uref_sound_flow_clear_format(struct uref *uref)
     uref_sound_flow_delete_planes(uref);
 }
 
+/** @This compares the format flow definition between two urefs.
+ *
+ * @param uref1 first uref
+ * @param uref2 second uref
+ * @return true if both urefs describe the same format
+ */
+static inline bool uref_sound_flow_compare_format(struct uref *uref1,
+                                                  struct uref *uref2)
+{
+    if (uref_flow_cmp_def(uref1, uref2) != 0 ||
+        uref_sound_flow_cmp_sample_size(uref1, uref2) != 0 ||
+        uref_sound_flow_cmp_planes(uref1, uref2) != 0)
+        return false;
+
+    uint8_t planes;
+    UBASE_RETURN(uref_sound_flow_get_planes(uref1, &planes))
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        if (uref_sound_flow_cmp_channel(uref1, uref2, plane) != 0)
+            return false;
+    }
+    return true;
+}
+
 #ifdef __cplusplus
 }
 #endif

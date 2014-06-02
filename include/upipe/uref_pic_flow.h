@@ -234,6 +234,33 @@ static inline void uref_pic_flow_clear_format(struct uref *uref)
     uref_pic_flow_delete_planes(uref);
 }
 
+
+/** @This compares the format flow definition between two urefs.
+ *
+ * @param uref1 first uref
+ * @param uref2 second uref
+ * @return true if both urefs describe the same format
+ */
+static inline bool uref_pic_flow_compare_format(struct uref *uref1,
+                                                struct uref *uref2)
+{
+    if (uref_flow_cmp_def(uref1, uref2) != 0 ||
+        uref_pic_flow_cmp_macropixel(uref1, uref2) != 0 ||
+        uref_pic_flow_cmp_planes(uref1, uref2) != 0)
+        return false;
+
+    uint8_t planes;
+    UBASE_RETURN(uref_pic_flow_get_planes(uref1, &planes))
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        if (uref_pic_flow_cmp_chroma(uref1, uref2, plane) != 0 ||
+            uref_pic_flow_cmp_hsubsampling(uref1, uref2, plane) != 0 ||
+            uref_pic_flow_cmp_vsubsampling(uref1, uref2, plane) != 0 ||
+            uref_pic_flow_cmp_macropixel_size(uref1, uref2, plane) != 0)
+            return false;
+    }
+    return true;
+}
+
 #ifdef __cplusplus
 }
 #endif

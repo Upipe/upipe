@@ -379,6 +379,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    const char *v1, *v2;                                                    \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return strcmp(v1, v2);                                                  \
 }
 
 /* @This allows to define accessors for a shorthand string attribute.
@@ -432,6 +450,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    const char *v1, *v2;                                                    \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return strcmp(v1, v2);                                                  \
 }
 
 /* @This allows to define accessors for a string attribute, with a name
@@ -489,6 +525,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2, args_decl)  \
+{                                                                           \
+    const char *v1, *v2;                                                    \
+    int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
+    int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return strcmp(v1, v2);                                                  \
 }
 
 
@@ -530,6 +584,23 @@ static inline int uref_##group##_set_##attr(struct uref *uref)              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_VOID, name);                   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    int err1 = uref_##group##_get_##attr(uref1);                            \
+    int err2 = uref_##group##_get_##attr(uref2);                            \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return 0;                                                               \
 }
 
 /* @This allows to define accessors for a shorthand void attribute.
@@ -566,6 +637,23 @@ static inline int uref_##group##_set_##attr(struct uref *uref)              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    int err1 = uref_##group##_get_##attr(uref1);                            \
+    int err2 = uref_##group##_get_##attr(uref2);                            \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return 0;                                                               \
 }
 
 /* @This allows to define accessors for a void attribute, with a name
@@ -605,6 +693,23 @@ static inline int uref_##group##_set_##attr(struct uref *uref, args_decl)   \
 static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_VOID, format, args);        \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2, args_decl)  \
+{                                                                           \
+    int err1 = uref_##group##_get_##attr(uref1, args);                      \
+    int err2 = uref_##group##_get_##attr(uref2, args);                      \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return 0;                                                               \
 }
 
 /* @This allows to define accessors for a void attribute directly in the uref
@@ -699,8 +804,25 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    uint8_t v1, v2;                                                         \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
-
 
 /* @This allows to define accessors for a shorthand small_unsigned attribute.
  *
@@ -752,6 +874,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    uint8_t v1, v2;                                                         \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
  
 
@@ -815,6 +955,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2, args_decl)  \
+{                                                                           \
+    uint8_t v1, v2;                                                         \
+    int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
+    int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
 
 /*
@@ -871,7 +1029,26 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    uint64_t v1, v2;                                                        \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
+
 
 /* @This allows to define accessors for a shorthand unsigned attribute.
  *
@@ -923,6 +1100,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    uint64_t v1, v2;                                                        \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
 
 
@@ -982,6 +1177,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2, args_decl)  \
+{                                                                           \
+    uint64_t v1, v2;                                                        \
+    int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
+    int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
 
 /* @This allows to define accessors for an unsigned attribute directly in the
@@ -1038,6 +1251,24 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    uint64_t v1, v2;                                                        \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
 
 
@@ -1082,6 +1313,24 @@ static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v)   \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    int64_t v1, v2;                                                         \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
 }
 
 /* @This allows to define accessors for a shorthand int attribute.
