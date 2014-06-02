@@ -446,7 +446,7 @@ static void uplay_stop(struct upump *upump)
     if (force_quit && upipe_src != NULL) {
         struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
         struct upipe *null = upipe_void_alloc(upipe_null_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "null"));
         upipe_mgr_release(upipe_null_mgr);
         upipe_set_output(upipe_src, null);

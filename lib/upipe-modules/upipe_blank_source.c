@@ -195,6 +195,7 @@ static void upipe_blksrc_worker(struct upump *upump)
     struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
     uref_clock_set_duration(uref, upipe_blksrc->interval);
     uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
+    uref_clock_set_pts_prog(uref, upipe_blksrc->pts);
     upipe_blksrc->pts += upipe_blksrc->interval;
 
     upipe_use(upipe);

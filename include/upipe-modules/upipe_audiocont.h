@@ -28,9 +28,9 @@
  * @short Upipe module video continuity
  */
 
-#ifndef _UPIPE_TS_UPIPE_AUDIOCONT_H_
+#ifndef _UPIPE_MODULES_UPIPE_AUDIOCONT_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_AUDIOCONT_H_
+#define _UPIPE_MODULES_UPIPE_AUDIOCONT_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

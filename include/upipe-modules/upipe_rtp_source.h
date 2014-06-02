@@ -27,9 +27,9 @@
  * @short Bin pipe decapsulating RTP packets from a UDP source
  */
 
-#ifndef _UPIPE_TS_UPIPE_RTP_SOURCE_H_
+#ifndef _UPIPE_MODULES_UPIPE_RTP_SOURCE_H_
 /** @hidden */
-#define _UPIPE_TS_UPIPE_RTP_SOURCE_H_
+#define _UPIPE_MODULES_UPIPE_RTP_SOURCE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

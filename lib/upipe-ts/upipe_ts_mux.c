@@ -1363,7 +1363,7 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
         }
 
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 

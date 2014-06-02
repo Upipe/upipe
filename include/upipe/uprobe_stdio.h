@@ -72,6 +72,7 @@ void uprobe_stdio_clean(struct uprobe_stdio *uprobe_stdio);
 /** @This allocates a new uprobe stdio structure.
  *
  * @param next next probe to test if this one doesn't catch the event
+ * @param stream stdio stream to which to log the messages
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */

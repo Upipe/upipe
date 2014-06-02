@@ -748,8 +748,7 @@ static void upipe_avcenc_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static int upipe_avcenc_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -878,7 +877,7 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe,
             upipe_av_samplefmt_from_flow_def(flow_def, &channels);
         const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
         if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL) {
-            upipe_err_va(upipe, "unsupported sample format %s", def);
+            upipe_err_va(upipe, "unknown sample format %s", def);
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
@@ -959,7 +958,7 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static int upipe_avcenc_suggest_flow_def(struct upipe *upipe,
-                                                    struct uref *flow_def)
+                                         struct uref *flow_def)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
