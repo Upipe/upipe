@@ -2,6 +2,7 @@ myincludedir = $(includedir)/upipe-modules
 myinclude_HEADERS = \
 	upipe_transfer.h \
 	upipe_dup.h \
+	upipe_idem.h \
 	upipe_file_sink.h \
 	upipe_file_source.h \
 	upipe_genaux.h \

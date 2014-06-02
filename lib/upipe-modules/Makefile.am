@@ -6,6 +6,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_transfer.c \
 	upipe_trickplay.c \
 	upipe_dup.c \
+	upipe_idem.c \
 	upipe_queue_source.c \
 	upipe_queue_sink.c \
 	upipe_udp_source.c \
