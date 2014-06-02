@@ -133,7 +133,7 @@ static int uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     uref_clock_set_date_sys(uref,
-            date + uprobe_dejitter->offset + uprobe_dejitter->deviation,
+            date + uprobe_dejitter->offset + uprobe_dejitter->deviation * 3,
             type);
     return UBASE_ERR_NONE;
 }

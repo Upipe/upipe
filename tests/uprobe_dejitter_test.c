@@ -113,28 +113,7 @@ int main(int argc, char **argv)
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts - 9500 == systime - 8000);
-
-    systime += 12000;
-    clock += 10000;
-    uref_clock_set_cr_sys(uref, systime);
-    upipe_throw_clock_ref(upipe, uref, clock, 0);
-
-    uref_clock_set_pts_prog(uref, clock);
-    upipe_throw_clock_ts(upipe, uref);
-    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts - 19888 == systime - 20000);
-
-    systime += UINT32_MAX;
-    clock += 10000;
-    uref_clock_set_cr_sys(uref, systime);
-    upipe_throw_clock_ref(upipe, uref, clock, 1);
-
-    uref_clock_set_pts_prog(uref, clock);
-    upipe_throw_clock_ts(upipe, uref);
-    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts - 416 == systime);
-    /* 416 = due to previous deviation */
+    assert(pts == systime + 2500);
 
     uref_free(uref);
     uprobe_release(uprobe_dejitter);
