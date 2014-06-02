@@ -87,6 +87,7 @@
         @item @ref upipe_udpsink_mgr_alloc @item sink pipe opening for writing a UDP socket @item @tt -lupipe-modules
         @item @ref upipe_multicat_sink_mgr_alloc @item sink pipe opening for writing a directory in a manner compatible with multicat @item @tt -lupipe-modules
         @item @ref upipe_dup_mgr_alloc @item split pipe allowing to duplicate all input packets to several outputs @item @tt -lupipe-modules
+        @item @ref upipe_idem_mgr_alloc @item linear pipe outputting packets identically @item @tt -lupipe-modules
         @item @ref upipe_qsrc_mgr_alloc (also note @ref upipe_qsrc_alloc) @item source pipe opening a thread-safe queue with one or more qsink pipes @item @tt -lupipe-modules
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
         @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
@@ -111,6 +112,7 @@
         @item @ref upipe_mpgaf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 audio (including AAC ADTS) streams into frames @item @tt -lupipe-framers
         @item @ref upipe_mpgvf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_h264f_mgr_alloc @item linear pipe gathering MPEG-4 AVC video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_ffmt_mgr_alloc @item linear pipe transforming the format into another specified (potentially for an encoder) @item @tt -lupipe-filters
         @item @ref upipe_filter_blend_mgr_alloc @item linear pipe deinterlacing pictures using a blending algorithm @item @tt -lupipe-filters
         @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
         @item @ref upipe_glx_sink_mgr_alloc @item sink pipe displaying picture on a GLX output @item @tt -lupipe-gl
@@ -135,6 +137,7 @@
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
         @item @ref uprobe_xfer_alloc @item forward probes from one thread to another, in conjunction with @ref upipe_xfer_alloc @item @tt -lupipe
+        @item @ref uprobe_filter_suggest_alloc @item on the @ref UPROBE_FILTER_SUGGEST_FLOW_DEF event, ask the output pipe to suggest a flow definition using @ref upipe_suggest_flow_def @item @tt -lupipe-filters
 
       @end table
 
