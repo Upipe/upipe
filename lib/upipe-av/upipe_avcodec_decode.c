@@ -250,7 +250,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         if (context->delay)
             UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
                     upipe_avcdec->input_latency +
-                    context->delay * UCLOCK_FREQ * fps.num / fps.den))
+                    (context->delay + 1) * UCLOCK_FREQ * fps.num / fps.den))
     }
     /* set aspect-ratio */
     if (frame->sample_aspect_ratio.num) {
