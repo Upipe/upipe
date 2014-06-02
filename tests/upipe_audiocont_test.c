@@ -160,6 +160,8 @@ int main(int argc, char **argv)
 
     ubase_assert(upipe_audiocont_set_input(audiocont, "bar2"));
     ubase_assert(upipe_audiocont_sub_set_input(subpipe[1]));
+    ubase_assert(upipe_audiocont_set_input(audiocont, NULL));
+    ubase_assert(upipe_audiocont_sub_set_input(subpipe[1]));
 
     input_name = NULL;
     ubase_assert(upipe_audiocont_get_current_input(audiocont, &input_name));

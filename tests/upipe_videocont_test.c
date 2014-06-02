@@ -149,6 +149,8 @@ int main(int argc, char **argv)
 
     ubase_assert(upipe_videocont_set_input(videocont, "bar2"));
     ubase_assert(upipe_videocont_sub_set_input(subpipe[1]));
+    ubase_assert(upipe_videocont_set_input(videocont, NULL));
+    ubase_assert(upipe_videocont_sub_set_input(subpipe[1]));
 
     input_name = NULL;
     ubase_assert(upipe_videocont_get_current_input(videocont, &input_name));

@@ -284,7 +284,8 @@ static void upipe_videocont_sub_dead(struct upipe *upipe)
         uref_free(uref);
     }
     if (upipe == upipe_videocont->input_cur) {
-        upipe_videocont->input_cur = NULL;
+        upipe_videocont_switch_input(upipe_videocont_to_upipe(upipe_videocont),
+                                     NULL);
     }
 
     if (likely(upipe_videocont_sub->flow_def)) {
@@ -357,22 +358,31 @@ static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
                                                    struct upipe *input)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
+    struct upipe_videocont_sub *sub;
     char *name = upipe_videocont->input_name ?
                  upipe_videocont->input_name : "(noname)";
     upipe_videocont->input_cur = input;
     upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
+
+    if (unlikely(!upipe_videocont->flow_def_input)) {
+        return UBASE_ERR_NONE;
+    }
 
     struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    uref_pic_flow_clear_format(flow_def);
-    uref_pic_flow_copy_format(flow_def,
-                    upipe_videocont_sub_from_upipe(input)->flow_def);
-    upipe_videocont->flow_input_format = true;
-    upipe_videocont_store_flow_def(upipe, flow_def);
 
+    if (input && (sub = upipe_videocont_sub_from_upipe(input))
+              && sub->flow_def) {
+        uref_pic_flow_clear_format(flow_def);
+        uref_pic_flow_copy_format(flow_def, sub->flow_def);
+        upipe_videocont->flow_input_format = true;
+    } else {
+        upipe_videocont->flow_input_format = false;
+    }
+    upipe_videocont_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
@@ -517,6 +527,7 @@ static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     char *name_dup = NULL;
+    free(upipe_videocont->input_name);
 
     if (name) {
         name_dup = strdup(name);
@@ -524,6 +535,8 @@ static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
+
+        upipe_videocont->input_name = name_dup;
 
         struct uchain *uchain;
         ulist_foreach(&upipe_videocont->subs, uchain) {
@@ -537,10 +550,11 @@ static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
                 break;
             }
         }
+    } else {
+        upipe_videocont->input_name = NULL;
+        upipe_videocont_switch_input(upipe, NULL);
     }
 
-    free(upipe_videocont->input_name);
-    upipe_videocont->input_name = name_dup;
     return UBASE_ERR_NONE;
 }
 

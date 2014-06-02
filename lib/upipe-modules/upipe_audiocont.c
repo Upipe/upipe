@@ -287,7 +287,8 @@ static void upipe_audiocont_sub_dead(struct upipe *upipe)
         uref_free(uref);
     }
     if (upipe == upipe_audiocont->input_cur) {
-        upipe_audiocont->input_cur = NULL;
+        upipe_audiocont_switch_input(upipe_audiocont_to_upipe(upipe_audiocont),
+                                     NULL);
     }
 
     if (likely(upipe_audiocont_sub->flow_def)) {
@@ -361,19 +362,27 @@ static enum ubase_err upipe_audiocont_switch_input(struct upipe *upipe,
                                                    struct upipe *input)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
+    struct upipe_audiocont_sub *sub;
     char *name = upipe_audiocont->input_name ?
                  upipe_audiocont->input_name : "(noname)";
     upipe_audiocont->input_cur = input;
     upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
+
+    if (unlikely(!upipe_audiocont->flow_def_input)) {
+        return UBASE_ERR_NONE;
+    }
 
     struct uref *flow_def = uref_dup(upipe_audiocont->flow_def_input);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    uref_sound_flow_clear_format(flow_def);
-    uref_sound_flow_copy_format(flow_def,
-                    upipe_audiocont_sub_from_upipe(input)->flow_def);
+
+    if (input && (sub  = upipe_audiocont_sub_from_upipe(input))
+              && sub->flow_def) {
+        uref_sound_flow_clear_format(flow_def);
+        uref_sound_flow_copy_format(flow_def, sub->flow_def);
+    }
     upipe_audiocont_store_flow_def(upipe, flow_def);
 
     uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
@@ -641,6 +650,7 @@ static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     char *name_dup = NULL;
+    free(upipe_audiocont->input_name);
 
     if (name) {
         name_dup = strdup(name);
@@ -648,6 +658,8 @@ static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
+
+        upipe_audiocont->input_name = name_dup;
 
         struct uchain *uchain;
         ulist_foreach(&upipe_audiocont->subs, uchain) {
@@ -661,10 +673,11 @@ static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
                 break;
             }
         }
+    } else {
+        upipe_audiocont->input_name = NULL;
+        upipe_audiocont_switch_input(upipe, NULL);
     }
 
-    free(upipe_audiocont->input_name);
-    upipe_audiocont->input_name = name_dup;
     return UBASE_ERR_NONE;
 }
 
