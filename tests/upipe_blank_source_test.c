@@ -35,8 +35,10 @@
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
+#include <upipe/uprobe_uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
+#include <upipe/uclock_std.h>
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
@@ -191,6 +193,9 @@ int main(int argc, char **argv)
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
+    struct uclock *uclock = uclock_std_alloc(0);
+    assert(uclock != NULL);
+
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
@@ -202,6 +207,8 @@ int main(int argc, char **argv)
                                                      UBUF_POOL_DEPTH);
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
+    assert(logger != NULL);
+    logger = uprobe_uclock_alloc(logger, uclock);
     assert(logger != NULL);
 
     /* blksrc manager */
@@ -278,6 +285,7 @@ int main(int argc, char **argv)
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     upump_mgr_release(upump_mgr);
+    uclock_release(uclock);
 
     ev_default_destroy();
     return 0;

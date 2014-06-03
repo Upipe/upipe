@@ -47,6 +47,7 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_source_read_size.h>
 #include <upipe-modules/upipe_blank_source.h>
 
@@ -73,6 +74,8 @@ struct upipe_blksrc {
     struct uref_mgr *uref_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** uclock */
+    struct uclock *uclock;
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
@@ -105,6 +108,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_blksrc, urefcount, upipe_blksrc_free)
 UPIPE_HELPER_FLOW(upipe_blksrc, "")
 UPIPE_HELPER_UREF_MGR(upipe_blksrc, uref_mgr)
 
+UPIPE_HELPER_UCLOCK(upipe_blksrc, uclock)
 UPIPE_HELPER_UBUF_MGR(upipe_blksrc, ubuf_mgr, flow_def)
 UPIPE_HELPER_OUTPUT(upipe_blksrc, output, flow_def, flow_def_sent)
 
@@ -194,6 +198,12 @@ static void upipe_blksrc_worker(struct upump *upump)
 
     struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
     uref_clock_set_duration(uref, upipe_blksrc->interval);
+    if (unlikely(upipe_blksrc->pts == UINT64_MAX)) {
+        if (unlikely(!ubase_check(upipe_blksrc_check_uclock(upipe)))) {
+            return;
+        }
+        upipe_blksrc->pts = uclock_now(upipe_blksrc->uclock);
+    }
     uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
     uref_clock_set_pts_prog(uref, upipe_blksrc->pts);
     upipe_blksrc->pts += upipe_blksrc->interval;
@@ -265,6 +275,11 @@ static int _upipe_blksrc_control(struct upipe *upipe,
             return upipe_blksrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UBUF_MGR:
             return upipe_blksrc_attach_ubuf_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK: {
+            struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
+            upipe_blksrc->pts = UINT64_MAX;
+            return upipe_blksrc_attach_uclock(upipe);
+        }
 
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -329,6 +344,7 @@ static void upipe_blksrc_free(struct upipe *upipe)
     upipe_blksrc_clean_upump(upipe);
     upipe_blksrc_clean_upump_mgr(upipe);
     upipe_blksrc_clean_output(upipe);
+    upipe_blksrc_clean_uclock(upipe);
     upipe_blksrc_clean_ubuf_mgr(upipe);
     upipe_blksrc_clean_uref_mgr(upipe);
     upipe_blksrc_clean_urefcount(upipe);
@@ -392,11 +408,12 @@ static struct upipe *upipe_blksrc_alloc(struct upipe_mgr *mgr,
     upipe_blksrc_init_urefcount(upipe);
     upipe_blksrc_init_uref_mgr(upipe);
     upipe_blksrc_init_ubuf_mgr(upipe);
+    upipe_blksrc_init_uclock(upipe);
     upipe_blksrc_init_output(upipe);
     upipe_blksrc_init_upump_mgr(upipe);
     upipe_blksrc_init_upump(upipe);
 
-    upipe_blksrc->pts = 10 * UCLOCK_FREQ;
+    upipe_blksrc->pts = UINT64_MAX;
     upipe_blksrc->blank_uref = NULL;
     upipe_throw_ready(upipe);
 
