@@ -448,6 +448,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_resize(ubuf, 0, pmt_size);
     uref_attach_ubuf(uref, ubuf);
     uref_block_set_start(uref);
+    uref_block_set_end(uref);
     upipe_ts_psig_program_output(upipe, uref, upump_p);
 
     upipe_notice(upipe, "end PMT");
