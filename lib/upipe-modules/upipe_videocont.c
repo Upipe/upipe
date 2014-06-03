@@ -449,7 +449,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     if (pts < next_pts + upipe_videocont->tolerance) {
         upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64")",
                          next_uref->ubuf, pts);
-        uref_attach_ubuf(uref, uref_detach_ubuf(next_uref));
+        uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
         sub_attached = true;
         next_uref = NULL;
         /* do NOT pop/free from list so that we can dup frame if needed */
@@ -470,7 +470,9 @@ output:
                                 upipe_videocont->input_cur)->flow_def);
         }
         upipe_videocont_store_flow_def(upipe, flow_def);
+        upipe_videocont->flow_input_format = sub_attached;
     }
+    upipe_verbose_va(upipe, "outputting picture %p", uref);
     upipe_videocont_output(upipe, uref, upump_p);
 }
 
