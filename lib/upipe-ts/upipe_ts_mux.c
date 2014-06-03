@@ -421,7 +421,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
                    upipe_ts_mux_input_free);
     upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
     upipe_ts_mux_input->pcr = false;
-    upipe_ts_mux_input->pid = 8192;
+    upipe_ts_mux_input->pid = 0;
     upipe_ts_mux_input->octetrate = 0;
     upipe_ts_mux_input->buffer_duration = 0;
     upipe_ts_mux_input->start_cr_sys = UINT64_MAX;
@@ -812,7 +812,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 (uint64_t)T_STD_TS_BUFFER * UCLOCK_FREQ /
                 (octetrate + pes_overhead + ts_overhead)));
 
-    uint64_t pid = 0;
+    uint64_t pid = upipe_ts_mux_input->pid;
     if (ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
         pid != upipe_ts_mux_input->pid &&
         upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(upipe_ts_mux), pid)) {
