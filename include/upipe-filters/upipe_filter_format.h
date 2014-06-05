@@ -35,6 +35,9 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe/uref_attr.h>
+
+UREF_ATTR_RATIONAL(ffmt_flow, dar, "x.dar", display aspect ratio)
 
 #define UPIPE_FFMT_SIGNATURE UBASE_FOURCC('f','f','m','t')
 

@@ -195,7 +195,15 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
+    char *old_def = NULL;
+    if (!strcmp(def_wanted, "sound."))
+        old_def = strdup(def);
     UBASE_RETURN(uref_attr_import(flow_def_dup, upipe_ffmt->flow_def_wanted))
+    if (old_def != NULL) {
+        uref_flow_set_def(flow_def_dup, old_def);
+        free(old_def);
+    }
+    uref_pic_flow_delete_sar(flow_def_dup);
 
     upipe_release(upipe_ffmt->input);
     upipe_ffmt->input = NULL;
@@ -231,6 +239,8 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                 upipe_warn_va(upipe, "couldn't allocate swscale");
             else if (!need_deint)
                 upipe_ffmt->input = upipe_use(sws);
+            else
+                upipe_set_output(upipe_ffmt->input, sws);
             upipe_ffmt_store_last_inner(upipe, sws);
         }
     } else { /* sound. */
@@ -260,6 +270,26 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         else
             upipe_ffmt_store_last_inner(upipe,
                                         upipe_use(upipe_ffmt->input));
+    }
+
+    struct urational dar;
+    uint64_t hsize, vsize;
+    if (ubase_check(uref_ffmt_flow_get_dar(upipe_ffmt->flow_def_wanted,
+                                           &dar)) &&
+        ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
+        ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
+        flow_def_dup = uref_dup(flow_def);
+        if (likely(flow_def_dup != NULL)) {
+            struct urational sar;
+            sar.num = vsize * dar.num;
+            sar.den = hsize * dar.den;
+            urational_simplify(&sar);
+            uref_pic_flow_set_sar(flow_def_dup, sar);
+            int err = upipe_set_flow_def(upipe_ffmt->input, flow_def_dup);
+            uref_free(flow_def_dup);
+            return err;
+        } else
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     }
 
     return upipe_set_flow_def(upipe_ffmt->input, flow_def);
