@@ -81,7 +81,11 @@ enum upipe_ts_mux_command {
     /** returns the configured MTU (unsigned int *) */
     UPIPE_TS_MUX_GET_MTU,
     /** sets the MTU (unsigned int) */
-    UPIPE_TS_MUX_SET_MTU
+    UPIPE_TS_MUX_SET_MTU,
+    /** returns the current version number of the table (unsigned int *) */
+    UPIPE_TS_MUX_GET_VERSION,
+    /** sets the version number of the table (unsigned int) */
+    UPIPE_TS_MUX_SET_VERSION
 };
 
 /** @This returns the current conformance mode. It cannot return
@@ -298,6 +302,34 @@ static inline int upipe_ts_mux_set_mtu(struct upipe *upipe, unsigned int mtu)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
                          UPIPE_TS_MUX_SIGNATURE, mtu);
+}
+
+/** @This returns the current version of the PSI table. It may also be called on
+ * upipe_ts_psi_generator.
+ *
+ * @param upipe description structure of the pipe
+ * @param version_p filled in with the version
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_version(struct upipe *upipe,
+                                           unsigned int *version_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_VERSION,
+                         UPIPE_TS_MUX_SIGNATURE, version_p);
+}
+
+/** @This sets the version of the PSI table. It may also be called on
+ * upipe_ts_psi_generator.
+ *
+ * @param upipe description structure of the pipe
+ * @param version new version
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_version(struct upipe *upipe,
+                                           unsigned int version)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_VERSION,
+                         UPIPE_TS_MUX_SIGNATURE, version);
 }
 
 /** @This returns the management structure for all ts_mux pipes.

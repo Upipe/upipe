@@ -51,8 +51,6 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_header, "t.pes_header",
         minimum PES header size)
 UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
         minimum PES duration)
-UREF_ATTR_SMALL_UNSIGNED(ts_flow, psi_version, "t.psi_version",
-        initial version number)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu8"]", descriptor,
         uint8_t nb, nb)

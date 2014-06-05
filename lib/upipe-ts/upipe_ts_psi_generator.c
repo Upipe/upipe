@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/upipe_ts_psi_generator.h>
+#include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdlib.h>
@@ -496,8 +497,6 @@ static int upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
         upipe_ts_psig_program_store_flow_def(upipe, flow_def_dup);
         upipe_ts_psig_program->program_number = program_number;
         upipe_ts_psig_program->pmt_pid = pid;
-        uref_ts_flow_get_psi_version(flow_def,
-                                     &upipe_ts_psig_program->pmt_version);
         upipe_ts_psig_program->descriptors_size = descriptors_size;
         free(upipe_ts_psig_program->descriptors);
         upipe_ts_psig_program->descriptors = descriptors;
@@ -538,6 +537,37 @@ static int _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     upipe_ts_psig_program->pcr_pid = pcr_pid;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the current version.
+ *
+ * @param upipe description structure of the pipe
+ * @param version_p filled in with the version
+ * @return an error code
+ */
+static int upipe_ts_psig_program_get_version(struct upipe *upipe,
+                                             unsigned int *version_p)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    assert(version_p != NULL);
+    *version_p = upipe_ts_psig_program->pmt_version;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the version.
+ *
+ * @param upipe description structure of the pipe
+ * @param version version
+ * @return an error code
+ */
+static int upipe_ts_psig_program_set_version(struct upipe *upipe,
+                                             unsigned int version)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    upipe_ts_psig_program->pmt_version = version;
     return UBASE_ERR_NONE;
 }
 
@@ -590,6 +620,16 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)
             unsigned int pcr_pid = va_arg(args, unsigned int);
             return _upipe_ts_psig_program_set_pcr_pid(upipe, pcr_pid);
+        }
+        case UPIPE_TS_MUX_GET_VERSION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            unsigned int *version_p = va_arg(args, unsigned int *);
+            return upipe_ts_psig_program_get_version(upipe, version_p);
+        }
+        case UPIPE_TS_MUX_SET_VERSION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            unsigned int version = va_arg(args, unsigned int);
+            return upipe_ts_psig_program_set_version(upipe, version);
         }
 
         default:
@@ -814,7 +854,35 @@ static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig->tsid = tsid;
     upipe_ts_psig->pat_version = 0;
-    uref_ts_flow_get_psi_version(flow_def, &upipe_ts_psig->pat_version);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the current version.
+ *
+ * @param upipe description structure of the pipe
+ * @param version_p filled in with the version
+ * @return an error code
+ */
+static int upipe_ts_psig_get_version(struct upipe *upipe,
+                                     unsigned int *version_p)
+{
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    assert(version_p != NULL);
+    *version_p = upipe_ts_psig->pat_version;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the version.
+ *
+ * @param upipe description structure of the pipe
+ * @param version version
+ * @return an error code
+ */
+static int upipe_ts_psig_set_version(struct upipe *upipe,
+                                     unsigned int version)
+{
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    upipe_ts_psig->pat_version = version;
     return UBASE_ERR_NONE;
 }
 
@@ -854,6 +922,17 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_psig_iterate_sub(upipe, p);
+        }
+
+        case UPIPE_TS_MUX_GET_VERSION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            unsigned int *version_p = va_arg(args, unsigned int *);
+            return upipe_ts_psig_get_version(upipe, version_p);
+        }
+        case UPIPE_TS_MUX_SET_VERSION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            unsigned int version = va_arg(args, unsigned int);
+            return upipe_ts_psig_set_version(upipe, version);
         }
 
         default:
