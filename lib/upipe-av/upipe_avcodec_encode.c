@@ -869,6 +869,11 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->width = hsize;
         context->height = vsize;
 
+        if (!ubase_check(uref_pic_get_progressive(flow_def))) {
+            context->flags |= CODEC_FLAG_INTERLACED_DCT |
+                              CODEC_FLAG_INTERLACED_ME;
+        }
+
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else {
