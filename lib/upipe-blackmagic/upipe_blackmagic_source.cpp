@@ -163,6 +163,8 @@ struct upipe_bmd_src {
     /** uclock structure */
     struct uclock *uclock;
 
+    /** pseudo-output */
+    struct upipe *output;
     /** subpipe manager */
     struct upipe_mgr sub_mgr;
     /** pic subpipe */
@@ -472,6 +474,7 @@ static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src_init_uclock(upipe);
     upipe_bmd_src_init_upump_mgr(upipe);
     upipe_bmd_src_init_upump(upipe);
+    upipe_bmd_src->output = NULL;
     upipe_bmd_src_init_sub_mgr(upipe);
 
     upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
@@ -561,6 +564,40 @@ static void upipe_bmd_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_bmd_src_work(upipe, upump);
+}
+
+/** @internal @This returns a pointer to the current pseudo-output.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with a pointer to the pseudo-output
+ * @return an error code
+ */
+static int upipe_bmd_src_get_output(struct upipe *upipe, struct upipe **p)
+{
+    struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
+    assert(p != NULL);
+    *p = upipe_bmd_src->output;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the pointer to the current pseudo-output.
+ *
+ * @param upipe description structure of the pipe
+ * @param output pointer to the pseudo-output
+ * @return an error code
+ */
+static int upipe_bmd_src_set_output(struct upipe *upipe, struct upipe *output)
+{
+    struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
+
+    if (unlikely(upipe_bmd_src->output != NULL))
+        upipe_release(upipe_bmd_src->output);
+    if (unlikely(output == NULL))
+        return UBASE_ERR_NONE;
+
+    upipe_bmd_src->output = output;
+    upipe_use(output);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the currently opened device.
@@ -758,6 +795,14 @@ static int _upipe_bmd_src_control(struct upipe *upipe,
             upipe_bmd_src_set_upump(upipe, NULL);
             return upipe_bmd_src_attach_upump_mgr(upipe);
         }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_bmd_src_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_bmd_src_set_output(upipe, output);
+        }
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_bmd_src_get_uri(upipe, uri_p);
@@ -853,6 +898,8 @@ static void upipe_bmd_src_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    if (upipe_bmd_src->output != NULL)
+        upipe_release(upipe_bmd_src->output);
     upipe_bmd_src_clean_uref_mgr(upipe);
     upipe_bmd_src_clean_upump(upipe);
     upipe_bmd_src_clean_upump_mgr(upipe);
