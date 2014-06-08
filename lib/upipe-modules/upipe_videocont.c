@@ -257,7 +257,7 @@ static int upipe_videocont_sub_control(struct upipe *upipe,
         }
 
         case UPIPE_VIDEOCONT_SUB_SET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SUB_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SUB_SIGNATURE)
             return _upipe_videocont_sub_set_input(upipe);
         }
 
@@ -623,27 +623,27 @@ static int _upipe_videocont_control(struct upipe *upipe,
         }
 
         case UPIPE_VIDEOCONT_SET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             const char *name = va_arg(args, const char*);
             return _upipe_videocont_set_input(upipe, name);
         }
         case UPIPE_VIDEOCONT_GET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             *va_arg(args, const char**) = upipe_videocont->input_name;
             return UBASE_ERR_NONE;
         }
         case UPIPE_VIDEOCONT_SET_TOLERANCE: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             upipe_videocont->tolerance = va_arg(args, uint64_t);
             return UBASE_ERR_NONE;
         }
         case UPIPE_VIDEOCONT_GET_TOLERANCE: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             *va_arg(args, uint64_t *) = upipe_videocont->tolerance;
             return UBASE_ERR_NONE;
         }
         case UPIPE_VIDEOCONT_GET_CURRENT_INPUT: {
-            assert(va_arg(args, int) == UPIPE_VIDEOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             const char **name_p = va_arg(args, const char **);
             return _upipe_videocont_get_current_input(upipe, name_p);
         }

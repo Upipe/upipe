@@ -246,8 +246,7 @@ static inline enum ubase_err _upipe_audiocont_sub_set_input(struct upipe *upipe)
  * @return an error code
  */
 static int upipe_audiocont_sub_control(struct upipe *upipe,
-                                       int command,
-                                       va_list args)
+                                       int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -260,7 +259,7 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
         }
 
         case UPIPE_AUDIOCONT_SUB_SET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SUB_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SUB_SIGNATURE)
             return _upipe_audiocont_sub_set_input(upipe);
         }
 
@@ -747,17 +746,17 @@ static enum ubase_err _upipe_audiocont_control(struct upipe *upipe,
         }
 
         case UPIPE_AUDIOCONT_SET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)
             const char *name = va_arg(args, const char*);
             return _upipe_audiocont_set_input(upipe, name);
         }
         case UPIPE_AUDIOCONT_GET_INPUT: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)
             *va_arg(args, const char**) = upipe_audiocont->input_name;
             return UBASE_ERR_NONE;
         }
         case UPIPE_AUDIOCONT_GET_CURRENT_INPUT: {
-            assert(va_arg(args, int) == UPIPE_AUDIOCONT_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)
             const char **name_p = va_arg(args, const char **);
             return _upipe_audiocont_get_current_input(upipe, name_p);
         }
