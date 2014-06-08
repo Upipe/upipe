@@ -447,7 +447,7 @@ static inline bool uprobe_plumber(int event, va_list args,
 
     va_list args_copy;
     va_copy(args_copy, args);
-    *flow_def_p = va_arg(args, struct uref *);
+    *flow_def_p = va_arg(args_copy, struct uref *);
     va_end(args_copy);
 
     if (unlikely(!ubase_check(uref_flow_get_def(*flow_def_p, def_p))))
