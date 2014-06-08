@@ -65,6 +65,20 @@ static inline int upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"))
             break;
+        case AV_PIX_FMT_YUV422P:
+        case AV_PIX_FMT_YUVJ422P:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8"))
+            break;
+        case AV_PIX_FMT_YUV444P:
+        case AV_PIX_FMT_YUVJ444P:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "u8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "v8"))
+            break;
         case AV_PIX_FMT_YUYV422:
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 2))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 4, "y8u8y8v8"))
@@ -158,6 +172,10 @@ static inline enum PixelFormat
     static const enum PixelFormat supported_fmts[] = {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_YUVJ420P,
+        AV_PIX_FMT_YUV422P,
+        AV_PIX_FMT_YUVJ422P,
+        AV_PIX_FMT_YUV444P,
+        AV_PIX_FMT_YUVJ444P,
         AV_PIX_FMT_YUYV422,
         AV_PIX_FMT_UYVY422,
         AV_PIX_FMT_YUV420P16LE,
@@ -190,6 +208,32 @@ static inline enum PixelFormat
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
                     u(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
                     u(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8"))) {
+                    chroma_p[0] = "y8";
+                    chroma_p[1] = "u8";
+                    chroma_p[2] = "v8";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV422P:
+            case AV_PIX_FMT_YUVJ422P:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "u8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "v8"))) {
+                    chroma_p[0] = "y8";
+                    chroma_p[1] = "u8";
+                    chroma_p[2] = "v8";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV444P:
+            case AV_PIX_FMT_YUVJ444P:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "u8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "v8"))) {
                     chroma_p[0] = "y8";
                     chroma_p[1] = "u8";
                     chroma_p[2] = "v8";
