@@ -55,6 +55,10 @@ enum upipe_videocont_command {
     UPIPE_VIDEOCONT_GET_TOLERANCE,
     /** sets the pts tolerance (int) */
     UPIPE_VIDEOCONT_SET_TOLERANCE,
+    /** returns the current pts latency (uint64_t *) */
+    UPIPE_VIDEOCONT_GET_LATENCY,
+    /** sets the pts latency (uint64_t) */
+    UPIPE_VIDEOCONT_SET_LATENCY,
 };
 
 /** @This extends upipe_command with specific commands for upipe_videocont
@@ -72,8 +76,8 @@ enum upipe_videocont_sub_command {
  * @param name_p filled with current input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_get_current_input(
-                       struct upipe *upipe, const char **name_p)
+static inline int upipe_videocont_get_current_input(struct upipe *upipe,
+                                                    const char **name_p)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_GET_CURRENT_INPUT,
                          UPIPE_VIDEOCONT_SIGNATURE, name_p);
@@ -85,8 +89,8 @@ static inline enum ubase_err upipe_videocont_get_current_input(
  * @param name_p filled with (next) input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_get_input(struct upipe *upipe,
-                                                       const char **name_p)
+static inline int upipe_videocont_get_input(struct upipe *upipe,
+                                            const char **name_p)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_GET_INPUT,
                          UPIPE_VIDEOCONT_SIGNATURE, name_p);
@@ -98,8 +102,8 @@ static inline enum ubase_err upipe_videocont_get_input(struct upipe *upipe,
  * @param name input name
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_set_input(struct upipe *upipe,
-                                                       const char *name)
+static inline int upipe_videocont_set_input(struct upipe *upipe,
+                                            const char *name)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_SET_INPUT,
                          UPIPE_VIDEOCONT_SIGNATURE, name);
@@ -111,8 +115,8 @@ static inline enum ubase_err upipe_videocont_set_input(struct upipe *upipe,
  * @param tolerance_p filled with current pts tolerance
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_get_tolerance(struct upipe *upipe,
-                                                       uint64_t *tolerance_p)
+static inline int upipe_videocont_get_tolerance(struct upipe *upipe,
+                                                uint64_t *tolerance_p)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_GET_TOLERANCE,
                          UPIPE_VIDEOCONT_SIGNATURE, tolerance_p);
@@ -124,11 +128,37 @@ static inline enum ubase_err upipe_videocont_get_tolerance(struct upipe *upipe,
  * @param tolerance pts tolerance
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_set_tolerance(struct upipe *upipe,
-                                                       uint64_t tolerance)
+static inline int upipe_videocont_set_tolerance(struct upipe *upipe,
+                                                uint64_t tolerance)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_SET_TOLERANCE,
                          UPIPE_VIDEOCONT_SIGNATURE, tolerance);
+}
+
+/** @This returns the current pts latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param latency_p filled with current pts latency
+ * @return an error code
+ */
+static inline int upipe_videocont_get_latency(struct upipe *upipe,
+                                              uint64_t *latency_p)
+{
+    return upipe_control(upipe, UPIPE_VIDEOCONT_GET_LATENCY,
+                         UPIPE_VIDEOCONT_SIGNATURE, latency_p);
+}
+
+/** @This sets the pts latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param latency pts latency
+ * @return an error code
+ */
+static inline int upipe_videocont_set_latency(struct upipe *upipe,
+                                              uint64_t latency)
+{
+    return upipe_control(upipe, UPIPE_VIDEOCONT_SET_LATENCY,
+                         UPIPE_VIDEOCONT_SIGNATURE, latency);
 }
 
 /** @This sets a videocont subpipe as its grandpipe input.
@@ -136,7 +166,7 @@ static inline enum ubase_err upipe_videocont_set_tolerance(struct upipe *upipe,
  * @param upipe description structure of the (sub)pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_videocont_sub_set_input(struct upipe *upipe)
+static inline int upipe_videocont_sub_set_input(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_VIDEOCONT_SUB_SET_INPUT,
                          UPIPE_VIDEOCONT_SUB_SIGNATURE);

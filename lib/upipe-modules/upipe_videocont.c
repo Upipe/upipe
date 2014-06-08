@@ -54,7 +54,7 @@
 /** only accept pics */
 #define EXPECTED_FLOW_DEF "pic."
 /** default pts tolerance (late packets) */
-#define TOLERANCE (UCLOCK_FREQ / 1000)
+#define DEFAULT_TOLERANCE (UCLOCK_FREQ / 25)
 
 /** @internal @This is the private context of a ts join pipe. */
 struct upipe_videocont {
@@ -82,6 +82,8 @@ struct upipe_videocont {
 
     /** pts tolerance */
     uint64_t tolerance;
+    /** pts latency */
+    uint64_t latency;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -120,8 +122,8 @@ UPIPE_HELPER_SUBPIPE(upipe_videocont, upipe_videocont_sub, sub, sub_mgr,
                      subs, uchain)
 
 /** @hidden */
-static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
-                                                   struct upipe *input);
+static int upipe_videocont_switch_input(struct upipe *upipe,
+                                        struct upipe *input);
 
 /** @internal @This allocates an input subpipe of a videocont pipe.
  *
@@ -339,7 +341,8 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     upipe_videocont->input_cur = NULL;
     upipe_videocont->input_name = NULL;
-    upipe_videocont->tolerance = TOLERANCE;
+    upipe_videocont->tolerance = DEFAULT_TOLERANCE;
+    upipe_videocont->latency = 0;
     upipe_videocont->flow_def_input = NULL;
     upipe_videocont->flow_input_format = false;
 
@@ -354,8 +357,8 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
  * @param input description structure of the input pipe
  * @return an error code
  */
-static enum ubase_err upipe_videocont_switch_input(struct upipe *upipe,
-                                                   struct upipe *input)
+static int upipe_videocont_switch_input(struct upipe *upipe,
+                                        struct upipe *input)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     struct upipe_videocont_sub *sub;
@@ -422,7 +425,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
             uint64_t pts = 0;
             struct uref *uref_uchain = uref_from_uchain(uchain);
             uref_clock_get_pts_sys(uref_uchain, &pts);
-            if (pts + upipe_videocont->tolerance < next_pts) {
+            if (pts + upipe_videocont->latency <
+                    next_pts - upipe_videocont->tolerance) {
                 upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
                                  subs, uref_uchain, pts);
                 ulist_delete(uchain);
@@ -446,7 +450,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     uint64_t pts = 0;
     uref_clock_get_pts_sys(next_uref, &pts);
 
-    if (pts < next_pts + upipe_videocont->tolerance) {
+    if (pts + upipe_videocont->latency <
+            next_pts + upipe_videocont->tolerance) {
         upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64")",
                          next_uref->ubuf, pts);
         uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
@@ -482,8 +487,8 @@ output:
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_videocont_set_flow_def(struct upipe *upipe,
-                                                   struct uref *flow_def)
+static int upipe_videocont_set_flow_def(struct upipe *upipe,
+                                        struct uref *flow_def)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     if (flow_def == NULL) {
@@ -524,8 +529,7 @@ static enum ubase_err upipe_videocont_set_flow_def(struct upipe *upipe,
  * @param name input name
  * @return an error code
  */
-static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
-                                                 const char *name)
+static int _upipe_videocont_set_input(struct upipe *upipe, const char *name)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     char *name_dup = NULL;
@@ -566,8 +570,8 @@ static enum ubase_err _upipe_videocont_set_input(struct upipe *upipe,
  * @param name_p filled with current input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err _upipe_videocont_get_current_input(
-                       struct upipe *upipe, const char **name_p)
+static int _upipe_videocont_get_current_input(struct upipe *upipe,
+                                              const char **name_p)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     if (unlikely(!name_p)) {
@@ -592,8 +596,8 @@ static inline enum ubase_err _upipe_videocont_get_current_input(
  * @param args arguments of the command
  * @return an error code
  */
-static int _upipe_videocont_control(struct upipe *upipe,
-                                    int command, va_list args)
+static int upipe_videocont_control(struct upipe *upipe,
+                                   int command, va_list args)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     switch (command) {
@@ -642,31 +646,25 @@ static int _upipe_videocont_control(struct upipe *upipe,
             *va_arg(args, uint64_t *) = upipe_videocont->tolerance;
             return UBASE_ERR_NONE;
         }
+        case UPIPE_VIDEOCONT_SET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
+            upipe_videocont->latency = va_arg(args, uint64_t);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_VIDEOCONT_GET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
+            *va_arg(args, uint64_t *) = upipe_videocont->latency;
+            return UBASE_ERR_NONE;
+        }
         case UPIPE_VIDEOCONT_GET_CURRENT_INPUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_VIDEOCONT_SIGNATURE)
             const char **name_p = va_arg(args, const char **);
             return _upipe_videocont_get_current_input(upipe, name_p);
         }
 
-
         default:
             return UBASE_ERR_UNHANDLED;
     }
-}
-
-/** @internal @This processes control commands.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int upipe_videocont_control(struct upipe *upipe,
-                                   int command, va_list args)
-{
-    UBASE_RETURN(_upipe_videocont_control(upipe, command, args))
-
-    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.

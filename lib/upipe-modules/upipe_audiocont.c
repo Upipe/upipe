@@ -83,6 +83,9 @@ struct upipe_audiocont {
     /** next input */
     char *input_name;
 
+    /** pts latency */
+    uint64_t latency;
+
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
 
@@ -345,6 +348,7 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     upipe_audiocont->flow_def_input = NULL;
     upipe_audiocont->planes = 0;
     upipe_audiocont->samplerate = 0;
+    upipe_audiocont->latency = 0;
 
     upipe_throw_ready(upipe);
 
@@ -474,18 +478,18 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
             uref_clock_get_duration(uref_uchain, &duration);
             uref_sound_size(uref_uchain, &size, NULL);
 
-            if (pts + duration < next_pts) {
+            if (pts + upipe_audiocont->latency + duration < next_pts) {
                 /* packet too old */
                 upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
                                  subs, uref_uchain, pts);
                 ulist_delete(uchain);
                 uref_free(uref_uchain);
-            } else if (pts > next_pts) {
+            } else if (pts + upipe_audiocont->latency > next_pts) {
                 /* packet in the future */
                 break;
             } else {
                 /* resize buffer (drop begining of packet) */
-                size_t offset = (next_pts - pts)
+                size_t offset = (next_pts - pts - upipe_audiocont->latency)
                                   * upipe_audiocont->samplerate
                                   / UCLOCK_FREQ;
                 upipe_verbose_va(upipe,
@@ -593,8 +597,8 @@ output:
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_audiocont_set_flow_def(struct upipe *upipe,
-                                                   struct uref *flow_def)
+static int upipe_audiocont_set_flow_def(struct upipe *upipe,
+                                        struct uref *flow_def)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     if (flow_def == NULL)
@@ -644,8 +648,7 @@ static enum ubase_err upipe_audiocont_set_flow_def(struct upipe *upipe,
  * @param name input name
  * @return an error code
  */
-static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
-                                                 const char *name)
+static int _upipe_audiocont_set_input(struct upipe *upipe, const char *name)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     char *name_dup = NULL;
@@ -686,8 +689,8 @@ static enum ubase_err _upipe_audiocont_set_input(struct upipe *upipe,
  * @param name_p filled with current input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err _upipe_audiocont_get_current_input(
-                       struct upipe *upipe, const char **name_p)
+static int _upipe_audiocont_get_current_input(struct upipe *upipe,
+                                              const char **name_p)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     if (unlikely(!name_p)) {
@@ -712,9 +715,8 @@ static inline enum ubase_err _upipe_audiocont_get_current_input(
  * @param args arguments of the command
  * @return an error code
  */
-static enum ubase_err _upipe_audiocont_control(struct upipe *upipe,
-                                               enum upipe_command command,
-                                               va_list args)
+static int upipe_audiocont_control(struct upipe *upipe,
+                                   int command, va_list args)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     switch (command) {
@@ -760,27 +762,20 @@ static enum ubase_err _upipe_audiocont_control(struct upipe *upipe,
             const char **name_p = va_arg(args, const char **);
             return _upipe_audiocont_get_current_input(upipe, name_p);
         }
-
+        case UPIPE_AUDIOCONT_SET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)
+            upipe_audiocont->latency = va_arg(args, uint64_t);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_AUDIOCONT_GET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)
+            *va_arg(args, uint64_t *) = upipe_audiocont->latency;
+            return UBASE_ERR_NONE;
+        }
 
         default:
             return UBASE_ERR_UNHANDLED;
     }
-}
-
-/** @internal @This processes control commands.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int upipe_audiocont_control(struct upipe *upipe,
-                                   int command,
-                                   va_list args)
-{
-    UBASE_RETURN(_upipe_audiocont_control(upipe, command, args))
-
-    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.

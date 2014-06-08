@@ -51,6 +51,10 @@ enum upipe_audiocont_command {
     UPIPE_AUDIOCONT_GET_INPUT,
     /** sets the grid input by its name (const char *) */
     UPIPE_AUDIOCONT_SET_INPUT,
+    /** returns the current pts latency (uint64_t *) */
+    UPIPE_AUDIOCONT_GET_LATENCY,
+    /** sets the pts latency (uint64_t) */
+    UPIPE_AUDIOCONT_SET_LATENCY,
 };
 
 /** @This extends upipe_command with specific commands for upipe_audiocont
@@ -68,8 +72,8 @@ enum upipe_audiocont_sub_command {
  * @param name_p filled with current input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_audiocont_get_current_input(
-                       struct upipe *upipe, const char **name_p)
+static inline int upipe_audiocont_get_current_input(struct upipe *upipe,
+                                                    const char **name_p)
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_GET_CURRENT_INPUT,
                          UPIPE_AUDIOCONT_SIGNATURE, name_p);
@@ -81,8 +85,8 @@ static inline enum ubase_err upipe_audiocont_get_current_input(
  * @param name_p filled with (next) input name pointer or NULL
  * @return an error code
  */
-static inline enum ubase_err upipe_audiocont_get_input(struct upipe *upipe,
-                                                       const char **name_p)
+static inline int upipe_audiocont_get_input(struct upipe *upipe,
+                                            const char **name_p)
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_GET_INPUT,
                          UPIPE_AUDIOCONT_SIGNATURE, name_p);
@@ -94,11 +98,37 @@ static inline enum ubase_err upipe_audiocont_get_input(struct upipe *upipe,
  * @param name input name
  * @return an error code
  */
-static inline enum ubase_err upipe_audiocont_set_input(struct upipe *upipe,
-                                                       const char *name)
+static inline int upipe_audiocont_set_input(struct upipe *upipe,
+                                            const char *name)
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_SET_INPUT,
                          UPIPE_AUDIOCONT_SIGNATURE, name);
+}
+
+/** @This returns the current pts latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param latency_p filled with current pts latency
+ * @return an error code
+ */
+static inline int upipe_audiocont_get_latency(struct upipe *upipe,
+                                              uint64_t *latency_p)
+{
+    return upipe_control(upipe, UPIPE_AUDIOCONT_GET_LATENCY,
+                         UPIPE_AUDIOCONT_SIGNATURE, latency_p);
+}
+
+/** @This sets the pts latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param latency pts latency
+ * @return an error code
+ */
+static inline int upipe_audiocont_set_latency(struct upipe *upipe,
+                                              uint64_t latency)
+{
+    return upipe_control(upipe, UPIPE_AUDIOCONT_SET_LATENCY,
+                         UPIPE_AUDIOCONT_SIGNATURE, latency);
 }
 
 /** @This sets a audiocont subpipe as its grandpipe input.
@@ -106,7 +136,7 @@ static inline enum ubase_err upipe_audiocont_set_input(struct upipe *upipe,
  * @param upipe description structure of the (sub)pipe
  * @return an error code
  */
-static inline enum ubase_err upipe_audiocont_sub_set_input(struct upipe *upipe)
+static inline int upipe_audiocont_sub_set_input(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_SUB_SET_INPUT,
                          UPIPE_AUDIOCONT_SUB_SIGNATURE);
