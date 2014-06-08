@@ -673,6 +673,24 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This suggests an input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_x264_suggest_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    uref_pic_flow_clear_format(flow_def);
+    UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+    UBASE_RETURN(uref_pic_flow_set_planes(flow_def, 0))
+    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"))
+    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"))
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on the pipe.
  *
  * @param upipe description structure of the pipe
@@ -697,6 +715,10 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_x264_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_SUGGEST_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_x264_suggest_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
