@@ -333,6 +333,7 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
         upipe_ffmt_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_ffmt_to_upipe(upipe_ffmt);
     upipe_throw_dead(upipe);
+    uref_free(upipe_ffmt->flow_def_wanted);
     uprobe_clean(&upipe_ffmt->proxy_probe);
     uprobe_clean(&upipe_ffmt->last_inner_probe);
     urefcount_clean(urefcount_real);
