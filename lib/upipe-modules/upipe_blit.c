@@ -161,7 +161,6 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
 * @param ubuf_mgr struct ubuf_mgr
 */
 void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
-    // check size
     int x, y;
     size_t h, v, h2, v2;
     uint8_t macropixel, macropixel2;
@@ -171,24 +170,20 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
     uref_pic_size(uref, &h, &v, &macropixel);
     uref_pic_size(urefsub, &h2, &v2, &macropixel2);
     int sh1 = (int)h, sh2 = (int)h2, sv1 = (int)v, sv2 = (int)v2;
-    // start operating
     if ((sh2 + hoset) <= sh1 && (sv2 + voset) <= sv1 &&
                     uref_pic_flow_compare_format(uref, urefsub)) {
-        //check if the ref pic have an alpha plane of the YUVA ("a8" plane)
         bool transpref = false;
         while (ubase_check(uref_pic_plane_iterate(uref, &cp)) && cp != NULL) {
             if (!strcmp(cp,"a8")) {
                 transpref = true;
             }
         }
-        //check if the sub pic have an alpha plane of the YUVA ("a8" plane)
         bool transpsub = false;
         while (ubase_check(uref_pic_plane_iterate(uref, &cp)) && cp != NULL) {
             if (!strcmp(cp,"a8")) {
                 transpsub = true;
             }
         } 
-        //if no transparency in both ref pic and sub pic
         if (!transpref && !transpsub) {
             while (ubase_check(uref_pic_plane_iterate(urefsub, &cp)) && 
                     cp != NULL) {
@@ -213,7 +208,6 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
                 uref_pic_plane_unmap(uref, cp, hoset, voset, sh2, sv2);
             }        
         } else {
-            // calcul du plan Alpha final
             size_t stridea, stridea2;
             uint8_t hsuba, vsuba, hsuba2, vsuba2;
             uint8_t macropixel_sizea, macropixel_sizea2;
@@ -233,9 +227,8 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
             }
             uref_pic_plane_unmap(urefsub, "a8", 0, 0, -1, -1);
             uref_pic_plane_unmap(uref, "a8", hoset, voset, sh2, sv2);
-            // copy         
             while (ubase_check(uref_pic_plane_iterate(urefsub, &cp)) && 
-cp != NULL) {
+                    cp != NULL) {
                 size_t stride, stride2;
                 int r, b, ha = 0;
                 int c = strcmp(cp, "a8");
@@ -257,7 +250,7 @@ cp != NULL) {
                 int hoctetsa = h2 * macropixel_sizea2 / hsuba2 / macropixel2;
                 for (y = 0; y < v2 / vsub2; y++) {
                     for (x = 0; x < hoctets; x++) {
-                        b = 20;//asub[x+ha];                    
+                        b = asub[x+ha];                    
                         r = ((b)*buf2[x]+(255-b)*out[x])/255;
                         out[x] = r;
                         ha = ha + hoctetsa / hoctets;
