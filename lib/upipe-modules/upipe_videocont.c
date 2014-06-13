@@ -67,6 +67,8 @@ struct upipe_videocont {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** true if flow definition is up to date */
+    bool flow_def_uptodate;
     /** true if subinput format has been copied to output flow def */
     bool flow_input_format;
     /** input flow definition packet */
@@ -345,10 +347,39 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
     upipe_videocont->latency = 0;
     upipe_videocont->flow_def_input = NULL;
     upipe_videocont->flow_input_format = false;
+    upipe_videocont->flow_def_uptodate = false;
 
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This copies format-related information from
+ * input flow to output flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param out_flow destination flow
+ * @param in_flow input flow
+ * @return an error code
+ */
+static int upipe_videocont_switch_format(struct upipe *upipe,
+                                         struct uref *out_flow,
+                                         struct uref *in_flow)
+{
+    size_t hsize, vsize;
+    struct urational sar;
+    uref_pic_flow_clear_format(out_flow);
+    uref_pic_flow_copy_format(out_flow, in_flow);
+    if (likely(ubase_check(uref_pic_flow_get_hsize(in_flow, &hsize)))) {
+        uref_pic_flow_set_hsize(out_flow, hsize);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_vsize(in_flow, &vsize)))) {
+        uref_pic_flow_set_vsize(out_flow, vsize);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_sar(in_flow, &sar)))) {
+        uref_pic_flow_set_sar(out_flow, sar);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This switches to a new input.
@@ -367,25 +398,7 @@ static int upipe_videocont_switch_input(struct upipe *upipe,
     upipe_videocont->input_cur = input;
     upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
 
-    if (unlikely(!upipe_videocont->flow_def_input)) {
-        return UBASE_ERR_NONE;
-    }
-
-    struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    if (input && (sub = upipe_videocont_sub_from_upipe(input))
-              && sub->flow_def) {
-        uref_pic_flow_clear_format(flow_def);
-        uref_pic_flow_copy_format(flow_def, sub->flow_def);
-        upipe_videocont->flow_input_format = true;
-    } else {
-        upipe_videocont->flow_input_format = false;
-    }
-    upipe_videocont_store_flow_def(upipe, flow_def);
+    upipe_videocont->flow_def_uptodate = false;
 
     return UBASE_ERR_NONE;
 }
@@ -404,7 +417,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     uint64_t next_pts = 0;
     bool sub_attached = false;
 
-    if (unlikely(!upipe_videocont->flow_def)) {
+    if (unlikely(!upipe_videocont->flow_def_input)) {
         upipe_warn_va(upipe, "need to define flow def first");
         uref_free(uref);
         return;
@@ -452,8 +465,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
 
     if (pts + upipe_videocont->latency <
             next_pts + upipe_videocont->tolerance) {
-        upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64")",
-                         next_uref->ubuf, pts);
+        upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64") next %"PRIu64,
+                         next_uref->ubuf, pts, next_pts);
         uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
         sub_attached = true;
         next_uref = NULL;
@@ -461,7 +474,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     }
 
 output:
-    if (unlikely(upipe_videocont->flow_input_format != sub_attached)) {
+    if (unlikely(!upipe_videocont->flow_def_uptodate
+                 || (upipe_videocont->flow_input_format != sub_attached))) {
         struct uref *flow_def = uref_dup(upipe_videocont->flow_def_input);
         if (unlikely(!flow_def)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -469,13 +483,13 @@ output:
             return;
         }
         if (sub_attached) {
-            uref_pic_flow_clear_format(flow_def);
-            uref_pic_flow_copy_format(flow_def,
+            upipe_videocont_switch_format(upipe, flow_def,
                         upipe_videocont_sub_from_upipe(
                                 upipe_videocont->input_cur)->flow_def);
         }
         upipe_videocont_store_flow_def(upipe, flow_def);
         upipe_videocont->flow_input_format = sub_attached;
+        upipe_videocont->flow_def_uptodate = true;
     }
     upipe_verbose_va(upipe, "outputting picture %p", uref);
     upipe_videocont_output(upipe, uref, upump_p);
@@ -506,20 +520,7 @@ static int upipe_videocont_set_flow_def(struct upipe *upipe,
     }
     upipe_videocont->flow_def_input = flow_def;
 
-    /* output flow def */
-    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-    if (upipe_videocont->input_cur &&
-        upipe_videocont_sub_from_upipe(upipe_videocont->input_cur)->flow_def) {
-        uref_pic_flow_clear_format(flow_def);
-        uref_pic_flow_copy_format(flow_def, upipe_videocont_sub_from_upipe(
-                                        upipe_videocont->input_cur)->flow_def);
-        upipe_videocont->flow_input_format = true;
-    }
-    upipe_videocont_store_flow_def(upipe, flow_def);
-
+    upipe_videocont->flow_def_uptodate = false;
     return UBASE_ERR_NONE;
 }
 

@@ -68,6 +68,8 @@ struct upipe_audiocont {
     struct uref *flow_def;
     /** true if the flow definition has already been sent */
     bool flow_def_sent;
+    /** true if flow definition is up to date */
+    bool flow_def_uptodate;
     /** input flow definition packet */
     struct uref *flow_def_input;
     /** number of planes */
@@ -211,6 +213,7 @@ static enum ubase_err upipe_audiocont_sub_set_flow_def(struct upipe *upipe,
         uref_free(upipe_audiocont_sub->flow_def);
     }
     upipe_audiocont_sub->flow_def = flow_def_dup;
+    upipe_audiocont->flow_def_uptodate = false;
 
     /* check flow against (next) grid input name */
     const char *name = NULL;
@@ -221,7 +224,6 @@ static enum ubase_err upipe_audiocont_sub_set_flow_def(struct upipe *upipe,
         upipe_audiocont_switch_input(upipe_audiocont_to_upipe(upipe_audiocont),
                                      upipe);
     }
-
     return UBASE_ERR_NONE;
 }
 
@@ -346,6 +348,7 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     upipe_audiocont->input_cur = NULL;
     upipe_audiocont->input_name = NULL;
     upipe_audiocont->flow_def_input = NULL;
+    upipe_audiocont->flow_def_uptodate = false;
     upipe_audiocont->planes = 0;
     upipe_audiocont->samplerate = 0;
     upipe_audiocont->latency = 0;
@@ -353,6 +356,29 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This copies format-related information from
+ * input flow to output flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param out_flow destination flow
+ * @param in_flow input flow
+ * @return an error code
+ */
+static int upipe_audiocont_switch_format(struct upipe *upipe,
+                                         struct uref *out_flow,
+                                         struct uref *in_flow)
+{
+    uref_sound_flow_clear_format(out_flow);
+    uref_sound_flow_copy_format(out_flow, in_flow);
+    #if 0
+    uint64_t rate;
+    if (likely(ubase_check(uref_sound_flow_get_rate(in_flow, &rate)))) {
+        uref_sound_flow_set_rate(out_flow, rate);
+    }
+    #endif
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This switches to a new input.
@@ -365,31 +391,11 @@ static enum ubase_err upipe_audiocont_switch_input(struct upipe *upipe,
                                                    struct upipe *input)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
-    struct upipe_audiocont_sub *sub;
     char *name = upipe_audiocont->input_name ?
                  upipe_audiocont->input_name : "(noname)";
     upipe_audiocont->input_cur = input;
+    upipe_audiocont->flow_def_uptodate = false;
     upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
-
-    if (unlikely(!upipe_audiocont->flow_def_input)) {
-        return UBASE_ERR_NONE;
-    }
-
-    struct uref *flow_def = uref_dup(upipe_audiocont->flow_def_input);
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    if (input && (sub  = upipe_audiocont_sub_from_upipe(input))
-              && sub->flow_def) {
-        uref_sound_flow_clear_format(flow_def);
-        uref_sound_flow_copy_format(flow_def, sub->flow_def);
-    }
-    upipe_audiocont_store_flow_def(upipe, flow_def);
-
-    uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
-    uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
 
     return UBASE_ERR_NONE;
 }
@@ -434,10 +440,38 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     struct uchain *uchain, *uchain_sub, *uchain_tmp;
     uint64_t next_pts = 0, next_duration = 0;
 
-    if (unlikely(!upipe_audiocont->flow_def)) {
+    if (unlikely(!upipe_audiocont->flow_def_input)) {
         upipe_warn_va(upipe, "need to define flow def first");
         uref_free(uref);
         return;
+    }
+
+    /* flow_def_input or input_cur has changed */
+    if (!upipe_audiocont->flow_def_uptodate) {
+        /* output flow def */
+        struct uref *flow_def = upipe_audiocont->flow_def_input;
+        if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
+
+        if (upipe_audiocont->input_cur &&
+                upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur)->flow_def) {
+            upipe_audiocont_switch_format(upipe, flow_def,
+                    upipe_audiocont_sub_from_upipe(
+                        upipe_audiocont->input_cur)->flow_def);
+        }
+        upipe_audiocont_store_flow_def(upipe, flow_def);
+        upipe_audiocont->flow_def_uptodate = true;
+
+        if (upipe_audiocont->ubuf_mgr) {
+            ubuf_mgr_release(upipe_audiocont->ubuf_mgr);
+            upipe_audiocont->ubuf_mgr = NULL;
+        }
+
+        uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
+        uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
     }
 
     if (unlikely(!ubase_check(upipe_audiocont_check_ubuf_mgr(upipe)))) {
@@ -478,16 +512,22 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
             uref_clock_get_duration(uref_uchain, &duration);
             uref_sound_size(uref_uchain, &size, NULL);
 
-            if (pts + upipe_audiocont->latency + duration < next_pts) {
-                /* packet too old */
-                upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
-                                 subs, uref_uchain, pts);
+            if (pts + upipe_audiocont->latency + duration
+                                               + next_duration < next_pts) {
+                /* packet too old
+                 * next_duration acts as a tolerance */
+                upipe_verbose_va(upipe,
+                        "(%d) deleted %p (%"PRIu64") next %"PRIu64"",
+                                subs, uref_uchain, pts, next_pts);
                 ulist_delete(uchain);
                 uref_free(uref_uchain);
             } else if (pts + upipe_audiocont->latency > next_pts) {
                 /* packet in the future */
+                upipe_verbose_va(upipe, "(%d) packet in the future %"PRIu64,
+                                 subs, pts);
                 break;
             } else {
+            #if 0 /* way too precise, leads to audio drops in the end */
                 /* resize buffer (drop begining of packet) */
                 size_t offset = (next_pts - pts - upipe_audiocont->latency)
                                   * upipe_audiocont->samplerate
@@ -506,6 +546,7 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
                                                 upipe_audiocont->samplerate);
                     break;
                 }
+            #endif
             }
         }
         subs++;
@@ -550,10 +591,22 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     while (offset < ref_size) {
         struct uchain *uchain = ulist_peek(&input->urefs);
         if (unlikely(!uchain)) {
+            upipe_verbose_va(upipe, "no input samples found (%"PRIu64")",
+            next_pts);
             break;
         }
         struct uref *input_uref = uref_from_uchain(uchain);
         size_t size;
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(input_uref, &pts);
+        if (pts + upipe_audiocont->latency > next_pts + next_duration) {
+            /* NOTE : next_duration is needed here because packets
+             * in the future are not mangled */
+            upipe_verbose_va(upipe,
+                "input samples in the future %"PRIu64" > %"PRIu64,
+                pts + upipe_audiocont->latency, next_pts);
+            break;
+        }
         uref_sound_size(input_uref, &size, NULL);
 
         size_t extracted = ((ref_size - offset) < size ) ?
@@ -621,23 +674,7 @@ static int upipe_audiocont_set_flow_def(struct upipe *upipe,
         uref_free(upipe_audiocont->flow_def_input);
     }
     upipe_audiocont->flow_def_input = flow_def;
-
-    /* output flow def */
-    if (unlikely((flow_def = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    if (upipe_audiocont->input_cur &&
-        upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur)->flow_def) {
-        uref_sound_flow_clear_format(flow_def);
-        uref_sound_flow_copy_format(flow_def, upipe_audiocont_sub_from_upipe(
-                                        upipe_audiocont->input_cur)->flow_def);
-    }
-    upipe_audiocont_store_flow_def(upipe, flow_def);
-
-    uref_sound_flow_get_planes(flow_def, &upipe_audiocont->planes);
-    uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
+    upipe_audiocont->flow_def_uptodate = false;
 
     return UBASE_ERR_NONE;
 }
