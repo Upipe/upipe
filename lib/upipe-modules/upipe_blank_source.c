@@ -196,20 +196,24 @@ static void upipe_blksrc_worker(struct upump *upump)
         }
     }
 
-    struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
-    uref_clock_set_duration(uref, upipe_blksrc->interval);
     if (unlikely(upipe_blksrc->pts == UINT64_MAX)) {
         if (unlikely(!ubase_check(upipe_blksrc_check_uclock(upipe)))) {
             return;
         }
         upipe_blksrc->pts = uclock_now(upipe_blksrc->uclock);
     }
-    uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
-    uref_clock_set_pts_prog(uref, upipe_blksrc->pts);
-    upipe_blksrc->pts += upipe_blksrc->interval;
 
+    uint64_t current_time = uclock_now(upipe_blksrc->uclock);
     upipe_use(upipe);
-    upipe_blksrc_output(upipe, uref, &upipe_blksrc->upump);
+    while (upipe_blksrc->pts < current_time + upipe_blksrc->interval) {
+        struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
+        uref_clock_set_duration(uref, upipe_blksrc->interval);
+        uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
+        uref_clock_set_pts_prog(uref, upipe_blksrc->pts);
+        upipe_blksrc->pts += upipe_blksrc->interval;
+
+        upipe_blksrc_output(upipe, uref, &upipe_blksrc->upump);
+    }
     upipe_release(upipe);
 }
 
