@@ -317,7 +317,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
-        if (!_upipe_x264_reconfigure(upipe))
+        if (!ubase_check(_upipe_x264_reconfigure(upipe)))
             return false;
     } else {
         /* open encoder */
