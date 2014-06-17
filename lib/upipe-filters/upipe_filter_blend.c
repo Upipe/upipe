@@ -237,7 +237,7 @@ static int upipe_filter_blend_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    UBASE_RETURN(uref_pic_set_progressive(flow_def))
+    UBASE_RETURN(uref_pic_set_progressive(flow_def_dup))
     upipe_filter_blend_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
