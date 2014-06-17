@@ -288,9 +288,10 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
  * @param width image width
  * @param height image height
  * @param sar SAR
+ * @param progressive true if the flow is progressive
  */
 static bool upipe_x264_open(struct upipe *upipe, int width, int height,
-                            struct urational *sar)
+                            struct urational *sar, bool progressive)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     struct urational fps = {0, 0};
@@ -312,8 +313,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     params->vui.i_sar_height = sar->den;
     params->i_width = width;
     params->i_height = height;
-    params->b_interlaced =
-        !ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input));
+    params->b_interlaced = !progressive;
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
@@ -462,7 +462,8 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
             upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
         }
         if (unlikely(needopen)) {
-            if (unlikely(!upipe_x264_open(upipe, width, height, &sar))) {
+            if (unlikely(!upipe_x264_open(upipe, width, height, &sar,
+                                          progressive))) {
                 upipe_err(upipe, "Could not open encoder");
                 uref_free(uref);
                 return;
