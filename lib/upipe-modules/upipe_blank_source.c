@@ -85,7 +85,7 @@ struct upipe_blksrc {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** read watcher */
+    /** timer */
     struct upump *upump;
 
     /** PTS of the next uref */
@@ -188,6 +188,7 @@ static void upipe_blksrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
+    uint64_t current_time;
 
     if (unlikely(!upipe_blksrc->blank_uref)) {
         upipe_blksrc->blank_uref = upipe_blksrc_alloc_uref(upipe);
@@ -203,9 +204,28 @@ static void upipe_blksrc_worker(struct upump *upump)
         upipe_blksrc->pts = uclock_now(upipe_blksrc->uclock);
     }
 
-    uint64_t current_time = uclock_now(upipe_blksrc->uclock);
+    /* increment refcount */
     upipe_use(upipe);
-    while (upipe_blksrc->pts < current_time + upipe_blksrc->interval) {
+
+    current_time = uclock_now(upipe_blksrc->uclock);
+    upipe_verbose_va(upipe, "delay %"PRId64, current_time - upipe_blksrc->pts);
+
+    struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
+    uref_clock_set_duration(uref, upipe_blksrc->interval);
+    uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
+    uref_clock_set_pts_prog(uref, upipe_blksrc->pts);
+    upipe_blksrc->pts += upipe_blksrc->interval;
+
+    upipe_blksrc_output(upipe, uref, &upipe_blksrc->upump);
+
+    /* derive timer from (next) pts and current time */
+    current_time = uclock_now(upipe_blksrc->uclock);
+    int64_t wait = upipe_blksrc->pts - current_time;
+
+    /* missed ticks */
+    while (wait < 0) {
+        upipe_warn_va(upipe, "late packet wait %"PRId64, wait);
+
         struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
         uref_clock_set_duration(uref, upipe_blksrc->interval);
         uref_clock_set_pts_sys(uref, upipe_blksrc->pts);
@@ -213,7 +233,18 @@ static void upipe_blksrc_worker(struct upump *upump)
         upipe_blksrc->pts += upipe_blksrc->interval;
 
         upipe_blksrc_output(upipe, uref, &upipe_blksrc->upump);
+        wait += upipe_blksrc->interval;
     }
+
+    upipe_verbose_va(upipe,
+        "interval %"PRIu64" nextpts %"PRIu64" current %"PRIu64" wait %"PRId64,
+        upipe_blksrc->interval, upipe_blksrc->pts,
+        current_time, wait);
+
+    /* realloc oneshot timer */
+    upipe_blksrc_wait_upump(upipe, wait, upipe_blksrc_worker);
+
+    /* decrement refcount */
     upipe_release(upipe);
 }
 
@@ -321,7 +352,7 @@ static int upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
     struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
     if (upipe_blksrc->upump_mgr != NULL && upipe_blksrc->upump == NULL) {
         struct upump *upump = upump_alloc_timer(upipe_blksrc->upump_mgr,
-            upipe_blksrc_worker, upipe, 0, upipe_blksrc->interval);
+            upipe_blksrc_worker, upipe, upipe_blksrc->interval, 0);
         if (unlikely(!upump)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

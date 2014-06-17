@@ -232,14 +232,14 @@ int main(int argc, char **argv)
 
     /* blksrc pipe */
     blksrc = upipe_flow_alloc(upipe_blksrc_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc"),
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc(pic)"),
         flow);
     assert(blksrc);
     uref_free(flow);
 
     /* blksrc_test */
     blksrc_test = upipe_void_alloc(&blksrc_test_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc_test"));
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc_test(pic)"));
     assert(blksrc_test);
     ubase_assert(upipe_set_output(blksrc, blksrc_test));
 
@@ -260,14 +260,14 @@ int main(int argc, char **argv)
 
     /* blksrc pipe */
     blksrc = upipe_flow_alloc(upipe_blksrc_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc"),
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc(snd)"),
         flow);
     assert(blksrc);
     uref_free(flow);
 
     /* blksrc_test */
     blksrc_test = upipe_void_alloc(&blksrc_test_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc_test"));
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blksrc_test(snd)"));
     assert(blksrc_test);
     ubase_assert(upipe_set_output(blksrc, blksrc_test));
 
