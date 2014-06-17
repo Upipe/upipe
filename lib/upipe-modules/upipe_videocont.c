@@ -454,7 +454,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    upipe_videocont->last_pts = next_pts + upipe_videocont->tolerance;
+    upipe_videocont->last_pts = next_pts - upipe_videocont->tolerance;
 
     /* clean old urefs first */
     int subs = 0;
