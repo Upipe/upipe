@@ -33,6 +33,7 @@
 #include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
@@ -86,6 +87,8 @@ struct upipe_videocont {
     uint64_t tolerance;
     /** pts latency */
     uint64_t latency;
+    /** last pts received from source */
+    uint64_t last_pts;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -173,6 +176,13 @@ static void upipe_videocont_sub_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    struct upipe_videocont *upipe_videocont =
+                            upipe_videocont_from_sub_mgr(upipe->mgr);
+    if (pts < upipe_videocont->last_pts) {
+        upipe_warn_va(upipe, "late picture received (%"PRId64" ms)",
+                      (upipe_videocont->last_pts - pts) / 27000);
+    }
+
     if (unlikely(!uref->ubuf)) {
         upipe_warn_va(upipe, "received empty packet");
         uref_free(uref);
@@ -345,6 +355,7 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
     upipe_videocont->input_name = NULL;
     upipe_videocont->tolerance = DEFAULT_TOLERANCE;
     upipe_videocont->latency = 0;
+    upipe_videocont->last_pts = 0;
     upipe_videocont->flow_def_input = NULL;
     upipe_videocont->flow_input_format = false;
     upipe_videocont->flow_def_uptodate = false;
@@ -372,12 +383,28 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
     uref_pic_flow_copy_format(out_flow, in_flow);
     if (likely(ubase_check(uref_pic_flow_get_hsize(in_flow, &hsize)))) {
         uref_pic_flow_set_hsize(out_flow, hsize);
+    } else {
+        uref_pic_flow_delete_hsize(out_flow);
     }
     if (likely(ubase_check(uref_pic_flow_get_vsize(in_flow, &vsize)))) {
         uref_pic_flow_set_vsize(out_flow, vsize);
+    } else {
+        uref_pic_flow_delete_vsize(out_flow);
     }
     if (likely(ubase_check(uref_pic_flow_get_sar(in_flow, &sar)))) {
         uref_pic_flow_set_sar(out_flow, sar);
+    } else {
+        uref_pic_flow_delete_sar(out_flow);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow)))) {
+        uref_pic_flow_set_overscan(out_flow);
+    } else {
+        uref_pic_flow_delete_overscan(out_flow);
+    }
+    if (likely(ubase_check(uref_pic_get_progressive(in_flow)))) {
+        uref_pic_set_progressive(out_flow);
+    } else {
+        uref_pic_delete_progressive(out_flow);
     }
     return UBASE_ERR_NONE;
 }
@@ -392,7 +419,6 @@ static int upipe_videocont_switch_input(struct upipe *upipe,
                                         struct upipe *input)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
-    struct upipe_videocont_sub *sub;
     char *name = upipe_videocont->input_name ?
                  upipe_videocont->input_name : "(noname)";
     upipe_videocont->input_cur = input;
@@ -428,6 +454,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    upipe_videocont->last_pts = next_pts + upipe_videocont->tolerance;
 
     /* clean old urefs first */
     int subs = 0;
@@ -468,6 +495,26 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64") next %"PRIu64,
                          next_uref->ubuf, pts, next_pts);
         uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
+        if (likely(ubase_check(uref_pic_get_progressive(next_uref)))) {
+            uref_pic_set_progressive(uref);
+        } else {
+            uref_pic_delete_progressive(uref);
+        }
+        if (likely(ubase_check(uref_pic_get_tf(next_uref)))) {
+            uref_pic_set_tf(uref);
+        } else {
+            uref_pic_delete_tf(uref);
+        }
+        if (likely(ubase_check(uref_pic_get_bf(next_uref)))) {
+            uref_pic_set_bf(uref);
+        } else {
+            uref_pic_delete_bf(uref);
+        }
+        if (likely(ubase_check(uref_pic_get_tff(next_uref)))) {
+            uref_pic_set_tff(uref);
+        } else {
+            uref_pic_delete_tff(uref);
+        }
         sub_attached = true;
         next_uref = NULL;
         /* do NOT pop/free from list so that we can dup frame if needed */
