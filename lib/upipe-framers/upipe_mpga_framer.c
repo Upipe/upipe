@@ -415,14 +415,15 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
-    if (upipe_mpgaf->samplerate <= 24000)
+    uint64_t samplerate = upipe_mpgaf->samplerate;
+    if (samplerate <= 24000)
         /* assume SBR on low frequency streams */
-        UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def,
-                                              upipe_mpgaf->samplerate * 2))
-    else
-        UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def,
-                                              upipe_mpgaf->samplerate))
+        samplerate *= 2;
+    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
+    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                upipe_mpgaf->input_latency +
+                UCLOCK_FREQ * upipe_mpgaf->samples / samplerate))
     if (adts_get_copy(header))
         UBASE_FATAL(upipe, uref_flow_set_copyright(flow_def))
     if (adts_get_home(header))
