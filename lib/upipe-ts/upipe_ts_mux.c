@@ -572,6 +572,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 uint8_t *language = desc56_get_language(telx_descriptor, j);
                 const char *lang = "unk";
                 uref_flow_get_language(flow_def, &lang, j);
+                if (strlen(lang) < 3)
+                    lang = "unk";
                 desc56n_set_code(language, (const uint8_t *)lang);
                 uint8_t telx_type = DESC56_TELETEXTTYPE_INFORMATION;
                 uref_ts_flow_get_telx_type(flow_def, &telx_type, j);
@@ -617,6 +619,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 uint8_t *language = desc59_get_language(dvbsub_descriptor, j);
                 const char *lang = "unk";
                 uref_flow_get_language(flow_def, &lang, j);
+                if (strlen(lang) < 3)
+                    lang = "unk";
                 desc59n_set_code(language, (const uint8_t *)lang);
                 /* DVB-subtitles (normal) with no AR criticality */
                 uint8_t dvbsub_type = 0x10;
@@ -762,6 +766,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 uint8_t *language = desc0a_get_language(lang_descriptor, j);
                 const char *lang = "unk";
                 uref_flow_get_language(flow_def, &lang, j);
+                if (strlen(lang) < 3)
+                    lang = "unk";
                 desc0an_set_code(language, (const uint8_t *)lang);
                 if (ubase_check(uref_flow_get_hearing_impaired(flow_def, j)))
                     desc0an_set_audiotype(lang_descriptor + DESC0A_HEADER_SIZE,
@@ -828,9 +834,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         if (pid >= MAX_PIDS) {
             uref_free(flow_def_dup);
             return UBASE_ERR_BUSY;
-        } else
-            UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
+        }
     }
+    UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
 
     if (!ubase_check(upipe_set_flow_def(upipe_ts_mux_input->tstd,
                                             flow_def_dup)) ||
