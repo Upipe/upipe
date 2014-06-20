@@ -372,12 +372,10 @@ static int upipe_audiocont_switch_format(struct upipe *upipe,
 {
     uref_sound_flow_clear_format(out_flow);
     uref_sound_flow_copy_format(out_flow, in_flow);
-    #if 0
-    uint64_t rate;
-    if (likely(ubase_check(uref_sound_flow_get_rate(in_flow, &rate)))) {
-        uref_sound_flow_set_rate(out_flow, rate);
+    uint8_t channels;
+    if (likely(ubase_check(uref_sound_flow_get_channels(in_flow, &channels)))) {
+        uref_sound_flow_set_channels(out_flow, channels);
     }
-    #endif
     return UBASE_ERR_NONE;
 }
 
