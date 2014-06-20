@@ -89,6 +89,8 @@ struct upipe_videocont {
     uint64_t latency;
     /** last pts received from source */
     uint64_t last_pts;
+    /** pointer value of last taken uref, for debug purposes */
+    struct uref *last_uref;
 
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
@@ -359,6 +361,7 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
     upipe_videocont->flow_def_input = NULL;
     upipe_videocont->flow_input_format = false;
     upipe_videocont->flow_def_uptodate = false;
+    upipe_videocont->last_uref = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -515,6 +518,10 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         } else {
             uref_pic_delete_tff(uref);
         }
+        if (upipe_videocont->last_uref == next_uref) {
+            upipe_warn(upipe, "reusing the same picture");
+        }
+        upipe_videocont->last_uref = next_uref;
         sub_attached = true;
         next_uref = NULL;
         /* do NOT pop/free from list so that we can dup frame if needed */
