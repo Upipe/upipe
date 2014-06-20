@@ -288,10 +288,9 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
  * @param width image width
  * @param height image height
  * @param sar SAR
- * @param progressive true if the flow is progressive
  */
 static bool upipe_x264_open(struct upipe *upipe, int width, int height,
-                            struct urational *sar, bool progressive)
+                            struct urational *sar)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     struct urational fps = {0, 0};
@@ -313,7 +312,8 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     params->vui.i_sar_height = sar->den;
     params->i_width = width;
     params->i_height = height;
-    params->b_interlaced = !progressive;
+    if (!ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input)))
+        params->b_interlaced = true;
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
@@ -401,20 +401,17 @@ static void upipe_x264_close(struct upipe *upipe)
  * @param width image width
  * @param height image height
  * @param sar SAR
- * @param progressive true if the flow is progressive
  * @return true if parameters update needed
  */
 static inline bool upipe_x264_need_update(struct upipe *upipe,
                                           int width, int height,
-                                          struct urational *sar,
-                                          bool progressive)
+                                          struct urational *sar)
 {
     x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
     return (params->i_width != width ||
             params->i_height != height ||
             params->vui.i_sar_width != sar->num ||
-            params->vui.i_sar_height != sar->den ||
-            params->b_interlaced != !progressive);
+            params->vui.i_sar_height != sar->den);
 }
 
 /** @internal @This processes pictures.
@@ -450,20 +447,17 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         uref_pic_flow_get_sar(upipe_x264->flow_def_input, &sar);
         urational_simplify(&sar);
         uref_pic_size(uref, &width, &height, NULL);
-        bool progressive =
-            ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input));
 
         /* open encoder if not already opened or if update needed */
         if (unlikely(!upipe_x264->encoder)) {
             needopen = true;
-        } else if (unlikely(upipe_x264_need_update(upipe, width, height, &sar,
-                                                   progressive))) {
+        } else if (unlikely(upipe_x264_need_update(upipe, width, height,
+                                                   &sar))) {
             needopen = true;
             upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
         }
         if (unlikely(needopen)) {
-            if (unlikely(!upipe_x264_open(upipe, width, height, &sar,
-                                          progressive))) {
+            if (unlikely(!upipe_x264_open(upipe, width, height, &sar))) {
                 upipe_err(upipe, "Could not open encoder");
                 uref_free(uref);
                 return;
