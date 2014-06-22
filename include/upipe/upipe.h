@@ -917,8 +917,7 @@ static inline int upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
 {
     if (event != UPROBE_READY && event != UPROBE_DEAD)
         return upipe_throw_va(upipe, event, args);
-    else
-        return uprobe_throw_va(upipe->uprobe, inner, event, args);
+    return UBASE_ERR_NONE;
 }
 
 /** @This sends an input buffer into a pipe. Note that all inputs and control
