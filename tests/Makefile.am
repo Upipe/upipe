@@ -36,6 +36,7 @@ check_PROGRAMS = \
 	upipe_trickplay_test \
 	upipe_dup_test \
 	upipe_genaux_test \
+	upipe_delay_test \
 	upipe_null_test \
 	upipe_setrap_test \
 	upipe_skip_test \
@@ -70,6 +71,7 @@ TESTS = \
 	upipe_trickplay_test \
 	upipe_dup_test \
 	upipe_genaux_test \
+	upipe_delay_test \
 	upipe_null_test \
 	upipe_setrap_test \
 	upipe_skip_test \
@@ -239,6 +241,7 @@ upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libup
 upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_delay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_skip_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

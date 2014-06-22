@@ -22,6 +22,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_probe_uref.c \
 	upipe_noclock.c \
 	upipe_nodemux.c \
+	upipe_delay.c \
 	upipe_null.c \
 	upipe_skip.c \
 	upipe_htons.c \
