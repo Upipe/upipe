@@ -546,9 +546,9 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         }
 
         if (type == UPIPE_BMD_SRC_PIC) {
-            uint64_t cr_sys;
-            if (likely(ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
-                upipe_throw_clock_ref(subpipe, uref, cr_sys, 0);
+            uint64_t pts_prog;
+            if (likely(ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))))
+                upipe_throw_clock_ref(subpipe, uref, pts_prog, 0);
         }
         upipe_throw_clock_ts(subpipe, uref);
         upipe_bmd_src_output_output(subpipe, uref, &upipe_bmd_src->upump);
