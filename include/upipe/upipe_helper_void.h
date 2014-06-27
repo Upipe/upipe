@@ -73,18 +73,19 @@ static struct upipe *STRUCTURE##_alloc_void(struct upipe_mgr *mgr,          \
                                             uint32_t signature,             \
                                             va_list args)                   \
 {                                                                           \
-    if (signature != UPIPE_VOID_SIGNATURE)                                  \
-        goto STRUCTURE##_alloc_void_err;                                    \
+    if (signature != UPIPE_VOID_SIGNATURE) {                                \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
     struct STRUCTURE *s =                                                   \
         (struct STRUCTURE *)malloc(sizeof(struct STRUCTURE));               \
-    if (unlikely(s == NULL))                                                \
-        goto STRUCTURE##_alloc_void_err;                                    \
+    if (unlikely(s == NULL)) {                                              \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
     struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
     upipe_init(upipe, mgr, uprobe);                                         \
     return upipe;                                                           \
-STRUCTURE##_alloc_void_err:                                                 \
-    uprobe_release(uprobe);                                                 \
-    return NULL;                                                            \
 }                                                                           \
 /** @internal @This frees the private structure.                            \
  *                                                                          \
