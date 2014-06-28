@@ -175,7 +175,10 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-    upipe_ts_pesd->next_pes_size = length + PES_HEADER_SIZE;
+    if (length)
+        upipe_ts_pesd->next_pes_size = length + PES_HEADER_SIZE;
+    else
+        upipe_ts_pesd->next_pes_size = 0;
 
     if (streamid == PES_STREAM_ID_PSM ||
         streamid == PES_STREAM_ID_PRIVATE_2 ||
@@ -275,11 +278,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
     }
 
     if (alignment)
-        uref_block_set_start(upipe_ts_pesd->next_uref);
-    else {
-        uref_block_delete_start(upipe_ts_pesd->next_uref);
-        upipe_ts_pesd->next_pes_size = 0;
-    }
+        uref_flow_set_random(upipe_ts_pesd->next_uref);
 
     UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1))
