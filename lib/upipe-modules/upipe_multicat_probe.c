@@ -94,12 +94,13 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "uref has no systime");
-    }
-    newidx = (systime/upipe_multicat_probe->rotate);
-    if (upipe_multicat_probe->idx != newidx) {
-        upipe_throw(upipe, UPROBE_MULTICAT_PROBE_ROTATE,
-                    UPIPE_MULTICAT_PROBE_SIGNATURE, uref, newidx);
-        upipe_multicat_probe->idx = newidx;
+    } else {
+        newidx = (systime/upipe_multicat_probe->rotate);
+        if (upipe_multicat_probe->idx != newidx) {
+            upipe_throw(upipe, UPROBE_MULTICAT_PROBE_ROTATE,
+                        UPIPE_MULTICAT_PROBE_SIGNATURE, uref, newidx);
+            upipe_multicat_probe->idx = newidx;
+        }
     }
 
     upipe_multicat_probe_output(upipe, uref, upump_p);
