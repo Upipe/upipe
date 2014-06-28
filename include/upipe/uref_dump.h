@@ -96,7 +96,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
                       uref->member);
     UREF_DUMP_UNSIGNED("k.dts_pts_delay", dts_pts_delay)
     UREF_DUMP_UNSIGNED("k.cr_dts_delay", cr_dts_delay)
-    UREF_DUMP_UNSIGNED("k.rap_sys", rap_sys)
+    UREF_DUMP_UNSIGNED("k.rap_cr_delay", rap_cr_delay)
 #undef UREF_DUMP_UNSIGNED
 
     if (uref->udict != NULL)

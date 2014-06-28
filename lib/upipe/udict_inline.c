@@ -75,6 +75,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "b.end", UDICT_TYPE_VOID },
 
     { "p.num", UDICT_TYPE_UNSIGNED },
+    { "p.key", UDICT_TYPE_VOID },
     { "p.hsize", UDICT_TYPE_UNSIGNED },
     { "p.vsize", UDICT_TYPE_UNSIGNED },
     { "p.hsizevis", UDICT_TYPE_UNSIGNED },

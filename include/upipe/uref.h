@@ -109,8 +109,8 @@ struct uref {
     uint64_t dts_pts_delay;
     /** duration between CR and DTS */
     uint64_t cr_dts_delay;
-    /** date of the latest RAP in system time */
-    uint64_t rap_sys;
+    /** duration between RAP and CR */
+    uint64_t rap_cr_delay;
     /** private for local pipe user */
     uint64_t priv;
 };
@@ -182,7 +182,7 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     uref->date_orig = UINT64_MAX;
     uref->dts_pts_delay = UINT64_MAX;
     uref->cr_dts_delay = UINT64_MAX;
-    uref->rap_sys = UINT64_MAX;
+    uref->rap_cr_delay = UINT64_MAX;
     uref->priv = UINT64_MAX;
 
     return uref;
@@ -259,7 +259,7 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
     new_uref->date_orig = uref->date_orig;
     new_uref->dts_pts_delay = uref->dts_pts_delay;
     new_uref->cr_dts_delay = uref->cr_dts_delay;
-    new_uref->rap_sys = uref->rap_sys;
+    new_uref->rap_cr_delay = uref->rap_cr_delay;
     new_uref->priv = uref->priv;
 
     return new_uref;

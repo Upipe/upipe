@@ -93,6 +93,8 @@ enum udict_type {
 
     /** p.num */
     UDICT_TYPE_PIC_NUM,
+    /** p.key */
+    UDICT_TYPE_PIC_KEY,
     /** p.hsize */
     UDICT_TYPE_PIC_HSIZE,
     /** p.vsize */

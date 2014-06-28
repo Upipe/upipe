@@ -42,6 +42,7 @@ extern "C" {
 #include <stdint.h>
 
 UREF_ATTR_UNSIGNED_SH(pic, number, UDICT_TYPE_PIC_NUM, picture number)
+UREF_ATTR_VOID_SH(pic, key, UDICT_TYPE_PIC_KEY, key picture)
 UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
         horizontal position)
 UREF_ATTR_UNSIGNED_SH(pic, vposition, UDICT_TYPE_PIC_VPOSITION,

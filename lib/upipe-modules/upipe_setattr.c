@@ -135,8 +135,6 @@ static void upipe_setattr_input(struct upipe *upipe, struct uref *uref,
             memcpy(v2, v1, size);
         }
     }
-    if (upipe_setattr->dict->rap_sys != UINT64_MAX)
-        uref->rap_sys = upipe_setattr->dict->rap_sys;
     upipe_setattr_output(upipe, uref, upump_p);
 }
 

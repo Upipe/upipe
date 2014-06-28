@@ -45,8 +45,8 @@ UREF_ATTR_UNSIGNED_UREF(clock, dts_pts_delay, dts_pts_delay,
         delay between DTS and PTS)
 UREF_ATTR_UNSIGNED_UREF(clock, cr_dts_delay, cr_dts_delay,
         delay between CR and DTS)
-UREF_ATTR_UNSIGNED_UREF(clock, rap_sys, rap_sys,
-        system date of the latest random access point)
+UREF_ATTR_UNSIGNED_UREF(clock, rap_cr_delay, rap_cr_delay,
+        delay between RAP and CR)
 UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
 UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
                     frame offset from last random access point)
@@ -236,6 +236,69 @@ UREF_CLOCK_GET_CR(sys)
 UREF_CLOCK_GET_CR(prog)
 UREF_CLOCK_GET_CR(orig)
 #undef UREF_CLOCK_GET_CR
+
+/** @hidden */
+#define UREF_CLOCK_GET_RAP(dv)                                              \
+/** @This gets the dv date as a RAP.                                        \
+ *                                                                          \
+ * @param uref uref structure                                               \
+ * @param date_p filled in with the date in #UCLOCK_FREQ units (may be NULL)\
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_clock_get_rap_##dv(struct uref *uref,                \
+                                          uint64_t *date_p)                 \
+{                                                                           \
+    uint64_t date, delay;                                                   \
+    int type;                                                               \
+    uref_clock_get_date_##dv(uref, &date, &type);                           \
+    switch (type) {                                                         \
+        /* intended pass-throughs */                                        \
+        default:                                                            \
+        case UREF_DATE_NONE:                                                \
+            return UBASE_ERR_INVALID;                                       \
+        case UREF_DATE_PTS:                                                 \
+            UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
+            date -= delay;                                                  \
+        case UREF_DATE_DTS:                                                 \
+            UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
+            date -= delay;                                                  \
+        case UREF_DATE_CR:                                                  \
+            UBASE_RETURN(uref_clock_get_rap_cr_delay(uref, &delay))         \
+            date -= delay;                                                  \
+            break;                                                          \
+    }                                                                       \
+    if (date_p != NULL)                                                     \
+        *date_p = date;                                                     \
+    return UBASE_ERR_NONE;                                                  \
+}
+
+UREF_CLOCK_GET_RAP(sys)
+UREF_CLOCK_GET_RAP(prog)
+UREF_CLOCK_GET_RAP(orig)
+#undef UREF_CLOCK_GET_RAP
+
+/** @hidden */
+#define UREF_CLOCK_SET_RAP(dv)                                              \
+/** @This sets the CR/RAP delay.                                            \
+ *                                                                          \
+ * @param uref uref structure                                               \
+ * @param rap RAP in #UCLOCK_FREQ units                                     \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_clock_set_rap_##dv(struct uref *uref, uint64_t rap)  \
+{                                                                           \
+    uint64_t cr;                                                            \
+    UBASE_RETURN(uref_clock_get_cr_##dv(uref, &cr));                        \
+    if (rap > cr)                                                           \
+        return UBASE_ERR_INVALID;                                           \
+    uref_clock_set_rap_cr_delay(uref, cr - rap);                            \
+    return UBASE_ERR_NONE;                                                  \
+}
+
+UREF_CLOCK_SET_RAP(sys)
+UREF_CLOCK_SET_RAP(prog)
+UREF_CLOCK_SET_RAP(orig)
+#undef UREF_CLOCK_SET_RAP
 
 /** @hidden */
 #define UREF_CLOCK_REBASE(dv, dt)                                           \

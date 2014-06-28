@@ -54,30 +54,30 @@ enum upipe_setrap_command {
  */
 struct upipe_mgr *upipe_setrap_mgr_alloc(void);
 
-/** @This returns the current systime_rap being set into urefs.
+/** @This returns the current rap_sys being set into urefs.
  *
  * @param upipe description structure of the pipe
- * @param rap_p filled with the current systime_rap
+ * @param rap_sys_p filled with the current rap_sys
  * @return an error code
  */
 static inline int upipe_setrap_get_rap(struct upipe *upipe,
-                                       uint64_t *rap_p)
+                                       uint64_t *rap_sys_p)
 {
     return upipe_control(upipe, UPIPE_SETRAP_GET_RAP,
-                         UPIPE_SETRAP_SIGNATURE, rap_p);
+                         UPIPE_SETRAP_SIGNATURE, rap_sys_p);
 }
 
-/** @This sets the systime_rap to set into urefs.
+/** @This sets the rap_sys to set into urefs.
  *
  * @param upipe description structure of the pipe
- * @param rap systime_rap to set
+ * @param rap_sys rap_sys to set
  * @return an error code
  */
 static inline int upipe_setrap_set_rap(struct upipe *upipe,
-                                       uint64_t rap)
+                                       uint64_t rap_sys)
 {
     return upipe_control(upipe, UPIPE_SETRAP_SET_RAP,
-                         UPIPE_SETRAP_SIGNATURE, rap);
+                         UPIPE_SETRAP_SIGNATURE, rap_sys);
 }
 
 #ifdef __cplusplus

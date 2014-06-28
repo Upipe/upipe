@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe module setting systime_rap to urefs
+ * @short Upipe module setting rap_sys to urefs
  */
 
 #include <upipe/ubase.h>
@@ -32,6 +32,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -57,7 +58,7 @@ struct upipe_setrap {
     bool flow_def_sent;
 
     /** rap to set */
-    uint64_t systime_rap;
+    uint64_t rap_sys;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -87,7 +88,7 @@ static struct upipe *upipe_setrap_alloc(struct upipe_mgr *mgr,
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
     upipe_setrap_init_urefcount(upipe);
     upipe_setrap_init_output(upipe);
-    upipe_setrap->systime_rap = UINT64_MAX;
+    upipe_setrap->rap_sys = UINT64_MAX;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -103,8 +104,10 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
 
-    if (likely(upipe_setrap->systime_rap != UINT64_MAX))
-        uref->rap_sys = upipe_setrap->systime_rap;
+    if (likely(upipe_setrap->rap_sys != UINT64_MAX))
+        if (unlikely(!ubase_check(uref_clock_set_rap_sys(uref,
+                            upipe_setrap->rap_sys))))
+            upipe_warn(upipe, "invalid clock ref for RAP");
     upipe_setrap_output(upipe, uref, upump_p);
 }
 
@@ -125,29 +128,29 @@ static int upipe_setrap_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This returns the current systime_rap being set into urefs.
+/** @internal @This returns the current rap_sys being set into urefs.
  *
  * @param upipe description structure of the pipe
- * @param rap_p filled with the current systime_rap
+ * @param rap_sys_p filled with the current rap_sys
  * @return an error code
  */
-static int _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_p)
+static int _upipe_setrap_get_rap(struct upipe *upipe, uint64_t *rap_sys_p)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    *rap_p = upipe_setrap->systime_rap;
+    *rap_sys_p = upipe_setrap->rap_sys;
     return UBASE_ERR_NONE;
 }
 
-/** @This sets the systime_rap to set into urefs.
+/** @This sets the rap_sys to set into urefs.
  *
  * @param upipe description structure of the pipe
- * @param rap systime_rap to set
+ * @param rap_sys rap_sys to set
  * @return an error code
  */
-static int _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap)
+static int _upipe_setrap_set_rap(struct upipe *upipe, uint64_t rap_sys)
 {
     struct upipe_setrap *upipe_setrap = upipe_setrap_from_upipe(upipe);
-    upipe_setrap->systime_rap = rap;
+    upipe_setrap->rap_sys = rap_sys;
     return UBASE_ERR_NONE;
 }
 
@@ -184,13 +187,13 @@ static int upipe_setrap_control(struct upipe *upipe, int command, va_list args)
 
         case UPIPE_SETRAP_GET_RAP: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SETRAP_SIGNATURE)
-            uint64_t *rap_p = va_arg(args, uint64_t *);
-            return _upipe_setrap_get_rap(upipe, rap_p);
+            uint64_t *rap_sys_p = va_arg(args, uint64_t *);
+            return _upipe_setrap_get_rap(upipe, rap_sys_p);
         }
         case UPIPE_SETRAP_SET_RAP: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SETRAP_SIGNATURE)
-            uint64_t rap = va_arg(args, uint64_t);
-            return _upipe_setrap_set_rap(upipe, rap);
+            uint64_t rap_sys = va_arg(args, uint64_t);
+            return _upipe_setrap_set_rap(upipe, rap_sys);
         }
         default:
             return UBASE_ERR_UNHANDLED;

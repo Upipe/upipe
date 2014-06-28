@@ -148,10 +148,12 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    uref_clock_set_cr_sys(uref, 2 * (uint64_t)UINT32_MAX);
     upipe_input(upipe_setrap, uref, NULL);
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    uref_clock_set_cr_sys(uref, 3 * (uint64_t)UINT32_MAX);
     upipe_input(upipe_setrap, uref, NULL);
 
     assert(nb_packets == 2);
