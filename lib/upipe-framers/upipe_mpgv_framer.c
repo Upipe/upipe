@@ -96,10 +96,12 @@ struct upipe_mpgvf {
     struct uref *flow_def_input;
     /** attributes in the sequence header */
     struct uref *flow_def_attr;
-    /** last random access point */
-    uint64_t systime_rap;
-    /** random access point of the last ref */
-    uint64_t systime_rap_ref;
+    /** rap of the last dts */
+    uint64_t dts_rap;
+    /** rap of the last I */
+    uint64_t iframe_rap;
+    /** rap of the last reference frame */
+    uint64_t ref_rap;
     /** latency in the input flow */
     uint64_t input_latency;
 
@@ -216,8 +218,9 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_init_uref_stream(upipe);
     upipe_mpgvf_init_output(upipe);
     upipe_mpgvf_init_flow_def(upipe);
-    upipe_mpgvf->systime_rap = UINT64_MAX;
-    upipe_mpgvf->systime_rap_ref = UINT64_MAX;
+    upipe_mpgvf->dts_rap = UINT64_MAX;
+    upipe_mpgvf->iframe_rap = UINT64_MAX;
+    upipe_mpgvf->ref_rap = UINT64_MAX;
     upipe_mpgvf->input_latency = 0;
     upipe_mpgvf->last_picture_number = 0;
     upipe_mpgvf->last_temporal_reference = -1;
@@ -763,28 +766,29 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
                 uref_block_insert(uref, 0, ubuf);
                 uref_flow_set_random(uref);
             }
+            UBASE_FATAL(upipe, uref_pic_set_key(uref))
 
-            uint64_t systime_rap = UINT64_MAX;
-            uref_clock_get_rap_sys(uref, &systime_rap);
-            upipe_mpgvf->systime_rap_ref = upipe_mpgvf->systime_rap;
-            upipe_mpgvf->systime_rap = systime_rap;
+            upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
+            upipe_mpgvf->iframe_rap = upipe_mpgvf->dts_rap;
+            if (upipe_mpgvf->iframe_rap != UINT64_MAX)
+                uref_clock_set_rap_sys(uref, upipe_mpgvf->iframe_rap);
             break;
         }
 
         case MP2VPIC_TYPE_P:
-            upipe_mpgvf->systime_rap_ref = upipe_mpgvf->systime_rap;
-            if (upipe_mpgvf->systime_rap != UINT64_MAX)
-                uref_clock_set_rap_sys(uref, upipe_mpgvf->systime_rap);
+            upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
+            if (upipe_mpgvf->iframe_rap != UINT64_MAX)
+                uref_clock_set_rap_sys(uref, upipe_mpgvf->iframe_rap);
             break;
 
         case MP2VPIC_TYPE_B:
-            if (upipe_mpgvf->systime_rap_ref != UINT64_MAX)
-                uref_clock_set_rap_sys(uref, upipe_mpgvf->systime_rap_ref);
+            if (upipe_mpgvf->ref_rap != UINT64_MAX)
+                uref_clock_set_rap_sys(uref, upipe_mpgvf->ref_rap);
             break;
     }
 
     if (upipe_mpgvf->closed_gop)
-        upipe_mpgvf->systime_rap_ref = upipe_mpgvf->systime_rap;
+        upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
     return true;
 }
 
@@ -889,8 +893,11 @@ static void upipe_mpgvf_promote_uref(struct upipe *upipe)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref, &date)))
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
+                                                 &date)))
         uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
+    if (ubase_check(uref_clock_get_dts_prog(upipe_mpgvf->next_uref, &date)))
+        uref_clock_get_rap_sys(upipe_mpgvf->next_uref, &upipe_mpgvf->dts_rap);
 }
 
 /** @internal @This resets the internal parsing state.

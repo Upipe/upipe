@@ -95,8 +95,14 @@ struct upipe_h264f {
     struct uref *flow_def_input;
     /** attributes in the SPS */
     struct uref *flow_def_attr;
-    /** last random access point */
-    uint64_t systime_rap;
+    /** rap of the last dts */
+    uint64_t dts_rap;
+    /** rap of the last sps */
+    uint64_t sps_rap;
+    /** rap of the last pps */
+    uint64_t pps_rap;
+    /** rap of the last I */
+    uint64_t iframe_rap;
     /** latency in the input flow */
     uint64_t input_latency;
 
@@ -157,6 +163,8 @@ struct upipe_h264f {
     int pic_struct;
     /** frame number */
     uint32_t frame_num;
+    /** slice type */
+    uint32_t slice_type;
     /** field pic */
     bool field_pic;
     /** bottom field */
@@ -253,8 +261,11 @@ static void upipe_h264f_promote_uref(struct upipe *upipe)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref, &date)))
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref,
+                                                 &date)))
         uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
+    if (ubase_check(uref_clock_get_dts_prog(upipe_h264f->next_uref, &date)))
+        uref_clock_get_rap_sys(upipe_h264f->next_uref, &upipe_h264f->dts_rap);
 }
 
 /** @internal @This allocates an h264f pipe.
@@ -279,7 +290,10 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f_init_uref_stream(upipe);
     upipe_h264f_init_output(upipe);
     upipe_h264f_init_flow_def(upipe);
-    upipe_h264f->systime_rap = UINT64_MAX;
+    upipe_h264f->dts_rap = UINT64_MAX;
+    upipe_h264f->sps_rap = UINT64_MAX;
+    upipe_h264f->pps_rap = UINT64_MAX;
+    upipe_h264f->iframe_rap = UINT64_MAX;
     upipe_h264f->input_latency = 0;
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
@@ -536,6 +550,8 @@ static void upipe_h264f_handle_sps(struct upipe *upipe)
     if (upipe_h264f->au_last_nal_start_size != 5)
         return;
 
+    upipe_h264f->sps_rap = upipe_h264f->dts_rap;
+
     struct ubuf *ubuf = ubuf_block_splice(upipe_h264f->next_uref->ubuf,
                                           upipe_h264f->au_last_nal_offset,
                                           upipe_h264f->au_size -
@@ -627,6 +643,8 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (upipe_h264f->au_last_nal_start_size != 5)
         return;
+
+    upipe_h264f->pps_rap = upipe_h264f->sps_rap;
 
     struct ubuf *ubuf = ubuf_block_splice(upipe_h264f->next_uref->ubuf,
                                           upipe_h264f->au_last_nal_offset,
@@ -1218,6 +1236,11 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     if (upipe_h264f->au_slice_nal == UINT8_MAX ||
         upipe_h264f->active_sps == -1 || upipe_h264f->active_pps == -1) {
         upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
+        upipe_h264f->au_size = 0;
+        upipe_h264f->au_vcl_offset = -1;
+        upipe_h264f->au_slice = false;
+        upipe_h264f->au_slice_nal = UINT8_MAX;
+        upipe_h264f->pic_struct = -1;
         return;
     }
 
@@ -1330,8 +1353,18 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     else
         uref_clock_delete_dts_pts_delay(uref);
 
-    if (upipe_h264f->systime_rap != UINT64_MAX)
-        uref_clock_set_rap_sys(uref, upipe_h264f->systime_rap);
+    switch (upipe_h264f->slice_type % 5) {
+        case H264SLI_TYPE_I:
+            upipe_h264f->iframe_rap = upipe_h264f->pps_rap;
+            UBASE_FATAL(upipe, uref_pic_set_key(uref))
+            break;
+        default:
+            break;
+    }
+
+    if (upipe_h264f->iframe_rap != UINT64_MAX)
+        if (!ubase_check(uref_clock_set_rap_sys(uref, upipe_h264f->iframe_rap)))
+            upipe_warn_va(upipe, "couldn't set rap_sys");
     if (upipe_h264f->au_vcl_offset > 0)
         UBASE_FATAL(upipe, uref_block_set_header_size(uref,
                                                upipe_h264f->au_vcl_offset))
@@ -1386,7 +1419,7 @@ upipe_h264f_parse_slice_retry:
                 upipe_h264f->au_last_nal_start_size));
 
     upipe_h264f_stream_ue(s); /* first_mb_in_slice */
-    upipe_h264f_stream_ue(s); /* slice_type */
+    uint32_t slice_type = upipe_h264f_stream_ue(s);
     uint32_t pps_id = upipe_h264f_stream_ue(s);
     if (unlikely(pps_id >= H264PPS_ID_MAX)) {
         upipe_warn_va(upipe, "invalid PPS %"PRIu32" in slice", pps_id);
@@ -1439,6 +1472,7 @@ upipe_h264f_parse_slice_retry:
         goto upipe_h264f_parse_slice_retry;
     }
     upipe_h264f->frame_num = frame_num;
+    upipe_h264f->slice_type = slice_type;
     upipe_h264f->field_pic = field_pic;
     upipe_h264f->bf = bf;
     upipe_h264f->idr_pic_id = idr_pic_id;
@@ -1510,9 +1544,6 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
         else
             upipe_h264f_parse_slice(upipe, upump_p);
         if (last_nal_type == H264NAL_TYPE_IDR) {
-            uint64_t systime_rap;
-            if (ubase_check(uref_clock_get_rap_sys(upipe_h264f->next_uref, &systime_rap)))
-                upipe_h264f->systime_rap = systime_rap;
             UBASE_FATAL(upipe, uref_flow_set_random(upipe_h264f->next_uref))
         }
         return;

@@ -125,8 +125,8 @@ struct upipe_avcdec {
     uint64_t counter;
     /** rap offset */
     uint8_t index_rap;
-    /** previous rap */
-    uint64_t prev_rap;
+    /** I frame rap */
+    uint64_t iframe_rap;
     /** latest incoming uref */
     struct uref *uref;
     /** next PTS */
@@ -658,14 +658,13 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
                                              struct uref *uref)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    uint64_t rap = 0, duration, pts, pts_sys;
+    uint64_t duration, pts, pts_sys;
 
-    /* rap */
-    uref_clock_get_rap_sys(uref, &rap);
-    if (unlikely(rap != upipe_avcdec->prev_rap)) {
-        upipe_avcdec->prev_rap = rap;
+    if (ubase_check(uref_pic_get_key(uref))) {
+        uref_clock_get_rap_sys(uref, &upipe_avcdec->iframe_rap);
         upipe_avcdec->index_rap = 0;
-    }
+    } else if (upipe_avcdec->iframe_rap != UINT64_MAX)
+        uref_clock_set_rap_sys(uref, upipe_avcdec->iframe_rap);
     UBASE_FATAL(upipe, uref_clock_set_index_rap(uref, upipe_avcdec->index_rap))
     upipe_avcdec->index_rap++;
 
@@ -687,12 +686,6 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
         uref_clock_rebase_pts_sys(uref);
 
     uref_clock_rebase_pts_orig(uref);
-
-    /* DTS has no meaning from now on. */
-    uref_clock_delete_dts_pts_delay(uref);
-
-    /* CR has no meaning from now on. */
-    uref_clock_delete_cr_dts_delay(uref);
 
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && ubase_check(uref_clock_get_duration(uref, &duration))) {
@@ -786,6 +779,9 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
                 (uint64_t)(2 + frame->repeat_pict) * context->ticks_per_frame *
                 UCLOCK_FREQ * context->time_base.num /
                 (2 * context->time_base.den)))
+
+    if (frame->key_frame)
+        uref_pic_set_key(uref);
 
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);
@@ -1288,7 +1284,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->uref = NULL;
 
     upipe_avcdec->index_rap = 0;
-    upipe_avcdec->prev_rap = 0;
+    upipe_avcdec->iframe_rap = 0;
     upipe_avcdec->next_pts = UINT64_MAX;
     upipe_avcdec->next_pts_sys = UINT64_MAX;
     upipe_avcdec->input_latency = 0;
