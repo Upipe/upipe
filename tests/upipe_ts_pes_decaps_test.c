@@ -125,7 +125,7 @@ static void ts_test_input(struct upipe *upipe, struct uref *uref,
     size_t size;
     ubase_assert(uref_block_size(uref, &size));
     assert(size == payload_size);
-    assert(dataalignment == uref_block_get_start(uref));
+    assert(dataalignment == uref_flow_get_random(uref));
     assert(end == uref_block_get_end(uref));
     uref_free(uref);
     nb_packets--;
@@ -231,6 +231,8 @@ int main(int argc, char *argv[])
         ubase_assert(uref_block_resize(dup, i, 1));
         if (!i)
             uref_block_set_start(dup);
+        if (i == PES_HEADER_SIZE_PTS - 1)
+            end = UBASE_ERR_NONE;
         upipe_input(upipe_ts_pesd, dup, NULL);
     }
     assert(!nb_packets);
@@ -283,7 +285,7 @@ int main(int argc, char *argv[])
     pes_set_length(buffer, PES_HEADER_SIZE_NOPTS + 12 - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, 0);
     dataalignment = UBASE_ERR_INVALID;
-    end = UBASE_ERR_INVALID;
+    end = UBASE_ERR_NONE;
     uref_block_unmap(uref, 0);
     uref_block_set_start(uref);
     payload_size = 12;
@@ -307,6 +309,7 @@ int main(int argc, char *argv[])
     payload_size = 0;
     expect_lost = false;
     dataalignment = UBASE_ERR_NONE;
+    end = UBASE_ERR_INVALID;
     uref_block_set_start(uref);
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);
