@@ -261,9 +261,7 @@ struct upipe_ts_demux_program {
     /** pointer to psi_pid structure */
     struct upipe_ts_demux_psi_pid *psi_pid;
     /** systime_rap of the last PMT */
-    uint64_t systime_pmt;
-    /** systime_rap of the last PCR */
-    uint64_t systime_pcr;
+    uint64_t pmt_rap;
 
     /** PMT PID */
     uint64_t pmt_pid;
@@ -330,8 +328,6 @@ struct upipe_ts_demux_output {
     struct upipe *split_output;
     /** setrap inner pipe */
     struct upipe *setrap;
-    /** systime of the last random-access frame */
-    uint64_t systime_random;
 
     /** maximum retention time in the pipeline */
     uint64_t max_delay;
@@ -878,8 +874,7 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
             return false;
         }
 
-        int err = upipe_set_flow_def(upipe_ts_demux_output->setrap,
-                                                flow_def);
+        int err = upipe_set_flow_def(upipe_ts_demux_output->setrap, flow_def);
         uref_free(flow_def);
         return err == UBASE_ERR_NONE;
     }
@@ -1109,9 +1104,9 @@ static int upipe_ts_demux_program_pmtd_probe(struct uprobe *uprobe,
     switch (event) {
         case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);
-            uint64_t systime;
-            if (ubase_check(uref_clock_get_rap_sys(uref, &systime)))
-                upipe_ts_demux_program->systime_pmt = systime;
+            uint64_t pmt_rap;
+            if (ubase_check(uref_clock_get_rap_sys(uref, &pmt_rap)))
+                upipe_ts_demux_program->pmt_rap = pmt_rap;
             return UBASE_ERR_NONE;
         }
         case UPROBE_NEW_FLOW_DEF:
@@ -1185,19 +1180,19 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
                           upipe_ts_demux_program->timestamp_offset,
                           discontinuity);
 
-    if (upipe_ts_demux_program->systime_pmt) {
+    if (upipe_ts_demux_program->pmt_rap) {
         struct uchain *uchain;
         struct upipe_ts_demux_output *output = NULL;
-        upipe_ts_demux_program->systime_pcr =
-            upipe_ts_demux_program->systime_pmt;
+        uint64_t pcr_rap = upipe_ts_demux_program->pmt_rap;
         ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
             output = upipe_ts_demux_output_from_uchain(uchain);
-            if (output->setrap != NULL)
+            if (output->setrap != NULL) {
                 UBASE_FATAL(upipe, upipe_setrap_set_rap(output->setrap,
-                                        upipe_ts_demux_program->systime_pcr));
+                                                        pcr_rap));
+            }
         }
         /* this is also valid for the packet we are processing */
-        uref_clock_set_rap_sys(uref, upipe_ts_demux_program->systime_pcr);
+        uref_clock_set_rap_sys(uref, pcr_rap);
     }
 }
 
@@ -1315,8 +1310,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program_init_sub_outputs(upipe);
     upipe_ts_demux_program->flow_def_input = flow_def;
     upipe_ts_demux_program->program = 0;
-    upipe_ts_demux_program->systime_pmt = 0;
-    upipe_ts_demux_program->systime_pcr = 0;
+    upipe_ts_demux_program->pmt_rap = 0;
     upipe_ts_demux_program->pcr_pid = 0;
     upipe_ts_demux_program->pcr_split_output = NULL;
     upipe_ts_demux_program->psi_split_output = NULL;
@@ -1627,9 +1621,9 @@ static int upipe_ts_demux_patd_new_rap(struct upipe *upipe,
     struct uref *uref = va_arg(args, struct uref *);
     assert(uref != NULL);
 
-    uint64_t systime_rap;
-    UBASE_RETURN(uref_clock_get_rap_sys(uref, &systime_rap))
-    return upipe_setrap_set_rap(upipe_ts_demux->setrap, systime_rap);
+    uint64_t pat_rap;
+    UBASE_RETURN(uref_clock_get_rap_sys(uref, &pat_rap))
+    return upipe_setrap_set_rap(upipe_ts_demux->setrap, pat_rap);
 }
 
 /** @internal @This catches update events coming from patd inner pipe.
