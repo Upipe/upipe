@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,6 +40,7 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 
 #include <assert.h>
@@ -187,6 +188,8 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
     size_t offset = 0;                                                      \
+    uint64_t rap_sys = UINT64_MAX;                                          \
+    uref_clock_get_rap_sys(STRUCTURE->NEXT_UREF, &rap_sys);                 \
     while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
         if (uchain == NULL) {                                               \
@@ -212,6 +215,8 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
     struct uref *uref = STRUCTURE->NEXT_UREF;                               \
     STRUCTURE->NEXT_UREF = uref_block_splice(uref, offset, -1);             \
     uref_block_truncate(uref, offset);                                      \
+    if (rap_sys != UINT64_MAX)                                              \
+        uref_clock_set_rap_sys(uref, rap_sys);                              \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
