@@ -416,7 +416,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
     uint64_t systime = upipe_avfsrc->uclock != NULL ?
-                       uclock_now(upipe_avfsrc->uclock) : 0;
+                       uclock_now(upipe_avfsrc->uclock) : UINT64_MAX;
     uint8_t *buffer;
     int read_size = -1;
     if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size, &buffer)))) {
@@ -433,8 +433,10 @@ static void upipe_avfsrc_worker(struct upump *upump)
     bool ts = false;
     if (upipe_avfsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
-    if (pkt.flags & AV_PKT_FLAG_KEY)
-        UBASE_FATAL(upipe, uref_flow_set_random(uref))
+    if (pkt.flags & AV_PKT_FLAG_KEY) {
+        UBASE_FATAL(upipe, uref_pic_set_key(uref))
+        upipe_avfsrc->systime_rap = systime;
+    }
 
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
@@ -459,9 +461,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
         if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
             upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
         ts = true;
-
-        if (upipe_avfsrc->uclock != NULL && stream->reference_dts == pkt.dts)
-            upipe_avfsrc->systime_rap = systime;
 
         /* this is subtly wrong, but whatever */
         upipe_throw_clock_ref(upipe, uref,
