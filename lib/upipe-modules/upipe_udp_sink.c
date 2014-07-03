@@ -204,8 +204,12 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     uint64_t now = uclock_now(upipe_udpsink->uclock);
     systime += upipe_udpsink->latency;
     if (unlikely(now < systime)) {
-        upipe_udpsink_wait_upump(upipe, systime - now, upipe_udpsink_watcher);
-        return false;
+        upipe_udpsink_check_upump_mgr(upipe);
+        if (likely(upipe_udpsink->upump_mgr != NULL)) {
+            upipe_udpsink_wait_upump(upipe, systime - now,
+                                     upipe_udpsink_watcher);
+            return false;
+        }
     } else if (now > systime + SYSTIME_TOLERANCE)
         upipe_warn_va(upipe,
                       "outputting late packet %"PRIu64" ms, latency %"PRIu64" ms",
