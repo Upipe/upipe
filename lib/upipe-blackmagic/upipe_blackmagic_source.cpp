@@ -446,9 +446,9 @@ static void upipe_bmd_src_init_sub_mgr(struct upipe *upipe)
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
-                                         struct uprobe *uprobe,
-                                         uint32_t signature, va_list args)
+static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
+                                          struct uprobe *uprobe,
+                                          uint32_t signature, va_list args)
 {
     if (signature != UPIPE_BMD_SRC_SIGNATURE)
         return NULL;
@@ -914,7 +914,7 @@ static struct upipe_mgr upipe_bmd_src_mgr = {
     /* .refcount = */ NULL,
     /* .signature = */ UPIPE_BMD_SRC_SIGNATURE,
 
-    /* .upipe_alloc = */ upipe_bmd_src_alloc,
+    /* .upipe_alloc = */ _upipe_bmd_src_alloc,
     /* .upipe_input = */ NULL,
     /* .upipe_control = */ upipe_bmd_src_control,
 
