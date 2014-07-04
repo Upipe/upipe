@@ -355,18 +355,22 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                                         upipe_ts_encaps->pcr_tolerance -
                                         upipe_ts_encaps->ts_delay);
             if (likely(output != NULL)) {
+                uint64_t pcr_dts_sys = upipe_ts_encaps->next_pcr +
+                                       upipe_ts_encaps->pcr_interval / 2;
                 uref_clock_set_ref(output);
                 uref_clock_set_cr_dts_delay(output,
-                    dts_sys - upipe_ts_encaps->next_pcr +
+                    pcr_dts_sys - upipe_ts_encaps->next_pcr +
                     upipe_ts_encaps->pcr_tolerance + upipe_ts_encaps->ts_delay);
-                uref_clock_set_dts_sys(output, dts_sys);
+                uref_clock_set_dts_sys(output, pcr_dts_sys);
                 uref_clock_rebase_cr_sys(output);
                 if (dts_prog != UINT64_MAX) {
-                    uref_clock_set_dts_prog(output, dts_prog);
+                    uref_clock_set_dts_prog(output, dts_prog +
+                                                    pcr_dts_sys - dts_sys);
                     uref_clock_rebase_cr_prog(output);
                 }
                 if (dts_orig != UINT64_MAX) {
-                    uref_clock_set_dts_orig(output, dts_orig);
+                    uref_clock_set_dts_orig(output, dts_orig +
+                                                    pcr_dts_sys - dts_sys);
                     uref_clock_rebase_cr_orig(output);
                 }
                 upipe_ts_encaps_output(upipe, output, upump_p);
@@ -418,6 +422,11 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
          * packet, considering the rest of the elementary stream will be output
          * at peak octet rate. */
         uint64_t output_dts = dts_sys - i * peak_duration / nb_ts;
+        if (pcr &&
+            upipe_ts_encaps->next_pcr + upipe_ts_encaps->pcr_interval / 2 <
+                output_dts)
+            output_dts = upipe_ts_encaps->next_pcr +
+                         upipe_ts_encaps->pcr_interval / 2;
         uint64_t output_delay;
         if (output_dts < muxdate) {
             upipe_warn(upipe, "input is bursting above its max octet rate");
@@ -433,17 +442,14 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
         uref_clock_rebase_cr_sys(output);
         if (dts_prog != UINT64_MAX) {
             uref_clock_set_dts_prog(output,
-                                    dts_prog - i * peak_duration / nb_ts);
+                                    dts_prog + output_dts - dts_sys);
             uref_clock_rebase_cr_prog(output);
         }
         if (dts_orig != UINT64_MAX) {
             uref_clock_set_dts_orig(output,
-                                    dts_orig - i * peak_duration / nb_ts);
+                                    dts_orig + output_dts - dts_sys);
             uref_clock_rebase_cr_orig(output);
         }
-
-        /* PTS is now meaningless. */
-        uref_clock_delete_dts_pts_delay(output);
 
         if (pcr) {
             uref_clock_set_ref(output);
