@@ -77,6 +77,23 @@
 #define BMD_CLOCK_MIN UINT32_MAX
 /** fixed sample rate FIXME */
 #define BMD_SAMPLERATE 48000
+/** fixed channels number */
+#define CHANS 8
+/** blackmagic uri separator */
+#define URI_SEP "://"
+
+const struct {
+    const char *name;
+    BMDVideoConnection bmdConn;
+} upipe_bmd_src_video_conns[] = {
+    {"sdi", bmdVideoConnectionSDI},
+    {"hdmi", bmdVideoConnectionHDMI},
+    {"opticalsdi", bmdVideoConnectionOpticalSDI},
+    {"component", bmdVideoConnectionComponent},
+    {"composite", bmdVideoConnectionComposite},
+    {"svideo", bmdVideoConnectionSVideo},
+    {NULL, 0},
+};
 
 /** @internal @This is the class that retrieves frames in a private thread. */
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
@@ -184,6 +201,8 @@ struct upipe_bmd_src {
     IDeckLink *deckLink;
     /** handle to decklink card input */
     IDeckLinkInput *deckLinkInput;
+    /** handle to decklink configuration */
+    IDeckLinkConfiguration *deckLinkConfiguration;
     /** handle to decklink delegate */
     DeckLinkCaptureDelegate *deckLinkCaptureDelegate;
     /** true for progressive frames - for use by the private thread */
@@ -491,6 +510,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
                 upipe_bmd_src->uqueue_extra);
     upipe_bmd_src->deckLink = NULL;
     upipe_bmd_src->deckLinkInput = NULL;
+    upipe_bmd_src->deckLinkConfiguration = NULL;
     upipe_bmd_src->deckLinkCaptureDelegate = NULL;
     upipe_bmd_src->progressive = false;
     upipe_bmd_src->tff = true;
@@ -635,8 +655,14 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     UBASE_RETURN(upipe_bmd_src_check_uref_mgr(upipe))
     upipe_bmd_src_check_upump_mgr(upipe);
 
+    const char *idx = strstr(uri, URI_SEP);
+    if (unlikely(!idx)) {
+        idx = uri;
+    } else {
+        idx += strlen(URI_SEP);
+    }
     upipe_bmd_src->uri = strdup(uri);
-    upipe_bmd_src->card_idx = atoi(uri);
+    upipe_bmd_src->card_idx = atoi(idx);
     upipe_notice_va(upipe, "opening device %s", upipe_bmd_src->uri);
 
     IDeckLinkIterator *deckLinkIterator;
@@ -681,20 +707,32 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-#if 0
-    /* decklink input connection */
+    /* card configuration */
     IDeckLinkConfiguration *deckLinkConfiguration;
     if (deckLink->QueryInterface(IID_IDeckLinkConfiguration,
-                                 (void**)&deckLinkConfiguration) != S_OK) {
+                (void**)&deckLinkConfiguration) != S_OK) {
         upipe_err(upipe, "decklink card has no configuration");
         deckLinkInput->Release();
         deckLink->Release();
         return UBASE_ERR_EXTERNAL;
     }
 
-    deckLinkConfiguration->SetInt(bmdDeckLinkConfigVideoInputConnection,
-                                  bmdVideoConnectionHDMI);
-#endif
+    /* decklink input connection */
+    if (idx != uri) {
+        int i = 0;
+        BMDVideoConnection conn = 0;
+        for (i=0; upipe_bmd_src_video_conns[i].name; i++) {
+            if (!ubase_ncmp(uri, upipe_bmd_src_video_conns[i].name)) {
+                conn = upipe_bmd_src_video_conns[i].bmdConn;
+                break;
+            }
+        }
+
+        if (conn != 0) {
+            deckLinkConfiguration->SetInt(
+                bmdDeckLinkConfigVideoInputConnection, conn);
+        }
+    }
 
     /* format detection available ? */
     IDeckLinkAttributes *deckLinkAttr = NULL;
@@ -715,14 +753,14 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     deckLinkInput->EnableVideoInput(bmdModeHD1080i50, bmdFormat8BitYUV,
                     (detectFormat ? bmdVideoInputEnableFormatDetection : 0));
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
-                                    bmdAudioSampleType16bitInteger, 2);
+                                    bmdAudioSampleType16bitInteger, CHANS);
 
     /* managers */
     upipe_bmd_src->pic_subpipe.ubuf_mgr =
         ubuf_pic_bmd_mgr_alloc(UBUF_POOL_DEPTH, bmdFormat8BitYUV);
     upipe_bmd_src->sound_subpipe.ubuf_mgr =
         ubuf_sound_bmd_mgr_alloc(UBUF_POOL_DEPTH,
-                                 bmdAudioSampleType16bitInteger, 2, "lr");
+                                 bmdAudioSampleType16bitInteger, CHANS, "ALL");
     /* TODO subpic */
     if (unlikely(upipe_bmd_src->pic_subpipe.ubuf_mgr == NULL ||
                  upipe_bmd_src->sound_subpipe.ubuf_mgr == NULL)) {
@@ -751,8 +789,9 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
             flow_def);
 
-    flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.", 2, 2);
-    uref_sound_flow_add_plane(flow_def, "lr");
+    flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.",
+                                         CHANS, 2*CHANS);
+    uref_sound_flow_add_plane(flow_def, "ALL");
     uref_sound_flow_set_rate(flow_def, BMD_SAMPLERATE);
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
@@ -762,6 +801,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_bmd_src->deckLink = deckLink;
     upipe_bmd_src->deckLinkInput = deckLinkInput;
+    upipe_bmd_src->deckLinkConfiguration = deckLinkConfiguration;
     /* callback helper */
     upipe_bmd_src->deckLinkCaptureDelegate = new DeckLinkCaptureDelegate(upipe);
     deckLinkInput->SetCallback(upipe_bmd_src->deckLinkCaptureDelegate);
@@ -881,6 +921,8 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
 
     upipe_bmd_src_work(upipe, NULL);
+    if (upipe_bmd_src->deckLinkConfiguration)
+        upipe_bmd_src->deckLinkConfiguration->Release();
     if (upipe_bmd_src->deckLinkInput)
         upipe_bmd_src->deckLinkInput->Release();
     if (upipe_bmd_src->deckLink)
