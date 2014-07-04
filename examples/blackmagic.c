@@ -57,6 +57,9 @@
 #include <upipe-av/upipe_avformat_sink.h>
 #include <upipe-blackmagic/upipe_blackmagic_source.h>
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-swresample/upipe_swr.h>
+#include <upipe-filters/upipe_filter_format.h>
+#include <upipe-filters/uprobe_filter_suggest.h>
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -85,6 +88,7 @@ struct upump_mgr *upump_mgr;
 
 const char *video_codec = "mpeg2video";
 const char *audio_codec = NULL;
+const char *bmd_uri = NULL;
 const char *sink_uri = NULL;
 
 /* catch uprobes */
@@ -99,7 +103,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 void usage(const char *argv0)
 {
-    printf("Usage: %s [-d] [-f format] [-m mime] [-c video_codec] [-a audio_codec] sink_uri\n", argv0);
+    printf("Usage: %s [-d] [-f format] [-m mime] [-c video_codec] [-a audio_codec] bmd_uri sink_uri\n", argv0);
     exit(-1);
 }
 
@@ -134,10 +138,11 @@ int main(int argc, char **argv)
                 usage(argv[0]);
         }
     }
-    if (argc - optind < 1) {
+    if (argc - optind < 2) {
         usage(argv[0]);
     }
 
+    bmd_uri = argv[optind++];
     sink_uri = argv[optind++];
 
     /* upipe env */
@@ -169,10 +174,14 @@ int main(int argc, char **argv)
     /* managers */
     struct upipe_mgr *upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
     struct upipe_mgr *upipe_bmd_src_mgr = upipe_bmd_src_mgr_alloc();
-    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
+    struct upipe_mgr *upipe_swr_mgr = upipe_swr_mgr_alloc();
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
+    struct upipe_mgr *upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
+
+    upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
+    upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
 
     /* /dev/null */
     struct upipe *devnull = upipe_void_alloc(upipe_null_mgr,
@@ -202,7 +211,7 @@ int main(int argc, char **argv)
                          loglevel, "bmdsubpic"));
     assert(bmdsrc);
     upipe_attach_uclock(bmdsrc);
-    upipe_set_uri(bmdsrc, "0");
+    upipe_set_uri(bmdsrc, bmd_uri);
    
     /* video source subpipe */
     struct upipe *bmdvideo = NULL;
@@ -211,33 +220,34 @@ int main(int argc, char **argv)
     upipe_use(bmdvideo);
 
     /* convert picture */
-    flow = uref_pic_flow_alloc_def(uref_mgr, 1);
-    uref_pic_flow_add_plane(flow, 1, 1, 1, "y8");
-    uref_pic_flow_add_plane(flow, 2, 2, 1, "u8");
-    uref_pic_flow_add_plane(flow, 2, 2, 1, "v8");
-    struct upipe *sws = upipe_flow_alloc_output(bmdvideo, upipe_sws_mgr,
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
-            loglevel, "sws"), flow);
-    assert(sws);
-    upipe_release(sws);
+    flow = uref_alloc_control(uref_mgr);
+    uref_flow_set_def(flow, "pic.");
+    struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
+                    uprobe_output_alloc(uprobe_use(logger))),
+                UPROBE_LOG_VERBOSE, "ffmtvideo"), flow);
+    assert(ffmt);
     uref_free(flow);
 
     /* encode */
     flow = uref_block_flow_alloc_def(uref_mgr, "");
     uref_avcenc_set_codec_name(flow, video_codec);
-    struct upipe *avcenc = upipe_flow_alloc_output(sws, upipe_avcenc_mgr,
+    struct upipe *avcenc = upipe_flow_alloc_output(ffmt, upipe_avcenc_mgr,
         uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
             loglevel, "avcenc"), flow);
     assert(avcenc);
     upipe_avcenc_set_option(avcenc, "b", "12000000");
-    upipe_release(avcenc);
     uref_free(flow);
     
     /* mux input */
     struct upipe *sink = upipe_void_alloc_output_sub(avcenc, avfsink,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "videosink"));
+    upipe_release(avcenc);
     assert(sink);
     upipe_release(sink);
+
+    upipe_set_output(bmdvideo, ffmt);
+    upipe_release(ffmt);
  
     /* audio source subpipe */
     struct upipe *bmdaudio = NULL;
@@ -246,22 +256,35 @@ int main(int argc, char **argv)
     upipe_use(bmdaudio);
 
     if (audio_codec) {
+        /* convert */
+        flow = uref_alloc_control(uref_mgr);
+        uref_flow_set_def(flow, "sound.");
+        struct upipe *ffmtaudio = upipe_flow_alloc(upipe_ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
+                    uprobe_output_alloc(uprobe_use(logger))),
+                UPROBE_LOG_VERBOSE, "ffmtaudio"), flow);
+        assert(ffmtaudio);
+        uref_free(flow);
+
         /* encode */
         flow = uref_block_flow_alloc_def(uref_mgr, "");
         uref_avcenc_set_codec_name(flow, audio_codec);
-        struct upipe *audioenc = upipe_flow_alloc_output(bmdaudio,
+        struct upipe *audioenc = upipe_flow_alloc_output(ffmtaudio,
             upipe_avcenc_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
                 loglevel, "audioenc"), flow);
         assert(audioenc);
-        upipe_release(audioenc);
         uref_free(flow);
         
         /* mux input */
         struct upipe *sink = upipe_void_alloc_output_sub(audioenc, avfsink,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "audiosink"));
         assert(sink);
+        upipe_release(audioenc);
         upipe_release(sink);
+
+        upipe_set_output(bmdaudio, ffmtaudio);
+        upipe_release(ffmtaudio);
     }
     else {
         upipe_set_output(bmdaudio, devnull);
@@ -269,4 +292,6 @@ int main(int argc, char **argv)
     }
 
     ev_loop(loop, 0);
+
+    /* should clean everything here, but meh :-) */
 }
