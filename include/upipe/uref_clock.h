@@ -77,6 +77,28 @@ static inline void uref_clock_get_date_##dv(const struct uref *uref,        \
 static inline void uref_clock_set_date_##dv(struct uref *uref,              \
                                             uint64_t date, int type)        \
 {                                                                           \
+    int current_type;                                                       \
+    uint64_t current_date;                                                  \
+    uref_clock_get_date_##dv(uref, &current_date, &current_type);           \
+    switch (current_type) {                                                 \
+        case UREF_DATE_CR: {                                                \
+            uint64_t dts_pts_delay;                                         \
+            if (type == UREF_DATE_PTS &&                                    \
+                ubase_check(uref_clock_get_dts_pts_delay(uref,              \
+                                                         &dts_pts_delay)))  \
+                uref_clock_set_cr_dts_delay(uref,                           \
+                        date - dts_pts_delay - current_date);               \
+            else if (type == UREF_DATE_DTS)                                 \
+                uref_clock_set_cr_dts_delay(uref, date - current_date);     \
+            break;                                                          \
+        }                                                                   \
+        case UREF_DATE_DTS:                                                 \
+            if (type == UREF_DATE_PTS)                                      \
+                uref_clock_set_dts_pts_delay(uref, date - current_date);    \
+            break;                                                          \
+        default:                                                            \
+            break;                                                          \
+    }                                                                       \
     uref->date_##dv = date;                                                 \
     uref->flags &= ~(UINT64_C(0x3) << UREF_FLAG_DATE_##DV##_SHIFT);         \
     uref->flags |= ((uint64_t)type << UREF_FLAG_DATE_##DV##_SHIFT);         \

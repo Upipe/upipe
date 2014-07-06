@@ -98,6 +98,8 @@ struct upipe_mpgvf {
     struct uref *flow_def_attr;
     /** rap of the last dts */
     uint64_t dts_rap;
+    /** rap of the last sequence header */
+    uint64_t seq_rap;
     /** rap of the last I */
     uint64_t iframe_rap;
     /** rap of the last reference frame */
@@ -219,6 +221,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_init_output(upipe);
     upipe_mpgvf_init_flow_def(upipe);
     upipe_mpgvf->dts_rap = UINT64_MAX;
+    upipe_mpgvf->seq_rap = UINT64_MAX;
     upipe_mpgvf->iframe_rap = UINT64_MAX;
     upipe_mpgvf->ref_rap = UINT64_MAX;
     upipe_mpgvf->input_latency = 0;
@@ -769,7 +772,7 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
             UBASE_FATAL(upipe, uref_pic_set_key(uref))
 
             upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
-            upipe_mpgvf->iframe_rap = upipe_mpgvf->dts_rap;
+            upipe_mpgvf->iframe_rap = upipe_mpgvf->seq_rap;
             if (upipe_mpgvf->iframe_rap != UINT64_MAX)
                 uref_clock_set_rap_sys(uref, upipe_mpgvf->iframe_rap);
             break;
@@ -998,6 +1001,7 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
         switch (start) {
             case MP2VSEQ_START_CODE:
                 upipe_mpgvf->next_frame_sequence = true;
+                upipe_mpgvf->seq_rap = upipe_mpgvf->dts_rap;
                 break;
             case MP2VGOP_START_CODE:
                 upipe_mpgvf->next_frame_gop_offset = 0;
