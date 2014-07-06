@@ -145,6 +145,11 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
 static void upipe_fsink_poll(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    if (unlikely(!ubase_check(upipe_fsink_check_upump_mgr(upipe)))) {
+        upipe_err_va(upipe, "can't get upump_mgr");
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
+    }
     struct upump *watcher = upump_alloc_fd_write(upipe_fsink->upump_mgr,
                                                  upipe_fsink_watcher, upipe,
                                                  upipe_fsink->fd);
@@ -351,7 +356,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(path == NULL))
         return UBASE_ERR_NONE;
 
-    UBASE_RETURN(upipe_fsink_check_upump_mgr(upipe))
+    upipe_fsink_check_upump_mgr(upipe);
 
     const char *mode_desc = NULL; /* hush gcc */
     int flags;
