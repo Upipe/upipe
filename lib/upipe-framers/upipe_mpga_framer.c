@@ -201,6 +201,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->samplerate = 0;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
+    uref_init(&upipe_mpgaf->au_uref_s);
     upipe_mpgaf_flush_dates(upipe);
     upipe_mpgaf->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);

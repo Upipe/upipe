@@ -162,17 +162,12 @@ static inline void uref_free(struct uref *uref)
     uref->mgr->uref_free(uref);
 }
 
-/** @This allocates and initializes a new uref.
+/** @This initializes a new uref.
  *
- * @param mgr management structure for this buffer pool
- * @return allocated uref or NULL in case of allocation failure
+ * @param uref allocated uref
  */
-static inline struct uref *uref_alloc(struct uref_mgr *mgr)
+static inline void uref_init(struct uref *uref)
 {
-    struct uref *uref = mgr->uref_alloc(mgr);
-    if (unlikely(uref == NULL))
-        return NULL;
-
     uref->ubuf = NULL;
     uref->udict = NULL;
 
@@ -184,7 +179,20 @@ static inline struct uref *uref_alloc(struct uref_mgr *mgr)
     uref->cr_dts_delay = UINT64_MAX;
     uref->rap_cr_delay = UINT64_MAX;
     uref->priv = UINT64_MAX;
+}
 
+/** @This allocates and initializes a new uref.
+ *
+ * @param mgr management structure for this buffer pool
+ * @return allocated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_alloc(struct uref_mgr *mgr)
+{
+    struct uref *uref = mgr->uref_alloc(mgr);
+    if (unlikely(uref == NULL))
+        return NULL;
+
+    uref_init(uref);
     return uref;
 }
 

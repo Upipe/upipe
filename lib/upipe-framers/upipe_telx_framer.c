@@ -125,6 +125,7 @@ static struct upipe *upipe_telxf_alloc(struct upipe_mgr *mgr,
     upipe_telxf->octetrate = 0;
     upipe_telxf->next_uref = NULL;
     upipe_telxf->next_uref_size = 0;
+    uref_init(&upipe_telxf->au_uref_s);
     uref_clock_set_date_sys(&upipe_telxf->au_uref_s, UINT64_MAX,
                             UREF_DATE_NONE);
     uref_clock_set_date_prog(&upipe_telxf->au_uref_s, UINT64_MAX,

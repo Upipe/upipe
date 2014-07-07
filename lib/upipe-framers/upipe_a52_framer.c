@@ -158,6 +158,7 @@ static struct upipe *upipe_a52f_alloc(struct upipe_mgr *mgr,
     upipe_a52f->samplerate = 0;
     upipe_a52f->got_discontinuity = false;
     upipe_a52f->next_frame_size = -1;
+    uref_init(&upipe_a52f->au_uref_s);
     upipe_a52f_flush_dates(upipe);
     upipe_a52f->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);

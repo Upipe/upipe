@@ -239,6 +239,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf->next_frame_offset = -1;
     upipe_mpgvf->next_frame_ext_offset = -1;
     upipe_mpgvf->next_frame_slice = false;
+    uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;

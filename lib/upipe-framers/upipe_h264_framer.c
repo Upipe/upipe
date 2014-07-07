@@ -308,6 +308,7 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->au_vcl_offset = -1;
     upipe_h264f->au_slice = false;
     upipe_h264f->au_slice_nal = UINT8_MAX;
+    uref_init(&upipe_h264f->au_uref_s);
     upipe_h264f_flush_dates(upipe);
 
     int i;
