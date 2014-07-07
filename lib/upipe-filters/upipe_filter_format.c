@@ -228,6 +228,9 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             urational_simplify(&sar);
             uref_pic_flow_set_sar(flow_def, sar);
         }
+        /* delete sar and dar to let sws set it */
+        uref_pic_flow_delete_sar(flow_def_dup);
+        uref_ffmt_flow_delete_dar(flow_def_dup);
 
         bool need_deint = !!(uref_pic_cmp_progressive(flow_def, flow_def_dup));
         bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
