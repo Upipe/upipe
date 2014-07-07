@@ -772,6 +772,7 @@ static inline struct ubuf *ubuf_block_copy(struct ubuf_mgr *mgr,
     int extract_size = new_size - extract_offset <= ubuf_size - extract_skip ?
                        new_size - extract_offset : ubuf_size - extract_skip;
     uint8_t *buffer;
+    bool ret;
     if (unlikely(!ubase_check(ubuf_block_write(new_ubuf, extract_offset,
                                                &extract_size, &buffer))))
         goto ubuf_block_copy_err;
