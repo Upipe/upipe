@@ -1514,6 +1514,8 @@ upipe_h264f_parse_slice_retry:
         upipe_h264f->delta_poc0 = delta_poc0;
         upipe_h264f->delta_poc1 = delta_poc1;
     }
+
+    upipe_h264f->au_slice = true;
 }
 
 /** @internal @This is called when a new NAL starts, to check the previous NAL.
