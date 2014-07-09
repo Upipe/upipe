@@ -196,11 +196,12 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
 
-    if (unlikely(upipe_avcdec->uref == NULL))
+    if (unlikely(upipe_avcdec->uref == NULL)) {
+        upipe_dbg(upipe, "get_buffer called without uref");
         return -1;
+    }
 
-    struct uref *uref = upipe_avcdec->uref;
-    upipe_avcdec->uref = NULL;
+    struct uref *uref = uref_dup(upipe_avcdec->uref);
     frame->opaque = uref;
 
     uint64_t framenum = 0;
@@ -293,8 +294,10 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1))
+    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+        upipe_verbose(upipe, "no direct rendering, using default");
         return avcodec_default_get_buffer(context, frame);
+    }
 
     /* Direct rendering */
     /* Iterate over the flow def attr because it's designed to be in the correct
