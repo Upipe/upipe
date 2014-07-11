@@ -11,6 +11,9 @@ libupipe_x264_la_LDFLAGS = -no-undefined
 if HAVE_X264_OBE
 libupipe_x264_la_CPPFLAGS += -DHAVE_X264_OBE
 endif
+if HAVE_X264_MPEG2
+libupipe_x264_la_CPPFLAGS += -DHAVE_X264_MPEG2
+endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_x264.pc

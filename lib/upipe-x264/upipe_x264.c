@@ -62,6 +62,7 @@
 
 #define EXPECTED_FLOW "pic."
 #define OUT_FLOW "block.h264.pic."
+#define OUT_FLOW_MPEG2 "block.mpeg2video.pic."
 
 /** @internal upipe_x264 private structure */
 struct upipe_x264 {
@@ -149,6 +150,20 @@ static void upipe_x264_log(void *_upipe, int loglevel,
     free(string);
 }
 
+/** @internal @This checks whether mpeg2 encoding is enabled
+ * @param upipe description structure of the pipe
+ * @return true if mpeg2 enabled
+ */
+static inline bool upipe_x264_mpeg2_enabled(struct upipe *upipe)
+{
+#ifdef HAVE_X264_MPEG2
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    return !!upipe_x264->params.b_mpeg2;
+#else
+    return false;
+#endif
+}
+
 /** @internal @This reconfigures encoder with updated parameters
  * @param upipe description structure of the pipe
  * @return an error code
@@ -173,6 +188,21 @@ static int _upipe_x264_set_default(struct upipe *upipe)
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_default(&upipe_x264->params);
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This reset parameters to mpeg2 default
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int _upipe_x264_set_default_mpeg2(struct upipe *upipe)
+{
+#ifndef HAVE_X264_MPEG2
+    return UBASE_ERR_EXTERNAL;
+#else
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    x264_param_default_mpeg2(&upipe_x264->params);
+    return UBASE_ERR_NONE;
+#endif
 }
 
 /** @internal @This sets default parameters for specified preset.
@@ -335,10 +365,15 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         return false;
     }
 
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_attr, OUT_FLOW)))) {
+    const char *def = OUT_FLOW;
+    if (upipe_x264_mpeg2_enabled(upipe)) {
+        def = OUT_FLOW_MPEG2;
+    }
+    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_attr, def)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
+
     /* set octetrate for CBR streams */
     if (params->rc.i_bitrate) {
         uref_block_flow_set_octetrate(flow_def_attr,
@@ -731,6 +766,10 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_X264_SET_DEFAULT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             return _upipe_x264_set_default(upipe);
+        }
+        case UPIPE_X264_SET_DEFAULT_MPEG2: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+            return _upipe_x264_set_default_mpeg2(upipe);
         }
         case UPIPE_X264_SET_DEFAULT_PRESET: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)

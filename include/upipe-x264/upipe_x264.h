@@ -50,6 +50,9 @@ enum upipe_x264_command {
     /** set default params */
     UPIPE_X264_SET_DEFAULT,
 
+    /** set default mpeg2 params */
+    UPIPE_X264_SET_DEFAULT_MPEG2,
+
     /** set default params for preset (const char *, const char *) */
     UPIPE_X264_SET_DEFAULT_PRESET,
 
@@ -78,6 +81,17 @@ static inline bool upipe_x264_reconfigure(struct upipe *upipe)
 static inline bool upipe_x264_set_default(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_X264_SET_DEFAULT, UPIPE_X264_SIGNATURE);
+}
+
+/** @This sets default mpeg2 parameters (and runs CPU detection).
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static inline bool upipe_x264_set_default_mpeg2(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_X264_SET_DEFAULT_MPEG2,
+                         UPIPE_X264_SIGNATURE);
 }
 
 /** @This sets default parameters for specified preset.

@@ -60,6 +60,16 @@ AC_CHECK_FUNC(x264_speedcontrol_sync,
 )
 CFLAGS="$CFLAGS_save" LDFLAGS="$LDFLAGS_save"
 
+# x262 (x264 mpeg2video encoding)
+CFLAGS_save="$CFLAGS" LDFLAGS_save="$LDFLAGS"
+CFLAGS="$CFLAGS $X264_CFLAGS" LDFLAGS="$LDFLAGS $X264_LIBS"
+AC_CHECK_FUNC(x264_param_default_mpeg2,
+                AM_CONDITIONAL(HAVE_X264_MPEG2, true),
+                AM_CONDITIONAL(HAVE_X264_MPEG2, false)
+)
+CFLAGS="$CFLAGS_save" LDFLAGS="$LDFLAGS_save"
+
+
 AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
 
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
