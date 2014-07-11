@@ -24,12 +24,8 @@
  *
  */
 
- /*
-
-([qsrc][encoder]{label: x264\navcenc}[fsink]) {border-style: dashed; flow: west}
-[] -- stream --> [avfsrc] --> [avcdec] --> [qsink] --> {flow: south; end: east}
-[qsrc] --> [encoder] --> [fsink] -- file --> {flow: west}[]
-
+/** @file
+ * @short Simple upipe/avformat/avcodec remuxer/transcoder
  */
 
 #include <upipe/ulist.h>
@@ -69,6 +65,9 @@
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe-swresample/upipe_swr.h>
+#include <upipe-swscale/upipe_sws.h>
+#include <upipe-filters/upipe_filter_format.h>
+#include <upipe-filters/uprobe_filter_suggest.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -103,7 +102,7 @@ struct uref_mgr *uref_mgr;
 
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
-struct upipe_mgr *upipe_swr_mgr;
+struct upipe_mgr *upipe_ffmt_mgr;
 
 static struct uprobe *logger;
 static struct upipe *avfsrc;
@@ -111,7 +110,7 @@ static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-m <mime>] [-f <format>] [-p <pid> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
     fprintf(stderr, "   -f: output format name\n");
     fprintf(stderr, "   -m: output mime type\n");
     fprintf(stderr, "   -p: add stream with id\n");
@@ -156,7 +155,7 @@ bool es_conf_iterate(struct es_conf *conf, const char **key,
         *type == UDICT_TYPE_END) {
         return false;
     }
-    return udict_get_string(conf->options, value, *type, *key);
+    return ubase_check(udict_get_string(conf->options, value, *type, *key));
 }
 
 /* allocate es configuration */
@@ -180,7 +179,8 @@ bool es_conf_add_option(struct es_conf *conf, const char *key,
                                               const char *value)
 {
     assert(conf);
-    return udict_set_string(conf->options, value, UDICT_TYPE_STRING, key);
+    return ubase_check(udict_set_string(conf->options,
+                       value, UDICT_TYPE_STRING, key));
 }
 
 /* add option to es configuration */
@@ -195,6 +195,18 @@ static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
         value++;
     }
     return es_conf_add_option(conf, key, value);
+}
+
+/* free configuration list */
+static void es_conf_clean(struct uchain *list)
+{
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (list, uchain, uchain_tmp) {
+        ulist_delete(uchain);
+        struct es_conf *conf = es_conf_from_uchain(uchain);
+        udict_free(conf->options);
+        free(conf);
+    }
 }
 
 /* main uprobe */
@@ -258,23 +270,28 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             incoming = decoder;
             
             /* stream type */
+            char *ffmt_def = NULL;
             if (strstr(def, ".sound.")) {
-                /* resample */
-                struct uref *flow = uref_sound_flow_alloc_def(uref_mgr,
-                                                              "s16.", 2, 4);
-                uref_sound_flow_add_plane(flow, "lr");
-                struct upipe *swr = upipe_flow_alloc_output(decoder,
-                        upipe_swr_mgr,
-                        uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
-                                            loglevel, "swr %"PRIu64, id), flow);
-                upipe_release(swr);
-                uref_free(flow);
-                incoming = swr;
-            } else if (!strstr(def, ".pic.")) {
+                ffmt_def = "sound.";
+            } else if (strstr(def, "pic.")) {
+                ffmt_def = "pic.";
+            } else {
                 upipe_err_va(upipe, "stream type unsupported %"PRIu64" (%s)",
                              id, def);
                 exit(EXIT_FAILURE);
             }
+            /* format conversion */
+            struct uref *ffmt_flow = uref_alloc_control(uref_mgr);
+            uref_flow_set_def(ffmt_flow, ffmt_def);
+            struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
+                uprobe_pfx_alloc_va(uprobe_filter_suggest_alloc(
+                        uprobe_output_alloc(uprobe_use(logger))),
+                    UPROBE_LOG_VERBOSE, "ffmt %"PRIu64, id), ffmt_flow);
+            assert(ffmt);
+            uref_free(ffmt_flow);
+            upipe_set_output(incoming, ffmt);
+            upipe_release(ffmt);
+            incoming = ffmt;
 
             /* encoder */
             struct uref *flow = uref_block_flow_alloc_def(uref_mgr, "");
@@ -402,9 +419,13 @@ int main(int argc, char *argv[])
     /* pipe managers */
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
+    struct upipe_mgr *upipe_swr_mgr = upipe_swr_mgr_alloc();
+    struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
-    upipe_swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
+    upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
+    upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
 
     /* avformat sink */
     avfsink = upipe_void_alloc(upipe_avfsink_mgr,
@@ -432,7 +453,13 @@ int main(int argc, char *argv[])
     upipe_release(avfsink);
     upipe_mgr_release(upipe_avfsink_mgr); /* nop */
 
+    upipe_mgr_release(upipe_ffmt_mgr);
+    upipe_mgr_release(upipe_sws_mgr); /* nop */
+    upipe_mgr_release(upipe_swr_mgr); /* nop */
+
     upipe_av_clean();
+
+    es_conf_clean(&eslist);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
