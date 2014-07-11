@@ -407,7 +407,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                                               &fps))) {
             UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
                     upipe_avcenc->input_latency +
-                    context->delay * UCLOCK_FREQ * fps.num / fps.den));
+                    context->delay * UCLOCK_FREQ * fps.den / fps.num));
         } else if (ubase_check(uref_sound_flow_get_rate(
                         upipe_avcenc->flow_def_input, &rate))) {
             UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
