@@ -567,6 +567,7 @@ static int upipe_ts_psig_program_set_version(struct upipe *upipe,
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
+    upipe_dbg_va(upipe, "setting version to %u\n", version);
     upipe_ts_psig_program->pmt_version = version;
     return UBASE_ERR_NONE;
 }
@@ -853,7 +854,6 @@ static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig->tsid = tsid;
-    upipe_ts_psig->pat_version = 0;
     return UBASE_ERR_NONE;
 }
 
@@ -882,6 +882,7 @@ static int upipe_ts_psig_set_version(struct upipe *upipe,
                                      unsigned int version)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    upipe_dbg_va(upipe, "setting version to %u\n", version);
     upipe_ts_psig->pat_version = version;
     return UBASE_ERR_NONE;
 }

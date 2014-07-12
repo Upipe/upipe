@@ -1367,6 +1367,14 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
             uint64_t interval = va_arg(args, uint64_t);
             return upipe_ts_mux_program_set_pcr_interval(upipe, interval);
         }
+        case UPIPE_TS_MUX_GET_VERSION:
+        case UPIPE_TS_MUX_SET_VERSION: {
+            struct upipe_ts_mux_program *upipe_ts_mux_program =
+                upipe_ts_mux_program_from_upipe(upipe);
+            return upipe_control_va(upipe_ts_mux_program->program_psig,
+                                    command, args);
+        }
+
 
         default:
             return UBASE_ERR_UNHANDLED;
@@ -1975,8 +1983,7 @@ static int _upipe_ts_mux_set_octetrate(struct upipe *upipe, uint64_t octetrate)
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_ts_mux_control(struct upipe *upipe,
-                                int command, va_list args)
+static int upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR: {
@@ -2056,6 +2063,11 @@ static int upipe_ts_mux_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t octetrate = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_octetrate(upipe, octetrate);
+        }
+        case UPIPE_TS_MUX_GET_VERSION:
+        case UPIPE_TS_MUX_SET_VERSION: {
+            struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+            return upipe_control_va(upipe_ts_mux->psig, command, args);
         }
 
         default:
