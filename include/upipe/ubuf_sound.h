@@ -234,6 +234,7 @@ static inline int ubuf_sound_write_##type(struct ubuf *ubuf,                \
 UBUF_SOUND_MAP_TEMPLATE(void, void objects)
 UBUF_SOUND_MAP_TEMPLATE(uint8_t, 8-bit unsigned integers)
 UBUF_SOUND_MAP_TEMPLATE(int16_t, 16-bit signed integers)
+UBUF_SOUND_MAP_TEMPLATE(int32_t, 32-bit signed integers)
 UBUF_SOUND_MAP_TEMPLATE(float, floats)
 UBUF_SOUND_MAP_TEMPLATE(double, double-precision floats)
 #undef UBUF_SOUND_MAP_TEMPLATE

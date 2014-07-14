@@ -144,6 +144,7 @@ static inline int uref_sound_write_##type(struct uref *uref,                \
 UREF_SOUND_MAP_TEMPLATE(void)
 UREF_SOUND_MAP_TEMPLATE(uint8_t)
 UREF_SOUND_MAP_TEMPLATE(int16_t)
+UREF_SOUND_MAP_TEMPLATE(int32_t)
 UREF_SOUND_MAP_TEMPLATE(float)
 UREF_SOUND_MAP_TEMPLATE(double)
 #undef UREF_SOUND_MAP_TEMPLATE
