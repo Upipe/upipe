@@ -356,8 +356,10 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                 upipe_mpgaf->input_latency +
                 UCLOCK_FREQ * upipe_mpgaf->samples / upipe_mpgaf->samplerate))
     upipe_mpgaf->octetrate = (uint64_t)octetrate * 1000;
-    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
-                                               upipe_mpgaf->octetrate))
+    if (upipe_mpgaf->octetrate) {
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
+                                                   upipe_mpgaf->octetrate))
+    }
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def,
             (uint64_t)max_octetrate * 1000))
     if (copyright)
@@ -400,6 +402,11 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         return false;
     }
 
+    if (adts_get_length(header) < ADTS_HEADER_SIZE) {
+        upipe_warn(upipe, "invalid header");
+        return false;
+    }
+
     memcpy(upipe_mpgaf->sync_header, header, ADTS_HEADER_SIZE);
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
@@ -413,9 +420,13 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     upipe_mpgaf->samples = ADTS_SAMPLES_PER_BLOCK *
                            (1 + adts_get_num_blocks(header));
     upipe_mpgaf->channels = adts_get_channels(header);
+    if (upipe_mpgaf->channels == 7)
+        upipe_mpgaf->channels = 8;
 
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
-    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
+    if (upipe_mpgaf->channels) {
+        UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
+    }
     uint64_t samplerate = upipe_mpgaf->samplerate;
     if (samplerate <= 24000)
         /* assume SBR on low frequency streams */
