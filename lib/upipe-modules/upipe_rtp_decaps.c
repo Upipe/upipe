@@ -162,7 +162,7 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(upipe_rtpd->expected_seqnum != -1 &&
                  seqnum != upipe_rtpd->expected_seqnum)) {
         upipe_warn_va(upipe, "potentially lost %d RTP packets",
-                      (seqnum + UINT16_MAX - upipe_rtpd->expected_seqnum) &
+                      (seqnum + UINT16_MAX + 1 - upipe_rtpd->expected_seqnum) &
                       UINT16_MAX);
         uref_flow_set_discontinuity(uref);
     }
