@@ -113,6 +113,7 @@
         @item @ref upipe_mpgvf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_h264f_mgr_alloc @item linear pipe gathering MPEG-4 AVC video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_ffmt_mgr_alloc @item linear pipe transforming the format into another specified (potentially for an encoder) @item @tt -lupipe-filters
+        @item @ref upipe_fdec_mgr_alloc @item linear pipe decoding a stream @item @tt -lupipe-filters
         @item @ref upipe_filter_blend_mgr_alloc @item linear pipe deinterlacing pictures using a blending algorithm @item @tt -lupipe-filters
         @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
         @item @ref upipe_glx_sink_mgr_alloc @item sink pipe displaying picture on a GLX output @item @tt -lupipe-gl
