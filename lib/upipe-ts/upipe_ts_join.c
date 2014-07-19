@@ -101,6 +101,10 @@ struct upipe_ts_join_sub {
 
     /** temporary uref storage */
     struct uchain urefs;
+    /** number of urefs in storage */
+    unsigned int nb_urefs;
+    /** maximum number of urefs in storage */
+    unsigned int max_urefs;
     /** next date that is supposed to be dequeued */
     uint64_t next_cr;
     /** last date that was dequeued */
@@ -142,6 +146,8 @@ static struct upipe *upipe_ts_join_sub_alloc(struct upipe_mgr *mgr,
     upipe_ts_join_sub_init_urefcount(upipe);
     upipe_ts_join_sub_init_sub(upipe);
     ulist_init(&upipe_ts_join_sub->urefs);
+    upipe_ts_join_sub->nb_urefs = 0;
+    upipe_ts_join_sub->max_urefs = 0;
     upipe_ts_join_sub->next_cr = upipe_ts_join_sub->last_cr = UINT64_MAX;
     upipe_ts_join_sub->latency = 0;
     upipe_ts_join_sub->subpic = false;
@@ -162,6 +168,13 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_join_sub *upipe_ts_join_sub =
         upipe_ts_join_sub_from_upipe(upipe);
 
+    if (unlikely(upipe_ts_join_sub->max_urefs &&
+                 upipe_ts_join_sub->nb_urefs >= upipe_ts_join_sub->max_urefs)) {
+        upipe_dbg(upipe, "too many queued packets, dropping");
+        uref_free(uref);
+        return;
+    }
+
     uint64_t cr;
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
         upipe_warn_va(upipe, "packet without date");
@@ -171,6 +184,7 @@ static void upipe_ts_join_sub_input(struct upipe *upipe, struct uref *uref,
 
     bool was_empty = ulist_empty(&upipe_ts_join_sub->urefs);
     ulist_add(&upipe_ts_join_sub->urefs, uref_to_uchain(uref));
+    upipe_ts_join_sub->nb_urefs++;
     if (was_empty)
         upipe_ts_join_sub->next_cr = cr;
 
@@ -213,6 +227,37 @@ static int upipe_ts_join_sub_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the current max length of the internal queue.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the length
+ * @return an error code
+ */
+static int upipe_ts_join_sub_get_max_length(struct upipe *upipe,
+                                            unsigned int *p)
+{
+    struct upipe_ts_join_sub *upipe_ts_join_sub =
+        upipe_ts_join_sub_from_upipe(upipe);
+    assert(p != NULL);
+    *p = upipe_ts_join_sub->max_urefs;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the max length of the internal queue.
+ *
+ * @param upipe description structure of the pipe
+ * @param length new length
+ * @return an error code
+ */
+static int upipe_ts_join_sub_set_max_length(struct upipe *upipe,
+                                            unsigned int length)
+{
+    struct upipe_ts_join_sub *upipe_ts_join_sub =
+        upipe_ts_join_sub_from_upipe(upipe);
+    upipe_ts_join_sub->max_urefs = length;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a subpipe of a ts_join
  * pipe.
  *
@@ -232,6 +277,14 @@ static int upipe_ts_join_sub_control(struct upipe *upipe,
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_join_sub_get_super(upipe, p);
+        }
+        case UPIPE_SINK_GET_MAX_LENGTH: {
+            unsigned int *p = va_arg(args, unsigned int *);
+            return upipe_ts_join_sub_get_max_length(upipe, p);
+        }
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            unsigned int max_length = va_arg(args, unsigned int);
+            return upipe_ts_join_sub_set_max_length(upipe, max_length);
         }
 
         default:
@@ -356,6 +409,7 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p)
         input->last_cr = input->next_cr;
 
         struct uchain *uchain = ulist_pop(&input->urefs);
+        input->nb_urefs--;
         struct uref *uref = uref_from_uchain(uchain);
 
         if (ulist_empty(&input->urefs)) {

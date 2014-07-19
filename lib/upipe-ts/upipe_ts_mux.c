@@ -347,6 +347,8 @@ struct upipe_ts_mux_input {
     struct upipe *tstd;
     /** pointer to ts_encaps */
     struct upipe *encaps;
+    /** pointer to ts_join */
+    struct upipe *join;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -437,7 +439,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_mux_mgr *ts_mux_mgr =
         upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
-    struct upipe *pes_encaps, *join;
+    struct upipe *pes_encaps;
     if (unlikely((upipe_ts_mux_input->psig_flow =
                   upipe_void_alloc_sub(program->program_psig,
                          uprobe_pfx_alloc_va(
@@ -460,7 +462,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
                          uprobe_pfx_alloc_va(
                              uprobe_output_alloc(uprobe_use(&upipe_ts_mux_input->probe)),
                              UPROBE_LOG_VERBOSE, "encaps"))) == NULL ||
-                 (join = upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
+                 (upipe_ts_mux_input->join =
+                  upipe_void_alloc_output_sub(upipe_ts_mux_input->encaps,
                          upipe_ts_mux->join,
                          uprobe_pfx_alloc_va(
                              uprobe_use(&upipe_ts_mux_input->probe),
@@ -470,7 +473,6 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     }
 
     upipe_release(pes_encaps);
-    upipe_release(join);
     return upipe;
 }
 
@@ -529,7 +531,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     const char *def;
     uint64_t octetrate;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (!ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate))) {
+    if (!ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate)) ||
+        !octetrate) {
         UBASE_RETURN(uref_block_flow_get_max_octetrate(flow_def, &octetrate));
         upipe_warn_va(upipe, "using max octetrate %"PRIu64" bits/s",
                       octetrate * 8);
@@ -846,8 +849,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         uref_free(flow_def_dup);
         return UBASE_ERR_ALLOC;
     }
-
     uref_free(flow_def_dup);
+
     upipe_ts_mux_input->input_type = input_type;
     upipe_ts_mux_input->pid = pid;
     upipe_ts_mux_input->octetrate = octetrate;
@@ -879,6 +882,12 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_mux_input_get_super(upipe, p);
+        }
+        case UPIPE_SINK_GET_MAX_LENGTH:
+        case UPIPE_SINK_SET_MAX_LENGTH: {
+            struct upipe_ts_mux_input *upipe_ts_mux_input =
+                upipe_ts_mux_input_from_upipe(upipe);
+            return upipe_control_va(upipe_ts_mux_input->join, command, args);
         }
 
         default:
@@ -921,6 +930,8 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
         upipe_release(upipe_ts_mux_input->tstd);
     if (upipe_ts_mux_input->encaps != NULL)
         upipe_release(upipe_ts_mux_input->encaps);
+    if (upipe_ts_mux_input->join != NULL)
+        upipe_release(upipe_ts_mux_input->join);
 
     upipe_ts_mux_input_clean_sub(upipe);
     if (!upipe_single(upipe_ts_mux_program_to_upipe(program)))
