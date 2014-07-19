@@ -397,7 +397,7 @@ static int upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
                         glxplayer->loglevel, "avcdec"));
             if (unlikely(avcdec == NULL))
                 return UBASE_ERR_ALLOC;
-            upipe_avcdec_set_option(avcdec, "threads", "2");
+            upipe_set_option(avcdec, "threads", "2");
             upipe_release(avcdec);
             return UBASE_ERR_NONE;
         }
@@ -959,7 +959,7 @@ int main(int argc, char** argv)
     while ((opt = getopt(argc, argv, "dt")) != -1) {
         switch (opt) {
             case 'd':
-                loglevel = UPROBE_LOG_DEBUG;
+                loglevel--;
                 break;
             case 't':
                 upipe_ts = true;

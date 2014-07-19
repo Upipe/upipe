@@ -203,7 +203,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                                 loglevel, "jpeg"), flow_def2);
     assert(jpegenc != NULL);
     upipe_release(upipe);
-    upipe_avcenc_set_option(jpegenc, "qmax", "2");
+    upipe_set_option(jpegenc, "qmax", "2");
     upipe = jpegenc;
 
     struct upipe *urefprobe = upipe_void_alloc_output(upipe,

@@ -39,30 +39,6 @@ extern "C" {
 
 #define UPIPE_AVCDEC_SIGNATURE UBASE_FOURCC('a', 'v', 'c', 'd')
 
-/** @This extends upipe_command with specific commands for avcodec decode. */
-enum upipe_avcdec_command {
-    UPIPE_AVCDEC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** sets the content of an avcodec option (const char *, const char *) */
-    UPIPE_AVCDEC_SET_OPTION
-};
-
-/** @This sets the content of an avcodec option. It only has effect before the
- * first packet is sent.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option
- * @return false in case of error
- */
-static inline bool upipe_avcdec_set_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char *content)
-{
-    return upipe_control(upipe, UPIPE_AVCDEC_SET_OPTION, UPIPE_AVCDEC_SIGNATURE,
-                         option, content);
-}
-
 /** @This returns the management structure for all avcodec decode pipes.
  *
  * @return pointer to manager

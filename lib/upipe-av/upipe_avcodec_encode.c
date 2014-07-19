@@ -1106,9 +1106,8 @@ static int upipe_avcenc_suggest_flow_def(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static int _upipe_avcenc_set_option(struct upipe *upipe,
-                                               const char *option,
-                                               const char *content)
+static int upipe_avcenc_set_option(struct upipe *upipe,
+                                   const char *option, const char *content)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     assert(option != NULL);
@@ -1169,11 +1168,10 @@ static int upipe_avcenc_control(struct upipe *upipe,
             return upipe_avcenc_set_output(upipe, output);
         }
 
-        case UPIPE_AVCENC_SET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCENC_SIGNATURE)
+        case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
-            return _upipe_avcenc_set_option(upipe, option, content);
+            return upipe_avcenc_set_option(upipe, option, content);
         }
 
         default:

@@ -1144,8 +1144,8 @@ static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static int _upipe_avcdec_set_option(struct upipe *upipe,
-                                    const char *option, const char *content)
+static int upipe_avcdec_set_option(struct upipe *upipe,
+                                   const char *option, const char *content)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     if (upipe_avcdec->context == NULL || avcodec_is_open(upipe_avcdec->context))
@@ -1207,11 +1207,10 @@ static int upipe_avcdec_control(struct upipe *upipe, int command, va_list args)
             return upipe_avcdec_set_output(upipe, output);
         }
 
-        case UPIPE_AVCDEC_SET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCDEC_SIGNATURE)
+        case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
-            return _upipe_avcdec_set_option(upipe, option, content);
+            return upipe_avcdec_set_option(upipe, option, content);
         }
 
         default:

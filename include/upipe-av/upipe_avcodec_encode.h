@@ -42,30 +42,6 @@ extern "C" {
 
 UREF_ATTR_STRING(avcenc, codec_name, "avcenc.name", avcenc codec name)
 
-/** @This extends upipe_command with specific commands for avcodec encode. */
-enum upipe_avcenc_command {
-    UPIPE_AVCENC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** sets the content of an avcodec option (const char *, const char *) */
-    UPIPE_AVCENC_SET_OPTION
-};
-
-/** @This sets the content of an avcodec option. It only has effect before the
- * first packet is sent.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option
- * @return an error code
- */
-static inline int upipe_avcenc_set_option(struct upipe *upipe,
-                                          const char *option,
-                                          const char *content)
-{
-    return upipe_control(upipe, UPIPE_AVCENC_SET_OPTION, UPIPE_AVCENC_SIGNATURE,
-                         option, content);
-}
-
 /** @This returns the management structure for avcodec encoders.
  *
  * @return pointer to manager

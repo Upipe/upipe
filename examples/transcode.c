@@ -286,7 +286,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(encoder);
             uref_free(flow);
             if (strstr(def, ".pic.")) {
-                upipe_avcenc_set_option(encoder, "threads", "0");
+                upipe_set_option(encoder, "threads", "0");
             }
 
             /* encoder options */
@@ -295,7 +295,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             while (es_conf_iterate(conf, &key, &value, &type)) {
                 upipe_dbg_va(encoder, "%s option: %s=%s",
                         conf->codec, key, value);
-                if (!ubase_check(upipe_avcenc_set_option(encoder, key, value)))
+                if (!ubase_check(upipe_set_option(encoder, key, value)))
                     upipe_warn_va(encoder, "option %s unknown", key);
             }
 

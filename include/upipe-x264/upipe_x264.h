@@ -56,9 +56,6 @@ enum upipe_x264_command {
     /** enforce profile (const char *) */
     UPIPE_X264_SET_PROFILE,
 
-    /** sets the content of an avcodec option (const char *, const char *) */
-    UPIPE_X264_SET_OPTION,
-
     /** switches to speedcontrol mode with the given latency (uint64_t) */
     UPIPE_X264_SET_SC_LATENCY
 };
@@ -107,22 +104,6 @@ static inline bool upipe_x264_set_profile(struct upipe *upipe, const char *profi
 {
     return upipe_control(upipe, UPIPE_X264_SET_PROFILE, UPIPE_X264_SIGNATURE,
                          profile);
-}
-
-/** @This sets the content of an x264 option. upipe_x264_reconfigure must
- * be called to apply changes.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option
- * @return false in case of error
- */
-static inline bool upipe_x264_set_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char *content)
-{
-    return upipe_control(upipe, UPIPE_X264_SET_OPTION, UPIPE_X264_SIGNATURE,
-                         option, content);
 }
 
 /** @This switches x264 into speedcontrol mode, with the given latency (size

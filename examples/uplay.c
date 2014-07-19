@@ -199,7 +199,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                              UPROBE_LOG_VERBOSE, "avcdec video"));
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
-    upipe_avcdec_set_option(avcdec, "threads", "4");
+    upipe_set_option(avcdec, "threads", "4");
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
@@ -237,9 +237,11 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             uprobe_gl_sink_cube_alloc(
                 uprobe_pfx_alloc(uprobe_use(&uprobe_glx_s),
                                  UPROBE_LOG_VERBOSE, "glx")));
+    assert(avcdec != NULL);
     upipe_mgr_release(upipe_glx_mgr);
     upipe_glx_sink_init(avcdec, 0, 0, 800, 480);
     upipe_attach_uclock(avcdec);
+
     upipe_release(avcdec);
     return UBASE_ERR_NONE;
 }
@@ -285,6 +287,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     sink = upipe_void_alloc(upipe_alsink_mgr,
                     uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                      UPROBE_LOG_VERBOSE, "alsink"));
+    assert(sink != NULL);
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
 #else

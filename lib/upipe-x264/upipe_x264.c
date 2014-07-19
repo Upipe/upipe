@@ -214,9 +214,8 @@ static int _upipe_x264_set_profile(struct upipe *upipe,
  * @param content content of the option
  * @return an error code
  */
-static int _upipe_x264_set_option(struct upipe *upipe,
-                                             const char *option,
-                                             const char *content)
+static int upipe_x264_set_option(struct upipe *upipe,
+                                 const char *option, const char *content)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret = x264_param_parse(&upipe_x264->params, option, content);
@@ -743,11 +742,10 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
             const char *profile = va_arg(args, const char *);
             return _upipe_x264_set_profile(upipe, profile);
         }
-        case UPIPE_X264_SET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+        case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
-            return _upipe_x264_set_option(upipe, option, content);
+            return upipe_x264_set_option(upipe, option, content);
         }
         case UPIPE_X264_SET_SC_LATENCY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
