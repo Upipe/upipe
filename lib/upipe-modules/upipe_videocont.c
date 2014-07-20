@@ -116,6 +116,8 @@ struct upipe_videocont_sub {
 
     /** input flow definition packet */
     struct uref *flow_def;
+    /** flow name in the latest flow definition packet */
+    const char *flow_name;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -155,6 +157,7 @@ static struct upipe *upipe_videocont_sub_alloc(struct upipe_mgr *mgr,
     upipe_videocont_sub_init_sub(upipe);
     ulist_init(&upipe_videocont_sub->urefs);
     upipe_videocont_sub->flow_def = NULL;
+    upipe_videocont_sub->flow_name = NULL;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -180,7 +183,7 @@ static void upipe_videocont_sub_input(struct upipe *upipe, struct uref *uref,
     }
     struct upipe_videocont *upipe_videocont =
                             upipe_videocont_from_sub_mgr(upipe->mgr);
-    if (pts < upipe_videocont->last_pts) {
+    if (pts + upipe_videocont->latency < upipe_videocont->last_pts) {
         upipe_warn_va(upipe, "late picture received (%"PRId64" ms)",
                       (upipe_videocont->last_pts - pts) / 27000);
     }
@@ -197,11 +200,34 @@ static void upipe_videocont_sub_input(struct upipe *upipe, struct uref *uref,
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet (belongs to the callee)
+ * @return an error code
+ */
+static void upipe_videocont_sub_handle_flow_def(struct upipe *upipe,
+                                                struct uref *flow_def)
+{
+    struct upipe_videocont_sub *upipe_videocont_sub =
+           upipe_videocont_sub_from_upipe(upipe);
+    struct upipe_videocont *upipe_videocont =
+                            upipe_videocont_from_sub_mgr(upipe->mgr);
+
+    if (unlikely(upipe_videocont_sub->flow_def)) {
+        uref_free(upipe_videocont_sub->flow_def);
+    }
+    upipe_videocont_sub->flow_def = flow_def;
+
+    if (upipe_videocont->input_cur == upipe)
+        upipe_videocont->flow_def_uptodate = false;
+}
+
+/** @internal @This receives the input flow definition.
+ *
+ * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_videocont_sub_set_flow_def(struct upipe *upipe,
-                                                       struct uref *flow_def)
+static int upipe_videocont_sub_set_flow_def(struct upipe *upipe,
+                                            struct uref *flow_def)
 {
     struct upipe_videocont_sub *upipe_videocont_sub =
            upipe_videocont_sub_from_upipe(upipe);
@@ -218,37 +244,38 @@ static enum ubase_err upipe_videocont_sub_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(upipe_videocont_sub->flow_def)) {
-        uref_free(upipe_videocont_sub->flow_def);
-    }
-    upipe_videocont_sub->flow_def = flow_def_dup;
 
     /* check flow against (next) grid input name */
-    const char *name = NULL;
-    uref_flow_get_name(flow_def, &name);
-    if (upipe_videocont->input_name
-        && likely(ubase_check(uref_flow_get_name(flow_def, &name)))
-        && !strcmp(upipe_videocont->input_name, name)) {
+    upipe_videocont_sub->flow_name = NULL;
+    if ((upipe_videocont->input_name
+        && likely(ubase_check(uref_flow_get_name(flow_def_dup,
+                    &upipe_videocont_sub->flow_name)))
+        && !strcmp(upipe_videocont->input_name,
+            upipe_videocont_sub->flow_name))) {
         upipe_videocont_switch_input(upipe_videocont_to_upipe(upipe_videocont),
                                      upipe);
     }
 
+    if (upipe_videocont_sub->flow_def != NULL)
+        ulist_add(&upipe_videocont_sub->urefs, uref_to_uchain(flow_def_dup));
+    else
+        upipe_videocont_sub_handle_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
 
-/** @This sets a videocont subpipe as its grandpipe input.
+/** @This sets a videocont subpipe as its superpipe input.
  *
  * @param upipe description structure of the (sub)pipe
  * @return an error code
  */
-static inline enum ubase_err _upipe_videocont_sub_set_input(struct upipe *upipe)
+static inline int _upipe_videocont_sub_set_input(struct upipe *upipe)
 {
     struct upipe_videocont *upipe_videocont =
                             upipe_videocont_from_sub_mgr(upipe->mgr);
-    struct upipe *grandpipe = upipe_videocont_to_upipe(upipe_videocont);
+    struct upipe *superpipe = upipe_videocont_to_upipe(upipe_videocont);
     free(upipe_videocont->input_name);
     upipe_videocont->input_name = NULL;
-    return upipe_videocont_switch_input(grandpipe, upipe);
+    return upipe_videocont_switch_input(superpipe, upipe);
 }
 
 /** @internal @This processes control commands on a subpipe of a videocont
@@ -457,7 +484,6 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    upipe_videocont->last_pts = next_pts - upipe_videocont->tolerance;
 
     /* clean old urefs first */
     int subs = 0;
@@ -467,13 +493,22 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         ulist_delete_foreach(&sub->urefs, uchain, uchain_tmp) {
             uint64_t pts = 0;
             struct uref *uref_uchain = uref_from_uchain(uchain);
-            uref_clock_get_pts_sys(uref_uchain, &pts);
-            if (pts + upipe_videocont->latency <
-                    next_pts - upipe_videocont->tolerance) {
-                upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
-                                 subs, uref_uchain, pts);
+            const char *def;
+            if (ubase_check(uref_flow_get_def(uref_uchain, &def))) {
                 ulist_delete(uchain);
-                uref_free(uref_uchain);
+                upipe_videocont_sub_handle_flow_def(
+                        upipe_videocont_sub_to_upipe(sub), uref_uchain);
+            } else {
+                uref_clock_get_pts_sys(uref_uchain, &pts);
+                if (pts + upipe_videocont->latency <
+                        next_pts - upipe_videocont->tolerance) {
+                    upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
+                                     subs, uref_uchain, pts);
+                    ulist_delete(uchain);
+                    uref_free(uref_uchain);
+                } else {
+                    break;
+                }
             }
         }
         subs++;
@@ -492,6 +527,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     struct uref *next_uref = uref_from_uchain(ulist_peek(&input->urefs));
     uint64_t pts = 0;
     uref_clock_get_pts_sys(next_uref, &pts);
+    upipe_videocont->last_pts = pts + upipe_videocont->latency;
 
     if (pts + upipe_videocont->latency <
             next_pts + upipe_videocont->tolerance) {
@@ -519,7 +555,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
             uref_pic_delete_tff(uref);
         }
         if (upipe_videocont->last_uref == next_uref) {
-            upipe_warn(upipe, "reusing the same picture");
+            upipe_warn_va(upipe, "reusing the same picture %"PRIu64" %"PRIu64,
+                      pts + upipe_videocont->latency, next_pts + upipe_videocont->tolerance);
         }
         upipe_videocont->last_uref = next_uref;
         sub_attached = true;
@@ -637,9 +674,7 @@ static int _upipe_videocont_get_current_input(struct upipe *upipe,
     if (upipe_videocont->input_cur) {
         struct upipe_videocont_sub *sub = 
                upipe_videocont_sub_from_upipe(upipe_videocont->input_cur);
-        if (sub->flow_def) {
-            uref_flow_get_name(sub->flow_def, name_p);
-        }
+        *name_p = sub->flow_name;
     }
     return UBASE_ERR_NONE;
 }
