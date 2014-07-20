@@ -403,11 +403,13 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
 
     /* packet in the future that would arrive too early if muxed into this
      * aggregate */
-    if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
-        dts_sys - delay > upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval) {
-        if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_CAPPED ||
-            !upipe_ts_agg_try_shift(upipe, dts_sys - delay))
-            upipe_ts_agg_complete(upipe, upump_p);
+    if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR) {
+        while (dts_sys - delay >
+               upipe_ts_agg->next_cr_sys + upipe_ts_agg->interval) {
+            if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_CAPPED ||
+                !upipe_ts_agg_try_shift(upipe, dts_sys - delay))
+                upipe_ts_agg_complete(upipe, upump_p);
+        }
     }
 
     if (dts_sys < upipe_ts_agg->next_urefs_dts)
