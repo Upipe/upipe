@@ -320,9 +320,9 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
 
     if (delay > upipe_ts_encaps->max_delay)
         /* TODO what do we do then ? */
-        upipe_warn_va(upipe,
-                      "input exceeds T-STD max retention time (%"PRIu64" ms)",
-                      delay * 1000 / UCLOCK_FREQ);
+        upipe_dbg_va(upipe,
+                     "input exceeds T-STD max retention time (%"PRIu64" ms)",
+                     delay * 1000 / UCLOCK_FREQ);
 
     size_t size;
     if (!ubase_check(uref_block_size(uref, &size)) || !size) {
