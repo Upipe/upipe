@@ -144,8 +144,7 @@ static struct uref *upipe_blksrc_alloc_uref(struct upipe *upipe)
             uref_pic_clear(uref, 0, 0, -1, -1);
             uref_clock_set_duration(uref, upipe_blksrc->interval);
 
-            if (ubase_check(uref_pic_get_progressive(upipe_blksrc->flow_def)))
-            {
+            if (ubase_check(uref_pic_get_progressive(upipe_blksrc->flow_def))) {
                 uref_pic_set_progressive(uref);
             }
                 
@@ -270,8 +269,7 @@ static void upipe_blksrc_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static enum ubase_err upipe_blksrc_set_flow_def(struct upipe *upipe,
-                                                struct uref *flow_def)
+static int upipe_blksrc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
     if (flow_def == NULL) {
@@ -285,8 +283,35 @@ static enum ubase_err upipe_blksrc_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
+    size_t hsize, vsize;
+    struct urational sar;
     uref_pic_flow_clear_format(flow_def_dup);
     uref_pic_flow_copy_format(flow_def_dup, flow_def);
+    if (likely(ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)))) {
+        uref_pic_flow_set_hsize(flow_def_dup, hsize);
+    } else {
+        uref_pic_flow_delete_hsize(flow_def_dup);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
+        uref_pic_flow_set_vsize(flow_def_dup, vsize);
+    } else {
+        uref_pic_flow_delete_vsize(flow_def_dup);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
+        uref_pic_flow_set_sar(flow_def_dup, sar);
+    } else {
+        uref_pic_flow_delete_sar(flow_def_dup);
+    }
+    if (likely(ubase_check(uref_pic_flow_get_overscan(flow_def)))) {
+        uref_pic_flow_set_overscan(flow_def_dup);
+    } else {
+        uref_pic_flow_delete_overscan(flow_def_dup);
+    }
+    if (likely(ubase_check(uref_pic_get_progressive(flow_def)))) {
+        uref_pic_set_progressive(flow_def_dup);
+    } else {
+        uref_pic_delete_progressive(flow_def_dup);
+    }
     upipe_blksrc_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
@@ -299,8 +324,7 @@ static enum ubase_err upipe_blksrc_set_flow_def(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int _upipe_blksrc_control(struct upipe *upipe,
-                                  int command, va_list args)
+static int _upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UREF_MGR:
