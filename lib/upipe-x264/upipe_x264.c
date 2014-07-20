@@ -558,6 +558,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
                 (float)(systime + upipe_x264->sc_latency -
                         (dts + upipe_x264->initial_latency)) /
                 (float)upipe_x264->sc_latency;
+            upipe_verbose_va(upipe, "buffer fill %f", buffer_fill);
             if (buffer_fill > 1.0)
                 buffer_fill = 1.0;
             if (buffer_fill < 0.0)
