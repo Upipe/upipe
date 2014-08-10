@@ -91,12 +91,12 @@ int main(int argc, char **argv)
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     /* sound */
     sound_mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr, 4);
+            UBUF_POOL_DEPTH, umem_mgr, 4, 32);
     assert(sound_mgr);
     ubase_assert(ubuf_sound_mem_mgr_add_plane(sound_mgr, "lr"));
 

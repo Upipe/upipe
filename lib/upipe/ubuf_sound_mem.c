@@ -70,6 +70,9 @@ struct ubuf_sound_mem_mgr {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** alignment in octets */
+    size_t align;
+
     /** ubuf pool */
     struct upool ubuf_pool;
     /** ubuf shared pool */
@@ -119,8 +122,19 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
         return NULL;
     }
 
-    size_t buffer_size = size * sound_mgr->common_mgr.sample_size *
-                         sound_mgr->common_mgr.nb_planes;
+    size_t buffer_size = 0;
+    size_t plane_sizes[sound_mgr->common_mgr.nb_planes];
+    for (uint8_t plane = 0; plane < sound_mgr->common_mgr.nb_planes; plane++) {
+        size_t align = 0;
+        size_t plane_size;
+        if (sound_mgr->align && (size * sound_mgr->common_mgr.sample_size) % sound_mgr->align)
+            align = sound_mgr->align;
+        plane_size = (size * sound_mgr->common_mgr.sample_size) + align;
+        if (align)
+            plane_size -= plane_size % align;
+        plane_sizes[plane] = plane_size + sound_mgr->align;
+        buffer_size += plane_sizes[plane];
+    }
 
     if (unlikely(!umem_alloc(sound_mgr->umem_mgr, &sound_mem->shared->umem,
                              buffer_size))) {
@@ -132,8 +146,11 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
 
     uint8_t *buffer = ubuf_mem_shared_buffer(sound_mem->shared);
     for (uint8_t plane = 0; plane < sound_mgr->common_mgr.nb_planes; plane++) {
-        ubuf_sound_common_plane_init(ubuf, plane, buffer);
-        buffer += size * sound_mgr->common_mgr.sample_size;
+        uint8_t *plane_buffer = buffer + sound_mgr->align;
+        if (sound_mgr->align)
+            plane_buffer -= ((uintptr_t)plane_buffer) % sound_mgr->align;
+        ubuf_sound_common_plane_init(ubuf, plane, plane_buffer);
+        buffer += plane_sizes[plane];
     }
 
     ubuf_mgr_use(mgr);
@@ -362,7 +379,8 @@ static void ubuf_sound_mem_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          uint8_t sample_size)
+                                          uint8_t sample_size,
+                                          uint64_t align)
 {
     assert(umem_mgr != NULL);
 
@@ -378,6 +396,7 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
             ubuf_sound_mem_alloc_inner, ubuf_sound_mem_free_inner);
 
     sound_mgr->umem_mgr = umem_mgr;
+    sound_mgr->align = align;
     umem_mgr_use(umem_mgr);
 
     struct ubuf_mgr *mgr = ubuf_sound_mem_mgr_to_ubuf_mgr(sound_mgr);
