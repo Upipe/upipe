@@ -62,7 +62,9 @@
 #include <assert.h>
 
 /** tolerance for late packets */
-#define SYSTIME_TOLERANCE (UCLOCK_FREQ / 100)
+#define SYSTIME_TOLERANCE UCLOCK_FREQ
+/** print late packets */
+#define SYSTIME_PRINT (UCLOCK_FREQ / 100)
 /** expected flow definition on all flows */
 #define EXPECTED_FLOW_DEF    "block."
 
@@ -210,7 +212,14 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                      upipe_udpsink_watcher);
             return false;
         }
-    } else if (now > systime + SYSTIME_TOLERANCE)
+    } else if (now > systime + SYSTIME_TOLERANCE) {
+        upipe_warn_va(upipe,
+                      "dropping late packet %"PRIu64" ms, latency %"PRIu64" ms",
+                      (now - systime) / (UCLOCK_FREQ / 1000),
+                      upipe_udpsink->latency / (UCLOCK_FREQ / 1000));
+        uref_free(uref);
+        return true;
+    } else if (now > systime + SYSTIME_PRINT)
         upipe_warn_va(upipe,
                       "outputting late packet %"PRIu64" ms, latency %"PRIu64" ms",
                       (now - systime) / (UCLOCK_FREQ / 1000),
