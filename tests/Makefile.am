@@ -40,6 +40,7 @@ check_PROGRAMS = \
 	upipe_null_test \
 	upipe_setrap_test \
 	upipe_skip_test \
+	upipe_setflowdef_test \
 	upipe_setattr_test \
 	upipe_match_attr_test \
 	upipe_probe_uref_test \
@@ -76,6 +77,7 @@ TESTS = \
 	upipe_null_test \
 	upipe_setrap_test \
 	upipe_skip_test \
+	upipe_setflowdef_test \
 	upipe_setattr_test \
 	upipe_match_attr_test \
 	upipe_probe_uref_test \
@@ -246,6 +248,7 @@ upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_mo
 upipe_delay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_skip_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_setflowdef_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_probe_uref_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
