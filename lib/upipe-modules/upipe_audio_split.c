@@ -367,7 +367,7 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
             if (unlikely(!(ubase_check(uref_audio_split_get_orig_index(
                                    split_sub->flow_def_params, &idx, channel))
                                 && idx < channels))) {
-                return;
+                continue;
             }
             upipe_verbose_va(upipe_sub, "chan %s idx %"PRIu8, channel, idx);
 
@@ -378,7 +378,7 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
                 upipe_warn_va(upipe_sub, "could not map %s", channel);
                 continue;
             }
-            const uint8_t *in = in_buf;
+            const uint8_t *in = in_buf + idx * out_sample_size;
             int i, j;
             for (i=0; i < samples; i++) {
                 for (j=0; j < out_sample_size; j++) {
