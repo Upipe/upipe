@@ -229,6 +229,7 @@ static int upipe_fdec_set_option(struct upipe *upipe,
         struct uref_mgr *uref_mgr;
         UBASE_RETURN(upipe_throw_need_uref_mgr(upipe, &uref_mgr))
         upipe_fdec->options = uref_alloc_control(uref_mgr);
+        uref_mgr_release(uref_mgr);
     }
 
     if (upipe_fdec->last_inner != NULL) {

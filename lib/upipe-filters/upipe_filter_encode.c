@@ -169,6 +169,7 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc->options = NULL;
     upipe_fenc->preset = NULL;
     upipe_fenc->tune = NULL;
+    upipe_fenc->profile = NULL;
     upipe_fenc->sc_latency = UINT64_MAX;
     upipe_throw_ready(upipe);
 
@@ -287,6 +288,7 @@ static int upipe_fenc_set_option(struct upipe *upipe,
         struct uref_mgr *uref_mgr;
         UBASE_RETURN(upipe_throw_need_uref_mgr(upipe, &uref_mgr))
         upipe_fenc->options = uref_alloc_control(uref_mgr);
+        uref_mgr_release(uref_mgr);
     }
 
     if (upipe_fenc->last_inner != NULL) {
@@ -425,6 +427,7 @@ static void upipe_fenc_free(struct urefcount *urefcount_real)
         upipe_fenc_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_fenc_to_upipe(upipe_fenc);
     upipe_throw_dead(upipe);
+    uref_free(upipe_fenc->flow_def_input);
     uref_free(upipe_fenc->options);
     free(upipe_fenc->preset);
     free(upipe_fenc->tune);

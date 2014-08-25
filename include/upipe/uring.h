@@ -238,7 +238,7 @@ static inline void uring_lifo_push(struct uring *uring, uring_lifo *lifo_p,
  * @item bits @item description
  * @item 24 @item tail tag
  * @item 8 @item tail index
- * @item 24 @item head description
+ * @item 24 @item head tag
  * @item 8 @item head index
  * @end table
  */
