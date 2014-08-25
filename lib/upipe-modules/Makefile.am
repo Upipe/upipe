@@ -27,11 +27,12 @@ libupipe_modules_la_SOURCES = \
 	upipe_skip.c \
 	upipe_htons.c \
 	upipe_chunk_stream.c \
+	upipe_setflowdef.c \
 	upipe_setattr.c \
 	upipe_match_attr.c \
 	upipe_setrap.c \
 	upipe_blit.c \
-    upipe_audio_split.c \
+	upipe_audio_split.c \
 	upipe_videocont.c \
 	upipe_audiocont.c \
 	upipe_blank_source.c \

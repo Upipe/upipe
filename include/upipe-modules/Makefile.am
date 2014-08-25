@@ -21,6 +21,7 @@ myinclude_HEADERS = \
 	upipe_chunk_stream.h \
 	upipe_queue_sink.h \
 	upipe_queue_source.h \
+	upipe_setflowdef.h \
 	upipe_setattr.h \
 	upipe_match_attr.h \
 	upipe_setrap.h \

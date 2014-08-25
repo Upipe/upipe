@@ -696,8 +696,15 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
             buffer_size = BS_ADTS_2;
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_AUDIO_MPEG2));
+            uint64_t rate;
+            if (ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) &&
+                rate >= 32000) {
+                UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                                   PMT_STREAMTYPE_AUDIO_MPEG1));
+            } else {
+                UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
+                                                   PMT_STREAMTYPE_AUDIO_MPEG2));
+            }
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                  PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.aac.")) {

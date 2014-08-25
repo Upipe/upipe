@@ -47,12 +47,14 @@ extern "C" {
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
  * @param sample_size number of octets in a sample for a plane
+ * @param align alignment in octets
  * @return pointer to manager, or NULL in case of error
  */
 struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          uint8_t sample_size);
+                                          uint8_t sample_size,
+                                          uint64_t align);
 
 /** @This adds a new plane to a ubuf manager for sound formats using umem.
  * It may only be called on initializing the manager, before any ubuf is

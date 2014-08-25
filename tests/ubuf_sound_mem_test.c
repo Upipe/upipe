@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
     /* packed s16 stereo */
     mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr,
-                                   4);
+                                   4, 32);
     assert(mgr != NULL);
     ubase_assert(ubuf_sound_mem_mgr_add_plane(mgr, "lr"));
 
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
 
     /* planar float 5.1 */
     mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr,
-                                   sizeof(float));
+                                   sizeof(float), 32);
     assert(mgr != NULL);
     ubase_assert(ubuf_sound_mem_mgr_add_plane(mgr, "l"));
     ubase_assert(ubuf_sound_mem_mgr_add_plane(mgr, "r"));

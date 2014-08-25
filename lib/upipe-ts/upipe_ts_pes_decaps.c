@@ -251,10 +251,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
             validate = validate &&
                        pes_validate_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
             dts = pes_get_dts(ts_fields - PES_HEADER_SIZE_NOPTS);
-            if (dts > pts) {
-                upipe_warn(upipe, "invalid DTS");
-                dts = pts;
-            }
         } else
             dts = pts;
         UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_ts_pesd->next_uref,

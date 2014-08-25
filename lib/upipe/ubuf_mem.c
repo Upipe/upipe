@@ -122,8 +122,11 @@ struct ubuf_mgr *ubuf_mem_mgr_alloc_from_flow_def(uint16_t ubuf_pool_depth,
                                                              &planes)))))
             return NULL;
 
+        uint64_t align = 0;
+        uref_sound_flow_get_align(flow_def, &align);
+
         struct ubuf_mgr *mgr = ubuf_sound_mem_mgr_alloc(ubuf_pool_depth,
-                shared_pool_depth, umem_mgr, sample_size);
+                shared_pool_depth, umem_mgr, sample_size, align);
         if (unlikely(mgr == NULL))
             return NULL;
 
