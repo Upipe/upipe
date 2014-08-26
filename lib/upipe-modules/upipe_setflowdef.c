@@ -120,6 +120,8 @@ static int upipe_setflowdef_build_flow_def(struct upipe *upipe)
     struct upipe_setflowdef *upipe_setflowdef =
         upipe_setflowdef_from_upipe(upipe);
     struct uref *flow_def_dup;
+    if(upipe_setflowdef->flow_def_input == NULL)
+        return UBASE_ERR_UNHANDLED;
     if ((flow_def_dup = uref_dup(upipe_setflowdef->flow_def_input)) == NULL)
         return UBASE_ERR_ALLOC;
 
