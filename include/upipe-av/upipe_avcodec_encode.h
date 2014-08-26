@@ -64,7 +64,8 @@ enum upipe_avcenc_mgr_command {
  * @param name codec name
  * @return an error code
  */
-int upipe_avcenc_mgr_set_flow_def_from_name(struct upipe_mgr *mgr,
+static inline int upipe_avcenc_mgr_set_flow_def_from_name(
+                                            struct upipe_mgr *mgr,
                                             struct uref *flow_def,
                                             const char *name)
 {
