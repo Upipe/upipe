@@ -503,6 +503,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
                               * context->time_base.num
                               / context->time_base.den;
     uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
+    uref_clock_delete_cr_dts_delay(uref);
 
     /* rebase to dts as we're in encoded domain now */
     uref_clock_rebase_dts_sys(uref);

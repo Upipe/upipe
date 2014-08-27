@@ -264,14 +264,15 @@ static int upipe_x264_set_option(struct upipe *upipe,
  * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
  * @return an error code
  */
-static int _upipe_x264_set_sc_latency(struct upipe *upipe,
-                                                 uint64_t sc_latency)
+static int _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
 {
 #ifndef HAVE_X264_OBE
     return UBASE_ERR_EXTERNAL;
 #else
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     upipe_x264->sc_latency = sc_latency;
+    upipe_dbg_va(upipe, "activating speed control with latency %"PRIu64" ms",
+                 sc_latency * 1000 / UCLOCK_FREQ);
     return UBASE_ERR_NONE;
 #endif
 }
@@ -384,20 +385,19 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     }
 
     /* find latency */
+    uint64_t latency = upipe_x264->input_latency;
     int delayed = x264_encoder_maximum_delayed_frames(upipe_x264->encoder);
-    if (delayed >= 0) {
-        uint64_t latency = upipe_x264->input_latency +
-                           (uint64_t)delayed * UCLOCK_FREQ
-                            * params->i_fps_den
-                            / params->i_fps_num;
-        upipe_x264->initial_latency = latency;
+    if (delayed >= 0)
+        latency += (uint64_t)delayed * UCLOCK_FREQ
+                     * params->i_fps_den
+                     / params->i_fps_num;
+    upipe_x264->initial_latency = latency;
 
-        if (params->rc.i_bitrate)
-            latency += (uint64_t)params->rc.i_vbv_buffer_size * UCLOCK_FREQ /
-                       params->rc.i_bitrate;
-        latency += upipe_x264->sc_latency;
-        uref_clock_set_latency(flow_def_attr, latency);
-    }
+    if (params->rc.i_bitrate)
+        latency += (uint64_t)params->rc.i_vbv_buffer_size * UCLOCK_FREQ /
+                   params->rc.i_bitrate;
+    latency += upipe_x264->sc_latency;
+    uref_clock_set_latency(flow_def_attr, latency);
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_x264_check_flow_def_attr(upipe, flow_def_attr)) {
@@ -577,6 +577,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
                               * curparams.i_timebase_num
                               / curparams.i_timebase_den;
     uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
+    uref_clock_delete_cr_dts_delay(uref);
 
     /* rebase to dts as we're in encoded domain now */
     uref_clock_rebase_dts_sys(uref);
@@ -589,17 +590,11 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     if (ubase_check(uref_clock_get_dts_sys(uref, &dts))) {
         if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
             uint64_t systime = uclock_now(upipe_x264->uclock);
-            float buffer_fill =
-                (float)(systime + upipe_x264->sc_latency -
-                        (dts + upipe_x264->initial_latency)) /
-                (float)upipe_x264->sc_latency;
-            upipe_verbose_va(upipe, "buffer fill %f", buffer_fill);
-            if (buffer_fill > 1.0)
-                buffer_fill = 1.0;
-            if (buffer_fill < 0.0)
-                buffer_fill = 0.0;
-            x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill,
-                                   upipe_x264->params.sc.i_buffer_size, 1 );
+            int64_t buffer_state = dts + upipe_x264->initial_latency +
+                                   upipe_x264->sc_latency - systime;
+            float buffer_fill = (float)buffer_state /
+                                (float)upipe_x264->sc_latency;
+            x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill, 0, 1 );
         }
     }
 #endif
@@ -673,7 +668,7 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
             upipe_x264->params.sc.i_buffer_size =
                 upipe_x264->sc_latency * fps.num / fps.den / UCLOCK_FREQ;
             upipe_x264->params.sc.f_speed = 1.0;
-            upipe_x264->params.sc.f_buffer_init = 1.0;
+            upipe_x264->params.sc.f_buffer_init = 0.0;
             upipe_x264->params.sc.b_alt_timer = 1;
             uint64_t height;
             if (ubase_check(uref_pic_flow_get_hsize(flow_def, &height)) && height >= 720)
