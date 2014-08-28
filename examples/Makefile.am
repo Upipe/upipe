@@ -13,7 +13,7 @@ UPIPEFRAMERS_LIBS = $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 UPIPETS_LIBS = $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 UPIPEX264_LIBS = $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 UPIPEALSA_LIBS = -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la
-UPIPEBMD_LIBS = $(top_builddir)/lib/upipe-blackmagic/libupipe_blackmagic.la -lstc++
+UPIPEBMD_LIBS = $(top_builddir)/lib/upipe-blackmagic/libupipe_blackmagic.la -lstdc++
 
 noinst_PROGRAMS = 
 
