@@ -17,3 +17,19 @@
    obj:/usr/lib/libev*
    fun:ev_loop_destroy
 }
+
+{
+   Qt_incompability
+   Memcheck:Addr4
+   ...
+   obj:/usr/lib/x86_64-linux-gnu/*
+   ...
+   fun:_ZN9QGtkStyleC1Ev
+   fun:_ZN13QStyleFactory6createERK7QString
+   fun:_ZN12QApplication5styleEv
+   fun:_ZN19QApplicationPrivate10initializeEv
+   fun:_ZN19QApplicationPrivate9constructEP9_XDisplaymm
+   fun:_ZN12QApplicationC1ERiPPci
+   ...
+}
+

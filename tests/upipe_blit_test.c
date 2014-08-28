@@ -81,8 +81,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
 int main(int argc, char **argv)
 {
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
-    int i, j;
-    struct upipe *subpipe;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -112,6 +110,19 @@ int main(int argc, char **argv)
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "blit"));
     assert(blit);
 
+    struct upipe *subpipe1 = upipe_void_alloc_sub(blit,
+            uprobe_pfx_alloc_va(uprobe_use(logger),
+                                UPROBE_LOG_LEVEL, "sub1"));
+    upipe_blit_sub_set_position(subpipe1, 20, 20);
+    assert(subpipe1);
+    struct upipe *subpipe2 = upipe_void_alloc_sub(blit,
+            uprobe_pfx_alloc_va(uprobe_use(logger),
+                                UPROBE_LOG_LEVEL, "sub2"));
+    assert(subpipe2);
+    struct upipe *subpipe3 = upipe_void_alloc_sub(blit,
+            uprobe_pfx_alloc_va(uprobe_use(logger),
+                                UPROBE_LOG_LEVEL, "sub3"));
+    assert(subpipe3);
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     ubase_assert(upipe_set_flow_def(blit, flow));
     uref_free(flow);
@@ -123,29 +134,12 @@ int main(int argc, char **argv)
     upipe_release(null);
     upipe_null_dump_dict(null, true);
 
-    subpipe = upipe_void_alloc_sub(blit,
-            uprobe_pfx_alloc_va(uprobe_use(logger),
-                                UPROBE_LOG_LEVEL, "sub"));
-    assert(subpipe);
-    flow = uref_pic_flow_alloc_def(uref_mgr, 1);
-    ubase_assert(upipe_set_flow_def(subpipe, flow));
-    uref_free(flow);
-
-    for (i=0; i < 2 * ITERATIONS; i++) {
-        struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 42, 42);
-        upipe_input(subpipe, uref, NULL);
-    }
-    
-    /* now send reference urefs */
-    for (i=0; i < ITERATIONS; i++) {
-        struct uref *uref = uref_alloc(uref_mgr);
-        upipe_input(blit, uref, NULL);
-    }
-    upipe_release(subpipe);
-
-    /* release pipe */
+    /* release blit pipe and subpipes */
+    upipe_release(subpipe1);
+    upipe_release(subpipe2);
+    upipe_release(subpipe3);
     upipe_release(blit);
-    
+
     /* release managers */
     upipe_mgr_release(upipe_blit_mgr); // no-op
     ubuf_mgr_release(pic_mgr);

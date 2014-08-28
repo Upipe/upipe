@@ -13,6 +13,7 @@ PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
 AC_CHECK_PROG(PERL, perl, perl)
+AC_CHECK_PROG(MOC, moc, moc)
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC_C99
@@ -47,6 +48,9 @@ PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
+AC_LANG_PUSH([C++])
+PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
+AC_LANG_POP([C++])
 
 CFLAGS="${CFLAGS} -D_REENTRANT"
 LIBS="${LIBS} -lpthread"
@@ -148,6 +152,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-alsa/Makefile
                  include/upipe-swresample/Makefile
                  include/upipe-blackmagic/Makefile
+                 include/upipe-qt/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -181,6 +186,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-swresample/libupipe_swr.pc
                  lib/upipe-blackmagic/Makefile
                  lib/upipe-blackmagic/libupipe_blackmagic.pc
+                 lib/upipe-qt/Makefile
+                 lib/upipe-qt/libupipe_qt.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT

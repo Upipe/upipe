@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=-I/usr/share/qt4/mkspecs/linux-g++-64 -I. -I/usr/include/qt4/QtCore -I/usr/include/qt4/QtGui -I/usr/include/qt4 -I.   
+includedir= -I/usr/share/qt4/mkspecs/linux-g++-64 -I. -I/usr/include/qt4/QtCore -I/usr/include/qt4/QtGui -I/usr/include/qt4 -I.   
+Name: libupipe_qt
+Description: upipe multimedia framework, core library
+Version: @VERSION@
+Libs: -L${libdir} -lupipe_qt 
+Libs.private: -lQtWebKit -lQtGui -lQtCore -lpthread -pthread
+Cflags: -I${includedir}

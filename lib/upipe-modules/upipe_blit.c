@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *          
@@ -99,9 +99,6 @@ struct upipe_blit_sub {
     
     /** received uref */
     struct uref *uref;
-   
-    /** temporary uref storage */
-    struct uchain urefs;
 
     /** input flow definition packet */
     struct uref *flow_def;
@@ -116,7 +113,6 @@ struct upipe_blit_sub {
 UPIPE_HELPER_UPIPE(upipe_blit_sub, upipe, UPIPE_BLIT_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_blit_sub, urefcount, upipe_blit_sub_dead)
 UPIPE_HELPER_VOID(upipe_blit_sub)
-
 UPIPE_HELPER_SUBPIPE(upipe_blit, upipe_blit_sub, sub, sub_mgr, subs, uchain)
 
 /** @internal @This allocates an input subpipe of a blit pipe.
@@ -142,7 +138,6 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
         upipe_blit_sub_from_upipe(upipe);
     upipe_blit_sub_init_urefcount(upipe);
     upipe_blit_sub_init_sub(upipe);
-    ulist_init(&upipe_blit_sub->urefs);
     upipe_blit_sub->uref = NULL;
     upipe_blit_sub->flow_def = NULL;
     upipe_blit_sub->H=0;
@@ -171,7 +166,8 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
     uref_pic_size(urefsub, &h2, &v2, &macropixel2);
     int sh1 = (int)h, sh2 = (int)h2, sv1 = (int)v, sv2 = (int)v2;
     if ((sh2 + hoset) <= sh1 && (sv2 + voset) <= sv1 &&
-                    uref_pic_flow_compare_format(uref, urefsub)) {
+                uref_pic_flow_compare_format(uref, urefsub)) {
+
         bool transpref = false;
         while (ubase_check(uref_pic_plane_iterate(uref, &cp)) && cp != NULL) {
             if (!strcmp(cp,"a8")) {
@@ -206,7 +202,7 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
                 }
                 uref_pic_plane_unmap(urefsub, cp, 0, 0, -1, -1);
                 uref_pic_plane_unmap(uref, cp, hoset, voset, sh2, sv2);
-            }        
+                }
         } else {
             size_t stridea, stridea2;
             uint8_t hsuba, vsuba, hsuba2, vsuba2;
@@ -215,58 +211,58 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
                                         &macropixel_sizea);
             uref_pic_plane_size(urefsub, "a8", &stridea2, &hsuba2, &vsuba2,
                                         &macropixel_sizea2);
-            uref_pic_plane_read(urefsub, "a8", 0, 0, -1, -1, &asub);
             uref_pic_plane_write(uref, "a8", hoset, voset, sh2, sv2, &aout);
             int hoctetsa = h2 * macropixel_sizea2 / hsuba2 / macropixel2;
             for (y = 0; y < v2 / vsuba2; y++) {
                 for (x = 0; x < hoctetsa; x++) {
-                    aout[x] = 255;
+                    aout[x] = 0;
                 }
-                asub += stridea2;
                 aout += stridea;
             }
-            uref_pic_plane_unmap(urefsub, "a8", 0, 0, -1, -1);
             uref_pic_plane_unmap(uref, "a8", hoset, voset, sh2, sv2);
+            uref_pic_plane_read(urefsub, "a8", 0, 0, -1, -1, &asub);            
+
             while (ubase_check(uref_pic_plane_iterate(urefsub, &cp)) && 
                     cp != NULL) {
                 size_t stride, stride2;
-                int r, b, ha = 0;
+                int r, b, ha, compteur = 0;
                 int c = strcmp(cp, "a8");
                 if (c){
-                uint8_t hsub, vsub, hsub2, vsub2;
-                uint8_t macropixel_size, macropixel_size2;                
-                uref_pic_plane_size(urefsub, cp, &stride2, &hsub2, &vsub2,
+                    uint8_t hsub, vsub, hsub2, vsub2;
+                    uint8_t macropixel_size, macropixel_size2;                
+                    uref_pic_plane_size(urefsub, cp, &stride2, &hsub2, &vsub2,
                                         &macropixel_size2);
-                uref_pic_plane_size(uref, cp, &stride, &hsub, &vsub,
+                    uref_pic_plane_size(uref, cp, &stride, &hsub, &vsub,
                                         &macropixel_size);
-                int hoctets = h2 * macropixel_size2 / hsub2 / macropixel2;            
-                uref_pic_plane_read(urefsub, cp, 0, 0, -1, -1, &buf2);
-                uref_pic_plane_write(uref, cp, hoset, voset, sh2, sv2, &out);
-                uref_pic_plane_size(uref, "a8", &stridea, &hsuba, &vsuba,
-                                        &macropixel_sizea);
-                uref_pic_plane_size(urefsub, "a8", &stridea2, &hsuba2, &vsuba2,
-                                        &macropixel_sizea2);
-                uref_pic_plane_read(urefsub, "a8", 0, 0, -1, -1, &asub);
-                int hoctetsa = h2 * macropixel_sizea2 / hsuba2 / macropixel2;
-                for (y = 0; y < v2 / vsub2; y++) {
-                    for (x = 0; x < hoctets; x++) {
-                        b = asub[x+ha];                    
-                        r = ((b)*buf2[x]+(255-b)*out[x])/255;
-                        out[x] = r;
-                        ha = ha + hoctetsa / hoctets;
+                    int hoctets = h2 * macropixel_size2 / hsub2 / macropixel2;            
+                    uref_pic_plane_write(urefsub, cp, 0, 0, -1, -1, &buf2);
+                    uref_pic_plane_write(uref, cp, hoset, voset, sh2, sv2, &out);
+                    uref_pic_plane_size(uref, "a8", &stridea, &hsuba, &vsuba,
+                                            &macropixel_sizea);
+                    uref_pic_plane_size(urefsub, "a8", &stridea2, &hsuba2, &vsuba2,
+                                            &macropixel_sizea2);
+
+                    int hoctetsa = h2 * macropixel_sizea2 / hsuba2 / macropixel2;
+                    for (y = 0; y < v2 / vsub2; y++) {
+                        for (x = 0; x < hoctets; x++) {
+                            b = 255-asub[x+ha];
+                            r = ((b)*buf2[x]+(1-b)*out[x]);
+                            out[x] = r;
+                            ha = ha + hoctetsa / hoctets;
+                        }
+                        ha = 0;
+                        buf2 += stride2;
+                        out += stride;
+                        asub += vsub2 * stridea2;
+                        compteur += 1;
                     }
-                    ha = 0;
-                    buf2 += stride2;
-                    out += stride;
-                    asub += vsub2 * stridea2;
-                }
-                uref_pic_plane_unmap(urefsub, "a8", 0, 0, -1, -1);
-                uref_pic_plane_unmap(urefsub, cp, 0, 0, -1, -1);
-                uref_pic_plane_unmap(uref, cp, hoset, voset, sh2, sv2);
+                    asub -= compteur * vsub2 * stridea2;
+                    uref_pic_plane_unmap(urefsub, cp, 0, 0, -1, -1);
+                    uref_pic_plane_unmap(uref, cp, hoset, voset, sh2, sv2);
                 }
             }
-         
-        }
+            uref_pic_plane_unmap(urefsub, "a8", 0, 0, -1, -1);
+        }      
     }
 }
 
@@ -289,13 +285,9 @@ static void upipe_blit_sub_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (upipe_blit_sub->uref != NULL) {
-        upipe_blit_sub->uref = uref;
-    } else {
         uref_free(upipe_blit_sub->uref);
-        upipe_blit_sub->uref = uref;
     }
-
-    ulist_add(&upipe_blit_sub->urefs, uref_to_uchain(uref));
+    upipe_blit_sub->uref = uref;
 }
 
 /** @internal @This sets the input flow definition.
@@ -404,24 +396,24 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
     struct uchain *uchain_sub;
     uint8_t *buf = NULL;
  
-    if (unlikely(!ubase_check(upipe_blit_check_ubuf_mgr(upipe))) || 
-                    uref->ubuf==NULL) {
+    if (unlikely(!ubase_check(upipe_blit_check_ubuf_mgr(upipe))) ||
+            uref->ubuf==NULL) {
         uref_free(uref);
         return;
     }
 
-    if (unlikely(!ubase_check(uref_pic_plane_write(uref, "y8", 0, 0, 
-                                        -1, -1, &buf)))) {
+    if (unlikely(!ubase_check(uref_pic_plane_write(uref, "b8g8r8a8", 0, 0, 
+                                                -1, -1, &buf)))) {
         struct ubuf *ubuf = ubuf_pic_copy(upipe_blit->ubuf_mgr,
-                                            uref->ubuf, 0, 0, -1, -1);
+                                            uref->ubuf,0, 0, -1, -1);
         if (unlikely(!ubuf)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
-            return;
-        }
+        return;
 
+        }
         uref_attach_ubuf(uref, ubuf);
-        if (unlikely(!ubase_check(uref_pic_plane_write(uref, "y8", 0, 0, 
+        if (unlikely(!ubase_check(uref_pic_plane_write(uref, "b8g8r8a8", 0, 0, 
                                              -1, -1, &buf)))) {
             upipe_warn_va(upipe, "could not map ref packet");
             uref_free(uref);
@@ -430,7 +422,7 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
 
     }
 
-    uref_pic_plane_unmap(uref, "y8", 0, 0, -1, -1);
+    uref_pic_plane_unmap(uref, "b8g8r8a8", 0, 0, -1, -1);
     ulist_foreach(&upipe_blit->subs, uchain_sub){
      struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain_sub);
      if (likely(sub->uref != NULL)) {
@@ -442,7 +434,6 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
 
     upipe_blit_output(upipe, uref, upump_p);
 }
-
 
 /** @internal @This amends a proposed flow format.
  * 
@@ -548,18 +539,13 @@ static void upipe_blit_sub_dead(struct upipe *upipe)
     struct upipe_blit_sub *upipe_blit_sub =
                                 upipe_blit_sub_from_upipe(upipe);
 
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach (&upipe_blit_sub->urefs, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-        ulist_delete(uchain);
-        uref_free(uref);
-    }
-
     if (likely(upipe_blit_sub->flow_def)) {
         uref_free(upipe_blit_sub->flow_def);
     }
 
     upipe_throw_dead(upipe);
+    uref_free(upipe_blit_sub->uref);
+    uref_free(upipe_blit_sub->flow_def);
     upipe_blit_sub_clean_sub(upipe);
     upipe_blit_sub_clean_urefcount(upipe);
     upipe_blit_sub_free_void(upipe);
@@ -595,7 +581,7 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
                                      uint32_t signature, va_list args)
 {
     struct upipe *upipe = upipe_blit_alloc_void(mgr, uprobe, signature,
-                                                args);
+                                                 args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -615,7 +601,9 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
 static void upipe_blit_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
 
+    upipe_mgr_release(&upipe_blit->sub_mgr);
     upipe_blit_clean_sub_subs(upipe);
     upipe_blit_clean_output(upipe);
     upipe_blit_clean_ubuf_mgr(upipe);

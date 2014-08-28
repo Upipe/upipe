@@ -48,6 +48,7 @@ check_PROGRAMS = \
 	upipe_chunk_stream_test \
 	upipe_htons_test \
 	upipe_blit_test \
+    upipe_qt_html_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
@@ -85,6 +86,7 @@ TESTS = \
 	upipe_chunk_stream_test \
 	upipe_htons_test \
 	upipe_blit_test \
+	upipe_qt_html_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
@@ -259,6 +261,7 @@ upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blit_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_qt_html_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-qt/libupipe_qt.la -L/usr/lib/x86_64-linux-gnu -lQtCore -lQtGui -lQtWebKit -lpthread $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_audio_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_videocont_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audiocont_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
