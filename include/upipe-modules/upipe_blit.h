@@ -118,7 +118,7 @@ static inline enum ubase_err upipe_blit_sub_set_vposition(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_blit_sub_set_position(struct upipe *upipe,
-                                                          int *h, int *v)
+                                                          int h, int v)
 {
     return upipe_control(upipe, UPIPE_SUB_SET_POSITION,
                           UPIPE_BLIT_INPUT_SIGNATURE, h, v);
@@ -132,7 +132,7 @@ static inline enum ubase_err upipe_blit_sub_set_position(struct upipe *upipe,
  * @return an error code
  */
 static inline enum ubase_err upipe_blit_sub_get_position(struct upipe *upipe,
-                                                          int h, int v)
+                                                          int *h, int *v)
 {
     return upipe_control(upipe, UPIPE_SUB_GET_POSITION,
                           UPIPE_BLIT_INPUT_SIGNATURE, h, v);

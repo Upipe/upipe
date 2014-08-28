@@ -42,7 +42,6 @@
 #include <upipe/upipe_helper_subpipe.h>
 
 #include <upipe/upipe_helper_output.h>
-#include <upipe-av/upipe_av_pixfmt.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -235,7 +234,7 @@ void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
                     uref_pic_plane_size(uref, cp, &stride, &hsub, &vsub,
                                         &macropixel_size);
                     int hoctets = h2 * macropixel_size2 / hsub2 / macropixel2;            
-                    uref_pic_plane_write(urefsub, cp, 0, 0, -1, -1, &buf2);
+                    uref_pic_plane_read(urefsub, cp, 0, 0, -1, -1, &buf2);
                     uref_pic_plane_write(uref, cp, hoset, voset, sh2, sv2, &out);
                     uref_pic_plane_size(uref, "a8", &stridea, &hsuba, &vsuba,
                                             &macropixel_sizea);

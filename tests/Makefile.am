@@ -48,7 +48,6 @@ check_PROGRAMS = \
 	upipe_chunk_stream_test \
 	upipe_htons_test \
 	upipe_blit_test \
-    upipe_qt_html_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
@@ -86,7 +85,6 @@ TESTS = \
 	upipe_chunk_stream_test \
 	upipe_htons_test \
 	upipe_blit_test \
-	upipe_qt_html_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
@@ -223,6 +221,11 @@ endif
 if HAVE_ECORE
 check_PROGRAMS += upump_ecore_test
 TESTS += upump_ecore_test
+endif
+
+if HAVE_QTWEBKIT
+check_PROGRAMS += upipe_qt_html_test
+TESTS += upipe_qt_html_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
