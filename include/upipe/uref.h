@@ -57,26 +57,23 @@ enum uref_date_type {
     UREF_DATE_PTS = 3
 };
 
-/** @This lists all void attributes handled in flags. */
-enum uref_flag {
-    /** the upstream pipe has disconnected */
-    UREF_FLAG_FLOW_END = 0x1,
-    /** there is a discontinuity in the flow */
-    UREF_FLAG_FLOW_DISC = 0x2,
-    /** the block is a starting point */
-    UREF_FLAG_BLOCK_START = 0x4,
-    /** the block is an ending point */
-    UREF_FLAG_BLOCK_END = 0x8,
-    /** the block contains a clock reference */
-    UREF_FLAG_CLOCK_REF = 0x10,
+/** the upstream pipe has disconnected */
+#define UREF_FLAG_FLOW_END 0x1
+/** there is a discontinuity in the flow */
+#define UREF_FLAG_FLOW_DISC 0x2
+/** the block is a starting point */
+#define UREF_FLAG_BLOCK_START 0x4
+/** the block is an ending point */
+#define UREF_FLAG_BLOCK_END 0x8
+/** the block contains a clock reference */
+#define UREF_FLAG_CLOCK_REF 0x10
 
-    /** position of the bitfield for the type of sys date */
-    UREF_FLAG_DATE_SYS = 0x0400000000000000,
-    /** position of the bitfield for the type of prog date */
-    UREF_FLAG_DATE_PROG = 0x1000000000000000,
-    /** position of the bitfield for the type of orig date */
-    UREF_FLAG_DATE_ORIG = 0x4000000000000000
-};
+/** position of the bitfield for the type of sys date */
+#define UREF_FLAG_DATE_SYS 0x0400000000000000
+/** position of the bitfield for the type of prog date */
+#define UREF_FLAG_DATE_PROG 0x1000000000000000
+/** position of the bitfield for the type of orig date */
+#define UREF_FLAG_DATE_ORIG 0x4000000000000000
 
 /** @internal @This is the number of bits to shift to get sys date type. */
 #define UREF_FLAG_DATE_SYS_SHIFT 58
