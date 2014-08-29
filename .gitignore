@@ -27,6 +27,9 @@ Makefile
 /doc/html
 /doc/dependancies.png
 
+# Qt
+/lib/upipe-qt/moc_thumbnail.cpp
+
 # pkg-config
 *.pc
 
