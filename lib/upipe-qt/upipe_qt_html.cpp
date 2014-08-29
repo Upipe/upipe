@@ -193,7 +193,7 @@ static void upipe_qt_html_worker(struct upump *upump){
     struct upipe_qt_html *upipe_qt_html = upipe_qt_html_from_upipe(upipe);
     struct uref *uref;
     upipe_use(upipe);
-    while (uref = uqueue_pop(&upipe_qt_html->uqueue, struct uref *)){
+    while ((uref = uqueue_pop(&upipe_qt_html->uqueue, struct uref *)) != NULL) {
         if (uref->ubuf !=  NULL){      
             upipe_qt_html_output(upipe, uref, &upipe_qt_html->upump);
         } else {
@@ -443,14 +443,14 @@ static struct upipe *upipe_qt_html_alloc(struct upipe_mgr *mgr,
 
 /** module manager static descriptor */
 static struct upipe_mgr upipe_qt_html_mgr = {
-    .refcount = NULL,
-    .signature = UPIPE_QT_HTML_SIGNATURE,
+    /* .refcount = */ NULL,
+    /* .signature = */ UPIPE_QT_HTML_SIGNATURE,
 
-    .upipe_alloc = upipe_qt_html_alloc,
-    .upipe_input = NULL,
-    .upipe_control = upipe_qt_html_control,
+    /* .upipe_alloc = */ upipe_qt_html_alloc,
+    /* .upipe_input = */ NULL,
+    /* .upipe_control = */ upipe_qt_html_control,
 
-    .upipe_mgr_control = NULL
+    /* .upipe_mgr_control = */ NULL
 };
 
 /** @This returns the management structure for html pipes

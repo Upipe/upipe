@@ -5,8 +5,8 @@ UNAME=$(uname)
 srcdir="$1"
 shift
 
-# Check for shell scripts
-if test "${1%.sh}" != "$1"; then
+# Check for shell scripts or leaking Qt
+if test "${1%.sh}" != "$1" -o `basename "$1"` = "upipe_qt_html_test"; then
 	exec "$1" "$srcdir"
 fi
 
