@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     umem_free(&umem);
     printf("Passed 4\n");
 
-    assert(umem_alloc(mgr, &umem, 64));
+    assert(umem_alloc(mgr, &umem, 8192));
     assert(umem_buffer(&umem) == p);
     umem_free(&umem);
     printf("Passed 5\n");

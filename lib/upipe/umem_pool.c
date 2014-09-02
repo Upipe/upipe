@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -100,6 +100,7 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
 
     umem->buffer = buffer;
     umem->size = size;
+    umem->real_size = real_size;
     umem->mgr = mgr;
     return true;
 }
@@ -114,21 +115,21 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
  */
 static bool umem_pool_realloc(struct umem *umem, size_t new_size)
 {
-    size_t real_old, real_new;
-    umem_pool_find(umem->mgr, umem->size, &real_old);
-    umem_pool_find(umem->mgr, new_size, &real_new);
-
-    if (likely(real_old == real_new)) {
+    if (likely(new_size <= umem->real_size)) {
         umem->size = new_size;
         return true;
     }
 
-    uint8_t *buffer = realloc(umem->buffer, real_new);
+    size_t real_size;
+    umem_pool_find(umem->mgr, new_size, &real_size);
+
+    uint8_t *buffer = realloc(umem->buffer, real_size);
     if (unlikely(buffer == NULL))
         return false;
 
     umem->buffer = buffer;
     umem->size = new_size;
+    umem->real_size = real_size;
     return true;
 }
 
@@ -142,7 +143,7 @@ static bool umem_pool_realloc(struct umem *umem, size_t new_size)
 static void umem_pool_free(struct umem *umem)
 {
     struct umem_pool_mgr *pool_mgr = umem_pool_mgr_from_umem_mgr(umem->mgr);
-    unsigned int pool = umem_pool_find(umem->mgr, umem->size, NULL);
+    unsigned int pool = umem_pool_find(umem->mgr, umem->real_size, NULL);
 
     if (unlikely(pool >= pool_mgr->nb_pools ||
                  !ulifo_push(&pool_mgr->pools[pool], umem->buffer)))

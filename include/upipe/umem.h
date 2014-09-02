@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,8 +52,10 @@ struct umem {
     struct umem_mgr *mgr;
     /** pointer to actual buffer space */
     uint8_t *buffer;
-    /** allocated size of the buffer space */
+    /** requested size of the buffer space */
     size_t size;
+    /** real size of the buffer space */
+    size_t real_size;
 };
 
 /** @This returns a pointer to the buffer space pointed to by a umem.
