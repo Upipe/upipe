@@ -118,8 +118,10 @@ static bool umem_pool_realloc(struct umem *umem, size_t new_size)
     umem_pool_find(umem->mgr, umem->size, &real_old);
     umem_pool_find(umem->mgr, new_size, &real_new);
 
-    if (likely(real_old == real_new))
+    if (likely(real_old == real_new)) {
+        umem->size = new_size;
         return true;
+    }
 
     uint8_t *buffer = realloc(umem->buffer, real_new);
     if (unlikely(buffer == NULL))
