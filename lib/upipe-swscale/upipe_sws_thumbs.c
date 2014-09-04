@@ -104,8 +104,6 @@ struct upipe_sws_thumbs {
     struct uref *gallery;
     /** thumb counter */
     int counter;
-    /** flush before next uref */
-    bool flush;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -152,7 +150,6 @@ static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump **up
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     struct uref *gallery = upipe_sws_thumbs->gallery;
-    upipe_sws_thumbs->flush = false;
     if (likely(gallery)) {
         upipe_sws_thumbs->counter = 0;
         upipe_sws_thumbs->gallery = NULL;
@@ -333,11 +330,6 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "thumbs size/num not set, dropping picture");
         uref_free(uref);
         return;
-    }
-
-    /* process flush_next order */
-    if (unlikely(upipe_sws_thumbs->flush)) {
-        upipe_sws_thumbs_flush(upipe, upump_p);
     }
 
     upipe_sws_thumbs_input_pic(upipe, uref, upump_p);
@@ -542,7 +534,7 @@ static int upipe_sws_thumbs_control(struct upipe *upipe,
         }
         case UPIPE_SWS_THUMBS_FLUSH_NEXT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SWS_THUMBS_SIGNATURE)
-            upipe_sws_thumbs_from_upipe(upipe)->flush = true;
+            upipe_sws_thumbs_flush(upipe, NULL);
             return UBASE_ERR_NONE;
         }
         default:
@@ -593,7 +585,6 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
 
     upipe_sws_thumbs->gallery = NULL;
     upipe_sws_thumbs->counter = 0;
-    upipe_sws_thumbs->flush = false;
 
     upipe_throw_ready(upipe);
 
