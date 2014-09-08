@@ -183,6 +183,7 @@ static void upipe_videocont_sub_input(struct upipe *upipe, struct uref *uref,
     }
     struct upipe_videocont *upipe_videocont =
                             upipe_videocont_from_sub_mgr(upipe->mgr);
+    upipe_verbose_va(upipe, "picture received (%"PRId64")", pts);
     if (pts + upipe_videocont->latency < upipe_videocont->last_pts) {
         upipe_warn_va(upipe, "late picture received (%"PRId64" ms)",
                       (upipe_videocont->last_pts - pts) / 27000);
@@ -527,7 +528,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     struct uref *next_uref = uref_from_uchain(ulist_peek(&input->urefs));
     uint64_t pts = 0;
     uref_clock_get_pts_sys(next_uref, &pts);
-    upipe_videocont->last_pts = pts + upipe_videocont->latency;
+    upipe_videocont->last_pts = next_pts - upipe_videocont->tolerance;
 
     if (pts + upipe_videocont->latency <
             next_pts + upipe_videocont->tolerance) {
@@ -582,7 +583,7 @@ output:
         upipe_videocont->flow_input_format = sub_attached;
         upipe_videocont->flow_def_uptodate = true;
     }
-    upipe_verbose_va(upipe, "outputting picture %p", uref);
+    upipe_verbose_va(upipe, "outputting picture %p (%"PRIu64")", uref, next_pts);
     upipe_videocont_output(upipe, uref, upump_p);
 }
 
