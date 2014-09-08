@@ -249,10 +249,13 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def_attr, fps))
-        if (context->delay)
-            UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr,
-                    upipe_avcdec->input_latency +
-                    (context->delay + 1) * UCLOCK_FREQ * fps.num / fps.den))
+
+        uint64_t latency = upipe_avcdec->input_latency +
+                           context->delay * UCLOCK_FREQ * fps.den / fps.num;
+        if (context->active_thread_type == FF_THREAD_FRAME &&
+            context->thread_count != -1)
+            latency += context->thread_count * UCLOCK_FREQ * fps.den / fps.num;
+        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr, latency))
     }
     /* set aspect-ratio */
     if (frame->sample_aspect_ratio.num) {
