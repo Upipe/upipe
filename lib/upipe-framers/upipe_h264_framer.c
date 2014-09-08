@@ -1038,7 +1038,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                                             frame_rate.num / 2;
                     UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                                 upipe_h264f->input_latency +
-                                upipe_h264f->duration))
+                                upipe_h264f->duration * 2))
                 }
             }
             ubuf_block_stream_skip_bits(s, 1);
