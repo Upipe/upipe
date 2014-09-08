@@ -434,7 +434,7 @@ static void uplay_start(struct upump *upump)
                         uprobe_output_alloc(uprobe_use(&uprobe_audio_s)),
                         UPROBE_SELFLOW_SOUND, "auto"),
                     UPROBE_SELFLOW_VOID, "auto"),
-                UPROBE_LOG_DEBUG, "ts demux"));
+                UPROBE_LOG_VERBOSE, "ts demux"));
     upipe_release(ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
 }
