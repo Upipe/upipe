@@ -1,1 +1,1 @@
-SUBDIRS = upipe upipe-modules upipe-pthread upipe-framers upump-ev upump-ecore upipe-av upipe-ts upipe-swscale upipe-gl upipe-filters upipe-x264 upipe-osx upipe-alsa upipe-swresample upipe-blackmagic upipe-qt upipe-ebur128 upipe-nacl
+SUBDIRS = upipe upipe-modules upipe-pthread upipe-framers upump-ev upump-ecore upipe-av upipe-ts upipe-swscale upipe-gl upipe-filters upipe-x264 upipe-osx upipe-alsa upipe-swresample upipe-blackmagic upipe-qt upipe-ebur128 upipe-nacl upipe-amt

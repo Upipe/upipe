@@ -78,8 +78,8 @@ AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_
 AC_CHECK_HEADERS([ppapi/c/ppb.h], AM_CONDITIONAL(HAVE_NACL, true), AM_CONDITIONAL(HAVE_NACL, false))
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
 AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, true) AM_CONDITIONAL(HAVE_OSX_DARWIN, true)], AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, false))
-
 AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
+AC_CHECK_HEADERS([amt.h], AM_CONDITIONAL(HAVE_AMT, true), AM_CONDITIONAL(HAVE_AMT, false))
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -155,6 +155,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-qt/Makefile
                  include/upipe-ebur128/Makefile
                  include/upipe-nacl/Makefile
+                 include/upipe-amt/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -194,6 +195,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-ebur128/libupipe_ebur128.pc
                  lib/upipe-nacl/Makefile
                  lib/upipe-nacl/libupipe_nacl.pc
+                 lib/upipe-amt/Makefile
+                 lib/upipe-amt/libupipe_amt.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
