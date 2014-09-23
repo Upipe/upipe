@@ -36,21 +36,34 @@ function moduleDidLoad() {
   // postMessage sends a message to it.
 }
 
+function run(mode) {
+  var multicastAddr = document.getElementById('multicastAddr').value;
+  var multicastPort = Number(document.getElementById('multicastPort').value);
+  var sourceAddr = document.getElementById('sourceAddr').value;
+  var relayAddr = document.getElementById('relayAddr').value;
+  common.naclModule.postMessage({
+    'message': 'set_uri',
+    'mode': mode,
+    'value': sourceAddr + '@' + multicastAddr + ':' + multicastPort,
+    'relay': relayAddr
+  });
+}
+
 // Add event listeners after the NaCl module has loaded.  These listeners will
 // forward messages to the NaCl module via postMessage()
 function attachListeners() {
-  document.getElementById('run').addEventListener('click',
-    function() {
-      var multicastAddr = document.getElementById('multicastAddr').value;
-      var multicastPort = Number(document.getElementById('multicastPort').value);
-      var sourceAddr = document.getElementById('sourceAddr').value;
-      var relayAddr = document.getElementById('relayAddr').value;
-      common.naclModule.postMessage({
-        'message': 'set_uri',
-        'value': sourceAddr + '@' + multicastAddr + ':' + multicastPort,
-        'relay': relayAddr
-      });
-    });
+  document.getElementById('udp').addEventListener('click', function () {
+    run("udp");
+  });
+  document.getElementById('ssm').addEventListener('click', function () {
+    run("ssm");
+  });
+  document.getElementById('amt').addEventListener('click', function () {
+    run("amt");
+  });
+  document.getElementById('any').addEventListener('click', function () {
+    run("any");
+  });
 }
 
 first_message = [1,1,1,1,1,1];

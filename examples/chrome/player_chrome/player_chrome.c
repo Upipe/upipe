@@ -2,6 +2,7 @@
  * Copyright (C) 2014 OpenHeadend S.A.R.L.
  *
  * Authors: Xavier Boulet
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -176,10 +177,6 @@
 #define SOUND_QUEUE_LENGTH      10
 #define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
 
-#define AMT true
-#define UDP false
-#define TCP false
-
 #ifndef GLES
     #define GLES false
 #endif
@@ -210,7 +207,7 @@ PPB_WebSocket* ppb_web_socket_interface = NULL;
 struct PPB_OpenGLES2* ppb_open_gles2_interface = NULL;
 PPB_VarDictionary* ppb_var_dictionary_interface = NULL;
 
-/*Probes & managers & pipes*/
+/* main event loop */
 static struct ev_loop *loop;
 /* upump manager for the main thread */
 struct upump_mgr *main_upump_mgr = NULL;
@@ -240,192 +237,6 @@ struct upipe *upipe_src = NULL;
 struct upipe *video_sink = NULL;
 /* audio sink */
 struct upipe *audio_sink = NULL;
-
-#if 0
-/** catch probes from uprobe_uref_video */
-static int uref_catch_video(struct uprobe *uprobe, struct upipe *upipe,
-                      int event, va_list args)
-{
-    if (event != UPROBE_PROBE_UREF){
-        return uprobe_throw_next(uprobe, upipe, event, args);}
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    unsigned int signature = va_arg(args_copy, unsigned int);
-    va_end(args_copy);
-    if (signature != UPIPE_PROBE_UREF_SIGNATURE)
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    int i=0;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_uref_video[i])
-        {
-            upipe_set_output(upipe, display[i]);
-        }
-    }
-    return UBASE_ERR_NONE;
-}
-
-/** avcdec_video callback */
-static int avcdec_catch_video(struct uprobe *uprobe, struct upipe *upipe,
-                        int event, va_list args)
-{
-    if (event != UPROBE_NEW_FLOW_DEF)
-        return uprobe_throw_next(uprobe, upipe, event, args);
-    struct uref *flow_def = va_arg(args, struct uref *);
-    uint64_t hsize, vsize;
-    struct urational sar;
-    struct urational fps;
-    if (unlikely(!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) || !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)) || !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) || !ubase_check(uref_pic_flow_get_fps(flow_def, &fps)))) {
-        upipe_err_va(upipe, "incompatible flow def");
-        return UBASE_ERR_UNHANDLED;
-    }
-    /* pic flow definition */
-    struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
-    ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 3, "r8g8b8"));
-
-    ubase_assert(uref_pic_flow_set_hsize(flow, g_Context.size.width));
-    ubase_assert(uref_pic_flow_set_vsize(flow, g_Context.size.height));
-    ubase_assert(uref_pic_flow_set_fps(flow, fps));
-    #if SWS_RGB
-    struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr, uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(uprobe_main)),UPROBE_LOG_LEVEL, "sws"), flow);
-    assert(sws != NULL);
-    upipe_release(upipe);
-    if (sws == NULL) {
-        upipe_err_va(upipe, "incompatible flow def");
-        uref_free(flow);
-        return true;
-    }
-
-    upipe = sws;
-    #endif
-    upipe_set_output(upipe, display[0]);
-#if 0
-    int i = 0;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_avcdec_video[i])
-        {
-            struct upipe *urefprobe = upipe_void_alloc_output(upipe,
-            upipe_probe_uref_video_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_uref_video[i])),UPROBE_LOG_LEVEL, "urefprobe")); 
-            upipe_release(upipe);
-        }
-    }
-#endif
-    return UBASE_ERR_NONE;
-}
-/** catch probes from uprobe_catch_video */
-static int video_catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
-{
-    if (event != UPROBE_NEW_FLOW_DEF)  
-        return uprobe_throw_next(uprobe, upipe, event, args);
-    int i=0;
-    struct uprobe *u_avc_vid = NULL;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_catch_video[i])
-        {
-            u_avc_vid = &uprobe_avcdec_video[i];
-        }
-    }
-
-    struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_video_mgr, uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(u_avc_vid)),UPROBE_LOG_LEVEL, "avcdec_video"));
-    if (avcdec == NULL) {
-        upipe_err_va(upipe, "incompatible flow def");
-        return UBASE_ERR_UNHANDLED;
-    }
-    upipe_release(avcdec); 
-    return UBASE_ERR_NONE;
-}
-
-/* catch probes from uprobe_uref_audio */
-static int uref_catch_audio(struct uprobe *uprobe, struct upipe *upipe,
-                      int event, va_list args)
-{    
-    if (event != UPROBE_PROBE_UREF) 
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    unsigned int signature = va_arg(args_copy, unsigned int);
-    va_end(args_copy);
-
-    if (signature != UPIPE_PROBE_UREF_SIGNATURE) return uprobe_throw_next(uprobe, upipe, event, args); 
-
-    int i=0;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_uref_audio[i])
-        {
-            upipe_set_output(upipe,r128[i]);
-            upipe_set_output(r128[i],sound[i]);
-        }
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-
-
-/** avcdec_audio callback */
-static int avcdec_catch_audio(struct uprobe *uprobe, struct upipe *upipe,
-                       int event, va_list args)
-{
-    struct uref *flow_def;
-    const char *def;
-    if (!uprobe_plumber(event, args, &flow_def, &def)) 
-        return uprobe_throw_next(uprobe, upipe, event, args); 
-            upipe_set_output(upipe,r128[0]);
-            upipe_set_output(r128[0],sound[0]);
-#if 0
-    int i = 0;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_avcdec_audio[i])
-        {
-            upipe_set_flow_def(r128[i],flow_def);
-            upipe_set_flow_def(sound[i], flow_def);
-
-            struct upipe *urefprobe = upipe_void_alloc_output(upipe,
-                upipe_probe_uref_video_mgr,
-                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_uref_audio[i])),
-                                    UPROBE_LOG_LEVEL, "urefprobe")); 
-            upipe_release(upipe);
-        }
-    }
-#endif
-    return UBASE_ERR_NONE;
-} 
-
-/** catch probes from uprobe_catch_audio */
-static int audio_catch (struct uprobe *uprobe, struct upipe *upipe, int event, va_list args)
-{
-    if (event != UPROBE_NEW_FLOW_DEF)
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    int i=0;
-    struct uprobe *u_avc_aud = NULL;
-    for(i=0; i<NB_SRC; i++)
-    {
-        if(uprobe == &uprobe_catch_audio[i])
-        {
-            u_avc_aud = &uprobe_avcdec_audio[i];
-        }
-    }
-
-    struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_audio_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(u_avc_aud)),
-                                UPROBE_LOG_LEVEL, "avcdec_audio"));
-    if (avcdec == NULL) {
-        upipe_err_va(upipe, "incompatible flow def");
-        return UBASE_ERR_UNHANDLED;
-    }
-    upipe_release(avcdec); 
-    return UBASE_ERR_NONE;
-}
-#endif
 
 /* probe for video subpipe of demux */
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -532,7 +343,7 @@ static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
 {
     if (event == UPROBE_SOURCE_END && main_upump_mgr != NULL) {
         upipe_dbg(upipe, "caught source end, dying (or not)");
-#if 0
+#if 0 /* FIXME */
         struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
                                                      demo_stop, (void *)0);
         upump_start(idler_stop);
@@ -542,60 +353,46 @@ static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
-static void demo_start(const char *uri, const char *relay)
+static void demo_start(const char *uri, const char *relay, const char *mode)
 {
     uprobe_notice_va(uprobe_main, NULL, "running URI %s", uri);
     bool need_trickp = false;
-    unsigned int src_out_queue_length = FSRC_OUT_QUEUE_LENGTH;
+    unsigned int src_out_queue_length = SRC_OUT_QUEUE_LENGTH;
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
 
     struct uprobe *uprobe_src = uprobe_xfer_alloc(uprobe_use(uprobe_main));
     uprobe_xfer_add(uprobe_src, UPROBE_XFER_VOID, UPROBE_SOURCE_END, 0);
 
-    /* try file source */
-    struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
-    upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
-                             UPROBE_LOG_VERBOSE, "fsrc"));
-    upipe_mgr_release(upipe_fsrc_mgr);
+    uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
 
-    if (upipe_src != NULL && ubase_check(upipe_set_uri(upipe_src, uri))) {
-        need_trickp = true;
+    if (!strcmp(mode, "udp")) {
+        struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
+        assert(upipe_udpsrc_mgr != NULL);
+        upipe_src = upipe_void_alloc(upipe_udpsrc_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_src),
+                                 UPROBE_LOG_VERBOSE, "udpsrc"));
+        upipe_mgr_release(upipe_udpsrc_mgr);
+
+        if (upipe_src == NULL || !ubase_check(upipe_set_uri(upipe_src, uri)))
+            return;
+        upipe_attach_uclock(upipe_src);
+
     } else {
-        upipe_release(upipe_src);
-        uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
-        src_out_queue_length = SRC_OUT_QUEUE_LENGTH;
-
-        /* try amt source */
-        struct upipe_mgr *upipe_amtsrc_mgr;
-        upipe_amtsrc_mgr = upipe_amtsrc_mgr_alloc(relay);
+        struct upipe_mgr *upipe_amtsrc_mgr = upipe_amtsrc_mgr_alloc(relay);
         assert(upipe_amtsrc_mgr != NULL);
         upipe_src = upipe_void_alloc(upipe_amtsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_src),
                                  UPROBE_LOG_VERBOSE, "amtsrc"));
         upipe_mgr_release(upipe_amtsrc_mgr);
 
-        if (upipe_src != NULL && ubase_check(upipe_set_uri(upipe_src, uri))) {
-            upipe_attach_uclock(upipe_src);
-        } else {
-            upipe_release(upipe_src);
-
-            /* try http source */
-            struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
-            upipe_src = upipe_void_alloc(upipe_http_src_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
-                                 UPROBE_LOG_VERBOSE, "httpsrc"));
-            upipe_mgr_release(upipe_http_src_mgr);
-
-            if (upipe_src == NULL ||
-                !ubase_check(upipe_set_uri(upipe_src, uri))) {
-                upipe_release(upipe_src);
-                uprobe_err_va(uprobe_main, NULL, "unable to open \"%s\"", uri);
-                exit(EXIT_FAILURE);
-            }
-        }
+        char real_uri[strlen(uri) + strlen(mode) + sizeof("://")];
+        sprintf(real_uri, "%s://%s", mode, uri);
+        if (upipe_src == NULL ||
+            !ubase_check(upipe_set_uri(upipe_src, real_uri)))
+            return;
+        upipe_attach_uclock(upipe_src);
     }
-    uprobe_release(uprobe_src);
+
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
     if (need_trickp) {
@@ -783,10 +580,6 @@ int upipe_demo(int argc, char *argv[]) {
 
     upipe_display_set_hposition(video_sink, 0);
     upipe_display_set_vposition(video_sink, 0);
-#if 0
-    upipe_display_set_hposition(video_sink, i%2*720);
-    upipe_display_set_vposition(video_sink, i/2*576);
-#endif
     upipe_display_set_context(video_sink, g_Context);
 
     PP_Resource sound_loop =
@@ -817,89 +610,15 @@ int upipe_demo(int argc, char *argv[]) {
     }
     printf("exiting event loop\n");
 
-#if 0
-    /* Threads + Message loops */
-
-    PP_Resource src_loop = ppb_message_loop_interface->Create(PSGetInstanceId());
-    struct thread_data src_threadData;
-    pthread_t src_thread;
-    src_threadData.loop = src_loop;
-    src_threadData.message_loop_interface = ppb_message_loop_interface;
-    src_threadData.instance_id = PSGetInstanceId();
-    pthread_create(&src_thread,NULL,&thread_main,&src_threadData);
-
-    PP_Resource *display_loop = malloc(NB_SRC*sizeof(PP_Resource));
-    struct thread_data *display_threadData = malloc(NB_SRC*sizeof(struct thread_data));
-    pthread_t *display_thread = malloc(NB_SRC*sizeof(pthread_t));
-    for(i=0;i<NB_SRC;i++)
-    {
-        display_loop[i] = ppb_message_loop_interface->Create(PSGetInstanceId());
-        display_threadData[i].loop = display_loop[i];
-        display_threadData[i].message_loop_interface = ppb_message_loop_interface;
-        display_threadData[i].instance_id = PSGetInstanceId();
-        pthread_create(&display_thread[i],NULL,&thread_main,&display_threadData[i]);
-    }
-
-    PP_Resource image = ppb_imagedata_interface->Create(PSGetInstanceId(), PP_IMAGEDATAFORMAT_BGRA_PREMUL, &(g_Context.size), PP_FALSE);
-
-    /* upipe_display + mgr */
-    struct upipe_mgr **display_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
-    display = malloc(NB_SRC*sizeof(struct upipe*));
-    for (i = 0; i < NB_SRC; i++)
-    {
-        display_mgr[i] = upipe_display_mgr_alloc();
-        display[i] = _upipe_display_alloc(display_mgr[i], uprobe_pfx_alloc(uprobe_use(uprobe_main),UPROBE_LOG_LEVEL, "display"), image, display_loop[i]);
-        upipe_attach_uclock(display[i]);
-        upipe_display_set_hposition(display[i],i%2*720);
-        upipe_display_set_vposition(display[i],i/2*576);
-        upipe_display_set_context(display[i],g_Context);
-    }
-    /* upipe_sound + mgr */
-    upipe_filter_ebur128_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
-    struct upipe_mgr **sound_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
-    r128 = malloc(NB_SRC*sizeof(struct upipe*));
-    sound = malloc(NB_SRC*sizeof(struct upipe*));
-    for (i = 0; i < NB_SRC; i++)
-    {
-        upipe_filter_ebur128_mgr[i] = upipe_filter_ebur128_mgr_alloc();
-        sound_mgr[i] = upipe_sound_mgr_alloc();
-        sound[i] = _upipe_sound_alloc(sound_mgr[i],uprobe_pfx_alloc(uprobe_use(uprobe_main),UPROBE_LOG_LEVEL, "sound"), src_loop);
-        r128[i] = _upipe_filter_ebur128_alloc(upipe_filter_ebur128_mgr[i], uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_LEVEL, "r128"),i);
-        upipe_filter_ebur128_set_time_length(r128[i], 1500);
-    }            
-#endif
-
     /* release & free*/
     upump_mgr_release(main_upump_mgr);
-#if 0
-    for (i = 0; i < NB_SRC; i++) {
-        upipe_mgr_release(upipe_src_mgr[i]);
-        upipe_mgr_release(display_mgr[i]);
-        upipe_mgr_release(upipe_filter_ebur128_mgr[i]);
-        upipe_mgr_release(sound_mgr[i]);
-
-        upipe_release(upipe_src[i]);
-        upipe_release(display[i]);
-        upipe_release(r128[i]);
-        upipe_release(sound[i]);
-
-        uprobe_release(&uprobe_catch_audio[i]);
-        uprobe_release(&uprobe_avcdec_audio[i]);
-        uprobe_release(&uprobe_uref_audio[i]);
-        uprobe_release(&uprobe_catch_video[i]);
-        uprobe_release(&uprobe_avcdec_video[i]);
-        uprobe_release(&uprobe_uref_video[i]);
-
-        ppb_message_loop_interface->PostQuit(display_loop[i], PP_FALSE);
-        ppb_core_interface->ReleaseResource(display_loop[i]);
-    }
-#endif
     uprobe_release(uprobe_dejitter);
     uprobe_release(uprobe_main);
-#if 0
-    ppb_message_loop_interface->PostQuit(src_loop, PP_FALSE);
-    ppb_core_interface->ReleaseResource(src_loop);
-#endif
+
+    ppb_message_loop_interface->PostQuit(display_loop, PP_FALSE);
+    ppb_core_interface->ReleaseResource(display_loop);
+    ppb_message_loop_interface->PostQuit(sound_loop, PP_FALSE);
+    ppb_core_interface->ReleaseResource(sound_loop);
     ppb_core_interface->ReleaseResource(image);
     ev_default_destroy();
     return 0;
@@ -1017,7 +736,11 @@ void ProcessEvent(PSEvent* event) {
                     char relay_string[256];
                     VarToCStr(relay, relay_string, sizeof(relay_string));
 
-                    demo_start(value_string, relay_string);
+                    struct PP_Var mode = ppb_var_dictionary_interface->Get(var, CStrToVar("mode"));
+                    char mode_string[256];
+                    VarToCStr(mode, mode_string, sizeof(mode_string));
+
+                    demo_start(value_string, relay_string, mode_string);
                 }
             }
             break;

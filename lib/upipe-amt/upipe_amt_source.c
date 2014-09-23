@@ -300,7 +300,20 @@ static int upipe_amtsrc_set_uri(struct upipe *upipe, const char *uri)
     char *string = strdup(uri);
     if (string == NULL)
         return UBASE_ERR_ALLOC;
-    char *source = string;
+
+    amt_connect_req_e mode;
+    if (!ubase_ncmp(string, "ssm://"))
+        mode = AMT_CONNECT_REQ_SSM;
+    else if (!ubase_ncmp(string, "amt://"))
+        mode = AMT_CONNECT_REQ_RELAY;
+    else if (!ubase_ncmp(string, "any://"))
+        mode = AMT_CONNECT_REQ_ANY;
+    else {
+        upipe_err_va(upipe, "unknown URI %s", string);
+        goto upipe_amtsrc_set_uri_err;
+    }
+
+    char *source = string + 6;
     char *multicast = strchr(source, '@');
 
     if (multicast != NULL) {
@@ -327,7 +340,7 @@ static int upipe_amtsrc_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_amtsrc->handle = amt_openChannel(htonl(amtsrc_mgr->amt_addr.s_addr),
             htonl(multicast_addr.s_addr), htonl(source_addr.s_addr),
-            port_number, AMT_CONNECT_REQ_ANY);
+            port_number, mode);
     if (unlikely(upipe_amtsrc->handle == NULL)) {
         upipe_err_va(upipe, "can't open %s", uri);
         return UBASE_ERR_EXTERNAL;
