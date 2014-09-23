@@ -37,7 +37,7 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
+#include <upipe/umem_pool.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -70,6 +70,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
+#include <upipe/uprobe_transfer.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
@@ -94,15 +95,22 @@
 #include <upipe-ebur128/ebur128.h>
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_file_source.h>
+#include <upipe-modules/upipe_udp_source.h>
+#include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_transfer.h>
+#include <upipe-modules/upipe_worker_source.h>
+#include <upipe-modules/upipe_worker_linear.h>
+#include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-nacl/upipe_display.h>
 #include <upipe-nacl/upipe_sound.h>
 #include <upipe-nacl/upipe_src_udp_chrome.h>
 #include <upipe-nacl/upipe_src_tcp_chrome.h>
+#include <upipe-amt/upipe_amt_source.h>
 
 #include <ppapi/c/pp_errors.h>
 #include <ppapi/c/pp_module.h>
@@ -128,6 +136,7 @@
 #include <ppapi/c/ppb_tcp_socket.h>
 #include <ppapi/c/ppb_udp_socket.h>
 #include <ppapi/c/ppb_var.h>
+#include <ppapi/c/ppb_var_dictionary.h>
 #include <ppapi/c/ppb_view.h>
 #include <ppapi/c/ppb_websocket.h>
 #include <ppapi_simple/ps_event.h>
@@ -150,26 +159,27 @@
 #include <assert.h>
 #include <time.h>
 
-#include "nacl_io/nacl_io.h"
-#define UPUMP_POOL          1
-#define UPUMP_BLOCKER_POOL  1
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
-#define WIDTH               80
-#define HEIGHT              80
-#define LIMIT               10
-#define UBUF_PREPEND        2
-#define UBUF_APPEND         2
-#define UBUF_ALIGN          16
-#define UBUF_ALIGN_HOFFSET  0
+#define UMEM_POOL               512
+#define UDICT_POOL_DEPTH        500
+#define UREF_POOL_DEPTH         500
+#define UBUF_POOL_DEPTH         3000
+#define UBUF_SHARED_POOL_DEPTH  50
+#define UPUMP_POOL              10
+#define UPUMP_BLOCKER_POOL      10
 #define DEJITTER_DIVIDER        100
-#define UPROBE_LOG_LEVEL    5
+#define XFER_QUEUE              255
+#define XFER_POOL               20
+#define FSRC_OUT_QUEUE_LENGTH   5
+#define SRC_OUT_QUEUE_LENGTH    10000
+#define DEC_IN_QUEUE_LENGTH     5
+#define DEC_OUT_QUEUE_LENGTH    2
+#define SOUND_QUEUE_LENGTH      10
+#define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
 
-#define UDP true
+#define AMT true
+#define UDP false
 #define TCP false
 
-#define NB_SRC 2
 #ifndef GLES
     #define GLES false
 #endif
@@ -178,7 +188,7 @@
 struct Context g_Context;
 void UpdateContext(uint32_t width, uint32_t height);
 void ProcessEvent(PSEvent* event);
-void* thread_main(void* user_data);
+void *thread_main(void* user_data);
 
 /* PPAPI Interfaces */
 PPB_Core* ppb_core_interface= NULL;
@@ -198,34 +208,40 @@ PPB_UDPSocket* ppb_udp_socket_interface = NULL;
 PPB_TCPSocket* ppb_tcp_socket_interface = NULL;
 PPB_WebSocket* ppb_web_socket_interface = NULL;
 struct PPB_OpenGLES2* ppb_open_gles2_interface = NULL;
+PPB_VarDictionary* ppb_var_dictionary_interface = NULL;
 
 /*Probes & managers & pipes*/
-struct uprobe* logger;
-struct uprobe *uprobe_catch_video;
-struct uprobe *uprobe_catch_audio;
-struct uprobe *uprobe_uref_video;
-struct uprobe *uprobe_uref_audio;
-struct uprobe *uprobe_avcdec_video;
-struct uprobe *uprobe_avcdec_audio;
-struct uprobe* uprobe_dejitter;
+static struct ev_loop *loop;
+/* upump manager for the main thread */
+struct upump_mgr *main_upump_mgr = NULL;
+/* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
+static struct uprobe *uprobe_main = NULL;
+/* probe for demux */
+struct uprobe *uprobe_dejitter = NULL;
+/* probe for source worker pipe */
+struct uprobe uprobe_src_s;
+/* probe for demux video subpipe */
+struct uprobe uprobe_video_s;
+/* probe for demux audio subpipe */
+struct uprobe uprobe_audio_s;
+/* probe for glx sink */
+struct uprobe uprobe_glx_s;
+/* source thread */
+struct upipe_mgr *upipe_wsrc_mgr = NULL;
+/* decoder thread */
+struct upipe_mgr *upipe_wlin_mgr = NULL;
+/* sink thread */
+struct upipe_mgr *upipe_wsink_mgr = NULL;
+/* trick play */
+struct upipe *trickp = NULL;
+/* source pipe */
+struct upipe *upipe_src = NULL;
+/* video sink */
+struct upipe *video_sink = NULL;
+/* audio sink */
+struct upipe *audio_sink = NULL;
 
-struct upipe_mgr **upipe_filter_ebur128_mgr;
-struct upipe_mgr *upipe_avcdec_video_mgr;
-struct upipe_mgr *upipe_avcdec_audio_mgr;
-struct upipe_mgr *upipe_avcenc_mgr;
-struct upipe_mgr *upipe_sws_mgr;
-struct upipe_mgr *upipe_probe_uref_video_mgr;
-struct upipe_mgr *upipe_probe_uref_audio_mgr;
-struct uref_mgr *uref_mgr;
-
-struct upipe *upipe_source;
-struct upipe **r128;
-struct upipe *upipe_split_video_output = NULL;
-struct upipe *upipe_split_audio_output = NULL;
-struct upipe **display;
-struct upipe **sound;
-struct upipe *upipe_null;
-
+#if 0
 /** catch probes from uprobe_uref_video */
 static int uref_catch_video(struct uprobe *uprobe, struct upipe *upipe,
                       int event, va_list args)
@@ -263,38 +279,29 @@ static int avcdec_catch_video(struct uprobe *uprobe, struct upipe *upipe,
     struct urational fps;
     if (unlikely(!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) || !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)) || !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) || !ubase_check(uref_pic_flow_get_fps(flow_def, &fps)))) {
         upipe_err_va(upipe, "incompatible flow def");
-        upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
     /* pic flow definition */
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 3, "r8g8b8"));
 
-    ubase_assert(uref_pic_flow_set_hsize(flow, hsize));
-    ubase_assert(uref_pic_flow_set_vsize(flow, vsize));
+    ubase_assert(uref_pic_flow_set_hsize(flow, g_Context.size.width));
+    ubase_assert(uref_pic_flow_set_vsize(flow, g_Context.size.height));
     ubase_assert(uref_pic_flow_set_fps(flow, fps));
     #if SWS_RGB
-    struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr, uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),UPROBE_LOG_LEVEL, "sws"), flow);
+    struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr, uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(uprobe_main)),UPROBE_LOG_LEVEL, "sws"), flow);
     assert(sws != NULL);
     upipe_release(upipe);
     if (sws == NULL) {
         upipe_err_va(upipe, "incompatible flow def");
         uref_free(flow);
-        upipe_release(upipe_source);
         return true;
     }
 
     upipe = sws;
     #endif
-    /*Trickplay */
-    struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
-    struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL, "trickp"));
-    upipe_mgr_release(upipe_trickp_mgr);
-    upipe_attach_uclock(trickp);
-    struct upipe *trickp_video = upipe_void_alloc_output_sub(upipe, trickp,uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),UPROBE_LOG_LEVEL, "trickp video"));
-    upipe_release(trickp);
-    upipe_release(upipe);
-    upipe = trickp_video;
+    upipe_set_output(upipe, display[0]);
+#if 0
     int i = 0;
     for(i=0; i<NB_SRC; i++)
     {
@@ -306,6 +313,7 @@ static int avcdec_catch_video(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(upipe);
         }
     }
+#endif
     return UBASE_ERR_NONE;
 }
 /** catch probes from uprobe_catch_video */
@@ -326,7 +334,6 @@ static int video_catch(struct uprobe *uprobe, struct upipe *upipe, int event, va
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_video_mgr, uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(u_avc_vid)),UPROBE_LOG_LEVEL, "avcdec_video"));
     if (avcdec == NULL) {
         upipe_err_va(upipe, "incompatible flow def");
-        upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
     upipe_release(avcdec); 
@@ -370,6 +377,9 @@ static int avcdec_catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     const char *def;
     if (!uprobe_plumber(event, args, &flow_def, &def)) 
         return uprobe_throw_next(uprobe, upipe, event, args); 
+            upipe_set_output(upipe,r128[0]);
+            upipe_set_output(r128[0],sound[0]);
+#if 0
     int i = 0;
     for(i=0; i<NB_SRC; i++)
     {
@@ -385,6 +395,7 @@ static int avcdec_catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(upipe);
         }
     }
+#endif
     return UBASE_ERR_NONE;
 } 
 
@@ -409,14 +420,260 @@ static int audio_catch (struct uprobe *uprobe, struct upipe *upipe, int event, v
                                 UPROBE_LOG_LEVEL, "avcdec_audio"));
     if (avcdec == NULL) {
         upipe_err_va(upipe, "incompatible flow def");
-        upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
     }
     upipe_release(avcdec); 
     return UBASE_ERR_NONE;
 }
+#endif
 
-int example_main(int argc, char *argv[]) {
+/* probe for video subpipe of demux */
+static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    if (upipe_wlin_mgr == NULL) /* we're dying */
+        return UBASE_ERR_UNHANDLED;
+
+    /* TODO: write a bin pipe with deint and sws */
+    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "avcdec video"));
+    assert(avcdec != NULL);
+    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_set_option(avcdec, "threads", "4");
+
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    uref_flow_set_def(uref, "pic.");
+    uref_pic_flow_set_macropixel(uref, 1);
+    uref_pic_flow_set_planes(uref, 0);
+    uref_pic_flow_add_plane(uref, 1, 1, 3, "r8g8b8");
+    uref_pic_flow_set_hsize(uref, g_Context.size.width);
+    uref_pic_flow_set_vsize(uref, g_Context.size.height);
+    struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
+    struct upipe *yuvrgb = upipe_flow_alloc_output(avcdec, upipe_sws_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "rgb"),
+            uref);
+    assert(yuvrgb != NULL);
+    uref_free(uref);
+    upipe_mgr_release(upipe_sws_mgr);
+    upipe_release(yuvrgb);
+
+    /* deport to the decoder thread */
+    avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "wlin video"),
+            avcdec,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wlin_x video"),
+            DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
+    assert(avcdec != NULL);
+    upipe_set_output(upipe, avcdec);
+
+    if (trickp != NULL)
+        avcdec = upipe_void_chain_output_sub(avcdec, trickp,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                                 UPROBE_LOG_VERBOSE, "trickp video"));
+
+    upipe_set_output(avcdec, video_sink);
+    upipe_release(avcdec);
+    return UBASE_ERR_NONE;
+}
+
+/* probe for audio subpipe of demux */
+static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    if (upipe_wlin_mgr == NULL) /* we're dying */
+        return UBASE_ERR_UNHANDLED;
+
+    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "avcdec audio"));
+    assert(avcdec != NULL);
+    upipe_mgr_release(upipe_avcdec_mgr);
+
+    /* deport to the decoder thread */
+    avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "wlin audio"),
+            avcdec,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wlin_x audio"),
+            DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
+    assert(avcdec != NULL);
+    upipe_set_output(upipe, avcdec);
+
+    if (trickp != NULL)
+        avcdec = upipe_void_chain_output_sub(avcdec, trickp,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                                 UPROBE_LOG_VERBOSE, "trickp audio"));
+
+    upipe_set_output(avcdec, audio_sink);
+    upipe_release(avcdec);
+    return UBASE_ERR_NONE;
+}
+
+/* generic source probe */
+static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
+                     int event, va_list args)
+{
+    if (event == UPROBE_SOURCE_END && main_upump_mgr != NULL) {
+        upipe_dbg(upipe, "caught source end, dying (or not)");
+#if 0
+        struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
+                                                     demo_stop, (void *)0);
+        upump_start(idler_stop);
+#endif
+        return UBASE_ERR_NONE;
+    }
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
+static void demo_start(const char *uri, const char *relay)
+{
+    uprobe_notice_va(uprobe_main, NULL, "running URI %s", uri);
+    bool need_trickp = false;
+    unsigned int src_out_queue_length = FSRC_OUT_QUEUE_LENGTH;
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
+
+    struct uprobe *uprobe_src = uprobe_xfer_alloc(uprobe_use(uprobe_main));
+    uprobe_xfer_add(uprobe_src, UPROBE_XFER_VOID, UPROBE_SOURCE_END, 0);
+
+    /* try file source */
+    struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
+    upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                             UPROBE_LOG_VERBOSE, "fsrc"));
+    upipe_mgr_release(upipe_fsrc_mgr);
+
+    if (upipe_src != NULL && ubase_check(upipe_set_uri(upipe_src, uri))) {
+        need_trickp = true;
+    } else {
+        upipe_release(upipe_src);
+        uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
+        src_out_queue_length = SRC_OUT_QUEUE_LENGTH;
+
+        /* try amt source */
+        struct upipe_mgr *upipe_amtsrc_mgr;
+        upipe_amtsrc_mgr = upipe_amtsrc_mgr_alloc(relay);
+        assert(upipe_amtsrc_mgr != NULL);
+        upipe_src = upipe_void_alloc(upipe_amtsrc_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                                 UPROBE_LOG_VERBOSE, "amtsrc"));
+        upipe_mgr_release(upipe_amtsrc_mgr);
+
+        if (upipe_src != NULL && ubase_check(upipe_set_uri(upipe_src, uri))) {
+            upipe_attach_uclock(upipe_src);
+        } else {
+            upipe_release(upipe_src);
+
+            /* try http source */
+            struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
+            upipe_src = upipe_void_alloc(upipe_http_src_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                                 UPROBE_LOG_VERBOSE, "httpsrc"));
+            upipe_mgr_release(upipe_http_src_mgr);
+
+            if (upipe_src == NULL ||
+                !ubase_check(upipe_set_uri(upipe_src, uri))) {
+                upipe_release(upipe_src);
+                uprobe_err_va(uprobe_main, NULL, "unable to open \"%s\"", uri);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    uprobe_release(uprobe_src);
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
+
+    if (need_trickp) {
+        struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
+        trickp = upipe_void_alloc(upipe_trickp_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                                 UPROBE_LOG_VERBOSE, "trickp"));
+        assert(trickp != NULL);
+        upipe_mgr_release(upipe_trickp_mgr);
+        upipe_attach_uclock(trickp);
+    }
+
+    /* deport to the source thread */
+    upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src_s)),
+                             UPROBE_LOG_VERBOSE, "wsrc"),
+            upipe_src,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wsrc_x"),
+            src_out_queue_length);
+
+    /* ts demux */
+    struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
+    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
+    upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr, upipe_mpgvf_mgr);
+    upipe_mgr_release(upipe_mpgvf_mgr);
+    struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
+    upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
+    upipe_mgr_release(upipe_h264f_mgr);
+    struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
+    upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr, upipe_mpgaf_mgr);
+    upipe_mgr_release(upipe_mpgaf_mgr);
+    struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
+    upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr, upipe_a52f_mgr);
+    upipe_mgr_release(upipe_a52f_mgr);
+    struct upipe *ts_demux = upipe_void_alloc_output(upipe_src,
+            upipe_ts_demux_mgr,
+            uprobe_pfx_alloc(
+                uprobe_selflow_alloc(uprobe_use(uprobe_main),
+                    uprobe_selflow_alloc(
+                        uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
+                            uprobe_output_alloc(uprobe_use(&uprobe_video_s)),
+                            UPROBE_SELFLOW_PIC, "auto"),
+                        uprobe_output_alloc(uprobe_use(&uprobe_audio_s)),
+                        UPROBE_SELFLOW_SOUND, "auto"),
+                    UPROBE_SELFLOW_VOID, "auto"),
+                UPROBE_LOG_VERBOSE, "ts demux"));
+    upipe_release(ts_demux);
+    upipe_mgr_release(upipe_ts_demux_mgr);
+
+    /* ev-loop */
+    ev_loop(loop, 0);
+}
+
+static struct upump_mgr *upump_mgr_alloc(void)
+{
+    struct ev_loop *loop = ev_loop_new(0);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
+                                                     UPUMP_BLOCKER_POOL);
+    assert(upump_mgr != NULL);
+    upump_mgr_set_opaque(upump_mgr, loop);
+    return upump_mgr;
+}
+
+static void upump_mgr_work(struct upump_mgr *upump_mgr)
+{
+    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
+    ev_loop(loop, 0);
+}
+
+static void upump_mgr_free(struct upump_mgr *upump_mgr)
+{
+    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
+    ev_loop_destroy(loop);
+}
+
+int upipe_demo(int argc, char *argv[]) {
+    printf("example_main running\n");
     /* PPAPI Interfaces */
     ppb_core_interface = (PPB_Core*)PSGetInterface(PPB_CORE_INTERFACE);
     ppb_graphic2d_interface = (PPB_Graphics2D*)PSGetInterface(PPB_GRAPHICS_2D_INTERFACE);
@@ -435,57 +692,132 @@ int example_main(int argc, char *argv[]) {
     ppb_audio_config_interface = (PPB_AudioConfig*)PSGetInterface(PPB_AUDIO_CONFIG_INTERFACE);
     ppb_audio_interface = (PPB_Audio*)PSGetInterface(PPB_AUDIO_INTERFACE);
     ppb_open_gles2_interface = (struct PPB_OpenGLES2*)PSGetInterface(PPB_OPENGLES2_INTERFACE);
+    ppb_var_dictionary_interface = (PPB_VarDictionary*)PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
 
-    int i = 0;
     /* upipe env */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop,UPUMP_POOL, UPUMP_BLOCKER_POOL);
-    struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
-    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,umem_mgr, -1, -1);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH,udict_mgr, 0);
+    loop = ev_default_loop(0);
+    main_upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    assert(main_upump_mgr != NULL);
+    struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
+                                                         umem_mgr, -1, -1);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+                                                   0);
+    udict_mgr_release(udict_mgr);
     struct uclock *uclock = uclock_std_alloc(0);
+
     /*default probe */
-    logger = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_LEVEL);
-    logger = uprobe_uclock_alloc(logger, uclock);
-    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
-    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,UBUF_POOL_DEPTH);
-    logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
-    logger = uprobe_pthread_upump_mgr_alloc(logger);
-    uprobe_pthread_upump_mgr_set(logger, upump_mgr);
+    uprobe_main = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_LEVEL);
+    uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
+    uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
+    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, umem_mgr, UBUF_POOL_DEPTH,
+                                        UBUF_POOL_DEPTH);
+    uprobe_main = uprobe_pthread_upump_mgr_alloc(uprobe_main);
+    uref_mgr_release(uref_mgr);
+    uclock_release(uclock);
+    umem_mgr_release(umem_mgr);
+    uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
     /* probes audio & video & dejitter*/
-    /* audio */
-    uprobe_catch_audio = malloc(NB_SRC*sizeof(struct uprobe));
-    uprobe_avcdec_audio = malloc(NB_SRC*sizeof(struct uprobe));
-    uprobe_uref_audio = malloc(NB_SRC*sizeof(struct uprobe));
-    for(i = 0; i< NB_SRC;i++)
-    {
-        uprobe_init(&uprobe_catch_audio[i], audio_catch, uprobe_use(logger));
-        uprobe_init(&uprobe_avcdec_audio[i], avcdec_catch_audio, uprobe_use(logger));
-        uprobe_init(&uprobe_uref_audio[i],  uref_catch_audio, uprobe_use(logger));
-    }
-    /* video */
-    uprobe_catch_video = malloc(NB_SRC*sizeof(struct uprobe));
-    uprobe_avcdec_video = malloc(NB_SRC*sizeof(struct uprobe));
-    uprobe_uref_video = malloc(NB_SRC*sizeof(struct uprobe));
-    for(i = 0; i< NB_SRC;i++)
-    {
-        uprobe_init(&uprobe_catch_video[i], video_catch, uprobe_use(logger));
-        uprobe_init(&uprobe_avcdec_video[i], avcdec_catch_video, uprobe_use(logger));
-        uprobe_init(&uprobe_uref_video[i],  uref_catch_video, uprobe_use(logger));
-    }
-    /* dejitter */
-    uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
-    /* upipe-av */
-    upipe_av_init(true, uprobe_use(logger));
-    /* global pipe managers */
-    upipe_avcdec_video_mgr = upipe_avcdec_mgr_alloc();
-    upipe_avcdec_audio_mgr = upipe_avcdec_mgr_alloc();
-    upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
-    upipe_sws_mgr = upipe_sws_mgr_alloc();
-    upipe_probe_uref_video_mgr = upipe_probe_uref_mgr_alloc();
-    upipe_probe_uref_audio_mgr = upipe_probe_uref_mgr_alloc();
+    uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(uprobe_main),
+                                            DEJITTER_DIVIDER);
+    uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
+    uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
+    uprobe_init(&uprobe_audio_s, catch_audio, uprobe_use(uprobe_dejitter));
 
+    /* upipe-av */
+    if (unlikely(!upipe_av_init(false,
+                                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                                                 UPROBE_LOG_VERBOSE, "av")))) {
+        uprobe_err_va(uprobe_main, NULL, "unable to init av");
+        exit(EXIT_FAILURE);
+    }
+
+    /* worker threads */
+    struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
+            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
+            upump_mgr_work, upump_mgr_free, NULL);
+    assert(src_xfer_mgr != NULL);
+    upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
+    assert(upipe_wsrc_mgr != NULL);
+    upipe_mgr_release(src_xfer_mgr);
+
+    struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
+            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
+            upump_mgr_work, upump_mgr_free, NULL);
+    assert(dec_xfer_mgr != NULL);
+    upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
+    assert(upipe_wlin_mgr != NULL);
+    upipe_mgr_release(dec_xfer_mgr);
+
+    PSEventSetFilter(PSE_ALL);
+    while (!g_Context.bound) {
+        PSEvent* event;
+        while ((event = PSEventTryAcquire()) != NULL) {
+            ProcessEvent(event);
+            PSEventRelease(event);
+        }
+    }
+
+    PP_Resource display_loop =
+        ppb_message_loop_interface->Create(PSGetInstanceId());
+
+    struct thread_data *display_threadData = malloc(sizeof(struct thread_data));
+    display_threadData->loop = display_loop;
+    display_threadData->message_loop_interface = ppb_message_loop_interface;
+    display_threadData->instance_id = PSGetInstanceId();
+    pthread_t display_thread;
+    pthread_create(&display_thread, NULL, &thread_main, display_threadData);
+
+    PP_Resource image = ppb_imagedata_interface->Create(PSGetInstanceId(),
+            PP_IMAGEDATAFORMAT_BGRA_PREMUL, &(g_Context.size), PP_FALSE);
+
+    /* upipe_display */
+    struct upipe_mgr *display_mgr = upipe_display_mgr_alloc();
+    video_sink = _upipe_display_alloc(display_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
+                            "display"), image, display_loop);
+    assert(video_sink != NULL);
+    upipe_mgr_release(display_mgr);
+    upipe_attach_uclock(video_sink);
+
+    upipe_display_set_hposition(video_sink, 0);
+    upipe_display_set_vposition(video_sink, 0);
+#if 0
+    upipe_display_set_hposition(video_sink, i%2*720);
+    upipe_display_set_vposition(video_sink, i/2*576);
+#endif
+    upipe_display_set_context(video_sink, g_Context);
+
+    PP_Resource sound_loop =
+        ppb_message_loop_interface->Create(PSGetInstanceId());
+
+    struct thread_data *sound_threadData = malloc(sizeof(struct thread_data));
+    sound_threadData->loop = sound_loop;
+    sound_threadData->message_loop_interface = ppb_message_loop_interface;
+    sound_threadData->instance_id = PSGetInstanceId();
+    pthread_t sound_thread;
+    pthread_create(&sound_thread, NULL, &thread_main, sound_threadData);
+
+    /* upipe_sound */
+    struct upipe_mgr *sound_mgr = upipe_sound_mgr_alloc();
+    audio_sink = _upipe_sound_alloc(sound_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_LEVEL,
+                             "sound"), sound_loop);
+
+    /* wait for an event asking to open a URI */
+    printf("entering event loop\n");
+
+    while (!g_Context.quit) {
+        PSEvent* event;
+        while ((event = PSEventWaitAcquire()) != NULL) {
+            ProcessEvent(event);
+            PSEventRelease(event);
+        }
+    }
+    printf("exiting event loop\n");
+
+#if 0
     /* Threads + Message loops */
 
     PP_Resource src_loop = ppb_message_loop_interface->Create(PSGetInstanceId());
@@ -508,52 +840,15 @@ int example_main(int argc, char *argv[]) {
         pthread_create(&display_thread[i],NULL,&thread_main,&display_threadData[i]);
     }
 
-    /* Pipes sources + managers*/
-    struct upipe_mgr **upipe_src_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
-    struct upipe **upipe_src = malloc(NB_SRC*sizeof(struct upipe*));
-    /*UDP*/
-    #if UDP
-    for(i = 0; i<NB_SRC; i++)
-    {
-        upipe_src_mgr[i] = upipe_src_udp_chrome_mgr_alloc();
-        upipe_src[i] = _upipe_src_udp_chrome_alloc(upipe_src_mgr[i], uprobe_pfx_alloc(uprobe_use(logger),UPROBE_LOG_LEVEL, "src_chrome"),src_loop);
-        char* uri = calloc(1024,sizeof(char));
-        snprintf(uri ,1024, "127.0.0.%d:%d", i+1,8880+i);
-        ubase_assert(upipe_set_uri(upipe_src[i],uri));
-    }
-#endif
-    /*TCP*/
-#if TCP
-    for(i = 0; i<NB_SRC; i++)
-    {
-        upipe_src_mgr[i] = upipe_src_tcp_chrome_mgr_alloc();
-        upipe_src[i] = _upipe_src_tcp_chrome_alloc(upipe_src_mgr[i], uprobe_pfx_alloc(uprobe_use(logger),UPROBE_LOG_LEVEL, "src_chrome"),src_loop);
-        char* uri = calloc(1024,sizeof(char));
-        snprintf(uri ,1024, "127.0.0.%d:%d", i+1,8880+i);
-        ubase_assert(upipe_set_uri(upipe_src[i],uri));
-    }
-#endif
-
-    /* Context */
-    
-    PSEventSetFilter(PSE_ALL);
-
-    while (!g_Context.bound) {
-        PSEvent* event;
-        while ((event = PSEventTryAcquire()) != NULL) {
-            ProcessEvent(event);
-            PSEventRelease(event);
-        }
-    }
     PP_Resource image = ppb_imagedata_interface->Create(PSGetInstanceId(), PP_IMAGEDATAFORMAT_BGRA_PREMUL, &(g_Context.size), PP_FALSE);
 
     /* upipe_display + mgr */
     struct upipe_mgr **display_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
     display = malloc(NB_SRC*sizeof(struct upipe*));
-    for(i=0; i<NB_SRC; i++)
+    for (i = 0; i < NB_SRC; i++)
     {
         display_mgr[i] = upipe_display_mgr_alloc();
-        display[i] = _upipe_display_alloc(display_mgr[i], uprobe_pfx_alloc(uprobe_use(logger),UPROBE_LOG_LEVEL, "display"), image, display_loop[i]);
+        display[i] = _upipe_display_alloc(display_mgr[i], uprobe_pfx_alloc(uprobe_use(uprobe_main),UPROBE_LOG_LEVEL, "display"), image, display_loop[i]);
         upipe_attach_uclock(display[i]);
         upipe_display_set_hposition(display[i],i%2*720);
         upipe_display_set_vposition(display[i],i/2*576);
@@ -564,60 +859,20 @@ int example_main(int argc, char *argv[]) {
     struct upipe_mgr **sound_mgr = malloc(NB_SRC*sizeof(struct upipe_mgr*));
     r128 = malloc(NB_SRC*sizeof(struct upipe*));
     sound = malloc(NB_SRC*sizeof(struct upipe*));
-    for(i=0; i<NB_SRC; i++)
+    for (i = 0; i < NB_SRC; i++)
     {
         upipe_filter_ebur128_mgr[i] = upipe_filter_ebur128_mgr_alloc();
         sound_mgr[i] = upipe_sound_mgr_alloc();
-        sound[i] = _upipe_sound_alloc(sound_mgr[i],uprobe_pfx_alloc(uprobe_use(logger),UPROBE_LOG_LEVEL, "sound"), src_loop);
-        r128[i] = _upipe_filter_ebur128_alloc(upipe_filter_ebur128_mgr[i], uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "r128"),i);
+        sound[i] = _upipe_sound_alloc(sound_mgr[i],uprobe_pfx_alloc(uprobe_use(uprobe_main),UPROBE_LOG_LEVEL, "sound"), src_loop);
+        r128[i] = _upipe_filter_ebur128_alloc(upipe_filter_ebur128_mgr[i], uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_LEVEL, "r128"),i);
         upipe_filter_ebur128_set_time_length(r128[i], 1500);
     }            
-    /* upipe-ts */
-
-    for(i = 0; i<NB_SRC;i++)
-    {
-        struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
-        struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-        upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr, upipe_mpgvf_mgr);
-        upipe_mgr_release(upipe_mpgvf_mgr);
-        struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-        upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
-        upipe_mgr_release(upipe_h264f_mgr);
-        struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-        upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr, upipe_mpgaf_mgr);
-        upipe_mgr_release(upipe_mpgaf_mgr);
-        struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
-        upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr, upipe_a52f_mgr);
-        upipe_mgr_release(upipe_a52f_mgr);
-
-        struct upipe *ts_demux = upipe_void_alloc_output(upipe_src[i],
-                upipe_ts_demux_mgr,
-                    uprobe_pfx_alloc(
-                        uprobe_selflow_alloc(uprobe_use(logger),
-                            uprobe_selflow_alloc(
-                                uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
-                                    uprobe_output_alloc(uprobe_use(&uprobe_catch_video[i])),
-                                        UPROBE_SELFLOW_PIC, "auto"),
-                                    uprobe_output_alloc(uprobe_use(&uprobe_catch_audio[i])),
-                                UPROBE_SELFLOW_SOUND, "auto"),
-                            UPROBE_SELFLOW_VOID, "auto"),
-                        UPROBE_LOG_DEBUG, "ts demux"));
-
-        assert(ts_demux != NULL);
-        upipe_mgr_release(upipe_ts_demux_mgr);
-        upipe_release(ts_demux);
-    }
-    /*ev-loop*/
-    ev_loop(loop, 0);
+#endif
 
     /* release & free*/
-    uref_mgr_release(uref_mgr);
-    uprobe_release(logger);
-    udict_mgr_release(udict_mgr);
-    umem_mgr_release(umem_mgr);
-    upump_mgr_release(upump_mgr);
-    for(i=0; i<NB_SRC; i++)
-    {
+    upump_mgr_release(main_upump_mgr);
+#if 0
+    for (i = 0; i < NB_SRC; i++) {
         upipe_mgr_release(upipe_src_mgr[i]);
         upipe_mgr_release(display_mgr[i]);
         upipe_mgr_release(upipe_filter_ebur128_mgr[i]);
@@ -638,33 +893,20 @@ int example_main(int argc, char *argv[]) {
         ppb_message_loop_interface->PostQuit(display_loop[i], PP_FALSE);
         ppb_core_interface->ReleaseResource(display_loop[i]);
     }
+#endif
     uprobe_release(uprobe_dejitter);
-    uprobe_release(logger);
-    free(upipe_src_mgr);
-    free(display_mgr);
-    free(upipe_filter_ebur128_mgr);
-    free(sound_mgr);
-    free(upipe_src);
-    free(display);
-    free(r128);
-    free(sound);
-    free(uprobe_catch_audio);
-    free(uprobe_avcdec_audio);
-    free(uprobe_uref_audio);
-    free(uprobe_catch_video);
-    free(uprobe_avcdec_video);
-    free(uprobe_uref_video);
-    free(display_threadData);
-    free(display_thread);
+    uprobe_release(uprobe_main);
+#if 0
     ppb_message_loop_interface->PostQuit(src_loop, PP_FALSE);
     ppb_core_interface->ReleaseResource(src_loop);
+#endif
     ppb_core_interface->ReleaseResource(image);
     ev_default_destroy();
-
-while(1){}
-return 0;
+    return 0;
 }
+
 void UpdateContext(uint32_t width, uint32_t height) {
+    printf("UpdateContext\n");
     if (width != g_Context.size.width || height != g_Context.size.height) {
         size_t size = width * height;
         size_t index;
@@ -716,6 +958,40 @@ void UpdateContext(uint32_t width, uint32_t height) {
     g_Context.bound = ppb_instance_interface->BindGraphics(PSGetInstanceId(), g_Context.ctx);
 }
 
+/**
+ * Create a new PP_Var from a C string.
+ * @param[in] str The string to convert.
+ * @return A new PP_Var with the contents of |str|.
+ */
+struct PP_Var CStrToVar(const char* str) {
+  if (ppb_var_interface != NULL) {
+    return ppb_var_interface->VarFromUtf8(str, strlen(str));
+  }
+  return PP_MakeUndefined();
+}
+
+/**
+ * Convert a PP_Var to a C string, given a buffer.
+ * @param[in] var The PP_Var to convert.
+ * @param[out] buffer The buffer to write to.
+ * @param[in] length The length of |buffer|.
+ * @return The number of characters written.
+ */
+uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length) {
+  if (ppb_var_interface != NULL) {
+    uint32_t var_length;
+    const char* str = ppb_var_interface->VarToUtf8(var, &var_length);
+    /* str is NOT NULL-terminated. Copy using memcpy. */
+    uint32_t min_length = MIN(var_length, length - 1);
+    memcpy(buffer, str, min_length);
+    buffer[min_length] = 0;
+
+    return min_length;
+  }
+
+  return 0;
+}
+
 void ProcessEvent(PSEvent* event) {
     switch(event->type) {
         /* If the view updates, build a new Graphics 2D Context */
@@ -723,6 +999,27 @@ void ProcessEvent(PSEvent* event) {
             struct PP_Rect rect;
             ppb_view_interface->GetRect(event->as_resource, &rect);
             UpdateContext(rect.size.width, rect.size.height);
+            break;
+        }
+        case PSE_INSTANCE_HANDLEMESSAGE: {
+            struct PP_Var var = event->as_var;
+            if (var.type == PP_VARTYPE_DICTIONARY) {
+                struct PP_Var message = ppb_var_dictionary_interface->Get(var,
+                        CStrToVar("message"));
+                char message_string[256];
+                VarToCStr(message, message_string, sizeof(message_string));
+                if (!strcmp(message_string, "set_uri")) {
+                    struct PP_Var value = ppb_var_dictionary_interface->Get(var, CStrToVar("value"));
+                    char value_string[256];
+                    VarToCStr(value, value_string, sizeof(value_string));
+
+                    struct PP_Var relay = ppb_var_dictionary_interface->Get(var, CStrToVar("relay"));
+                    char relay_string[256];
+                    VarToCStr(relay, relay_string, sizeof(relay_string));
+
+                    demo_start(value_string, relay_string);
+                }
+            }
             break;
         }
         default:
@@ -737,4 +1034,4 @@ void* thread_main(void* user_data) {
     data->message_loop_interface->Run(data->loop);
     return NULL;
 }
-PPAPI_SIMPLE_REGISTER_MAIN(example_main);
+PPAPI_SIMPLE_REGISTER_MAIN(upipe_demo);

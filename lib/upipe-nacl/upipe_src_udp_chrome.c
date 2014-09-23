@@ -65,6 +65,9 @@
 #include <errno.h>
 #include <assert.h>
 #include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <upipe-nacl/upipe_src_udp_chrome.h>
 
@@ -129,13 +132,15 @@ static uint16_t Htons(uint16_t hostshort) {
 }
 
 /* Create a struct PP_NetAddress_IPv4 */
-static struct PP_NetAddress_IPv4 createIPv4(int port, int a1, int a2, int a3, int a4) {
+static struct PP_NetAddress_IPv4 createIPv4(uint16_t port, in_addr_t addr)
+{
     struct PP_NetAddress_IPv4 addressIPv4;
-    addressIPv4.port=Htons((uint16_t)(port));
-    addressIPv4.addr[0]=a1;
-    addressIPv4.addr[1]=a2;
-    addressIPv4.addr[2]=a3;
-    addressIPv4.addr[3]=a4;
+    addressIPv4.port = htons(port);
+    uint32_t a = htonl(addr);
+    addressIPv4.addr[0] = a >> 24;
+    addressIPv4.addr[1] = a >> 16;
+    addressIPv4.addr[2] = a >> 8;
+    addressIPv4.addr[3] = a;
     return addressIPv4;
 }
 
@@ -224,6 +229,7 @@ static void upipe_src_udp_chrome_idler(struct upump *upump)
     {
         return;
     }
+    uint64_t now = uclock_now(upipe_src_udp_chrome->uclock);
     uint8_t* buffer = uqueue_pop(&upipe_src_udp_chrome->bufferUDP,uint8_t*);
     int read_size;
     memcpy(&read_size,buffer,sizeof(int));
@@ -233,6 +239,7 @@ static void upipe_src_udp_chrome_idler(struct upump *upump)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
+    uref_clock_set_cr_sys(uref, now);
  
     if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size,&buffer2)))) {
         uref_free(uref);
@@ -264,31 +271,51 @@ static int upipe_src_udp_chrome_set_uri(struct upipe *upipe, const char *uri)
     upipe_src_udp_chrome->uri = NULL;
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
-    upipe_src_udp_chrome->uri = uri;
-    int i = 0;
-    char **s_a = malloc(4*sizeof(char*));
-    int *a = malloc(4*sizeof(int));
-    const char* c = uri;
-    for(i=0;i<4;i++)
-    {
-        s_a[i] = malloc(8*sizeof(char));
-        int j = 0;
-        while(*c !='.' && *c !=':')
-        {
-            s_a[i][j++] = *c++;
-        }
-        s_a[i][j]='\0';
-        c++;    
-        a[i]=atoi(s_a[i]);
-    }
+    upipe_src_udp_chrome->uri = strdup(uri);
 
-    char *s_port = strchr(uri,':')+1;
-    int port=atoi(s_port);
+    struct in_addr multicast_addr, source_addr;
+    uint16_t port_number = 0;
+    multicast_addr.s_addr = source_addr.s_addr = INADDR_ANY;
+
+    char *string = strdup(uri);
+    if (string == NULL)
+        return UBASE_ERR_ALLOC;
+    char *source = string;
+    char *multicast = strchr(source, '@');
+
+    if (multicast != NULL) {
+        *multicast++ = '\0';
+        char *port = strchr(multicast, ':');
+        if (port != NULL) {
+            *port++ = '\0';
+            port_number = strtoul(port, &port, 10);
+            if (*port != '\0') {
+                upipe_err_va(upipe, "invalid port");
+                goto upipe_src_udp_chrome_set_uri_err;
+            }
+        }
+        if (!inet_aton(multicast, &multicast_addr)) {
+            upipe_err_va(upipe, "invalid multicast address");
+            goto upipe_src_udp_chrome_set_uri_err;
+        }
+    }
+    if (!inet_aton(source, &source_addr)) {
+        upipe_err_va(upipe, "invalid source address");
+        goto upipe_src_udp_chrome_set_uri_err;
+    }
+    free(string);
+
     /*create socket + bind*/
-    struct PP_NetAddress_IPv4 addressIPv4 = createIPv4(port,a[0],a[1],a[2],a[3]);
+    struct PP_NetAddress_IPv4 addressIPv4 = createIPv4(port_number, multicast_addr.s_addr);
     upipe_src_udp_chrome->addr = upipe_src_udp_chrome->net_address_interface->CreateFromIPv4Address(PSGetInstanceId(),&addressIPv4);
     upipe_src_udp_chrome->udpSocket = upipe_src_udp_chrome->udp_socket_interface->Create(PSGetInstanceId());
+
+    struct PP_Var var;
+    var.type = PP_VARTYPE_BOOL;
+    var.value.as_bool = true;
     struct PP_CompletionCallback cb_onConnect = PP_BlockUntilComplete();
+    upipe_src_udp_chrome->udp_socket_interface->SetOption(upipe_src_udp_chrome->udpSocket, PP_UDPSOCKET_OPTION_ADDRESS_REUSE, var, cb_onConnect);
+
     if(upipe_src_udp_chrome->udp_socket_interface->Bind(upipe_src_udp_chrome->udpSocket,upipe_src_udp_chrome->addr,cb_onConnect) != PP_OK) 
     {
         printf("Binding error\n");
@@ -306,15 +333,11 @@ static int upipe_src_udp_chrome_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
     
-    free(a);
-    for(i=0;i<4;i++)
-    {
-        free(s_a[i]);
-    }
-    free(s_a);
-    free((char*)(uri));
-    
     return UBASE_ERR_NONE;
+
+upipe_src_udp_chrome_set_uri_err:
+    free(string);
+    return UBASE_ERR_INVALID;
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -371,7 +394,7 @@ static int upipe_src_udp_chrome_control(struct upipe *upipe, int command, va_lis
     struct upipe_src_udp_chrome *upipe_src_udp_chrome = upipe_src_udp_chrome_from_upipe(upipe);
 
     if (upipe_src_udp_chrome->upump_mgr != NULL && upipe_src_udp_chrome->upump == NULL) {
-        struct upump *upump = upump_alloc_idler(upipe_src_udp_chrome->upump_mgr, upipe_src_udp_chrome_idler, upipe);
+        struct upump *upump = uqueue_upump_alloc_pop(&upipe_src_udp_chrome->bufferUDP, upipe_src_udp_chrome->upump_mgr, upipe_src_udp_chrome_idler, upipe);
         if (unlikely(!upump)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

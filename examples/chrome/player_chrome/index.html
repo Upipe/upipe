@@ -3,13 +3,30 @@
 <head>
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="-1">
-  <title>upipe/chrome</title>
+  <title>Upipe Native Client Demo</title>
   <script type="text/javascript" src="common.js"></script>
-  <script type="text/javascript" src="example.js"></script>
+  <script type="text/javascript" src="upipe_demo.js"></script>
 </head>
-<body data-width="1200" data-height="800" data-name="player_chrome" data-tools="glibc" data-configs="Debug Release" data-path="{tc}/{config}">
-<div id="graphDiv2"></div>
-<div id="listener"></div>
+<body data-width="720" data-height="576" data-name="player_chrome" data-tools="glibc" data-configs="Debug Release" data-path="{tc}/{config}">
+  <h1>Upipe Native Client Demo</h1>
+  <h2>Status: <code id="statusField">NO-STATUS</code></h2>
+  <div>
+    This demo binds the given UDP or TCP address, decodes and renders the
+    video using Upipe flexible dataflow framework.
+    <br>
+    Multicast address:
+    <input type="text" id="multicastAddr" value="232.1.1.1" />
+    Port:
+    <input type="number" id="multicastPort" min="0" max="65535" value="5004" />
+    Source address:
+    <input type="text" id="sourceAddr" value="192.168.0.1" />
+    AMT relay:
+    <input type="text" id="relayAddr" value="193.247.95.248" />
+    <br>
+    <input type="submit" id="run" value="Run" />
+  </div>
+  <!-- The NaCl plugin will be embedded inside the element with id "listener".
+      See common.js.-->
+  <div id="listener"></div>
 </body>
-
 </html>

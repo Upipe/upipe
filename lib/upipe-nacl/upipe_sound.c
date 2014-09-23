@@ -306,7 +306,7 @@ static int upipe_sound_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_INVALID;
     }
 
-    upipe_sound->flow_def = flow_def;
+    upipe_sound->flow_def = uref_dup(flow_def);
     uint64_t sample_rate;
     uref_sound_flow_get_rate(upipe_sound->flow_def, &sample_rate);
     uint32_t count = upipe_sound->audio_config_interface->RecommendSampleFrameCount(PSGetInstanceId(),sample_rate, COUNT);

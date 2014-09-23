@@ -48,7 +48,6 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -90,13 +89,6 @@ struct upipe_display {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** output flow */
-    struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
-
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** event watcher */
@@ -138,7 +130,6 @@ struct upipe_display {
 UPIPE_HELPER_UPIPE(upipe_display, upipe, UPIPE_DISPLAY_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_display, urefcount, upipe_display_free);
 UPIPE_HELPER_VOID(upipe_display);
-UPIPE_HELPER_UBUF_MGR(upipe_display, ubuf_mgr, flow_def);
 UPIPE_HELPER_UCLOCK(upipe_display, uclock);
 
 UPIPE_HELPER_UPUMP_MGR(upipe_display, upump_mgr);
@@ -484,30 +475,35 @@ static bool upipe_display_input_(struct upipe *upipe, struct uref *uref,
                 struct upump **upump_p)
 {
     struct upipe_display *upipe_display = upipe_display_from_upipe(upipe);
-    /* pts */
 
-    uint64_t pts = 0;
-    uint64_t now = uclock_now(upipe_display->uclock);
+    if (upipe_display->uclock != NULL) {
+        uint64_t pts = 0;
+        uint64_t now = uclock_now(upipe_display->uclock);
 
-    if(!ubase_check(uref_clock_get_pts_sys(uref, &pts)))
-    {
-        uref_free(uref);
-        return true;
-    }
-    if(now < pts)
-    {
-        upipe_display_wait_upump(upipe, pts - now, upipe_display_watcher);
-        return false;
-    }
-    else if (now > pts + UCLOCK_FREQ / 10)
-    {
-        uref_free(uref);
-        return true;
+        if(!ubase_check(uref_clock_get_pts_sys(uref, &pts)))
+        {
+            upipe_dbg(upipe, "packet without pts");
+            uref_free(uref);
+            return true;
+        }
+        pts += upipe_display->latency;
+        if (now < pts)
+        {
+            upipe_display_wait_upump(upipe, pts - now, upipe_display_watcher);
+            return false;
+        }
+        else if (now > pts + UCLOCK_FREQ / 10)
+        {
+            upipe_warn_va(upipe, "late picture dropped %"PRIu64, now - pts);
+            uref_free(uref);
+            return true;
+        }
     }
 
     #if GLES
     #else
     if(unlikely(!uqueue_push(&upipe_display->queue_uref, uref)))   {
+        upipe_err(upipe, "cannot queue");
         uref_free(uref);
         return true;
     }
@@ -533,7 +529,6 @@ static struct upipe* upipe_display_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_display_to_upipe(upipe_display);
     upipe_init(upipe, mgr, uprobe);
     upipe_display_init_urefcount(upipe);
-    upipe_display_init_ubuf_mgr(upipe);
     upipe_display->ppb_core_interface = (PPB_Core*)PSGetInterface(PPB_CORE_INTERFACE);
     upipe_display->ppb_graphic2d_interface = (PPB_Graphics2D*)PSGetInterface(PPB_GRAPHICS_2D_INTERFACE);
     upipe_display->ppb_graphic3d_interface = (PPB_Graphics3D*)PSGetInterface(PPB_GRAPHICS_2D_INTERFACE);
@@ -593,7 +588,6 @@ static void upipe_display_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    upipe_display_clean_ubuf_mgr(upipe);
     upipe_display_clean_urefcount(upipe);
     upipe_display_clean_upump_mgr(upipe);
     upipe_display_clean_upump(upipe);
@@ -603,6 +597,14 @@ static void upipe_display_free(struct upipe *upipe)
     upipe_display_free_void(upipe);
 }
 
+static int upipe_display_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_display *display = upipe_display_from_upipe(upipe);
+    uref_clock_get_latency(flow_def, &display->latency);
+    display->latency = UCLOCK_FREQ / 5; /* FIXME */
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on the pipe.
  *
  * @param upipe description structure of the pipe
@@ -610,7 +612,7 @@ static void upipe_display_free(struct upipe *upipe)
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_display_control(struct upipe *upipe,int command, va_list args)
+static int upipe_display_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_display *display = upipe_display_from_upipe(upipe);
     switch (command) {
@@ -620,11 +622,11 @@ static int upipe_display_control(struct upipe *upipe,int command, va_list args)
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
-            display->flow_def = va_arg(args,struct uref*);
-            return UBASE_ERR_NONE;
+            struct uref *flow_def = va_arg(args, struct uref*);
+            return upipe_display_set_flow_def(upipe, flow_def);
         }
         case UPIPE_ATTACH_UCLOCK:
-             return upipe_display_attach_uclock(upipe);
+            return upipe_display_attach_uclock(upipe);
         case UPIPE_DISPLAY_SET_POSITIONH: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_DISPLAY_SIGNATURE);
             display->position_h = va_arg(args, int);

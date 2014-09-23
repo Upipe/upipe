@@ -84,6 +84,7 @@ struct Context{
   PP_Resource ctx;
   struct PP_Size size;
   int bound;
+  int quit;
   uint8_t* cell_in;
   uint8_t* cell_out;
 };

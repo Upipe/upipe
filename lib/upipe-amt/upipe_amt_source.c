@@ -173,13 +173,13 @@ static void upipe_amtsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_amtsrc *upipe_amtsrc = upipe_amtsrc_from_upipe(upipe);
-    amt_read_state_t ars[0];
+    amt_read_state_t ars[1];
     ars[0].handle = upipe_amtsrc->handle;
     ars[0].rstate = AMT_READ_NONE;
 
     /* Implementation note: libamt is synchronous, so we have to poll for
      * input. The timeout is set as low as possible to 1 ms. */
-    if (unlikely(amt_poll(ars, 1, 1))) {
+    if (unlikely(amt_poll(ars, 1, 1) < 0)) {
         upipe_err_va(upipe, "poll error from %s", upipe_amtsrc->uri);
         upipe_amtsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);

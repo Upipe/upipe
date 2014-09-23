@@ -7,9 +7,10 @@ TARGET = player_chrome
 DEPS = ppapi_simple nacl_io
 LIBS = ppapi_simple nacl_io ppapi_cpp ppapi pthread 
 LIBS+= ev
-LIBS+= upipe_ebur128 upipe_nacl upipe_pthread upipe_ts upipe_framers upipe_swr upipe_sws upump_ev upipe_av upipe_filters upipe_modules upipe 
+LIBS+= upipe_nacl upipe_amt upipe_ebur128 upipe_pthread upipe_ts upipe_framers upipe_swr upipe_sws upump_ev upipe_av upipe_filters upipe_modules upipe 
 LIBS+= swresample swscale avformat avcodec avutil avfilter
 LIBS+= vorbisenc vorbisfile vorbis mp3lame theoraenc theoradec theora
+LIBS+= amt
 LIBS+= rt
 CFLAGS =-Wall -Werror -Wno-unused-function -Wno-unused-label -Wno-unused-variable -g -O0 -std=gnu99
 
