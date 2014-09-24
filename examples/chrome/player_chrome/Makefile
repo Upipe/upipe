@@ -1,4 +1,4 @@
-VALID_TOOLCHAINS := glibc
+ALL_TOOLCHAINS := glibc
 
 include $(NACL_SDK_ROOT)/tools/common.mk
 
