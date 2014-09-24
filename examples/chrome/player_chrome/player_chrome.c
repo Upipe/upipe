@@ -81,6 +81,7 @@
 #include <upipe-av/upipe_avcodec_encode.h>
 
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-swresample/upipe_swr.h>
 
 #include <upipe-nacl/upipe_filter_ebur128.h>
 
@@ -97,6 +98,7 @@
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
+#include <upipe-modules/upipe_rtp_decaps.h>
 #include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
@@ -316,6 +318,22 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
 
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    uref_flow_set_def(uref, "sound.s16.");
+    uref_sound_flow_set_channels(uref, 2);
+    uref_sound_flow_set_sample_size(uref, 3);
+    uref_sound_flow_set_planes(uref, 0);
+    uref_sound_flow_add_plane(uref, "lr");
+    struct upipe_mgr *upipe_swr_mgr = upipe_swr_mgr_alloc();
+    struct upipe *swr = upipe_flow_alloc_output(avcdec, upipe_swr_mgr,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "swr"),
+            uref);
+    assert(swr != NULL);
+    uref_free(uref);
+    upipe_mgr_release(upipe_swr_mgr);
+    upipe_release(swr);
+
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
@@ -391,6 +409,14 @@ static void demo_start(const char *uri, const char *relay, const char *mode)
             !ubase_check(upipe_set_uri(upipe_src, real_uri)))
             return;
         upipe_attach_uclock(upipe_src);
+
+        struct upipe_mgr *rtpd_mgr = upipe_rtpd_mgr_alloc();
+        struct upipe *rtpd = upipe_void_alloc_output(upipe_src, rtpd_mgr,
+                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                                 UPROBE_LOG_VERBOSE, "rtpd"));
+        assert(rtpd != NULL);
+        upipe_release(rtpd);
+        upipe_mgr_release(rtpd_mgr);
     }
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
