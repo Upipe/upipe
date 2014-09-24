@@ -173,7 +173,7 @@ static void upipe_amtsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_amtsrc *upipe_amtsrc = upipe_amtsrc_from_upipe(upipe);
-    amt_read_state_t ars[1];
+    amt_read_event_t ars[1];
     ars[0].handle = upipe_amtsrc->handle;
     ars[0].rstate = AMT_READ_NONE;
 
@@ -496,7 +496,8 @@ static int upipe_amtsrc_mgr_control(struct upipe_mgr *mgr,
         case UPIPE_AMTSRC_MGR_SET_TIMEOUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AMTSRC_SIGNATURE)
             unsigned int timeout = va_arg(args, unsigned int);
-            amt_timeOut(timeout);
+            /* no longer present in libamt */
+            /* amt_timeOut(timeout); */
             break;
         }
 
