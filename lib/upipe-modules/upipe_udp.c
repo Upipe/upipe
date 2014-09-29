@@ -342,6 +342,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     bool b_raw;
     int family;
     socklen_t sockaddr_len;
+    char *ifname = NULL;
 
     memset(&bind_addr, 0, sizeof(union sockaddru));
     memset(&connect_addr, 0, sizeof(union sockaddru));
@@ -417,6 +418,11 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 char *option = config_stropt(ARG_OPTION("ifaddr="));
                 if_addr = inet_addr(option);
                 free( option );
+            } else if ( IS_OPTION("ifname=") ) {
+                ifname = config_stropt( ARG_OPTION("ifname=") );
+                if (strlen(ifname) >= IFNAMSIZ) {
+                    ifname[IFNAMSIZ-1] = '\0';
+                }
             } else if (IS_OPTION("srcaddr=")) {
                 char *option = config_stropt(ARG_OPTION("srcaddr="));
                 src_addr = inet_addr(option);
@@ -616,6 +622,21 @@ normal_bind:
                     return -1;
                 }
             }
+#ifdef SO_BINDTODEVICE
+            if (ifname) {
+                /* linux specific, needs root or CAP_NET_RAW */
+                if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
+                               ifname, strlen(ifname) + 1) < 0) {
+                    upipe_err_va(upipe, "couldn't bind to device %s (%m)",
+                                 ifname);
+                    free(ifname);
+                    close(fd);
+                    return -1;
+                }
+                free(ifname);
+                ifname = NULL;
+            }
+#endif
         }
     }
 
