@@ -108,6 +108,8 @@ union upipe_xfer_arg {
 union upipe_xfer_event_arg {
     /** unsigned long */
     unsigned long ulong;
+    /** uint64_t */
+    uint64_t u64;
 };
 
 /** @hidden */
@@ -232,6 +234,10 @@ static int upipe_xfer_probe(struct uprobe *uprobe, struct upipe *remote,
             signature = 0;
             event_arg.ulong = 0;
             break;
+        case UPROBE_XFER_UINT64_T:
+            signature = 0;
+            event_arg.u64 = va_arg(args, uint64_t);
+            break;
         case UPROBE_XFER_UNSIGNED_LONG_LOCAL:
             signature = va_arg(args, uint32_t);
             event_arg.ulong = va_arg(args, unsigned long);
@@ -337,6 +343,10 @@ static void upipe_xfer_worker(struct upump *upump)
             case UPROBE_XFER_VOID:
                 if (upipe_xfer->upipe_remote == msg->upipe_remote)
                     upipe_throw(upipe, msg->arg.event);
+                break;
+            case UPROBE_XFER_UINT64_T:
+                if (upipe_xfer->upipe_remote == msg->upipe_remote)
+                    upipe_throw(upipe, msg->arg.event, msg->event_arg.u64);
                 break;
             case UPROBE_XFER_UNSIGNED_LONG_LOCAL:
                 if (upipe_xfer->upipe_remote == msg->upipe_remote)

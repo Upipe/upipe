@@ -95,6 +95,11 @@ static int uprobe_xfer_throw(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_XFER_VOID:
             return upipe_throw(upipe, found->xfer_event, UPROBE_XFER_SIGNATURE,
                                event);
+        case UPROBE_XFER_UINT64_T: {
+            uint64_t arg = va_arg(args, uint64_t);
+            return upipe_throw(upipe, found->xfer_event, UPROBE_XFER_SIGNATURE,
+                               event, arg);
+        }
         case UPROBE_XFER_UNSIGNED_LONG_LOCAL: {
             unsigned long arg = va_arg(args, unsigned long);
             return upipe_throw(upipe, found->xfer_event, UPROBE_XFER_SIGNATURE,

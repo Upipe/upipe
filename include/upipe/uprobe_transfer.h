@@ -47,6 +47,8 @@ enum uprobe_xfer_event {
 
     /** a void event needs to be transferred */
     UPROBE_XFER_VOID,
+    /** a uint64_t event needs to be transferred */
+    UPROBE_XFER_UINT64_T,
     /** a local unsigned long event needs to be transferred */
     UPROBE_XFER_UNSIGNED_LONG_LOCAL
 };
