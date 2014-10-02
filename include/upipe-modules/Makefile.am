@@ -25,6 +25,7 @@ myinclude_HEADERS = \
 	upipe_setattr.h \
 	upipe_match_attr.h \
 	upipe_setrap.h \
+	upipe_play.h \
 	upipe_trickplay.h \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
@@ -33,7 +34,7 @@ myinclude_HEADERS = \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
 	upipe_blit.h \
-    upipe_audio_split.h \
+	upipe_audio_split.h \
 	upipe_videocont.h \
 	upipe_audiocont.h \
 	upipe_blank_source.h \

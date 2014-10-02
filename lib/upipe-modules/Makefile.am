@@ -4,6 +4,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_file_source.c \
 	upipe_file_sink.c \
 	upipe_transfer.c \
+	upipe_play.c \
 	upipe_trickplay.c \
 	upipe_dup.c \
 	upipe_idem.c \
