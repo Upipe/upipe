@@ -63,6 +63,7 @@
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_http_source.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_play.h>
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_worker_source.h>
@@ -104,31 +105,37 @@
 #define SOUND_QUEUE_LENGTH      10
 
 /* true if we receive raw udp */
-bool udp = false;
+static bool udp = false;
 /* upump manager for the main thread */
-struct upump_mgr *main_upump_mgr = NULL;
+static struct upump_mgr *main_upump_mgr = NULL;
 /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
 static struct uprobe *uprobe_main = NULL;
 /* probe for demux */
-struct uprobe *uprobe_dejitter = NULL;
+static struct uprobe *uprobe_dejitter = NULL;
 /* probe for source worker pipe */
-struct uprobe uprobe_src_s;
+static struct uprobe uprobe_src_s;
 /* probe for demux video subpipe */
-struct uprobe uprobe_video_s;
+static struct uprobe uprobe_video_s;
 /* probe for demux audio subpipe */
-struct uprobe uprobe_audio_s;
+static struct uprobe uprobe_audio_s;
+/* probe for sinks */
+static struct uprobe uprobe_latency_s;
 /* probe for glx sink */
-struct uprobe uprobe_glx_s;
+static struct uprobe uprobe_glx_s;
 /* source thread */
-struct upipe_mgr *upipe_wsrc_mgr = NULL;
+static struct upipe_mgr *upipe_wsrc_mgr = NULL;
 /* decoder thread */
-struct upipe_mgr *upipe_wlin_mgr = NULL;
+static struct upipe_mgr *upipe_wlin_mgr = NULL;
 /* sink thread */
-struct upipe_mgr *upipe_wsink_mgr = NULL;
+static struct upipe_mgr *upipe_wsink_mgr = NULL;
+/* play */
+static struct upipe *play = NULL;
 /* trick play */
-struct upipe *trickp = NULL;
+static struct upipe *trickp = NULL;
 /* source pipe */
-struct upipe *upipe_src = NULL;
+static struct upipe *upipe_src = NULL;
+/* max sink latency */
+static uint64_t sink_latency = 0;
 
 static void uplay_stop(struct upump *upump);
 
@@ -176,6 +183,23 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
         default:
             upipe_dbg_va(upipe, "key pressed (%d)", key);
             break;
+    }
+    return UBASE_ERR_NONE;
+}
+
+/* probe for sinks */
+static int catch_latency(struct uprobe *uprobe, struct upipe *upipe,
+                         int event, va_list args)
+{
+    if (event != UPROBE_SINK_LATENCY)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    uint64_t latency = va_arg(args, uint64_t);
+    if (latency > sink_latency) {
+        upipe_notice_va(upipe, "setting output latency to %"PRIu64" ms",
+                        latency * 1000 / UCLOCK_FREQ);
+        sink_latency = latency;
+        upipe_play_set_output_latency(play, sink_latency);
     }
     return UBASE_ERR_NONE;
 }
@@ -232,6 +256,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
                                  UPROBE_LOG_VERBOSE, "trickp video"));
 
+    avcdec = upipe_void_chain_output_sub(avcdec, play,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "play video"));
+
     struct upipe_mgr *upipe_glx_mgr = upipe_glx_sink_mgr_alloc();
     avcdec = upipe_void_chain_output(avcdec, upipe_glx_mgr,
             uprobe_gl_sink_cube_alloc(
@@ -281,26 +309,31 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                 uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
                                  UPROBE_LOG_VERBOSE, "trickp audio"));
 
+    avcdec = upipe_void_chain_output_sub(avcdec, play,
+            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                             UPROBE_LOG_VERBOSE, "play audio"));
+
+    struct uprobe *uprobe_sink = uprobe_xfer_alloc(uprobe_use(uprobe_main));
+    uprobe_xfer_add(uprobe_sink, UPROBE_XFER_UINT64_T, UPROBE_SINK_LATENCY, 0);
+
     struct upipe *sink;
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
     sink = upipe_void_alloc(upipe_alsink_mgr,
-                    uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                                     UPROBE_LOG_VERBOSE, "alsink"));
+            uprobe_pfx_alloc(uprobe_sink, UPROBE_LOG_VERBOSE, "alsink"));
     assert(sink != NULL);
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
 #else
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     sink = upipe_void_alloc(upipe_null_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "null"));
+            uprobe_pfx_alloc(uprobe_sink, UPROBE_LOG_VERBOSE, "null"));
     upipe_mgr_release(upipe_null_mgr);
 #endif
 
     /* deport to the sink thread */
     sink = upipe_wsink_alloc(upipe_wsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+            uprobe_pfx_alloc(uprobe_use(&uprobe_latency_s),
                              UPROBE_LOG_VERBOSE, "wsink audio"),
             sink,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -400,6 +433,13 @@ static void uplay_start(struct upump *upump)
         upipe_attach_uclock(trickp);
     }
 
+    struct upipe_mgr *upipe_play_mgr = upipe_play_mgr_alloc();
+    play = upipe_void_alloc(upipe_play_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "play"));
+    assert(play != NULL);
+    upipe_mgr_release(upipe_play_mgr);
+
     /* deport to the source thread */
     upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
             uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src_s)),
@@ -465,6 +505,8 @@ static void uplay_stop(struct upump *upump)
     upipe_wsink_mgr = NULL;
     upipe_release(trickp);
     trickp = NULL;
+    upipe_release(play);
+    play = NULL;
     uprobe_release(uprobe_main);
     uprobe_main = NULL;
     uprobe_release(uprobe_dejitter);
@@ -559,7 +601,8 @@ int main(int argc, char **argv)
     uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
     uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
     uprobe_init(&uprobe_audio_s, catch_audio, uprobe_use(uprobe_dejitter));
-    uprobe_init(&uprobe_glx_s, catch_glx, uprobe_use(uprobe_main));
+    uprobe_init(&uprobe_latency_s, catch_latency, uprobe_use(uprobe_main));
+    uprobe_init(&uprobe_glx_s, catch_glx, uprobe_use(&uprobe_latency_s));
 
     /* upipe-av */
     if (unlikely(!upipe_av_init(false,

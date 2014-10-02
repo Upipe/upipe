@@ -250,6 +250,8 @@ static bool upipe_alsink_open(struct upipe *upipe)
         goto open_error;
     }
 
+    upipe_sink_throw_latency(upipe, upipe_alsink->period_duration * 2);
+
     /* Apply HW parameter settings to PCM device. */
     if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
         upipe_err_va(upipe, "error configuring hw device %s", uri);
@@ -748,10 +750,8 @@ static int upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_alsink->planes = planes;
     }
 
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
-    if (latency > upipe_alsink->latency)
-        upipe_alsink->latency = latency;
+    upipe_alsink->latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_alsink->latency);
     return UBASE_ERR_NONE;
 }
 

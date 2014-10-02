@@ -87,6 +87,8 @@ enum uprobe_event {
     UPROBE_NEW_FLOW_DEF,
     /** a new random access point is available in the input (struct uref *) */
     UPROBE_NEW_RAP,
+    /** a sink pipe declares a need for a given extra latency (uint64_t) */
+    UPROBE_SINK_LATENCY,
     /** a split pipe declares a new output flow list (void) */
     UPROBE_SPLIT_UPDATE,
     /** a filter pipe asks to validate the output flow def (struct uref *) */
