@@ -369,7 +369,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     upipe_glx_sink_init_upump_watcher(upipe);
     upipe_glx_sink_init_sink(upipe);
     upipe_glx_sink_init_uclock(upipe);
-    upipe_glx_sink->latency= 0;
+    upipe_glx_sink->latency = 0;
 
     upipe_glx_sink->display = NULL;
     upipe_glx_sink->visual = NULL;
@@ -479,11 +479,9 @@ static int upipe_glx_sink_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
-    if (latency > upipe_glx_sink->latency)
-        upipe_glx_sink->latency = latency;
+    upipe_glx_sink->latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_glx_sink->latency);
 
     /* throw new flow definition to update probe */
     upipe_throw_new_flow_def(upipe, flow_def);

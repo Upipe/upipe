@@ -498,7 +498,7 @@ static int upipe_amtsrc_mgr_control(struct upipe_mgr *mgr,
             unsigned int timeout = va_arg(args, unsigned int);
             /* no longer present in libamt */
             /* amt_timeOut(timeout); */
-            break;
+            return UBASE_ERR_NONE;
         }
 
         default:

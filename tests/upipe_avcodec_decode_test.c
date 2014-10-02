@@ -253,7 +253,7 @@ static void fetch_av_packets(struct upump *pump)
     if (thread->count < thread->limit && av_read_frame(thread->avfctx, &avpkt) >= 0) {
         if(avpkt.stream_index == videoStream) {
             size = avpkt.size;
-            printf("#[%d]# Reading video frame %d - size : %d\n", thread->num, thread->count, size, avpkt.data);
+            printf("#[%d]# Reading video frame %d - size : %d\n", thread->num, thread->count, size);
 
             // Allocate uref/ubuf_block and copy data
             uref = uref_block_alloc(uref_mgr, block_mgr, size);
@@ -266,7 +266,7 @@ static void fetch_av_packets(struct upump *pump)
             thread->count++;
         } else if (thread->audiodec && avpkt.stream_index == audioStream) {
             size = avpkt.size;
-            printf("#[%d]# Reading audio %d - size : %d\n", thread->num, thread->count, size, avpkt.data);
+            printf("#[%d]# Reading audio %d - size : %d\n", thread->num, thread->count, size);
             // Allocate uref/ubuf_block and copy data
             uref = uref_block_alloc(uref_mgr, block_mgr, size);
             uref_block_write(uref, 0, &size, &buf);

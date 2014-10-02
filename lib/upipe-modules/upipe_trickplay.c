@@ -333,6 +333,7 @@ static void upipe_trickp_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_trickp_sub_alloc;
     sub_mgr->upipe_input = upipe_trickp_sub_input;
     sub_mgr->upipe_control = upipe_trickp_sub_control;
+    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a trickp pipe.
