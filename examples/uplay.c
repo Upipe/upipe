@@ -49,6 +49,7 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
@@ -74,6 +75,9 @@
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_a52_framer.h>
+#include <upipe-filters/uprobe_filter_suggest.h>
+#include <upipe-filters/upipe_filter_decode.h>
+#include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
@@ -216,29 +220,39 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     if (upipe_wlin_mgr == NULL) /* we're dying */
         return UBASE_ERR_UNHANDLED;
 
-    /* TODO: write a bin pipe with deint and sws */
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "avcdec video"));
+    struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+    upipe_mgr_release(avcdec_mgr);
+    struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
+        uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                            UPROBE_LOG_VERBOSE, "avcdec"));
     assert(avcdec != NULL);
-    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
+
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();
+    upipe_ffmt_mgr_set_sws_mgr(ffmt_mgr, sws_mgr);
+    upipe_mgr_release(sws_mgr);
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
     uref_pic_flow_set_macropixel(uref, 1);
     uref_pic_flow_set_planes(uref, 0);
     uref_pic_flow_add_plane(uref, 1, 1, 3, "r8g8b8");
-    struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
-    struct upipe *yuvrgb = upipe_flow_alloc_output(avcdec, upipe_sws_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "rgb"),
+    uref_pic_set_progressive(uref);
+
+    struct upipe *ffmt = upipe_flow_alloc_output(avcdec, ffmt_mgr,
+            uprobe_pfx_alloc(
+                uprobe_filter_suggest_alloc(
+                    uprobe_output_alloc(uprobe_use(uprobe_main))),
+                UPROBE_LOG_VERBOSE, "ffmt"),
             uref);
-    assert(yuvrgb != NULL);
+    assert(ffmt != NULL);
     uref_free(uref);
-    upipe_mgr_release(upipe_sws_mgr);
-    upipe_release(yuvrgb);
+    upipe_mgr_release(ffmt_mgr);
+    upipe_release(ffmt);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
