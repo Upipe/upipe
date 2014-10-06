@@ -13,7 +13,7 @@ PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
 AC_CHECK_PROG(PERL, perl, perl)
-AC_CHECK_PROG(MOC, moc, moc)
+AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC_C99
