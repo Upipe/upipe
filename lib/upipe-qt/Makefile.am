@@ -1,6 +1,4 @@
-if HAVE_QTWEBKIT
 lib_LTLIBRARIES = libupipe_qt.la
-endif
 
 BUILT_SOURCES = moc_thumbnail.cpp
 CLEANFILES = moc_thumbnail.cpp
