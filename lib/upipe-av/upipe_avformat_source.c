@@ -694,15 +694,15 @@ static void upipe_avfsrc_probe(struct upump *upump)
 
         switch (codec->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
-                if (codec->codec_id >= CODEC_ID_FIRST_AUDIO &&
-                    codec->codec_id < CODEC_ID_ADPCM_IMA_QT)
+                if (codec->codec_id >= AV_CODEC_ID_FIRST_AUDIO &&
+                    codec->codec_id < AV_CODEC_ID_ADPCM_IMA_QT)
                     flow_def = alloc_raw_audio_def(upipe_avfsrc->uref_mgr,
                                                    codec);
                 else
                     flow_def = alloc_audio_def(upipe_avfsrc->uref_mgr, codec);
                 break;
             case AVMEDIA_TYPE_VIDEO:
-                if (codec->codec_id == CODEC_ID_RAWVIDEO)
+                if (codec->codec_id == AV_CODEC_ID_RAWVIDEO)
                     flow_def = alloc_raw_video_def(upipe_avfsrc->uref_mgr, codec);
                 else
                     flow_def = alloc_video_def(upipe_avfsrc->uref_mgr, codec);
