@@ -43,11 +43,6 @@ extern "C" {
 enum upipe_avfsink_command {
     UPIPE_AVFSINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the content of an avformat option (const char *,
-     * const char **) */
-    UPIPE_AVFSINK_GET_OPTION,
-    /** sets the content of an avformat option (const char *, const char *) */
-    UPIPE_AVFSINK_SET_OPTION,
     /** returns the currently configured MIME type (const char **) */
     UPIPE_AVFSINK_GET_MIME,
     /** sets the MIME type (const char *) */
@@ -63,38 +58,6 @@ enum upipe_avfsink_command {
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_avfsink_mgr_alloc(void);
-
-/** @This returns the content of an avformat option.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content_p filled in with the content of the option
- * @return an error code
- */
-static inline int upipe_avfsink_get_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char **content_p)
-{
-    return upipe_control(upipe, UPIPE_AVFSINK_GET_OPTION,
-                         UPIPE_AVFSINK_SIGNATURE,
-                         option, content_p);
-}
-
-/** @This sets the content of an avformat option. It only takes effect after
- * the next call to @ref upipe_set_uri.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option, or NULL to delete it
- * @return an error code
- */
-static inline int upipe_avfsink_set_option(struct upipe *upipe,
-                                           const char *option,
-                                           const char *content)
-{
-    return upipe_control(upipe, UPIPE_AVFSINK_SET_OPTION,
-                         UPIPE_AVFSINK_SIGNATURE, option, content);
-}
 
 /** @This returns the currently configured MIME type.
  *

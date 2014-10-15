@@ -602,7 +602,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static int _upipe_avfsink_get_option(struct upipe *upipe,
+static int _upipe_get_option(struct upipe *upipe,
                                      const char *option, const char **content_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
@@ -624,7 +624,7 @@ static int _upipe_avfsink_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static int _upipe_avfsink_set_option(struct upipe *upipe,
+static int _upipe_set_option(struct upipe *upipe,
                                      const char *option, const char *content)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
@@ -791,17 +791,15 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_avfsink_iterate_sub(upipe, p);
         }
-        case UPIPE_AVFSINK_GET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+        case UPIPE_GET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char **content_p = va_arg(args, const char **);
-            return _upipe_avfsink_get_option(upipe, option, content_p);
+            return _upipe_get_option(upipe, option, content_p);
         }
-        case UPIPE_AVFSINK_SET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+        case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
-            return _upipe_avfsink_set_option(upipe, option, content);
+            return _upipe_set_option(upipe, option, content);
         }
         case UPIPE_AVFSINK_GET_MIME: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
