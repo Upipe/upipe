@@ -81,8 +81,13 @@ UPIPE_HELPER_OUTPUT(upipe_probe_uref, output, flow_def, flow_def_sent);
 static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
 {
-    upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref);
-    upipe_probe_uref_output(upipe, uref, upump_p);
+    bool drop = false;
+    upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref, &drop);
+    if (drop) {
+        uref_free(uref);
+    } else {
+        upipe_probe_uref_output(upipe, uref, upump_p);
+    }
 }
 
 /** @internal @This sets the input flow definition.

@@ -25,7 +25,8 @@
 
 /** @file
  * @short Upipe module - probe uref
- * This linear module sends a probe for each uref.
+ * This linear module sends a probe for each uref. It can also
+ * drop uref on demand using the second probe va_arg element.
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_PROBE_UREF_H_
@@ -44,7 +45,7 @@ extern "C" {
 enum uprobe_probe_uref_event {
     UPROBE_PROBE_SENTINEL = UPROBE_LOCAL,
 
-    /** rotate event (struct uref *uref) */
+    /** received uref event (struct uref *uref, bool *drop) */
     UPROBE_PROBE_UREF
 };
 
