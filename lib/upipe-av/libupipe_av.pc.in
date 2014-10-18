@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_avformat
 Description: Upipe multimedia framework, libav wrappers
 Version: @VERSION@
-Requires: libupipe libavformat libavcodec
+Requires: libupipe libavformat libavcodec libavutil
 Libs: -L${libdir} -lupipe_av
 Cflags: -I${includedir}
