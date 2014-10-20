@@ -387,6 +387,11 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         return false;
     }
 
+    if (context->extradata_size) {
+        UBASE_FATAL(upipe, uref_flow_set_headers(flow_def_attr, context->extradata,
+                    context->extradata_size))
+    }
+
     const char *codec_def = upipe_av_to_flow_def(codec->id);
     UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def_attr, PREFIX_FLOW "%s",
                                       codec_def));
