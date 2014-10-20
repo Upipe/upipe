@@ -399,6 +399,22 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     latency += upipe_x264->sc_latency;
     uref_clock_set_latency(flow_def_attr, latency);
 
+    /* global headers (extradata) */
+    if (!params->b_repeat_headers) {
+        int i, ret, nal_num, size = 0;
+        x264_nal_t *nals;
+        ret = x264_encoder_headers(upipe_x264->encoder, &nals, &nal_num);
+        if (unlikely(ret < 0)) {
+            upipe_warn(upipe, "unable to get encoder headers");
+        } else {
+            for (i=0; i < nal_num; i++) {
+                size += nals[i].i_payload;
+            }
+            UBASE_FATAL(upipe,
+                uref_flow_set_headers(flow_def_attr, nals[0].p_payload, size))
+        }
+    }
+
     /* Find out if flow def attributes have changed. */
     if (!upipe_x264_check_flow_def_attr(upipe, flow_def_attr)) {
         struct uref *flow_def =
