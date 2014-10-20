@@ -359,6 +359,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     if (extradata_alloc != NULL) {
+        codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
         codec->extradata_size = extradata_size;
         codec->extradata = extradata_alloc;
     }
@@ -515,7 +516,6 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
 
             AVDictionary *options = NULL;
             av_dict_copy(&options, upipe_avfsink->options, 0);
-            av_dict_free(&options);
             int error = avformat_write_header(upipe_avfsink->context, &options);
             if (unlikely(error < 0)) {
                 upipe_av_strerror(error, buf);
