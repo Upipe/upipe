@@ -241,6 +241,7 @@ static void upipe_ts_pese_input(struct upipe *upipe, struct uref *uref,
     uref_clock_get_duration(uref, &uref_duration);
     size_t uref_size = 0;
     uref_block_size(uref, &uref_size);
+    uref_block_delete_start(uref);
 
     ulist_add(&upipe_ts_pese->next_pes, uref_to_uchain(uref));
     upipe_ts_pese->next_pes_duration += uref_duration;

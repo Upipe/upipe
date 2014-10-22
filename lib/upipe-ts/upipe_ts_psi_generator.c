@@ -364,6 +364,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    uref_block_delete_start(uref);
 
     upipe_notice_va(upipe,
                     "new PMT program=%"PRIu16" version=%"PRIu8" pcrpid=%"PRIu16,
@@ -723,6 +724,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    uref_block_delete_start(uref);
 
     upipe_notice_va(upipe, "new PAT tsid=%"PRIu16" version=%"PRIu8,
                     upipe_ts_psig->tsid, upipe_ts_psig->pat_version);
