@@ -51,6 +51,8 @@ enum upipe_avfsink_command {
     UPIPE_AVFSINK_GET_FORMAT,
     /** sets the format name (const char *) */
     UPIPE_AVFSINK_SET_FORMAT,
+    /** returns the current duration (uint64_t *) */
+    UPIPE_AVFSINK_GET_DURATION,
 };
 
 /** @This returns the management structure for all avformat sinks.
@@ -110,6 +112,19 @@ static inline int upipe_avfsink_set_format(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_FORMAT,
                          UPIPE_AVFSINK_SIGNATURE, format);
+}
+
+/** @This returns the current duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration_p filled in with the current duration
+ * @return an error code
+ */
+static inline int upipe_avfsink_get_duration(struct upipe *upipe,
+                                             uint64_t *duration_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_GET_DURATION,
+                         UPIPE_AVFSINK_SIGNATURE, duration_p);
 }
 
 #ifdef __cplusplus

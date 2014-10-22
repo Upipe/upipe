@@ -212,6 +212,10 @@ int main(int argc, char *argv[])
 
     upipe_mgr_release(upipe_avfsrc_mgr); // nop
 
+    uint64_t duration;
+    ubase_assert(upipe_avfsink_get_duration(upipe_avfsink, &duration));
+    printf("duration: %"PRIu64"\n", duration);
+
     upipe_release(upipe_avfsink);
     upipe_mgr_release(upipe_avfsink_mgr); // nop
 

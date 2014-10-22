@@ -88,6 +88,8 @@ struct upipe_avfsink {
     bool opened;
     /** offset between Upipe timestamp and avformat timestamp */
     uint64_t ts_offset;
+    /** highest DTS */
+    uint64_t highest_next_dts;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -456,6 +458,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink->context = NULL;
     upipe_avfsink->opened = false;
     upipe_avfsink->ts_offset = UINT64_MAX;
+    upipe_avfsink->highest_next_dts = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -584,6 +587,10 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         uref_block_extract(uref, 0, avpkt.size, avpkt.data); 
         uref_free(uref);
 
+        if (input->next_dts > upipe_avfsink->highest_next_dts) {
+            upipe_avfsink->highest_next_dts = input->next_dts;
+        }
+
         int error = av_write_frame(upipe_avfsink->context, &avpkt);
         free(avpkt.data);
         if (unlikely(error < 0)) {
@@ -711,6 +718,26 @@ static int _upipe_avfsink_set_format(struct upipe *upipe, const char *format)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration_p filled in with the current duration
+ * @return an error code
+ */
+static int _upipe_avfsink_get_duration(struct upipe *upipe,
+                                       uint64_t *duration_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    assert(duration_p != NULL);
+    if (upipe_avfsink->highest_next_dts == 0) {
+        *duration_p = 0;
+    } else {
+        *duration_p = upipe_avfsink->highest_next_dts
+                      - upipe_avfsink->ts_offset;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the currently opened URI.
  *
  * @param upipe description structure of the pipe
@@ -820,6 +847,11 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *format = va_arg(args, const char *);
             return _upipe_avfsink_set_format(upipe, format);
+        }
+        case UPIPE_AVFSINK_GET_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t *duration_p = va_arg(args, uint64_t *);
+            return _upipe_avfsink_get_duration(upipe, duration_p);
         }
 
         case UPIPE_GET_URI: {
