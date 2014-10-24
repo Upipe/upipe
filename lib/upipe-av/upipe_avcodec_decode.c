@@ -129,6 +129,10 @@ struct upipe_avcdec {
     uint64_t iframe_rap;
     /** latest incoming uref */
     struct uref *uref;
+    /** last PTS */
+    uint64_t last_pts;
+    /** last PTS (systime time) */
+    uint64_t last_pts_sys;
     /** next PTS */
     uint64_t next_pts;
     /** next PTS (systime time) */
@@ -681,6 +685,12 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
         if (pts != UINT64_MAX) {
             uref_clock_set_pts_prog(uref, pts);
         }
+    } else if (upipe_avcdec->last_pts != UINT64_MAX &&
+               pts < upipe_avcdec->last_pts) {
+        upipe_warn_va(upipe, "PTS prog in the past, resetting (%"PRIu64" ms)",
+                      (upipe_avcdec->last_pts - pts) * 1000 / UCLOCK_FREQ);
+        pts = upipe_avcdec->last_pts + 1;
+        uref_clock_set_pts_prog(uref, pts);
     } else
         uref_clock_rebase_pts_prog(uref);
 
@@ -689,6 +699,13 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
         if (pts_sys != UINT64_MAX) {
             uref_clock_set_pts_sys(uref, pts_sys);
         }
+    } else if (upipe_avcdec->last_pts_sys != UINT64_MAX &&
+               pts_sys < upipe_avcdec->last_pts_sys) {
+        upipe_warn_va(upipe, "PTS sys in the past, resetting (%"PRIu64" ms)",
+                      (upipe_avcdec->last_pts_sys - pts_sys) * 1000 /
+                      UCLOCK_FREQ);
+        pts_sys = upipe_avcdec->last_pts_sys + 1;
+        uref_clock_set_pts_sys(uref, pts_sys);
     } else
         uref_clock_rebase_pts_sys(uref);
 
@@ -696,9 +713,12 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
 
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && ubase_check(uref_clock_get_duration(uref, &duration))) {
+        upipe_avcdec->last_pts = pts;
         upipe_avcdec->next_pts = pts + duration;
-        if (pts_sys != UINT64_MAX)
+        if (pts_sys != UINT64_MAX) {
+            upipe_avcdec->last_pts_sys = pts_sys;
             upipe_avcdec->next_pts_sys = pts_sys + duration;
+        }
     } else {
         upipe_warn(upipe, "couldn't determine next_pts");
     }
@@ -1291,6 +1311,8 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
 
     upipe_avcdec->index_rap = 0;
     upipe_avcdec->iframe_rap = 0;
+    upipe_avcdec->last_pts = UINT64_MAX;
+    upipe_avcdec->last_pts_sys = UINT64_MAX;
     upipe_avcdec->next_pts = UINT64_MAX;
     upipe_avcdec->next_pts_sys = UINT64_MAX;
     upipe_avcdec->input_latency = 0;

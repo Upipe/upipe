@@ -100,6 +100,11 @@ struct upipe_x264 {
     /** output pipe */
     struct upipe *output;
 
+    /** last DTS */
+    uint64_t last_dts;
+    /** last DTS (systime time) */
+    uint64_t last_dts_sys;
+
     /** public structure */
     struct upipe upipe;
 };
@@ -308,6 +313,10 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264_init_output(upipe);
     upipe_x264_init_flow_def(upipe);
     upipe_x264_init_flow_def_check(upipe);
+
+    upipe_x264->last_dts = UINT64_MAX;
+    upipe_x264->last_dts_sys = UINT64_MAX;
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -596,13 +605,35 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     uref_clock_delete_cr_dts_delay(uref);
 
     /* rebase to dts as we're in encoded domain now */
-    uref_clock_rebase_dts_sys(uref);
-    uref_clock_rebase_dts_prog(uref);
+    uint64_t dts = UINT64_MAX;
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts)) ||
+        (upipe_x264->last_dts != UINT64_MAX &&
+               dts < upipe_x264->last_dts)) {
+        upipe_warn_va(upipe, "DTS prog in the past, resetting (%"PRIu64" ms)",
+                      (upipe_x264->last_dts - dts) * 1000 / UCLOCK_FREQ);
+        dts = upipe_x264->last_dts + 1;
+        uref_clock_set_dts_prog(uref, dts);
+    } else
+        uref_clock_rebase_dts_prog(uref);
+
+    uint64_t dts_sys = UINT64_MAX;
+    if (!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) ||
+        (upipe_x264->last_dts_sys != UINT64_MAX &&
+               dts_sys < upipe_x264->last_dts_sys)) {
+        upipe_warn_va(upipe, "DTS sys in the past, resetting (%"PRIu64" ms)",
+                      (upipe_x264->last_dts_sys - dts_sys) * 1000 / UCLOCK_FREQ);
+        dts_sys = upipe_x264->last_dts_sys + 1;
+        uref_clock_set_dts_sys(uref, dts_sys);
+    } else
+        uref_clock_rebase_dts_sys(uref);
+
     uref_clock_rebase_dts_orig(uref);
+
+    upipe_x264->last_dts = dts;
+    upipe_x264->last_dts_sys = dts_sys;
 
 #ifdef HAVE_X264_OBE
     /* speedcontrol */
-    uint64_t dts;
     if (ubase_check(uref_clock_get_dts_sys(uref, &dts))) {
         if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
             uint64_t systime = uclock_now(upipe_x264->uclock);
