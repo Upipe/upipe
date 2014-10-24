@@ -513,6 +513,10 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                     upipe_err_va(upipe, "couldn't open file %s (%s)",
                                  upipe_avfsink->context->filename, buf);
                     upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+                    while (!ulist_empty(&input->urefs)) {
+                        uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
+                    }
+                    upipe_release(upipe_avfsink_sub_to_upipe(input));
                     return;
                 }
             }
@@ -524,6 +528,10 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                 upipe_av_strerror(error, buf);
                 upipe_err_va(upipe, "couldn't write header (%s)", buf);
                 upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+                while (!ulist_empty(&input->urefs)) {
+                    uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
+                }
+                upipe_release(upipe_avfsink_sub_to_upipe(input));
                 return;
             }
             AVDictionaryEntry *e = NULL;
