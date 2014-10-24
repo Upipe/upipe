@@ -51,6 +51,8 @@
 #define DEFAULT_INTERVAL (UCLOCK_FREQ / 10)
 /** default delay for PSI tables */
 #define DEFAULT_DELAY (UCLOCK_FREQ / 100)
+/** max hole in input */
+#define MAX_HOLE UCLOCK_FREQ
 
 /** @internal @This is the private context of a ts_psii manager. */
 struct upipe_ts_psii_mgr {
@@ -477,6 +479,11 @@ static void upipe_ts_psii_input(struct upipe *upipe, struct uref *uref,
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_psii->subs, uchain) {
         struct upipe_ts_psii_sub *sub = upipe_ts_psii_sub_from_uchain(uchain);
+        if (sub->next_cr_sys && cr_sys > sub->next_cr_sys + MAX_HOLE) {
+            upipe_warn_va(upipe, "skipping hole in the source (%"PRIu64" ms)",
+                          (cr_sys - sub->next_cr_sys) * 1000 / UCLOCK_FREQ);
+            sub->next_cr_sys = 0;
+        }
         while (sub->next_cr_sys < cr_sys)
             upipe_ts_psii_sub_output(upipe_ts_psii_sub_to_upipe(sub), uref);
     }

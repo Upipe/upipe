@@ -57,6 +57,8 @@
 #define POW2_33 UINT64_C(8589934592)
 /** T-STD standard max retention time - 1 s */
 #define T_STD_MAX_RETENTION UCLOCK_FREQ
+/** Max hole allowed in CBR/Capped VBR streams */
+#define MAX_HOLE UCLOCK_FREQ
 
 /** @internal @This is the private context of a ts_encaps pipe. */
 struct upipe_ts_encaps {
@@ -340,6 +342,18 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
                              upipe_ts_encaps->tb_rate;
     uint64_t end = dts_sys - delay;
     uint64_t begin = end - duration;
+
+    if (upipe_ts_encaps->next_pcr != UINT64_MAX &&
+        upipe_ts_encaps->next_pcr != 0 &&
+        upipe_ts_encaps->next_pcr + MAX_HOLE <=
+                   begin - upipe_ts_encaps->pcr_tolerance -
+                   upipe_ts_encaps->ts_delay) {
+        upipe_warn_va(upipe, "skipping hole in the source (%"PRIu64" ms)",
+                      (begin - upipe_ts_encaps->pcr_tolerance -
+                       upipe_ts_encaps->ts_delay - upipe_ts_encaps->next_pcr) *
+                      1000 / UCLOCK_FREQ);
+        upipe_ts_encaps->next_pcr = 0;
+    }
 
     if (upipe_ts_encaps->next_pcr != UINT64_MAX &&
         upipe_ts_encaps->next_pcr != 0) {

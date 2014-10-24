@@ -57,6 +57,8 @@
 #define POW2_33 UINT64_C(8589934592)
 /** default MTU */
 #define DEFAULT_MTU (7 * TS_SIZE)
+/** Max hole allowed in CBR/Capped VBR streams */
+#define MAX_HOLE UCLOCK_FREQ
 
 /** @internal @This is the private context of a ts_aggregate pipe. */
 struct upipe_ts_agg {
@@ -381,6 +383,16 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     }
     uint64_t delay = 0;
     uref_clock_get_cr_dts_delay(uref, &delay);
+
+    if (upipe_ts_agg->mode != UPIPE_TS_MUX_MODE_VBR &&
+        upipe_ts_agg->next_cr_sys != UINT64_MAX &&
+        dts_sys - delay > upipe_ts_agg->next_cr_sys + MAX_HOLE) {
+        upipe_warn_va(upipe, "skipping hole in the source (%"PRIu64" ms)",
+                      (dts_sys - delay - upipe_ts_agg->next_cr_sys) * 1000 /
+                      UCLOCK_FREQ);
+        upipe_ts_agg_complete(upipe, upump_p);
+        upipe_ts_agg->next_cr_sys = UINT64_MAX;
+    }
 
     if (upipe_ts_agg->next_cr_sys == UINT64_MAX && dts_sys != UINT64_MAX)
         upipe_ts_agg->next_cr_sys = dts_sys - delay;
