@@ -173,6 +173,16 @@ static inline struct uchain *ulist_pop(struct uchain *ulist)
     for ((uchain) = (ulist)->next; (uchain) != (ulist);                     \
          (uchain) = (uchain)->next)
 
+/** @This walks through a ulist in reverse. Please note that the list may not be altered
+ * during the walk (see @ref #ulist_delete_foreach_reverse).
+ *
+ * @param ulist pointer to a ulist
+ * @param uchain iterator
+ */
+#define ulist_foreach_reverse(ulist, uchain)                                \
+    for ((uchain) = (ulist)->prev; (uchain) != (ulist);                     \
+         (uchain) = (uchain)->prev)
+
 /** @This walks through a ulist. This variant allows to remove the current
  * element safely.
  *
@@ -184,6 +194,18 @@ static inline struct uchain *ulist_pop(struct uchain *ulist)
     for ((uchain) = (ulist)->next, (uchain_tmp) = (uchain)->next;           \
          (uchain) != (ulist);                                               \
          (uchain) = (uchain_tmp), (uchain_tmp) = (uchain)->next)
+
+/** @This walks through a ulist in reverse. This variant allows to remove the current
+ * element safely.
+ *
+ * @param ulist pointer to a ulist
+ * @param uchain iterator
+ * @param uchain_tmp uchain to use for temporary storage
+ */
+#define ulist_delete_foreach_reverse(ulist, uchain, uchain_tmp)              \
+    for ((uchain) = (ulist)->prev, (uchain_tmp) = (uchain)->prev;           \
+         (uchain) != (ulist);                                               \
+         (uchain) = (uchain_tmp), (uchain_tmp) = (uchain)->prev)
 
 #ifdef __cplusplus
 }
