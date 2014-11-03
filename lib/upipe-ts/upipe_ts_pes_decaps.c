@@ -292,8 +292,6 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
-    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
-        upipe_ts_pesd_flush(upipe);
     size_t uref_size;
     if (unlikely(!ubase_check(uref_block_size(uref, &uref_size)))) {
         upipe_warn(upipe, "invalid PES chunk");
