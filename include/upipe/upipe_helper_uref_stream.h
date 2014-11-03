@@ -190,6 +190,9 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
     size_t offset = 0;                                                      \
     uint64_t rap_sys = UINT64_MAX;                                          \
     uref_clock_get_rap_sys(STRUCTURE->NEXT_UREF, &rap_sys);                 \
+    bool error = ubase_check(uref_flow_get_error(STRUCTURE->NEXT_UREF));    \
+    bool disc =                                                             \
+        ubase_check(uref_flow_get_discontinuity(STRUCTURE->NEXT_UREF));     \
     while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
         if (uchain == NULL) {                                               \
@@ -217,6 +220,10 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
     uref_block_truncate(uref, offset);                                      \
     if (rap_sys != UINT64_MAX)                                              \
         uref_clock_set_rap_sys(uref, rap_sys);                              \
+    if (error)                                                              \
+        uref_flow_set_error(uref);                                          \
+    if (disc)                                                               \
+        uref_flow_set_discontinuity(uref);                                  \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
