@@ -438,6 +438,9 @@ static void upipe_a52f_output_frame(struct upipe *upipe, struct upump **upump_p)
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
+    if (upipe_a52f->got_discontinuity)
+        uref_flow_set_discontinuity(uref);
+    upipe_a52f->got_discontinuity = false;
     upipe_a52f_output(upipe, uref, upump_p);
 }
 

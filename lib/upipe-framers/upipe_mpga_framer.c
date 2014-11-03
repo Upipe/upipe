@@ -535,6 +535,9 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
+    if (upipe_mpgaf->got_discontinuity)
+        uref_flow_set_discontinuity(uref);
+    upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf_output(upipe, uref, upump_p);
 }
 
