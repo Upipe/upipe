@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
     ubase_assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
-    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET * 10));
 
     /* valid TS packets */
     nb_packets = PACKETS_NUM;
@@ -231,8 +231,8 @@ int main(int argc, char *argv[])
         ts_pad(buffer);
         ts_set_pid(buffer, 8190);
         uref_block_unmap(uref, 0);
-        uref_clock_set_dts_sys(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
-        uref_clock_set_dts_prog(uref, UCLOCK_FREQ + UCLOCK_FREQ * i);
+        uref_clock_set_dts_sys(uref, (UCLOCK_FREQ / 10) + (UCLOCK_FREQ / 10) * i);
+        uref_clock_set_dts_prog(uref, (UCLOCK_FREQ / 10) + (UCLOCK_FREQ / 10) * i);
         upipe_input(upipe_ts_agg, uref, NULL);
     }
 
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_ts_agg, upipe_sink));
     uref_free(uref);
     ubase_assert(upipe_ts_mux_set_mode(upipe_ts_agg, UPIPE_TS_MUX_MODE_CBR));
-    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET));
+    ubase_assert(upipe_ts_mux_set_octetrate(upipe_ts_agg, TS_SIZE * TS_PER_PACKET * 10));
 
     /* valid TS packets */
     nb_packets = PACKETS_NUM;
@@ -267,9 +267,9 @@ int main(int argc, char *argv[])
         ts_pad(buffer);
         ts_set_pid(buffer, 8190);
         uref_block_unmap(uref, 0);
-        uref_clock_set_dts_sys(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
-        uref_clock_set_dts_prog(uref, UCLOCK_FREQ + UCLOCK_FREQ * i / TS_PER_PACKET);
-        uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
+        uref_clock_set_dts_sys(uref, (UCLOCK_FREQ / 10) + (UCLOCK_FREQ / 10) * i / TS_PER_PACKET);
+        uref_clock_set_dts_prog(uref, (UCLOCK_FREQ / 10) + (UCLOCK_FREQ / 10) * i / TS_PER_PACKET);
+        uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ / 10);
         upipe_input(upipe_ts_agg, uref, NULL);
     }
 
