@@ -318,11 +318,14 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
                                                  A52_SYNCINFO_SIZE, header))))
         return true; /* not enough data */
 
+    ssize_t next_frame_size = a52_get_frame_size(a52_get_fscod(header),
+                                                 a52_get_frmsizecod(header));
+    if (!next_frame_size)
+        return false;
+
     if (likely(a52_sync_compare_formats(header, upipe_a52f->sync_header))) {
         /* identical sync */
-        upipe_a52f->next_frame_size =
-            a52_get_frame_size(a52_get_fscod(header),
-                               a52_get_frmsizecod(header));
+        upipe_a52f->next_frame_size = next_frame_size;
         return true;
     }
 
@@ -344,8 +347,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     }
 
     /* frame size */
-    upipe_a52f->next_frame_size = a52_get_frame_size(a52_get_fscod(header),
-                                                a52_get_frmsizecod(header));
+    upipe_a52f->next_frame_size = next_frame_size;
 
     uint64_t octetrate = a52_bitrate_tab[a52_get_frmsizecod(header)] / 8;
     memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE);
