@@ -156,11 +156,13 @@
 #include <math.h>
 #include <ev.h>
 #include <pthread.h>
-#include <sys/mount.h>
 #include <sys/param.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <signal.h>
 #include <assert.h>
 #include <time.h>
+#include <netinet/in.h>
 
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
@@ -371,9 +373,23 @@ static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
-static void demo_start(const char *uri, const char *relay, const char *mode)
+static int demo_start(const char *uri, const char *relay, const char *mode)
 {
     uprobe_notice_va(uprobe_main, NULL, "running URI %s", uri);
+    /* try opening a socket */
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd == -1)
+        return UBASE_ERR_EXTERNAL;
+
+    struct sockaddr_in sin;
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    sin.sin_port = 0;
+    int err = bind(fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
+    close(fd);
+    if (err == -1)
+        return UBASE_ERR_EXTERNAL;
+
     bool need_trickp = false;
     unsigned int src_out_queue_length = SRC_OUT_QUEUE_LENGTH;
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
@@ -392,7 +408,7 @@ static void demo_start(const char *uri, const char *relay, const char *mode)
         upipe_mgr_release(upipe_udpsrc_mgr);
 
         if (upipe_src == NULL || !ubase_check(upipe_set_uri(upipe_src, uri)))
-            return;
+            return UBASE_ERR_EXTERNAL;
         upipe_attach_uclock(upipe_src);
 
     } else {
@@ -407,7 +423,7 @@ static void demo_start(const char *uri, const char *relay, const char *mode)
         sprintf(real_uri, "%s://%s", mode, uri);
         if (upipe_src == NULL ||
             !ubase_check(upipe_set_uri(upipe_src, real_uri)))
-            return;
+            return UBASE_ERR_EXTERNAL;
         upipe_attach_uclock(upipe_src);
 
         struct upipe_mgr *rtpd_mgr = upipe_rtpd_mgr_alloc();
@@ -471,6 +487,7 @@ static void demo_start(const char *uri, const char *relay, const char *mode)
 
     /* ev-loop */
     ev_loop(loop, 0);
+    return UBASE_ERR_NONE;
 }
 
 static struct upump_mgr *upump_mgr_alloc(void)
@@ -766,7 +783,16 @@ void ProcessEvent(PSEvent* event) {
                     char mode_string[256];
                     VarToCStr(mode, mode_string, sizeof(mode_string));
 
-                    demo_start(value_string, relay_string, mode_string);
+                    int err = demo_start(value_string, relay_string, mode_string);
+                    if (!ubase_check(err)) {
+                        /* send error message */
+                        char error[256];
+                        sprintf(error, "error:%d", err);
+                        struct PP_Var pp_message =
+                            ppb_var_interface->VarFromUtf8(error, strlen(error));
+                        ppb_messaging_interface->PostMessage(PSGetInstanceId(),
+                                                             pp_message);
+                    }
                 }
             }
             break;

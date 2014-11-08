@@ -72,46 +72,10 @@ chan_par_pipe = [0,0,0,0,0,0];
 
 
 function handleMessage(message) {
-
-  var n = message.data.indexOf(":");
-  var n_pipe = +(message.data.substring(0,n));
-  var n2= message.data.indexOf(":",n+1);
-  var nb_chan = +(message.data.substring(n+1,n2));
-  
-  if(first_message[n_pipe]==1) {
-    first_message[n_pipe]=0;
-    var ctx2 = createCanvas(n_pipe);
-    graph2[n_pipe] = new BarGraph(ctx2);
-    graph2[n_pipe].margin = 2;
-    graph2[n_pipe].width = 600;
-    graph2[n_pipe].height = 700;
-
-    for(i=0;i<nb_chan;i+=1)
-    {
-      graph2[n_pipe].xAxisLabelArr[i]="chan "+i;  
-    }
+  if (message.data.indexOf("error:") == 0) {
+    var error = message.data.substring(6);
+    document.getElementById('statusField').innerHTML = "ERROR " + error + ". Please check that your browser supports opening NaCl sockets.";
   }
-  if(graph2[n_pipe]){
-    var valeurLM = new Array();
-    var loud_max = new Array();
-    for(i=0;i<nb_chan;i+=1)
-    {
-      n = n2;
-      n2 = message.data.indexOf(":",n+1);
-      valeurLM.push(+(message.data.substring(n+1,n2)));
-      n = message.data.indexOf(":",n2+1);
-      loud_max.push(+(message.data.substring(n2+1,n)));
-      n2 = n;
-    }
-    chan_par_pipe[n_pipe]=nb_chan;
-    var valeur=new Array();
-    for(i=0;i<nb_chan;i+=1)
-    {
-      valeur.push(valeurLM[i]+100);
-    }
-    graph2[n_pipe].update(valeur,loud_max);
-  }
-
 }
 
 function createCanvas(n) {
