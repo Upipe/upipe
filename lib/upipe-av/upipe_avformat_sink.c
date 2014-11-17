@@ -88,6 +88,8 @@ struct upipe_avfsink {
     bool opened;
     /** offset between Upipe timestamp and avformat timestamp */
     uint64_t ts_offset;
+    /** first DTS */
+    uint64_t first_dts;
     /** highest DTS */
     uint64_t highest_next_dts;
 
@@ -457,7 +459,8 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink->options = NULL;
     upipe_avfsink->context = NULL;
     upipe_avfsink->opened = false;
-    upipe_avfsink->ts_offset = UINT64_MAX;
+    upipe_avfsink->ts_offset = 0;
+    upipe_avfsink->first_dts = 0;
     upipe_avfsink->highest_next_dts = 0;
     upipe_throw_ready(upipe);
     return upipe;
@@ -503,7 +506,11 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
     while ((input = upipe_avfsink_find_input(upipe)) != NULL) {
         if (unlikely(!upipe_avfsink->opened)) {
             upipe_dbg(upipe, "writing header");
-            upipe_avfsink->ts_offset = input->next_dts;
+            /* avformat dts for formats other than mpegts should start at 0 */
+            if (strcmp(upipe_avfsink->context->oformat->name, "mpegts")) {
+                upipe_avfsink->ts_offset = input->next_dts;
+            }
+            upipe_avfsink->first_dts = input->next_dts;
             if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)) {
                 int error = avio_open(&upipe_avfsink->context->pb,
                                       upipe_avfsink->context->filename,
@@ -741,7 +748,7 @@ static int _upipe_avfsink_get_duration(struct upipe *upipe,
         *duration_p = 0;
     } else {
         *duration_p = upipe_avfsink->highest_next_dts
-                      - upipe_avfsink->ts_offset;
+                      - upipe_avfsink->first_dts;
     }
     return UBASE_ERR_NONE;
 }
