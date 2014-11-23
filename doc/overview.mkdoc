@@ -7,9 +7,7 @@
 
   @section T {Data structures}
 
-    Upipe's data structures can be classified into four groups, as shown by the following graph which depicts dependancy relationships between structures (dashed lines are optional):
-
-    @image dependancies.png
+    Upipe's data structures can be classified into four groups:
 
     @section {Core structures}
 
@@ -220,6 +218,14 @@
 
     @end section
 
+    @section {Structure dependancies}
+
+    The following graph depicts dependancy relationships between structures (dashed lines are optional):
+
+    @image dependancies.png
+
+    @end section
+
   @end section
 
   @section T {Managers}
@@ -297,20 +303,26 @@
 
   @section T {Threads}
 
-    Upipe objects do not natively deal with threads. Multithreading is supposed to be the prerogative of the application, or at least of very high level bin pipes (an exception being the libraries which themselves take advantage of multithreading, such as FFmpeg/libav and x264). However there is some minimum support to allow running a part of a pipeline in a different "worker" thread.
-
-    The first kind of support is the @ref upipe_qsrc_mgr_alloc and @ref upipe_qsink_mgr_alloc managers, which allow to bridge @ref uref from one thread to another. In that case, each thread runs its own upump manager, which is passed to the pipes running in it.
-
-    Upipe also provides facilities to transfer pipes to another thread (ie. upump manager), and control them remotely from a "main" thread: @ref upipe_xfer_mgr_alloc. It works the following way:
+    Upipe objects do not natively deal with threads. Multithreading is supposed to be the prerogative of the application, or at least of very high level bin pipes (an exception being the libraries which themselves take advantage of multithreading, such as FFmpeg/libav and x264). However multithreading in Upipe is built on several levels:
 
     @list
 
-      @item An xfer_mgr is created, in general from the main thread, using @ref upipe_xfer_mgr_alloc.
-      @item A new thread is created (for instance with pthread_create). The pointer to the xfer_mgr is passed as the opaque argument to pthread_create, and retrieved in the worker thread.
-      @item The worker thread initializes a new event loop and a new upump manager, and calls @ref upipe_xfer_mgr_attach on the xfer_mgr passed by the main thread. It can then enter the event loop.
-      @item The main thread creates a pipe that is supposed to run on the worker thread via @ref upipe_void_alloc, and initializes it. The pipe is supposed to work with a upump_mgr, either directly, or through the use of @ref upipe_qsrc_mgr_alloc and/or @ref upipe_qsink_mgr_alloc. If a group of pipes has to be moved (for instance with queue source and queue sink), the group can be built normally with @ref upipe_set_output, and then all members requiring a upump manager have to be transferred.
-      @item Pipes that need a upump manager are transferred to the worked thread by calling @ref upipe_xfer_alloc on them. In case there are several pipes, they must be transferred in the sink to source order. After @ref upipe_xfer_alloc, the original upipe pointer shall no longer be used in the main thread; however this function returns a pointer to a pipe handle, that allows to do basic operations on the remote pipe, such as releasing it.
-      @item At the end of the processing, all pipe handles are released, which in turn releases the remote pipes in the worker thread. The main thread calls  @ref upipe_mgr_release to stop the event loop in the worker thread, and release the xfer_mgr.
+      @item The core structures provide thread-safe queues (@ref uqueue) and pools (@ref upool).
+      @item Two low-level pipes, @ref upipe_qsrc_mgr_alloc and @ref upipe_qsink_mgr_alloc, allow to bridge @ref uref from one thread to another. In that case, each thread runs its own upump manager, which is passed to the pipes running in it.
+      @item One low-level pipe, @ref upipe_xfer_mgr_alloc, allows to transfer a single pipe to a upump manager running in a different thread.
+      @item Three high-level bin pipes allow to create a thread and to transfer there whole subpipelines, while setting up appropriate queues to transfer urefs in and out of the subpipeline.
+
+    @end list
+
+    The common method to use worker threads is the following:
+
+    @list
+
+      @item A worker thread and transfer manager is created with the manager adapted to the threading system (for POSIX systems, @ref upipe_pthread_xfer_mgr_alloc). You have to pass functions to initialize, run and clean the upump manager attached to the worker thread.
+      @item A worker manager is created using the transfer manager. It allows to transfer whole subpipelines to the thread. You must choose the correct type of worker, whether the subpipeline is a source (@ref upipe_wsrc_mgr_alloc), a sink (@ref upipe_wsink_mgr_alloc) or a linear subpipeline (@ref upipe_wlin_mgr_alloc). This controls which queues will be set up for the input and/or output of the subpipeline.
+      @item The pipes that are to be transferred to the subpipeline are created normally in the main thread. However, some pipes may request a upump manager and start working immediately, therefore pumps would be created with the wrong upump manager. To avoid that, it is necessary to freeze the upump manager of the main thread by calling @ref uprobe_throw on the probe that delivers upump managers (for instance @ref uprobe_pthread_alloc) with the event @ref UPROBE_FREEZE_UPUMP_MGR.
+      @item a worker pipe is created with a pointer to the subpipeline, and takes the place of the subpipeline, from the point of view of the main thread. It is possible to input urefs to the worker pipe (for linear and sink workers), set its output (for linear and source workers), or release it (@ref upipe_release). The worker pipe automatically calls @ref upipe_attach_upump_mgr on relevant pipes of the subpipeline.
+      @item After the subpipeline has been transferred, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
 
     @end list
 
