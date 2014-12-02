@@ -226,8 +226,10 @@ TESTS += upump_ecore_test
 endif
 
 if HAVE_QTWEBKIT
+if HAVE_EV
 check_PROGRAMS += upipe_qt_html_test
 TESTS += upipe_qt_html_test
+endif
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
