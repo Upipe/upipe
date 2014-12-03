@@ -211,6 +211,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
         upipe_release(out_qsink);
         goto upipe_wsrc_alloc_err3;
     }
+    upipe_attach_upump_mgr(last_remote_xfer);
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
 
@@ -224,11 +225,11 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
             upipe_release(upipe);
             return NULL;
         }
+        upipe_attach_upump_mgr(upipe_wsrc->source);
     } else {
         upipe_wsrc->source = last_remote_xfer;
         upipe_release(remote);
     }
-    upipe_attach_upump_mgr(upipe_wsrc->source);
     return upipe;
 
 upipe_wsrc_alloc_err3:

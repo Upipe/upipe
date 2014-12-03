@@ -237,6 +237,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         upipe_release(out_qsink);
         goto upipe_wlin_alloc_err3;
     }
+    upipe_attach_upump_mgr(last_remote_xfer);
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
 
@@ -251,11 +252,11 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
             upipe_release(out_qsink);
             goto upipe_wlin_alloc_err3;
         }
+        upipe_attach_upump_mgr(remote_xfer);
         upipe_release(last_remote_xfer);
     } else {
         remote_xfer = last_remote_xfer;
     }
-    upipe_attach_upump_mgr(remote_xfer);
 
     /* input queue */
     struct upipe *in_qsink = upipe_void_alloc(wlin_mgr->qsink_mgr,
