@@ -179,6 +179,9 @@ struct upipe_xfer {
     struct upipe *upipe_remote;
     /** probe to send events to the main thread */
     struct uprobe uprobe_remote;
+    /** refcount of the uprobe remote, used to release upipe_xfer in the main
+     * thread */
+    struct urefcount urefcount_probe;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -199,6 +202,7 @@ UPIPE_HELPER_UPUMP_MGR(upipe_xfer, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_xfer, upump, upump_mgr)
 
 UBASE_FROM_TO(upipe_xfer, urefcount, urefcount_real, urefcount_real)
+UBASE_FROM_TO(upipe_xfer, urefcount, urefcount_probe, urefcount_probe)
 
 /** @hidden */
 static void upipe_xfer_free(struct urefcount *urefcount_real);
@@ -241,6 +245,7 @@ static int upipe_xfer_probe(struct uprobe *uprobe, struct upipe *remote,
         case UPROBE_XFER_UNSIGNED_LONG_LOCAL:
             signature = va_arg(args, uint32_t);
             event_arg.ulong = va_arg(args, unsigned long);
+            break;
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -270,6 +275,31 @@ static int upipe_xfer_probe(struct uprobe *uprobe, struct upipe *remote,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This is called when the remote pipe dies, to free to probe
+ * and trigger the destruction of the upipe_xfer structure in the main thread.
+ * Caution: this runs in the remote thread!
+ *
+ * @param urefcount_probe pointer to urefcount_probe in @ref upipe_xfer
+ */
+static void upipe_xfer_probe_free(struct urefcount *urefcount_probe)
+{
+    /* We may only access the manager as the rest is not thread-safe. */
+    struct upipe_xfer *upipe_xfer =
+        upipe_xfer_from_urefcount_probe(urefcount_probe);
+    struct upipe *upipe = upipe_xfer_to_upipe(upipe_xfer);
+
+    struct upipe_xfer_msg *msg = upipe_xfer_msg_alloc(upipe->mgr);
+    if (msg == NULL)
+        return;
+
+    msg->type = UPROBE_DEAD;
+
+    urefcount_use(upipe_xfer_to_urefcount_real(upipe_xfer));
+    if (unlikely(!uqueue_push(&upipe_xfer->uqueue, msg))) {
+        urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+        upipe_xfer_msg_free(upipe->mgr, msg);
+    }
+}
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
  * used to remotely release the transferred pipe.
@@ -313,9 +343,12 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_xfer_to_urefcount_real(upipe_xfer), upipe_xfer_free);
     upipe_xfer_init_upump_mgr(upipe);
     upipe_xfer_init_upump(upipe);
+    urefcount_init(upipe_xfer_to_urefcount_probe(upipe_xfer),
+                   upipe_xfer_probe_free);
     uprobe_init(&upipe_xfer->uprobe_remote, upipe_xfer_probe, NULL);
     upipe_xfer->uprobe_remote.refcount =
-        upipe_xfer_to_urefcount_real(upipe_xfer);
+        upipe_xfer_to_urefcount_probe(upipe_xfer);
+    upipe_push_probe(upipe_remote, &upipe_xfer->uprobe_remote);
     upipe_xfer->upipe_remote = upipe_remote;
     upipe_throw_ready(upipe);
     return upipe;
@@ -340,6 +373,9 @@ static void upipe_xfer_worker(struct upump *upump)
     while ((msg = uqueue_pop(&upipe_xfer->uqueue,
                              struct upipe_xfer_msg *)) != NULL) {
         switch (msg->type) {
+            case UPROBE_DEAD:
+                urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+                break;
             case UPROBE_XFER_VOID:
                 if (upipe_xfer->upipe_remote == msg->upipe_remote)
                     upipe_throw(upipe, msg->arg.event);
@@ -386,7 +422,7 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
                     return UBASE_ERR_UPUMP;
                 upump_start(upipe_xfer->upump);
             }
-            union upipe_xfer_arg arg = { .pipe = upipe_use(upipe) };
+            union upipe_xfer_arg arg = { .pipe = NULL };
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_ATTACH_UPUMP_MGR,
                                        upipe_xfer->upipe_remote, arg);
         }
@@ -430,6 +466,7 @@ static void upipe_xfer_free(struct urefcount *urefcount_real)
     upipe_xfer_clean_upump_mgr(upipe);
     uprobe_clean(&upipe_xfer->uprobe_remote);
     urefcount_clean(urefcount_real);
+    urefcount_clean(&upipe_xfer->urefcount_probe);
     upipe_xfer_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_xfer);
@@ -448,7 +485,6 @@ static void upipe_xfer_no_ref(struct upipe *upipe)
                                                   upipe_xfer->upipe_remote,
                                                   arg))))
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-    urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
 }
 
 /** @This instructs an existing manager to release all structures
@@ -493,14 +529,9 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
     while ((msg = uqueue_pop(&xfer_mgr->uqueue,
                              struct upipe_xfer_msg *)) != NULL) {
         switch (msg->type) {
-            case UPIPE_XFER_ATTACH_UPUMP_MGR: {
-                struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(msg->arg.pipe);
-                upipe_push_probe(msg->upipe_remote,
-                                 uprobe_use(&upipe_xfer->uprobe_remote));
-                upipe_release(msg->arg.pipe);
+            case UPIPE_XFER_ATTACH_UPUMP_MGR:
                 upipe_attach_upump_mgr(msg->upipe_remote);
                 break;
-            }
             case UPIPE_XFER_SET_URI:
                 upipe_set_uri(msg->upipe_remote, msg->arg.string);
                 free(msg->arg.string);

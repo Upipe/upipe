@@ -239,27 +239,33 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     }
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
-    upipe_release(last_remote_xfer);
 
     /* remote */
-    upipe_use(remote);
-    struct upipe *remote_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
-                             UPROBE_LOG_VERBOSE, "lin_xfer"), remote);
-    if (unlikely(remote_xfer == NULL)) {
-        upipe_release(out_qsink);
-        goto upipe_wlin_alloc_err3;
+    struct upipe *remote_xfer;
+    if (last_remote != remote) {
+        upipe_use(remote);
+        remote_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "lin_xfer"), remote);
+        if (unlikely(remote_xfer == NULL)) {
+            upipe_release(out_qsink);
+            goto upipe_wlin_alloc_err3;
+        }
+        upipe_release(last_remote_xfer);
+    } else {
+        remote_xfer = last_remote_xfer;
     }
     upipe_attach_upump_mgr(remote_xfer);
 
     /* input queue */
-    upipe_wlin->in_qsink = upipe_void_alloc(wlin_mgr->qsink_mgr,
+    struct upipe *in_qsink = upipe_void_alloc(wlin_mgr->qsink_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
                              UPROBE_LOG_VERBOSE, "in_qsink"));
-    if (unlikely(upipe_wlin->in_qsink == NULL)) {
+    if (unlikely(in_qsink == NULL)) {
         upipe_release(remote_xfer);
         goto upipe_wlin_alloc_err3;
     }
+    upipe_wlin->in_qsink = in_qsink;
     if (in_queue_length > UINT8_MAX)
         upipe_sink_set_max_length(upipe_wlin->in_qsink,
                                   in_queue_length - UINT8_MAX);

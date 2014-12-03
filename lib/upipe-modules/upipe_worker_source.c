@@ -213,16 +213,20 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     }
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
-    upipe_release(last_remote_xfer);
 
     /* remote */
-    upipe_wsrc->source = upipe_xfer_alloc(wsrc_mgr->xfer_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_wsrc->proxy_probe),
-                             UPROBE_LOG_VERBOSE, "src_xfer"), remote);
-    if (unlikely(upipe_wsrc->source == NULL)) {
-        upipe_release(out_qsink);
-        upipe_release(upipe);
-        return NULL;
+    if (last_remote != remote) {
+        upipe_wsrc->source = upipe_xfer_alloc(wsrc_mgr->xfer_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_wsrc->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "src_xfer"), remote);
+        if (unlikely(upipe_wsrc->source == NULL)) {
+            upipe_release(out_qsink);
+            upipe_release(upipe);
+            return NULL;
+        }
+    } else {
+        upipe_wsrc->source = last_remote_xfer;
+        upipe_release(remote);
     }
     upipe_attach_upump_mgr(upipe_wsrc->source);
     return upipe;
