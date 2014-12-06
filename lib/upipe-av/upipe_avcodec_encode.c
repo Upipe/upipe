@@ -843,6 +843,7 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
+        upipe_avcenc->frame->format = context->pix_fmt;
 
         const AVRational *supported_framerates = codec->supported_framerates;
         struct urational fps = {25, 1};
