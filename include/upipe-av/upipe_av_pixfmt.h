@@ -87,6 +87,42 @@ static inline int upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 2))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8"))
             break;
+        case AV_PIX_FMT_YUV420P10LE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 2, "u10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 2, "v10l"))
+            break;
+        case AV_PIX_FMT_YUV420P10BE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 2, "u10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 2, "v10b"))
+            break;
+        case AV_PIX_FMT_YUV422P10LE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 2, "u10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 2, "v10l"))
+            break;
+        case AV_PIX_FMT_YUV422P10BE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 2, "u10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 1, 2, "v10b"))
+            break;
+        case AV_PIX_FMT_YUV444P10LE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "u10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "v10l"))
+            break;
+        case AV_PIX_FMT_YUV444P10BE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "u10b"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "v10b"))
+            break;
         case AV_PIX_FMT_YUV420P16LE:
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "y16l"))
