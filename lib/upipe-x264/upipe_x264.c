@@ -684,14 +684,19 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
     }
 
     struct urational fps;
-    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps))) {
+    uint64_t hsize, vsize;
+    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps) ||
+        !ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
+        !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
         upipe_err(upipe, "incompatible flow def");
         uref_free(flow_def_check);
         return UBASE_ERR_INVALID;
     }
 
     if (unlikely(!ubase_check(uref_pic_flow_copy_format(flow_def_check, flow_def)) ||
-                 !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)))) {
+                 !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
+                 !ubase_check(uref_pic_flow_set_hsize(flow_def_check, hsize)) ||
+                 !ubase_check(uref_pic_flow_set_vsize(flow_def_check, vsize)))) {
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
