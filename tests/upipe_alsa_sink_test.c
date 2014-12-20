@@ -28,7 +28,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
@@ -68,6 +67,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_SINK_LATENCY:
             break;
         default:
             assert(0);
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_sinesrc_mgr = upipe_sinesrc_mgr_alloc();
     assert(upipe_sinesrc_mgr != NULL);
     struct upipe *sinesrc = upipe_void_alloc(upipe_sinesrc_mgr,
-               uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+               uprobe_pfx_alloc(uprobe_use(logger),
                                 UPROBE_LOG_LEVEL, "sinesrc"));
     assert(sinesrc != NULL);
     ubase_assert(upipe_attach_uclock(sinesrc));

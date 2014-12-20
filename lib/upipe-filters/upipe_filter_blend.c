@@ -43,12 +43,20 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-filters/upipe_filter_blend.h>
 
 #include <stdlib.h>
 #include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
+
+/** @hidden */
+static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
+                                      struct upump **upump_p);
+/** @hidden */
+static int upipe_filter_blend_check(struct upipe *upipe,
+                                    struct uref *flow_format);
 
 /** @internal upipe_filter_blend private structure */
 struct upipe_filter_blend {
@@ -57,13 +65,27 @@ struct upipe_filter_blend {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
-    /** output */
+    /** output pipe */
     struct upipe *output;
-    /** output flow */
-    struct uref *output_flow;
-    /** has flow def been sent ?*/
-    bool output_flow_sent;
+    /** flow_definition packet */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
+
     /** public structure */
     struct upipe upipe;
 };
@@ -71,8 +93,12 @@ struct upipe_filter_blend {
 UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_filter_blend, urefcount, upipe_filter_blend_free)
 UPIPE_HELPER_VOID(upipe_filter_blend)
-UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr, output_flow);
-UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, output_flow, output_flow_sent)
+UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr, ubuf_mgr_request,
+                      upipe_filter_blend_check,
+                      upipe_filter_blend_register_output_request,
+                      upipe_filter_blend_unregister_output_request)
+UPIPE_HELPER_INPUT(upipe_filter_blend, urefs, nb_urefs, max_urefs, blockers, upipe_filter_blend_handle)
 
 /** @internal @This allocates a filter pipe.
  *
@@ -94,6 +120,7 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
     upipe_filter_blend_init_urefcount(upipe);
     upipe_filter_blend_init_ubuf_mgr(upipe);
     upipe_filter_blend_init_output(upipe);
+    upipe_filter_blend_init_input(upipe);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -153,11 +180,22 @@ static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to upump structure
+ * @return always true
  */
-static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
-                                     struct upump **upump_p)
+static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
+                                      struct upump **upump_p)
 {
     struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_filter_blend_store_flow_def(upipe, NULL);
+        upipe_filter_blend_require_ubuf_mgr(upipe, uref);
+        return true;
+    }
+
+    if (upipe_filter_blend->flow_def == NULL)
+        return false;
+
     const uint8_t *in;
     uint8_t *out;
     uint8_t hsub, vsub;
@@ -168,10 +206,6 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     // Now process frames
     uref_pic_size(uref, &width, &height, NULL);
     upipe_verbose_va(upipe, "received pic (%dx%d)", width, height);
-
-    // Alloc deint buffer
-    if (unlikely(!ubase_check(upipe_filter_blend_check_ubuf_mgr(upipe))))
-        goto error;
 
     assert(upipe_filter_blend->ubuf_mgr);
     ubuf_deint = ubuf_pic_alloc(upipe_filter_blend->ubuf_mgr, width, height);
@@ -210,14 +244,63 @@ static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
     uref_pic_delete_tff(uref);
 
     upipe_filter_blend_output(upipe, uref, upump_p);
-    return;
+    return true;
 
 error:
     uref_free(uref);
     if (ubuf_deint) {
         ubuf_free(ubuf_deint);
     }
-    return;
+    return true;
+}
+
+/** @internal @This inputs data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_filter_blend_input(struct upipe *upipe, struct uref *uref,
+                                     struct upump **upump_p)
+{
+    if (!upipe_filter_blend_check_input(upipe)) {
+        upipe_filter_blend_hold_input(upipe, uref);
+        upipe_filter_blend_block_input(upipe, upump_p);
+    } else if (!upipe_filter_blend_handle(upipe, uref, upump_p)) {
+        upipe_filter_blend_hold_input(upipe, uref);
+        upipe_filter_blend_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
+}
+
+/** @internal @This checks if the input may start.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_filter_blend_check(struct upipe *upipe,
+                                    struct uref *flow_format)
+{
+    struct upipe_filter_blend *upipe_filter_blend =
+        upipe_filter_blend_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_filter_blend_store_flow_def(upipe, flow_format);
+
+    if (upipe_filter_blend->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    bool was_buffered = !upipe_filter_blend_check_input(upipe);
+    upipe_filter_blend_output_input(upipe);
+    upipe_filter_blend_unblock_input(upipe);
+    if (was_buffered && upipe_filter_blend_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_filter_blend_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -238,7 +321,7 @@ static int upipe_filter_blend_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
     UBASE_RETURN(uref_pic_set_progressive(flow_def_dup))
-    upipe_filter_blend_store_flow_def(upipe, flow_def_dup);
+    upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -253,11 +336,20 @@ static int upipe_filter_blend_control(struct upipe *upipe,
                                       int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_filter_blend_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT:
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_filter_blend_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_filter_blend_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_filter_blend_get_flow_def(upipe, p);
@@ -287,6 +379,7 @@ static void upipe_filter_blend_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    upipe_filter_blend_clean_input(upipe);
     upipe_filter_blend_clean_ubuf_mgr(upipe);
     upipe_filter_blend_clean_output(upipe);
     upipe_filter_blend_clean_urefcount(upipe);
@@ -303,7 +396,7 @@ static struct upipe_mgr upipe_filter_blend_mgr = {
     .upipe_control = upipe_filter_blend_control
 };
 
-/** @This returns the management structure for glx_sink pipes
+/** @This returns the management structure for glx_input pipes
  *
  * @return pointer to manager
  */

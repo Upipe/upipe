@@ -20,6 +20,13 @@
 
 /** @file
  * @short Upipe source module for BlackMagic Design SDI cards
+ *
+ * Note that the allocator requires three additional parameters:
+ * @table 2
+ * @item uprobe_pic @item structure used to raise events for the pic subpipe
+ * @item uprobe_sound @item structure used to raise events for the sound subpipe
+ * @item uprobe_subpic @item structure used to raise events for the subpic subpipe
+ * @end table
  */
 
 #ifndef _UPIPE_BLACKMAGIC_UPIPE_BLACKMAGIC_SOURCE_H_
@@ -94,24 +101,13 @@ static inline int upipe_bmd_src_get_subpic_sub(struct upipe *upipe,
                          UPIPE_BMD_SRC_SIGNATURE, upipe_p);
 }
 
-/** @This allocates and initializes a bmd source pipe.
- *
- * @param mgr management structure for bmd source type
- * @param uprobe structure used to raise events for the super pipe
- * @param uprobe_pic structure used to raise events for the pic subpipe
- * @param uprobe_sound structure used to raise events for the sound subpipe
- * @param uprobe_subpic structure used to raise events for the subpic subpipe
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_bmd_src_alloc(struct upipe_mgr *mgr,
-                                                struct uprobe *uprobe,
-                                                struct uprobe *uprobe_pic,
-                                                struct uprobe *uprobe_sound,
-                                                struct uprobe *uprobe_subpic)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_BMD_SRC_SIGNATURE,
-                       uprobe_pic, uprobe_sound, uprobe_subpic);
-}
+/** @hidden */
+#define ARGS_DECL , struct uprobe *uprobe_pic, struct uprobe *uprobe_sound, struct uprobe *uprobe_subpic
+/** @hidden */
+#define ARGS , uprobe_pic, uprobe_sound, uprobe_subpic
+UPIPE_HELPER_ALLOC(bmd_src, UPIPE_BMD_SRC_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

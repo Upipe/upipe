@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
@@ -88,8 +87,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_SOURCE_END:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_SOURCE_END:
             break;
     }
     return UBASE_ERR_NONE;
@@ -155,7 +154,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));

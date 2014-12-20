@@ -59,7 +59,7 @@
 #define UPUMP_POOL 0
 #define UPUMP_BLOCKER_POOL 0
 #define QUEUE_LENGTH 6
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 UREF_ATTR_SMALL_UNSIGNED(test, test, "x.test", test)
 
@@ -67,6 +67,9 @@ static struct ev_loop *loop;
 static struct upump_mgr *upump_mgr;
 static struct upipe *upipe_qsink;
 static uint8_t counter = 0;
+static struct uref_mgr *uref_mgr;
+static struct urequest request;
+static bool request_was_unregistered = false;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -87,10 +90,26 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** helper phony pipe to test upipe_qsrc */
-static struct upipe *queue_test_alloc(struct upipe_mgr *mgr,
-                                      struct uprobe *uprobe, uint32_t signature,
-                                      va_list args)
+static void check_end(void)
+{
+    if (counter >= 1 && request_was_unregistered)
+        upipe_release(upipe_qsink);
+}
+
+static int provide_request(struct urequest *urequest, va_list args)
+{
+    upipe_notice(upipe_qsink, "providing request");
+    assert(urequest == &request);
+    struct uref_mgr *m = va_arg(args, struct uref_mgr *);
+    assert(m == uref_mgr);
+    uref_mgr_release(uref_mgr);
+    upipe_unregister_request(upipe_qsink, urequest);
+    return UBASE_ERR_NONE;
+}
+
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -99,9 +118,9 @@ static struct upipe *queue_test_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_qsrc */
-static void queue_test_input(struct upipe *upipe, struct uref *uref,
-                             struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     upipe_notice_va(upipe, "loop %"PRIu8, counter);
@@ -110,25 +129,45 @@ static void queue_test_input(struct upipe *upipe, struct uref *uref,
         ubase_assert(uref_test_get_test(uref, &uref_counter));
         assert(uref_counter == counter);
     } else
-        upipe_release(upipe_qsink);
+        check_end();
     counter++;
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_qsrc */
-static void queue_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            request_was_unregistered = true;
+            check_end();
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_qsrc */
+/** helper phony pipe */
 static struct upipe_mgr queue_test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = queue_test_alloc,
-    .upipe_input = queue_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -141,8 +180,7 @@ int main(int argc, char *argv[])
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
     struct uref *uref;
     struct uprobe uprobe;
@@ -173,12 +211,12 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_qsink_mgr = upipe_qsink_mgr_alloc();
     assert(upipe_qsink_mgr != NULL);
-    upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
+    upipe_qsink = upipe_qsink_alloc(upipe_qsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "queue sink"));
+                             "queue sink"),
+            upipe_qsrc);
     assert(upipe_qsink != NULL);
     ubase_assert(upipe_set_flow_def(upipe_qsink, uref));
-    ubase_assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
     uref_free(uref);
 
     uref = uref_alloc(uref_mgr);
@@ -195,9 +233,13 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_qsrc_get_length(upipe_qsrc, &length));
     assert(length == 3);
 
+    urequest_init_uref_mgr(&request, provide_request, NULL);
+    upipe_register_request(upipe_qsink, &request);
+
     ev_loop(loop, 0);
 
     assert(counter == 2);
+    assert(request_was_unregistered);
 
     /* check that they are correctly released even if no flow def is input */
     upipe_qsrc = upipe_qsrc_alloc(upipe_qsrc_mgr,
@@ -205,18 +247,18 @@ int main(int argc, char *argv[])
                              "queue source"), QUEUE_LENGTH);
     assert(upipe_qsrc != NULL);
 
-    upipe_qsink = upipe_void_alloc(upipe_qsink_mgr,
+    upipe_qsink = upipe_qsink_alloc(upipe_qsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "queue sink"));
+                             "queue sink"),
+            upipe_qsrc);
     assert(upipe_qsink != NULL);
-    ubase_assert(upipe_qsink_set_qsrc(upipe_qsink, upipe_qsrc));
     upipe_release(upipe_qsrc);
     upipe_release(upipe_qsink);
 
     upipe_mgr_release(upipe_qsink_mgr); // nop
     upipe_mgr_release(upipe_qsrc_mgr); // nop
 
-    queue_test_free(upipe_sink);
+    test_free(upipe_sink);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);

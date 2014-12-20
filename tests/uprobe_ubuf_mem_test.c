@@ -41,6 +41,7 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
+#include <upipe/urequest.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -161,6 +162,18 @@ static void test_YUYV(struct ubuf_mgr *mgr)
 }
 
 /** helper phony pipe to test uprobe_ubuf_mem */
+static int uprobe_test_provide_ubuf_mgr(struct urequest *urequest, va_list args)
+{
+    struct ubuf_mgr *m = va_arg(args, struct ubuf_mgr *);
+    assert(m != NULL);
+    test_mgr(m);
+    ubuf_mgr_release(m);
+    struct uref *flow_def = va_arg(args, struct uref *);
+    uref_free(flow_def);
+    return UBASE_ERR_NONE;
+}
+
+/** helper phony pipe to test uprobe_ubuf_mem */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
@@ -168,11 +181,9 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
-    struct ubuf_mgr *m;
-    ubase_assert(upipe_throw_new_flow_format(upipe, flow_def, &m));
-    assert(m != NULL);
-    test_mgr(m);
-    ubuf_mgr_release(m);
+    struct urequest request;
+    urequest_init_ubuf_mgr(&request, flow_def, uprobe_test_provide_ubuf_mgr,
+                           NULL);
     return upipe;
 }
 

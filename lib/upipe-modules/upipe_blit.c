@@ -38,7 +38,6 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_subpipe.h>
 
 #include <upipe/upipe_helper_output.h>
@@ -66,15 +65,14 @@ struct upipe_blit {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** output flow */
-    struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
     /** output pipe */
     struct upipe *output;
-
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
+    /** flow_definition packet */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -86,8 +84,7 @@ struct upipe_blit {
 UPIPE_HELPER_UPIPE(upipe_blit, upipe, UPIPE_BLIT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_blit, urefcount, upipe_blit_free)
 UPIPE_HELPER_VOID(upipe_blit)
-UPIPE_HELPER_OUTPUT(upipe_blit, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_blit, ubuf_mgr, flow_def)
+UPIPE_HELPER_OUTPUT(upipe_blit, output, flow_def, output_state, request_list)
 
 /** @internal @This is the private context of an input of a blit pipe. */
 struct upipe_blit_sub {
@@ -152,7 +149,6 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
 * @param signature signature of the pipe allocator
 * @param uref uref structure
 * @param urefsub second uref structure containing the picture to copy
-* @param ubuf_mgr struct ubuf_mgr
 */
 void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
     int x, y;
@@ -388,22 +384,16 @@ static int _upipe_blit_sub_control(struct upipe *upipe,
  *
  */
 static void upipe_blit_input(struct upipe *upipe, struct uref *uref, 
-                    struct upump **upump_p)
+                             struct upump **upump_p)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
  
     struct uchain *uchain_sub;
     uint8_t *buf = NULL;
  
-    if (unlikely(!ubase_check(upipe_blit_check_ubuf_mgr(upipe))) ||
-            uref->ubuf==NULL) {
-        uref_free(uref);
-        return;
-    }
-
     if (unlikely(!ubase_check(uref_pic_plane_write(uref, "b8g8r8a8", 0, 0, 
                                                 -1, -1, &buf)))) {
-        struct ubuf *ubuf = ubuf_pic_copy(upipe_blit->ubuf_mgr,
+        struct ubuf *ubuf = ubuf_pic_copy(uref->ubuf->mgr,
                                             uref->ubuf,0, 0, -1, -1);
         if (unlikely(!ubuf)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -432,30 +422,6 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_blit_output(upipe, uref, upump_p);
-}
-
-/** @internal @This amends a proposed flow format.
- * 
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_blit_amend_flow_format(struct upipe *upipe,
-                                                  struct uref *flow_format)
-{
-    if (flow_format == NULL)
-        return UBASE_ERR_INVALID;
-
-    uint64_t align;
-    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
-        return uref_pic_flow_set_align(flow_format, 16);
-
-    if (align % 16) {
-        align = align * 16 / ubase_gcd(align, 16);
-        return uref_pic_flow_set_align(flow_format, align);
-    }
-
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -492,13 +458,13 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        /* generic commands */
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_blit_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_blit_amend_flow_format(upipe, flow_format);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_blit_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_blit_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -587,7 +553,6 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     upipe_blit_init_sub_mgr(upipe);
     upipe_blit_init_sub_subs(upipe);
     upipe_blit_init_urefcount(upipe);
-    upipe_blit_init_ubuf_mgr(upipe);
     upipe_blit_init_output(upipe);
     upipe_throw_ready(upipe);
     return upipe;
@@ -605,7 +570,6 @@ static void upipe_blit_free(struct upipe *upipe)
     upipe_mgr_release(&upipe_blit->sub_mgr);
     upipe_blit_clean_sub_subs(upipe);
     upipe_blit_clean_output(upipe);
-    upipe_blit_clean_ubuf_mgr(upipe);
     upipe_blit_clean_urefcount(upipe);
     upipe_blit_free_void(upipe);
 }

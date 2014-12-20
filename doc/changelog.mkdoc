@@ -1,0 +1,45 @@
+
+@section TPH {Changelog}
+
+  @section T {Migration from Upipe 0.3 to 0.4}
+
+    Upipe 0.4 introduces @ref urequest, which allows the negotiation of data structures and formats between pipes. Consequently, every pipe that has an output must register all the requests the output pipe should provide. Similarly, every pipe that has an input must handle the requests registered by the input pipe, and either provide the structures itself, or ask the application to provide them via a probe event.
+
+    @section {Application migration}
+
+      There are only a few modifications to migrate applications to Upipe 0.4:
+
+      @list
+
+        @item uprobe_output and uprobe_filter_suggest are now deprecated, as the functionality is now handled directly by @ref #UPIPE_HELPER_OUTPUT. These probes are now idempotent, so they can still be used by unmodified applications, but in the long run they should be removed.
+
+        @item The event @ref UPROBE_NEW_FLOW_DEF, as it was previously used by applications, has been renamed @ref UPROBE_NEED_OUTPUT. @ref UPROBE_NEW_FLOW_DEF still exists, but with different semantics (called each time the output flow definition changes, regardless of the behaviour of the output pipe), and it should not be used to build dynamic pipelines.
+
+        @item upipe_attach_uref_mgr and upipe_attach_ubuf_mgr do no longer exist, as these structures should be provided automatically.
+
+      @end list
+
+    @end section
+    @section {Pipe migration}
+
+      There are quite a few modifications to migrate pipes to Upipe 0.4:
+
+      @list
+
+        @item The @ref #UPIPE_HELPER_OUTPUT no longer takes a boolean argument, but takes two additional arguments. See upipe_idem.c for an example. The helper provides additional functions to register requests to the output pipe, and to proxy requests coming from an input pipe.
+
+        @item All pipes accepting an input must also accept the control commands @ref UPIPE_REGISTER_REQUEST and @ref UPIPE_UNREGISTER_REQUEST. Most of the time the requests will be proxied to the output pipe, or thrown as probe events if the pipe is a sink, but sometimes it may be interesting to modify the request. This mechanism replaces UPIPE_AMEND_FLOW_FORMAT and UPIPE_SUGGEST_FLOW_DEF, along with the new @ref #UPIPE_HELPER_FLOW_FORMAT. See upipe_avcodec_encode.c and upipe_sws.c for examples.
+
+        @item The UPIPE_HELPER_SINK was renamed @ref #UPIPE_HELPER_INPUT. All function names containing _sink have been renamed _input. Pipes that require a ubuf manager may need to buffer input urefs until the ubuf manager has been asynchronously received. See upipe_genaux.c for an example.
+
+        @item The helpers @ref #UPIPE_HELPER_UREF_MGR, @ref #UPIPE_HELPER_UBUF_MGR and @ref #UPIPE_HELPER_UCLOCK now take additional arguemnts, and upipe_throw_need_uref_mgr, upipe_throw_need_ubuf_mgr and upipe_throw_need_uclock do no longer exist. The helpers now provide a way to require those structures using a @ref urequest. See upipe_genaux.c for an example.
+
+        @item The current helper for bin pipes has been renamed @ref #UPIPE_HELPER_BIN_OUTPUT, and there is a new helper for input requests @ref #UPIPE_HELPER_BIN_INPUT.
+
+      @end list
+
+    @end section
+
+  @end section
+
+@end section

@@ -109,7 +109,7 @@ static int STRUCTURE##_attach_upump_mgr(struct upipe *upipe)                \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_check_upump_mgr(struct upipe *upipe)                 \
+static UBASE_UNUSED int STRUCTURE##_check_upump_mgr(struct upipe *upipe)    \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (unlikely(s->UPUMP_MGR == NULL))                                     \

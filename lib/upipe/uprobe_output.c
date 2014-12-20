@@ -24,16 +24,7 @@
  */
 
 /** @file
- * @short probe dealing with events having consequences on the output pipe
- *
- * In particular, it catches the new_flow_def event, and calls
- * @ref upipe_set_flow_def on the output. If it returns an error, the output
- * is cleared and the event is forwarded to higher-level probes.
- *
- * It also catches the new_flow_format event, and calls
- * @ref upipe_amend_flow_format on the output, so that it can tune the
- * parameters of the new ubuf manager (alignment, prepending and appending).
- * The event is then always forwarded to higher-level probes.
+ * @short stub probe (to be removed)
  */
 
 #include <upipe/ubase.h>
@@ -57,45 +48,7 @@
 static int uprobe_output_throw(struct uprobe *uprobe, struct upipe *upipe,
                                int event, va_list args)
 {
-    switch (event) {
-        default:
-            return uprobe_throw_next(uprobe, upipe, event, args);
-
-        case UPROBE_NEW_FLOW_DEF: {
-            va_list args_copy;
-            va_copy(args_copy, args);
-            struct uref *flow_def = va_arg(args_copy, struct uref *);
-            va_end(args_copy);
-            struct upipe *output;
-            if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
-                       output != NULL)) {
-                if (likely(ubase_check(upipe_set_flow_def(output, flow_def))))
-                    return UBASE_ERR_NONE;
-                upipe_set_output(upipe, NULL);
-            }
-            UBASE_RETURN(uprobe_throw_next(uprobe, upipe, event, args))
-            /* try again */
-            if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
-                       output != NULL)) {
-                if (likely(ubase_check(upipe_set_flow_def(output, flow_def))))
-                    return UBASE_ERR_NONE;
-                upipe_set_output(upipe, NULL);
-            }
-            return UBASE_ERR_UNHANDLED;
-        }
-
-        case UPROBE_NEW_FLOW_FORMAT: {
-            va_list args_copy;
-            va_copy(args_copy, args);
-            struct uref *flow_format = va_arg(args_copy, struct uref *);
-            va_end(args_copy);
-            struct upipe *output;
-            if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
-                       output != NULL))
-                upipe_amend_flow_format(output, flow_format);
-            return uprobe_throw_next(uprobe, upipe, event, args);
-        }
-    }
+    return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
 /** @This initializes an already allocated uprobe_output structure.

@@ -38,7 +38,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_trickplay.h>
@@ -51,7 +51,7 @@
 /** @hidden */
 static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts);
 /** @hidden */
-static void upipe_trickp_check_start(struct upipe *upipe);
+static int upipe_trickp_check_start(struct upipe *upipe, struct uref *);
 /** @hidden */
 static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
                                      struct upump **upump);
@@ -63,6 +63,8 @@ struct upipe_trickp {
 
     /** uclock structure */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** origins of timestamps */
     uint64_t ts_origin;
@@ -84,7 +86,8 @@ struct upipe_trickp {
 UPIPE_HELPER_UPIPE(upipe_trickp, upipe, UPIPE_TRICKP_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_trickp, urefcount, upipe_trickp_free)
 UPIPE_HELPER_VOID(upipe_trickp)
-UPIPE_HELPER_UCLOCK(upipe_trickp, uclock)
+UPIPE_HELPER_UCLOCK(upipe_trickp, uclock, uclock_request,
+                    upipe_trickp_check_start, upipe_throw_provide_request, NULL)
 
 /** @internal @This is the type of the flow (different behaviours). */
 enum upipe_trickp_sub_type {
@@ -116,8 +119,10 @@ struct upipe_trickp_sub {
     struct upipe *output;
     /** flow definition packet on this output */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -126,8 +131,8 @@ struct upipe_trickp_sub {
 UPIPE_HELPER_UPIPE(upipe_trickp_sub, upipe, UPIPE_TRICKP_SUB_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_trickp_sub, urefcount, upipe_trickp_sub_free)
 UPIPE_HELPER_VOID(upipe_trickp_sub)
-UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, flow_def_sent)
-UPIPE_HELPER_SINK(upipe_trickp_sub, urefs, nb_urefs, max_urefs, blockers, upipe_trickp_sub_process)
+UPIPE_HELPER_OUTPUT(upipe_trickp_sub, output, flow_def, output_state, request_list)
+UPIPE_HELPER_INPUT(upipe_trickp_sub, urefs, nb_urefs, max_urefs, blockers, upipe_trickp_sub_process)
 
 UPIPE_HELPER_SUBPIPE(upipe_trickp, upipe_trickp_sub, sub, sub_mgr, subs, uchain)
 
@@ -150,7 +155,7 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     upipe_trickp_sub_init_urefcount(upipe);
     upipe_trickp_sub_init_output(upipe);
-    upipe_trickp_sub_init_sink(upipe);
+    upipe_trickp_sub_init_input(upipe);
     upipe_trickp_sub_init_sub(upipe);
     struct upipe_trickp_sub *upipe_trickp_sub =
         upipe_trickp_sub_from_upipe(upipe);
@@ -201,22 +206,19 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(upipe->mgr);
-    if (unlikely(!ubase_check(upipe_trickp_check_uclock(upipe_trickp_to_upipe(upipe_trickp))))) {
-        uref_free(uref);
-        return;
-    }
 
-    if (upipe_trickp->rate.num == 0 || upipe_trickp->rate.den == 0) {
+    if (upipe_trickp->uclock == NULL || upipe_trickp->rate.num == 0 ||
+        upipe_trickp->rate.den == 0) {
         /* pause */
-        upipe_trickp_sub_hold_sink(upipe, uref);
-        upipe_trickp_sub_block_sink(upipe, upump_p);
+        upipe_trickp_sub_hold_input(upipe, uref);
+        upipe_trickp_sub_block_input(upipe, upump_p);
     } else if (upipe_trickp->systime_offset == 0) {
-        upipe_trickp_sub_hold_sink(upipe, uref);
-        upipe_trickp_check_start(upipe_trickp_to_upipe(upipe_trickp));
-    } else if (!upipe_trickp_sub_check_sink(upipe) ||
+        upipe_trickp_sub_hold_input(upipe, uref);
+        upipe_trickp_check_start(upipe_trickp_to_upipe(upipe_trickp), NULL);
+    } else if (!upipe_trickp_sub_check_input(upipe) ||
                !upipe_trickp_sub_process(upipe, uref, upump_p)) {
-        upipe_trickp_sub_hold_sink(upipe, uref);
-        upipe_trickp_sub_block_sink(upipe, upump_p);
+        upipe_trickp_sub_hold_input(upipe, uref);
+        upipe_trickp_sub_block_input(upipe, upump_p);
     }
 }
 
@@ -265,9 +267,13 @@ static int upipe_trickp_sub_control(struct upipe *upipe,
                                     int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_trickp_sub_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_trickp_sub_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -290,11 +296,11 @@ static int upipe_trickp_sub_control(struct upipe *upipe,
             return upipe_trickp_sub_get_super(upipe, p);
         }
 
-        case UPIPE_SINK_GET_MAX_LENGTH: {
+        case UPIPE_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_trickp_sub_get_max_length(upipe, p);
         }
-        case UPIPE_SINK_SET_MAX_LENGTH: {
+        case UPIPE_SET_MAX_LENGTH: {
             unsigned int max_length = va_arg(args, unsigned int);
             return upipe_trickp_sub_set_max_length(upipe, max_length);
         }
@@ -313,7 +319,7 @@ static void upipe_trickp_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_trickp_sub_clean_output(upipe);
-    upipe_trickp_sub_clean_sink(upipe);
+    upipe_trickp_sub_clean_input(upipe);
     upipe_trickp_sub_clean_sub(upipe);
     upipe_trickp_sub_clean_urefcount(upipe);
     upipe_trickp_sub_free_void(upipe);
@@ -360,6 +366,7 @@ static struct upipe *upipe_trickp_alloc(struct upipe_mgr *mgr,
     upipe_trickp->ts_origin = 0;
     upipe_trickp->rate.num = upipe_trickp->rate.den = 1;
     upipe_throw_ready(upipe);
+    upipe_trickp_require_uclock(upipe);
     return upipe;
 }
 
@@ -367,8 +374,10 @@ static struct upipe *upipe_trickp_alloc(struct upipe_mgr *mgr,
  * we are ready to output them.
  *
  * @param upipe description structure of the pipe
+ * @param uref unused uref
+ * @return an error code
  */
-static void upipe_trickp_check_start(struct upipe *upipe)
+static int upipe_trickp_check_start(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     uint64_t earliest_ts = UINT64_MAX;
@@ -383,7 +392,7 @@ static void upipe_trickp_check_start(struct upipe *upipe)
             struct uchain *uchain2;
             uchain2 = ulist_peek(&upipe_trickp_sub->urefs);
             if (uchain2 == NULL)
-                return; /* not ready */
+                return UBASE_ERR_NONE; /* not ready */
             struct uref *uref = uref_from_uchain(uchain2);
             uint64_t ts;
             int type;
@@ -400,17 +409,20 @@ static void upipe_trickp_check_start(struct upipe *upipe)
         }
     }
 
+    if (earliest_ts == UINT64_MAX)
+        return UBASE_ERR_NONE;
     upipe_trickp->ts_origin = earliest_ts;
     upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock);
 
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =
             upipe_trickp_sub_from_uchain(uchain);
-        upipe_trickp_sub_output_sink(
+        upipe_trickp_sub_output_input(
                     upipe_trickp_sub_to_upipe(upipe_trickp_sub));
-        upipe_trickp_sub_unblock_sink(
+        upipe_trickp_sub_unblock_input(
                 upipe_trickp_sub_to_upipe(upipe_trickp_sub));
     }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns a system date converted from a timestamp.
@@ -468,7 +480,7 @@ static inline int _upipe_trickp_set_rate(struct upipe *upipe,
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     upipe_trickp->rate = rate;
     upipe_trickp_reset_uclock(upipe);
-    upipe_trickp_check_start(upipe);
+    upipe_trickp_check_start(upipe, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -482,9 +494,6 @@ static inline int _upipe_trickp_set_rate(struct upipe *upipe,
 static int upipe_trickp_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UCLOCK:
-            upipe_trickp_reset_uclock(upipe);
-            return upipe_trickp_attach_uclock(upipe);
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_trickp_get_sub_mgr(upipe, p);

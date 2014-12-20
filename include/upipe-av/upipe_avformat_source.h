@@ -43,11 +43,6 @@ extern "C" {
 enum upipe_avfsrc_command {
     UPIPE_AVFSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the content of an avformat option (const char *,
-     * const char **) */
-    UPIPE_AVFSRC_GET_OPTION,
-    /** sets the content of an avformat option (const char *, const char *) */
-    UPIPE_AVFSRC_SET_OPTION,
     /** returns the reading time of the currently opened file, in clock units
      * (uint64_t *) */
     UPIPE_AVFSRC_GET_TIME,
@@ -61,22 +56,21 @@ enum upipe_avfsrc_command {
  */
 struct upipe_mgr *upipe_avfsrc_mgr_alloc(void);
 
-/** @This returns the content of an avformat option.
+/** @deprecated @This returns the content of an avformat option.
  *
  * @param upipe description structure of the pipe
  * @param option name of the option
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static inline int upipe_avfsrc_get_option(struct upipe *upipe,
+static inline UBASE_DEPRECATED int upipe_avfsrc_get_option(struct upipe *upipe,
                                           const char *option,
                                           const char **content_p)
 {
-    return upipe_control(upipe, UPIPE_AVFSRC_GET_OPTION, UPIPE_AVFSRC_SIGNATURE,
-                         option, content_p);
+    return upipe_get_option(upipe, option, content_p);
 }
 
-/** @This sets the content of an avformat option. It only takes effect after
+/** @deprecated @This sets the content of an avformat option. It only takes effect after
  * the next call to @ref upipe_set_uri.
  *
  * @param upipe description structure of the pipe
@@ -84,12 +78,11 @@ static inline int upipe_avfsrc_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static inline int upipe_avfsrc_set_option(struct upipe *upipe,
+static inline UBASE_DEPRECATED int upipe_avfsrc_set_option(struct upipe *upipe,
                                           const char *option,
                                           const char *content)
 {
-    return upipe_control(upipe, UPIPE_AVFSRC_SET_OPTION, UPIPE_AVFSRC_SIGNATURE,
-                         option, content);
+    return upipe_set_option(upipe, option, content);
 }
 
 /** @This returns the reading time of the currently opened URL.

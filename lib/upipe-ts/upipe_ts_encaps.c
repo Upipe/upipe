@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-ts/upipe_ts_encaps.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -60,6 +61,12 @@
 /** Max hole allowed in CBR/Capped VBR streams */
 #define MAX_HOLE UCLOCK_FREQ
 
+/** @hidden */
+static bool upipe_ts_encaps_handle(struct upipe *upipe, struct uref *uref,
+                                   struct upump **upump_p);
+/** @hidden */
+static int upipe_ts_encaps_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a ts_encaps pipe. */
 struct upipe_ts_encaps {
     /** refcount management structure */
@@ -67,15 +74,31 @@ struct upipe_ts_encaps {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
 
     /** PID */
     uint16_t pid;
@@ -107,9 +130,16 @@ struct upipe_ts_encaps {
 UPIPE_HELPER_UPIPE(upipe_ts_encaps, upipe, UPIPE_TS_ENCAPS_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_encaps, urefcount, upipe_ts_encaps_free)
 UPIPE_HELPER_VOID(upipe_ts_encaps)
-UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_ts_encaps, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_encaps, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr, uref_mgr_request,
+                      upipe_ts_encaps_check,
+                      upipe_ts_encaps_register_output_request,
+                      upipe_ts_encaps_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr, ubuf_mgr_request,
+                      upipe_ts_encaps_check,
+                      upipe_ts_encaps_register_output_request,
+                      upipe_ts_encaps_unregister_output_request)
+UPIPE_HELPER_INPUT(upipe_ts_encaps, urefs, nb_urefs, max_urefs, blockers, upipe_ts_encaps_handle)
 
 /** @internal @This allocates a ts_encaps pipe.
  *
@@ -133,6 +163,7 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps_init_output(upipe);
     upipe_ts_encaps_init_uref_mgr(upipe);
     upipe_ts_encaps_init_ubuf_mgr(upipe);
+    upipe_ts_encaps_init_input(upipe);
     upipe_ts_encaps->pid = 8192;
     upipe_ts_encaps->octetrate = 0;
     upipe_ts_encaps->tb_rate = 0;
@@ -209,7 +240,7 @@ static struct uref *upipe_ts_encaps_splice(struct upipe *upipe,
     else
         header_size = TS_HEADER_SIZE;
 
-    size_t uref_size, padding_size = 0;
+    size_t uref_size = 0, padding_size = 0;
     uref_block_size(uref, &uref_size);
     if (!uref_size) {
         upipe_dbg(upipe, "splicing an empty uref");
@@ -481,23 +512,41 @@ static void upipe_ts_encaps_work(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** @internal @This receives data.
+/** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
+ * @return false if the input must be blocked
  */
-static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
-                                  struct upump **upump_p)
+static bool upipe_ts_encaps_handle(struct upipe *upipe, struct uref *uref,
+                                   struct upump **upump_p)
 {
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
-    assert(upipe_ts_encaps->octetrate);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_ts_encaps->psi = !ubase_ncmp(def, "block.mpegts.mpegtspsi.");
+        uref_block_flow_get_octetrate(uref, &upipe_ts_encaps->octetrate);
+        uref_ts_flow_get_tb_rate(uref, &upipe_ts_encaps->tb_rate);
+        uint64_t pid;
+        uref_ts_flow_get_pid(uref, &pid);
+        upipe_ts_encaps->pid = pid;
+        upipe_ts_encaps->ts_delay = 0;
+        uref_ts_flow_get_ts_delay(uref, &upipe_ts_encaps->ts_delay);
+        upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
+        uref_ts_flow_get_max_delay(uref, &upipe_ts_encaps->max_delay);
+        upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
+                                         upipe_ts_encaps->octetrate;
 
-    if (unlikely(!ubase_check(upipe_ts_encaps_check_uref_mgr(upipe)) ||
-                 !ubase_check(upipe_ts_encaps_check_ubuf_mgr(upipe)))) {
-        uref_free(uref);
-        return;
+        upipe_ts_encaps_store_flow_def(upipe, NULL);
+        upipe_ts_encaps_require_ubuf_mgr(upipe, uref);
+        return true;
     }
+
+    if (upipe_ts_encaps->flow_def == NULL || upipe_ts_encaps->uref_mgr == NULL)
+        return false;
+
+    assert(upipe_ts_encaps->octetrate);
 
     /* FIXME For the moment we do not handle overlaps */
     if (upipe_ts_encaps->psi) {
@@ -509,7 +558,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
             ubuf_free(ubuf);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+            return true;
         }
         assert(size == 1);
         buffer[0] = 0;
@@ -520,11 +569,64 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
             ubuf_free(section);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+            return true;
         }
     }
 
     upipe_ts_encaps_work(upipe, uref, upump_p);
+    return true;
+}
+
+/** @internal @This receives data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump_p)
+{
+    if (!upipe_ts_encaps_check_input(upipe)) {
+        upipe_ts_encaps_hold_input(upipe, uref);
+        upipe_ts_encaps_block_input(upipe, upump_p);
+    } else if (!upipe_ts_encaps_handle(upipe, uref, upump_p)) {
+        upipe_ts_encaps_hold_input(upipe, uref);
+        upipe_ts_encaps_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
+}
+
+/** @internal @This checks if the input may start.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_ts_encaps_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_ts_encaps_store_flow_def(upipe, flow_format);
+
+    if (upipe_ts_encaps->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_ts_encaps->uref_mgr == NULL) {
+        upipe_ts_encaps_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    bool was_buffered = !upipe_ts_encaps_check_input(upipe);
+    upipe_ts_encaps_output_input(upipe);
+    upipe_ts_encaps_unblock_input(upipe);
+    if (was_buffered && upipe_ts_encaps_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_ts_encaps_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -554,22 +656,10 @@ static int upipe_ts_encaps_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup, "block.mpegts.%s",
-                                       def + strlen(EXPECTED_FLOW_DEF)))))
+    if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def_dup,
+                        "block.mpegts.%s", def + strlen(EXPECTED_FLOW_DEF)))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    upipe_ts_encaps_store_flow_def(upipe, flow_def_dup);
-
-    struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
-    upipe_ts_encaps->psi = !ubase_ncmp(def, "block.mpegtspsi.");
-    upipe_ts_encaps->pid = pid;
-    upipe_ts_encaps->octetrate = octetrate;
-    upipe_ts_encaps->tb_rate = tb_rate;
-    upipe_ts_encaps->ts_delay = 0;
-    uref_ts_flow_get_ts_delay(flow_def, &upipe_ts_encaps->ts_delay);
-    upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
-    uref_ts_flow_get_max_delay(flow_def, &upipe_ts_encaps->max_delay);
-    upipe_ts_encaps->pcr_tolerance = (uint64_t)TS_SIZE * UCLOCK_FREQ /
-                                     octetrate;
+    upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -615,11 +705,18 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
                                    int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_ts_encaps_attach_uref_mgr(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_ts_encaps_attach_ubuf_mgr(upipe);
-
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UREF_MGR)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_ts_encaps_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UREF_MGR)
+                return UBASE_ERR_NONE;
+            return upipe_ts_encaps_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_encaps_get_flow_def(upipe, p);
@@ -660,6 +757,7 @@ static void upipe_ts_encaps_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    upipe_ts_encaps_clean_input(upipe);
     upipe_ts_encaps_clean_output(upipe);
     upipe_ts_encaps_clean_ubuf_mgr(upipe);
     upipe_ts_encaps_clean_uref_mgr(upipe);

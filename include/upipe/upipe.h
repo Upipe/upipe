@@ -37,6 +37,7 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
+#include <upipe/urequest.h>
 #include <upipe/udict_dump.h>
 
 #include <stdint.h>
@@ -66,11 +67,11 @@ enum upipe_command {
     /*
      * Global commands
      */
-    /** sends a probe to attach a uref manager (void) */
+    /** sends a request to attach a uref manager (void) */
     UPIPE_ATTACH_UREF_MGR,
-    /** sends a probe to attach a upump manager (void) */
+    /** sends a request to attach a upump manager (void) */
     UPIPE_ATTACH_UPUMP_MGR,
-    /** sends a probe to attach a uclock (void) */
+    /** sends a request to attach a uclock (void) */
     UPIPE_ATTACH_UCLOCK,
     /** gets uniform resource identifier (const char **) */
     UPIPE_GET_URI,
@@ -82,14 +83,20 @@ enum upipe_command {
     UPIPE_SET_OPTION,
 
     /*
-     * Input-related commands
+     * Input-related commands, normally called by the upstream pipe
      */
-    /** amend ubuf flow format (struct uref *) */
-    UPIPE_AMEND_FLOW_FORMAT,
+    /** registers a request (struct urequest *) */
+    UPIPE_REGISTER_REQUEST,
+    /** unregisters a request (struct urequest *) */
+    UPIPE_UNREGISTER_REQUEST,
     /** sets input flow definition (struct uref *) */
     UPIPE_SET_FLOW_DEF,
-    /** suggests an input flow definition (struct uref *) */
-    UPIPE_SUGGEST_FLOW_DEF,
+    /** gets the length of the internal queue (unsigned int *) */
+    UPIPE_GET_MAX_LENGTH,
+    /** sets the length of the internal queue (unsigned int) */
+    UPIPE_SET_MAX_LENGTH,
+    /** flushes all currently held buffers and unblock the sources (void) */
+    UPIPE_FLUSH,
 
     /*
      * Output-related commands
@@ -98,7 +105,7 @@ enum upipe_command {
     UPIPE_GET_OUTPUT,
     /** sets output (struct upipe *) */
     UPIPE_SET_OUTPUT,
-    /** sends a probe to attach a ubuf manager (void) */
+    /** sends a request to attach a ubuf manager (void) */
     UPIPE_ATTACH_UBUF_MGR,
     /** gets output flow definition (struct uref **) */
     UPIPE_GET_FLOW_DEF,
@@ -114,12 +121,6 @@ enum upipe_command {
     /*
      * Sink elements commands
      */
-    /** gets the length of the internal queue (unsigned int *) */
-    UPIPE_SINK_GET_MAX_LENGTH,
-    /** sets the length of the internal queue (unsigned int) */
-    UPIPE_SINK_SET_MAX_LENGTH,
-    /** flushes all currently held buffers and unblock the sources (void) */
-    UPIPE_SINK_FLUSH,
     /** gets delay applied to systime attribute (uint64_t *) */
     UPIPE_SINK_GET_DELAY,
     /** sets delay applied to systime attribute (uint64_t) */
@@ -309,42 +310,6 @@ static inline struct upipe *upipe_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_alloc_va(mgr, uprobe, signature, args);
     va_end(args);
     return upipe;
-}
-
-/** @This allocates and initializes a pipe which is designed to accept no
- * argument.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param mgr management structure for this pipe type
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_void_alloc(struct upipe_mgr *mgr,
-                                             struct uprobe *uprobe)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_VOID_SIGNATURE);
-}
-
-/** @This allocates and initializes a pipe which is designed to accept an
- * output flow definition.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param mgr management structure for this pipe type
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the output
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_alloc(struct upipe_mgr *mgr,
-                                             struct uprobe *uprobe,
-                                             struct uref *flow_def)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_FLOW_SIGNATURE, flow_def);
 }
 
 /** @This initializes the public members of a pipe.
@@ -686,22 +651,40 @@ static inline int upipe_throw_sink_end(struct upipe *upipe)
     return upipe_throw(upipe, UPROBE_SINK_END);
 }
 
-/** @This throws an event asking for a uref manager. Note that all parameters
- * belong to the caller, so there is no need to @ref uref_mgr_use the given
- * manager.
+/** @This throws an event asking for an output, either because no output
+ * pipe has been defined, or because the output pipe rejected the flow
+ * definition.
  *
  * @param upipe description structure of the pipe
- * @param uref_mgr_p filled in with a pointer to the uref manager
+ * @param flow_def output flow definition
  * @return an error code
  */
-static inline int upipe_throw_need_uref_mgr(struct upipe *upipe,
-        struct uref_mgr **uref_mgr_p)
+static inline int upipe_throw_need_output(struct upipe *upipe,
+                                          struct uref *flow_def)
 {
-    upipe_dbg(upipe, "throw need uref mgr");
-    int err = upipe_throw(upipe, UPROBE_NEED_UREF_MGR, uref_mgr_p);
-    upipe_dbg_va(upipe, "got uref_mgr %p with error code 0x%x",
-                 *uref_mgr_p, err);
-    return err;
+    if (flow_def == NULL || flow_def->udict == NULL)
+        upipe_dbg(upipe, "throw need output (NULL)");
+    else {
+        upipe_dbg(upipe, "throw need output");
+        udict_dump(flow_def->udict, upipe->uprobe);
+    }
+    return upipe_throw(upipe, UPROBE_NEED_OUTPUT, flow_def);
+}
+
+/** @This throws an event asking to provide a urequest. It is thrown by a
+ * pipe when it has no output, or when it would make no sense to forward the
+ * request to the output (for instance a request for a ubuf manager when the
+ * pipe is a decoder or encoder).
+ *
+ * @param upipe description structure of the pipe
+ * @param urequest request to provide
+ * @return an error code
+ */
+static inline int upipe_throw_provide_request(struct upipe *upipe,
+                                              struct urequest *urequest)
+{
+    upipe_dbg_va(upipe, "throw provide request type %d", urequest->type);
+    return upipe_throw(upipe, UPROBE_PROVIDE_REQUEST, urequest);
 }
 
 /** @This throws an event asking for a upump manager. Note that all parameters
@@ -746,50 +729,6 @@ static inline int upipe_throw_thaw_upump_mgr(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw thaw upump mgr");
     return upipe_throw(upipe, UPROBE_THAW_UPUMP_MGR);
-}
-
-/** @This throws an event asking for a uclock. Note that all parameters
- * belong to the caller, so there is no need to @ref uclock_use the given
- * uclock.
- *
- * @param upipe description structure of the pipe
- * @param uclock_p filled in with a pointer to the uclock
- * @return an error code
- */
-static inline int upipe_throw_need_uclock(struct upipe *upipe,
-        struct uclock **uclock_p)
-{
-    upipe_dbg(upipe, "throw need uclock");
-    int err = upipe_throw(upipe, UPROBE_NEED_UCLOCK, uclock_p);
-    upipe_dbg_va(upipe, "got uclock %p with error code 0x%x", *uclock_p, err);
-    return err;
-}
-
-/** @This throws an event proposing a new flow format. If the ubuf_mgr_p
- * parameter is not NULL, its also requests a ubuf manager. Note that all
- * parameters belong to the caller, so there is no need to @ref ubuf_mgr_use
- * the given manager.
- *
- * @param upipe description structure of the pipe
- * @param flow_format format of this flow
- * @param ubuf_mgr_p filled in with a pointer to an ubuf_mgr, if not NULL
- * @return an error code
- */
-static inline int upipe_throw_new_flow_format(struct upipe *upipe,
-        struct uref *flow_format, struct ubuf_mgr **ubuf_mgr_p)
-{
-    if (flow_format == NULL || flow_format->udict == NULL)
-        upipe_dbg(upipe, "throw new flow format (NULL)");
-    else {
-        upipe_dbg(upipe, "throw new flow format");
-        udict_dump(flow_format->udict, upipe->uprobe);
-    }
-    int err = upipe_throw(upipe, UPROBE_NEW_FLOW_FORMAT, flow_format,
-                                     ubuf_mgr_p);
-    if (ubuf_mgr_p != NULL)
-        upipe_dbg_va(upipe, "got ubuf_mgr %p with error code 0x%x", *ubuf_mgr_p,
-                     err);
-    return err;
 }
 
 /** @This throws an event declaring a new flow definition on the output.
@@ -845,24 +784,6 @@ static inline int upipe_split_throw_update(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw split update");
     return upipe_throw(upipe, UPROBE_SPLIT_UPDATE);
-}
-
-/** @This throws an event asking to validate the output flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def proposed output flow definition
- * @return an error code
- */
-static inline int upipe_filter_throw_suggest_flow_def(struct upipe *upipe,
-                                                      struct uref *flow_def)
-{
-    if (flow_def == NULL || flow_def->udict == NULL)
-        upipe_dbg(upipe, "throw suggest flow def (NULL)");
-    else {
-        upipe_dbg(upipe, "throw suggest flow def");
-        udict_dump(flow_def->udict, upipe->uprobe);
-    }
-    return upipe_throw(upipe, UPROBE_FILTER_SUGGEST_FLOW_DEF, flow_def);
 }
 
 /** @This throws an event telling that a pipe synchronized on its input.
@@ -1038,13 +959,12 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
                        flow definition of the output)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
                        pipe acting as output (unsafe, use only internally))
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, max_length, MAX_LENGTH, unsigned int,
+                       max length of the internal queue)
 
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
                        unsigned int, read size of the source)
 
-UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, max_length, MAX_LENGTH,
-                       unsigned int,
-                       max length of the internal queue)
 UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
                        delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
@@ -1075,7 +995,7 @@ static inline int upipe_set_option(struct upipe *upipe, const char *option,
     return upipe_control(upipe, UPIPE_SET_OPTION, option, value);
 }
 
-/** @This sends a probe to attach a uref manager.
+/** @This sends a request to attach a uref manager.
  *
  * @param upipe description structure of the pipe
  * @return an error code
@@ -1085,7 +1005,7 @@ static inline int upipe_attach_uref_mgr(struct upipe *upipe)
     return upipe_control(upipe, UPIPE_ATTACH_UREF_MGR);
 }
 
-/** @This sends a probe to attach a upump manager.
+/** @This sends a request to attach a upump manager.
  *
  * @param upipe description structure of the pipe
  * @return an error code
@@ -1095,7 +1015,7 @@ static inline int upipe_attach_upump_mgr(struct upipe *upipe)
     return upipe_control(upipe, UPIPE_ATTACH_UPUMP_MGR);
 }
 
-/** @This sends a probe to attach a uclock.
+/** @This sends a request to attach a uclock.
  *
  * @param upipe description structure of the pipe
  * @return an error code
@@ -1105,7 +1025,7 @@ static inline int upipe_attach_uclock(struct upipe *upipe)
     return upipe_control(upipe, UPIPE_ATTACH_UCLOCK);
 }
 
-/** @This sends a probe to attach a ubuf manager.
+/** @This sends a request to attach a ubuf manager.
  *
  * @param upipe description structure of the pipe
  * @return an error code
@@ -1115,41 +1035,28 @@ static inline int upipe_attach_ubuf_mgr(struct upipe *upipe)
     return upipe_control(upipe, UPIPE_ATTACH_UBUF_MGR);
 }
 
-/** @This asks the pipe to review the given ubuf format, and optionally
- * amend it with additional attributes. Allowed attributes are:
- * @list
- * @item @ref uref_block_flow_set_align
- * @item @ref uref_block_flow_set_align_offset
- * @item @ref uref_pic_flow_set_hmprepend
- * @item @ref uref_pic_flow_set_hmappend
- * @item @ref uref_pic_flow_set_vprepend
- * @item @ref uref_pic_flow_set_vappend
- * @item @ref uref_pic_flow_set_align
- * @item @ref uref_pic_flow_set_align_hmoffset
- * @end list
+/** @This registers a request.
  *
  * @param upipe description structure of the pipe
- * @param flow_format proposed flow format, to be amended by the pipe (and
- * optionally its outputs)
+ * @param urequest description structure of the request
  * @return an error code
  */
-static inline int upipe_amend_flow_format(struct upipe *upipe,
-                                          struct uref *flow_format)
+static inline int upipe_register_request(struct upipe *upipe,
+                                         struct urequest *urequest)
 {
-    return upipe_control(upipe, UPIPE_AMEND_FLOW_FORMAT, flow_format);
+    return upipe_control(upipe, UPIPE_REGISTER_REQUEST, urequest);
 }
 
-/** @This asks the pipe to modify the given flow definition so that it would
- * be acceptable by set_flow_def.
+/** @This unregisters a request.
  *
  * @param upipe description structure of the pipe
- * @param flow_def proposed flow definition, to be modified by the pipe
+ * @param urequest description structure of the request
  * @return an error code
  */
-static inline int upipe_suggest_flow_def(struct upipe *upipe,
-                                         struct uref *flow_def)
+static inline int upipe_unregister_request(struct upipe *upipe,
+                                           struct urequest *urequest)
 {
-    return upipe_control(upipe, UPIPE_SUGGEST_FLOW_DEF, flow_def);
+    return upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest);
 }
 
 /** @This flushes all currently held buffers, and unblocks the sources.
@@ -1157,9 +1064,15 @@ static inline int upipe_suggest_flow_def(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static inline int upipe_sink_flush(struct upipe *upipe)
+static inline int upipe_flush(struct upipe *upipe)
 {
-    return upipe_control(upipe, UPIPE_SINK_FLUSH);
+    return upipe_control(upipe, UPIPE_FLUSH);
+}
+
+/** @deprecated @see upipe_flush */
+static inline UBASE_DEPRECATED int upipe_sink_flush(struct upipe *upipe)
+{
+    return upipe_flush(upipe);
 }
 
 /** @This iterates over the list of possible output flow definitions.
@@ -1206,476 +1119,358 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }
 
-/** @This allocates and initializes a subpipe which is designed to accept no
- * argument.
+/** @This declares ten functions to allocate pipes with a certain pipe
+ * allocator.
  *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
+ * Supposing the name of the allocator is upipe_foo, it declares:
+ * @list
+ * @item @code
+ *  struct upipe *upipe_foo_alloc(struct upipe_mgr *upipe_mgr,
+ *                                struct uprobe *uprobe, ...)
+ * @end code
+ * The basic pipe allocator.
  *
- * @param upipe structure of the super-pipe
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @return pointer to allocated subpipe, or NULL in case of failure
+ * @item @code
+ *  struct upipe *upipe_foo_alloc_output(struct upipe *upipe,
+ *                                       struct upipe_mgr *upipe_mgr,
+ *                                       struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc() which additionally sets the allocated
+ * pipe as the output of the upipe argument.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_chain_output(struct upipe *upipe,
+ *                                       struct upipe_mgr *upipe_mgr,
+ *                                       struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_output() which additionally releases the
+ * upipe argument.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_alloc_input(struct upipe *upipe,
+ *                                      struct upipe_mgr *upipe_mgr,
+ *                                      struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc() which additionally sets the upipe argument
+ * as the output of the allocated pipe.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_chain_input(struct upipe *upipe,
+ *                                      struct upipe_mgr *upipe_mgr,
+ *                                      struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_input() which additionally releases the
+ * upipe argument.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_alloc_sub(struct upipe *super_pipe,
+ *                                    struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc() which retrieves the subpipe manager from the
+ * given super-pipe.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_alloc_output_sub(struct upipe *upipe,
+ *                                           struct upipe *super_pipe,
+ *                                           struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_sub() which additionally sets the allocated
+ * pipe as the output of the upipe argument.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_chain_output_sub(struct upipe *upipe,
+ *                                           struct upipe *super_pipe,
+ *                                           struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_output_sub() which additionally releases the
+ * upipe argument.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_alloc_input_sub(struct upipe *upipe,
+ *                                          struct upipe *super_pipe,
+ *                                          struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_sub() which additionally sets the upipe argument
+ * as the output of the allocated pipe.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_chain_input_sub(struct upipe *upipe,
+ *                                          struct upipe *super_pipe,
+ *                                          struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_input() which additionally releases the
+ * upipe argument.
+ * @end list
+ *
+ * Please note that you must declare upipe_foo_alloc before this helper,
+ * and the macros ARGS_DECL and ARGS must be filled respectively with the
+ * declaration of arguments of upipe_foo_alloc, and the use of them in the
+ * call to uprobe_foo_alloc (arguments after uprobe).
+ *
+ * @param GROUP name of the allocator
  */
-static inline struct upipe *upipe_void_alloc_sub(struct upipe *upipe,
-                                                 struct uprobe *uprobe)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_void_alloc(sub_mgr, uprobe);
+#define UPIPE_HELPER_ALLOC(GROUP, SIGNATURE)                                \
+/** @This allocates and initializes a pipe from the given manager.          \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param mgr management structure for this pipe type                       \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated pipe, or NULL in case of failure            \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc(struct upipe_mgr *mgr,                            \
+                          struct uprobe *uprobe  ARGS_DECL)                 \
+{                                                                           \
+    return upipe_alloc(mgr, uprobe, SIGNATURE  ARGS);                       \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, and sets it as the   \
+ * output of the given pipe.                                                \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the existing pipe                  \
+ * @param upipe_mgr manager for the output pipe                             \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated output pipe (which must be stored or        \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc_output(struct upipe *upipe,                       \
+                                 struct upipe_mgr *upipe_mgr,               \
+                                 struct uprobe *uprobe  ARGS_DECL)          \
+{                                                                           \
+    struct upipe *output = upipe_##GROUP##_alloc(upipe_mgr, uprobe  ARGS);  \
+    if (unlikely(output == NULL)) {                                         \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
+    if (unlikely(!ubase_check(upipe_set_output(upipe, output)))) {          \
+        upipe_release(output);                                              \
+        return NULL;                                                        \
+    }                                                                       \
+    return output;                                                          \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, sets it as the       \
+ * output of the given pipe, and releases the latter.                       \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe (belongs to the callee)   \
+ * @param upipe_mgr manager for the output pipe                             \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated output pipe (which must be stored or        \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_output(struct upipe *upipe,                       \
+                                 struct upipe_mgr *upipe_mgr,               \
+                                 struct uprobe *uprobe  ARGS_DECL)          \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return NULL;                                                        \
+    struct upipe *output = upipe_##GROUP##_alloc_output(upipe, upipe_mgr,   \
+                                                        uprobe  ARGS);      \
+    upipe_release(upipe);                                                   \
+    return output;                                                          \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, and sets it as the   \
+ * input of the given pipe.                                                 \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param upipe_mgr manager for the input pipe                              \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated input pipe (which must be stored or         \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc_input(struct upipe *upipe,                        \
+                                struct upipe_mgr *upipe_mgr,                \
+                                struct uprobe *uprobe  ARGS_DECL)           \
+{                                                                           \
+    struct upipe *input = upipe_##GROUP##_alloc(upipe_mgr, uprobe  ARGS);   \
+    if (unlikely(input == NULL)) {                                          \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
+    if (unlikely(!ubase_check(upipe_set_output(input, upipe)))) {           \
+        upipe_release(input);                                               \
+        return NULL;                                                        \
+    }                                                                       \
+    return input;                                                           \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, sets it as the       \
+ * input of the given pipe, and releases it.                                \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe (belongs to the callee)   \
+ * @param upipe_mgr manager for the input pipe                              \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated input pipe (which must be stored or         \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_input(struct upipe *upipe,                        \
+                                struct upipe_mgr *upipe_mgr,                \
+                                struct uprobe *uprobe  ARGS_DECL)           \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return NULL;                                                        \
+    struct upipe *input = upipe_##GROUP##_alloc_input(upipe, upipe_mgr,     \
+                                                      uprobe  ARGS);        \
+    upipe_release(upipe);                                                   \
+    return input;                                                           \
+}                                                                           \
+/** @This allocates and initializes a subpipe from the given super-pipe.    \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param super_upipe description structure of the super-pipe               \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated subpipe, or NULL in case of failure         \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc_sub(struct upipe *super_pipe,                     \
+                              struct uprobe *uprobe  ARGS_DECL)             \
+{                                                                           \
+    struct upipe_mgr *sub_mgr;                                              \
+    if (unlikely(!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr)))) {  \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
+    return upipe_##GROUP##_alloc(sub_mgr, uprobe  ARGS);                    \
+}                                                                           \
+/** @This allocates a subpipe from the given super-pipe, and sets it as the \
+ * output of the given pipe.                                                \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param super_pipe description structure of the super-pipe                \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated output subpipe (which must be stored or     \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc_output_sub(struct upipe *upipe,                   \
+                                     struct upipe *super_pipe,              \
+                                     struct uprobe *uprobe  ARGS_DECL)      \
+{                                                                           \
+    struct upipe_mgr *sub_mgr;                                              \
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {            \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
+    return upipe_##GROUP##_alloc_output(upipe, sub_mgr, uprobe  ARGS);      \
+}                                                                           \
+/** @This allocates a subpipe from the given super-pipe, sets it as the     \
+ * output of the given pipe, and releases it.                               \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param super_pipe description structure of the super-pipe                \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated output subpipe (which must be stored or     \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_output_sub(struct upipe *upipe,                   \
+                                     struct upipe *super_pipe,              \
+                                     struct uprobe *uprobe  ARGS_DECL)      \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return NULL;                                                        \
+    struct upipe *output = upipe_##GROUP##_alloc_output_sub(upipe,          \
+            super_pipe, uprobe  ARGS);                                      \
+    upipe_release(upipe);                                                   \
+    return output;                                                          \
+}                                                                           \
+/** @This allocates a subpipe from the given super-pipe, and sets it as the \
+ * input of the given pipe.                                                 \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param super_pipe description structure of the super-pipe                \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated input pipe (which must be stored or         \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_alloc_input_sub(struct upipe *upipe,                    \
+                                    struct upipe *super_pipe,               \
+                                    struct uprobe *uprobe  ARGS_DECL)       \
+{                                                                           \
+    struct upipe_mgr *sub_mgr;                                              \
+    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {            \
+        uprobe_release(uprobe);                                             \
+        return NULL;                                                        \
+    }                                                                       \
+    return upipe_##GROUP##_alloc_input(upipe, sub_mgr, uprobe  ARGS);       \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, sets it as the       \
+ * input of the given pipe, and releases it.                                \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe (belongs to the callee)   \
+ * @param super_pipe description structure of the super-pipe                \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated input pipe (which must be stored or         \
+ * released), or NULL in case of failure                                    \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_input_sub(struct upipe *upipe,                    \
+                                    struct upipe *super_pipe,               \
+                                    struct uprobe *uprobe  ARGS_DECL)       \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return NULL;                                                        \
+    struct upipe *input = upipe_##GROUP##_alloc_input_sub(upipe,            \
+            super_pipe, uprobe  ARGS);                                      \
+    upipe_release(upipe);                                                   \
+    return input;                                                           \
 }
 
-/** @This allocates and initializes a subpipe which is designed to accept an
- * output flow definition.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe structure of the super-pipe
- * @param uprobe structure used to raise events (belongs to the caller and
- * must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the output
- * @return pointer to allocated subpipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_alloc_sub(struct upipe *upipe,
-                                                 struct uprobe *uprobe,
-                                                 struct uref *flow_def)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(upipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_flow_alloc(sub_mgr, uprobe, flow_def);
-}
+/** @hidden */
+#define ARGS_DECL
+/** @hidden */
+#define ARGS
+UPIPE_HELPER_ALLOC(void, UPIPE_VOID_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
-/** @This allocates a new pipe from the given manager, designed to accept no
- * argument, and sets it as the output of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the output pipe
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_void_alloc_output(struct upipe *upipe,
-                                                    struct upipe_mgr *upipe_mgr,
-                                                    struct uprobe *uprobe)
-{
-    struct upipe *output = upipe_void_alloc(upipe_mgr, uprobe);
-    if (unlikely(output == NULL)) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-
-    struct uref *flow_def;
-    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_check(upipe_set_flow_def(output, flow_def))) ||
-                 !ubase_check(upipe_set_output(upipe, output)))) {
-        upipe_dbg_va(upipe, "failed allocating output");
-        udict_dump(flow_def->udict, upipe->uprobe);
-        upipe_release(output);
-        return NULL;
-    }
-
-    return output;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept no
- * argument, sets it as the output of the given pipe, and releases it.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe (released afterwards)
- * @param upipe_mgr manager for the output pipe
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_void_chain_output(struct upipe *upipe,
-                                                    struct upipe_mgr *upipe_mgr,
-                                                    struct uprobe *uprobe)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *output = upipe_void_alloc_output(upipe, upipe_mgr, uprobe);
-    upipe_release(upipe);
-    return output;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept an
- * output flow definition, and sets it as the output of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the output pipe
- * @param flow_def_output flow definition of the output
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_alloc_output(struct upipe *upipe,
-                                                    struct upipe_mgr *upipe_mgr,
-                                                    struct uprobe *uprobe,
-                                                    struct uref *flow_def_output)
-{
-    struct upipe *output = upipe_flow_alloc(upipe_mgr, uprobe, flow_def_output);
-    if (unlikely(output == NULL)) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-
-    struct uref *flow_def;
-    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_check(upipe_set_flow_def(output, flow_def))) ||
-                 !ubase_check(upipe_set_output(upipe, output)))) {
-        upipe_release(output);
-        return NULL;
-    }
-
-    return output;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept an
- * output flow definition, sets it as the output of the given pipe, and releases
- * it.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the output pipe
- * @param flow_def_output flow definition of the output
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_chain_output(struct upipe *upipe,
-                                                    struct upipe_mgr *upipe_mgr,
-                                                    struct uprobe *uprobe,
-                                                    struct uref *flow_def_output)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *output = upipe_flow_alloc_output(upipe, upipe_mgr, uprobe,
-                                                   flow_def_output);
-    upipe_release(upipe);
-    return output;
-}
-
-/** @This allocates a subpipe from the given super-pipe, and sets it as the
- * output of the given pipe.
- *
- * Please note that the super-pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the output to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @return pointer to allocated output subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_void_alloc_output_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_void_alloc_output(upipe, sub_mgr, uprobe);
-}
-
-/** @This allocates a subpipe from the given super-pipe, sets it as the
- * output of the given pipe, and releases it.
- *
- * Please note that the super-pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the output to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @return pointer to allocated output subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_void_chain_output_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *output = upipe_void_alloc_output_sub(upipe, super_pipe,
-                                                       uprobe);
-    upipe_release(upipe);
-    return output;
-}
-
-/** @This allocates a subpipe from the given super-pipe, with a flow def output
- * argument, and sets it as the output of the given pipe.
- *
- * Please note that the super-pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the output to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the output
- * @return pointer to allocated output subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_flow_alloc_output_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe, struct uref *flow_def)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_flow_alloc_output(upipe, sub_mgr, uprobe, flow_def);
-}
-
-/** @This allocates a subpipe from the given super-pipe, with a flow def output
- * argument, sets it as the output of the given pipe, and releases it.
- *
- * Please note that the super-pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the output to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the output
- * @return pointer to allocated output subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_flow_chain_output_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe, struct uref *flow_def)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *output = upipe_flow_alloc_output_sub(upipe, super_pipe,
-                                                       uprobe, flow_def);
-    upipe_release(upipe);
-    return output;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept no
- * argument, and sets it as the input of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the input pipe
- * @return pointer to allocated input pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_void_alloc_input(struct upipe *upipe,
-                                                   struct upipe_mgr *upipe_mgr,
-                                                   struct uprobe *uprobe)
-{
-    struct upipe *input = upipe_void_alloc(upipe_mgr, uprobe);
-    if (unlikely(input == NULL)) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-
-    struct uref *flow_def;
-    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_check(upipe_set_flow_def(input, flow_def))) ||
-                 !ubase_check(upipe_set_output(input, upipe)))) {
-        upipe_release(input);
-        return NULL;
-    }
-
-    return input;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept no
- * argument, sets it as the input of the given pipe, and releases it.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe (released afterwards)
- * @param upipe_mgr manager for the output pipe
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_void_chain_input(struct upipe *upipe,
-                                                   struct upipe_mgr *upipe_mgr,
-                                                   struct uprobe *uprobe)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *input = upipe_void_alloc_input(upipe, upipe_mgr, uprobe);
-    upipe_release(upipe);
-    return input;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept an
- * output flow definition, and sets it as the input of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the input pipe
- * @param flow_def_input flow definition of the input
- * @return pointer to allocated input pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_alloc_input(struct upipe *upipe,
-                                                   struct upipe_mgr *upipe_mgr,
-                                                   struct uprobe *uprobe,
-                                                   struct uref *flow_def_output)
-{
-    struct upipe *input = upipe_flow_alloc(upipe_mgr, uprobe, flow_def_output);
-    if (unlikely(input == NULL)) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-
-    struct uref *flow_def;
-    if (unlikely((ubase_check(upipe_get_flow_def(upipe, &flow_def)) &&
-                  !ubase_check(upipe_set_flow_def(input, flow_def))) ||
-                 !ubase_check(upipe_set_output(input, upipe)))) {
-        upipe_release(input);
-        return NULL;
-    }
-
-    return input;
-}
-
-/** @This allocates a new pipe from the given manager, designed to accept an
- * output flow definition, sets it as the input of the given pipe, and releases
- * it.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param upipe_mgr manager for the output pipe
- * @param flow_def_output flow definition of the output
- * @return pointer to allocated output pipe (which must be stored or released),
- * or NULL in case of failure
- */
-static inline struct upipe *upipe_flow_chain_input(struct upipe *upipe,
-                                                   struct upipe_mgr *upipe_mgr,
-                                                   struct uprobe *uprobe,
-                                                   struct uref *flow_def_output)
-{
-    if (unlikely(upipe == NULL))
-        return NULL;
-    struct upipe *input = upipe_flow_alloc_input(upipe, upipe_mgr, uprobe,
-                                                 flow_def_output);
-    upipe_release(upipe);
-    return input;
-}
-
-/** @This allocates a subpipe from the given super-pipe, and sets it as the
- * input of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the input to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @return pointer to allocated input subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_void_alloc_input_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_void_alloc_input(upipe, sub_mgr, uprobe);
-}
-
-/** @This allocates a subpipe from the given super-pipe, with a flow def input
- * argument, and sets it as the input of the given pipe.
- *
- * Please note that the output pipe must accept @ref upipe_set_flow_def control
- * command.
- *
- * Please note that this function does not _use() the probe, so if you want
- * to reuse an existing probe, you have to use it first.
- *
- * @param upipe description structure of the pipe
- * @param super_pipe structure of the super-pipe
- * @param uprobe structure used by the input to raise events (belongs to the
- * caller and must be kept alive for all the duration of the pipe)
- * @param flow_def flow definition of the input
- * @return pointer to allocated input subpipe (which must be stored or
- * released), or NULL in case of failure
- */
-static inline struct upipe *
-    upipe_flow_alloc_input_sub(struct upipe *upipe, struct upipe *super_pipe,
-                                struct uprobe *uprobe, struct uref *flow_def)
-{
-    struct upipe_mgr *sub_mgr;
-    if (!ubase_check(upipe_get_sub_mgr(super_pipe, &sub_mgr))) {
-        uprobe_release(uprobe);
-        return NULL;
-    }
-    return upipe_flow_alloc_input(upipe, sub_mgr, uprobe, flow_def);
-}
+/** @hidden */
+#define ARGS_DECL , struct uref *flow_def
+/** @hidden */
+#define ARGS , flow_def
+UPIPE_HELPER_ALLOC(flow, UPIPE_FLOW_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

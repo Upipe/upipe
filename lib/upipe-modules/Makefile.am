@@ -8,6 +8,9 @@ libupipe_modules_la_SOURCES = \
 	upipe_trickplay.c \
 	upipe_dup.c \
 	upipe_idem.c \
+	upipe_null.c \
+	upipe_queue.c \
+	upipe_queue.h \
 	upipe_queue_source.c \
 	upipe_queue_sink.c \
 	upipe_udp_source.c \
@@ -24,14 +27,13 @@ libupipe_modules_la_SOURCES = \
 	upipe_noclock.c \
 	upipe_nodemux.c \
 	upipe_delay.c \
-	upipe_null.c \
 	upipe_skip.c \
 	upipe_htons.c \
 	upipe_chunk_stream.c \
 	upipe_setflowdef.c \
 	upipe_setattr.c \
-	upipe_match_attr.c \
 	upipe_setrap.c \
+	upipe_match_attr.c \
 	upipe_blit.c \
 	upipe_audio_split.c \
 	upipe_videocont.c \

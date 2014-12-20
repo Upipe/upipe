@@ -51,6 +51,8 @@
 #define CR_TOLERANCE (UCLOCK_FREQ / 1000)
 
 /** @hidden */
+static int upipe_ts_join_check(struct upipe *upipe, struct uref *unused);
+/** @hidden */
 static void upipe_ts_join_build_flow_def(struct upipe *upipe);
 
 /** @internal @This is the private context of a ts join pipe. */
@@ -60,13 +62,17 @@ struct upipe_ts_join {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** max latency of the subpipes */
     uint64_t latency;
@@ -84,8 +90,11 @@ struct upipe_ts_join {
 UPIPE_HELPER_UPIPE(upipe_ts_join, upipe, UPIPE_TS_JOIN_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_join, urefcount, upipe_ts_join_free)
 UPIPE_HELPER_VOID(upipe_ts_join)
-UPIPE_HELPER_UREF_MGR(upipe_ts_join, uref_mgr)
-UPIPE_HELPER_OUTPUT(upipe_ts_join, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_join, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_ts_join, uref_mgr, uref_mgr_request,
+                      upipe_ts_join_check,
+                      upipe_ts_join_register_output_request,
+                      upipe_ts_join_unregister_output_request)
 
 /** @internal @This is the private context of an input of a ts_join pipe. */
 struct upipe_ts_join_sub {
@@ -270,6 +279,20 @@ static int upipe_ts_join_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct upipe_ts_join *upipe_ts_join =
+                upipe_ts_join_from_sub_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_join_alloc_output_proxy(
+                    upipe_ts_join_to_upipe(upipe_ts_join), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct upipe_ts_join *upipe_ts_join =
+                upipe_ts_join_from_sub_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_join_free_output_proxy(
+                    upipe_ts_join_to_upipe(upipe_ts_join), request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_join_sub_set_flow_def(upipe, flow_def);
@@ -278,11 +301,11 @@ static int upipe_ts_join_sub_control(struct upipe *upipe,
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_join_sub_get_super(upipe, p);
         }
-        case UPIPE_SINK_GET_MAX_LENGTH: {
+        case UPIPE_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_ts_join_sub_get_max_length(upipe, p);
         }
-        case UPIPE_SINK_SET_MAX_LENGTH: {
+        case UPIPE_SET_MAX_LENGTH: {
             unsigned int max_length = va_arg(args, unsigned int);
             return upipe_ts_join_sub_set_max_length(upipe, max_length);
         }
@@ -355,8 +378,7 @@ static struct upipe *upipe_ts_join_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
 
-    if (ubase_check(upipe_ts_join_check_uref_mgr(upipe)))
-        upipe_ts_join_build_flow_def(upipe);
+    upipe_ts_join_require_uref_mgr(upipe);
     return upipe;
 }
 
@@ -394,13 +416,11 @@ static struct upipe_ts_join_sub *upipe_ts_join_find_input(struct upipe *upipe)
 static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_join *upipe_ts_join = upipe_ts_join_from_upipe(upipe);
+    if (unlikely(upipe_ts_join->flow_def == NULL))
+        return;
+
     struct upipe_ts_join_sub *input;
     while ((input = upipe_ts_join_find_input(upipe)) != NULL) {
-        if (unlikely(upipe_ts_join->flow_def == NULL)) {
-            if (unlikely(!ubase_check(upipe_ts_join_check_uref_mgr(upipe))))
-                return;
-        }
-
         if (unlikely(input->last_cr != UINT64_MAX &&
                      input->next_cr + CR_TOLERANCE < input->last_cr))
             upipe_warn_va(upipe_ts_join_sub_to_upipe(input),
@@ -431,6 +451,21 @@ static void upipe_ts_join_mux(struct upipe *upipe, struct upump **upump_p)
     }
 }
 
+/** @internal @This checks if the input may start.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_ts_join_check(struct upipe *upipe, struct uref *unused)
+{
+    assert(unused == NULL);
+
+    upipe_ts_join_build_flow_def(upipe);
+    upipe_ts_join_mux(upipe, NULL);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -442,8 +477,6 @@ static int _upipe_ts_join_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_ts_join_attach_uref_mgr(upipe);
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_join_get_flow_def(upipe, p);

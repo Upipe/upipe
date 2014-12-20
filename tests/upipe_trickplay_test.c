@@ -76,16 +76,15 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** helper phony pipe to test upipe_trickp */
+/** helper phony pipe */
 struct test_pipe {
     unsigned int *count_p;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_trickp */
-static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe,
-                                       uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct test_pipe *test_pipe = malloc(sizeof(struct test_pipe));
     assert(test_pipe != NULL);
@@ -102,9 +101,9 @@ static struct upipe *trickp_test_alloc(struct upipe_mgr *mgr,
     return &test_pipe->upipe;
 }
 
-/** helper phony pipe to test upipe_trickp */
-static void trickp_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct test_pipe *test_pipe = container_of(upipe, struct test_pipe, upipe);
     assert(uref != NULL);
@@ -116,20 +115,32 @@ static void trickp_test_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_trickp */
-static void trickp_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     struct test_pipe *test_pipe = container_of(upipe, struct test_pipe, upipe);
     upipe_clean(upipe);
     free(test_pipe);
 }
 
-/** helper phony pipe to test upipe_trickp */
+/** helper phony pipe */
 static struct upipe_mgr trickp_test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = trickp_test_alloc,
-    .upipe_input = trickp_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 /** helper uclock to test upipe_trickp */
@@ -258,9 +269,9 @@ int main(int argc, char *argv[])
     upipe_release(upipe_trickp_subpic);
     upipe_mgr_release(upipe_trickp_mgr); // nop
 
-    trickp_test_free(upipe_sink_pic);
-    trickp_test_free(upipe_sink_sound);
-    trickp_test_free(upipe_sink_subpic);
+    test_free(upipe_sink_pic);
+    test_free(upipe_sink_sound);
+    test_free(upipe_sink_subpic);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

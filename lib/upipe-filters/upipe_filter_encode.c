@@ -39,7 +39,9 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_bin.h>
+#include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_bin_input.h>
+#include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_encode.h>
 #include <upipe-x264/upipe_x264.h>
@@ -67,12 +69,19 @@ struct upipe_fenc_mgr {
 UBASE_FROM_TO(upipe_fenc_mgr, upipe_mgr, upipe_mgr, mgr)
 UBASE_FROM_TO(upipe_fenc_mgr, urefcount, urefcount, urefcount)
 
+static int upipe_fenc_provide(struct upipe *upipe, struct uref *unused);
+
 /** @internal @This is the private context of a fenc pipe. */
 struct upipe_fenc {
     /** real refcount management structure */
     struct urefcount urefcount_real;
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
+
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** input flow def */
     struct uref *flow_def_input;
@@ -90,6 +99,12 @@ struct upipe_fenc {
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
 
+    /** list of input bin requests */
+    struct uchain input_request_list;
+    /** list of output bin requests */
+    struct uchain output_request_list;
+    /** first inner pipe of the bin (avcdec) */
+    struct upipe *first_inner;
     /** last inner pipe of the bin (avcdec) */
     struct upipe *last_inner;
     /** output */
@@ -102,7 +117,11 @@ struct upipe_fenc {
 UPIPE_HELPER_UPIPE(upipe_fenc, upipe, UPIPE_FENC_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_fenc, "block.")
 UPIPE_HELPER_UREFCOUNT(upipe_fenc, urefcount, upipe_fenc_no_ref)
-UPIPE_HELPER_BIN(upipe_fenc, last_inner_probe, last_inner, output)
+UPIPE_HELPER_UREF_MGR(upipe_fenc, uref_mgr, uref_mgr_request,
+                      upipe_fenc_provide, upipe_throw_provide_request, NULL)
+UPIPE_HELPER_BIN_INPUT(upipe_fenc, first_inner, input_request_list)
+UPIPE_HELPER_BIN_OUTPUT(upipe_fenc, last_inner_probe, last_inner, output,
+                        output_request_list)
 
 UBASE_FROM_TO(upipe_fenc, urefcount, urefcount_real, urefcount_real)
 
@@ -139,6 +158,7 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
     if (unlikely(enc == NULL))
         return UBASE_ERR_INVALID;
 
+    upipe_fenc_store_first_inner(upipe, upipe_use(enc));
     upipe_fenc_store_last_inner(upipe, enc);
     return UBASE_ERR_NONE;
 }
@@ -164,7 +184,9 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc_init_urefcount(upipe);
     urefcount_init(upipe_fenc_to_urefcount_real(upipe_fenc),
                    upipe_fenc_free);
-    upipe_fenc_init_bin(upipe, upipe_fenc_to_urefcount_real(upipe_fenc));
+    upipe_fenc_init_uref_mgr(upipe);
+    upipe_fenc_init_bin_input(upipe);
+    upipe_fenc_init_bin_output(upipe, upipe_fenc_to_urefcount_real(upipe_fenc));
     upipe_fenc->flow_def_input = flow_def_input;
     upipe_fenc->options = NULL;
     upipe_fenc->preset = NULL;
@@ -172,6 +194,7 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc->profile = NULL;
     upipe_fenc->sc_latency = UINT64_MAX;
     upipe_throw_ready(upipe);
+    upipe_fenc_demand_uref_mgr(upipe);
 
     if (unlikely(!ubase_check(upipe_fenc_alloc_inner(upipe)))) {
         upipe_release(upipe);
@@ -181,22 +204,18 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This handles data.
+/** @internal @This allocates the options uref.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param unused unused argument
+ * @return an error code
  */
-static inline void upipe_fenc_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
+static int upipe_fenc_provide(struct upipe *upipe, struct uref *unused)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
-    if (upipe_fenc->last_inner == NULL) {
-        uref_free(uref);
-        return;
-    }
-
-    upipe_input(upipe_fenc->last_inner, uref, upump_p);
+    if (upipe_fenc->uref_mgr != NULL && upipe_fenc->options == NULL)
+        upipe_fenc->options = uref_alloc_control(upipe_fenc->uref_mgr);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -215,6 +234,7 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
             return UBASE_ERR_NONE;
     }
+    upipe_fenc_store_first_inner(upipe, NULL);
     upipe_fenc_store_last_inner(upipe, NULL);
 
     if (unlikely(!ubase_check(upipe_fenc_alloc_inner(upipe))))
@@ -247,6 +267,7 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
         return UBASE_ERR_NONE;
+    upipe_fenc_store_first_inner(upipe, NULL);
     upipe_fenc_store_last_inner(upipe, NULL);
     return UBASE_ERR_INVALID;
 }
@@ -284,12 +305,8 @@ static int upipe_fenc_set_option(struct upipe *upipe,
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     assert(key != NULL);
 
-    if (upipe_fenc->options == NULL) {
-        struct uref_mgr *uref_mgr;
-        UBASE_RETURN(upipe_throw_need_uref_mgr(upipe, &uref_mgr))
-        upipe_fenc->options = uref_alloc_control(uref_mgr);
-        uref_mgr_release(uref_mgr);
-    }
+    if (upipe_fenc->options == NULL)
+        return UBASE_ERR_ALLOC;
 
     if (upipe_fenc->last_inner != NULL) {
         UBASE_RETURN(upipe_set_option(upipe_fenc->last_inner, key, value))
@@ -413,8 +430,13 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
         }
 
         default:
-            return upipe_fenc_control_bin(upipe, command, args);
+            break;
     }
+
+    int err = upipe_fenc_control_bin_input(upipe, command, args);
+    if (err == UBASE_ERR_UNHANDLED)
+        return upipe_fenc_control_bin_output(upipe, command, args);
+    return err;
 }
 
 /** @This frees a upipe.
@@ -433,6 +455,7 @@ static void upipe_fenc_free(struct urefcount *urefcount_real)
     free(upipe_fenc->tune);
     free(upipe_fenc->profile);
     uprobe_clean(&upipe_fenc->last_inner_probe);
+    upipe_fenc_clean_uref_mgr(upipe);
     urefcount_clean(urefcount_real);
     upipe_fenc_clean_urefcount(upipe);
     upipe_fenc_free_flow(upipe);
@@ -445,7 +468,8 @@ static void upipe_fenc_free(struct urefcount *urefcount_real)
 static void upipe_fenc_no_ref(struct upipe *upipe)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
-    upipe_fenc_clean_bin(upipe);
+    upipe_fenc_clean_bin_input(upipe);
+    upipe_fenc_clean_bin_output(upipe);
     urefcount_release(upipe_fenc_to_urefcount_real(upipe_fenc));
 }
 
@@ -520,7 +544,7 @@ struct upipe_mgr *upipe_fenc_mgr_alloc(void)
     fenc_mgr->mgr.refcount = upipe_fenc_mgr_to_urefcount(fenc_mgr);
     fenc_mgr->mgr.signature = UPIPE_FENC_SIGNATURE;
     fenc_mgr->mgr.upipe_alloc = upipe_fenc_alloc;
-    fenc_mgr->mgr.upipe_input = upipe_fenc_input;
+    fenc_mgr->mgr.upipe_input = upipe_fenc_bin_input;
     fenc_mgr->mgr.upipe_control = upipe_fenc_control;
     fenc_mgr->mgr.upipe_mgr_control = upipe_fenc_mgr_control;
     return upipe_fenc_mgr_to_upipe_mgr(fenc_mgr);

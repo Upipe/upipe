@@ -34,7 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_bin.h>
+#include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
@@ -83,6 +83,8 @@ struct upipe_wsrc {
     struct upipe *source;
     /** queue source (last inner pipe of the bin) */
     struct upipe *out_qsrc;
+    /** list of output bin requests */
+    struct uchain output_request_list;
     /** output */
     struct upipe *output;
 
@@ -92,7 +94,8 @@ struct upipe_wsrc {
 
 UPIPE_HELPER_UPIPE(upipe_wsrc, upipe, UPIPE_WSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_wsrc, urefcount, upipe_wsrc_no_ref)
-UPIPE_HELPER_BIN(upipe_wsrc, last_inner_probe, out_qsrc, output)
+UPIPE_HELPER_BIN_OUTPUT(upipe_wsrc, last_inner_probe, out_qsrc, output,
+                        output_request_list)
 
 UBASE_FROM_TO(upipe_wsrc, urefcount, urefcount_real, urefcount_real)
 
@@ -164,7 +167,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_wsrc_init_urefcount(upipe);
     urefcount_init(upipe_wsrc_to_urefcount_real(upipe_wsrc), upipe_wsrc_free);
-    upipe_wsrc_init_bin(upipe, upipe_wsrc_to_urefcount_real(upipe_wsrc));
+    upipe_wsrc_init_bin_output(upipe, upipe_wsrc_to_urefcount_real(upipe_wsrc));
     upipe_wsrc->source = NULL;
 
     uprobe_init(&upipe_wsrc->proxy_probe, upipe_wsrc_proxy_probe, NULL);
@@ -175,24 +178,25 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     /* output queue */
-    struct upipe *out_qsink = upipe_void_alloc(wsrc_mgr->qsink_mgr,
-            uprobe_pfx_alloc(uprobe_remote, UPROBE_LOG_VERBOSE,
-                             "out_qsink"));
-    if (unlikely(out_qsink == NULL))
-        goto upipe_wsrc_alloc_err3;
-    if (queue_length > UINT8_MAX)
-        upipe_sink_set_max_length(out_qsink, queue_length - UINT8_MAX);
-
     struct upipe *out_qsrc = upipe_qsrc_alloc(wsrc_mgr->qsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_wsrc->qsrc_probe),
                              UPROBE_LOG_VERBOSE, "out_qsrc"),
             queue_length > UINT8_MAX ? UINT8_MAX : queue_length);
-    if (unlikely(out_qsrc == NULL)) {
-        upipe_release(out_qsink);
+    if (unlikely(out_qsrc == NULL))
+        goto upipe_wsrc_alloc_err3;
+
+    struct upipe *out_qsink = upipe_qsink_alloc(wsrc_mgr->qsink_mgr,
+            uprobe_pfx_alloc(uprobe_remote, UPROBE_LOG_VERBOSE,
+                             "out_qsink"),
+            out_qsrc);
+    if (unlikely(out_qsink == NULL)) {
+        upipe_release(out_qsrc);
         goto upipe_wsrc_alloc_err3;
     }
+    if (queue_length > UINT8_MAX)
+        upipe_set_max_length(out_qsink, queue_length - UINT8_MAX);
+
     upipe_use(out_qsrc); /* because of upipe_release in probe */
-    upipe_qsink_set_qsrc(out_qsink, out_qsrc);
     upipe_attach_upump_mgr(out_qsrc);
     upipe_wsrc_store_last_inner(upipe, out_qsrc);
 
@@ -272,7 +276,7 @@ static void upipe_wsrc_no_ref(struct upipe *upipe)
     struct upipe_wsrc *upipe_wsrc = upipe_wsrc_from_upipe(upipe);
     upipe_release(upipe_wsrc->source);
     upipe_wsrc->source = NULL;
-    upipe_wsrc_clean_bin(upipe);
+    upipe_wsrc_clean_bin_output(upipe);
     urefcount_release(upipe_wsrc_to_urefcount_real(upipe_wsrc));
 }
 
@@ -354,7 +358,7 @@ struct upipe_mgr *upipe_wsrc_mgr_alloc(struct upipe_mgr *xfer_mgr)
     wsrc_mgr->mgr.signature = UPIPE_WSRC_SIGNATURE;
     wsrc_mgr->mgr.upipe_alloc = _upipe_wsrc_alloc;
     wsrc_mgr->mgr.upipe_input = NULL;
-    wsrc_mgr->mgr.upipe_control = upipe_wsrc_control_bin;
+    wsrc_mgr->mgr.upipe_control = upipe_wsrc_control_bin_output;
     wsrc_mgr->mgr.upipe_mgr_control = upipe_wsrc_mgr_control;
     return upipe_wsrc_mgr_to_upipe_mgr(wsrc_mgr);
 }

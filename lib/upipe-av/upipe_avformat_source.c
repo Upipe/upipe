@@ -88,13 +88,18 @@ struct upipe_avfsrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
     /** offset between libavformat timestamps and Upipe timestamps */
     int64_t timestamp_offset;
     /** highest Upipe timestamp given to a frame */
@@ -127,13 +132,19 @@ struct upipe_avfsrc {
 UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe, UPIPE_AVFSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_avfsrc, urefcount, upipe_avfsrc_no_input)
 UPIPE_HELPER_VOID(upipe_avfsrc)
-UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr)
+
+UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr, uref_mgr_request, NULL,
+                      upipe_throw_provide_request, NULL)
+UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock, uclock_request, NULL,
+                    upipe_throw_provide_request, NULL)
+
 UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock)
 
 UBASE_FROM_TO(upipe_avfsrc, urefcount, urefcount_real, urefcount_real)
 
+/** @hidden */
+static int upipe_avfsrc_sub_check(struct upipe *upipe, struct uref *flow_format);
 /** @hidden */
 static void upipe_avfsrc_free(struct urefcount *urefcount_real);
 
@@ -147,14 +158,19 @@ struct upipe_avfsrc_sub {
     /** libavformat stream ID */
     uint64_t id;
 
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition */
     struct uref *flow_def;
-    /** true if the flow definition has been sent */
-    bool flow_def_sent;
-    /** ubuf manager for this output */
-    struct ubuf_mgr *ubuf_mgr;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -163,9 +179,14 @@ struct upipe_avfsrc_sub {
 UPIPE_HELPER_UPIPE(upipe_avfsrc_sub, upipe, UPIPE_AVFSRC_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_avfsrc_sub, urefcount, upipe_avfsrc_sub_free)
 UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
-UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, flow_def)
 
+UPIPE_HELPER_OUTPUT(upipe_avfsrc_sub, output, flow_def, output_state,
+                    request_list)
+UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, ubuf_mgr_request,
+                      upipe_avfsrc_sub_check,
+                      upipe_avfsrc_sub_register_output_request,
+                      upipe_avfsrc_sub_unregister_output_request)
+    
 UPIPE_HELPER_SUBPIPE(upipe_avfsrc, upipe_avfsrc_sub, sub, sub_mgr,
                      subs, uchain)
 
@@ -229,7 +250,21 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
 
     upipe_avfsrc_sub->id = id;
     upipe_avfsrc_sub_store_flow_def(upipe, flow_def);
+    upipe_avfsrc_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
     return upipe;
+}
+
+/** @internal @This provides a ubuf_mgr request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_avfsrc_sub_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_avfsrc_sub_store_flow_def(upipe, flow_format);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on an output subpipe of an avfsrc
@@ -244,9 +279,6 @@ static int upipe_avfsrc_sub_control(struct upipe *upipe,
                                     int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_avfsrc_sub_attach_ubuf_mgr(upipe);
-
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_sub_get_flow_def(upipe, p);
@@ -401,9 +433,11 @@ static void upipe_avfsrc_worker(struct upump *upump)
         av_free_packet(&pkt);
         return;
     }
-    if (unlikely(!ubase_check(upipe_avfsrc_sub_check_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output))))) {
-        av_free_packet(&pkt);
-        return;
+    if (unlikely(output->ubuf_mgr == NULL)) {
+        if (unlikely(!upipe_avfsrc_sub_demand_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output), uref_dup(output->flow_def)))) {
+            av_free_packet(&pkt);
+            return;
+        }
     }
 
     struct uref *uref = uref_block_alloc(upipe_avfsrc->uref_mgr,
@@ -859,7 +893,8 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;
 
-    UBASE_RETURN(upipe_avfsrc_check_uref_mgr(upipe))
+    if (unlikely(!upipe_avfsrc_demand_uref_mgr(upipe)))
+        return UBASE_ERR_ALLOC;
     upipe_avfsrc_check_upump_mgr(upipe);
 
     AVDictionary *options = NULL;
@@ -921,15 +956,15 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_avfsrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avfsrc_set_upump(upipe, NULL);
             upipe_avfsrc_abort_av_deal(upipe);
             return upipe_avfsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_avfsrc_set_upump(upipe, NULL);
-            return upipe_avfsrc_attach_uclock(upipe);
+            upipe_avfsrc_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_iterate(upipe, p);
@@ -943,14 +978,12 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
             return upipe_avfsrc_iterate_sub(upipe, p);
         }
 
-        case UPIPE_AVFSRC_GET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
+        case UPIPE_GET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char **content_p = va_arg(args, const char **);
             return _upipe_avfsrc_get_option(upipe, option, content_p);
         }
-        case UPIPE_AVFSRC_SET_OPTION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSRC_SIGNATURE)
+        case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return _upipe_avfsrc_set_option(upipe, option, content);

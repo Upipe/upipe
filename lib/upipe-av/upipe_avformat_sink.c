@@ -624,8 +624,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
  * @param content_p filled in with the content of the option
  * @return an error code
  */
-static int _upipe_get_option(struct upipe *upipe,
-                                     const char *option, const char **content_p)
+static int upipe_avfsink_get_option(struct upipe *upipe,
+                                    const char *option, const char **content_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -646,8 +646,8 @@ static int _upipe_get_option(struct upipe *upipe,
  * @param content content of the option, or NULL to delete it
  * @return an error code
  */
-static int _upipe_set_option(struct upipe *upipe,
-                                     const char *option, const char *content)
+static int upipe_avfsink_set_option(struct upipe *upipe,
+                                    const char *option, const char *content)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     assert(option != NULL);
@@ -836,12 +836,12 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_GET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char **content_p = va_arg(args, const char **);
-            return _upipe_get_option(upipe, option, content_p);
+            return upipe_avfsink_get_option(upipe, option, content_p);
         }
         case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
-            return _upipe_set_option(upipe, option, content);
+            return upipe_avfsink_set_option(upipe, option, content);
         }
         case UPIPE_AVFSINK_GET_MIME: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
@@ -869,6 +869,12 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             return _upipe_avfsink_get_duration(upipe, duration_p);
         }
 
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_avfsink_get_uri(upipe, uri_p);

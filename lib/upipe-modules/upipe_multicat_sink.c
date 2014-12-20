@@ -302,34 +302,6 @@ static int _upipe_multicat_sink_get_path(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This pushes the given upump manager to the (fsink) output
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_multicat_sink_attach_upump_mgr(struct upipe *upipe)
-{
-    struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
-    if (! upipe_multicat_sink->fsink) {
-        UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
-    }
-    return upipe_attach_upump_mgr(upipe_multicat_sink->fsink);
-}
-
-/** @internal @This pushes the given uclock to the (fsink) output
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_multicat_sink_attach_uclock(struct upipe *upipe)
-{
-    struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
-    if (! upipe_multicat_sink->fsink) {
-        UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
-    }
-    return upipe_attach_uclock(upipe_multicat_sink->fsink);
-}
-
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -348,10 +320,16 @@ static int upipe_multicat_sink_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_multicat_sink_set_flow_def(upipe, flow_def);
         }
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+        case UPIPE_ATTACH_UREF_MGR:
         case UPIPE_ATTACH_UPUMP_MGR:
-            return upipe_multicat_sink_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UBUF_MGR:
         case UPIPE_ATTACH_UCLOCK:
-            return upipe_multicat_sink_attach_uclock(upipe);
+            if (!upipe_multicat_sink->fsink) {
+                UBASE_RETURN(_upipe_multicat_sink_output_alloc(upipe));
+            }
+            return upipe_control_va(upipe_multicat_sink->fsink, command, args);
 
         case UPIPE_MULTICAT_SINK_SET_MODE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)

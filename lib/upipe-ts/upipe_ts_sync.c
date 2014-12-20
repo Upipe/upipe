@@ -65,8 +65,10 @@ struct upipe_ts_sync {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** TS packet size */
     size_t ts_size;
@@ -91,7 +93,7 @@ UPIPE_HELPER_VOID(upipe_ts_sync)
 UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)
 
-UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_sync pipe.
  *
@@ -333,6 +335,14 @@ static int upipe_ts_sync_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_sync_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_sync_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_sync_get_flow_def(upipe, p);

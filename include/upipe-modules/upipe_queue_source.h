@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -25,6 +25,11 @@
 
 /** @file
  * @short Upipe source module for queues
+ *
+ * Note that the allocator requires an additional parameter:
+ * @table 2
+ * @item queue_length @item maximum length of the queue (<= 255)
+ * @end table
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_
@@ -41,41 +46,6 @@ extern "C" {
 #include <assert.h>
 
 #define UPIPE_QSRC_SIGNATURE UBASE_FOURCC('q','s','r','c')
-
-/** @internal @This is the structure exported from source to sinks. */
-struct upipe_queue {
-    /** max length of the queue */
-    unsigned int max_length;
-    /** queue */
-    struct uqueue uqueue;
-
-    /** public upipe structure */
-    struct upipe upipe;
-};
-
-/** @internal @This returns a pointer the uqueue structure.
- *
- * @param upipe pointer to upipe structure of type queue source
- * @return pointer to uqueue
- */
-static inline struct uqueue *upipe_queue(struct upipe *upipe)
-{
-    assert(upipe->mgr->signature == UPIPE_QSRC_SIGNATURE);
-    struct upipe_queue *queue = container_of(upipe, struct upipe_queue, upipe);
-    return &queue->uqueue;
-}
-
-/** @internal @This returns the max length of the queue.
- *
- * @param upipe pointer to upipe structure of type queue source
- * @return max length of the queue
- */
-static inline unsigned int upipe_queue_max_length(struct upipe *upipe)
-{
-    assert(upipe->mgr->signature == UPIPE_QSRC_SIGNATURE);
-    struct upipe_queue *queue = container_of(upipe, struct upipe_queue, upipe);
-    return queue->max_length;
-}
 
 /** @This extends upipe_command with specific commands for queue source. */
 enum upipe_qsrc_command {
@@ -122,19 +92,13 @@ static inline int upipe_qsrc_get_length(struct upipe *upipe,
                          UPIPE_QSRC_SIGNATURE, length_p);
 }
 
-/** @This allocates and initializes a queue source pipe.
- *
- * @param mgr management structure for queue source type
- * @param uprobe structure used to raise events
- * @param length maximum length of the queue
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_qsrc_alloc(struct upipe_mgr *mgr,
-                                             struct uprobe *uprobe,
-                                             unsigned int length)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_QSRC_SIGNATURE, length);
-}
+/** @hidden */
+#define ARGS_DECL , unsigned int queue_length
+/** @hidden */
+#define ARGS , queue_length
+UPIPE_HELPER_ALLOC(qsrc, UPIPE_QSRC_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

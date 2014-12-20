@@ -66,8 +66,10 @@ struct upipe_videocont {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** true if flow definition is up to date */
     bool flow_def_uptodate;
     /** true if subinput format has been copied to output flow def */
@@ -102,7 +104,7 @@ struct upipe_videocont {
 UPIPE_HELPER_UPIPE(upipe_videocont, upipe, UPIPE_VIDEOCONT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_videocont, urefcount, upipe_videocont_free)
 UPIPE_HELPER_VOID(upipe_videocont)
-UPIPE_HELPER_OUTPUT(upipe_videocont, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_videocont, output, flow_def, output_state, request_list)
 
 /** @internal @This is the private context of an input of a videocont pipe. */
 struct upipe_videocont_sub {
@@ -291,6 +293,20 @@ static int upipe_videocont_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            struct upipe_videocont *upipe_videocont =
+                                    upipe_videocont_from_sub_mgr(upipe->mgr);
+            return upipe_videocont_alloc_output_proxy(
+                    upipe_videocont_to_upipe(upipe_videocont), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            struct upipe_videocont *upipe_videocont =
+                                    upipe_videocont_from_sub_mgr(upipe->mgr);
+            return upipe_videocont_free_output_proxy(
+                    upipe_videocont_to_upipe(upipe_videocont), request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_videocont_sub_set_flow_def(upipe, flow_def);
@@ -692,6 +708,14 @@ static int upipe_videocont_control(struct upipe *upipe,
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_videocont_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_videocont_free_output_proxy(upipe, request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_videocont_set_flow_def(upipe, flow_def);

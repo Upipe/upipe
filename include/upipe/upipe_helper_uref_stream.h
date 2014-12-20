@@ -146,8 +146,8 @@ static void STRUCTURE##_append_uref_stream(struct upipe *upipe,             \
  * @param upipe description structure of the pipe                           \
  * @param consumed number of octets consumed from the uref stream           \
  */                                                                         \
-static void STRUCTURE##_consume_uref_stream(struct upipe *upipe,            \
-                                            size_t consumed)                \
+static UBASE_UNUSED void                                                    \
+    STRUCTURE##_consume_uref_stream(struct upipe *upipe, size_t consumed)   \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \

@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_uref_mgr events and providing a given uref manager
+ * @short probe catching provide_request events asking for a uref manager
  */
 
 #include <upipe/ubase.h>
@@ -51,12 +51,18 @@ static int uprobe_uref_mgr_throw(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uprobe_uref_mgr *uprobe_uref_mgr =
         uprobe_uref_mgr_from_uprobe(uprobe);
-    if (event != UPROBE_NEED_UREF_MGR || uprobe_uref_mgr->uref_mgr == NULL)
+    if (event != UPROBE_PROVIDE_REQUEST || uprobe_uref_mgr->uref_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    struct uref_mgr **uref_mgr_p = va_arg(args, struct uref_mgr **);
-    *uref_mgr_p = uref_mgr_use(uprobe_uref_mgr->uref_mgr);
-    return UBASE_ERR_NONE;
+    va_list args_copy;
+    va_copy(args_copy, args);
+    struct urequest *urequest = va_arg(args_copy, struct urequest *);
+    va_end(args_copy);
+    if (urequest->type != UREQUEST_UREF_MGR)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    return urequest_provide_uref_mgr(urequest,
+                                     uref_mgr_use(uprobe_uref_mgr->uref_mgr));
 }
 
 /** @This initializes an already allocated uprobe_uref_mgr structure.

@@ -101,8 +101,10 @@ struct upipe_ts_split_sub {
     struct upipe *output;
     /** flow definition packet on this output */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -111,7 +113,7 @@ struct upipe_ts_split_sub {
 UPIPE_HELPER_UPIPE(upipe_ts_split_sub, upipe, UPIPE_TS_SPLIT_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_split_sub, urefcount, upipe_ts_split_sub_free)
 UPIPE_HELPER_FLOW(upipe_ts_split_sub, NULL)
-UPIPE_HELPER_OUTPUT(upipe_ts_split_sub, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_split_sub, output, flow_def, output_state, request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_split, upipe_ts_split_sub, sub, sub_mgr,
                      subs, uchain)
@@ -175,6 +177,14 @@ static int upipe_ts_split_sub_control(struct upipe *upipe,
                                       int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_split_sub_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_split_sub_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_split_sub_get_flow_def(upipe, p);

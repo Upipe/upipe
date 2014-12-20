@@ -81,8 +81,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** helper phony pipe to test upipe_htons */
-static struct upipe *htons_test_alloc(struct upipe_mgr *mgr,
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr,
                                           struct uprobe *uprobe,
                                           uint32_t signature, va_list args)
 {
@@ -92,9 +92,9 @@ static struct upipe *htons_test_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_htons */
-static void htons_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     const uint8_t *buffer;
@@ -118,19 +118,31 @@ static void htons_test_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_htons */
-static void htons_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_htons */
+/** helper phony pipe */
 static struct upipe_mgr htons_test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = htons_test_alloc,
-    .upipe_input = htons_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -200,7 +212,7 @@ int main(int argc, char *argv[])
     /* release everything */
     upipe_mgr_release(upipe_htons_mgr); // nop
 
-    htons_test_free(upipe_sink);
+    test_free(upipe_sink);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

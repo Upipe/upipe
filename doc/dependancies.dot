@@ -27,6 +27,16 @@ digraph "Upipe objects dependancies" {
 		upump;
 	}
 
+	subgraph cluster_requests {
+		color="#E8F0FF";
+		style="filled";
+		label="Internal events";
+		fontname="Verdana Black";
+		fontsize=11;
+		fontcolor="#203080";
+		urequest;
+	}
+
 	subgraph cluster_buffers {
 		color="#E8F0FF";
 		style="filled";
@@ -94,15 +104,18 @@ digraph "Upipe objects dependancies" {
 
 	ulist->uchain;
 
-	uprobe->upipe;
 	upipe->uprobe;
 	upipe->uref;
 	upipe->urefcount;
 	upipe->upump;
+	upipe->urequest;
 	upipe->uclock [style="dashed"];
 	upipe->udeal [style="dashed"];
 	upipe->uqueue [style="dashed"];
 	upipe->ulist [style="dashed"];
 
 	upump->uchain;
+
+	urequest->uchain;
+	urequest->uref [style="dashed"];
 }

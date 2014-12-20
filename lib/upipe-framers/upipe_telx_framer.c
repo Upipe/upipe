@@ -63,8 +63,10 @@ struct upipe_telxf {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** input flow definition packet */
     struct uref *flow_def_input;
     /** attributes in the sequence header */
@@ -95,7 +97,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_telxf, urefcount, upipe_telxf_free)
 UPIPE_HELPER_VOID(upipe_telxf)
 UPIPE_HELPER_SYNC(upipe_telxf, acquired)
 
-UPIPE_HELPER_OUTPUT(upipe_telxf, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_telxf, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_telxf, flow_def_input, flow_def_attr)
 
 /** @internal @This allocates an telxf pipe.
@@ -279,6 +281,14 @@ static int upipe_telxf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_telxf_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_telxf_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_telxf_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_telxf_get_flow_def(upipe, p);

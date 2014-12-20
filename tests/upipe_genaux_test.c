@@ -64,27 +64,26 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         default:
             assert(0);
             break;
-        case UPROBE_NEW_FLOW_DEF:
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
     }
     return UBASE_ERR_NONE;
 }
 
-/** phony pipe to test upipe_genaux */
+/** helper phony pipe */
 struct genaux_test {
     struct uref *entry;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_genaux */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(genaux_test, upipe, 0);
 
-/** helper phony pipe to test upipe_genaux */
-static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
-                                       struct uprobe *uprobe,
-                                       uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct genaux_test *genaux_test = malloc(sizeof(struct genaux_test));
     assert(genaux_test != NULL);
@@ -93,9 +92,9 @@ static struct upipe *genaux_test_alloc(struct upipe_mgr *mgr,
     return &genaux_test->upipe;
 }
 
-/** helper phony pipe to test upipe_genaux */
-static void genaux_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
     assert(uref != NULL);
@@ -109,8 +108,26 @@ static void genaux_test_input(struct upipe *upipe, struct uref *uref,
     // FIXME peek into buffer
 }
 
-/** helper phony pipe to test upipe_genaux */
-static void genaux_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     struct genaux_test *genaux_test = genaux_test_from_upipe(upipe);
@@ -120,14 +137,14 @@ static void genaux_test_free(struct upipe *upipe)
     free(genaux_test);
 }
 
-/** helper phony pipe to test upipe_dup */
+/** helper phony pipe */
 static struct upipe_mgr genaux_test_mgr = {
     .refcount = NULL,
     .signature = 0,
 
-    .upipe_alloc = genaux_test_alloc,
-    .upipe_input = genaux_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char **argv)
@@ -204,7 +221,7 @@ int main(int argc, char **argv)
     assert(opaque == result);
 
     upipe_release(genaux);
-    genaux_test_free(genaux_test);
+    test_free(genaux_test);
 
     /* release managers */
     uref_mgr_release(uref_mgr);

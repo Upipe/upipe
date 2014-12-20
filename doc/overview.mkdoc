@@ -7,7 +7,7 @@
 
   @section T {Data structures}
 
-    Upipe's data structures can be classified into four groups:
+    Upipe's data structures can be classified into five groups:
 
     @section {Core structures}
 
@@ -90,6 +90,7 @@
         @item @ref upipe_qsink_mgr_alloc @item sink pipe sending buffers to a queue opened by a qsrc pipe @item @tt -lupipe-modules
         @item @ref upipe_null_mgr_alloc @item sink pipe destroying all input buffers @item @tt -lupipe-modules
         @item @ref upipe_xfer_mgr_alloc (also note @ref upipe_xfer_alloc) @item pipe manager allowing to attach another pipe to a given upump_mgr running in a different thread @item @tt -lupipe-modules
+        @item @ref upipe_pthread_xfer_mgr_alloc @item pipe manager creating a pthread and allowing to attach another pipe to the remote upump_mgr @item @tt -lupipe-pthread
         @item @ref upipe_wsrc_mgr_alloc (also note @ref upipe_wsrc_alloc) @item pipe manager allowing to deport a source pipe to a different thread @item @tt -lupipe-modules
         @item @ref upipe_wlin_mgr_alloc (also note @ref upipe_wlin_alloc) @item pipe manager allowing to deport a linear pipe to a different thread @item @tt -lupipe-modules
         @item @ref upipe_wsink_mgr_alloc (also note @ref upipe_wsink_alloc) @item pipe manager allowing to deport a sink pipe to a different thread @item @tt -lupipe-modules
@@ -105,12 +106,16 @@
         @item @ref upipe_avcdec_mgr_alloc @item linear pipe decoding a video or audio flow using libavcodec @item @tt -lupipe-av
         @item @ref upipe_avcenc_mgr_alloc @item linear pipe encoding a video or audio flow using libavcodec @item @tt -lupipe-av
         @item @ref upipe_sws_mgr_alloc @item linear pipe scaling a flow of pictures using libswscale @item @tt -lupipe-sws
-        @item @ref upipe_sws_thumbs_mgr_alloc @item linear pipe building a mosaic of thumbnails out of a picture flow @item @tt -lupipe-sws
+        @item @ref upipe_sws_thumbs_mgr_alloc @item linear pipe building a mosaic of thumbnails out of a picture flow @item @tt -lupipe-swr
+        @item @ref upipe_swr_mgr_alloc @item linear pipe resampling a flow of sound with libswresample @item @tt -lupipe-sws
         @item @ref upipe_ts_demux_mgr_alloc @item split pipe demultiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
         @item @ref upipe_ts_mux_mgr_alloc @item join pipe multiplexing a TS stream (also features lots of subpipes) @item @tt -lupipe-ts
         @item @ref upipe_mpgaf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 audio (including AAC ADTS) streams into frames @item @tt -lupipe-framers
         @item @ref upipe_mpgvf_mgr_alloc @item linear pipe gathering MPEG-1 and MPEG-2 video streams into frames @item @tt -lupipe-framers
         @item @ref upipe_h264f_mgr_alloc @item linear pipe gathering MPEG-4 AVC video streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_a52f_mgr_alloc @item linear pipe gathering A52 audio streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_telxf_mgr_alloc @item linear pipe gathering teletext streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_dvbsubf_mgr_alloc @item linear pipe gathering DVB subtitling streams into frames @item @tt -lupipe-framers
         @item @ref upipe_ffmt_mgr_alloc @item linear pipe transforming the format into another specified (potentially for an encoder) @item @tt -lupipe-filters
         @item @ref upipe_fdec_mgr_alloc @item linear pipe decoding a stream @item @tt -lupipe-filters
         @item @ref upipe_fenc_mgr_alloc @item linear pipe encoding a stream @item @tt -lupipe-filters
@@ -130,19 +135,18 @@
 
         @item @ref uprobe_stdio_alloc @item print all log messages to a file stream @item @tt -lupipe
         @item @ref uprobe_pfx_alloc @item prefix all log messages with the given name @item @tt -lupipe
-        @item @ref uprobe_output_alloc @item forward flow definition changes to the output pipe @item @tt -lupipe
-        @item @ref uprobe_upump_mgr_alloc @item give a upump manager to pipes that throw @ref UPROBE_NEED_UPUMP_MGR @item @tt -lupipe
-        @item @ref uprobe_uref_mgr_alloc @item give a uref manager to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
-        @item @ref uprobe_uclock_alloc @item give a uclock to pipes that throw @ref UPROBE_NEED_UREF_MGR @item @tt -lupipe
-        @item @ref uprobe_ubuf_mem_alloc @item allocated and give a ubuf manager to pipes that throw @ref UPROBE_NEW_FLOW_FORMAT @item @tt -lupipe
+        @item @ref uprobe_upump_mgr_alloc @item give a common upump manager to pipes requiring one @item @tt -lupipe
+        @item @ref uprobe_pthread_upump_mgr_alloc @item give a upump manager specific to each thread to pipes requiring one @item @tt -lupipe-pthread
+        @item @ref uprobe_uref_mgr_alloc @item give a uref manager to pipes requiring one @item @tt -lupipe
+        @item @ref uprobe_uclock_alloc @item give a uclock to pipes requiring one @item @tt -lupipe
+        @item @ref uprobe_ubuf_mem_alloc @item allocate and give a ubuf manager to pipes that require one @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
         @item @ref uprobe_xfer_alloc @item forward probes from one thread to another, in conjunction with @ref upipe_xfer_alloc @item @tt -lupipe
-        @item @ref uprobe_filter_suggest_alloc @item on the @ref UPROBE_FILTER_SUGGEST_FLOW_DEF event, ask the output pipe to suggest a flow definition using @ref upipe_suggest_flow_def @item @tt -lupipe-filters
 
       @end table
 
-      In Upipe's design, decision taking happens inside probes, while data processing is done in pipes with no intelligence whatsoever.
+      In Upipe's design, decision taking happens inside probes, while execution is done in pipes.
 
       Control commands and pipes are classified (that is, enum values are prepended with a prefix) into 7 categories:
 
@@ -165,6 +169,7 @@
         @item helper macro @item description
 
         @item @ref #UPIPE_HELPER_UPIPE @item very basic helper providing the @tt {upipe_foo_from_upipe} and @tt {upipe_foo_to_upipe} functions on which most helpers rely
+        @item @ref #UPIPE_HELPER_ALLOC @item helper providing allocation functions for a custom allocator
         @item @ref #UPIPE_HELPER_VOID @item helper for pipes which require no argument to their allocation function
         @item @ref #UPIPE_HELPER_FLOW @item helper for pipes which require a flow definition packet to be passed as argument to their allocation function
         @item @ref #UPIPE_HELPER_UREF_MGR @item helper for pipes which require a uref manager
@@ -174,17 +179,18 @@
         @item @ref #UPIPE_HELPER_OUTPUT @item helper for the management of the output
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
         @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
-        @item @ref #UPIPE_HELPER_SINK @item helper for sink pipes outputting data at a certain rate, to block pumps and buffer urefs
+        @item @ref #UPIPE_HELPER_INPUT @item helper for pipes having an input, which need to block input pumps and buffer urefs
         @item @ref #UPIPE_HELPER_UREF_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
         @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
-        @item @ref #UPIPE_HELPER_BIN @item helper for bin pipes (that incorporate a sub-pipeline of several pipes)
+        @item @ref #UPIPE_HELPER_BIN_INPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the input of the bin
+        @item @ref #UPIPE_HELPER_BIN_OUTPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the output of the bin
         @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
         @item @ref #UPROBE_HELPER_ALLOC @item helper providing easy probe allocation and deallocation
 
       @end table
 
-      Strictly speaking, a @ref upipe object has at most one input and one output (and possibly none). Split and join pipes are implemented using subpipes: the main split (resp. join) pipe is a sink (resp. a source), and each output (resp. input) requires allocating a source (resp. sink) subpipe using @ref upipe_void_alloc_sub or @ref upipe_flow_alloc_sub, depending whether the subpipe requests a flow definition. In a split pipe, outputs are configured with @ref upipe_set_output and @ref upipe_set_flow_def called on the output subpipe; however data is fed into the main pipe. In a join pipe, data is input using @ref upipe_input on each input subpipe; however outputs are configured on the main pipe. The caller must therefore keep a constellation of objects, not only the main pipe but also all the subpipes. Outputs (resp. inputs) are closed by calling @ref upipe_release on the related subpipe.
+      Strictly speaking, a @ref upipe object has at most one input and one output (and possibly none). Split and join pipes are implemented using subpipes: the main split (resp. join) pipe is a sink (resp. a source), and each output (resp. input) requires allocating a source (resp. sink) subpipe using @ref upipe_void_alloc_sub or @ref upipe_flow_alloc_sub, depending whether the subpipe requests a flow definition. In a split pipe, outputs are configured by allocating output subpipes; however data is fed into the main pipe. In a join pipe, data is input using @ref upipe_input on each input subpipe; however outputs are configured on the main pipe. The caller must therefore keep a constellation of objects, not only the main pipe but also all the subpipes. Outputs (resp. inputs) are closed by calling @ref upipe_release on the related subpipe.
 
     @end section
 
@@ -213,6 +219,39 @@
         @item event loop @item API @item link with
 
         @item libev @item @ref upump_ev_mgr_alloc @item @tt -lupump-ev -lev
+        @item libecore @item @ref upump_ecore_mgr_alloc @item @tt -lupump-ecore -lecore
+
+      @end table
+
+    @end section
+
+    @section {Internal events}
+
+      Buffer management structures are allocated on the fly, depending on the needs of the pipes. However, some negotiation may take place, because downstream pipes may have specific requirements, such as the alignement of data, or even a custom ubuf manager required by an external library. The process to ask for buffer management structures is therefore as follows:
+
+      @list
+
+        @item The pipe creates a @ref urequest. For some request types, an additional uref is necessary.
+        @item The pipe registers the request on its output. The standard helper @ref #UPIPE_HELPER_OUTPUT provides functions to deal with this.
+        @item When an output is connected to the pipe, or when the output is changed, the request is automatically registered to the new output.
+        @item The request is forwarded from pipe to pipe down to the sink. If a pipe has specific requirements such as alignement, it may modify the request.
+        @item A sink pipe (or logical sink, for instance when a pipe changes the format so much that a new ubuf manager will be used) either provides the data structures itself, or throws the request as a probe event using @ref upipe_throw_provide_request to ask for the required data structures.
+        @item The call-back passed to the request is called, and the internal event bubbles upstream until it reaches the source of the request.
+
+      @end list
+
+      Thus, any change in the pipeline triggers a renegotiation of data structures. In a multi-threaded application, the pipes providing standard queues or workers have the ability to forward the requests downstream, and the replies upstream. However the reply is asynchronous, and the source pipe must not expect to receive the data structures immediately. It must buffer the packets (for instance using @ref #UPIPE_HELPER_INPUT) until the reply is received. If the pipe can really not cope with the additional delay, it may throw the @ref upipe_throw_provide_request to get an immediate reply, which may be adjusted later. This behaviour is however discouraged.
+
+      There are four types of requests, and Upipe provides helpers to deal with them:
+
+      @table 3
+
+        @item type @item function @item helper
+
+        @item @ref UREQUEST_UREF_MGR @item @ref urequest_init_uref_mgr @item @ref #UPIPE_HELPER_UREF_MGR
+        @item @ref UREQUEST_FLOW_FORMAT @item @ref urequest_init_flow_format @item @ref #UPIPE_HELPER_FLOW_FORMAT
+        @item @ref UREQUEST_UBUF_MGR @item @ref urequest_init_ubuf_mgr @item @ref #UPIPE_HELPER_UBUF_MGR
+        @item @ref UREQUEST_UCLOCK @item @ref urequest_init_uclock @item @ref #UPIPE_HELPER_UCLOCK
 
       @end table
 
@@ -246,9 +285,9 @@
 
     The movement of buffers between the input and output of a pipe is called a flow. Pipes generally expect some parameters describing the flow; these are called a flow definition. A flow definition packet is a @ref uref pointing to a @ref udict with key/value pairs. Standard flow definitions are provided for block (@ref uref_block_flow_alloc_def), picture (@ref uref_pic_flow_alloc_def) and sound (@ref uref_sound_flow_alloc_def) formats.
 
-    The input flow definition is set on a pipe using @ref upipe_set_flow_def. It may be changed at any time, but the pipe may deny it by returning false if it considers it is too big a change; by convention, pipes only allow it if it doesn't require a full reset of the pipe's state.
+    The input flow definition is set on a pipe using @ref upipe_set_flow_def. It may be changed at any time, but the pipe may deny it by returning an error if it considers it is too big a change; by convention, pipes only allow it if it doesn't require a full reset of the pipe's state.
 
-    Some pipes (filters) may also require a flow definition describing the requested output, for instance to change picture format. In that case the output flow definition packet is passed on allocation using @ref upipe_flow_alloc instead of @ref upipe_void_alloc. When a pipe changes the flow definition on its output, it must send the UPROBE_NEW_FLOW_DEF event. Upipe provides helper functions (see @ref upipe_void_alloc_output and @ref upipe_flow_alloc_output) to automatically forward the new flow definition to the output pipe.
+    Some pipes (filters) may also require a flow definition describing the requested output, for instance to change picture format. In that case the output flow definition packet is passed on allocation using @ref upipe_flow_alloc instead of @ref upipe_void_alloc. When a pipe changes the flow definition on its output, it must call @ref upipe_set_flow_def on the output pipe.
 
     It is useful to note that a flow definition packet is actually a patchwork of attributes with different purposes:
 
@@ -320,7 +359,7 @@
 
       @item A worker thread and transfer manager is created with the manager adapted to the threading system (for POSIX systems, @ref upipe_pthread_xfer_mgr_alloc). You have to pass functions to initialize, run and clean the upump manager attached to the worker thread.
       @item A worker manager is created using the transfer manager. It allows to transfer whole subpipelines to the thread. You must choose the correct type of worker, whether the subpipeline is a source (@ref upipe_wsrc_mgr_alloc), a sink (@ref upipe_wsink_mgr_alloc) or a linear subpipeline (@ref upipe_wlin_mgr_alloc). This controls which queues will be set up for the input and/or output of the subpipeline.
-      @item The pipes that are to be transferred to the subpipeline are created normally in the main thread. However, some pipes may request a upump manager and start working immediately, therefore pumps would be created with the wrong upump manager. To avoid that, it is necessary to freeze the upump manager of the main thread by calling @ref uprobe_throw on the probe that delivers upump managers (for instance @ref uprobe_pthread_alloc) with the event @ref UPROBE_FREEZE_UPUMP_MGR.
+      @item The pipes that are to be transferred to the subpipeline are created normally in the main thread. However, some pipes may request a upump manager and start working immediately, therefore pumps would be created with the wrong upump manager. To avoid that, it is necessary to freeze the upump manager of the main thread by calling @ref uprobe_throw on the probe that delivers upump managers (for instance @ref uprobe_pthread_upump_mgr_alloc) with the event @ref UPROBE_FREEZE_UPUMP_MGR.
       @item a worker pipe is created with a pointer to the subpipeline, and takes the place of the subpipeline, from the point of view of the main thread. It is possible to input urefs to the worker pipe (for linear and sink workers), set its output (for linear and source workers), or release it (@ref upipe_release). The worker pipe automatically calls @ref upipe_attach_upump_mgr on relevant pipes of the subpipeline.
       @item After the subpipeline has been transferred, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
 

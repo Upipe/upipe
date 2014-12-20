@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -59,6 +59,16 @@ static inline void ulist_init(struct uchain *ulist)
 static inline bool ulist_is_last(struct uchain *ulist, struct uchain *element)
 {
     return element->next == ulist;
+}
+
+/** @This checks if the element is in a list.
+ *
+ * @param element pointer to element
+ * @return true if the element is in the list
+ */
+static inline bool ulist_is_in(struct uchain *element)
+{
+    return !(element->next == NULL);
 }
 
 /** @This checks if the list is empty.

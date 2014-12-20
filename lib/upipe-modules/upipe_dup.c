@@ -85,8 +85,10 @@ struct upipe_dup_output {
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -94,7 +96,7 @@ struct upipe_dup_output {
 
 UPIPE_HELPER_UPIPE(upipe_dup_output, upipe, UPIPE_DUP_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_dup_output, urefcount, upipe_dup_output_free)
-UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, output_state, request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_output, output, sub_mgr, outputs,
                      uchain)
@@ -309,12 +311,14 @@ static int upipe_dup_set_flow_def(struct upipe *upipe,
 static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            upipe_dup_throw_sub_outputs(upipe, UPROBE_NEW_FLOW_FORMAT,
-                                        flow_format, NULL);
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            /* We do not pass through the requests ; which output would
+             * we use ? */
+            return upipe_throw_provide_request(upipe, request);
         }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_dup_set_flow_def(upipe, uref);

@@ -54,8 +54,10 @@ struct upipe_delay {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** delay to set */
     uint64_t delay;
@@ -67,7 +69,7 @@ struct upipe_delay {
 UPIPE_HELPER_UPIPE(upipe_delay, upipe, UPIPE_DELAY_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_delay, urefcount, upipe_delay_free)
 UPIPE_HELPER_VOID(upipe_delay)
-UPIPE_HELPER_OUTPUT(upipe_delay, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_delay, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a delay pipe.
  *
@@ -173,9 +175,13 @@ static int _upipe_delay_set_delay(struct upipe *upipe, uint64_t delay)
 static int upipe_delay_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_delay_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_delay_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

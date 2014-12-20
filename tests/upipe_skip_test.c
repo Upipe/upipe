@@ -72,7 +72,7 @@ struct skip_test {
 UPIPE_HELPER_UPIPE(skip_test, upipe, 0);
 
 /** helper phony pipe to test upipe_skip */
-static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
+static struct upipe *test_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
@@ -85,7 +85,7 @@ static struct upipe *skip_test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe to test upipe_skip */
-static void skip_test_input(struct upipe *upipe, struct uref *uref,
+static void test_input(struct upipe *upipe, struct uref *uref,
                             struct upump **upump_p)
 {
     struct skip_test *skip_test = skip_test_from_upipe(upipe);
@@ -103,8 +103,20 @@ static void skip_test_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** helper phony pipe to test upipe_skip */
-static void skip_test_free(struct upipe *upipe)
+static void test_free(struct upipe *upipe)
 {
     struct skip_test *skip_test = skip_test_from_upipe(upipe);
     assert(skip_test->counter == ITERATIONS);
@@ -117,9 +129,9 @@ static void skip_test_free(struct upipe *upipe)
 static struct upipe_mgr skip_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = skip_test_alloc,
-    .upipe_input = skip_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 
@@ -129,6 +141,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         default:
             assert(0);
@@ -206,7 +219,7 @@ int main(int argc, char **argv)
 
     /* release pipe */
     upipe_release(skip);
-    skip_test_free(skip_test);
+    test_free(skip_test);
 
     /* release managers */
     upipe_mgr_release(upipe_skip_mgr); // no-op

@@ -42,6 +42,7 @@
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-swscale/upipe_sws_thumbs.h>
 #include <upipe-av/upipe_av_pixfmt.h>
 
@@ -62,6 +63,12 @@ struct picsize {
     size_t vsize;
 };
 
+/** @hidden */
+static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
+                                    struct upump **upump_p);
+/** @hidden */
+static int upipe_sws_thumbs_check(struct upipe *upipe, struct uref *flow_format);
+
 /** upipe_sws_thumbs structure with swscale parameters */ 
 struct upipe_sws_thumbs {
     /** refcount management structure */
@@ -71,15 +78,28 @@ struct upipe_sws_thumbs {
     struct uref *flow_def_input;
     /** attributes added by the pipe */
     struct uref *flow_def_attr;
-    /** output flow */
-    struct uref *output_flow;
-    /** true if the flow definition has already been sent */
-    bool output_flow_sent;
     /** output pipe */
     struct upipe *output;
+    /** output flow */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
 
     /** swscale image conversion context */
     struct SwsContext *convert_ctx;
@@ -112,9 +132,13 @@ struct upipe_sws_thumbs {
 UPIPE_HELPER_UPIPE(upipe_sws_thumbs, upipe, UPIPE_SWS_THUMBS_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sws_thumbs, urefcount, upipe_sws_thumbs_free)
 UPIPE_HELPER_FLOW(upipe_sws_thumbs, "pic.");
-UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, output_flow, output_flow_sent)
+UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_sws_thumbs, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr, flow_def_attr);
+UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr, ubuf_mgr_request,
+                      upipe_sws_thumbs_check,
+                      upipe_sws_thumbs_register_output_request,
+                      upipe_sws_thumbs_unregister_output_request)
+UPIPE_HELPER_INPUT(upipe_sws_thumbs, urefs, nb_urefs, max_urefs, blockers, upipe_sws_thumbs_handle)
 
 /** @internal @This configures swscale context
  *
@@ -157,16 +181,37 @@ static inline void upipe_sws_thumbs_flush(struct upipe *upipe, struct upump **up
     }
 }
 
-/** @internal @This receives incoming pictures.
+/** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure describing the picture
  * @param upump_p reference to pump that generated the buffer
+ * @return false if the input must be blocked
  */
-static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
-                                       struct upump **upump_p)
+static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
+                                    struct upump **upump_p)
 {
-    struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
+    struct upipe_sws_thumbs *upipe_sws_thumbs =
+        upipe_sws_thumbs_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_sws_thumbs_store_flow_def(upipe, NULL);
+        uref = upipe_sws_thumbs_store_flow_def_input(upipe, uref);
+        upipe_sws_thumbs_require_ubuf_mgr(upipe, uref);
+        return true;
+    }
+
+    if (upipe_sws_thumbs->flow_def == NULL)
+        return false;
+
+    /* check parameters */
+    if (unlikely(!upipe_sws_thumbs->thumbsize ||
+                 !upipe_sws_thumbs->thumbnum)) {
+        upipe_warn(upipe, "thumbs size/num not set, dropping picture");
+        uref_free(uref);
+        return true;
+    }
+
     const char **planes;
     struct uref *gallery;
     struct ubuf *ubuf;
@@ -223,7 +268,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     /* get sws context */
     if (unlikely(!upipe_sws_thumbs_set_context(upipe, &inputsize, &surface))) {
         uref_free(uref);
-        return;
+        return true;
     }
 
     /* allocate dest ubuf */
@@ -234,7 +279,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
         if (unlikely(!gallery)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
-            return;
+            return true;
         }
         ubuf = ubuf_pic_alloc(upipe_sws_thumbs->ubuf_mgr,
                                            thumbsize->hsize * thumbnum->hsize,
@@ -243,7 +288,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
             uref_free(gallery);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+            return true;
         }
         ubuf_pic_clear(ubuf, 0, 0, -1, -1);
         uref_attach_ubuf(gallery, ubuf);
@@ -289,7 +334,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
     if (unlikely(ret <= 0)) {
         upipe_warn(upipe, "error during sws conversion");
-        return;
+        return true;
     }
 
     /* output if gallery is complete */
@@ -299,6 +344,7 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
     if (unlikely(counter == 0)) {
         upipe_sws_thumbs_flush(upipe, upump_p);
     }
+    return true;
 }
 
 /** @internal @This receives incoming uref.
@@ -310,29 +356,16 @@ static void upipe_sws_thumbs_input_pic(struct upipe *upipe, struct uref *uref,
 static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
 {
-    struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
-
-    /* check ubuf manager */
-    if (unlikely(!ubase_check(upipe_sws_thumbs_check_ubuf_mgr(upipe)))) {
-        uref_free(uref);
-        return;
+    if (!upipe_sws_thumbs_check_input(upipe)) {
+        upipe_sws_thumbs_hold_input(upipe, uref);
+        upipe_sws_thumbs_block_input(upipe, upump_p);
+    } else if (!upipe_sws_thumbs_handle(upipe, uref, upump_p)) {
+        upipe_sws_thumbs_hold_input(upipe, uref);
+        upipe_sws_thumbs_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
     }
-
-    if (unlikely(!upipe_sws_thumbs->flow_def_input)) {
-        upipe_warn(upipe, "received picture before input flow, dropping");
-        uref_free(uref);
-        return;
-    }
-
-    /* check parameters */
-    if (unlikely(!upipe_sws_thumbs->thumbsize ||
-                 !upipe_sws_thumbs->thumbnum)) {
-        upipe_warn(upipe, "thumbs size/num not set, dropping picture");
-        uref_free(uref);
-        return;
-    }
-
-    upipe_sws_thumbs_input_pic(upipe, uref, upump_p);
 }
 
 /** @internal @This sets output pictures size
@@ -418,26 +451,62 @@ static int _upipe_sws_thumbs_get_size(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This amends a proposed flow format.
+/** @internal @This receives a provided ubuf manager.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
+ * @param flow_format amended flow format
  * @return an error code
  */
-static int upipe_sws_thumbs_amend_flow_format(struct upipe *upipe,
-                                              struct uref *flow_format)
+static int upipe_sws_thumbs_check(struct upipe *upipe,
+                                  struct uref *flow_format)
 {
-    if (flow_format == NULL)
-        return UBASE_ERR_INVALID;
+    struct upipe_sws_thumbs *upipe_sws_thumbs =
+        upipe_sws_thumbs_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_sws_thumbs_store_flow_def(upipe, flow_format);
+
+    if (upipe_sws_thumbs->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    bool was_buffered = !upipe_sws_thumbs_check_input(upipe);
+    upipe_sws_thumbs_output_input(upipe);
+    upipe_sws_thumbs_unblock_input(upipe);
+    if (was_buffered && upipe_sws_thumbs_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_sws_thumbs_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This requires a ubuf manager by proxy, and amends the flow
+ * format.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_sws_thumbs_amend_ubuf_mgr(struct upipe *upipe,
+                                    struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
 
     uint64_t align;
     if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
-        return uref_pic_flow_set_align(flow_format, 16);
+        uref_pic_flow_set_align(flow_format, 16);
 
     if (align % 16) {
         align = align * 16 / ubase_gcd(align, 16);
-        return uref_pic_flow_set_align(flow_format, align);
+        uref_pic_flow_set_align(flow_format, align);
     }
+
+    struct urequest ubuf_mgr_request;
+    urequest_set_opaque(&ubuf_mgr_request, request);
+    urequest_init_ubuf_mgr(&ubuf_mgr_request, flow_format,
+                           upipe_sws_thumbs_provide_output_proxy, NULL);
+    upipe_throw_provide_request(upipe, &ubuf_mgr_request);
+    urequest_clean(&ubuf_mgr_request);
     return UBASE_ERR_NONE;
 }
 
@@ -470,10 +539,7 @@ static int upipe_sws_thumbs_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-
-    flow_def = upipe_sws_thumbs_store_flow_def_input(upipe, flow_def);
-    if (flow_def != NULL)
-        upipe_sws_thumbs_store_flow_def(upipe, flow_def);
+    upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -490,13 +556,22 @@ static int upipe_sws_thumbs_control(struct upipe *upipe,
 {
     switch (command) {
         /* generic commands */
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_sws_thumbs_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_sws_thumbs_amend_flow_format(upipe, flow_format);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_sws_thumbs_amend_ubuf_mgr(upipe, request);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_sws_thumbs_alloc_output_proxy(upipe, request);
         }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_sws_thumbs_free_output_proxy(upipe, request);
+        }
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sws_thumbs_get_output(upipe, p);
@@ -577,6 +652,7 @@ static struct upipe *upipe_sws_thumbs_alloc(struct upipe_mgr *mgr,
     upipe_sws_thumbs_init_ubuf_mgr(upipe);
     upipe_sws_thumbs_init_output(upipe);
     upipe_sws_thumbs_init_flow_def(upipe);
+    upipe_sws_thumbs_init_input(upipe);
 
     upipe_sws_thumbs->convert_ctx = NULL;
 
@@ -614,7 +690,7 @@ static void upipe_sws_thumbs_free(struct upipe *upipe)
     }
 
     upipe_throw_dead(upipe);
-
+    upipe_sws_thumbs_clean_input(upipe);
     upipe_sws_thumbs_clean_output(upipe);
     upipe_sws_thumbs_clean_flow_def(upipe);
     upipe_sws_thumbs_clean_ubuf_mgr(upipe);

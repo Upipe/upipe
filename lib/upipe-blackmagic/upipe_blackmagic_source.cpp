@@ -47,7 +47,6 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
@@ -154,16 +153,18 @@ struct upipe_bmd_src_output {
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src_output, upipe, UPIPE_BMD_SRC_OUTPUT_SIGNATURE)
-UPIPE_HELPER_OUTPUT(upipe_bmd_src_output, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_bmd_src_output, ubuf_mgr, flow_def)
+UPIPE_HELPER_OUTPUT(upipe_bmd_src_output, output, flow_def, output_state,
+                    request_list)
 
 /** @internal @This is the private context of a http source pipe. */
 struct upipe_bmd_src {
@@ -177,8 +178,13 @@ struct upipe_bmd_src {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** uclock structure */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** pseudo-output */
     struct upipe *output;
@@ -219,8 +225,12 @@ struct upipe_bmd_src {
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src, upipe, UPIPE_BMD_SRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_src, urefcount, upipe_bmd_src_free)
-UPIPE_HELPER_UREF_MGR(upipe_bmd_src, uref_mgr)
-UPIPE_HELPER_UCLOCK(upipe_bmd_src, uclock)
+
+UPIPE_HELPER_UREF_MGR(upipe_bmd_src, uref_mgr, uref_mgr_request, NULL,
+                      upipe_throw_provide_request, NULL)
+UPIPE_HELPER_UCLOCK(upipe_bmd_src, uclock, uclock_request, NULL,
+                    upipe_throw_provide_request, NULL)
+
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_bmd_src, upump, upump_mgr)
 
@@ -382,7 +392,6 @@ static void upipe_bmd_src_output_init(struct upipe *upipe,
     upipe_init(upipe, sub_mgr, uprobe);
     upipe->refcount = &upipe_bmd_src->urefcount;
 
-    upipe_bmd_src_output_init_ubuf_mgr(upipe);
     upipe_bmd_src_output_init_output(upipe);
 
     upipe_throw_ready(upipe);
@@ -396,13 +405,9 @@ static void upipe_bmd_src_output_init(struct upipe *upipe,
  * @return an error code
  */
 static int upipe_bmd_src_output_control(struct upipe *upipe,
-                                                   int command, va_list args)
+                                        int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR: {
-            return upipe_bmd_src_output_attach_ubuf_mgr(upipe);
-        }
-
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_bmd_src_output_get_flow_def(upipe, p);
@@ -436,7 +441,6 @@ static void upipe_bmd_src_output_clean(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_bmd_src_output_clean_output(upipe);
-    upipe_bmd_src_output_clean_ubuf_mgr(upipe);
 
     upipe_clean(upipe);
 }
@@ -652,7 +656,8 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    UBASE_RETURN(upipe_bmd_src_check_uref_mgr(upipe))
+    if (unlikely(!upipe_bmd_src_demand_uref_mgr(upipe)))
+        return UBASE_ERR_ALLOC;
     upipe_bmd_src_check_upump_mgr(upipe);
 
     const char *idx = strstr(uri, URI_SEP);
@@ -825,16 +830,15 @@ static int _upipe_bmd_src_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR: {
-            return upipe_bmd_src_attach_uref_mgr(upipe);
-        }
-        case UPIPE_ATTACH_UCLOCK: {
-            return upipe_bmd_src_attach_uclock(upipe);
-        }
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_bmd_src_set_upump(upipe, NULL);
             return upipe_bmd_src_attach_upump_mgr(upipe);
         }
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_bmd_src_set_upump(upipe, NULL);
+            upipe_bmd_src_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_bmd_src_get_output(upipe, p);
@@ -945,6 +949,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_clean_uref_mgr(upipe);
     upipe_bmd_src_clean_upump(upipe);
     upipe_bmd_src_clean_upump_mgr(upipe);
+    upipe_bmd_src_clean_uclock(upipe);
     upipe_bmd_src_clean_urefcount(upipe);
 
     free(upipe_bmd_src);

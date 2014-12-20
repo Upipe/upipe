@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
+#include <upipe/urequest.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +42,15 @@
 #include <assert.h>
 
 static struct uclock *uclock;
+
+/** helper phony pipe to test uprobe_ubuf_mem */
+static int uprobe_test_provide_uclock(struct urequest *urequest, va_list args)
+{
+    struct uclock *m = va_arg(args, struct uclock *);
+    assert(m == uclock);
+    uclock_release(m);
+    return UBASE_ERR_NONE;
+}
 
 /** helper phony pipe to test uprobe_uclock */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
@@ -50,10 +60,8 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
-    struct uclock *m;
-    upipe_throw_need_uclock(upipe, &m);
-    assert(m == uclock);
-    uclock_release(m);
+    struct urequest request;
+    urequest_init_uclock(&request, uprobe_test_provide_uclock, NULL);
     return upipe;
 }
 

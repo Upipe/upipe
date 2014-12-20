@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -71,7 +71,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 break;
 
             case UDICT_TYPE_STRING: {
-                const char *val;
+                const char *val = "";
                 if (likely(ubase_check(udict_get_string(udict, &val,
                                                         itype, iname))))
                     uprobe_dbg_va(uprobe, NULL, " - \"%s\" [string]: \"%s\"",
@@ -87,7 +87,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 break;
 
             case UDICT_TYPE_BOOL: {
-                bool val;
+                bool val = false; /* to keep gcc happy */
                 if (likely(ubase_check(udict_get_bool(udict, &val,
                                                       itype, iname))))
                     uprobe_dbg_va(uprobe, NULL, " - \"%s\" [bool]: %s", name,
@@ -99,7 +99,8 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
             }
 
             case UDICT_TYPE_RATIONAL: {
-                struct urational val;
+                /* to keep gcc happy */
+                struct urational val = { .num = 0, .den = 0 };
                 if (likely(ubase_check(udict_get_rational(udict, &val,
                                                           itype, iname))))
                     uprobe_dbg_va(uprobe, NULL,
@@ -113,7 +114,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 
 #define UDICT_DUMP_TEMPLATE(TYPE, utype, ctype, ftype)                      \
             case UDICT_TYPE_##TYPE: {                                       \
-                ctype val;                                                  \
+                ctype val = 0; /* to keep gcc happy */                      \
                 if (likely(ubase_check(udict_get_##utype(udict, &val,       \
                                                          itype, iname))))   \
                     uprobe_dbg_va(uprobe, NULL,                             \

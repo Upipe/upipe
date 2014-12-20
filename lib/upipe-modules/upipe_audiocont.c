@@ -55,6 +55,9 @@
 /** only accept sound */
 #define EXPECTED_FLOW_DEF "sound."
 
+/** @hidden */
+static int upipe_audiocont_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a ts join pipe. */
 struct upipe_audiocont {
     /** refcount management structure */
@@ -62,12 +65,17 @@ struct upipe_audiocont {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** true if flow definition is up to date */
     bool flow_def_uptodate;
     /** input flow definition packet */
@@ -98,8 +106,11 @@ struct upipe_audiocont {
 UPIPE_HELPER_UPIPE(upipe_audiocont, upipe, UPIPE_AUDIOCONT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audiocont, urefcount, upipe_audiocont_free)
 UPIPE_HELPER_VOID(upipe_audiocont)
-UPIPE_HELPER_OUTPUT(upipe_audiocont, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, flow_def)
+UPIPE_HELPER_OUTPUT(upipe_audiocont, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, ubuf_mgr_request,
+                      upipe_audiocont_check,
+                      upipe_audiocont_register_output_request,
+                      upipe_audiocont_unregister_output_request)
 
 /** @internal @This is the private context of an input of a audiocont pipe. */
 struct upipe_audiocont_sub {
@@ -254,6 +265,24 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_throw_provide_request(upipe, request);
+            struct upipe_audiocont *upipe_audiocont =
+                                    upipe_audiocont_from_sub_mgr(upipe->mgr);
+            return upipe_audiocont_alloc_output_proxy(
+                    upipe_audiocont_to_upipe(upipe_audiocont), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return UBASE_ERR_NONE;
+            struct upipe_audiocont *upipe_audiocont =
+                                    upipe_audiocont_from_sub_mgr(upipe->mgr);
+            return upipe_audiocont_free_output_proxy(
+                    upipe_audiocont_to_upipe(upipe_audiocont), request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_sub_set_flow_def(upipe, flow_def);
@@ -425,6 +454,19 @@ static inline int upipe_audiocont_resize_uref(struct uref *uref, size_t offset,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This is called when an ubuf manager is provided.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_audiocont_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_audiocont_store_flow_def(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes reference ("clock") input.
  *
  * @param upipe description structure of the pipe
@@ -472,7 +514,8 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
         uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
     }
 
-    if (unlikely(!ubase_check(upipe_audiocont_check_ubuf_mgr(upipe)))) {
+    if (unlikely(!upipe_audiocont_demand_ubuf_mgr(upipe,
+                    uref_dup(upipe_audiocont->flow_def)))) {
         uref_free(uref);
         return;
     }
@@ -755,8 +798,20 @@ static int upipe_audiocont_control(struct upipe *upipe,
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_audiocont_attach_ubuf_mgr(upipe);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_audiocont_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_audiocont_free_output_proxy(upipe, request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_set_flow_def(upipe, flow_def);

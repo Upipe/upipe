@@ -36,8 +36,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_aggregate.h>
 #include <upipe-ts/upipe_ts_mux.h>
@@ -65,17 +63,14 @@ struct upipe_ts_agg {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
-
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** latency in the input flow */
     uint64_t input_latency;
 
@@ -114,9 +109,7 @@ struct upipe_ts_agg {
 UPIPE_HELPER_UPIPE(upipe_ts_agg, upipe, UPIPE_TS_AGG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_agg, urefcount, upipe_ts_agg_free)
 UPIPE_HELPER_VOID(upipe_ts_agg)
-UPIPE_HELPER_UREF_MGR(upipe_ts_agg, uref_mgr)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_agg, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_ts_agg, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_agg, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_aggregate pipe.
  *
@@ -136,8 +129,6 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
     upipe_ts_agg_init_urefcount(upipe);
-    upipe_ts_agg_init_uref_mgr(upipe);
-    upipe_ts_agg_init_ubuf_mgr(upipe);
     upipe_ts_agg_init_output(upipe);
     upipe_ts_agg->input_latency = 0;
     upipe_ts_agg->octetrate = 0;
@@ -156,17 +147,17 @@ static struct upipe *upipe_ts_agg_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This initializes the pipe.
+/** @internal @This initializes the padding packet.
  *
  * @param upipe description structure of the pipe
+ * @param ubuf_mgr pointer to ubuf manager
  */
-static void upipe_ts_agg_init(struct upipe *upipe)
+static void upipe_ts_agg_init_padding(struct upipe *upipe,
+                                      struct ubuf_mgr *ubuf_mgr)
 {
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
-    if (unlikely(!ubase_check(upipe_ts_agg_check_ubuf_mgr(upipe))))
-        return;
 
-    upipe_ts_agg->padding = ubuf_block_alloc(upipe_ts_agg->ubuf_mgr, TS_SIZE);
+    upipe_ts_agg->padding = ubuf_block_alloc(ubuf_mgr, TS_SIZE);
     if (unlikely(upipe_ts_agg->padding == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -289,11 +280,8 @@ static void upipe_ts_agg_complete(struct upipe *upipe, struct upump **upump_p)
             /* Do not output a packet. */
             return;
 
-        if (unlikely(!ubase_check(upipe_ts_agg_check_uref_mgr(upipe))))
-            return;
-
-        uref = uref_block_alloc(upipe_ts_agg->uref_mgr, upipe_ts_agg->ubuf_mgr,
-                                0);
+        uref = uref_block_alloc(upipe_ts_agg->flow_def->mgr,
+                                upipe_ts_agg->padding->mgr, 0);
     }
     uref_clock_set_cr_sys(uref, next_cr_sys);
     /* DVB-IPI does not require the RTP clock to be sync'ed to cr_prog, so
@@ -347,7 +335,7 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
 
     if (unlikely(upipe_ts_agg->padding == NULL))
-        upipe_ts_agg_init(upipe);
+        upipe_ts_agg_init_padding(upipe, uref->ubuf->mgr);
     if (unlikely(upipe_ts_agg->padding == NULL)) {
         uref_free(uref);
         return;
@@ -434,6 +422,27 @@ static void upipe_ts_agg_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_agg_complete(upipe, upump_p);
 }
 
+/** @internal @This builds the output flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_ts_agg_build_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    struct upipe_ts_agg *upipe_ts_agg = upipe_ts_agg_from_upipe(upipe);
+
+    if (unlikely(!ubase_check(uref_clock_set_latency(flow_def,
+                                upipe_ts_agg->input_latency +
+                                upipe_ts_agg->interval)) ||
+                 !ubase_check(uref_block_flow_set_octetrate(flow_def,
+                                upipe_ts_agg->octetrate))))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    upipe_ts_agg_store_flow_def(upipe, flow_def);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -454,15 +463,9 @@ static int upipe_ts_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     uref_clock_get_latency(flow_def, &upipe_ts_agg->input_latency);
 
     if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup,
-                                                "block.mpegtsaligned.")) ||
-                 !ubase_check(uref_clock_set_latency(flow_def_dup,
-                                upipe_ts_agg->input_latency +
-                                upipe_ts_agg->interval)) ||
-                 !ubase_check(uref_block_flow_set_octetrate(flow_def_dup,
-                                upipe_ts_agg->octetrate))))
+                                                "block.mpegtsaligned."))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
-    return UBASE_ERR_NONE;
+    return upipe_ts_agg_build_flow_def(upipe, flow_def_dup);
 }
 
 /** @internal @This returns the current mux octetrate.
@@ -500,15 +503,12 @@ static int upipe_ts_agg_set_octetrate(struct upipe *upipe, uint64_t octetrate)
                     upipe_ts_agg->mode == UPIPE_TS_MUX_MODE_CBR ? "CBR" :
                     "capped VBR", octetrate * 8);
 
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(upipe_ts_agg->flow_def)) == NULL ||
-                 !ubase_check(uref_clock_set_latency(flow_def_dup,
-                                upipe_ts_agg->input_latency +
-                                upipe_ts_agg->interval)) ||
-                 !ubase_check(uref_block_flow_set_octetrate(flow_def_dup,
-                                upipe_ts_agg->octetrate))))
-        return UBASE_ERR_ALLOC;
-    upipe_ts_agg_store_flow_def(upipe, flow_def_dup);
+    if (upipe_ts_agg->flow_def != NULL) {
+        struct uref *flow_def_dup;
+        if (unlikely((flow_def_dup = uref_dup(upipe_ts_agg->flow_def)) == NULL))
+            return UBASE_ERR_ALLOC;
+        return upipe_ts_agg_build_flow_def(upipe, flow_def_dup);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -586,11 +586,14 @@ static int upipe_ts_agg_set_mtu(struct upipe *upipe, unsigned int mtu)
 static int upipe_ts_agg_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_ts_agg_attach_uref_mgr(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_ts_agg_attach_ubuf_mgr(upipe);
-
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_agg_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_agg_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_agg_get_flow_def(upipe, p);
@@ -658,8 +661,6 @@ static void upipe_ts_agg_free(struct upipe *upipe)
     if (likely(upipe_ts_agg->padding))
         ubuf_free(upipe_ts_agg->padding);
     upipe_ts_agg_clean_output(upipe);
-    upipe_ts_agg_clean_ubuf_mgr(upipe);
-    upipe_ts_agg_clean_uref_mgr(upipe);
     upipe_ts_agg_clean_urefcount(upipe);
     upipe_ts_agg_free_void(upipe);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -26,6 +26,12 @@
 /** @file
  * @short Upipe module allowing to transfer other pipes to a remote event loop
  * This is particularly helpful for multithreaded applications.
+ *
+ * Note that the allocator requires an additional parameter:
+ * @table 2
+ * @item upipe_remote @item pipe to transfer to remote upump_mgr (belongs to
+ * the callee)
+ * @end table
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_TRANSFER_H_
@@ -80,25 +86,13 @@ static inline int upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
                              upump_mgr);
 }
 
-/** @This allocates and initializes an xfer pipe. An xfer pipe allows to
- * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
- * used to remotely release the transferred pipe.
- *
- * Please note that upipe_remote is not "used" so its refcount is not
- * incremented. For that reason it shouldn't be "released" afterwards. Only
- * release the xfer pipe.
- *
- * @param mgr management structure for queue source type
- * @param uprobe structure used to raise events
- * @param upipe_remote pipe to transfer to remote upump_mgr
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_xfer_alloc(struct upipe_mgr *mgr,
-                                             struct uprobe *uprobe,
-                                             struct upipe *upipe_remote)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_XFER_SIGNATURE, upipe_remote);
-}
+/** @hidden */
+#define ARGS_DECL , struct upipe *upipe_remote
+/** @hidden */
+#define ARGS , upipe_remote
+UPIPE_HELPER_ALLOC(xfer, UPIPE_XFER_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

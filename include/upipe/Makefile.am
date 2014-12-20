@@ -31,12 +31,14 @@ pkginclude_HEADERS = \
 	umem_alloc.h \
 	umem_pool.h \
 	upipe.h \
-	upipe_helper_bin.h \
+	upipe_helper_bin_input.h \
+	upipe_helper_bin_output.h \
 	upipe_helper_flow_def_check.h \
 	upipe_helper_flow_def.h \
+	upipe_helper_flow_format.h \
 	upipe_helper_flow.h \
+	upipe_helper_input.h \
 	upipe_helper_output.h \
-	upipe_helper_sink.h \
 	upipe_helper_source_read_size.h \
 	upipe_helper_subpipe.h \
 	upipe_helper_sync.h \
@@ -81,4 +83,5 @@ pkginclude_HEADERS = \
 	uref_sound.h \
 	uref_sound_flow.h \
 	uref_std.h \
+	urequest.h \
 	uring.h

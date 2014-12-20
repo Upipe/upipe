@@ -24,7 +24,24 @@
  */
 
 /** @file
- * @short Bin pipe wrapping a source and a queue
+ * @short Bin pipe wrapping a source subpipeline and a queue
+ *
+ * It allows to transfer an existing source subpipeline to a remote upump_mgr,
+ * while setting up a queue to retrieve the packets in the main upump_mgr.
+ *
+ * Please note that the remote subpipeline is not "used" so its refcount is not
+ * incremented. For that reason it shouldn't be "released" afterwards. Only
+ * release the wsrc pipe.
+ *
+ * Note that the allocator requires three additional parameters:
+ * @table 2
+ * @item upipe_remote @item subpipeline to transfer to remote upump_mgr
+ * (belongs to the callee)
+ * @item uprobe_remote @item probe hierarchy to use on the remote thread
+ * (belongs to the callee)
+ * @item output_queue_length @item number of packets in the queue between remote
+ * and main thread
+ * @end table
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_WORKER_SOURCE_H_
@@ -96,32 +113,13 @@ UPIPE_WSRC_MGR_GET_SET_MGR2(qsrc, QSRC)
 UPIPE_WSRC_MGR_GET_SET_MGR2(qsink, QSINK)
 #undef UPIPE_WSRC_MGR_GET_SET_MGR2
 
-/** @This allocates and initializes a worker source pipe. It allows to
- * transfer an existing source pipe to a remote upump_mgr, while setting up
- * a queue to retrieve the packets in the main upump_mgr.
- *
- * Please note that upipe_remote is not "used" so its refcount is not
- * incremented. For that reason it shouldn't be "released" afterwards. Only
- * release the wsrc pipe.
- *
- * @param mgr management structure for queue source type
- * @param uprobe structure used to raise events
- * @param upipe_remote pipe to transfer to remote upump_mgr
- * @param uprobe_remote probe hierarchy to use on the remote thread (belongs to
- * the callee)
- * @param queue_length number of packets in the queue between remote and main
- * thread
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_wsrc_alloc(struct upipe_mgr *mgr,
-                                             struct uprobe *uprobe,
-                                             struct upipe *upipe_remote,
-                                             struct uprobe *uprobe_remote,
-                                             unsigned int queue_length)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_WSRC_SIGNATURE, upipe_remote,
-                       uprobe_remote, queue_length);
-}
+/** @hidden */
+#define ARGS_DECL , struct upipe *upipe_remote, struct uprobe *uprobe_remote, unsigned int output_queue_length
+/** @hidden */
+#define ARGS , upipe_remote, uprobe_remote, output_queue_length
+UPIPE_HELPER_ALLOC(wsrc, UPIPE_WSRC_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

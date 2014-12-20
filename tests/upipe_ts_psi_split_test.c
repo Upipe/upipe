@@ -87,66 +87,77 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-struct ts_test {
+struct test {
     uint16_t table_id;
     unsigned int nb_packets;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_ts_psi_split */
-static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, uint32_t signature,
-                                   va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
-    struct ts_test *ts_test = malloc(sizeof(struct ts_test));
-    assert(ts_test != NULL);
-    upipe_init(&ts_test->upipe, mgr, uprobe);
-    ts_test->table_id = 0;
-    ts_test->nb_packets = 0;
-    return &ts_test->upipe;
+    struct test *test = malloc(sizeof(struct test));
+    assert(test != NULL);
+    upipe_init(&test->upipe, mgr, uprobe);
+    test->table_id = 0;
+    test->nb_packets = 0;
+    return &test->upipe;
 }
 
-/** helper phony pipe to test upipe_ts_psi_split */
-static void ts_test_set_table(struct upipe *upipe, uint16_t table_id)
+/** helper phony pipe */
+static void test_set_table(struct upipe *upipe, uint16_t table_id)
 {
-    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
-    ts_test->table_id = table_id;
+    struct test *test = container_of(upipe, struct test, upipe);
+    test->table_id = table_id;
 }
 
-/** helper phony pipe to test upipe_ts_psi_split */
-static void ts_test_input(struct upipe *upipe, struct uref *uref,
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
                           struct upump **upump_p)
 {
-    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
+    struct test *test = container_of(upipe, struct test, upipe);
     assert(uref != NULL);
-    ts_test->nb_packets++;
+    test->nb_packets++;
     const uint8_t *buffer;
     int size = -1;
     ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == PSI_MAX_SIZE);
-    assert(psi_get_tableid(buffer) == ts_test->table_id);
-    if (ts_test->table_id == 69) {
-        assert(psi_get_tableidext(buffer) == ts_test->table_id);
+    assert(psi_get_tableid(buffer) == test->table_id);
+    if (test->table_id == 69) {
+        assert(psi_get_tableidext(buffer) == test->table_id);
     }
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_ts_psi_split */
-static void ts_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
 {
-    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
-    assert(ts_test->nb_packets == 1);
-    upipe_clean(upipe);
-    free(ts_test);
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
-/** helper phony pipe to test upipe_ts_psi_split */
-static struct upipe_mgr ts_test_mgr = {
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
+{
+    struct test *test = container_of(upipe, struct test, upipe);
+    assert(test->nb_packets == 1);
+    upipe_clean(upipe);
+    free(test);
+}
+
+/** helper phony pipe */
+static struct upipe_mgr test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = ts_test_alloc,
-    .upipe_input = ts_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -192,10 +203,10 @@ int main(int argc, char *argv[])
     psi_set_tableid(filter, 68);
     ubase_assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    struct upipe *upipe_sink68 = upipe_void_alloc(&ts_test_mgr,
+    struct upipe *upipe_sink68 = upipe_void_alloc(&test_mgr,
                                                   uprobe_use(uprobe_stdio));
     assert(upipe_sink68 != NULL);
-    ts_test_set_table(upipe_sink68, 68);
+    test_set_table(upipe_sink68, 68);
 
     struct upipe *upipe_ts_psi_split_output68 =
         upipe_flow_alloc_sub(upipe_ts_psi_split,
@@ -209,10 +220,10 @@ int main(int argc, char *argv[])
     psi_set_tableidext(filter, 69);
     ubase_assert(uref_ts_flow_set_psi_filter(uref, filter, mask,
                                        PSI_HEADER_SIZE_SYNTAX1));
-    struct upipe *upipe_sink69 = upipe_void_alloc(&ts_test_mgr,
+    struct upipe *upipe_sink69 = upipe_void_alloc(&test_mgr,
                                                   uprobe_use(uprobe_stdio));
     assert(upipe_sink69 != NULL);
-    ts_test_set_table(upipe_sink69, 69);
+    test_set_table(upipe_sink69, 69);
 
     struct upipe *upipe_ts_psi_split_output69 =
         upipe_flow_alloc_sub(upipe_ts_psi_split,
@@ -262,8 +273,8 @@ int main(int argc, char *argv[])
     upipe_release(upipe_ts_psi_split);
     upipe_mgr_release(upipe_ts_psi_split_mgr); // nop
 
-    ts_test_free(upipe_sink68);
-    ts_test_free(upipe_sink69);
+    test_free(upipe_sink68);
+    test_free(upipe_sink69);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

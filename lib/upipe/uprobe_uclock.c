@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_uclock events and providing a given uclock
+ * @short probe catching provide_request events asking for a uclock
  */
 
 #include <upipe/ubase.h>
@@ -51,12 +51,18 @@ static int uprobe_uclock_throw(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uprobe_uclock *uprobe_uclock =
         uprobe_uclock_from_uprobe(uprobe);
-    if (event != UPROBE_NEED_UCLOCK || uprobe_uclock->uclock == NULL)
+    if (event != UPROBE_PROVIDE_REQUEST || uprobe_uclock->uclock == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    struct uclock **uclock_p = va_arg(args, struct uclock **);
-    *uclock_p = uclock_use(uprobe_uclock->uclock);
-    return UBASE_ERR_NONE;
+    va_list args_copy;
+    va_copy(args_copy, args);
+    struct urequest *urequest = va_arg(args_copy, struct urequest *);
+    va_end(args_copy);
+    if (urequest->type != UREQUEST_UCLOCK)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    return urequest_provide_uclock(urequest,
+                                   uclock_use(uprobe_uclock->uclock));
 }
 
 /** @This initializes an already allocated uprobe_uclock structure.

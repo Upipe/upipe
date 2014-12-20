@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>

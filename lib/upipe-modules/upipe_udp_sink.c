@@ -43,7 +43,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include "upipe_udp.h"
@@ -86,8 +86,11 @@ struct upipe_udpsink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *upump;
+
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** delay applied to systime attribute when uclock is provided */
     uint64_t latency;
@@ -118,8 +121,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
-UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock)
+UPIPE_HELPER_INPUT(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
+UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 /** @internal @This allocates a udp sink pipe.
  *
@@ -142,7 +145,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
     upipe_udpsink_init_upump(upipe);
-    upipe_udpsink_init_sink(upipe);
+    upipe_udpsink_init_input(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
@@ -187,6 +190,15 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(uref, &latency);
+        if (latency > upipe_udpsink->latency)
+            upipe_udpsink->latency = latency;
+        uref_free(uref);
+        return true;
+    }
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         uref_free(uref);
@@ -306,9 +318,9 @@ static void upipe_udpsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_udpsink_set_upump(upipe, NULL);
-    upipe_udpsink_output_sink(upipe);
-    upipe_udpsink_unblock_sink(upipe);
-    if (upipe_udpsink_check_sink(upipe)) {
+    upipe_udpsink_output_input(upipe);
+    upipe_udpsink_unblock_input(upipe);
+    if (upipe_udpsink_check_input(upipe)) {
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_udpsink_input. */
         upipe_release(upipe);
@@ -324,12 +336,12 @@ static void upipe_udpsink_watcher(struct upump *upump)
 static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
-    if (!upipe_udpsink_check_sink(upipe)) {
-        upipe_udpsink_hold_sink(upipe, uref);
-        upipe_udpsink_block_sink(upipe, upump_p);
+    if (!upipe_udpsink_check_input(upipe)) {
+        upipe_udpsink_hold_input(upipe, uref);
+        upipe_udpsink_block_input(upipe, upump_p);
     } else if (!upipe_udpsink_output(upipe, uref, upump_p)) {
-        upipe_udpsink_hold_sink(upipe, uref);
-        upipe_udpsink_block_sink(upipe, upump_p);
+        upipe_udpsink_hold_input(upipe, uref);
+        upipe_udpsink_block_input(upipe, upump_p);
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);
@@ -347,12 +359,10 @@ static int upipe_udpsink_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
-    if (latency > upipe_udpsink->latency)
-        upipe_udpsink->latency = latency;
+    flow_def = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def)
+    upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -391,7 +401,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     free(upipe_udpsink->uri);
     upipe_udpsink->uri = NULL;
     upipe_udpsink_set_upump(upipe, NULL);
-    if (!upipe_udpsink_check_sink(upipe))
+    if (!upipe_udpsink_check_input(upipe))
         /* Release the pipe used in @ref upipe_udpsink_input. */
         upipe_release(upipe);
 
@@ -425,7 +435,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    if (!upipe_udpsink_check_sink(upipe))
+    if (!upipe_udpsink_check_input(upipe))
         /* Use again the pipe that we previously released. */
         upipe_use(upipe);
     upipe_notice_va(upipe, "opening uri %s in %s mode",
@@ -441,7 +451,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
  */
 static int upipe_udpsink_flush(struct upipe *upipe)
 {
-    if (upipe_udpsink_flush_sink(upipe)) {
+    if (upipe_udpsink_flush_input(upipe)) {
         upipe_udpsink_set_upump(upipe, NULL);
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_udpsink_input. */
@@ -466,17 +476,24 @@ static int _upipe_udpsink_control(struct upipe *upipe,
             return upipe_udpsink_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_udpsink_set_upump(upipe, NULL);
-            return upipe_udpsink_attach_uclock(upipe);
+            upipe_udpsink_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_udpsink_set_flow_def(upipe, flow_def);
         }
 
-        case UPIPE_SINK_GET_MAX_LENGTH: {
+        case UPIPE_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_udpsink_get_max_length(upipe, p);
         }
-        case UPIPE_SINK_SET_MAX_LENGTH: {
+        case UPIPE_SET_MAX_LENGTH: {
             unsigned int max_length = va_arg(args, unsigned int);
             return upipe_udpsink_set_max_length(upipe, max_length);
         }
@@ -501,7 +518,7 @@ static int _upipe_udpsink_control(struct upipe *upipe,
             enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
             return _upipe_udpsink_set_uri(upipe, uri, mode);
         }
-        case UPIPE_SINK_FLUSH:
+        case UPIPE_FLUSH:
             return upipe_udpsink_flush(upipe);
         default:
             return UBASE_ERR_UNHANDLED;
@@ -520,7 +537,7 @@ static int upipe_udpsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_udpsink_control(upipe, command, args));
 
-    if (unlikely(!upipe_udpsink_check_sink(upipe)))
+    if (unlikely(!upipe_udpsink_check_input(upipe)))
         upipe_udpsink_poll(upipe);
 
     return UBASE_ERR_NONE;
@@ -544,7 +561,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     upipe_udpsink_clean_uclock(upipe);
     upipe_udpsink_clean_upump(upipe);
     upipe_udpsink_clean_upump_mgr(upipe);
-    upipe_udpsink_clean_sink(upipe);
+    upipe_udpsink_clean_input(upipe);
     upipe_udpsink_clean_urefcount(upipe);
     upipe_udpsink_free_void(upipe);
 }

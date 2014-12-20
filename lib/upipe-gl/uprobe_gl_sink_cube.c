@@ -113,7 +113,6 @@ static void uprobe_gl_sink_cube_render(struct uprobe *uprobe,
     /* load image to texture */
     if (!upipe_gl_texture_load_uref(uref, cube->texture)) {
         upipe_err(upipe, "Could not map picture plane");
-        uref_free(uref);
         return;
     }
 
@@ -225,7 +224,7 @@ static int uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
                         struct upipe *upipe, int event, va_list args)
 {
     switch (event) {
-        case UPROBE_NEW_FLOW_DEF: {
+        case UPROBE_NEW_FLOW_DEF: { /* FIXME */
             struct uref *uref = va_arg(args, struct uref*);
             uprobe_gl_sink_cube_new_flow(uprobe, upipe, uref);
             return UBASE_ERR_NONE;

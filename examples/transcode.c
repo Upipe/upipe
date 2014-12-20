@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
@@ -252,7 +251,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
         /* demux output */
         struct upipe *avfsrc_output =
             upipe_flow_alloc_sub(avfsrc,
-                    uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
                         loglevel, "src %"PRIu64, id), flow_def);
         assert(avfsrc_output != NULL);
 
@@ -264,7 +263,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             /* decoder */
             struct upipe *decoder = upipe_void_alloc_output(avfsrc_output,
                 upipe_avcdec_mgr,
-                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "dec %"PRIu64, id));
             upipe_release(decoder);
             incoming = decoder;
@@ -285,7 +284,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             uref_flow_set_def(ffmt_flow, ffmt_def);
             struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
                 uprobe_pfx_alloc_va(uprobe_filter_suggest_alloc(
-                        uprobe_output_alloc(uprobe_use(logger))),
+                        uprobe_use(logger)),
                     UPROBE_LOG_VERBOSE, "ffmt %"PRIu64, id), ffmt_flow);
             assert(ffmt);
             uref_free(ffmt_flow);
@@ -298,7 +297,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             uref_avcenc_set_codec_name(flow, conf->codec);
             struct upipe *encoder = upipe_flow_alloc_output(incoming,
                 upipe_avcenc_mgr,
-                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "enc %"PRIu64, id), flow);
             upipe_release(encoder);
             uref_free(flow);

@@ -1,5 +1,7 @@
 #!/bin/sh
 
+UNAME=$(uname)
+
 TMP="`mktemp -d tmp.XXXXXXXXXX`"
 if ! ./upipe_file_test Makefile "$TMP"/test; then
 	rm -rf "$TMP"

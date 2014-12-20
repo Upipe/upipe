@@ -42,7 +42,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_rtp_prepend.h>
 
@@ -70,14 +69,14 @@ struct upipe_rtp_prepend {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** rtp sequence number */
     uint16_t seqnum;
@@ -93,8 +92,7 @@ struct upipe_rtp_prepend {
 UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_rtp_prepend, urefcount, upipe_rtp_prepend_free)
 UPIPE_HELPER_VOID(upipe_rtp_prepend);
-UPIPE_HELPER_UBUF_MGR(upipe_rtp_prepend, ubuf_mgr, flow_def);
-UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, flow_def_sent);
+UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, output_state, request_list);
 
 /** @internal @This handles data.
  *
@@ -113,12 +111,6 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     lldiv_t div;
     int size = -1;
 
-    /* check ubuf manager */
-    if (unlikely(!ubase_check(upipe_rtp_prepend_check_ubuf_mgr(upipe)))) {
-        uref_free(uref);
-        return;
-    }
-
     /* timestamp (synced to program clock ref, fallback to system clock ref) */
     if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
         uref_clock_get_cr_sys(uref, &cr);
@@ -128,7 +120,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
          + ((uint64_t)div.rem * upipe_rtp_prepend->clockrate)/UCLOCK_FREQ;
     
     /* alloc header */
-    header = ubuf_block_alloc(upipe_rtp_prepend->ubuf_mgr, RTP_HEADER_SIZE);
+    header = ubuf_block_alloc(uref->ubuf->mgr, RTP_HEADER_SIZE);
     if (unlikely(!header)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         uref_free(uref);
@@ -244,12 +236,13 @@ static int upipe_rtp_prepend_control(struct upipe *upipe,
                                      int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_rtp_prepend_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_rtp_prepend_register_output_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_rtp_prepend_unregister_output_request(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -308,7 +301,6 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     struct upipe_rtp_prepend *upipe_rtp_prepend =
         upipe_rtp_prepend_from_upipe(upipe);
     upipe_rtp_prepend_init_urefcount(upipe);
-    upipe_rtp_prepend_init_ubuf_mgr(upipe);
     upipe_rtp_prepend_init_output(upipe);
 
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
@@ -328,7 +320,6 @@ static void upipe_rtp_prepend_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    upipe_rtp_prepend_clean_ubuf_mgr(upipe);
     upipe_rtp_prepend_clean_output(upipe);
     upipe_rtp_prepend_clean_urefcount(upipe);
     upipe_rtp_prepend_free_void(upipe);

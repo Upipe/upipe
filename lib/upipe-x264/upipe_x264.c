@@ -27,6 +27,8 @@
  * @short Upipe x264 module
  */
 
+#define _GNU_SOURCE
+
 #include <upipe/uclock.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
@@ -64,6 +66,9 @@
 #define OUT_FLOW "block.h264.pic."
 #define OUT_FLOW_MPEG2 "block.mpeg2video.pic."
 
+/** @hidden */
+static int upipe_x264_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal upipe_x264 private structure */
 struct upipe_x264 {
     /** refcount management structure */
@@ -85,8 +90,13 @@ struct upipe_x264 {
 
     /** uclock */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** input flow */
     struct uref *flow_def_input;
     /** attributes added by the pipe */
@@ -95,10 +105,12 @@ struct upipe_x264 {
     struct uref *flow_def_check;
     /** output flow */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
     /** output pipe */
     struct upipe *output;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** last DTS */
     uint64_t last_dts;
@@ -112,11 +124,13 @@ struct upipe_x264 {
 UPIPE_HELPER_UPIPE(upipe_x264, upipe, UPIPE_X264_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_x264, urefcount, upipe_x264_free)
 UPIPE_HELPER_VOID(upipe_x264);
-UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, flow_def_attr);
-UPIPE_HELPER_UCLOCK(upipe_x264, uclock);
-UPIPE_HELPER_OUTPUT(upipe_x264, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_x264, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_x264, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_x264, flow_def_check)
+UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, ubuf_mgr_request, upipe_x264_check,
+                      upipe_x264_register_output_request,
+                      upipe_x264_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_x264, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 static void upipe_x264_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p);
 
@@ -135,7 +149,7 @@ static const enum uprobe_log_level loglevel_map[] = {
  * @param args arguments
  */
 static void upipe_x264_log(void *_upipe, int loglevel,
-                             const char *format, va_list args)
+                           const char *format, va_list args)
 {
     struct upipe *upipe = _upipe;
     char *string = NULL, *end = NULL;
@@ -482,8 +496,25 @@ static inline bool upipe_x264_need_update(struct upipe *upipe,
 static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
                              struct upump **upump_p)
 {
-    static const char *const chromas[] = {"y8", "u8", "v8"};
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_x264_store_flow_def(upipe, NULL);
+        uref = upipe_x264_store_flow_def_input(upipe, uref);
+        uref_pic_flow_clear_format(uref);
+        upipe_x264->input_latency = 0;
+        uref_clock_get_latency(upipe_x264->flow_def_input,
+                               &upipe_x264->input_latency);
+        upipe_x264_demand_ubuf_mgr(upipe, uref);
+        return;
+    }
+
+    if (upipe_x264->flow_def == NULL) {
+        uref_free(uref);
+        return;
+    }
+
+    static const char *const chromas[] = {"y8", "u8", "v8"};
     size_t width, height;
     x264_picture_t pic;
     x264_nal_t *nals;
@@ -523,11 +554,6 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
             }
         }
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
-
-        if (unlikely(!ubase_check(upipe_x264_check_ubuf_mgr(upipe)))) {
-            uref_free(uref);
-            return;
-        }
 
         /* set pts in x264 timebase */
         pic.i_pts = upipe_x264->x264_ts;
@@ -653,6 +679,20 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     upipe_x264_output(upipe, uref, upump_p);
 }
 
+/** @internal @This receives a provided ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_x264_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_x264_store_flow_def(upipe, flow_format);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -738,34 +778,28 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    flow_def = upipe_x264_store_flow_def_input(upipe, flow_def);
-    if (flow_def != NULL) {
-        uref_pic_flow_clear_format(flow_def);
-        upipe_x264_store_flow_def(upipe, flow_def);
-    }
-
-    upipe_x264->input_latency = 0;
-    uref_clock_get_latency(upipe_x264->flow_def_input,
-                           &upipe_x264->input_latency);
+    upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This suggests an input flow definition.
+/** @internal @This provides a flow format suggestion.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
+ * @param request description structure of the request
  * @return an error code
  */
-static int upipe_x264_suggest_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+static int upipe_x264_provide_flow_format(struct upipe *upipe,
+                                          struct urequest *request)
 {
-    uref_pic_flow_clear_format(flow_def);
-    UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
-    UBASE_RETURN(uref_pic_flow_set_planes(flow_def, 0))
-    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
-    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"))
-    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"))
-    return UBASE_ERR_NONE;
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    uref_pic_flow_clear_format(flow_format);
+    uref_pic_flow_set_macropixel(flow_format, 1);
+    uref_pic_flow_set_planes(flow_format, 0);
+    uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
+    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
+    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+    return urequest_provide_flow_format(request, flow_format);
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -779,12 +813,24 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
-            return upipe_x264_attach_uclock(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_x264_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT:
+            upipe_x264_require_uclock(upipe);
             return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_throw_provide_request(upipe, request);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_x264_provide_flow_format(upipe, request);
+            return upipe_x264_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_x264_free_output_proxy(upipe, request);
+        }
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_x264_get_flow_def(upipe, p);
@@ -792,10 +838,6 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_x264_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUGGEST_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_x264_suggest_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -873,7 +915,7 @@ static struct upipe_mgr upipe_x264_mgr = {
     .upipe_mgr_control = NULL
 };
 
-/** @This returns the management structure for glx_sink pipes
+/** @This returns the management structure for x264 pipes
  *
  * @return pointer to manager
  */

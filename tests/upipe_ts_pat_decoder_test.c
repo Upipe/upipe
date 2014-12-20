@@ -78,6 +78,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEED_OUTPUT:
             break;
         case UPROBE_NEW_RAP: {
             struct uref *uref = va_arg(args, struct uref *);

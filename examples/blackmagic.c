@@ -27,7 +27,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -201,13 +200,13 @@ int main(int argc, char **argv)
 
     /* blackmagic source */
     struct upipe *bmdsrc = upipe_bmd_src_alloc(upipe_bmd_src_mgr,
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+        uprobe_pfx_alloc(uprobe_use(logger),
                          loglevel, "bmdsrc"),
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+        uprobe_pfx_alloc(uprobe_use(logger),
                          loglevel, "bmdvideo"),
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+        uprobe_pfx_alloc(uprobe_use(logger),
                          loglevel, "bmdaudio"),
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+        uprobe_pfx_alloc(uprobe_use(logger),
                          loglevel, "bmdsubpic"));
     assert(bmdsrc);
     upipe_attach_uclock(bmdsrc);
@@ -224,7 +223,7 @@ int main(int argc, char **argv)
     uref_flow_set_def(flow, "pic.");
     struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
             uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
-                    uprobe_output_alloc(uprobe_use(logger))),
+                    uprobe_use(logger)),
                 UPROBE_LOG_VERBOSE, "ffmtvideo"), flow);
     assert(ffmt);
     uref_free(flow);
@@ -233,7 +232,7 @@ int main(int argc, char **argv)
     flow = uref_block_flow_alloc_def(uref_mgr, "");
     uref_avcenc_set_codec_name(flow, video_codec);
     struct upipe *avcenc = upipe_flow_alloc_output(ffmt, upipe_avcenc_mgr,
-        uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+        uprobe_pfx_alloc(uprobe_use(logger),
             loglevel, "avcenc"), flow);
     assert(avcenc);
     upipe_set_option(avcenc, "b", "12000000");
@@ -261,7 +260,7 @@ int main(int argc, char **argv)
         uref_flow_set_def(flow, "sound.");
         struct upipe *ffmtaudio = upipe_flow_alloc(upipe_ffmt_mgr,
             uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
-                    uprobe_output_alloc(uprobe_use(logger))),
+                    uprobe_use(logger)),
                 UPROBE_LOG_VERBOSE, "ffmtaudio"), flow);
         assert(ffmtaudio);
         uref_free(flow);
@@ -271,7 +270,7 @@ int main(int argc, char **argv)
         uref_avcenc_set_codec_name(flow, audio_codec);
         struct upipe *audioenc = upipe_flow_alloc_output(ffmtaudio,
             upipe_avcenc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                 loglevel, "audioenc"), flow);
         assert(audioenc);
         uref_free(flow);

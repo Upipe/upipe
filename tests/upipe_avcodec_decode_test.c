@@ -32,6 +32,7 @@
 #include <assert.h>
 #include <ev.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
@@ -60,8 +61,8 @@
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe-modules/upipe_null.h>
 
-#include <upipe/upipe_helper_upipe.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 
@@ -130,8 +131,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEW_FLOW_DEF:
-        case UPROBE_NEW_FLOW_FORMAT:
         case UPROBE_NEED_UPUMP_MGR:
             break;
         default:
@@ -141,16 +140,16 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     return UBASE_ERR_NONE;
 }
 
-/** phony pipe to test upipe_avcdec */
+/** helper phony pipe */
 struct avcdec_test {
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_avcdec */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(avcdec_test, upipe, 0);
 
-/** helper phony pipe to test upipe_avcdec */
-static struct upipe *avcdec_test_alloc(struct upipe_mgr *mgr,
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
                                        uint32_t signature, va_list args)
 {
@@ -161,8 +160,8 @@ static struct upipe *avcdec_test_alloc(struct upipe_mgr *mgr,
     return &avcdec_test->upipe;
 }
 
-/** helper phony pipe to test upipe_avcdec */
-static void avcdec_test_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
     const uint8_t *buf = NULL;
     size_t stride = 0, hsize = 0, vsize = 0;
@@ -183,8 +182,26 @@ static void avcdec_test_input(struct upipe *upipe, struct uref *uref, struct upu
     // FIXME peek into buffer
 }
 
-/** helper phony pipe to test upipe_avcdec */
-static void avcdec_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
@@ -197,45 +214,9 @@ static void avcdec_test_free(struct upipe *upipe)
 static struct upipe_mgr avcdec_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = avcdec_test_alloc,
-    .upipe_input = avcdec_test_input,
-    .upipe_control = NULL
-};
-
-/** nullpipe (/dev/null) */
-static struct upipe *nullpipe_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe,
-                                    uint32_t signature, va_list args)
-{
-    struct upipe *upipe = malloc(sizeof(struct upipe));
-    if (unlikely(!upipe))
-        return NULL;
-    upipe_init(upipe, mgr, uprobe);
-    upipe_throw_ready(upipe);
-    return upipe;
-}
-
-/** nullpipe (/dev/null) */
-static void nullpipe_free(struct upipe *upipe)
-{
-    upipe_throw_dead(upipe);
-    upipe_clean(upipe);
-    free(upipe);
-}
-
-/** nullpipe (/dev/null) */
-static void nullpipe_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
-{
-    upipe_dbg(upipe, "sending uref to devnull");
-    uref_free(uref);
-}
-
-/** nullpipe (/dev/null) */
-static struct upipe_mgr nullpipe_mgr = {
-    .refcount = NULL,
-    .upipe_alloc = nullpipe_alloc,
-    .upipe_input = nullpipe_input,
-    .upipe_control = NULL,
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 /** Fetch video packets using avformat and send them to avcdec pipe.
@@ -457,9 +438,11 @@ int main (int argc, char **argv)
     ubase_assert(upipe_set_output(avcdec, avcdec_test));
     
     // null pipe
-    struct upipe *nullpipe = upipe_void_alloc(&nullpipe_mgr,
+    struct upipe_mgr *nullpipe_mgr = upipe_null_mgr_alloc();
+    struct upipe *nullpipe = upipe_void_alloc(nullpipe_mgr,
                 uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                  "devnull"));
+    upipe_mgr_release(nullpipe_mgr);
 
     if (!pgm_prefix) {
         ubase_assert(upipe_set_output(avcdec, nullpipe));
@@ -533,7 +516,7 @@ int main (int argc, char **argv)
             avformat_close_input(&thread[i].avfctx);
         }
 
-        printf("udeal/pthread test ended. Now launching decoding test.\n", thread_num);
+        printf("udeal/pthread test ended (%d). Now launching decoding test.\n", thread_num);
     }
 
     // Now read with avformat
@@ -542,8 +525,8 @@ int main (int argc, char **argv)
     // Close avformat
     avformat_close_input(&mainthread.avfctx);
 
-    nullpipe_free(nullpipe);
-    avcdec_test_free(avcdec_test);
+    upipe_release(nullpipe);
+    test_free(avcdec_test);
     upipe_mgr_release(upipe_avcdec_mgr);
 	upump_free(write_pump);
 

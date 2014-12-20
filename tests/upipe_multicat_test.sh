@@ -1,5 +1,7 @@
 #!/bin/sh
 
+UNAME=$(uname)
+
 TMP="`mktemp -d tmp.XXXXXXXXXX`"
 mkdir -p "$TMP"/test1
 if ! ./upipe_multicat_test -r 270000000 "$TMP"/test1/ .bar; then

@@ -82,10 +82,9 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** helper phony pipe to test upipe_ts_psii */
-static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, uint32_t signature,
-                                   va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -93,28 +92,46 @@ static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_ts_psii */
-static void ts_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     nb_packets++;
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_ts_psii */
-static void ts_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_ts_psii */
+/** helper phony pipe */
 static struct upipe_mgr ts_test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = ts_test_alloc,
-    .upipe_input = ts_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -156,9 +173,9 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "ts psii"));
     assert(upipe_ts_psii != NULL);
+    ubase_assert(upipe_set_output(upipe_ts_psii, upipe_sink));
     ubase_assert(upipe_set_flow_def(upipe_ts_psii, uref));
     uref_free(uref);
-    ubase_assert(upipe_set_output(upipe_ts_psii, upipe_sink));
 
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
@@ -212,7 +229,7 @@ int main(int argc, char *argv[])
 
     upipe_mgr_release(upipe_ts_psii_mgr); // nop
 
-    ts_test_free(upipe_sink);
+    test_free(upipe_sink);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

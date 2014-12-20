@@ -59,8 +59,10 @@ struct upipe_ts_patd {
     struct upipe *output;
     /** output flow definition */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** input flow definition */
     struct uref *flow_def_input;
@@ -82,7 +84,7 @@ struct upipe_ts_patd {
 UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe, UPIPE_TS_PATD_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_patd, urefcount, upipe_ts_patd_free)
 UPIPE_HELPER_VOID(upipe_ts_patd)
-UPIPE_HELPER_OUTPUT(upipe_ts_patd, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_patd, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_patd pipe.
  *
@@ -318,7 +320,7 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
         UBASE_FATAL(upipe, uref_flow_set_id(flow_def, tsid))
         upipe_ts_patd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
-        upipe_throw_new_flow_def(upipe, flow_def);
+        upipe_ts_patd_output(upipe, NULL, upump_p);
     }
 
     upipe_ts_patd_table_rap(upipe, uref);
@@ -471,6 +473,14 @@ static int _upipe_ts_patd_get_nit(struct upipe *upipe, struct uref **p)
 static int upipe_ts_patd_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_patd_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_patd_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_patd_get_flow_def(upipe, p);

@@ -80,7 +80,7 @@ static void test_free(struct urefcount *urefcount)
 {
     struct test_pipe *test_pipe =
         container_of(urefcount, struct test_pipe, urefcount);
-    upipe_dbg(&test_pipe->upipe, "dead");
+    upipe_throw_dead(&test_pipe->upipe);
     urefcount_clean(&test_pipe->urefcount);
     upipe_clean(&test_pipe->upipe);
     free(test_pipe);
@@ -161,6 +161,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         default:
             assert(0);
@@ -186,6 +187,7 @@ int main(int argc, char **argv)
 
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
+    setlinebuf(stdout);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_VERBOSE);
     assert(logger != NULL);
     logger = uprobe_pthread_upump_mgr_alloc(logger);

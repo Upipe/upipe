@@ -54,7 +54,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
@@ -182,7 +181,7 @@ int main(int argc, char *argv[])
     /* udp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "udp source"));
     upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
     upipe_attach_uclock(upipe_udpsrc);
@@ -211,10 +210,10 @@ int main(int argc, char *argv[])
                 uprobe_pfx_alloc(uprobe_use(logger), loglevel, "dup"));
 
         struct upipe *upipe_dup_data = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                    uprobe_pfx_alloc(uprobe_use(logger),
                                      loglevel, "dupdata"));
         struct upipe *upipe_dup_aux = upipe_void_alloc_sub(upipe_dup,
-                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                    uprobe_pfx_alloc(uprobe_use(logger),
                                      loglevel, "dupaux"));
 
         /* data files (multicat sink) */
@@ -233,7 +232,7 @@ int main(int argc, char *argv[])
         struct upipe_mgr *upipe_genaux_mgr = upipe_genaux_mgr_alloc();
         struct upipe *genaux = upipe_void_alloc_output(upipe_dup_aux,
                 upipe_genaux_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "genaux"));
 
         /* aux files (multicat sink) */

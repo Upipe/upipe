@@ -30,7 +30,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/upipe.h>
@@ -116,7 +115,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
-        case UPROBE_NEW_FLOW_FORMAT:
         case UPROBE_NEED_UPUMP_MGR:
             break;
         default:
@@ -135,7 +133,7 @@ static int catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
     int64_t num = 0;
     struct upump_mgr *upump_mgr = NULL;
 
-    if (event != UPROBE_NEW_FLOW_DEF) {
+    if (event != UPROBE_NEED_OUTPUT) {
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
 
@@ -202,7 +200,7 @@ struct upipe *build_pipeline(const char *codec_def,
     /* encoder */
     struct upipe *avcenc = upipe_flow_alloc(upipe_avcenc_mgr,
         uprobe_upump_mgr_alloc(
-            uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_avcenc_s),
+            uprobe_pfx_alloc_va(&uprobe_avcenc_s,
                                 loglevel, "avcenc %d", num), upump_mgr),
         output_flow);
     uref_free(output_flow);

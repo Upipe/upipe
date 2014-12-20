@@ -47,6 +47,7 @@
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_idem.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -246,6 +247,60 @@ int main(int argc, char **argv)
     upipe_release(null);
 
     struct uref *uref = uref_alloc(uref_mgr);
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(upipe_set_flow_def(upipe_handle, uref));
+    uref_flow_delete_def(uref);
+    nb_packets++;
+    upipe_input(upipe_handle, uref, NULL);
+    upipe_release(upipe_handle);
+
+    ev_loop(loop, 0);
+
+    uprobe_err(logger, NULL, "joining");
+    assert(!pthread_join(id, NULL));
+    uprobe_err(logger, NULL, "joined");
+    assert(transferred);
+    assert(!nb_packets);
+
+    /* same test with 2 pipes */
+    upipe_test = upipe_void_alloc(&test_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "test"));
+    assert(upipe_test != NULL);
+
+    struct upipe_mgr *idem_mgr = upipe_idem_mgr_alloc();
+    upipe_test = upipe_void_chain_input(upipe_test, idem_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "idem"));
+    assert(upipe_test != NULL);
+    upipe_mgr_release(idem_mgr);
+
+    upipe_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    assert(upipe_xfer_mgr != NULL);
+
+    upipe_mgr_use(upipe_xfer_mgr);
+    assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
+
+    upipe_wlin_mgr = upipe_wlin_mgr_alloc(upipe_xfer_mgr);
+    assert(upipe_wlin_mgr != NULL);
+    upipe_mgr_release(upipe_xfer_mgr);
+
+    upipe_handle = upipe_wlin_alloc(upipe_wlin_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "wlin"),
+            upipe_test,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "wlin_x"),
+            WLIN_QUEUE, WLIN_QUEUE);
+    /* from now on upipe_test shouldn't be accessed from this thread */
+    assert(upipe_handle != NULL);
+    upipe_mgr_release(upipe_wlin_mgr);
+
+    upipe_null_mgr = upipe_null_mgr_alloc();
+    assert(upipe_null_mgr != NULL);
+    null = upipe_void_alloc(upipe_null_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "null"));
+    assert(null != NULL);
+    upipe_set_output(upipe_handle, null);
+    upipe_release(null);
+
+    uref = uref_alloc(uref_mgr);
     ubase_assert(uref_flow_set_def(uref, "void."));
     ubase_assert(upipe_set_flow_def(upipe_handle, uref));
     uref_flow_delete_def(uref);

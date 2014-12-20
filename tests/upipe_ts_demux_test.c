@@ -92,6 +92,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_CLOCK_TS:
         case UPROBE_TS_SPLIT_ADD_PID:
         case UPROBE_TS_SPLIT_DEL_PID:
+        case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SOURCE_END:
             break;
         case UPROBE_SPLIT_UPDATE: {
@@ -132,7 +133,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             }
             break;
         }
-        case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEED_OUTPUT:
             assert(expect_new_flow_def);
             expect_new_flow_def = false;
             break;

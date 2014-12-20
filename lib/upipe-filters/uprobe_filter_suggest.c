@@ -24,10 +24,7 @@
  */
 
 /** @file
- * @short probe dealing with the suggest_flow_def event
- *
- * It catches the suggest_flow_def event, and asks the output pipe to
- * suggest modifications to the proposed flow definition.
+ * @short stub probe (to be removed)
  */
 
 #include <upipe/ubase.h>
@@ -52,25 +49,7 @@ static int uprobe_filter_suggest_throw(struct uprobe *uprobe,
                                        struct upipe *upipe,
                                        int event, va_list args)
 {
-    switch (event) {
-        default:
-            return uprobe_throw_next(uprobe, upipe, event, args);
-
-        case UPROBE_FILTER_SUGGEST_FLOW_DEF: {
-            va_list args_copy;
-            va_copy(args_copy, args);
-            struct uref *flow_def = va_arg(args_copy, struct uref *);
-            va_end(args_copy);
-            struct upipe *output;
-            if (likely(ubase_check(upipe_get_output(upipe, &output)) &&
-                       output != NULL)) {
-                upipe_suggest_flow_def(output, flow_def);
-                upipe_dbg(upipe, "suggested flow def");
-                udict_dump(flow_def->udict, upipe->uprobe);
-            }
-            return uprobe_throw_next(uprobe, upipe, event, args);
-        }
-    }
+    return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
 /** @This initializes an already allocated uprobe_filter_suggest structure.

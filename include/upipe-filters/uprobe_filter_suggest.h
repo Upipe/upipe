@@ -57,7 +57,7 @@ UPROBE_HELPER_UPROBE(uprobe_filter_suggest, uprobe)
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_filter_suggest_init(
+UBASE_DEPRECATED struct uprobe *uprobe_filter_suggest_init(
         struct uprobe_filter_suggest *uprobe_filter_suggest,
         struct uprobe *next);
 

@@ -27,7 +27,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
@@ -120,7 +119,7 @@ static int catch_mpgaf(struct uprobe *uprobe, struct upipe *upipe,
     /* avcdec */
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
+            uprobe_pfx_alloc_va(uprobe_use(&uprobe_avcdec),
                                 loglevel, "avcdec"));
     upipe_release(avcdec);
     return UBASE_ERR_NONE;
@@ -141,7 +140,7 @@ static int catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     upipe_mgr_release(upipe_trickp_mgr);
     upipe_attach_uclock(trickp);
     struct upipe *trickp_audio = upipe_void_alloc_output_sub(upipe, trickp,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc_va(uprobe_use(logger),
                                 loglevel, "trickp audio"));
     upipe_release(trickp);
 
@@ -234,7 +233,7 @@ int main(int argc, char **argv)
         exit(1);
 
     struct upipe *upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src)),
+                uprobe_pfx_alloc(uprobe_use(&uprobe_src),
                                  loglevel, "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
     if (unlikely(upipe_src == NULL))
@@ -250,7 +249,7 @@ int main(int argc, char **argv)
 
     struct upipe *upipe_nodemux = upipe_void_alloc_output(upipe_src,
                 upipe_nodemux_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "nodemux"));
     if (upipe_nodemux == NULL)
         exit(1);
@@ -263,7 +262,7 @@ int main(int argc, char **argv)
 
     struct upipe *upipe_mpgaf = upipe_void_alloc_output(upipe_nodemux,
                 upipe_mpgaf_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_mpgaf)),
+                uprobe_pfx_alloc(uprobe_use(&uprobe_mpgaf),
                                  loglevel, "mpgaf"));
     if (upipe_mpgaf == NULL)
         exit(1);

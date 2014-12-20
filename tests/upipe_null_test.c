@@ -54,7 +54,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEW_FLOW_DEF:
             break;
         default:
             assert(0);

@@ -71,6 +71,9 @@
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
+/** @hidden */
+static int upipe_udpsrc_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a udp socket source pipe. */
 struct upipe_udpsrc {
     /** refcount management structure */
@@ -78,22 +81,32 @@ struct upipe_udpsrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
     /** read size */
     unsigned int read_size;
 
@@ -109,14 +122,22 @@ struct upipe_udpsrc {
 UPIPE_HELPER_UPIPE(upipe_udpsrc, upipe, UPIPE_UDPSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_udpsrc, urefcount, upipe_udpsrc_free)
 UPIPE_HELPER_VOID(upipe_udpsrc)
-UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_udpsrc, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_udpsrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_udpsrc, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_udpsrc, uref_mgr, uref_mgr_request,
+                      upipe_udpsrc_check,
+                      upipe_udpsrc_register_output_request,
+                      upipe_udpsrc_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_udpsrc, ubuf_mgr, ubuf_mgr_request,
+                      upipe_udpsrc_check,
+                      upipe_udpsrc_register_output_request,
+                      upipe_udpsrc_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_udpsrc, uclock, uclock_request, upipe_udpsrc_check,
+                    upipe_udpsrc_register_output_request,
+                    upipe_udpsrc_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_udpsrc, uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_udpsrc, read_size)
 
 /** @internal @This allocates a udp socket source pipe.
@@ -221,6 +242,58 @@ static void upipe_udpsrc_worker(struct upump *upump)
     upipe_release(upipe);
 }
 
+/** @internal @This checks if the pump may be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_udpsrc_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_udpsrc_store_flow_def(upipe, flow_format);
+
+    upipe_udpsrc_check_upump_mgr(upipe);
+    if (upipe_udpsrc->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_udpsrc->uref_mgr == NULL) {
+        upipe_udpsrc_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_udpsrc->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_udpsrc_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_udpsrc->uclock == NULL &&
+        urequest_get_opaque(&upipe_udpsrc->uclock_request, struct upipe *)
+            != NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_udpsrc->fd != -1 && upipe_udpsrc->upump == NULL) {
+        struct upump *upump;
+        upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
+                                    upipe_udpsrc_worker, upipe,
+                                    upipe_udpsrc->fd);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_udpsrc_set_upump(upipe, upump);
+        upump_start(upump);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the uri of the currently opened udp socket.
  *
  * @param upipe description structure of the pipe
@@ -260,20 +333,6 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    UBASE_RETURN(upipe_udpsrc_check_uref_mgr(upipe))
-    upipe_udpsrc_check_upump_mgr(upipe);
-
-    if (upipe_udpsrc->flow_def == NULL) {
-        struct uref *flow_def =
-            uref_block_flow_alloc_def(upipe_udpsrc->uref_mgr, NULL);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_udpsrc_store_flow_def(upipe, flow_def);
-    }
-    UBASE_RETURN(upipe_udpsrc_check_ubuf_mgr(upipe))
-
     upipe_udpsrc->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp, NULL, NULL);
     if (unlikely(upipe_udpsrc->fd == -1)) {
@@ -303,16 +362,13 @@ static int _upipe_udpsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_udpsrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsrc_set_upump(upipe, NULL);
             return upipe_udpsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_udpsrc_set_upump(upipe, NULL);
-            return upipe_udpsrc_attach_uclock(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_udpsrc_attach_ubuf_mgr(upipe);
+            upipe_udpsrc_require_uclock(upipe);
+            return UBASE_ERR_NONE;
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -361,21 +417,7 @@ static int upipe_udpsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_udpsrc_control(upipe, command, args));
 
-    struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
-    if (upipe_udpsrc->upump_mgr != NULL && upipe_udpsrc->fd != -1 &&
-        upipe_udpsrc->upump == NULL) {
-        struct upump *upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
-                                                  upipe_udpsrc_worker, upipe,
-                                                  upipe_udpsrc->fd);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_udpsrc_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_udpsrc_check(upipe, NULL);
 }
 
 /** @This frees a upipe.

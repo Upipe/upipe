@@ -70,10 +70,9 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** helper phony pipe to test upipe_dup */
-static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe,
-                                    uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -82,27 +81,39 @@ static struct upipe *dup_test_alloc(struct upipe_mgr *mgr,
 }
 
 /** helper phony pipe to test upipe_dup */
-static void dup_test_input(struct upipe *upipe, struct uref *uref,
-                           struct upump **upump_p)
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     assert(uref != NULL);
     counter++;
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_dup */
-static void dup_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_dup */
+/** helper phony pipe */
 static struct upipe_mgr dup_test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = dup_test_alloc,
-    .upipe_input = dup_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -170,8 +181,8 @@ int main(int argc, char *argv[])
     upipe_release(upipe_dup_output1);
     upipe_mgr_release(upipe_dup_mgr); // nop
 
-    dup_test_free(upipe_sink0);
-    dup_test_free(upipe_sink1);
+    test_free(upipe_sink0);
+    test_free(upipe_sink1);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

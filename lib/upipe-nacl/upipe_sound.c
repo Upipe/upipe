@@ -73,11 +73,6 @@ struct upipe_sound {
 
     /** output flow */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
-
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -103,7 +98,6 @@ struct upipe_sound {
 UPIPE_HELPER_UPIPE(upipe_sound, upipe, UPIPE_SOUND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sound, urefcount, upipe_sound_free);
 UPIPE_HELPER_VOID(upipe_sound);
-UPIPE_HELPER_UBUF_MGR(upipe_sound, ubuf_mgr, flow_def);
 
 void startCallBack(void* user_data, int32_t result) {
     struct start_data* data = (struct start_data*)(user_data); 
@@ -331,6 +325,12 @@ static int upipe_sound_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_sound_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_sound_set_flow_def(upipe, flow_def);

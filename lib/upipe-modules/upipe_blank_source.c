@@ -59,6 +59,9 @@
 #include <math.h>
 #include <assert.h>
 
+/** @hidden */
+static int upipe_blksrc_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the flow type */
 enum upipe_blksrc_type {
     UPIPE_BLKSRC_TYPE_PIC,
@@ -72,16 +75,27 @@ struct upipe_blksrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** uclock */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -106,11 +120,19 @@ struct upipe_blksrc {
 UPIPE_HELPER_UPIPE(upipe_blksrc, upipe, UPIPE_BLKSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_blksrc, urefcount, upipe_blksrc_free)
 UPIPE_HELPER_FLOW(upipe_blksrc, "")
-UPIPE_HELPER_UREF_MGR(upipe_blksrc, uref_mgr)
 
-UPIPE_HELPER_UCLOCK(upipe_blksrc, uclock)
-UPIPE_HELPER_UBUF_MGR(upipe_blksrc, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_blksrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_blksrc, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_blksrc, uref_mgr, uref_mgr_request,
+                      upipe_blksrc_check,
+                      upipe_blksrc_register_output_request,
+                      upipe_blksrc_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_blksrc, ubuf_mgr, ubuf_mgr_request,
+                      upipe_blksrc_check,
+                      upipe_blksrc_register_output_request,
+                      upipe_blksrc_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_blksrc, uclock, uclock_request, upipe_blksrc_check,
+                    upipe_blksrc_register_output_request,
+                    upipe_blksrc_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_blksrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_blksrc, upump, upump_mgr)
@@ -123,11 +145,6 @@ UPIPE_HELPER_UPUMP(upipe_blksrc, upump, upump_mgr)
 static struct uref *upipe_blksrc_alloc_uref(struct upipe *upipe)
 {
     struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
-
-    if (unlikely(!ubase_check(upipe_blksrc_check_ubuf_mgr(upipe)
-        || !ubase_check(upipe_blksrc_check_uref_mgr(upipe))))) {
-        return NULL;
-    }
 
     switch (upipe_blksrc->type) {
         case UPIPE_BLKSRC_TYPE_PIC: {
@@ -197,9 +214,6 @@ static void upipe_blksrc_worker(struct upump *upump)
     }
 
     if (unlikely(upipe_blksrc->pts == UINT64_MAX)) {
-        if (unlikely(!ubase_check(upipe_blksrc_check_uclock(upipe)))) {
-            return;
-        }
         upipe_blksrc->pts = uclock_now(upipe_blksrc->uclock);
     }
 
@@ -261,6 +275,53 @@ static void upipe_blksrc_input(struct upipe *upipe, struct uref *uref,
         uref_free(upipe_blksrc->blank_uref);
     }
     upipe_blksrc->blank_uref = uref;
+}
+
+/** @internal @This checks if the pump may be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_blksrc_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_blksrc_store_flow_def(upipe, flow_format);
+
+    upipe_blksrc_check_upump_mgr(upipe);
+    if (upipe_blksrc->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_blksrc->uref_mgr == NULL) {
+        upipe_blksrc_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_blksrc->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_blksrc->ubuf_mgr == NULL) {
+        upipe_blksrc_require_ubuf_mgr(upipe, uref_dup(upipe_blksrc->flow_def));
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_blksrc->uclock == NULL) {
+        upipe_blksrc_require_uclock(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_blksrc->upump == NULL) {
+        struct upump *upump = upump_alloc_timer(upipe_blksrc->upump_mgr,
+            upipe_blksrc_worker, upipe, upipe_blksrc->interval, 0);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_blksrc_set_upump(upipe, upump);
+        upump_start(upump);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -327,19 +388,9 @@ static int upipe_blksrc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int _upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_blksrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_blksrc_set_upump(upipe, NULL);
             return upipe_blksrc_attach_upump_mgr(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_blksrc_attach_ubuf_mgr(upipe);
-        case UPIPE_ATTACH_UCLOCK: {
-            struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
-            upipe_blksrc->pts = UINT64_MAX;
-            return upipe_blksrc_attach_uclock(upipe);
-        }
-
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_blksrc_set_flow_def(upipe, flow_def);
@@ -373,18 +424,8 @@ static int _upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
 static int upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_blksrc_control(upipe, command, args));
-    struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
-    if (upipe_blksrc->upump_mgr != NULL && upipe_blksrc->upump == NULL) {
-        struct upump *upump = upump_alloc_timer(upipe_blksrc->upump_mgr,
-            upipe_blksrc_worker, upipe, upipe_blksrc->interval, 0);
-        if (unlikely(!upump)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_blksrc_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-    return UBASE_ERR_NONE;
+
+    return upipe_blksrc_check(upipe, NULL);
 }
 
 /** @This frees a upipe.

@@ -24,16 +24,7 @@
  */
 
 /** @file
- * @short probe dealing with events having consequences on the output pipe
- *
- * In particular, it catches the new_flow_def event, and calls
- * @ref upipe_set_flow_def on the output. If it returns an error, the output
- * is cleared and the event is forwarded to higher-level probes.
- *
- * It also catches the new_flow_format event, and calls
- * @ref upipe_amend_flow_format on the output, so that it can tune the
- * parameters of the new ubuf manager (alignment, prepending and appending).
- * The event is then always forwarded to higher-level probes.
+ * @short stub probe (to be removed)
  */
 
 #ifndef _UPIPE_UPROBE_OUTPUT_H_
@@ -64,7 +55,7 @@ UPROBE_HELPER_UPROBE(uprobe_output, uprobe)
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_output_init(struct uprobe_output *uprobe_output,
-                                  struct uprobe *next);
+                                  struct uprobe *next) UBASE_DEPRECATED;
 
 /** @This cleans a uprobe output structure.
  *

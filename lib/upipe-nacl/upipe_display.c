@@ -85,6 +85,7 @@ static bool upipe_display_input_(struct upipe *upipe, struct uref *uref, struct 
 struct upipe_display {
     struct Context context;
     struct uclock *uclock;
+    struct urequest uclock_request;
     uint64_t latency;
     /** refcount management structure */
     struct urefcount urefcount;
@@ -130,7 +131,7 @@ struct upipe_display {
 UPIPE_HELPER_UPIPE(upipe_display, upipe, UPIPE_DISPLAY_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_display, urefcount, upipe_display_free);
 UPIPE_HELPER_VOID(upipe_display);
-UPIPE_HELPER_UCLOCK(upipe_display, uclock);
+UPIPE_HELPER_UCLOCK(upipe_display, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_display, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_display, upump, upump_mgr);
@@ -605,6 +606,25 @@ static int upipe_display_set_flow_def(struct upipe *upipe, struct uref *flow_def
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_display_provide_flow_format(struct upipe *upipe,
+                                             struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    uref_pic_flow_clear_format(flow_format);
+    uref_pic_flow_set_macropixel(flow_format, 1);
+    uref_pic_flow_set_planes(flow_format, 0);
+    uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
+    uref_pic_set_progressive(flow_format);
+    return urequest_provide_flow_format(request, flow_format);
+}
+
 /** @internal @This processes control commands on the pipe.
  *
  * @param upipe description structure of the pipe
@@ -621,12 +641,23 @@ static int upipe_display_control(struct upipe *upipe, int command, va_list args)
             UBASE_RETURN(upipe_display_attach_upump_mgr(upipe))
             return UBASE_ERR_NONE;
         }
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_display_set_upump(upipe, NULL);
+            upipe_display_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_display_provide_flow_format(upipe, request);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref*);
             return upipe_display_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_ATTACH_UCLOCK:
-            return upipe_display_attach_uclock(upipe);
         case UPIPE_DISPLAY_SET_POSITIONH: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_DISPLAY_SIGNATURE);
             display->position_h = va_arg(args, int);

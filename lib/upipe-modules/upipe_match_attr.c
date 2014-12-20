@@ -59,8 +59,10 @@ struct upipe_match_attr {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** match uint8_t */
     int (*match_uint8_t) (struct uref*, uint8_t, uint8_t);
@@ -80,7 +82,7 @@ struct upipe_match_attr {
 UPIPE_HELPER_UPIPE(upipe_match_attr, upipe, UPIPE_MATCH_ATTR_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_match_attr, urefcount, upipe_match_attr_free)
 UPIPE_HELPER_VOID(upipe_match_attr)
-UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_match_attr, output, flow_def, output_state, request_list)
 
 /** @internal @This receives data.
  *
@@ -152,9 +154,13 @@ static int upipe_match_attr_control(struct upipe *upipe,
 {
     struct upipe_match_attr *upipe_match_attr = upipe_match_attr_from_upipe(upipe);
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_match_attr_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_match_attr_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

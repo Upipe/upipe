@@ -38,6 +38,7 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
+#include <upipe/urequest.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +50,15 @@
 
 static struct uref_mgr *uref_mgr;
 
+/** helper phony pipe to test uprobe_ubuf_mem */
+static int uprobe_test_provide_uref_mgr(struct urequest *urequest, va_list args)
+{
+    struct uref_mgr *m = va_arg(args, struct uclock *);
+    assert(m == uref_mgr);
+    uref_mgr_release(m);
+    return UBASE_ERR_NONE;
+}
+
 /** helper phony pipe to test uprobe_uref_mgr */
 static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
                                        struct uprobe *uprobe,
@@ -57,10 +67,8 @@ static struct upipe *uprobe_test_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
     upipe_init(upipe, mgr, uprobe);
-    struct uref_mgr *m;
-    upipe_throw_need_uref_mgr(upipe, &m);
-    assert(m == uref_mgr);
-    uref_mgr_release(m);
+    struct urequest request;
+    urequest_init_uref_mgr(&request, uprobe_test_provide_uref_mgr, NULL);
     return upipe;
 }
 

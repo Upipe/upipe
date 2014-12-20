@@ -36,7 +36,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_bin.h>
+#include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_rtp_decaps.h>
@@ -80,6 +80,8 @@ struct upipe_rtpsrc {
     struct upipe *source;
     /** last inner pipe of the bin (rtpd) */
     struct upipe *last_inner;
+    /** list of output bin requests */
+    struct uchain output_request_list;
     /** output */
     struct upipe *output;
 
@@ -90,7 +92,8 @@ struct upipe_rtpsrc {
 UPIPE_HELPER_UPIPE(upipe_rtpsrc, upipe, UPIPE_RTPSRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_rtpsrc)
 UPIPE_HELPER_UREFCOUNT(upipe_rtpsrc, urefcount, upipe_rtpsrc_no_ref)
-UPIPE_HELPER_BIN(upipe_rtpsrc, last_inner_probe, last_inner, output)
+UPIPE_HELPER_BIN_OUTPUT(upipe_rtpsrc, last_inner_probe, last_inner, output,
+                        output_request_list)
 
 UBASE_FROM_TO(upipe_rtpsrc, urefcount, urefcount_real, urefcount_real)
 
@@ -134,7 +137,8 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
     upipe_rtpsrc_init_urefcount(upipe);
     urefcount_init(upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc),
                    upipe_rtpsrc_free);
-    upipe_rtpsrc_init_bin(upipe, upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc));
+    upipe_rtpsrc_init_bin_output(upipe,
+            upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc));
     upipe_rtpsrc->source = NULL;
 
     uprobe_init(&upipe_rtpsrc->proxy_probe, upipe_rtpsrc_proxy_probe, NULL);
@@ -177,35 +181,20 @@ static int upipe_rtpsrc_control(struct upipe *upipe, int command, va_list args)
     struct upipe_rtpsrc *upipe_rtpsrc = upipe_rtpsrc_from_upipe(upipe);
 
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
         case UPIPE_ATTACH_UREF_MGR:
-            return upipe_attach_uref_mgr(upipe_rtpsrc->source);
         case UPIPE_ATTACH_UPUMP_MGR:
-            return upipe_attach_upump_mgr(upipe_rtpsrc->source);
-        case UPIPE_ATTACH_UCLOCK:
-            return upipe_attach_uclock(upipe_rtpsrc->source);
         case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_attach_ubuf_mgr(upipe_rtpsrc->source);
-
-        case UPIPE_SOURCE_GET_READ_SIZE: {
-            unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_source_get_read_size(upipe_rtpsrc->source, p);
-        }
-        case UPIPE_SOURCE_SET_READ_SIZE: {
-            unsigned int read_size = va_arg(args, unsigned int);
-            return upipe_source_set_read_size(upipe_rtpsrc->source, read_size);
-        }
-
-        case UPIPE_GET_URI: {
-            const char **uri_p = va_arg(args, const char **);
-            return upipe_get_uri(upipe_rtpsrc->source, uri_p);
-        }
-        case UPIPE_SET_URI: {
-            const char *uri = va_arg(args, const char *);
-            return upipe_set_uri(upipe_rtpsrc->source, uri);
-        }
+        case UPIPE_ATTACH_UCLOCK:
+        case UPIPE_SOURCE_GET_READ_SIZE:
+        case UPIPE_SOURCE_SET_READ_SIZE:
+        case UPIPE_GET_URI:
+        case UPIPE_SET_URI:
+            return upipe_control_va(upipe_rtpsrc->source, command, args);
 
         default:
-            return upipe_rtpsrc_control_bin(upipe, command, args);
+            return upipe_rtpsrc_control_bin_output(upipe, command, args);
     }
 }
 
@@ -235,7 +224,7 @@ static void upipe_rtpsrc_no_ref(struct upipe *upipe)
     struct upipe_rtpsrc *upipe_rtpsrc = upipe_rtpsrc_from_upipe(upipe);
     upipe_release(upipe_rtpsrc->source);
     upipe_rtpsrc->source = NULL;
-    upipe_rtpsrc_clean_bin(upipe);
+    upipe_rtpsrc_clean_bin_output(upipe);
     urefcount_release(upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc));
 }
 

@@ -39,7 +39,11 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_bin.h>
+#include <upipe/upipe_helper_flow_format.h>
+#include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_bin_input.h>
+#include <upipe/upipe_helper_bin_output.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-filters/upipe_filter_blend.h>
@@ -69,6 +73,13 @@ struct upipe_ffmt_mgr {
 UBASE_FROM_TO(upipe_ffmt_mgr, upipe_mgr, upipe_mgr, mgr)
 UBASE_FROM_TO(upipe_ffmt_mgr, urefcount, urefcount, urefcount)
 
+/** @hidden */
+static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
+                              struct upump **upump_p);
+/** @hidden */
+static int upipe_ffmt_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format);
+
 /** @internal @This is the private context of a ffmt pipe. */
 struct upipe_ffmt {
     /** real refcount management structure */
@@ -76,19 +87,37 @@ struct upipe_ffmt {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
+    /** flow format request */
+    struct urequest request;
+
     /** proxy probe */
     struct uprobe proxy_probe;
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
 
+    /** flow definition on the input */
+    struct uref *flow_def_input;
     /** flow definition wanted on the output */
     struct uref *flow_def_wanted;
-    /** input pipe (deint or sws or swr) */
-    struct upipe *input;
+    /** list of input bin requests */
+    struct uchain input_request_list;
+    /** list of output bin requests */
+    struct uchain output_request_list;
+    /** first inner pipe of the bin (deint or sws or swr) */
+    struct upipe *first_inner;
     /** last inner pipe of the bin (sws or swr) */
     struct upipe *last_inner;
     /** output */
     struct upipe *output;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -97,7 +126,15 @@ struct upipe_ffmt {
 UPIPE_HELPER_UPIPE(upipe_ffmt, upipe, UPIPE_FFMT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ffmt, NULL)
 UPIPE_HELPER_UREFCOUNT(upipe_ffmt, urefcount, upipe_ffmt_no_ref)
-UPIPE_HELPER_BIN(upipe_ffmt, last_inner_probe, last_inner, output)
+UPIPE_HELPER_INPUT(upipe_ffmt, urefs, nb_urefs, max_urefs, blockers,
+                  upipe_ffmt_handle)
+UPIPE_HELPER_BIN_INPUT(upipe_ffmt, first_inner, input_request_list)
+UPIPE_HELPER_BIN_OUTPUT(upipe_ffmt, last_inner_probe, last_inner, output,
+                        output_request_list)
+UPIPE_HELPER_FLOW_FORMAT(upipe_ffmt, request,
+                         upipe_ffmt_check_flow_format,
+                         upipe_ffmt_register_bin_output_request,
+                         upipe_ffmt_unregister_bin_output_request)
 
 UBASE_FROM_TO(upipe_ffmt, urefcount, urefcount_real, urefcount_real)
 
@@ -141,15 +178,17 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
     upipe_ffmt_init_urefcount(upipe);
-    urefcount_init(upipe_ffmt_to_urefcount_real(upipe_ffmt),
-                   upipe_ffmt_free);
-    upipe_ffmt_init_bin(upipe, upipe_ffmt_to_urefcount_real(upipe_ffmt));
+    urefcount_init(upipe_ffmt_to_urefcount_real(upipe_ffmt), upipe_ffmt_free);
+    upipe_ffmt_init_flow_format(upipe);
+    upipe_ffmt_init_input(upipe);
+    upipe_ffmt_init_bin_input(upipe);
+    upipe_ffmt_init_bin_output(upipe, upipe_ffmt_to_urefcount_real(upipe_ffmt));
 
     uprobe_init(&upipe_ffmt->proxy_probe, upipe_ffmt_proxy_probe, NULL);
     upipe_ffmt->proxy_probe.refcount =
         upipe_ffmt_to_urefcount_real(upipe_ffmt);
+    upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
-    upipe_ffmt->input = NULL;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -160,57 +199,82 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
+ * @return always true
  */
-static inline void upipe_ffmt_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
+static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
+                              struct upump **upump_p)
 {
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
-    if (upipe_ffmt->input == NULL) {
-        uref_free(uref);
-        return;
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        uref_free(upipe_ffmt->flow_def_input);
+        upipe_ffmt->flow_def_input = uref_dup(uref);
+        if (unlikely(upipe_ffmt->flow_def_input == NULL)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return true;
+        }
+
+        char *old_def = NULL;
+        if (!strcmp(def, "sound."))
+            old_def = strdup(def);
+        uref_attr_import(uref, upipe_ffmt->flow_def_wanted);
+        if (old_def != NULL) {
+            uref_flow_set_def(uref, old_def);
+            free(old_def);
+        }
+
+        upipe_ffmt_store_first_inner(upipe, NULL);
+        upipe_ffmt_store_last_inner(upipe, NULL);
+        upipe_ffmt_require_flow_format(upipe, uref);
+        return true;
     }
 
-    upipe_input(upipe_ffmt->input, uref, upump_p);
+    if (upipe_ffmt->first_inner == NULL)
+        return false;
+
+    upipe_ffmt_bin_input(upipe, uref, upump_p);
+    return true;
 }
 
-/** @internal @This sets the input flow definition.
+/** @internal @This inputs data.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ffmt_input(struct upipe *upipe, struct uref *uref,
+                             struct upump **upump_p)
+{
+    if (!upipe_ffmt_check_input(upipe)) {
+        upipe_ffmt_hold_input(upipe, uref);
+        upipe_ffmt_block_input(upipe, upump_p);
+    } else if (!upipe_ffmt_handle(upipe, uref, upump_p)) {
+        upipe_ffmt_hold_input(upipe, uref);
+        upipe_ffmt_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
+}
+
+/** @internal @This receives the result of a flow format request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def_dup amended flow format
  * @return an error code
  */
-static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_ffmt_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_def_dup)
 {
     struct upipe_ffmt_mgr *ffmt_mgr = upipe_ffmt_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
-    if (flow_def == NULL)
+    if (flow_def_dup == NULL)
         return UBASE_ERR_INVALID;
-    const char *def_wanted, *def;
+
+    struct uref *flow_def = upipe_ffmt->flow_def_input;
+    const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    UBASE_RETURN(uref_flow_get_def(upipe_ffmt->flow_def_wanted, &def_wanted))
-    if (!((!ubase_ncmp(def, "pic.") && !ubase_ncmp(def_wanted, "pic.")) ||
-          (!ubase_ncmp(def, "sound.") && !ubase_ncmp(def_wanted, "sound."))))
-        return UBASE_ERR_INVALID;
-
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def = uref_dup(flow_def)) == NULL ||
-                 (flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        uref_free(flow_def);
-        return UBASE_ERR_ALLOC;
-    }
-    char *old_def = NULL;
-    if (!strcmp(def_wanted, "sound."))
-        old_def = strdup(def);
-    uref_attr_import(flow_def_dup, upipe_ffmt->flow_def_wanted);
-    if (old_def != NULL) {
-        uref_flow_set_def(flow_def_dup, old_def);
-        free(old_def);
-    }
-
-    upipe_release(upipe_ffmt->input);
-    upipe_ffmt->input = NULL;
-    upipe_ffmt_store_last_inner(upipe, NULL);
-    upipe_filter_throw_suggest_flow_def(upipe, flow_def_dup);
 
     if (!strcmp(def, "pic.")) {
         /* check aspect ratio */
@@ -238,17 +302,16 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                         uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
 
         if (need_deint) {
-            upipe_ffmt->input = upipe_void_alloc(ffmt_mgr->deint_mgr,
+            struct upipe *input = upipe_void_alloc(ffmt_mgr->deint_mgr,
                     uprobe_pfx_alloc(
-                        need_sws ? uprobe_output_alloc(
-                                        uprobe_use(&upipe_ffmt->proxy_probe)) :
+                        need_sws ? uprobe_use(&upipe_ffmt->proxy_probe) :
                                    uprobe_use(&upipe_ffmt->last_inner_probe),
                         UPROBE_LOG_VERBOSE, "deint"));
-            if (unlikely(upipe_ffmt->input == NULL))
+            if (unlikely(input == NULL))
                 upipe_warn_va(upipe, "couldn't allocate deinterlace");
             else if (!need_sws)
-                upipe_ffmt_store_last_inner(upipe,
-                                            upipe_use(upipe_ffmt->input));
+                upipe_ffmt_store_last_inner(upipe, upipe_use(input));
+            upipe_ffmt_store_first_inner(upipe, input);
         }
 
         if (need_sws) {
@@ -259,43 +322,87 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             if (unlikely(sws == NULL))
                 upipe_warn_va(upipe, "couldn't allocate swscale");
             else if (!need_deint)
-                upipe_ffmt->input = upipe_use(sws);
+                upipe_ffmt_store_first_inner(upipe, upipe_use(sws));
             else
-                upipe_set_output(upipe_ffmt->input, sws);
+                upipe_set_output(upipe_ffmt->first_inner, sws);
             upipe_ffmt_store_last_inner(upipe, sws);
         }
+
     } else { /* sound. */
         if (!uref_sound_flow_compare_format(flow_def, flow_def_dup) ||
             uref_sound_flow_cmp_rate(flow_def, flow_def_dup)) {
-            upipe_ffmt->input = upipe_flow_alloc(ffmt_mgr->swr_mgr,
+            struct upipe *input = upipe_flow_alloc(ffmt_mgr->swr_mgr,
                     uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
                                      UPROBE_LOG_VERBOSE, "swr"),
                     flow_def_dup);
-            if (unlikely(upipe_ffmt->input == NULL))
+            if (unlikely(input == NULL))
                 upipe_warn_va(upipe, "couldn't allocate swresample");
-            else
-                upipe_ffmt_store_last_inner(upipe,
-                                            upipe_use(upipe_ffmt->input));
+            else {
+                upipe_ffmt_store_first_inner(upipe,
+                                             upipe_use(input));
+                upipe_ffmt_store_last_inner(upipe, input);
+            }
         }
     }
     uref_free(flow_def_dup);
 
-    if (upipe_ffmt->input == NULL) {
+    if (upipe_ffmt->first_inner == NULL) {
         struct upipe_mgr *idem_mgr = upipe_idem_mgr_alloc();
-        upipe_ffmt->input = upipe_void_alloc(idem_mgr,
+        struct upipe *input = upipe_void_alloc(idem_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
                                  UPROBE_LOG_VERBOSE, "idem"));
         upipe_mgr_release(idem_mgr);
-        if (unlikely(upipe_ffmt->input == NULL))
+        if (unlikely(input == NULL))
             upipe_warn_va(upipe, "couldn't allocate idem");
-        else
-            upipe_ffmt_store_last_inner(upipe,
-                                        upipe_use(upipe_ffmt->input));
+        else {
+            upipe_ffmt_store_first_inner(upipe, upipe_use(input));
+            upipe_ffmt_store_last_inner(upipe, input);
+        }
     }
 
-    int err = upipe_set_flow_def(upipe_ffmt->input, flow_def);
+    int err = upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
     uref_free(flow_def);
-    return err;
+
+    if (!ubase_check(err)) {
+        upipe_ffmt_store_first_inner(upipe, NULL);
+        upipe_ffmt_store_last_inner(upipe, NULL);
+        return err;
+    }
+
+    bool was_buffered = !upipe_ffmt_check_input(upipe);
+    upipe_ffmt_output_input(upipe);
+    upipe_ffmt_unblock_input(upipe);
+    if (was_buffered && upipe_ffmt_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_ffmt_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+    const char *def_wanted, *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    UBASE_RETURN(uref_flow_get_def(upipe_ffmt->flow_def_wanted, &def_wanted))
+    if (!((!ubase_ncmp(def, "pic.") && !ubase_ncmp(def_wanted, "pic.")) ||
+          (!ubase_ncmp(def, "sound.") && !ubase_ncmp(def_wanted, "sound."))))
+        return UBASE_ERR_INVALID;
+
+    struct uref *flow_def_dup;
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+        return UBASE_ERR_ALLOC;
+    upipe_input(upipe, flow_def_dup, NULL);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a ffmt pipe.
@@ -307,23 +414,15 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
-
-    switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            if (unlikely(upipe_ffmt->input == NULL))
-                return UBASE_ERR_UNHANDLED;
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_amend_flow_format(upipe_ffmt->input, flow_format);
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_ffmt_set_flow_def(upipe, flow_def);
-        }
-
-        default:
-            return upipe_ffmt_control_bin(upipe, command, args);
+    if (command == UPIPE_SET_FLOW_DEF) {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        return upipe_ffmt_set_flow_def(upipe, flow_def);
     }
+
+    int err = upipe_ffmt_control_bin_input(upipe, command, args);
+    if (err == UBASE_ERR_UNHANDLED)
+        return upipe_ffmt_control_bin_output(upipe, command, args);
+    return err;
 }
 
 /** @This frees a upipe.
@@ -336,6 +435,8 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
         upipe_ffmt_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_ffmt_to_upipe(upipe_ffmt);
     upipe_throw_dead(upipe);
+    upipe_ffmt_clean_input(upipe);
+    upipe_ffmt_clean_flow_format(upipe);
     uref_free(upipe_ffmt->flow_def_wanted);
     uprobe_clean(&upipe_ffmt->proxy_probe);
     uprobe_clean(&upipe_ffmt->last_inner_probe);
@@ -351,9 +452,8 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
 static void upipe_ffmt_no_ref(struct upipe *upipe)
 {
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
-    upipe_release(upipe_ffmt->input);
-    upipe_ffmt->input = NULL;
-    upipe_ffmt_clean_bin(upipe);
+    upipe_ffmt_clean_bin_input(upipe);
+    upipe_ffmt_clean_bin_output(upipe);
     urefcount_release(upipe_ffmt_to_urefcount_real(upipe_ffmt));
 }
 

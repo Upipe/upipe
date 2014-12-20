@@ -24,7 +24,25 @@
  */
 
 /** @file
- * @short Bin pipe wrapping a queue and a sink
+ * @short Bin pipe wrapping a queue and a sink subpipeline
+ *
+ * It allows to transfer an existing sink subpipeline to a remote upump_mgr,
+ * while setting up a queue to send the packets to the sink in the remote
+ * upump_mgr.
+ *
+ * Please note that the remote subpipeline is not "used" so its refcount is not
+ * incremented. For that reason it shouldn't be "released" afterwards. Only
+ * release the wsink pipe.
+ *
+ * Note that the allocator requires three additional parameters:
+ * @table 2
+ * @item upipe_remote @item subpipeline to transfer to remote upump_mgr
+ * (belongs to the callee)
+ * @item uprobe_remote @item probe hierarchy to use on the remote thread
+ * (belongs to the callee)
+ * @item input_queue_length @item number of packets in the queue between main
+ * and remote thread
+ * @end table
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_WORKER_SINK_H_
@@ -96,32 +114,13 @@ UPIPE_WSINK_MGR_GET_SET_MGR2(qsrc, QSRC)
 UPIPE_WSINK_MGR_GET_SET_MGR2(qsink, QSINK)
 #undef UPIPE_WSINK_MGR_GET_SET_MGR2
 
-/** @This allocates and initializes a worker sink pipe. It allows to
- * transfer an existing sink pipe to a remote upump_mgr, while setting up
- * a queue to send the packets to the sink in the remote upump_mgr.
- *
- * Please note that upipe_remote is not "used" so its refcount is not
- * incremented. For that reason it shouldn't be "released" afterwards. Only
- * release the wsink pipe.
- *
- * @param mgr management structure for queue source type
- * @param uprobe structure used to raise events
- * @param upipe_remote pipe to transfer to remote upump_mgr
- * @param uprobe_remote probe hierarchy to use on the remote thread (belongs to
- * the callee)
- * @param queue_length number of packets in the queue between main and
- * remote thread
- * @return pointer to allocated pipe, or NULL in case of failure
- */
-static inline struct upipe *upipe_wsink_alloc(struct upipe_mgr *mgr,
-                                              struct uprobe *uprobe,
-                                              struct upipe *upipe_remote,
-                                              struct uprobe *uprobe_remote,
-                                              unsigned int queue_length)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_WSINK_SIGNATURE, upipe_remote,
-                       uprobe_remote, queue_length);
-}
+/** @hidden */
+#define ARGS_DECL , struct upipe *upipe_remote, struct uprobe *uprobe_remote, unsigned int input_queue_length
+/** @hidden */
+#define ARGS , upipe_remote, uprobe_remote, input_queue_length
+UPIPE_HELPER_ALLOC(wsink, UPIPE_WSINK_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 #ifdef __cplusplus
 }

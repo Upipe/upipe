@@ -18,7 +18,6 @@ dist_check_DATA = \
 
 check_PROGRAMS = \
 	uprobe_stdio_test \
-	uprobe_output_test \
 	uprobe_prefix_test \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
@@ -35,19 +34,19 @@ check_PROGRAMS = \
 	uclock_std_test \
 	upipe_play_test \
 	upipe_trickplay_test \
+	upipe_null_test \
 	upipe_dup_test \
 	upipe_genaux_test \
+	upipe_multicat_probe_test \
+	upipe_probe_uref_test \
 	upipe_delay_test \
-	upipe_null_test \
-	upipe_setrap_test \
 	upipe_skip_test \
+	upipe_htons_test \
+	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
 	upipe_setattr_test \
+	upipe_setrap_test \
 	upipe_match_attr_test \
-	upipe_probe_uref_test \
-	upipe_multicat_probe_test \
-	upipe_chunk_stream_test \
-	upipe_htons_test \
 	upipe_blit_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
@@ -62,7 +61,6 @@ TESTS = \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
 	uprobe_stdio_test.sh \
-	uprobe_output_test \
 	uprobe_prefix_test.sh \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
@@ -71,21 +69,21 @@ TESTS = \
 	uprobe_uref_mgr_test \
 	uref_std_test \
 	uclock_std_test \
+	upipe_null_test \
 	upipe_play_test \
 	upipe_trickplay_test \
 	upipe_dup_test \
 	upipe_genaux_test \
+	upipe_multicat_probe_test \
+	upipe_probe_uref_test \
 	upipe_delay_test \
-	upipe_null_test \
-	upipe_setrap_test \
 	upipe_skip_test \
+	upipe_htons_test \
+	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
 	upipe_setattr_test \
+	upipe_setrap_test \
 	upipe_match_attr_test \
-	upipe_probe_uref_test \
-	upipe_multicat_probe_test \
-	upipe_chunk_stream_test \
-	upipe_htons_test \
 	upipe_blit_test \
 	upipe_audio_split_test \
 	upipe_videocont_test \
@@ -98,13 +96,13 @@ check_PROGRAMS += \
 	ulifo_uqueue_test \
 	udeal_test \
 	uprobe_upump_mgr_test \
+	upipe_transfer_test \
 	upipe_file_test \
 	upipe_queue_test \
-	upipe_multicat_test \
-	upipe_http_src_test \
 	upipe_udp_test \
+	upipe_http_src_test \
+	upipe_multicat_test \
 	upipe_blank_source_test \
-	upipe_transfer_test \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test
@@ -114,12 +112,12 @@ TESTS += \
 	ulifo_uqueue_test \
 	udeal_test \
 	uprobe_upump_mgr_test \
+	upipe_transfer_test \
 	upipe_file_test.sh \
 	upipe_queue_test \
-	upipe_multicat_test.sh \
 	upipe_udp_test \
+	upipe_multicat_test.sh \
 	upipe_blank_source_test \
-	upipe_transfer_test \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test
@@ -167,57 +165,52 @@ endif
 
 if HAVE_BITSTREAM
 check_PROGRAMS += \
-	upipe_ts_sync_test \
-	upipe_ts_check_test \
-	upipe_ts_split_test \
-	upipe_ts_join_test \
-	upipe_ts_decaps_test \
-	upipe_ts_encaps_test \
-	upipe_ts_pes_decaps_test \
-	upipe_ts_pes_encaps_test \
-	upipe_ts_psi_generator_test \
-	upipe_ts_psi_inserter_test \
-	upipe_ts_psi_merge_test \
-	upipe_ts_psi_split_test \
-	upipe_ts_pat_decoder_test \
-	upipe_ts_pmt_decoder_test \
-	upipe_ts_demux_test \
-	upipe_ts_aggregate_test \
-	upipe_ts_tstd_test \
-	upipe_ts_test \
+	upipe_rtp_decaps_test \
+	upipe_rtp_prepend_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
-	upipe_rtp_decaps_test \
-	upipe_rtp_prepend_test
+	upipe_ts_check_test \
+	upipe_ts_decaps_test \
+	upipe_ts_pes_decaps_test \
+	upipe_ts_pat_decoder_test \
+	upipe_ts_pmt_decoder_test \
+	upipe_ts_psi_merge_test \
+	upipe_ts_psi_split_test \
+	upipe_ts_split_test \
+	upipe_ts_sync_test \
+	upipe_ts_demux_test \
+	upipe_ts_aggregate_test \
+	upipe_ts_encaps_test \
+	upipe_ts_join_test \
+	upipe_ts_pes_encaps_test \
+	upipe_ts_psi_generator_test \
+	upipe_ts_psi_inserter_test \
+	upipe_ts_tstd_test \
+	upipe_ts_test
 TESTS += \
-	upipe_ts_sync_test \
-	upipe_ts_check_test \
-	upipe_ts_split_test \
-	upipe_ts_join_test \
-	upipe_ts_decaps_test \
-	upipe_ts_encaps_test \
-	upipe_ts_pes_decaps_test \
-	upipe_ts_pes_encaps_test \
-	upipe_ts_psi_generator_test \
-	upipe_ts_psi_inserter_test \
-	upipe_ts_psi_merge_test \
-	upipe_ts_psi_split_test \
-	upipe_ts_pat_decoder_test \
-	upipe_ts_pmt_decoder_test \
-	upipe_ts_aggregate_test \
-	upipe_ts_tstd_test \
-	upipe_ts_demux_test \
+	upipe_rtp_decaps_test \
+	upipe_rtp_prepend_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
-	upipe_rtp_decaps_test \
-	upipe_rtp_prepend_test
-endif
-
-if HAVE_X264
-check_PROGRAMS += upipe_x264_test
-TESTS += upipe_x264_test
+	upipe_ts_check_test \
+	upipe_ts_decaps_test \
+	upipe_ts_pes_decaps_test \
+	upipe_ts_pat_decoder_test \
+	upipe_ts_pmt_decoder_test \
+	upipe_ts_psi_merge_test \
+	upipe_ts_psi_split_test \
+	upipe_ts_split_test \
+	upipe_ts_sync_test \
+	upipe_ts_demux_test \
+	upipe_ts_aggregate_test \
+	upipe_ts_encaps_test \
+	upipe_ts_join_test \
+	upipe_ts_pes_encaps_test \
+	upipe_ts_psi_generator_test \
+	upipe_ts_psi_inserter_test \
+	upipe_ts_tstd_test
 endif
 
 if HAVE_ECORE
@@ -284,7 +277,7 @@ upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_
 upipe_avcodec_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
 upipe_avcodec_decode_test_CFLAGS = @AVFORMAT_CFLAGS@
-upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
+upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
 
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la

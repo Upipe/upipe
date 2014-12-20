@@ -92,60 +92,71 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-struct ts_test {
+struct test {
     uint16_t pid;
     bool got_packet;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_ts_split */
-static struct upipe *ts_test_alloc(struct upipe_mgr *mgr,
-                                   struct uprobe *uprobe, uint32_t signature,
-                                   va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct uref *flow_def = va_arg(args, struct uref *);
     uint64_t pid;
     ubase_assert(uref_ts_flow_get_pid(flow_def, &pid));
-    struct ts_test *ts_test = malloc(sizeof(struct ts_test));
-    assert(ts_test != NULL);
-    upipe_init(&ts_test->upipe, mgr, uprobe);
-    ts_test->got_packet = false;
-    ts_test->pid = pid;
-    return &ts_test->upipe;
+    struct test *test = malloc(sizeof(struct test));
+    assert(test != NULL);
+    upipe_init(&test->upipe, mgr, uprobe);
+    test->got_packet = false;
+    test->pid = pid;
+    return &test->upipe;
 }
 
-/** helper phony pipe to test upipe_ts_split */
-static void ts_test_input(struct upipe *upipe, struct uref *uref,
-                          struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
-    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
+    struct test *test = container_of(upipe, struct test, upipe);
     assert(uref != NULL);
-    ts_test->got_packet = true;
+    test->got_packet = true;
     const uint8_t *buffer;
     int size = -1;
     ubase_assert(uref_block_read(uref, 0, &size, &buffer));
     assert(size == TS_SIZE); //because of the way we allocated it
     assert(ts_validate(buffer));
-    assert(ts_get_pid(buffer) == ts_test->pid);
+    assert(ts_get_pid(buffer) == test->pid);
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_ts_split */
-static void ts_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
 {
-    struct ts_test *ts_test = container_of(upipe, struct ts_test, upipe);
-    assert(ts_test->got_packet);
-    upipe_clean(upipe);
-    free(ts_test);
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
-/** helper phony pipe to test upipe_ts_split */
-static struct upipe_mgr ts_test_mgr = {
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
+{
+    struct test *test = container_of(upipe, struct test, upipe);
+    assert(test->got_packet);
+    upipe_clean(upipe);
+    free(test);
+}
+
+/** helper phony pipe */
+static struct upipe_mgr test_mgr = {
     .refcount = NULL,
-    .upipe_alloc = ts_test_alloc,
-    .upipe_input = ts_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char *argv[])
@@ -181,7 +192,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_flow_def(upipe_ts_split, uref));
 
     ubase_assert(uref_ts_flow_set_pid(uref, 68));
-    struct upipe *upipe_sink68 = upipe_flow_alloc(&ts_test_mgr,
+    struct upipe *upipe_sink68 = upipe_flow_alloc(&test_mgr,
             uprobe_use(uprobe_stdio), uref);
     assert(upipe_sink68 != NULL);
 
@@ -192,7 +203,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_ts_split_output68, upipe_sink68));
 
     ubase_assert(uref_ts_flow_set_pid(uref, 69));
-    struct upipe *upipe_sink69 = upipe_flow_alloc(&ts_test_mgr,
+    struct upipe *upipe_sink69 = upipe_flow_alloc(&test_mgr,
             uprobe_use(uprobe_stdio), uref);
     assert(upipe_sink69 != NULL);
 
@@ -230,8 +241,8 @@ int main(int argc, char *argv[])
     upipe_release(upipe_ts_split);
     upipe_mgr_release(upipe_ts_split_mgr); // nop
 
-    ts_test_free(upipe_sink68);
-    ts_test_free(upipe_sink69);
+    test_free(upipe_sink68);
+    test_free(upipe_sink69);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

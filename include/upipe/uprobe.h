@@ -44,6 +44,8 @@ extern "C" {
 /** @hidden */
 struct uprobe;
 /** @hidden */
+struct urequest;
+/** @hidden */
 struct upipe;
 
 /** common types of events */
@@ -70,19 +72,16 @@ enum uprobe_event {
     /** unable to write to an output because the disk is full or another error
      * occurred (const char *) */
     UPROBE_SINK_END,
-    /** a uref manager is necessary to operate (struct uref_mgr **) */
-    UPROBE_NEED_UREF_MGR,
+    /** an output is necessary to operate (struct uref *) */
+    UPROBE_NEED_OUTPUT,
+    /** a request needs a provider (struct urequest *) */
+    UPROBE_PROVIDE_REQUEST,
     /** a upump manager is necessary to operate (struct upump_mgr **) */
     UPROBE_NEED_UPUMP_MGR,
     /** upump manager probe is forbidden to answer (void) */
     UPROBE_FREEZE_UPUMP_MGR,
     /** upump manager probe is allowed to answer (void) */
     UPROBE_THAW_UPUMP_MGR,
-    /** a uclock is necessary to operate (struct uclock **) */
-    UPROBE_NEED_UCLOCK,
-    /** a new flow format is proposed, ubuf_mgr may be required (struct uref *,
-     * struct ubuf_mgr **) */
-    UPROBE_NEW_FLOW_FORMAT,
     /** a new flow definition is available on the output (struct uref *) */
     UPROBE_NEW_FLOW_DEF,
     /** a new random access point is available in the input (struct uref *) */
@@ -91,8 +90,6 @@ enum uprobe_event {
     UPROBE_SINK_LATENCY,
     /** a split pipe declares a new output flow list (void) */
     UPROBE_SPLIT_UPDATE,
-    /** a filter pipe asks to validate the output flow def (struct uref *) */
-    UPROBE_FILTER_SUGGEST_FLOW_DEF,
     /** a pipe got synchronized with its input (void) */
     UPROBE_SYNC_ACQUIRED,
     /** a pipe lost synchronization with its input (void) */
@@ -432,7 +429,7 @@ static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
     } while (0)
 
 /** @This implements the common parts of a plumber probe (catching the
- * new_flow_def event).
+ * need_output event).
  *
  * @param event event triggered by the pipe
  * @param args arguments of the event
@@ -444,7 +441,7 @@ static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
 static inline bool uprobe_plumber(int event, va_list args,
                                   struct uref **flow_def_p, const char **def_p)
 {
-    if (event != UPROBE_NEW_FLOW_DEF)
+    if (event != UPROBE_NEED_OUTPUT)
         return false;
 
     va_list args_copy;

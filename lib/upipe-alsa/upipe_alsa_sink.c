@@ -44,7 +44,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-alsa/upipe_alsa_sink.h>
 
@@ -91,8 +91,11 @@ struct upipe_alsink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *upump;
+
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** sample rate */
     unsigned int rate;
@@ -133,8 +136,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_alsink, urefcount, upipe_alsink_free)
 UPIPE_HELPER_VOID(upipe_alsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_alsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_alsink, upump, upump_mgr)
-UPIPE_HELPER_SINK(upipe_alsink, urefs, nb_urefs, max_urefs, blockers, NULL)
-UPIPE_HELPER_UCLOCK(upipe_alsink, uclock)
+UPIPE_HELPER_INPUT(upipe_alsink, urefs, nb_urefs, max_urefs, blockers, NULL)
+UPIPE_HELPER_UCLOCK(upipe_alsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 /** @internal @This allocates a file sink pipe.
  *
@@ -156,7 +159,7 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
     upipe_alsink_init_urefcount(upipe);
     upipe_alsink_init_upump_mgr(upipe);
     upipe_alsink_init_upump(upipe);
-    upipe_alsink_init_sink(upipe);
+    upipe_alsink_init_input(upipe);
     upipe_alsink_init_uclock(upipe);
     upipe_alsink->latency = 0;
     upipe_alsink->rate = 0;
@@ -291,7 +294,7 @@ static bool upipe_alsink_open(struct upipe *upipe)
     upipe_alsink_set_upump(upipe, timer);
     upump_start(timer);
 
-    if (!upipe_alsink_check_sink(upipe))
+    if (!upipe_alsink_check_input(upipe))
         upipe_use(upipe);
     upipe_notice_va(upipe, "opened device %s", uri);
     return true;
@@ -318,8 +321,8 @@ static void upipe_alsink_close(struct upipe *upipe)
     upipe_alsink->handle = NULL;
 
     upipe_alsink_set_upump(upipe, NULL);
-    upipe_alsink_unblock_sink(upipe);
-    if (upipe_alsink_check_sink(upipe))
+    upipe_alsink_unblock_input(upipe);
+    if (upipe_alsink_check_input(upipe))
         /* Release the pipe used in @ref upipe_alsink_input. */
         upipe_release(upipe);
 }
@@ -448,7 +451,7 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
     size_t uref_size;
     if (ubase_check(uref_sound_size(uref, &uref_size, NULL)) &&
         uref_size <= frames) {
-        upipe_alsink_pop_sink(upipe);
+        upipe_alsink_pop_input(upipe);
         uref_free(uref);
         frames = uref_size;
     } else {
@@ -473,7 +476,7 @@ static void upipe_alsink_timer(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     uint64_t next_pts = UINT64_MAX;
-    bool was_empty = upipe_alsink_check_sink(upipe);
+    bool was_empty = upipe_alsink_check_input(upipe);
 
     snd_pcm_state_t state = snd_pcm_state(upipe_alsink->handle);
     switch (state) {
@@ -524,7 +527,7 @@ static void upipe_alsink_timer(struct upump *upump)
         if (next_pts != UINT64_MAX) {
             uint64_t uref_pts;
             if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &uref_pts)))) {
-                upipe_alsink_pop_sink(upipe);
+                upipe_alsink_pop_input(upipe);
                 uref_free(uref);
                 upipe_warn(upipe, "non-dated uref received");
                 continue;
@@ -556,7 +559,7 @@ static void upipe_alsink_timer(struct upump *upump)
 
         size_t size;
         if (unlikely(!ubase_check(uref_sound_size(uref, &size, NULL)))) {
-            upipe_alsink_pop_sink(upipe);
+            upipe_alsink_pop_input(upipe);
             uref_free(uref);
             upipe_warn(upipe, "cannot read ubuf buffer");
             continue;
@@ -573,8 +576,8 @@ static void upipe_alsink_timer(struct upump *upump)
 
     if (upipe_alsink->urefs_duration < upipe_alsink->period_duration *
                                        BUFFER_PERIODS)
-        upipe_alsink_unblock_sink(upipe);
-    if (!was_empty && upipe_alsink_check_sink(upipe)) {
+        upipe_alsink_unblock_input(upipe);
+    if (!was_empty && upipe_alsink_check_input(upipe)) {
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_alsink_input. */
         upipe_release(upipe);
@@ -607,17 +610,17 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
     uint64_t uref_duration = (uint64_t)uref_size * UCLOCK_FREQ /
         upipe_alsink->rate;
 
-    if (upipe_alsink_check_sink(upipe)) {
+    if (upipe_alsink_check_input(upipe)) {
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);
     }
 
-    upipe_alsink_hold_sink(upipe, uref);
+    upipe_alsink_hold_input(upipe, uref);
     upipe_alsink->urefs_duration += uref_duration;
     if (upipe_alsink->urefs_duration >= upipe_alsink->period_duration *
                                         BUFFER_PERIODS)
-        upipe_alsink_block_sink(upipe, upump_p);
+        upipe_alsink_block_input(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -802,7 +805,7 @@ static int upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
  */
 static int upipe_alsink_flush(struct upipe *upipe)
 {
-    if (upipe_alsink_flush_sink(upipe))
+    if (upipe_alsink_flush_input(upipe))
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_alsink_input. */
         upipe_release(upipe);
@@ -824,7 +827,14 @@ static int upipe_alsink_control(struct upipe *upipe, int command, va_list args)
             return upipe_alsink_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_alsink_set_upump(upipe, NULL);
-            return upipe_alsink_attach_uclock(upipe);
+            upipe_alsink_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_alsink_set_flow_def(upipe, flow_def);
@@ -837,7 +847,7 @@ static int upipe_alsink_control(struct upipe *upipe, int command, va_list args)
             const char *uri = va_arg(args, const char *);
             return upipe_alsink_set_uri(upipe, uri);
         }
-        case UPIPE_SINK_FLUSH:
+        case UPIPE_FLUSH:
             return upipe_alsink_flush(upipe);
         default:
             return UBASE_ERR_UNHANDLED;
@@ -858,7 +868,7 @@ static void upipe_alsink_free(struct upipe *upipe)
     upipe_alsink_clean_uclock(upipe);
     upipe_alsink_clean_upump(upipe);
     upipe_alsink_clean_upump_mgr(upipe);
-    upipe_alsink_clean_sink(upipe);
+    upipe_alsink_clean_input(upipe);
     upipe_alsink_clean_urefcount(upipe);
     upipe_alsink_free_void(upipe);
 }

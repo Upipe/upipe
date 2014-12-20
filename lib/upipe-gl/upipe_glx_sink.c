@@ -46,7 +46,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-gl/upipe_glx_sink.h>
 
@@ -64,7 +64,7 @@
 #include <GL/glx.h>
 
 /** @hidden */
-static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
+static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
                                      struct upump **upump_p);
 /** @hidden */
 static void upipe_glx_sink_write_watcher(struct upump *upump);
@@ -75,6 +75,9 @@ struct upipe_glx_sink {
 
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** temporary uref storage */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -120,8 +123,8 @@ UPIPE_HELPER_VOID(upipe_glx_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_glx_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_glx_sink, upump_watcher, upump_mgr)
-UPIPE_HELPER_SINK(upipe_glx_sink, urefs, nb_urefs, max_urefs, blockers, upipe_glx_sink_input_pic)
-UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock)
+UPIPE_HELPER_INPUT(upipe_glx_sink, urefs, nb_urefs, max_urefs, blockers, upipe_glx_sink_output)
+UPIPE_HELPER_UCLOCK(upipe_glx_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 static inline void upipe_glx_sink_flush(struct upipe *upipe)
 {
@@ -367,7 +370,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     upipe_glx_sink_init_upump_mgr(upipe);
     upipe_glx_sink_init_upump(upipe);
     upipe_glx_sink_init_upump_watcher(upipe);
-    upipe_glx_sink_init_sink(upipe);
+    upipe_glx_sink_init_input(upipe);
     upipe_glx_sink_init_uclock(upipe);
     upipe_glx_sink->latency = 0;
 
@@ -387,10 +390,21 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump_p reference to upump structure
  */
-static bool upipe_glx_sink_input_pic(struct upipe *upipe, struct uref *uref,
-                                     struct upump **upump_p)
+static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump_p)
 {
     struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
+
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_glx_sink->latency = 0;
+        uref_clock_get_latency(uref, &upipe_glx_sink->latency);
+        /* FIXME throw new flow definition to update probe */
+        upipe_throw_new_flow_def(upipe, uref);
+
+        uref_free(uref);
+        return true;
+    }
 
     if (likely(upipe_glx_sink->uclock != NULL)) {
         uint64_t pts = 0;
@@ -428,8 +442,8 @@ static void upipe_glx_sink_write_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_glx_sink_set_upump(upipe, NULL);
-    upipe_glx_sink_output_sink(upipe);
-    upipe_glx_sink_unblock_sink(upipe);
+    upipe_glx_sink_output_input(upipe);
+    upipe_glx_sink_unblock_input(upipe);
 }
 
 /** @internal @This handles input.
@@ -449,10 +463,10 @@ static void upipe_glx_sink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (!upipe_glx_sink_check_sink(upipe) ||
-        !upipe_glx_sink_input_pic(upipe, uref, upump_p)) {
-        upipe_glx_sink_hold_sink(upipe, uref);
-        upipe_glx_sink_block_sink(upipe, upump_p);
+    if (!upipe_glx_sink_check_input(upipe) ||
+        !upipe_glx_sink_output(upipe, uref, upump_p)) {
+        upipe_glx_sink_hold_input(upipe, uref);
+        upipe_glx_sink_block_input(upipe, upump_p);
     }
 }
 
@@ -479,14 +493,29 @@ static int upipe_glx_sink_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    struct upipe_glx_sink *upipe_glx_sink = upipe_glx_sink_from_upipe(upipe);
-    upipe_glx_sink->latency = 0;
-    uref_clock_get_latency(flow_def, &upipe_glx_sink->latency);
-
-    /* throw new flow definition to update probe */
-    upipe_throw_new_flow_def(upipe, flow_def);
-
+    flow_def = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def)
+    upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_glx_sink_provide_flow_format(struct upipe *upipe,
+                                              struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    uref_pic_flow_clear_format(flow_format);
+    uref_pic_flow_set_macropixel(flow_format, 1);
+    uref_pic_flow_set_planes(flow_format, 0);
+    uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
+    uref_pic_set_progressive(flow_format);
+    return urequest_provide_flow_format(request, flow_format);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -509,16 +538,26 @@ static int upipe_glx_sink_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         case UPIPE_ATTACH_UCLOCK:
             upipe_glx_sink_set_upump(upipe, NULL);
-            return upipe_glx_sink_attach_uclock(upipe);
+            upipe_glx_sink_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_glx_sink_provide_flow_format(upipe, request);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_glx_sink_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_SINK_GET_MAX_LENGTH: {
+        case UPIPE_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_glx_sink_get_max_length(upipe, p);
         }
-        case UPIPE_SINK_SET_MAX_LENGTH: {
+        case UPIPE_SET_MAX_LENGTH: {
             unsigned int max_length = va_arg(args, unsigned int);
             return upipe_glx_sink_set_max_length(upipe, max_length);
         }
@@ -552,7 +591,7 @@ static void upipe_glx_sink_free(struct upipe *upipe)
         upipe_glx_sink_clean_glx(upipe);
     }
     upipe_glx_sink_clean_uclock(upipe);
-    upipe_glx_sink_clean_sink(upipe);
+    upipe_glx_sink_clean_input(upipe);
     upipe_glx_sink_clean_urefcount(upipe);
     upipe_glx_sink_free_void(upipe);
 }

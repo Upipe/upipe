@@ -58,8 +58,10 @@ struct upipe_ts_psim {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** next uref to be processed */
     struct uref *next_uref;
@@ -74,7 +76,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_psim, upipe, UPIPE_TS_PSIM_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psim, urefcount, upipe_ts_psim_free)
 UPIPE_HELPER_VOID(upipe_ts_psim)
 UPIPE_HELPER_SYNC(upipe_ts_psim, acquired)
-UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_psim, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_psim pipe.
  *
@@ -263,6 +265,14 @@ static int upipe_ts_psim_set_flow_def(struct upipe *upipe,
 static int upipe_ts_psim_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psim_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psim_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psim_get_flow_def(upipe, p);

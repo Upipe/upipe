@@ -118,7 +118,12 @@ static int upipe_null_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT:
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF:
             return UBASE_ERR_NONE;
 

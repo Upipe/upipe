@@ -70,6 +70,9 @@
 /** default size of buffers when unspecified */
 #define UBUF_DEFAULT_SIZE       4096
 
+/** @hidden */
+static int upipe_amtsrc_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a amtsrc manager. */
 struct upipe_amtsrc_mgr {
     /** refcount management structure */
@@ -92,22 +95,32 @@ struct upipe_amtsrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
     /** read size */
     unsigned int read_size;
 
@@ -123,14 +136,22 @@ struct upipe_amtsrc {
 UPIPE_HELPER_UPIPE(upipe_amtsrc, upipe, UPIPE_AMTSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_amtsrc, urefcount, upipe_amtsrc_free)
 UPIPE_HELPER_VOID(upipe_amtsrc)
-UPIPE_HELPER_UREF_MGR(upipe_amtsrc, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_amtsrc, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_amtsrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_amtsrc, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_amtsrc, uref_mgr, uref_mgr_request,
+                      upipe_amtsrc_check,
+                      upipe_amtsrc_register_output_request,
+                      upipe_amtsrc_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_amtsrc, ubuf_mgr, ubuf_mgr_request,
+                      upipe_amtsrc_check,
+                      upipe_amtsrc_register_output_request,
+                      upipe_amtsrc_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_amtsrc, uclock, uclock_request, upipe_amtsrc_check,
+                    upipe_amtsrc_register_output_request,
+                    upipe_amtsrc_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_amtsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_amtsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_amtsrc, uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_amtsrc, read_size)
 
 /** @internal @This allocates a amtsrc pipe.
@@ -239,6 +260,56 @@ static void upipe_amtsrc_worker(struct upump *upump)
     upipe_release(upipe);
 }
 
+/** @internal @This checks if the pump may be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_amtsrc_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_amtsrc *upipe_amtsrc = upipe_amtsrc_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_amtsrc_store_flow_def(upipe, flow_format);
+
+    upipe_amtsrc_check_upump_mgr(upipe);
+    if (upipe_amtsrc->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_amtsrc->uref_mgr == NULL) {
+        upipe_amtsrc_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_amtsrc->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_block_flow_alloc_def(upipe_amtsrc->uref_mgr, NULL);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_amtsrc_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_amtsrc->uclock == NULL &&
+        urequest_get_opaque(&upipe_amtsrc->uclock_request, struct upipe *)
+            != NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_amtsrc->handle != NULL && upipe_amtsrc->upump == NULL) {
+        struct upump *upump = upump_alloc_idler(upipe_amtsrc->upump_mgr,
+                                                upipe_amtsrc_worker, upipe);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_amtsrc_set_upump(upipe, upump);
+        upump_start(upump);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the uri of the currently opened udp socket.
  *
  * @param upipe description structure of the pipe
@@ -278,20 +349,6 @@ static int upipe_amtsrc_set_uri(struct upipe *upipe, const char *uri)
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
-
-    UBASE_RETURN(upipe_amtsrc_check_uref_mgr(upipe))
-    upipe_amtsrc_check_upump_mgr(upipe);
-
-    if (upipe_amtsrc->flow_def == NULL) {
-        struct uref *flow_def =
-            uref_block_flow_alloc_def(upipe_amtsrc->uref_mgr, NULL);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_amtsrc_store_flow_def(upipe, flow_def);
-    }
-    UBASE_RETURN(upipe_amtsrc_check_ubuf_mgr(upipe))
 
     struct in_addr multicast_addr, source_addr;
     uint16_t port_number = 0;
@@ -366,16 +423,13 @@ static int _upipe_amtsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_amtsrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_amtsrc_set_upump(upipe, NULL);
             return upipe_amtsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_amtsrc_set_upump(upipe, NULL);
-            return upipe_amtsrc_attach_uclock(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_amtsrc_attach_ubuf_mgr(upipe);
+            upipe_amtsrc_require_uclock(upipe);
+            return UBASE_ERR_NONE;
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -424,20 +478,7 @@ static int upipe_amtsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_amtsrc_control(upipe, command, args));
 
-    struct upipe_amtsrc *upipe_amtsrc = upipe_amtsrc_from_upipe(upipe);
-    if (upipe_amtsrc->upump_mgr != NULL && upipe_amtsrc->handle != NULL &&
-        upipe_amtsrc->upump == NULL) {
-        struct upump *upump = upump_alloc_idler(upipe_amtsrc->upump_mgr,
-                                                upipe_amtsrc_worker, upipe);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_amtsrc_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_amtsrc_check(upipe, NULL);
 }
 
 /** @This frees a upipe.

@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_uclock events and providing a given uclock
+ * @short probe catching provide_request events asking for a uclock
  */
 
 #ifndef _UPIPE_UPROBE_UCLOCK_H_

@@ -72,7 +72,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_NEW_FLOW_DEF:
             break;
         default:
-            //assert(0);
+            assert(0);
             break;
     }
     return UBASE_ERR_NONE;

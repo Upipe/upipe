@@ -115,7 +115,8 @@ static void STRUCTURE##_init_flow_def(struct upipe *upipe)                  \
  * @param upipe description structure of the pipe                           \
  * @return a pointer to a flow def attribute                                \
  */                                                                         \
-static struct uref *STRUCTURE##_alloc_flow_def_attr(struct upipe *upipe)    \
+static UBASE_UNUSED struct uref *                                           \
+    STRUCTURE##_alloc_flow_def_attr(struct upipe *upipe)                    \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->FLOW_DEF_INPUT == NULL)                                          \
@@ -146,8 +147,9 @@ static struct uref *STRUCTURE##_make_flow_def(struct upipe *upipe)          \
  * @param flow_def_attr new flow def attributes packet                      \
  * @return false if the flow def attributes packets are different           \
  */                                                                         \
-static bool STRUCTURE##_check_flow_def_attr(struct upipe *upipe,            \
-                                            struct uref *flow_def_attr)     \
+static UBASE_UNUSED bool                                                    \
+    STRUCTURE##_check_flow_def_attr(struct upipe *upipe,                    \
+                                    struct uref *flow_def_attr)             \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     return s->FLOW_DEF_ATTR != NULL &&                                      \

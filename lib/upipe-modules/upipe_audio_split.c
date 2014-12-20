@@ -50,6 +50,9 @@
 #include <string.h>
 #include <assert.h>
 
+/** @hidden */
+static int upipe_audio_split_sub_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of an audio_split pipe. */
 struct upipe_audio_split {
     /** real refcount management structure */
@@ -92,12 +95,17 @@ struct upipe_audio_split_sub {
     struct uref *flow_def;
     /** attributes / parameters from application */
     struct uref *flow_def_params;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** true if the flow definition needs update */
     bool flow_need_update;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -107,9 +115,12 @@ UPIPE_HELPER_UPIPE(upipe_audio_split_sub, upipe,
                    UPIPE_AUDIO_SPLIT_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audio_split_sub, urefcount,
                        upipe_audio_split_sub_free)
-UPIPE_HELPER_OUTPUT(upipe_audio_split_sub, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_audio_split_sub, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW(upipe_audio_split_sub, "sound.")
-UPIPE_HELPER_UBUF_MGR(upipe_audio_split_sub, ubuf_mgr, flow_def);
+UPIPE_HELPER_UBUF_MGR(upipe_audio_split_sub, ubuf_mgr, ubuf_mgr_request,
+                      upipe_audio_split_sub_check,
+                      upipe_audio_split_sub_register_output_request,
+                      upipe_audio_split_sub_unregister_output_request)
 
 UPIPE_HELPER_SUBPIPE(upipe_audio_split, upipe_audio_split_sub, output,
                      sub_mgr, outputs, uchain)
@@ -145,6 +156,20 @@ static struct upipe *upipe_audio_split_sub_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This receives the result of ubuf manager requests.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_audio_split_sub_check(struct upipe *upipe,
+                                       struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_audio_split_sub_store_flow_def(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an output subpipe of an
  * audio_split pipe.
  *
@@ -157,8 +182,6 @@ static int upipe_audio_split_sub_control(struct upipe *upipe,
                                          int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_audio_split_sub_attach_ubuf_mgr(upipe);
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_audio_split_sub_get_flow_def(upipe, p);
@@ -338,9 +361,9 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(split_sub->flow_need_update)) {
             upipe_audio_split_sub_update_flow(upipe_sub);
         }
-        if (unlikely(!ubase_check(upipe_audio_split_sub_check_ubuf_mgr(upipe_sub)))) {
+        if (unlikely(!upipe_audio_split_sub_demand_ubuf_mgr(upipe_sub,
+                                           uref_dup(split_sub->flow_def))))
             continue;
-        }
 
         /* dup uref, allocate new ubuf */
         struct uref *uref_planar = uref_dup(uref);
@@ -446,12 +469,12 @@ static int upipe_audio_split_control(struct upipe *upipe,
                                      int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            upipe_audio_split_throw_sub_outputs(upipe, UPROBE_NEW_FLOW_FORMAT,
-                                                flow_format, NULL);
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
         }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_audio_split_set_flow_def(upipe, uref);

@@ -66,8 +66,10 @@ struct upipe_ts_pmtd {
     struct upipe *output;
     /** output flow definition */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** input flow definition */
     struct uref *flow_def_input;
@@ -83,7 +85,7 @@ struct upipe_ts_pmtd {
 UPIPE_HELPER_UPIPE(upipe_ts_pmtd, upipe, UPIPE_TS_PMTD_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_pmtd, urefcount, upipe_ts_pmtd_free)
 UPIPE_HELPER_VOID(upipe_ts_pmtd)
-UPIPE_HELPER_OUTPUT(upipe_ts_pmtd, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_pmtd, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_pmtd pipe.
  *
@@ -232,7 +234,7 @@ static void upipe_ts_pmtd_clean_flows(struct upipe *upipe)
 #define UPIPE_TS_PMTD_PEEK_END(upipe, pmt, offset)                          \
     }                                                                       \
     if (unlikely(offset + PMT_ES_SIZE <= size - PSI_CRC_SIZE)) {            \
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                         \
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                          \
     }                                                                       \
 
 /** @internal @This validates the next PMT.
@@ -621,7 +623,7 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
                                                  header_desclength))
         upipe_ts_pmtd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
-        upipe_throw_new_flow_def(upipe, flow_def);
+        upipe_ts_pmtd_output(upipe, NULL, upump_p);
     }
 
     upipe_ts_pmtd_clean_flows(upipe);
@@ -720,6 +722,14 @@ static int upipe_ts_pmtd_iterate(struct upipe *upipe, struct uref **p)
 static int upipe_ts_pmtd_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_pmtd_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_pmtd_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_pmtd_get_flow_def(upipe, p);

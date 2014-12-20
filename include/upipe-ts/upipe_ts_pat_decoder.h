@@ -38,7 +38,7 @@ extern "C" {
 enum upipe_ts_patd_command {
     UPIPE_TS_PATD_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the flow definition of the NIT (int *) */
+    /** returns the flow definition of the NIT (struct uref **) */
     UPIPE_TS_PATD_GET_NIT
 };
 

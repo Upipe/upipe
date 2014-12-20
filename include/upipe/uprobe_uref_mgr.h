@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching need_uref_mgr events and providing a given uref manager
+ * @short probe catching provide_request events asking for a uref manager
  */
 
 #ifndef _UPIPE_UPROBE_UREF_MGR_H_
@@ -57,8 +57,8 @@ UPROBE_HELPER_UPROBE(uprobe_uref_mgr, uprobe)
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_uref_mgr_init(struct uprobe_uref_mgr *uprobe_uref_mgr,
-                                     struct uprobe *next,
-                                     struct uref_mgr *uref_mgr);
+                                    struct uprobe *next,
+                                    struct uref_mgr *uref_mgr);
 
 /** @This cleans a uprobe_uref_mgr structure.
  *

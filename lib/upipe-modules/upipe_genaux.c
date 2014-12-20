@@ -43,6 +43,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_genaux.h>
 
 #include <stdlib.h>
@@ -56,6 +57,12 @@
 #include <math.h>
 #include <assert.h>
 
+/** @hidden */
+static bool upipe_genaux_handle(struct upipe *upipe, struct uref *uref,
+                                struct upump **upump_p);
+/** @hidden */
+static int upipe_genaux_check(struct upipe *upipe, struct uref *flow_format);
+
 /** upipe_genaux structure */ 
 struct upipe_genaux {
     /** refcount management structure */
@@ -63,12 +70,26 @@ struct upipe_genaux {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
 
     /** get attr */
     int (*getattr) (struct uref *, uint64_t *);
@@ -78,12 +99,62 @@ struct upipe_genaux {
 };
 
 UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free)
+UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free);
 UPIPE_HELPER_VOID(upipe_genaux);
-UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, flow_def);
-UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
+UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, output_state, request_list);
+UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, ubuf_mgr_request,
+                      upipe_genaux_check,
+                      upipe_genaux_register_output_request,
+                      upipe_genaux_unregister_output_request)
+UPIPE_HELPER_INPUT(upipe_genaux, urefs, nb_urefs, max_urefs, blockers, upipe_genaux_handle)
 
 /** @internal @This handles data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ * @return false if the input must be blocked
+ */
+static bool upipe_genaux_handle(struct upipe *upipe, struct uref *uref,
+                                struct upump **upump_p)
+{
+    struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_genaux_store_flow_def(upipe, NULL);
+        upipe_genaux_require_ubuf_mgr(upipe, uref);
+        return true;
+    }
+
+    if (upipe_genaux->flow_def == NULL)
+        return false;
+
+    uint64_t systime = 0;
+    int size;
+    struct ubuf *dst;
+    uint8_t *aux;
+
+    if (!ubase_check(upipe_genaux->getattr(uref, &systime))) {
+        uref_free(uref);
+        return true;
+    }
+
+    size = sizeof(uint64_t);
+    dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
+    if (unlikely(dst == NULL)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return true;
+    }
+    ubuf_block_write(dst, 0, &size, &aux);
+    upipe_genaux_hton64(aux, systime);
+    ubuf_block_unmap(dst, 0);
+    uref_attach_ubuf(uref, dst);
+    upipe_genaux_output(upipe, uref, upump_p);
+    return true;
+}
+
+/** @internal @This inputs data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -92,30 +163,42 @@ UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, flow_def_sent);
 static void upipe_genaux_input(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p)
 {
+    if (!upipe_genaux_check_input(upipe)) {
+        upipe_genaux_hold_input(upipe, uref);
+        upipe_genaux_block_input(upipe, upump_p);
+    } else if (!upipe_genaux_handle(upipe, uref, upump_p)) {
+        upipe_genaux_hold_input(upipe, uref);
+        upipe_genaux_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
+}
+
+/** @internal @This checks if the input may start.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_genaux_check(struct upipe *upipe, struct uref *flow_format)
+{
     struct upipe_genaux *upipe_genaux = upipe_genaux_from_upipe(upipe);
-    uint64_t systime = 0;
-    int size;
-    struct ubuf *dst;
-    uint8_t *aux;
+    if (flow_format != NULL)
+        upipe_genaux_store_flow_def(upipe, flow_format);
 
-    if (!ubase_check(upipe_genaux_check_ubuf_mgr(upipe)) ||
-        !ubase_check(upipe_genaux->getattr(uref, &systime))) {
-        uref_free(uref);
-        return;
-    }
+    if (upipe_genaux->flow_def == NULL)
+        return UBASE_ERR_NONE;
 
-    size = sizeof(uint64_t);
-    dst = ubuf_block_alloc(upipe_genaux->ubuf_mgr, size);
-    if (unlikely(dst == NULL)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+    bool was_buffered = !upipe_genaux_check_input(upipe);
+    upipe_genaux_output_input(upipe);
+    upipe_genaux_unblock_input(upipe);
+    if (was_buffered && upipe_genaux_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_genaux_input. */
+        upipe_release(upipe);
     }
-    ubuf_block_write(dst, 0, &size, &aux);
-    upipe_genaux_hton64(aux, systime);
-    ubuf_block_unmap(dst, 0);
-    uref_attach_ubuf(uref, dst);
-    upipe_genaux_output(upipe, uref, upump_p);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -133,7 +216,7 @@ static int upipe_genaux_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_ALLOC;
     if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, "block.aux."))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    upipe_genaux_store_flow_def(upipe, flow_def_dup);
+    upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -184,11 +267,20 @@ static int upipe_genaux_control(struct upipe *upipe,
                                 int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_genaux_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT:
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_genaux_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_genaux_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_genaux_get_flow_def(upipe, p);
@@ -241,6 +333,7 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
     upipe_genaux_init_urefcount(upipe);
     upipe_genaux_init_ubuf_mgr(upipe);
     upipe_genaux_init_output(upipe);
+    upipe_genaux_init_input(upipe);
     upipe_genaux->getattr = uref_clock_get_cr_sys;
     upipe_throw_ready(upipe);
     return upipe;
@@ -252,9 +345,9 @@ static struct upipe *upipe_genaux_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_genaux_free(struct upipe *upipe)
 {
-    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
+    upipe_genaux_clean_input(upipe);
     upipe_genaux_clean_ubuf_mgr(upipe);
     upipe_genaux_clean_output(upipe);
     upipe_genaux_clean_urefcount(upipe);

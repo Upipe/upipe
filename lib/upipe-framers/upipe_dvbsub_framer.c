@@ -72,8 +72,10 @@ struct upipe_dvbsubf {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
     /** input flow definition packet */
     struct uref *flow_def_input;
     /** attributes in the sequence header */
@@ -98,7 +100,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_dvbsubf, urefcount, upipe_dvbsubf_free)
 UPIPE_HELPER_VOID(upipe_dvbsubf)
 UPIPE_HELPER_SYNC(upipe_dvbsubf, acquired)
 
-UPIPE_HELPER_OUTPUT(upipe_dvbsubf, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_dvbsubf, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_dvbsubf, flow_def_input, flow_def_attr)
 
 /** @internal @This allocates an dvbsubf pipe.
@@ -274,6 +276,14 @@ static int upipe_dvbsubf_set_flow_def(struct upipe *upipe,
 static int upipe_dvbsubf_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_dvbsubf_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_dvbsubf_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_dvbsubf_get_flow_def(upipe, p);

@@ -88,13 +88,12 @@ struct blksrc_test {
     uint64_t next_pts;
 };
 
-/** helper phony pipe to test upipe_blksrc */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(blksrc_test, upipe, 0);
 
-/** helper phony pipe to test upipe_blksrc */
-static struct upipe *blksrc_test_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe,
-                                     uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct blksrc_test *blksrc_test = malloc(sizeof(struct blksrc_test));
     assert(blksrc_test != NULL);
@@ -105,9 +104,9 @@ static struct upipe *blksrc_test_alloc(struct upipe_mgr *mgr,
     return &blksrc_test->upipe;
 }
 
-/** helper phony pipe to test upipe_blksrc */
-static void blksrc_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct blksrc_test *blksrc_test = blksrc_test_from_upipe(upipe);
     uint64_t pts = 0, duration = 0;
@@ -141,8 +140,26 @@ static void blksrc_test_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** helper phony pipe to test upipe_blksrc */
-static void blksrc_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     struct blksrc_test *blksrc_test = blksrc_test_from_upipe(upipe);
     upipe_throw_dead(upipe);
@@ -150,13 +167,13 @@ static void blksrc_test_free(struct upipe *upipe)
     free(blksrc_test);
 }
 
-/** helper phony pipe to test upipe_blksrc */
+/** helper phony pipe */
 static struct upipe_mgr blksrc_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = blksrc_test_alloc,
-    .upipe_input = blksrc_test_input,
-    .upipe_control = NULL,
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 /** definition of our uprobe */
@@ -247,7 +264,7 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     /* release pipes */
-    blksrc_test_free(blksrc_test);
+    test_free(blksrc_test);
 
     printf("picture test went fine, moving to sound test\n");
 
@@ -275,7 +292,7 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     /* release pipes */
-    blksrc_test_free(blksrc_test);
+    test_free(blksrc_test);
 
     /* clean everything */
     upipe_mgr_release(upipe_blksrc_mgr); // noop

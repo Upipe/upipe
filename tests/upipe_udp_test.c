@@ -115,25 +115,26 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_SOURCE_END:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_SOURCE_END:
             break;
     }
     return UBASE_ERR_NONE;
 }
 
-/** phony pipe to test upipe_udpsrc */
+/** helper phony pipe */
 struct udpsrc_test {
 	int counter;
     struct uref *flow;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_udpsrc */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(udpsrc_test, upipe, 0);
 
-/** helper phony pipe to test upipe_udpsrc */
-static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct udpsrc_test *udpsrc_test = malloc(sizeof(struct udpsrc_test));
     assert(udpsrc_test != NULL);
@@ -144,9 +145,9 @@ static struct upipe *udpsrc_test_alloc(struct upipe_mgr *mgr, struct uprobe *upr
     return &udpsrc_test->upipe;
 }
 
-/** helper phony pipe to test upipe_udpsrc */
-static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
 	uint8_t buf[BUF_SIZE], str[BUF_SIZE];
 	const uint8_t *rbuf;
@@ -164,8 +165,26 @@ static void udpsrc_test_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_udpsrc */
-static void udpsrc_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
@@ -176,13 +195,13 @@ static void udpsrc_test_free(struct upipe *upipe)
     free(udpsrc_test);
 }
 
-/** helper phony pipe to test upipe_udpsrc */
+/** helper phony pipe */
 static struct upipe_mgr udpsrc_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = udpsrc_test_alloc,
-    .upipe_input = udpsrc_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 /* packet generator */
@@ -358,7 +377,7 @@ int main(int argc, char *argv[])
     upump_free(write_pump);
     upipe_release(upipe_udpsrc);
     upipe_release(upipe_udpsink);
-    udpsrc_test_free(udpsrc_test);
+    test_free(udpsrc_test);
     upipe_mgr_release(upipe_udpsrc_mgr); /* nop */
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);

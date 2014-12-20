@@ -1,8 +1,6 @@
 Plans for core:
- - ubuf_mgr_control
- - check ubuf picture format against flow def
- - ubuf_sound
- - rewrite ubuf_mem
+ - reduce stack consumption in ubuf
+ - autoregulate pools
  - thread pool support in upump-ev
 
 Plans for modules:

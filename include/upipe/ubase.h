@@ -121,6 +121,18 @@ static inline struct STRUCTURE *                                            \
         return command;                                                     \
     }
 
+#ifdef __GNUC__
+/** @This marks a function or variable as possibly unused (suppresses compiler
+ * warnings). */
+#define UBASE_UNUSED __attribute__ ((unused))
+/** @This marks a function or variable as deprecated (forces compiler
+ * warnings). */
+#define UBASE_DEPRECATED __attribute__ ((deprecated))
+#else  /* mkdoc:skip */
+#define UBASE_UNUSED
+#define UBASE_DEPRECATED
+#endif
+
 /** @This is designed to chain uref and ubuf in a list. */
 struct uchain {
     /** pointer to next element */
@@ -256,6 +268,14 @@ do {                                                                        \
     if (va_arg(args, unsigned int) != signature)                            \
         return UBASE_ERR_UNHANDLED;                                         \
 }
+
+/** @This returns #UBASE_ERR_ALLOC if the variable is NULL.
+ *
+ * @param var variable to check
+ */
+#define UBASE_ALLOC_RETURN(var)                                             \
+    if (unlikely(var == NULL))                                              \
+        return UBASE_ERR_ALLOC;
 
 /** @This returns the greatest common denominator between two positive integers.
  *

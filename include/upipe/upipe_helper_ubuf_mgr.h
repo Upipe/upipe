@@ -37,20 +37,31 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
+#include <upipe/urequest.h>
 
 #include <stdbool.h>
 
-/** @This declares four functions dealing with the ubuf manager used on the
+/** @This defines a function that will be called after a ubuf_mgr has been
+ * received. The second argument is the amended flow format (belongs to the
+ * callee). */
+typedef int (*upipe_helper_ubuf_mgr_check)(struct upipe *, struct uref *);
+
+/** @This defines a function that will be called to register or unregister a
+ * request. */
+typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *);
+
+/** @This declares five functions dealing with the ubuf manager used on the
  * output of a pipe.
  *
  * You must add two members to your private upipe structure, for instance:
  * @code
  *  struct ubuf_mgr *ubuf_mgr;
- *  struct uref *flow_def;
+ *  struct urequest ubuf_mgr_request;
  * @end code
- * where the flow_def is probably shared with @ref #UPIPE_HELPER_OUTPUT.
  *
- * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
+ * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro,
+ * and provide two functions which will be called 1/ when the ubuf manager is
+ * provided, 2/ and 3/ when a request needs to be registered/unregistered.
  *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
@@ -60,19 +71,24 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  int upipe_foo_attach_ubuf_mgr(struct upipe *upipe)
+ *  int upipe_foo_provide_ubuf_mgr(struct upipe *upipe, va_list args)
  * @end code
- * Typically called from your upipe_foo_control() handler, such as:
- * @code
- *  case UPIPE_ATTACH_UBUF_MGR: {
- *      return upipe_foo_attach_ubuf_mgr(upipe);
- *  }
- * @end code
+ * Internal function called when the request is answered.
  *
  * @item @code
- *  int upipe_foo_check_ubuf_mgr(struct upipe *upipe)
+ *  int upipe_foo_require_ubuf_mgr(struct upipe *upipe,
+ *                                 struct uref *flow_format)
  * @end code
- * Checks if the ubuf manager is available, and asks for it otherwise.
+ * Initializes and registers the request to get a ubuf manager. The flow
+ * format belongs to the callee and will be eventually freed.
+ *
+ * @item @code
+ *  bool upipe_foo_demand_ubuf_mgr(struct upipe *upipe,
+                                   struct uref *flow_format)
+ * @end code
+ * Initializes and registers the request to get a ubuf manager, and send it
+ * via a probe if no answer has been received synchronously. Returns false
+ * if no ubuf_mgr was received.
  *
  * @item @code
  *  void upipe_foo_clean_ubuf_mgr(struct upipe *upipe)
@@ -83,47 +99,87 @@ extern "C" {
  * @param STRUCTURE name of your private upipe structure 
  * @param UBUF_MGR name of the @tt {struct ubuf_mgr *} field of
  * your private upipe structure
- * @param FLOW_DEF name of the @tt{struct uref *} field of
+ * @param REQUEST name of the @tt {struct urequest} field of
  * your private upipe structure
+ * @param CHECK function called after a uref manager has been received
+ * @param REGISTER function called to register a request
+ * @param UNREGISTER function called to unregister a request
  */
-#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR, FLOW_DEF)                \
+#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR, REQUEST,                 \
+                              CHECK, REGISTER, UNREGISTER)                  \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
 static void STRUCTURE##_init_ubuf_mgr(struct upipe *upipe)                  \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    STRUCTURE->UBUF_MGR = NULL;                                             \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s->UBUF_MGR = NULL;                                                     \
+    urequest_set_opaque(&s->REQUEST, NULL);                                 \
 }                                                                           \
-/** @internal @This sends a probe to attach a ubuf manager.                 \
+/** @internal @This handles the result of a ubuf manager request.           \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_attach_ubuf_mgr(struct upipe *upipe)                 \
+static int STRUCTURE##_provide_ubuf_mgr(struct urequest *urequest,          \
+                                        va_list args)                       \
 {                                                                           \
+    struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ubuf_mgr_release(s->UBUF_MGR);                                          \
-    s->UBUF_MGR = NULL;                                                     \
-    if (likely(s->FLOW_DEF == NULL))                                        \
-        return UBASE_ERR_UNHANDLED;                                         \
-    return upipe_throw_new_flow_format(upipe, s->FLOW_DEF, &s->UBUF_MGR);   \
+    s->UBUF_MGR = va_arg(args, struct ubuf_mgr *);                          \
+    struct uref *flow_format = va_arg(args, struct uref *);                 \
+    upipe_dbg_va(upipe, "provided ubuf_mgr %p", s->UBUF_MGR);               \
+    upipe_helper_ubuf_mgr_check check = CHECK;                              \
+    if (check != NULL)                                                      \
+        return check(upipe, flow_format);                                   \
+    uref_free(flow_format);                                                 \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
-/** @internal @This checks if the ubuf manager is available, and asks       \
- * for it otherwise.                                                        \
+/** @internal @This registers a request to get a ubuf manager.              \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @return an error code                                                    \
+ * @param flow_format flow format for which a ubuf is required (belongs     \
+ * to the callee)                                                           \
  */                                                                         \
-static int STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)                  \
+static void STRUCTURE##_require_ubuf_mgr(struct upipe *upipe,               \
+                                         struct uref *flow_format)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->UBUF_MGR != NULL))                                        \
-        return UBASE_ERR_NONE;                                              \
-    if (unlikely(s->FLOW_DEF == NULL))                                      \
-        return UBASE_ERR_INVALID;                                           \
-    return upipe_throw_new_flow_format(upipe, s->FLOW_DEF, &s->UBUF_MGR);   \
+    upipe_helper_ubuf_mgr_register reg = REGISTER;                          \
+    upipe_helper_ubuf_mgr_register unreg = UNREGISTER;                      \
+    assert(flow_format != NULL);                                            \
+    if (urequest_get_opaque(&s->REQUEST, struct upipe *) != NULL) {         \
+        if (unreg != NULL)                                                  \
+            unreg(upipe, &s->REQUEST);                                      \
+        urequest_clean(&s->REQUEST);                                        \
+        ubuf_mgr_release(s->UBUF_MGR);                                      \
+        s->UBUF_MGR = NULL;                                                 \
+    }                                                                       \
+    urequest_init_ubuf_mgr(&s->REQUEST, flow_format,                        \
+                           STRUCTURE##_provide_ubuf_mgr, NULL);             \
+    urequest_set_opaque(&s->REQUEST, upipe);                                \
+    upipe_dbg(upipe, "require ubuf_mgr");                                   \
+    if (reg != NULL)                                                        \
+        reg(upipe, &s->REQUEST);                                            \
+}                                                                           \
+/** @internal @This registers a request to get a ubuf manager, and also     \
+ * send it via a probe if nothing has been received synchronously.          \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param flow_format flow format for which a ubuf manager is required      \
+ * (belongs to the callee)                                                  \
+ * @return false if the ubuf manager couldn't be allocated                  \
+ */                                                                         \
+static UBASE_UNUSED bool STRUCTURE##_demand_ubuf_mgr(struct upipe *upipe,   \
+                                        struct uref *flow_format)           \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    STRUCTURE##_require_ubuf_mgr(upipe, flow_format);                       \
+    if (unlikely(s->UBUF_MGR == NULL))                                      \
+        upipe_throw_provide_request(upipe, &s->REQUEST);                    \
+    return s->UBUF_MGR != NULL;                                             \
 }                                                                           \
 /** @internal @This cleans up the private members of this helper.           \
  *                                                                          \
@@ -131,8 +187,10 @@ static int STRUCTURE##_check_ubuf_mgr(struct upipe *upipe)                  \
  */                                                                         \
 static void STRUCTURE##_clean_ubuf_mgr(struct upipe *upipe)                 \
 {                                                                           \
-    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    ubuf_mgr_release(STRUCTURE->UBUF_MGR);                                  \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    ubuf_mgr_release(s->UBUF_MGR);                                          \
+    /* If the request was registered, it should be unregistered             \
+     * automatically. Otherwise it has not been initialized. */             \
 }
 
 #ifdef __cplusplus

@@ -40,6 +40,7 @@ extern "C" {
 #include <upipe/ubuf.h>
 #include <upipe/udict.h>
 
+#include <assert.h>
 #include <inttypes.h>
 
 /** @hidden */
@@ -244,6 +245,7 @@ static inline struct uref *uref_sibling_alloc_control(struct uref *uref)
  */
 static inline struct uref *uref_dup_inner(struct uref *uref)
 {
+    assert(uref != NULL);
     struct uref *new_uref = uref->mgr->uref_alloc(uref->mgr);
     if (unlikely(new_uref == NULL))
         return NULL;

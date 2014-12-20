@@ -81,20 +81,19 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** phony pipe to test upipe_rtp_prepend */
+/** helper phony pipe */
 struct rtp_prepend_test {
     struct uref *entry;
     uint16_t seqnum;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_rtp_prepend */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(rtp_prepend_test, upipe, 0);
 
-/** helper phony pipe to test upipe_rtp_prepend */
-static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe,
-                                            uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct rtp_prepend_test *rtp_prepend_test = malloc(sizeof(struct rtp_prepend_test));
     assert(rtp_prepend_test != NULL);
@@ -104,9 +103,9 @@ static struct upipe *rtp_prepend_test_alloc(struct upipe_mgr *mgr,
     return &rtp_prepend_test->upipe;
 }
 
-/** helper phony pipe to test upipe_rtp_prepend */
-static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct rtp_prepend_test *rtp_prepend_test = rtp_prepend_test_from_upipe(upipe);
     uint16_t seqnum;
@@ -159,8 +158,26 @@ static void rtp_prepend_test_input(struct upipe *upipe, struct uref *uref,
     rtp_prepend_test->seqnum++;
 }
 
-/** helper phony pipe to test upipe_rtp_prepend */
-static void rtp_prepend_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     struct rtp_prepend_test *rtp_prepend_test = rtp_prepend_test_from_upipe(upipe);
@@ -170,13 +187,13 @@ static void rtp_prepend_test_free(struct upipe *upipe)
     free(rtp_prepend_test);
 }
 
-/** helper phony pipe to test upipe_dup */
+/** helper phony pipe */
 static struct upipe_mgr rtp_prepend_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = rtp_prepend_test_alloc,
-    .upipe_input = rtp_prepend_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 int main(int argc, char **argv)
@@ -243,7 +260,7 @@ int main(int argc, char **argv)
     }
 
     upipe_release(rtp_prepend);
-    rtp_prepend_test_free(rtp_prepend_test);
+    test_free(rtp_prepend_test);
 
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);

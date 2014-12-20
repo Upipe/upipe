@@ -32,7 +32,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
@@ -112,7 +111,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_TS_SPLIT_DEL_PID:
         case UPROBE_SOURCE_END:
         case UPROBE_NEW_FLOW_DEF:
-        case UPROBE_NEED_UREF_MGR:
             break;
     }
     return UBASE_ERR_NONE;
@@ -141,7 +139,7 @@ static int catch_ts_demux_program(struct uprobe *uprobe,
             upipe_release(upipe);
             return UBASE_ERR_NONE;
 
-        case UPROBE_NEW_FLOW_DEF: {
+        case UPROBE_NEED_OUTPUT: {
             struct uref *flow_def = va_arg(args, struct uref *);
             struct upipe *upipe_ts_demux;
             ubase_assert(upipe_sub_get_super(upipe, &upipe_ts_demux));
@@ -184,14 +182,14 @@ static int catch_ts_demux_program(struct uprobe *uprobe,
                 upipe_notice_va(upipe, "add flow %"PRIu64, flow_id);
 
                 output = upipe_flow_alloc_sub(upipe,
-                    uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_demux_output_s),
+                    uprobe_pfx_alloc_va(&uprobe_demux_output_s,
                                         UPROBE_LOG_LEVEL,
                                         "ts demux output %"PRIu64,
                                         flow_id), flow_def);
                 assert(output != NULL);
                 struct upipe *noclock = upipe_void_alloc_output(output,
                     upipe_noclock_mgr,
-                    uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
                                         UPROBE_LOG_LEVEL,
                                         "noclock %"PRIu64, flow_id));
                 assert(noclock != NULL);
@@ -219,7 +217,7 @@ static int catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                           int event, va_list args)
 {
     switch (event) {
-        case UPROBE_NEW_FLOW_DEF: {
+        case UPROBE_NEED_OUTPUT: {
             struct uref *flow_def = va_arg(args, struct uref *);
             /* TS mux */
             struct upipe_mgr *upipe_ts_mux_mgr = upipe_ts_mux_mgr_alloc();
@@ -240,7 +238,7 @@ static int catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
             assert(upipe_fsink_mgr != NULL);
             struct upipe *upipe_fsink = upipe_void_alloc_output(upipe_ts_mux,
                     upipe_fsink_mgr,
-                    uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                    uprobe_pfx_alloc(uprobe_use(logger),
                                      UPROBE_LOG_LEVEL, "file sink"));
             assert(upipe_fsink != NULL);
             upipe_mgr_release(upipe_fsink_mgr);
@@ -275,7 +273,7 @@ static int catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                     continue;
 
                 program = upipe_flow_alloc_sub(upipe,
-                    uprobe_pfx_alloc_va(uprobe_output_alloc(&uprobe_demux_program_s),
+                    uprobe_pfx_alloc_va(&uprobe_demux_program_s,
                                         UPROBE_LOG_LEVEL,
                                         "ts demux program %"PRIu64,
                                         flow_id), flow_def);
@@ -330,7 +328,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     assert(upipe_fsrc_mgr != NULL);
     struct upipe *upipe_fsrc = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
@@ -365,7 +363,7 @@ int main(int argc, char *argv[])
 
     struct upipe *upipe_ts_demux = upipe_void_alloc_output(upipe_fsrc,
             upipe_ts_demux_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(&uprobe_ts_demux_s),
+            uprobe_pfx_alloc(&uprobe_ts_demux_s,
                              UPROBE_LOG_LEVEL, "ts demux"));
     assert(upipe_ts_demux != NULL);
     upipe_mgr_release(upipe_ts_demux_mgr);

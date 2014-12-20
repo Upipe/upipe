@@ -299,8 +299,8 @@ static int STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)   \
  * @param upipe description structure of the pipe                           \
  * @param event event to throw, followed by arguments                       \
  */                                                                         \
-static void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,             \
-                                           int event, ...)                  \
+static UBASE_UNUSED void STRUCTURE##_throw_sub_##SUB##s(struct upipe *upipe,\
+                                                        int event, ...)     \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain;                                                  \

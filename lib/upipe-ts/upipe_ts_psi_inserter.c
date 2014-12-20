@@ -78,8 +78,10 @@ struct upipe_ts_psii {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** list of input subpipes */
     struct uchain subs;
@@ -94,7 +96,7 @@ struct upipe_ts_psii {
 UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psii, urefcount, upipe_ts_psii_free)
 UPIPE_HELPER_VOID(upipe_ts_psii)
-UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, output_state, request_list)
 
 /** @internal @This is the private context of a program of a ts_psii pipe. */
 struct upipe_ts_psii_sub {
@@ -357,6 +359,20 @@ static int upipe_ts_psii_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct upipe_ts_psii *upipe_ts_psii =
+                upipe_ts_psii_from_sub_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_alloc_output_proxy(
+                    upipe_ts_psii_to_upipe(upipe_ts_psii), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct upipe_ts_psii *upipe_ts_psii =
+                upipe_ts_psii_from_sub_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_free_output_proxy(
+                    upipe_ts_psii_to_upipe(upipe_ts_psii), request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_psii_sub_set_flow_def(upipe, flow_def);
@@ -511,9 +527,7 @@ static int upipe_ts_psii_set_flow_def(struct upipe *upipe,
     upipe_ts_psii_store_flow_def(upipe, flow_def_dup);
     /* Force sending it immediately, because subpipes also send to output
      * without passing by our helper. */
-    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
-    upipe_ts_psii->flow_def_sent = true;
-    upipe_throw_new_flow_def(upipe, upipe_ts_psii->flow_def);
+    upipe_ts_psii_output(upipe, NULL, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -548,6 +562,14 @@ static int upipe_ts_psii_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psii_get_flow_def(upipe, p);

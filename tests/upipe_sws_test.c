@@ -196,19 +196,18 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
     return true;
 }
 
-/** helper phony pipe to test upipe_sws */
+/** helper phony pipe */
 struct sws_test {
     struct uref *pic;
     struct upipe upipe;
 };
 
-/** helper phony pipe to test upipe_sws */
+/** helper phony pipe */
 UPIPE_HELPER_UPIPE(sws_test, upipe, 0);
 
-/** helper phony pipe to test upipe_sws */
-static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
-                                    struct uprobe *uprobe,
-                                    uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     assert(sws_test != NULL);
@@ -218,9 +217,9 @@ static struct upipe *sws_test_alloc(struct upipe_mgr *mgr,
     return &sws_test->upipe;
 }
 
-/** helper phony pipe to test upipe_sws */
-static void sws_test_input(struct upipe *upipe, struct uref *uref,
-                           struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct sws_test *sws_test = sws_test_from_upipe(upipe);
     assert(uref != NULL);
@@ -234,8 +233,26 @@ static void sws_test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg(upipe, "received pic");
 }
 
-/** helper phony pipe to test upipe_sws */
-static void sws_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_dbg(upipe, "releasing pipe");
     upipe_throw_dead(upipe);
@@ -245,13 +262,13 @@ static void sws_test_free(struct upipe *upipe)
     free(sws_test);
 }
 
-/** helper phony pipe to test upipe_dup */
+/** helper phony pipe */
 static struct upipe_mgr sws_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = sws_test_alloc,
-    .upipe_input = sws_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 // DEBUG - from swscale/swscale_unscaled.c
@@ -409,7 +426,7 @@ int main(int argc, char **argv)
 
     /* release pipes */
     upipe_release(sws);
-    sws_test_free(sws_test);
+    test_free(sws_test);
 
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);

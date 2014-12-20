@@ -26,7 +26,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -148,7 +147,7 @@ static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
 static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                         int event, va_list args)
 {
-    if (event != UPROBE_NEW_FLOW_DEF)
+    if (event != UPROBE_NEED_OUTPUT)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct uref *flow_def = va_arg(args, struct uref *);
@@ -173,7 +172,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
         uref_pic_set_progressive(flow_def2);
         struct upipe *deint = upipe_void_alloc_output(upipe,
                 upipe_filter_blend_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "deint"));
         assert(deint != NULL);
         upipe_release(upipe);
@@ -183,7 +182,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     if (wanted_hsize != hsize) {
         uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
         struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr,
-                uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+                uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "sws"), flow_def2);
         assert(sws != NULL);
         upipe_release(upipe);
@@ -199,7 +198,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     uref_pic_flow_clear_format(flow_def2);
     uref_flow_set_def(flow_def2, "block.mjpeg.pic.");
     struct upipe *jpegenc = upipe_flow_alloc_output(upipe, upipe_avcenc_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(logger)),
+            uprobe_pfx_alloc_va(uprobe_use(logger),
                                 loglevel, "jpeg"), flow_def2);
     assert(jpegenc != NULL);
     upipe_release(upipe);
@@ -208,7 +207,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
 
     struct upipe *urefprobe = upipe_void_alloc_output(upipe,
             upipe_probe_uref_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_uref)),
+            uprobe_pfx_alloc_va(uprobe_use(&uprobe_uref),
                                 loglevel, "urefprobe"));
     assert(urefprobe != NULL);
     upipe_release(upipe);
@@ -232,14 +231,14 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
 static int split_catch(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
-    if (event != UPROBE_NEW_FLOW_DEF)
+    if (event != UPROBE_NEED_OUTPUT)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     upipe_release(upipe_split_output);
     upipe_split_output = upipe_use(upipe);
 
     struct upipe *avcdec = upipe_void_alloc_output(upipe, upipe_avcdec_mgr,
-            uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(&uprobe_avcdec)),
+            uprobe_pfx_alloc_va(uprobe_use(&uprobe_avcdec),
                                 loglevel, "avcdec"));
     if (avcdec == NULL) {
         upipe_err_va(upipe, "incompatible flow def");
@@ -329,8 +328,7 @@ int main(int argc, char **argv)
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     upipe_source = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(logger)),
-                             loglevel, "fsrc"));
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "fsrc"));
     assert(upipe_source != NULL);
     upipe_mgr_release(upipe_fsrc_mgr);
     if (!ubase_check(upipe_set_uri(upipe_source, srcpath)))

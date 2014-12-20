@@ -36,7 +36,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
@@ -225,8 +224,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
     upipe_mgr_release(avcdec_mgr);
     struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
-        uprobe_pfx_alloc_va(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                            UPROBE_LOG_VERBOSE, "avcdec"));
+        uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
+                            UPROBE_LOG_VERBOSE, "avcdec video"));
     assert(avcdec != NULL);
     upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
@@ -238,16 +237,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
-    uref_pic_flow_set_macropixel(uref, 1);
-    uref_pic_flow_set_planes(uref, 0);
-    uref_pic_flow_add_plane(uref, 1, 1, 3, "r8g8b8");
-    uref_pic_set_progressive(uref);
 
     struct upipe *ffmt = upipe_flow_alloc_output(avcdec, ffmt_mgr,
-            uprobe_pfx_alloc(
-                uprobe_filter_suggest_alloc(
-                    uprobe_output_alloc(uprobe_use(uprobe_main))),
-                UPROBE_LOG_VERBOSE, "ffmt"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
             uref);
     assert(ffmt != NULL);
     uref_free(uref);
@@ -256,7 +249,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "wlin video"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -267,11 +260,11 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp video"));
 
     avcdec = upipe_void_chain_output_sub(avcdec, play,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "play video"));
 
     struct upipe_mgr *upipe_glx_mgr = upipe_glx_sink_mgr_alloc();
@@ -302,14 +295,14 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "wlin audio"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -320,11 +313,11 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp audio"));
 
     avcdec = upipe_void_chain_output_sub(avcdec, play,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "play audio"));
 
     struct uprobe *uprobe_sink = uprobe_xfer_alloc(uprobe_use(uprobe_main));
@@ -391,7 +384,7 @@ static void uplay_start(struct upump *upump)
     /* try file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
     upipe_src = upipe_void_alloc(upipe_fsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_src),
                              UPROBE_LOG_VERBOSE, "fsrc"));
     upipe_mgr_release(upipe_fsrc_mgr);
 
@@ -409,7 +402,7 @@ static void uplay_start(struct upump *upump)
         else
             upipe_rtpsrc_mgr = upipe_udpsrc_mgr_alloc();
         upipe_src = upipe_void_alloc(upipe_rtpsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_src),
                                  UPROBE_LOG_VERBOSE,
                                  udp ? "udpsrc" : "rtpsrc"));
         upipe_mgr_release(upipe_rtpsrc_mgr);
@@ -422,7 +415,7 @@ static void uplay_start(struct upump *upump)
             /* try http source */
             struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
             upipe_src = upipe_void_alloc(upipe_http_src_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_src)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_src),
                                  UPROBE_LOG_VERBOSE, "httpsrc"));
             upipe_mgr_release(upipe_http_src_mgr);
 
@@ -456,7 +449,7 @@ static void uplay_start(struct upump *upump)
 
     /* deport to the source thread */
     upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src_s)),
+            uprobe_pfx_alloc(uprobe_use(&uprobe_src_s),
                              UPROBE_LOG_VERBOSE, "wsrc"),
             upipe_src,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -483,9 +476,9 @@ static void uplay_start(struct upump *upump)
                 uprobe_selflow_alloc(uprobe_use(uprobe_main),
                     uprobe_selflow_alloc(
                         uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
-                            uprobe_output_alloc(uprobe_use(&uprobe_video_s)),
+                            uprobe_use(&uprobe_video_s),
                             UPROBE_SELFLOW_PIC, "auto"),
-                        uprobe_output_alloc(uprobe_use(&uprobe_audio_s)),
+                        uprobe_use(&uprobe_audio_s),
                         UPROBE_SELFLOW_SOUND, "auto"),
                     UPROBE_SELFLOW_VOID, "auto"),
                 UPROBE_LOG_VERBOSE, "ts demux"));

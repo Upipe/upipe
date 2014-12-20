@@ -95,6 +95,18 @@ static void count_input(struct upipe *upipe, struct uref *uref,
 }
 
 /** helper phony pipe to count pictures */
+static int count_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe to count pictures */
 static void count_free(struct upipe *upipe)
 {
     upipe_clean(upipe);
@@ -106,7 +118,7 @@ static struct upipe_mgr count_mgr = {
     .refcount = NULL,
     .upipe_alloc = count_alloc,
     .upipe_input = count_input,
-    .upipe_control = NULL
+    .upipe_control = count_control
 };
 
 /** catch callback (demux subpipes for flows) */

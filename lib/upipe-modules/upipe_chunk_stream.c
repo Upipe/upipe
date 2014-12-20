@@ -69,8 +69,10 @@ struct upipe_chunk_stream {
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** maximum outbound block size */
     unsigned int mtu;
@@ -91,9 +93,9 @@ struct upipe_chunk_stream {
 };
 
 UPIPE_HELPER_UPIPE(upipe_chunk_stream, upipe, UPIPE_CHUNK_STREAM_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_chunk_stream, urefcount, upipe_chunk_stream_free)
-UPIPE_HELPER_VOID(upipe_chunk_stream)
-UPIPE_HELPER_OUTPUT(upipe_chunk_stream, output, flow_def, flow_def_sent);
+UPIPE_HELPER_UREFCOUNT(upipe_chunk_stream, urefcount, upipe_chunk_stream_free);
+UPIPE_HELPER_VOID(upipe_chunk_stream);
+UPIPE_HELPER_OUTPUT(upipe_chunk_stream, output, flow_def, output_state, request_list);
 UPIPE_HELPER_UREF_STREAM(upipe_chunk_stream, next_uref, next_uref_size, urefs, NULL)
 
 /** @internal @This handles data.
@@ -230,9 +232,13 @@ static int upipe_chunk_stream_control(struct upipe *upipe,
                                       int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_chunk_stream_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_chunk_stream_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

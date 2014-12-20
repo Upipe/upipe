@@ -51,6 +51,9 @@
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/mpeg/psi.h>
 
+/** @hidden */
+static int upipe_ts_psig_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a ts psig pipe. */
 struct upipe_ts_psig {
     /** refcount management structure */
@@ -58,13 +61,17 @@ struct upipe_ts_psig {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** TS ID */
     uint16_t tsid;
@@ -84,8 +91,11 @@ struct upipe_ts_psig {
 UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psig, urefcount, upipe_ts_psig_free)
 UPIPE_HELPER_VOID(upipe_ts_psig)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, ubuf_mgr_request,
+                      upipe_ts_psig_check,
+                      upipe_ts_psig_register_output_request,
+                      upipe_ts_psig_unregister_output_request)
 
 /** @internal @This is the private context of a program of a ts_psig pipe. */
 struct upipe_ts_psig_program {
@@ -98,8 +108,10 @@ struct upipe_ts_psig_program {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** program number (service ID) */
     uint16_t program_number;
@@ -129,7 +141,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_psig_program, upipe,
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psig_program, urefcount,
                        upipe_ts_psig_program_free)
 UPIPE_HELPER_VOID(upipe_ts_psig_program)
-UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, output_state, request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig, upipe_ts_psig_program, program, program_mgr,
                      programs, uchain)
@@ -360,7 +372,7 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_psig_program_from_upipe(upipe);
     struct upipe_ts_psig *upipe_ts_psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
-    if (unlikely(!ubase_check(upipe_ts_psig_check_ubuf_mgr(upipe_ts_psig_to_upipe(upipe_ts_psig))))) {
+    if (unlikely(upipe_ts_psig->flow_def == NULL)) {
         uref_free(uref);
         return;
     }
@@ -588,6 +600,20 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
                                          int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct upipe_ts_psig *upipe_ts_psig =
+                upipe_ts_psig_from_program_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_alloc_output_proxy(
+                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct upipe_ts_psig *upipe_ts_psig =
+                upipe_ts_psig_from_program_mgr(upipe->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_free_output_proxy(
+                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psig_program_get_flow_def(upipe, p);
@@ -720,7 +746,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
-    if (unlikely(!ubase_check(upipe_ts_psig_check_ubuf_mgr(upipe)))) {
+    if (unlikely(upipe_ts_psig->flow_def == NULL)) {
         uref_free(uref);
         return;
     }
@@ -836,6 +862,19 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This receives a ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_ts_psig_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_ts_psig_store_flow_def(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -857,7 +896,8 @@ static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
     }
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def_dup,
                                          "block.mpegtspsi.mpegtspat."))
-    upipe_ts_psig_store_flow_def(upipe, flow_def_dup);
+    upipe_ts_psig_store_flow_def(upipe, NULL);
+    upipe_ts_psig_demand_ubuf_mgr(upipe, flow_def_dup);
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig->tsid = tsid;
@@ -905,9 +945,14 @@ static int upipe_ts_psig_set_version(struct upipe *upipe,
 static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_ts_psig_attach_ubuf_mgr(upipe);
-
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_psig_get_flow_def(upipe, p);

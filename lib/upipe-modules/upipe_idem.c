@@ -53,8 +53,10 @@ struct upipe_idem {
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -63,19 +65,7 @@ struct upipe_idem {
 UPIPE_HELPER_UPIPE(upipe_idem, upipe, UPIPE_IDEM_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_idem, urefcount, upipe_idem_free)
 UPIPE_HELPER_VOID(upipe_idem);
-UPIPE_HELPER_OUTPUT(upipe_idem, output, flow_def, flow_def_sent)
-
-/** @internal @This handles data.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
- */
-static inline void upipe_idem_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
-{
-    upipe_idem_output(upipe, uref, upump_p);
-}
+UPIPE_HELPER_OUTPUT(upipe_idem, output, flow_def, output_state, request_list)
 
 /** @internal @This sets the input flow definition.
  *
@@ -104,9 +94,13 @@ static int upipe_idem_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_idem_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_idem_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_idem_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -170,7 +164,7 @@ static struct upipe_mgr upipe_idem_mgr = {
     .signature = UPIPE_IDEM_SIGNATURE,
 
     .upipe_alloc = upipe_idem_alloc,
-    .upipe_input = upipe_idem_input,
+    .upipe_input = upipe_idem_output,
     .upipe_control = upipe_idem_control,
 
     .upipe_mgr_control = NULL

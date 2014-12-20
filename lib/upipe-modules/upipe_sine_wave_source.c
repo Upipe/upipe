@@ -67,6 +67,9 @@
 /** @internal @This is the frequency of the sound wave. */
 #define UPIPE_SINESRC_FREQ 440 /* Hz */
 
+/** @hidden */
+static int upipe_sinesrc_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a sine wave source pipe. */
 struct upipe_sinesrc {
     /** refcount management structure */
@@ -74,22 +77,32 @@ struct upipe_sinesrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** uclock */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** read watcher */
+    /** timer */
     struct upump *upump;
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
 
     /** PTS of the next uref */
     uint64_t next_pts;
@@ -103,14 +116,22 @@ struct upipe_sinesrc {
 UPIPE_HELPER_UPIPE(upipe_sinesrc, upipe, UPIPE_SINESRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_sinesrc, urefcount, upipe_sinesrc_free)
 UPIPE_HELPER_VOID(upipe_sinesrc)
-UPIPE_HELPER_UREF_MGR(upipe_sinesrc, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_sinesrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_sinesrc, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_sinesrc, uref_mgr, uref_mgr_request,
+                      upipe_sinesrc_check,
+                      upipe_sinesrc_register_output_request,
+                      upipe_sinesrc_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr, ubuf_mgr_request,
+                      upipe_sinesrc_check,
+                      upipe_sinesrc_register_output_request,
+                      upipe_sinesrc_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_sinesrc, uclock, uclock_request, upipe_sinesrc_check,
+                    upipe_sinesrc_register_output_request,
+                    upipe_sinesrc_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_sinesrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_sinesrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_sinesrc, uclock)
 
 static const double max_phase = 2. * M_PI;
 
@@ -138,9 +159,6 @@ static struct upipe *upipe_sinesrc_alloc(struct upipe_mgr *mgr,
     upipe_sinesrc->next_pts = UINT64_MAX;
     upipe_sinesrc->phase = 0.;
     upipe_throw_ready(upipe);
-
-    upipe_sinesrc_check_uref_mgr(upipe);
-    upipe_sinesrc_check_upump_mgr(upipe);
     return upipe;
 }
 
@@ -156,9 +174,6 @@ static void upipe_sinesrc_idler(struct upump *upump)
                  upipe_sinesrc->next_pts == UINT64_MAX))
         upipe_sinesrc->next_pts = uclock_now(upipe_sinesrc->uclock) +
                                   UPIPE_SINESRC_DELAY;
-
-    if (unlikely(!ubase_check(upipe_sinesrc_check_ubuf_mgr(upipe))))
-        return;
 
     size_t size = (uint64_t)UPIPE_SINESRC_DURATION * UPIPE_SINESRC_RATE /
                   UCLOCK_FREQ;
@@ -201,6 +216,61 @@ static void upipe_sinesrc_idler(struct upump *upump)
     upipe_release(upipe);
 }
 
+/** @internal @This checks if the pump may be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_sinesrc_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_sinesrc *upipe_sinesrc = upipe_sinesrc_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_sinesrc_store_flow_def(upipe, flow_format);
+
+    upipe_sinesrc_check_upump_mgr(upipe);
+    if (upipe_sinesrc->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_sinesrc->uref_mgr == NULL) {
+        upipe_sinesrc_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_sinesrc->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_sound_flow_alloc_def(upipe_sinesrc->uref_mgr, "s16.", 1, 2);
+        if (flow_format == NULL) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        uref_sound_flow_add_plane(flow_format, "c");
+        uref_sound_flow_set_rate(flow_format, UPIPE_SINESRC_RATE);
+        upipe_sinesrc_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_sinesrc->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_sinesrc->uclock == NULL &&
+        urequest_get_opaque(&upipe_sinesrc->uclock_request, struct upipe *)
+            != NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_sinesrc->upump == NULL) {
+        struct upump *upump = upump_alloc_idler(upipe_sinesrc->upump_mgr,
+                                                upipe_sinesrc_idler, upipe);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_sinesrc_set_upump(upipe, upump);
+        upump_start(upump);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a sine wave source pipe.
  *
  * @param upipe description structure of the pipe
@@ -212,16 +282,13 @@ static int _upipe_sinesrc_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_sinesrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_sinesrc_set_upump(upipe, NULL);
             return upipe_sinesrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_sinesrc_set_upump(upipe, NULL);
-            return upipe_sinesrc_attach_uclock(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_sinesrc_attach_ubuf_mgr(upipe);
+            upipe_sinesrc_require_uclock(upipe);
+            return UBASE_ERR_NONE;
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -253,31 +320,7 @@ static int upipe_sinesrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_sinesrc_control(upipe, command, args));
 
-    struct upipe_sinesrc *upipe_sinesrc = upipe_sinesrc_from_upipe(upipe);
-    if (upipe_sinesrc->uref_mgr != NULL && upipe_sinesrc->upump_mgr != NULL &&
-        upipe_sinesrc->upump == NULL) {
-        struct uref *flow_def =
-            uref_sound_flow_alloc_def(upipe_sinesrc->uref_mgr, "s16.",
-                                      1, 2);
-        if (flow_def == NULL) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        uref_sound_flow_add_plane(flow_def, "c");
-        uref_sound_flow_set_rate(flow_def, UPIPE_SINESRC_RATE);
-        upipe_sinesrc_store_flow_def(upipe, flow_def);
-
-        struct upump *upump = upump_alloc_idler(upipe_sinesrc->upump_mgr,
-                                                upipe_sinesrc_idler, upipe);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_sinesrc_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_sinesrc_check(upipe, NULL);
 }
 
 /** @This frees a upipe.

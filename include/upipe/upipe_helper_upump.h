@@ -106,8 +106,9 @@ static void STRUCTURE##_set_##UPUMP(struct upipe *upipe,                    \
  * @param upipe description structure of the pipe                           \
  * @param timeout time to wait before waking up                             \
  */                                                                         \
-static void STRUCTURE##_wait_##UPUMP(struct upipe *upipe, uint64_t timeout, \
-                                     upump_cb cb)                           \
+static void UBASE_UNUSED STRUCTURE##_wait_##UPUMP(struct upipe *upipe,      \
+                                                  uint64_t timeout,         \
+                                                  upump_cb cb)              \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct upump *watcher = upump_alloc_timer(s->UPUMP_MGR, cb, upipe,      \

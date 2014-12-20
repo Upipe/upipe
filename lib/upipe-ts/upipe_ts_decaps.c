@@ -58,8 +58,10 @@ struct upipe_ts_decaps {
     struct upipe *output;
     /** output flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** last continuity counter for this PID, or -1 */
     int8_t last_cc;
@@ -71,7 +73,7 @@ struct upipe_ts_decaps {
 UPIPE_HELPER_UPIPE(upipe_ts_decaps, upipe, UPIPE_TS_DECAPS_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_decaps, urefcount, upipe_ts_decaps_free)
 UPIPE_HELPER_VOID(upipe_ts_decaps)
-UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_decaps, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a ts_decaps pipe.
  *
@@ -244,6 +246,14 @@ static int upipe_ts_decaps_control(struct upipe *upipe,
                                    int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_decaps_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_decaps_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_decaps_get_flow_def(upipe, p);

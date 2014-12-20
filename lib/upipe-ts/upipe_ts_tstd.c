@@ -55,8 +55,10 @@ struct upipe_ts_tstd {
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** buffer size, in octets */
     uint64_t bs;
@@ -78,7 +80,7 @@ struct upipe_ts_tstd {
 UPIPE_HELPER_UPIPE(upipe_ts_tstd, upipe, UPIPE_TS_TSTD_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_tstd, urefcount, upipe_ts_tstd_free)
 UPIPE_HELPER_VOID(upipe_ts_tstd)
-UPIPE_HELPER_OUTPUT(upipe_ts_tstd, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_ts_tstd, output, flow_def, output_state, request_list)
 
 /** @internal @This handles urefs.
  *
@@ -168,9 +170,13 @@ static int upipe_ts_tstd_set_flow_def(struct upipe *upipe,
 static int upipe_ts_tstd_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_tstd_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_tstd_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

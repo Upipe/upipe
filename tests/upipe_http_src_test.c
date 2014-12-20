@@ -79,7 +79,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
-        case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SOURCE_END:
             break;
     }

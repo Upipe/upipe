@@ -39,7 +39,9 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_bin.h>
+#include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_bin_input.h>
+#include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_decode.h>
 
@@ -64,6 +66,8 @@ struct upipe_fdec_mgr {
 UBASE_FROM_TO(upipe_fdec_mgr, upipe_mgr, upipe_mgr, mgr)
 UBASE_FROM_TO(upipe_fdec_mgr, urefcount, urefcount, urefcount)
 
+static int upipe_fdec_provide(struct upipe *upipe, struct uref *unused);
+
 /** @internal @This is the private context of a fdec pipe. */
 struct upipe_fdec {
     /** real refcount management structure */
@@ -71,12 +75,23 @@ struct upipe_fdec {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** uref serving as a dictionary for options */
     struct uref *options;
 
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
 
+    /** list of input bin requests */
+    struct uchain input_request_list;
+    /** list of output bin requests */
+    struct uchain output_request_list;
+    /** first inner pipe of the bin (avcdec) */
+    struct upipe *first_inner;
     /** last inner pipe of the bin (avcdec) */
     struct upipe *last_inner;
     /** output */
@@ -89,7 +104,11 @@ struct upipe_fdec {
 UPIPE_HELPER_UPIPE(upipe_fdec, upipe, UPIPE_FDEC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_fdec)
 UPIPE_HELPER_UREFCOUNT(upipe_fdec, urefcount, upipe_fdec_no_ref)
-UPIPE_HELPER_BIN(upipe_fdec, last_inner_probe, last_inner, output)
+UPIPE_HELPER_UREF_MGR(upipe_fdec, uref_mgr, uref_mgr_request,
+                      upipe_fdec_provide, upipe_throw_provide_request, NULL)
+UPIPE_HELPER_BIN_INPUT(upipe_fdec, first_inner, input_request_list)
+UPIPE_HELPER_BIN_OUTPUT(upipe_fdec, last_inner_probe, last_inner, output,
+                        output_request_list)
 
 UBASE_FROM_TO(upipe_fdec, urefcount, urefcount_real, urefcount_real)
 
@@ -115,29 +134,27 @@ static struct upipe *upipe_fdec_alloc(struct upipe_mgr *mgr,
     upipe_fdec_init_urefcount(upipe);
     urefcount_init(upipe_fdec_to_urefcount_real(upipe_fdec),
                    upipe_fdec_free);
-    upipe_fdec_init_bin(upipe, upipe_fdec_to_urefcount_real(upipe_fdec));
+    upipe_fdec_init_uref_mgr(upipe);
+    upipe_fdec_init_bin_input(upipe);
+    upipe_fdec_init_bin_output(upipe, upipe_fdec_to_urefcount_real(upipe_fdec));
     upipe_fdec->options = NULL;
     upipe_throw_ready(upipe);
-
+    upipe_fdec_demand_uref_mgr(upipe);
     return upipe;
 }
 
-/** @internal @This handles data.
+/** @internal @This allocates the options uref.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param unused unused argument
+ * @return an error code
  */
-static inline void upipe_fdec_input(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
+static int upipe_fdec_provide(struct upipe *upipe, struct uref *unused)
 {
     struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
-    if (upipe_fdec->last_inner == NULL) {
-        uref_free(uref);
-        return;
-    }
-
-    upipe_input(upipe_fdec->last_inner, uref, upump_p);
+    if (upipe_fdec->uref_mgr != NULL && upipe_fdec->options == NULL)
+        upipe_fdec->options = uref_alloc_control(upipe_fdec->uref_mgr);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -157,6 +174,7 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (ubase_check(upipe_set_flow_def(upipe_fdec->last_inner, flow_def)))
             return UBASE_ERR_NONE;
     }
+    upipe_fdec_store_first_inner(upipe, NULL);
     upipe_fdec_store_last_inner(upipe, NULL);
 
     struct upipe *avcdec = upipe_void_alloc(fdec_mgr->avcdec_mgr,
@@ -188,6 +206,7 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
     }
 
+    upipe_fdec_store_first_inner(upipe, upipe_use(avcdec));
     upipe_fdec_store_last_inner(upipe, avcdec);
     return UBASE_ERR_NONE;
 }
@@ -225,12 +244,8 @@ static int upipe_fdec_set_option(struct upipe *upipe,
     struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
     assert(key != NULL);
 
-    if (upipe_fdec->options == NULL) {
-        struct uref_mgr *uref_mgr;
-        UBASE_RETURN(upipe_throw_need_uref_mgr(upipe, &uref_mgr))
-        upipe_fdec->options = uref_alloc_control(uref_mgr);
-        uref_mgr_release(uref_mgr);
-    }
+    if (upipe_fdec->options == NULL)
+        return UBASE_ERR_ALLOC;
 
     if (upipe_fdec->last_inner != NULL) {
         UBASE_RETURN(upipe_set_option(upipe_fdec->last_inner, key, value))
@@ -269,8 +284,13 @@ static int upipe_fdec_control(struct upipe *upipe, int command, va_list args)
         }
 
         default:
-            return upipe_fdec_control_bin(upipe, command, args);
+            break;
     }
+
+    int err = upipe_fdec_control_bin_input(upipe, command, args);
+    if (err == UBASE_ERR_UNHANDLED)
+        return upipe_fdec_control_bin_output(upipe, command, args);
+    return err;
 }
 
 /** @This frees a upipe.
@@ -285,6 +305,7 @@ static void upipe_fdec_free(struct urefcount *urefcount_real)
     upipe_throw_dead(upipe);
     uref_free(upipe_fdec->options);
     uprobe_clean(&upipe_fdec->last_inner_probe);
+    upipe_fdec_clean_uref_mgr(upipe);
     urefcount_clean(urefcount_real);
     upipe_fdec_clean_urefcount(upipe);
     upipe_fdec_free_void(upipe);
@@ -297,7 +318,8 @@ static void upipe_fdec_free(struct urefcount *urefcount_real)
 static void upipe_fdec_no_ref(struct upipe *upipe)
 {
     struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
-    upipe_fdec_clean_bin(upipe);
+    upipe_fdec_clean_bin_input(upipe);
+    upipe_fdec_clean_bin_output(upipe);
     urefcount_release(upipe_fdec_to_urefcount_real(upipe_fdec));
 }
 
@@ -369,7 +391,7 @@ struct upipe_mgr *upipe_fdec_mgr_alloc(void)
     fdec_mgr->mgr.refcount = upipe_fdec_mgr_to_urefcount(fdec_mgr);
     fdec_mgr->mgr.signature = UPIPE_FDEC_SIGNATURE;
     fdec_mgr->mgr.upipe_alloc = upipe_fdec_alloc;
-    fdec_mgr->mgr.upipe_input = upipe_fdec_input;
+    fdec_mgr->mgr.upipe_input = upipe_fdec_bin_input;
     fdec_mgr->mgr.upipe_control = upipe_fdec_control;
     fdec_mgr->mgr.upipe_mgr_control = upipe_fdec_mgr_control;
     return upipe_fdec_mgr_to_upipe_mgr(fdec_mgr);

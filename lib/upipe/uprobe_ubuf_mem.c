@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short probe catching new_flow_format events and providing a given ubuf manager using umem storage
+ * @short probe catching provide_request events asking for a ubuf manager
  */
 
 #include <upipe/ubase.h>
@@ -53,26 +53,36 @@ static int uprobe_ubuf_mem_throw(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uprobe_ubuf_mem *uprobe_ubuf_mem =
         uprobe_ubuf_mem_from_uprobe(uprobe);
-    if (event != UPROBE_NEW_FLOW_FORMAT || uprobe_ubuf_mem->umem_mgr == NULL)
+
+    if (event != UPROBE_PROVIDE_REQUEST || uprobe_ubuf_mem->umem_mgr == NULL)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     va_list args_copy;
     va_copy(args_copy, args);
-    struct uref *flow_def = va_arg(args_copy, struct uref *);
-    struct ubuf_mgr **ubuf_mgr_p = va_arg(args_copy, struct ubuf_mgr **);
+    struct urequest *urequest = va_arg(args_copy, struct urequest *);
     va_end(args_copy);
 
-    if (ubuf_mgr_p == NULL)
+    if (urequest->type != UREQUEST_UBUF_MGR &&
+        urequest->type != UREQUEST_FLOW_FORMAT)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    *ubuf_mgr_p =
+    struct uref *uref = uref_dup(urequest->uref);
+    if (unlikely(uref == NULL))
+        return UBASE_ERR_ALLOC;
+
+    if (urequest->type == UREQUEST_FLOW_FORMAT)
+        return urequest_provide_flow_format(urequest, uref);
+
+    struct ubuf_mgr *ubuf_mgr =
         ubuf_mem_mgr_alloc_from_flow_def(uprobe_ubuf_mem->ubuf_pool_depth,
                                          uprobe_ubuf_mem->shared_pool_depth,
-                                         uprobe_ubuf_mem->umem_mgr, flow_def);
-    if (*ubuf_mgr_p == NULL)
+                                         uprobe_ubuf_mem->umem_mgr, uref);
+    if (ubuf_mgr == NULL) {
+        uref_free(uref);
         return uprobe_throw_next(uprobe, upipe, event, args);
+    }
 
-    return UBASE_ERR_NONE;
+    return urequest_provide_ubuf_mgr(urequest, ubuf_mgr, uref);
 }
 
 /** @This initializes an already allocated uprobe_ubuf_mem structure.

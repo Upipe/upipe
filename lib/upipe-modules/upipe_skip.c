@@ -67,8 +67,10 @@ struct upipe_skip {
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -77,7 +79,7 @@ struct upipe_skip {
 UPIPE_HELPER_UPIPE(upipe_skip, upipe, UPIPE_SKIP_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_skip, urefcount, upipe_skip_free)
 UPIPE_HELPER_VOID(upipe_skip);
-UPIPE_HELPER_OUTPUT(upipe_skip, output, flow_def, flow_def_sent);
+UPIPE_HELPER_OUTPUT(upipe_skip, output, flow_def, output_state, request_list);
 
 /** @internal @This handles data.
  *
@@ -124,9 +126,13 @@ static int upipe_skip_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_skip_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_throw_new_flow_format(upipe, flow_format, NULL);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_skip_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_skip_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

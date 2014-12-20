@@ -61,8 +61,10 @@ struct upipe_multicat_probe {
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** rotate interval */
     uint64_t rotate;
@@ -77,7 +79,7 @@ UPIPE_HELPER_UPIPE(upipe_multicat_probe, upipe, UPIPE_MULTICAT_PROBE_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_multicat_probe, urefcount,
                        upipe_multicat_probe_free)
 UPIPE_HELPER_VOID(upipe_multicat_probe)
-UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, flow_def_sent);
+UPIPE_HELPER_OUTPUT(upipe_multicat_probe, output, flow_def, output_state, request_list);
 
 /** @internal @This handles data.
  *
@@ -168,6 +170,14 @@ static int upipe_multicat_probe_control(struct upipe *upipe,
                                         int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_multicat_probe_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_multicat_probe_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_multicat_probe_get_flow_def(upipe, p);

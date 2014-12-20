@@ -231,6 +231,7 @@ int main(int argc, char **argv)
     assert(upipe_null_mgr != NULL);
     struct upipe *null = upipe_void_alloc(upipe_null_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "null"));
+    upipe_null_dump_dict(null, true);
     assert(null != NULL);
     upipe_set_output(upipe_handle, null);
     upipe_release(null);

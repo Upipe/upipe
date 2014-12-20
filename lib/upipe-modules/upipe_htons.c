@@ -39,7 +39,6 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_htons.h>
 
 #include <stdlib.h>
@@ -58,15 +57,14 @@ struct upipe_htons {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
-
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -75,8 +73,7 @@ struct upipe_htons {
 UPIPE_HELPER_UPIPE(upipe_htons, upipe, UPIPE_HTONS_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_htons, urefcount, upipe_htons_free)
 UPIPE_HELPER_VOID(upipe_htons);
-UPIPE_HELPER_UBUF_MGR(upipe_htons, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
+UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, output_state, request_list);
 
 /** @internal @This handles input.
  *
@@ -87,7 +84,6 @@ UPIPE_HELPER_OUTPUT(upipe_htons, output, flow_def, flow_def_sent);
 static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
 {
-    struct upipe_htons *upipe_htons = upipe_htons_from_upipe(upipe);
     struct ubuf *ubuf;
     size_t size = 0;
     int remain, bufsize = -1, offset = 0;
@@ -103,24 +99,19 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     bufsize = -1;
     if (!ubase_check(uref_block_write(uref, 0, &bufsize, &buf)) ||
         ((uintptr_t)buf & 1) || bufsize != size) {
-        if (unlikely(!ubase_check(upipe_htons_check_ubuf_mgr(upipe)))) {
-            uref_free(uref);
-            return;
-        }
-
-        ubuf = ubuf_block_copy(upipe_htons->ubuf_mgr, uref->ubuf, 0, size);
+        ubuf = ubuf_block_copy(uref->ubuf->mgr, uref->ubuf, 0, size);
         if (unlikely(!ubuf)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
             return;
-        uref_attach_ubuf(uref, ubuf);
         }
+        uref_attach_ubuf(uref, ubuf);
     } else {
         uref_block_unmap(uref, 0);
     }
 
     /* process ubuf chunks */
-    while(size > 0) {
+    while (size > 0) {
         bufsize = -1;
         if (unlikely(!ubase_check(uref_block_write(uref, offset, &bufsize,
                                   &buf)))) {
@@ -172,11 +163,14 @@ static int upipe_htons_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_htons_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_htons_attach_ubuf_mgr(upipe);
-
-        case UPIPE_AMEND_FLOW_FORMAT:
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_htons_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_htons_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_htons_get_flow_def(upipe, p);
@@ -217,7 +211,6 @@ static struct upipe *upipe_htons_alloc(struct upipe_mgr *mgr,
 
     upipe_htons_init_urefcount(upipe);
     upipe_htons_init_output(upipe);
-    upipe_htons_init_ubuf_mgr(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -232,7 +225,6 @@ static void upipe_htons_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_htons_clean_output(upipe);
-    upipe_htons_clean_ubuf_mgr(upipe);
     upipe_htons_clean_urefcount(upipe);
     upipe_htons_free_void(upipe);
 }

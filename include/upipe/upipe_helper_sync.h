@@ -89,7 +89,7 @@ static void STRUCTURE##_init_sync(struct upipe *upipe)                      \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static int STRUCTURE##_sync_lost(struct upipe *upipe)                       \
+static UBASE_UNUSED int STRUCTURE##_sync_lost(struct upipe *upipe)          \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     if (STRUCTURE->ACQUIRED) {                                              \

@@ -29,6 +29,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
+#include <upipe/urequest.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -69,6 +70,9 @@
 /** default size of buffers when unspecified */
 #define UBUF_DEFAULT_SIZE       32768
 
+/** @hidden */
+static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_fsrc {
     /** refcount management structure */
@@ -76,22 +80,32 @@ struct upipe_fsrc {
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
     struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
     /** read size */
     unsigned int read_size;
 
@@ -109,14 +123,20 @@ struct upipe_fsrc {
 UPIPE_HELPER_UPIPE(upipe_fsrc, upipe, UPIPE_FSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_fsrc, urefcount, upipe_fsrc_free)
 UPIPE_HELPER_VOID(upipe_fsrc)
-UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr)
 
-UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr, flow_def)
-UPIPE_HELPER_OUTPUT(upipe_fsrc, output, flow_def, flow_def_sent)
+UPIPE_HELPER_OUTPUT(upipe_fsrc, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr, uref_mgr_request, upipe_fsrc_check,
+                      upipe_fsrc_register_output_request,
+                      upipe_fsrc_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr, ubuf_mgr_request, upipe_fsrc_check,
+                      upipe_fsrc_register_output_request,
+                      upipe_fsrc_unregister_output_request)
+UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock, uclock_request, upipe_fsrc_check,
+                    upipe_fsrc_register_output_request,
+                    upipe_fsrc_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_fsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsrc, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock)
 UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
 
 /** @internal @This allocates a file source pipe.
@@ -158,7 +178,7 @@ static void upipe_fsrc_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     uint64_t systime = 0; /* to keep gcc quiet */
-    if (unlikely(upipe_fsrc->uclock != NULL))
+    if (upipe_fsrc->uclock != NULL)
         systime = uclock_now(upipe_fsrc->uclock);
 
     struct uref *uref = uref_block_alloc(upipe_fsrc->uref_mgr,
@@ -210,7 +230,7 @@ static void upipe_fsrc_worker(struct upump *upump)
         upipe_throw_source_end(upipe);
         return;
     }
-    if (unlikely(upipe_fsrc->uclock != NULL))
+    if (upipe_fsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_fsrc->read_size))
         uref_block_resize(uref, 0, ret);
@@ -219,14 +239,69 @@ static void upipe_fsrc_worker(struct upump *upump)
     upipe_release(upipe);
 }
 
+/** @internal @This checks if the pump may be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_fsrc_store_flow_def(upipe, flow_format);
+
+    upipe_fsrc_check_upump_mgr(upipe);
+    if (upipe_fsrc->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_fsrc->uref_mgr == NULL) {
+        upipe_fsrc_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_fsrc->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_block_flow_alloc_def(upipe_fsrc->uref_mgr, NULL);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_fsrc_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_fsrc->uclock == NULL &&
+        urequest_get_opaque(&upipe_fsrc->uclock_request, struct upipe *)
+            != NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_fsrc->fd != -1 && upipe_fsrc->upump == NULL) {
+        struct upump *upump;
+        if (upipe_fsrc->regular_file)
+            upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
+                                      upipe_fsrc_worker, upipe);
+        else
+            upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
+                                        upipe_fsrc_worker, upipe,
+                                        upipe_fsrc->fd);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_fsrc_set_upump(upipe, upump);
+        upump_start(upump);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the path of the currently opened file.
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
  * @return an error code
  */
-static int upipe_fsrc_get_uri(struct upipe *upipe,
-                                         const char **path_p)
+static int upipe_fsrc_get_uri(struct upipe *upipe, const char **path_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(path_p != NULL);
@@ -256,20 +331,6 @@ static int upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
 
     if (unlikely(path == NULL))
         return UBASE_ERR_NONE;
-
-    UBASE_RETURN(upipe_fsrc_check_uref_mgr(upipe))
-    upipe_fsrc_check_upump_mgr(upipe);
-
-    if (upipe_fsrc->flow_def == NULL) {
-        struct uref *flow_def = uref_block_flow_alloc_def(upipe_fsrc->uref_mgr,
-                                                          NULL);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_fsrc_store_flow_def(upipe, flow_def);
-    }
-    UBASE_RETURN(upipe_fsrc_check_ubuf_mgr(upipe))
 
     struct stat st;
     if (unlikely(stat(path, &st) == -1)) {
@@ -360,16 +421,13 @@ static int _upipe_fsrc_set_position(struct upipe *upipe, uint64_t position)
 static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_fsrc_attach_uref_mgr(upipe);
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_fsrc_set_upump(upipe, NULL);
             return upipe_fsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_fsrc_set_upump(upipe, NULL);
-            return upipe_fsrc_attach_uclock(upipe);
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_fsrc_attach_ubuf_mgr(upipe);
+            upipe_fsrc_require_uclock(upipe);
+            return UBASE_ERR_NONE;
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -434,26 +492,7 @@ static int upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_fsrc_control(upipe, command, args))
 
-    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    if (upipe_fsrc->upump_mgr != NULL && upipe_fsrc->fd != -1 &&
-        upipe_fsrc->upump == NULL) {
-        struct upump *upump;
-        if (upipe_fsrc->regular_file)
-            upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
-                                      upipe_fsrc_worker, upipe);
-        else
-            upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
-                                        upipe_fsrc_worker, upipe,
-                                        upipe_fsrc->fd);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_fsrc_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_fsrc_check(upipe, NULL);
 }
 
 /** @This frees a upipe.

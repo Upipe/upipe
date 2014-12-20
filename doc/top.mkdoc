@@ -28,6 +28,7 @@
 @include tutorials.mkdoc
 @include rules.mkdoc
 @include reference.mkdoc
+@include changelog.mkdoc
 
 @section TPe {API documentation}
 

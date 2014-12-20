@@ -58,15 +58,14 @@
 #define UBUF_ALIGN_OFFSET   0
 #define SIZE                1328
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 static unsigned int nb_packets = 0;
 static bool expect_discontinuity = false;
 
-/** helper phony pipe to test upipe_rtpd */
-static struct upipe *rtpd_test_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe,
-                                     uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -75,9 +74,9 @@ static struct upipe *rtpd_test_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** helper phony pipe to test upipe_rtpd */
-static void rtpd_test_input(struct upipe *upipe, struct uref *uref,
-                            struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     const uint8_t *buf;
     int size;
@@ -92,21 +91,44 @@ static void rtpd_test_input(struct upipe *upipe, struct uref *uref,
     uref_free(uref);
 }
 
-/** helper phony pipe to test upipe_rtpd */
-static void rtpd_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            const char *def;
+            ubase_assert(uref_flow_get_def(flow_def, &def));
+            assert(!strcmp(def, "block.mpegtsaligned."));
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_clean(upipe);
     free(upipe);
 }
 
-/** helper phony pipe to test upipe_rtpd */
+/** helper phony pipe */
 static struct upipe_mgr rtpd_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = rtpd_test_alloc,
-    .upipe_input = rtpd_test_input,
-    .upipe_control = NULL
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 /** definition of our uprobe */
@@ -115,14 +137,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
     switch (event) {
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
-        case UPROBE_NEW_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            const char *def;
-            ubase_assert(uref_flow_get_def(flow_def, &def));
-            assert(!strcmp(def, "block.mpegtsaligned."));
-            break;
-        }
         default:
             assert(0);
             break;
@@ -208,7 +224,7 @@ int main(int argc, char **argv)
 
     /* release pipe */
     upipe_release(rtpd);
-    rtpd_test_free(rtpd_test);
+    test_free(rtpd_test);
 
     /* release managers */
     upipe_mgr_release(upipe_rtpd_mgr); // no-op
