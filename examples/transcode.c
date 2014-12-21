@@ -66,7 +66,6 @@
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_format.h>
-#include <upipe-filters/uprobe_filter_suggest.h>
 
 #include <stdbool.h>
 #include <stdlib.h>

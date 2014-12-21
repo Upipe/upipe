@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -179,7 +178,7 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     struct upipe *avcdec = upipe_void_alloc(fdec_mgr->avcdec_mgr,
             uprobe_pfx_alloc(
-                uprobe_output_alloc(uprobe_use(&upipe_fdec->last_inner_probe)),
+                uprobe_use(&upipe_fdec->last_inner_probe),
                 UPROBE_LOG_VERBOSE, "avcdec"));
 
     if (unlikely(avcdec == NULL)) {

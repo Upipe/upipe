@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -189,7 +188,7 @@ static struct upipe *_upipe_wsink_alloc(struct upipe_mgr *mgr,
     /* input queue */
     struct upipe *in_qsrc = upipe_qsrc_alloc(wsink_mgr->qsrc_mgr,
             uprobe_pfx_alloc(
-                uprobe_output_alloc(uprobe_use(&upipe_wsink->in_qsrc_probe)),
+                uprobe_use(&upipe_wsink->in_qsrc_probe),
                 UPROBE_LOG_VERBOSE, "in_qsrc"),
             queue_length > UINT8_MAX ? UINT8_MAX : queue_length);
     if (unlikely(in_qsrc == NULL))

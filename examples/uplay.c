@@ -74,7 +74,6 @@
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_a52_framer.h>
-#include <upipe-filters/uprobe_filter_suggest.h>
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>

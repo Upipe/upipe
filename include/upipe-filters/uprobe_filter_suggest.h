@@ -65,7 +65,7 @@ UBASE_DEPRECATED struct uprobe *uprobe_filter_suggest_init(
  *
  * @param uprobe_filter_suggest structure to clean
  */
-void uprobe_filter_suggest_clean(
+UBASE_DEPRECATED void uprobe_filter_suggest_clean(
         struct uprobe_filter_suggest *uprobe_filter_suggest);
 
 /** @This allocates a new uprobe_filter_suggest structure.
@@ -73,7 +73,7 @@ void uprobe_filter_suggest_clean(
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_filter_suggest_alloc(struct uprobe *next);
+UBASE_DEPRECATED struct uprobe *uprobe_filter_suggest_alloc(struct uprobe *next);
 
 #ifdef __cplusplus
 }

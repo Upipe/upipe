@@ -54,21 +54,21 @@ UPROBE_HELPER_UPROBE(uprobe_output, uprobe)
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_output_init(struct uprobe_output *uprobe_output,
+UBASE_DEPRECATED struct uprobe *uprobe_output_init(struct uprobe_output *uprobe_output,
                                   struct uprobe *next) UBASE_DEPRECATED;
 
 /** @This cleans a uprobe output structure.
  *
  * @param uprobe_output structure to clean
  */
-void uprobe_output_clean(struct uprobe_output *uprobe_output);
+UBASE_DEPRECATED void uprobe_output_clean(struct uprobe_output *uprobe_output);
 
 /** @This allocates a new uprobe output structure.
  *
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_output_alloc(struct uprobe *next);
+UBASE_DEPRECATED struct uprobe *uprobe_output_alloc(struct uprobe *next);
 
 #ifdef __cplusplus
 }

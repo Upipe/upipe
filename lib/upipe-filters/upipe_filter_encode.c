@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -142,18 +141,19 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
         !ubase_ncmp(def, "block.h264.") && fenc_mgr->x264_mgr != NULL) {
         struct upipe *enc = upipe_void_alloc(fenc_mgr->x264_mgr,
                 uprobe_pfx_alloc(
-                    uprobe_output_alloc(uprobe_use(&upipe_fenc->last_inner_probe)),
+                    uprobe_use(&upipe_fenc->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "x264"));
         if (unlikely(enc == NULL))
             return UBASE_ERR_INVALID;
 
+        upipe_fenc_store_first_inner(upipe, upipe_use(enc));
         upipe_fenc_store_last_inner(upipe, enc);
         return UBASE_ERR_NONE;
     }
 
     struct upipe *enc = upipe_flow_alloc(fenc_mgr->avcenc_mgr,
             uprobe_pfx_alloc(
-                uprobe_output_alloc(uprobe_use(&upipe_fenc->last_inner_probe)),
+                uprobe_use(&upipe_fenc->last_inner_probe),
                 UPROBE_LOG_VERBOSE, "avcenc"), upipe_fenc->flow_def_input);
     if (unlikely(enc == NULL))
         return UBASE_ERR_INVALID;

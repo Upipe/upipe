@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -150,7 +149,7 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
         upipe_rtpsrc_mgr_from_upipe_mgr(upipe->mgr);
     upipe_rtpsrc->source = upipe_void_alloc(rtpsrc_mgr->udpsrc_mgr,
             uprobe_pfx_alloc(
-                uprobe_output_alloc(uprobe_use(&upipe_rtpsrc->proxy_probe)),
+                uprobe_use(&upipe_rtpsrc->proxy_probe),
                 UPROBE_LOG_VERBOSE, "udpsrc"));
     if (unlikely(upipe_rtpsrc->source == NULL))
         goto upipe_rtpsrc_alloc_err;

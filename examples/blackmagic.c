@@ -58,7 +58,6 @@
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-filters/upipe_filter_format.h>
-#include <upipe-filters/uprobe_filter_suggest.h>
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -222,8 +221,7 @@ int main(int argc, char **argv)
     flow = uref_alloc_control(uref_mgr);
     uref_flow_set_def(flow, "pic.");
     struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
-            uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
-                    uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                 UPROBE_LOG_VERBOSE, "ffmtvideo"), flow);
     assert(ffmt);
     uref_free(flow);
@@ -259,8 +257,7 @@ int main(int argc, char **argv)
         flow = uref_alloc_control(uref_mgr);
         uref_flow_set_def(flow, "sound.");
         struct upipe *ffmtaudio = upipe_flow_alloc(upipe_ffmt_mgr,
-            uprobe_pfx_alloc(uprobe_filter_suggest_alloc(
-                    uprobe_use(logger)),
+            uprobe_pfx_alloc(uprobe_use(logger),
                 UPROBE_LOG_VERBOSE, "ffmtaudio"), flow);
         assert(ffmtaudio);
         uref_free(flow);
