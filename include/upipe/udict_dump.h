@@ -99,8 +99,9 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
             }
 
             case UDICT_TYPE_RATIONAL: {
+                struct urational val;
                 /* to keep gcc happy */
-                struct urational val = { .num = 0, .den = 0 };
+                val.num = val.den = 0;
                 if (likely(ubase_check(udict_get_rational(udict, &val,
                                                           itype, iname))))
                     uprobe_dbg_va(uprobe, NULL,
