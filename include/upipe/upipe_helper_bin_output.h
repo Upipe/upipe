@@ -254,6 +254,14 @@ static int STRUCTURE##_control_bin_output(struct upipe *upipe,              \
 static void STRUCTURE##_clean_bin_output(struct upipe *upipe)               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    struct uchain *uchain;                                                  \
+    while ((uchain = ulist_pop(&s->REQUEST_LIST)) != NULL) {                \
+        struct urequest *urequest = urequest_from_uchain(uchain);           \
+        if (likely(s->OUTPUT != NULL))                                      \
+            upipe_unregister_request(s->OUTPUT, urequest);                  \
+        urequest_clean(urequest);                                           \
+        urequest_free(urequest);                                            \
+    }                                                                       \
     upipe_release(s->LAST_INNER);                                           \
     upipe_release(s->OUTPUT);                                               \
 }

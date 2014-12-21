@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -216,7 +215,7 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
         }
 
         char *old_def = NULL;
-        if (!strcmp(def, "sound."))
+        if (!ubase_ncmp(def, "sound."))
             old_def = strdup(def);
         uref_attr_import(uref, upipe_ffmt->flow_def_wanted);
         if (old_def != NULL) {
@@ -272,11 +271,12 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     if (flow_def_dup == NULL)
         return UBASE_ERR_INVALID;
 
-    struct uref *flow_def = upipe_ffmt->flow_def_input;
+    struct uref *flow_def = uref_dup(upipe_ffmt->flow_def_input);
+    UBASE_ALLOC_RETURN(flow_def)
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
-    if (!strcmp(def, "pic.")) {
+    if (!ubase_ncmp(def, "pic.")) {
         /* check aspect ratio */
         struct urational sar, dar;
         uint64_t hsize, vsize;
@@ -319,9 +319,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                     uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
                                      UPROBE_LOG_VERBOSE, "sws"),
                     flow_def_dup);
-            if (unlikely(sws == NULL))
+            if (unlikely(sws == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate swscale");
-            else if (!need_deint)
+                udict_dump(flow_def_dup->udict, upipe->uprobe);
+            } else if (!need_deint)
                 upipe_ffmt_store_first_inner(upipe, upipe_use(sws));
             else
                 upipe_set_output(upipe_ffmt->first_inner, sws);
@@ -335,11 +336,11 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                     uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
                                      UPROBE_LOG_VERBOSE, "swr"),
                     flow_def_dup);
-            if (unlikely(input == NULL))
+            if (unlikely(input == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate swresample");
-            else {
-                upipe_ffmt_store_first_inner(upipe,
-                                             upipe_use(input));
+                udict_dump(flow_def_dup->udict, upipe->uprobe);
+            } else {
+                upipe_ffmt_store_first_inner(upipe, upipe_use(input));
                 upipe_ffmt_store_last_inner(upipe, input);
             }
         }

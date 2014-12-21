@@ -238,11 +238,11 @@ static int upipe_rtp_prepend_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtp_prepend_register_output_request(upipe, request);
+            return upipe_rtp_prepend_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtp_prepend_unregister_output_request(upipe, request);
+            return upipe_rtp_prepend_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

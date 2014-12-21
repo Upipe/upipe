@@ -1651,7 +1651,7 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *unused)
     assert(unused == NULL);
 
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    if (upipe_ts_mux->uref_mgr != NULL)
+    if (upipe_ts_mux->join == NULL)
         upipe_ts_mux_init(upipe);
     return UBASE_ERR_NONE;
 }

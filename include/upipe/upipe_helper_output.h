@@ -226,6 +226,7 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                 return;                                                     \
                                                                             \
             case UPIPE_HELPER_OUTPUT_INVALID:                               \
+                upipe_warn(upipe, "invalid output, dropping uref");         \
                 uref_free(uref);                                            \
                 return;                                                     \
         }                                                                   \
@@ -412,8 +413,9 @@ static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
         urequest_free(urequest);                                            \
     }                                                                       \
     upipe_release(s->OUTPUT);                                               \
-    if (likely(s->FLOW_DEF != NULL))                                        \
-        uref_free(s->FLOW_DEF);                                             \
+    s->OUTPUT = NULL;                                                       \
+    uref_free(s->FLOW_DEF);                                                 \
+    s->FLOW_DEF = NULL;                                                     \
 }
 
 #ifdef __cplusplus

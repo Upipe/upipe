@@ -444,7 +444,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
             upipe_x264_store_flow_def_attr(upipe, flow_def_attr);
         if (flow_def != NULL) {
             uref_pic_flow_clear_format(flow_def);
-            upipe_x264_store_flow_def(upipe, flow_def);
+            upipe_x264_demand_ubuf_mgr(upipe, flow_def);
         }
     }
 
@@ -498,19 +498,15 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     const char *def;
-    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+    if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_x264_store_flow_def(upipe, NULL);
-        uref = upipe_x264_store_flow_def_input(upipe, uref);
-        uref_pic_flow_clear_format(uref);
         upipe_x264->input_latency = 0;
-        uref_clock_get_latency(upipe_x264->flow_def_input,
-                               &upipe_x264->input_latency);
-        upipe_x264_demand_ubuf_mgr(upipe, uref);
-        return;
-    }
-
-    if (upipe_x264->flow_def == NULL) {
-        uref_free(uref);
+        uref_clock_get_latency(uref, &upipe_x264->input_latency);
+        uref = upipe_x264_store_flow_def_input(upipe, uref);
+        if (uref != NULL) {
+            uref_pic_flow_clear_format(uref);
+            upipe_x264_demand_ubuf_mgr(upipe, uref);
+        }
         return;
     }
 
@@ -553,6 +549,12 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
                 return;
             }
         }
+        if (upipe_x264->flow_def == NULL) {
+            upipe_err(upipe, "Could not get ubuf manager");
+            uref_free(uref);
+            return;
+        }
+
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
 
         /* set pts in x264 timebase */

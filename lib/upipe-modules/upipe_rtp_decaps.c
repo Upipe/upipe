@@ -227,11 +227,11 @@ static int upipe_rtpd_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtpd_register_output_request(upipe, request);
+            return upipe_rtpd_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtpd_unregister_output_request(upipe, request);
+            return upipe_rtpd_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);

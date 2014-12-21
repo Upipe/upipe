@@ -142,6 +142,7 @@ static UBASE_UNUSED void STRUCTURE##_bin_input(struct upipe *upipe,         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->FIRST_INNER == NULL) {                                           \
+        upipe_warn(upipe, "invalid first inner, dropping uref");            \
         uref_free(uref);                                                    \
         return;                                                             \
     }                                                                       \
