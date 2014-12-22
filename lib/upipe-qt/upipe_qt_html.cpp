@@ -87,24 +87,31 @@
  * @short Upipe HTML renderer
  */
 static void upipe_qt_html_freefin(struct upipe *upipe);
+static int upipe_qt_html_check(struct upipe *upipe, struct uref *flow_format);
 /** upipe_qt_html structure to do html */ 
 struct upipe_qt_html {
     /** refcount management structure */
     struct urefcount urefcount;
     struct urefcount urefcountfin;
 
-    /** output flow */
-    struct uref *flow_def;
-    /** true if the flow definition has already been sent */
-    bool flow_def_sent;
     /** output pipe */
     struct upipe *output;
+    /** output flow */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** ubuf manager */
     struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -144,9 +151,17 @@ struct upipe_qt_html {
 UPIPE_HELPER_UPIPE(upipe_qt_html, upipe, UPIPE_QT_HTML_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_qt_html, urefcount, upipe_qt_html_free)
 UPIPE_HELPER_VOID(upipe_qt_html)
-UPIPE_HELPER_OUTPUT(upipe_qt_html, output, flow_def, flow_def_sent)
-UPIPE_HELPER_UBUF_MGR(upipe_qt_html, ubuf_mgr, flow_def)
-UPIPE_HELPER_UREF_MGR(upipe_qt_html, uref_mgr)
+
+UPIPE_HELPER_OUTPUT(upipe_qt_html, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_qt_html, uref_mgr, uref_mgr_request,
+                      upipe_qt_html_check,
+                      upipe_qt_html_register_output_request,
+                      upipe_qt_html_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_qt_html, ubuf_mgr, ubuf_mgr_request,
+                      upipe_qt_html_check,
+                      upipe_qt_html_register_output_request,
+                      upipe_qt_html_unregister_output_request)
+
 UPIPE_HELPER_UPUMP_MGR(upipe_qt_html, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qt_html, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qt_html, upumpstart, upump_mgr)
@@ -214,14 +229,6 @@ void start(struct upump *upumpstart){
     struct upipe *upipe = upump_get_opaque(upumpstart, struct upipe *);
     struct upipe_qt_html *upipe_qt_html = upipe_qt_html_from_upipe(upipe);
     
-    struct uref *flow_def = uref_pic_flow_alloc_def(upipe_qt_html->uref_mgr, 1);
-    uref_pic_flow_set_macropixel(flow_def, 1);
-    uref_pic_flow_add_plane(flow_def, 1, 1, 4, "b8g8r8a8");
-    uref_pic_flow_set_hsize(flow_def, upipe_qt_html->H);
-    uref_pic_flow_set_vsize(flow_def, upipe_qt_html->V);
-    upipe_qt_html_store_flow_def(upipe, flow_def);
-    upipe_qt_html_check_ubuf_mgr(upipe);
-
     upipe_qt_html->qtthreadfree = false;
     upipe_qt_html->uqueue_extra = (uint8_t*)malloc(uqueue_sizeof(MAX_QUEUE_LENGTH));
     uqueue_init(&upipe_qt_html->uqueue, MAX_QUEUE_LENGTH,
@@ -243,64 +250,50 @@ void start(struct upump *upumpstart){
     upipe_qt_html_set_upumpstart(upipe,NULL);
 }
 
-/** @internal @This amends a proposed flow format.
- * 
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_qt_html_amend_flow_format(struct upipe *upipe,
-                                                  struct uref *flow_format)
-{
-    if (flow_format == NULL)
-        return UBASE_ERR_INVALID;
-
-    uint64_t align;
-    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
-        return uref_pic_flow_set_align(flow_format, 16);
-
-    if (align % 16) {
-        align = align * 16 / ubase_gcd(align, 16);
-        return uref_pic_flow_set_align(flow_format, align);
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the input flow definition.
+/** @internal @This checks if the pump may be allocated.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
+ * @param flow_format amended flow format
  * @return an error code
  */
-static int upipe_qt_html_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_qt_html_check(struct upipe *upipe, struct uref *flow_format)
 {
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
+    struct upipe_qt_html *upipe_qt_html = upipe_qt_html_from_upipe(upipe);
+    if (flow_format != NULL)
+        upipe_qt_html_store_flow_def(upipe, flow_format);
 
-    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
-    flow_def = uref_dup(flow_def);
+    upipe_qt_html_check_upump_mgr(upipe);
+    if (upipe_qt_html->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
 
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+    if (upipe_qt_html->uref_mgr == NULL) {
+        upipe_qt_html_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
     }
 
-    upipe_qt_html_store_flow_def(upipe, flow_def);
+    if (upipe_qt_html->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_pic_flow_alloc_def(upipe_qt_html->uref_mgr, 1);
+        uref_pic_flow_set_macropixel(flow_format, 1);
+        uref_pic_flow_add_plane(flow_format, 1, 1, 4, "b8g8r8a8");
+        uref_pic_flow_set_hsize(flow_format, upipe_qt_html->H);
+        uref_pic_flow_set_vsize(flow_format, upipe_qt_html->V);
+
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_qt_html_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_qt_html->upump == NULL) {
+        upipe_qt_html_wait_upumpstart(upipe, 0, start);
+    }
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This start the upumpstart if there is a upump_mgr
- *
- * @param upipe description structure of the pipe
- */
-static int find_upump_mgr(struct upipe *upipe){
-    upipe_qt_html_attach_upump_mgr(upipe);
-    upipe_qt_html_wait_upumpstart(upipe, 0, start);
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This processes control commands on a file source pipe, and
+/** @internal @This processes control commands on a qt source pipe, and
  * checks the status of the pipe afterwards.
  * 
  * @param upipe description structure of the pipe
@@ -308,20 +301,15 @@ static int find_upump_mgr(struct upipe *upipe){
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_qt_html_control(struct upipe *upipe, int command, va_list args)
+static int _upipe_qt_html_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_qt_html *html = upipe_qt_html_from_upipe(upipe);
     switch (command) {
         /* generic commands */
-        case UPIPE_ATTACH_UBUF_MGR:
-            return upipe_qt_html_attach_ubuf_mgr(upipe);
-        case UPIPE_ATTACH_UREF_MGR:
-            return upipe_qt_html_attach_uref_mgr(upipe);
-        case UPIPE_ATTACH_UPUMP_MGR:
-            return find_upump_mgr(upipe);
-        case UPIPE_AMEND_FLOW_FORMAT: {
-            struct uref *flow_format = va_arg(args, struct uref *);
-            return upipe_qt_html_amend_flow_format(upipe, flow_format);
+        case UPIPE_ATTACH_UPUMP_MGR: {
+            upipe_qt_html_set_upump(upipe, NULL);
+            upipe_qt_html_attach_upump_mgr(upipe);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -334,10 +322,6 @@ static int upipe_qt_html_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_qt_html_get_flow_def(upipe, p);
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow = va_arg(args, struct uref *);
-            return upipe_qt_html_set_flow_def(upipe, flow);
         }
         case UPIPE_QT_HTML_SET_URL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_QT_HTML_SIGNATURE);
@@ -374,6 +358,21 @@ static int upipe_qt_html_control(struct upipe *upipe, int command, va_list args)
         default:
             return UBASE_ERR_UNHANDLED;
     }
+}
+
+/** @internal @This processes control commands on a qt source pipe, and
+ * checks the status of the pipe afterwards.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_qt_html_control(struct upipe *upipe, int command, va_list args)
+{
+    UBASE_RETURN(_upipe_qt_html_control(upipe, command, args))
+
+    return upipe_qt_html_check(upipe, NULL);
 }
 
 /** @internal @This frees a upipe.
@@ -433,11 +432,9 @@ static struct upipe *upipe_qt_html_alloc(struct upipe_mgr *mgr,
     upipe_qt_html_init_upump_mgr(upipe);
     upipe_qt_html_init_upump(upipe);
     upipe_qt_html_init_upumpstart(upipe);
-    upipe_qt_html_check_uref_mgr(upipe);
-    upipe_qt_html_check_upump_mgr(upipe);
-    if (upipe_qt_html->upump_mgr != NULL)
-        upipe_qt_html_wait_upumpstart(upipe, 0, start);
     upipe_throw_ready(upipe);
+
+    upipe_qt_html_check(upipe, NULL);
     return upipe;
 }
 

@@ -282,8 +282,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *ffmt_flow = uref_alloc_control(uref_mgr);
             uref_flow_set_def(ffmt_flow, ffmt_def);
             struct upipe *ffmt = upipe_flow_alloc(upipe_ffmt_mgr,
-                uprobe_pfx_alloc_va(uprobe_filter_suggest_alloc(
-                        uprobe_use(logger)),
+                uprobe_pfx_alloc_va(uprobe_use(logger),
                     UPROBE_LOG_VERBOSE, "ffmt %"PRIu64, id), ffmt_flow);
             assert(ffmt);
             uref_free(ffmt_flow);

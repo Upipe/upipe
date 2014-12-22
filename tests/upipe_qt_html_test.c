@@ -92,10 +92,9 @@ struct html_test{
 };
 UPIPE_HELPER_UPIPE(html_test, upipe, 0);
 
-/** helper phony pipe to test upipe_qt_html */
-static struct upipe *html_test_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe,
-                                     uint32_t signature, va_list args)
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct html_test *html_test = malloc(sizeof(struct html_test));
     assert(html_test != NULL);
@@ -105,9 +104,9 @@ static struct upipe *html_test_alloc(struct upipe_mgr *mgr,
     return &html_test->upipe;
 }
 
-/** helper phony pipe to test upipe_qt_html */
-static void html_test_input(struct upipe *upipe, struct uref *uref,
-                              struct upump **upump_p)
+/** helper phony pipe */
+static void test_input(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
 {
     struct html_test *html_test = html_test_from_upipe(upipe);
     html_test->c++;
@@ -118,8 +117,26 @@ static void html_test_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
-/** helper phony pipe to test upipe_qt_html */
-static void html_test_free(struct upipe *upipe)
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
 {
     struct html_test *html_test = html_test_from_upipe(upipe);
     upipe_throw_dead(upipe);
@@ -127,15 +144,13 @@ static void html_test_free(struct upipe *upipe)
     free(html_test);
 }
 
-
-
-/** helper phony pipe to test upipe_qt_html */
+/** helper phony pipe */
 static struct upipe_mgr html_test_mgr = {
     .refcount = NULL,
     .signature = 0,
-    .upipe_alloc = html_test_alloc,
-    .upipe_input = html_test_input,
-    .upipe_control = NULL,
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_input,
+    .upipe_control = test_control
 };
 
 
@@ -206,7 +221,7 @@ int main(int argc, char **argv)
 
     ev_loop(loop, 0);
 
-    html_test_free(html_test);
+    test_free(html_test);
     upump_mgr_release(main_upump_mgr);
     upipe_mgr_release(upipe_qt_html_mgr);
     ubuf_mgr_release(pic_mgr);
