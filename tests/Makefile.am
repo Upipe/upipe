@@ -213,6 +213,11 @@ TESTS += \
 	upipe_ts_tstd_test
 endif
 
+if HAVE_X264
+check_PROGRAMS += upipe_x264_test
+TESTS += upipe_x264_test
+endif
+
 if HAVE_ECORE
 check_PROGRAMS += upump_ecore_test
 TESTS += upump_ecore_test
