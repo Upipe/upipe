@@ -58,6 +58,8 @@ static void upipe_qsink_watcher(struct upump *upump);
 /** @hidden */
 static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p);
+/** @hidden */
+static void upipe_qsink_oob(struct upump *upump);
 
 /** @This is the private context of a queue sink pipe. */
 struct upipe_qsink {
@@ -237,6 +239,7 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
             upipe_qsink_input(upipe, flow_def, upump_p);
         }
     }
+
     if (!upipe_qsink_check_input(upipe)) {
         upipe_qsink_hold_input(upipe, uref);
         upipe_qsink_block_input(upipe, upump_p);
@@ -345,6 +348,21 @@ static int upipe_qsink_push_downstream(struct upipe *upipe,
         upipe_warn(upipe, "unable to send downstream message");
         upipe_queue_downstream_free(downstream);
         return UBASE_ERR_BUSY;
+    }
+
+    if (upipe_qsink->upump_oob == NULL) {
+        upipe_qsink_check_upump_mgr(upipe);
+        if (upipe_qsink->upump_mgr != NULL) {
+            struct upump *upump = uqueue_upump_alloc_pop(
+                    &upipe_queue(upipe_qsink->qsrc)->upstream_oob,
+                    upipe_qsink->upump_mgr, upipe_qsink_oob, upipe);
+            if (unlikely(upump == NULL)) {
+                upipe_err_va(upipe, "can't create watcher");
+                return UBASE_ERR_UPUMP;
+            }
+            upipe_qsink_set_upump_oob(upipe, upump);
+            upump_start(upump);
+        }
     }
     return UBASE_ERR_NONE;
 }
@@ -523,21 +541,6 @@ static int upipe_qsink_control(struct upipe *upipe, int command, va_list args)
         upump_start(upipe_qsink->upump);
     }
 
-    if (upipe_qsink->qsrc != NULL) {
-        upipe_qsink_check_upump_mgr(upipe);
-        if (upipe_qsink->upump_mgr == NULL)
-            return UBASE_ERR_NONE;
-
-        struct upump *upump = uqueue_upump_alloc_pop(
-                &upipe_queue(upipe_qsink->qsrc)->upstream_oob,
-                upipe_qsink->upump_mgr, upipe_qsink_oob, upipe);
-        if (unlikely(upump == NULL)) {
-            upipe_err_va(upipe, "can't create watcher");
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_qsink_set_upump_oob(upipe, upump);
-        upump_start(upump);
-    }
     return UBASE_ERR_NONE;
 }
 
