@@ -94,6 +94,40 @@ const struct {
     {NULL, 0},
 };
 
+const struct {
+    const char *name;
+    BMDDisplayMode mode;
+} upipe_bmd_src_display_modes[] = {
+    {"ntsc",        bmdModeNTSC},
+    {"ntsc2398",    bmdModeNTSC2398},
+    {"pal",         bmdModePAL},
+    {"ntscp",       bmdModeNTSCp},
+    {"palp",        bmdModePALp},
+    {"1080p2398",   bmdModeHD1080p2398},
+    {"1080p24",     bmdModeHD1080p24},
+    {"1080p25",     bmdModeHD1080p25},
+    {"1080p2997",   bmdModeHD1080p2997},
+    {"1080p30",     bmdModeHD1080p30},
+    {"1080i50",     bmdModeHD1080i50},
+    {"1080i5994",   bmdModeHD1080i5994},
+    {"1080i6000",   bmdModeHD1080i6000},
+    {"1080p50",     bmdModeHD1080p50},
+    {"1080p5994",   bmdModeHD1080p5994},
+    {"1080p6000",   bmdModeHD1080p6000},
+    {"720p50",      bmdModeHD720p50},
+    {"720p5994",    bmdModeHD720p5994},
+    {"720p60",      bmdModeHD720p60},
+    {"2k2398",      bmdMode2k2398},
+    {"2k24",        bmdMode2k24},
+    {"2k25",        bmdMode2k25},
+    {"2160p2398",   bmdMode4K2160p2398},
+    {"2160p24",     bmdMode4K2160p24},
+    {"2160p25",     bmdMode4K2160p25},
+    {"2160p2997",   bmdMode4K2160p2997},
+    {"2160p30",     bmdMode4K2160p30},
+    {NULL, 0},
+};
+
 /** @internal @This is the class that retrieves frames in a private thread. */
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
@@ -239,6 +273,51 @@ UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, pic_subpipe, pic_subpipe)
 UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, sound_subpipe, sound_subpipe)
 UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, subpic_subpipe, subpic_subpipe)
 
+static int upipe_bmd_src_flow_def_from_displaymode(struct uref *flow,
+                                                   IDeckLinkDisplayMode *mode)
+{
+    UBASE_RETURN(uref_pic_flow_set_hsize(flow, mode->GetWidth()));
+    UBASE_RETURN(uref_pic_flow_set_vsize(flow, mode->GetHeight()));
+
+    /* TODO get aspect-ratio from WSS or user */
+    struct urational sar;
+    sar.num = 16 * mode->GetHeight();
+    sar.den =  9 * mode->GetWidth();
+    urational_simplify(&sar);
+    UBASE_RETURN(uref_pic_flow_set_sar(flow, sar));
+
+    struct urational fps;
+    BMDTimeValue frameDuration;
+    BMDTimeScale timeScale;
+    mode->GetFrameRate(&frameDuration, &timeScale);
+    fps.num = timeScale;
+    fps.den = frameDuration;
+    urational_simplify(&fps);
+    UBASE_RETURN(uref_pic_flow_set_fps(flow, fps));
+
+    BMDFieldDominance field = mode->GetFieldDominance();
+    switch (field) {
+        case bmdLowerFieldFirst:
+            uref_pic_delete_tff(flow);
+            uref_pic_delete_progressive(flow);
+            break;
+        default:
+        case bmdUnknownFieldDominance:
+            /* sensible defaults */
+        case bmdUpperFieldFirst:
+            UBASE_RETURN(uref_pic_set_tff(flow));
+            uref_pic_delete_progressive(flow);
+            break;
+        case bmdProgressiveFrame:
+        case bmdProgressiveSegmentedFrame:
+            uref_pic_delete_tff(flow);
+            UBASE_RETURN(uref_pic_set_progressive(flow));
+            break;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
                 BMDVideoInputFormatChangedEvents events,
                 IDeckLinkDisplayMode *mode, BMDDetectedVideoInputFormatFlags)
@@ -256,50 +335,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
     struct uref *flow_def_video =
         uref_dup(upipe_bmd_src->pic_subpipe.flow_def);
 
-    uref_pic_flow_set_hsize(flow_def_video, mode->GetWidth());
-    uref_pic_flow_set_vsize(flow_def_video, mode->GetHeight());
-
-    /* TODO get aspect-ratio from WSS or user */
-    struct urational sar;
-    sar.num = 16 * mode->GetHeight();
-    sar.den =  9 * mode->GetWidth();
-    urational_simplify(&sar);
-    uref_pic_flow_set_sar(flow_def_video, sar);
-
-    struct urational fps;
-    BMDTimeValue frameDuration;
-    BMDTimeScale timeScale;
-    mode->GetFrameRate(&frameDuration, &timeScale);
-    fps.num = timeScale;
-    fps.den = frameDuration;
-    urational_simplify(&fps);
-    uref_pic_flow_set_fps(flow_def_video, fps);
-
-    BMDFieldDominance field = mode->GetFieldDominance();
-    switch (field) {
-        case bmdLowerFieldFirst:
-            uref_pic_delete_tff(flow_def_video);
-            uref_pic_delete_progressive(flow_def_video);
-            upipe_bmd_src->tff = false;
-            upipe_bmd_src->progressive = false;
-            break;
-        default:
-        case bmdUnknownFieldDominance:
-            /* sensible defaults */
-        case bmdUpperFieldFirst:
-            uref_pic_set_tff(flow_def_video);
-            uref_pic_delete_progressive(flow_def_video);
-            upipe_bmd_src->tff = true;
-            upipe_bmd_src->progressive = false;
-            break;
-        case bmdProgressiveFrame:
-        case bmdProgressiveSegmentedFrame:
-            uref_pic_delete_tff(flow_def_video);
-            uref_pic_set_progressive(flow_def_video);
-            upipe_bmd_src->tff = false;
-            upipe_bmd_src->progressive = true;
-            break;
-    }
+    upipe_bmd_src_flow_def_from_displaymode(flow_def_video, mode);
+    upipe_bmd_src->tff = ubase_check(uref_pic_get_tff(flow_def_video));
+    upipe_bmd_src->progressive =
+                 ubase_check(uref_pic_get_progressive(flow_def_video));
 
     uref_attr_set_priv(flow_def_video, UPIPE_BMD_SRC_PIC);
 
@@ -638,6 +677,29 @@ static int upipe_bmd_src_get_uri(struct upipe *upipe, const char **uri_p)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This is a helper for @ref upipe_bmd_src_set_uri.
+ *
+ * @param string option string
+ * @return duplicated string
+ */
+static char *config_stropt(char *string)
+{
+    char *ret, *tmp;
+    if (!string || strlen(string) == 0)
+        return NULL;
+    ret = tmp = strdup(string);
+    while (*tmp) {
+        if (*tmp == '_')
+            *tmp = ' ';
+        if (*tmp == '/') {
+            *tmp = '\0';
+            break;
+        }
+        tmp++;
+    }
+    return ret;
+}
+
 /** @internal @This asks to open the given device.
  *
  * @param upipe description structure of the pipe
@@ -739,6 +801,64 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         }
     }
 
+    /* parse uri parameters */
+    char *mode = NULL;
+    const char *params = strchr(idx, '/');
+    if (params) {
+        char *paramsdup = strdup(params);
+        char *token = paramsdup;
+        do {
+            *token++ = '\0';
+#define IS_OPTION(option) (!strncasecmp(token, option, strlen(option)))
+#define ARG_OPTION(option) (token + strlen(option))
+            if (IS_OPTION("mode=")) {
+                mode = config_stropt(ARG_OPTION("mode="));
+            }
+#undef IS_OPTION
+#undef ARG_OPTION
+        } while ((token = strchr(token, '/')) != NULL);
+
+        free(paramsdup);
+    }
+
+    /* parse display mode */
+    BMDDisplayMode displayModeId = bmdModeHD1080i50;
+    if (mode) {
+        int i = 0;
+        for (i=0; upipe_bmd_src_display_modes[i].name; i++) {
+            if (!strcmp(mode, upipe_bmd_src_display_modes[i].name)) {
+                displayModeId = upipe_bmd_src_display_modes[i].mode;
+                break;
+            }
+        }
+        free(mode);
+    }
+
+    /* find display mode */
+	IDeckLinkDisplayModeIterator *displayModeIterator = NULL;
+    if (deckLinkInput->GetDisplayModeIterator(&displayModeIterator) != S_OK) {
+        deckLinkInput->Release();
+        deckLink->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+    /* iterate through available display modes and compare */
+	IDeckLinkDisplayMode *displayModeIter = NULL, *displayMode = NULL;
+	while (displayModeIterator->Next(&displayModeIter) == S_OK) {
+        if (displayModeIter->GetDisplayMode() == displayModeId) {
+            displayMode = displayModeIter;
+            break;
+        }
+		displayModeIter->Release();
+    }
+    displayModeIterator->Release();
+
+    if (unlikely(!displayMode)) {
+        upipe_warn(upipe, "display mode not available");
+        deckLinkInput->Release();
+        deckLink->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
     /* format detection available ? */
     IDeckLinkAttributes *deckLinkAttr = NULL;
     if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
@@ -747,15 +867,16 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         deckLink->Release();
         return UBASE_ERR_EXTERNAL;
     }
-
     bool detectFormat = false;
     deckLinkAttr->GetFlag(BMDDeckLinkSupportsInputFormatDetection,
                           &detectFormat);
     deckLinkAttr->Release();
+    if (!detectFormat) {
+        upipe_warn(upipe, "automatic input format detection not supported");
+    }
 
     /* configure input */
-    /* FIXME hardcoded format and default mode */
-    deckLinkInput->EnableVideoInput(bmdModeHD1080i50, bmdFormat8BitYUV,
+    deckLinkInput->EnableVideoInput(displayModeId, bmdFormat8BitYUV,
                     (detectFormat ? bmdVideoInputEnableFormatDetection : 0));
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
                                     bmdAudioSampleType16bitInteger, CHANS);
@@ -777,22 +898,21 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_ALLOC;
     }
 
-    /* default flow definitions (FIXME hardcoded according to format/mode) */
+    /* flow definitions */
     struct uref *flow_def =
         uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
     uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
     uref_pic_flow_set_macropixel(flow_def, 2);
-    struct urational fps = {25, 1};
-    uref_pic_flow_set_fps(flow_def, fps);
-    uref_pic_flow_set_hsize(flow_def, 1920);
-    uref_pic_flow_set_vsize(flow_def, 1080);
-    struct urational sar = {1, 1};
-    urational_simplify(&sar);
-    uref_pic_flow_set_sar(flow_def, sar);
+    upipe_bmd_src_flow_def_from_displaymode(flow_def, displayMode);
+    upipe_bmd_src->tff = ubase_check(uref_pic_get_tff(flow_def));
+    upipe_bmd_src->progressive =
+                 ubase_check(uref_pic_get_progressive(flow_def));
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)),
             flow_def);
+
+    displayMode->Release();
 
     flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.",
                                          CHANS, 2*CHANS);
