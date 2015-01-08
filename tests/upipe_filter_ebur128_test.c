@@ -54,7 +54,7 @@
 #define UDICT_POOL_DEPTH    5
 #define UREF_POOL_DEPTH     5
 #define UBUF_POOL_DEPTH     0
-#define ITERATIONS          20
+#define ITERATIONS          200
 #define RATE                48000
 #define SAMPLES             1024
 #define DURATION            SAMPLES * UCLOCK_FREQ / RATE
@@ -62,6 +62,7 @@
 #define FREQ                440
 #define STEP                (2. * M_PI * FREQ / RATE)
 #define UPROBE_LOG_LEVEL    UPROBE_LOG_VERBOSE
+#define ALIGN               0
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -82,7 +83,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 int main(int argc, char **argv)
 {
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
-    int i, j;
+    int i, j, k;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -96,7 +97,7 @@ int main(int argc, char **argv)
 
     /* sound */
     struct ubuf_mgr *sound_mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                             UBUF_POOL_DEPTH, umem_mgr, 4);
+                                             UBUF_POOL_DEPTH, umem_mgr, 4, ALIGN);
     assert(sound_mgr);
     ubase_assert(ubuf_sound_mem_mgr_add_plane(sound_mgr, "lr"));
 
@@ -138,16 +139,19 @@ int main(int argc, char **argv)
     double phase = 0;
     for (i=0; i < ITERATIONS; i++) {
         struct uref *uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
+        assert(uref);
         const char *channel = NULL;
         int16_t *sample = NULL;
         while (ubase_check(uref_sound_plane_iterate(uref, &channel))
                                                            && channel) {
             uref_sound_plane_write_int16_t(uref, channel, 0, -1, &sample);
             memset(sample, 0, 2 * CHANNELS * SAMPLES);
-            #if 0
+            #if 1
             for (j=0; j < SAMPLES; j++) {
-                sample[j]   = sin(phase) * INT16_MAX;
-                //sample[2*j+1] = sin(phase) * INT16_MAX;
+                int16_t val = sin(phase) * INT16_MAX;
+                for (k=0; k < CHANNELS; k++) {
+                    sample[CHANNELS*j+k] = val;
+                }
                 phase += STEP;
                 if (phase >= 2. * M_PI) {
                     phase = 0;
