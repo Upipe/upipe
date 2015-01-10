@@ -79,6 +79,8 @@ struct upipe_ts_encaps {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -135,7 +137,7 @@ UPIPE_HELPER_UREF_MGR(upipe_ts_encaps, uref_mgr, uref_mgr_request,
                       upipe_ts_encaps_check,
                       upipe_ts_encaps_register_output_request,
                       upipe_ts_encaps_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_ts_encaps, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_ts_encaps_check,
                       upipe_ts_encaps_register_output_request,
                       upipe_ts_encaps_unregister_output_request)

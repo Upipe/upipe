@@ -86,6 +86,8 @@ struct upipe_swr {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -121,7 +123,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_swr, urefcount, upipe_swr_free)
 UPIPE_HELPER_FLOW(upipe_swr, UREF_SOUND_FLOW_DEF);
 UPIPE_HELPER_OUTPUT(upipe_swr, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_swr, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_swr, ubuf_mgr, ubuf_mgr_request, upipe_swr_check,
+UPIPE_HELPER_UBUF_MGR(upipe_swr, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_swr_check,
                       upipe_swr_register_output_request,
                       upipe_swr_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_swr, urefs, nb_urefs, max_urefs, blockers, upipe_swr_handle)

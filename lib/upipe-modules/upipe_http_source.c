@@ -91,6 +91,8 @@ struct upipe_http_src {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -139,7 +141,7 @@ UPIPE_HELPER_UREF_MGR(upipe_http_src, uref_mgr, uref_mgr_request,
                       upipe_http_src_check,
                       upipe_http_src_register_output_request,
                       upipe_http_src_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_http_src, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_http_src_check,
                       upipe_http_src_register_output_request,
                       upipe_http_src_unregister_output_request)

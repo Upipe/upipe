@@ -89,6 +89,8 @@ struct upipe_sws_thumbs {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -134,7 +136,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_sws_thumbs, urefcount, upipe_sws_thumbs_free)
 UPIPE_HELPER_FLOW(upipe_sws_thumbs, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws_thumbs, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_sws_thumbs, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_sws_thumbs, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sws_thumbs_check,
                       upipe_sws_thumbs_register_output_request,
                       upipe_sws_thumbs_unregister_output_request)

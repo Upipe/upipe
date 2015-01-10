@@ -122,8 +122,13 @@ static int STRUCTURE##_provide_uref_mgr(struct urequest *urequest,          \
 {                                                                           \
     struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    struct uref_mgr *uref_mgr = va_arg(args, struct uref_mgr *);            \
+    if (uref_mgr == s->UREF_MGR) {                                          \
+        uref_mgr_release(uref_mgr);                                         \
+        return UBASE_ERR_NONE;                                              \
+    }                                                                       \
     uref_mgr_release(s->UREF_MGR);                                          \
-    s->UREF_MGR = va_arg(args, struct uref_mgr *);                          \
+    s->UREF_MGR = uref_mgr;                                                 \
     upipe_dbg_va(upipe, "provided uref_mgr %p", s->UREF_MGR);               \
     upipe_helper_uref_mgr_check check = CHECK;                              \
     return check != NULL ? check(upipe, NULL) : UBASE_ERR_NONE;             \

@@ -53,9 +53,10 @@ typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *)
 /** @This declares five functions dealing with the ubuf manager used on the
  * output of a pipe.
  *
- * You must add two members to your private upipe structure, for instance:
+ * You must add three members to your private upipe structure, for instance:
  * @code
  *  struct ubuf_mgr *ubuf_mgr;
+ *  struct uref *flow_format;
  *  struct urequest ubuf_mgr_request;
  * @end code
  *
@@ -99,13 +100,15 @@ typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *)
  * @param STRUCTURE name of your private upipe structure 
  * @param UBUF_MGR name of the @tt {struct ubuf_mgr *} field of
  * your private upipe structure
+ * @param FLOW_FORMAT name of the @tt {struct uref *} field of
+ * your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of
  * your private upipe structure
  * @param CHECK function called after a uref manager has been received
  * @param REGISTER function called to register a request
  * @param UNREGISTER function called to unregister a request
  */
-#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR, REQUEST,                 \
+#define UPIPE_HELPER_UBUF_MGR(STRUCTURE, UBUF_MGR, FLOW_FORMAT, REQUEST,    \
                               CHECK, REGISTER, UNREGISTER)                  \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
@@ -115,6 +118,7 @@ static void STRUCTURE##_init_ubuf_mgr(struct upipe *upipe)                  \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     s->UBUF_MGR = NULL;                                                     \
+    s->FLOW_FORMAT = NULL;                                                  \
     urequest_set_opaque(&s->REQUEST, NULL);                                 \
 }                                                                           \
 /** @internal @This handles the result of a ubuf manager request.           \
@@ -127,10 +131,20 @@ static int STRUCTURE##_provide_ubuf_mgr(struct urequest *urequest,          \
 {                                                                           \
     struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    ubuf_mgr_release(s->UBUF_MGR);                                          \
-    s->UBUF_MGR = va_arg(args, struct ubuf_mgr *);                          \
+    struct ubuf_mgr *ubuf_mgr = va_arg(args, struct ubuf_mgr *);            \
     struct uref *flow_format = va_arg(args, struct uref *);                 \
+    if (ubuf_mgr == s->UBUF_MGR && s->FLOW_FORMAT != NULL &&                \
+        s->FLOW_FORMAT->udict != NULL && flow_format->udict != NULL &&      \
+        !udict_cmp(s->FLOW_FORMAT->udict, flow_format->udict)) {            \
+        ubuf_mgr_release(ubuf_mgr);                                         \
+        uref_free(flow_format);                                             \
+        return UBASE_ERR_NONE;                                              \
+    }                                                                       \
+    ubuf_mgr_release(s->UBUF_MGR);                                          \
+    s->UBUF_MGR = ubuf_mgr;                                                 \
     upipe_dbg_va(upipe, "provided ubuf_mgr %p", s->UBUF_MGR);               \
+    uref_free(s->FLOW_FORMAT);                                              \
+    s->FLOW_FORMAT = uref_dup(flow_format);                                 \
     upipe_helper_ubuf_mgr_check check = CHECK;                              \
     if (check != NULL)                                                      \
         return check(upipe, flow_format);                                   \
@@ -189,6 +203,7 @@ static void STRUCTURE##_clean_ubuf_mgr(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ubuf_mgr_release(s->UBUF_MGR);                                          \
+    uref_free(s->FLOW_FORMAT);                                              \
     /* If the request was registered, it should be unregistered             \
      * automatically. Otherwise it has not been initialized. */             \
 }

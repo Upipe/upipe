@@ -69,6 +69,8 @@ struct upipe_ts_pese {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -115,7 +117,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_ts_pese, urefcount, upipe_ts_pese_free)
 UPIPE_HELPER_VOID(upipe_ts_pese)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_pese, output, flow_def, output_state, request_list)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_pese, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_ts_pese, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_ts_pese_check,
                       upipe_ts_pese_register_output_request,
                       upipe_ts_pese_unregister_output_request)

@@ -85,6 +85,8 @@ struct upipe_fsrc {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -128,7 +130,8 @@ UPIPE_HELPER_OUTPUT(upipe_fsrc, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UREF_MGR(upipe_fsrc, uref_mgr, uref_mgr_request, upipe_fsrc_check,
                       upipe_fsrc_register_output_request,
                       upipe_fsrc_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr, ubuf_mgr_request, upipe_fsrc_check,
+UPIPE_HELPER_UBUF_MGR(upipe_fsrc, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_fsrc_check,
                       upipe_fsrc_register_output_request,
                       upipe_fsrc_unregister_output_request)
 UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock, uclock_request, upipe_fsrc_check,

@@ -116,8 +116,13 @@ static int STRUCTURE##_provide_uclock(struct urequest *urequest,            \
 {                                                                           \
     struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);    \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    struct uclock *uclock = va_arg(args, struct uclock *);                  \
+    if (uclock == s->UCLOCK) {                                              \
+        uclock_release(uclock);                                             \
+        return UBASE_ERR_NONE;                                              \
+    }                                                                       \
     uclock_release(s->UCLOCK);                                              \
-    s->UCLOCK = va_arg(args, struct uclock *);                              \
+    s->UCLOCK = uclock;                                                     \
     upipe_dbg_va(upipe, "provided uclock %p", s->UCLOCK);                   \
     upipe_helper_uclock_check check = CHECK;                                \
     return check != NULL ? check(upipe, NULL) : UBASE_ERR_NONE;             \

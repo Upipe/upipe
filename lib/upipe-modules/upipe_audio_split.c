@@ -104,6 +104,8 @@ struct upipe_audio_split_sub {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -117,7 +119,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_audio_split_sub, urefcount,
                        upipe_audio_split_sub_free)
 UPIPE_HELPER_OUTPUT(upipe_audio_split_sub, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW(upipe_audio_split_sub, "sound.")
-UPIPE_HELPER_UBUF_MGR(upipe_audio_split_sub, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_audio_split_sub, ubuf_mgr, flow_format,
+                      ubuf_mgr_request,
                       upipe_audio_split_sub_check,
                       upipe_audio_split_sub_register_output_request,
                       upipe_audio_split_sub_unregister_output_request)
@@ -361,7 +364,8 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(split_sub->flow_need_update)) {
             upipe_audio_split_sub_update_flow(upipe_sub);
         }
-        if (unlikely(!upipe_audio_split_sub_demand_ubuf_mgr(upipe_sub,
+        if (unlikely(split_sub->ubuf_mgr == NULL &&
+                     !upipe_audio_split_sub_demand_ubuf_mgr(upipe_sub,
                                            uref_dup(split_sub->flow_def))))
             continue;
 

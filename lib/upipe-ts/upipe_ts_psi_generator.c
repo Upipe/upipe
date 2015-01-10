@@ -61,6 +61,8 @@ struct upipe_ts_psig {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -92,7 +94,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psig, urefcount, upipe_ts_psig_free)
 UPIPE_HELPER_VOID(upipe_ts_psig)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, output_state, request_list)
-UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_ts_psig_check,
                       upipe_ts_psig_register_output_request,
                       upipe_ts_psig_unregister_output_request)

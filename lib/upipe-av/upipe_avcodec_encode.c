@@ -118,6 +118,8 @@ struct upipe_avcenc {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -170,7 +172,7 @@ UPIPE_HELPER_OUTPUT(upipe_avcenc, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_avcenc, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_avcenc, flow_def_check)
 
-UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avcenc_check,
                       upipe_avcenc_register_output_request,
                       upipe_avcenc_unregister_output_request)

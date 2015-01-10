@@ -92,8 +92,11 @@ struct upipe_x264 {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -127,7 +130,8 @@ UPIPE_HELPER_VOID(upipe_x264);
 UPIPE_HELPER_OUTPUT(upipe_x264, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_x264, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_x264, flow_def_check)
-UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, ubuf_mgr_request, upipe_x264_check,
+UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_x264_check,
                       upipe_x264_register_output_request,
                       upipe_x264_unregister_output_request)
 UPIPE_HELPER_UCLOCK(upipe_x264, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)

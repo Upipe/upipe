@@ -65,6 +65,8 @@ struct upipe_audiocont {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -107,7 +109,7 @@ UPIPE_HELPER_UPIPE(upipe_audiocont, upipe, UPIPE_AUDIOCONT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audiocont, urefcount, upipe_audiocont_free)
 UPIPE_HELPER_VOID(upipe_audiocont)
 UPIPE_HELPER_OUTPUT(upipe_audiocont, output, flow_def, output_state, request_list)
-UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_audiocont, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_audiocont_check,
                       upipe_audiocont_register_output_request,
                       upipe_audiocont_unregister_output_request)
@@ -514,7 +516,8 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
         uref_sound_flow_get_rate(flow_def, &upipe_audiocont->samplerate);
     }
 
-    if (unlikely(!upipe_audiocont_demand_ubuf_mgr(upipe,
+    if (unlikely(upipe_audiocont->ubuf_mgr == NULL &&
+                 !upipe_audiocont_demand_ubuf_mgr(upipe,
                     uref_dup(upipe_audiocont->flow_def)))) {
         uref_free(uref);
         return;

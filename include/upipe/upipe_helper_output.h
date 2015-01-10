@@ -334,6 +334,13 @@ static void STRUCTURE##_store_flow_def(struct upipe *upipe,                 \
                                        struct uref *flow_def)               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    if (s->FLOW_DEF != NULL && s->FLOW_DEF->udict != NULL &&                \
+        flow_def->udict != NULL &&                                          \
+        !udict_cmp(s->FLOW_DEF->udict, flow_def->udict)) {                  \
+        uref_free(s->FLOW_DEF);                                             \
+        s->FLOW_DEF = flow_def; /* doesn't change the state */              \
+        return;                                                             \
+    }                                                                       \
     if (unlikely(s->FLOW_DEF != NULL)) {                                    \
         uref_free(s->FLOW_DEF);                                             \
         s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_NONE;                         \

@@ -206,6 +206,12 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        if (upipe_ffmt->flow_def_input != NULL &&
+            upipe_ffmt->flow_def_input->udict != NULL && uref->udict != NULL &&
+            !udict_cmp(upipe_ffmt->flow_def_input->udict, uref->udict)) {
+            uref_free(uref);
+            return true;
+        }
         uref_free(upipe_ffmt->flow_def_input);
         upipe_ffmt->flow_def_input = uref_dup(uref);
         if (unlikely(upipe_ffmt->flow_def_input == NULL)) {

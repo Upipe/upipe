@@ -82,6 +82,8 @@ struct upipe_sinesrc {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -122,7 +124,7 @@ UPIPE_HELPER_UREF_MGR(upipe_sinesrc, uref_mgr, uref_mgr_request,
                       upipe_sinesrc_check,
                       upipe_sinesrc_register_output_request,
                       upipe_sinesrc_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_sinesrc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sinesrc_check,
                       upipe_sinesrc_register_output_request,
                       upipe_sinesrc_unregister_output_request)

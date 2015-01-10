@@ -84,6 +84,8 @@ struct upipe_sws {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -118,7 +120,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_sws, urefcount, upipe_sws_free)
 UPIPE_HELPER_FLOW(upipe_sws, "pic.");
 UPIPE_HELPER_OUTPUT(upipe_sws, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_sws, flow_def_input, flow_def_attr)
-UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr, ubuf_mgr_request, upipe_sws_check,
+UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_sws_check,
                       upipe_sws_register_output_request,
                       upipe_sws_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_sws, urefs, nb_urefs, max_urefs, blockers, upipe_sws_handle)

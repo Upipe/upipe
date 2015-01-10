@@ -65,6 +65,8 @@ struct upipe_filter_blend {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -94,8 +96,8 @@ UPIPE_HELPER_UPIPE(upipe_filter_blend, upipe, UPIPE_FILTER_BLEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_filter_blend, urefcount, upipe_filter_blend_free)
 UPIPE_HELPER_VOID(upipe_filter_blend)
 UPIPE_HELPER_OUTPUT(upipe_filter_blend, output, flow_def, output_state, request_list)
-UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr, ubuf_mgr_request,
-                      upipe_filter_blend_check,
+UPIPE_HELPER_UBUF_MGR(upipe_filter_blend, ubuf_mgr, flow_format,
+                      ubuf_mgr_request, upipe_filter_blend_check,
                       upipe_filter_blend_register_output_request,
                       upipe_filter_blend_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_filter_blend, urefs, nb_urefs, max_urefs, blockers, upipe_filter_blend_handle)

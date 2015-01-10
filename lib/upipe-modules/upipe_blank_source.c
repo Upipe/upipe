@@ -80,6 +80,8 @@ struct upipe_blksrc {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -126,7 +128,7 @@ UPIPE_HELPER_UREF_MGR(upipe_blksrc, uref_mgr, uref_mgr_request,
                       upipe_blksrc_check,
                       upipe_blksrc_register_output_request,
                       upipe_blksrc_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_blksrc, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_blksrc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_blksrc_check,
                       upipe_blksrc_register_output_request,
                       upipe_blksrc_unregister_output_request)

@@ -70,6 +70,8 @@ struct upipe_genaux {
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
@@ -102,7 +104,7 @@ UPIPE_HELPER_UPIPE(upipe_genaux, upipe, UPIPE_GENAUX_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_genaux, urefcount, upipe_genaux_free);
 UPIPE_HELPER_VOID(upipe_genaux);
 UPIPE_HELPER_OUTPUT(upipe_genaux, output, flow_def, output_state, request_list);
-UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_genaux, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_genaux_check,
                       upipe_genaux_register_output_request,
                       upipe_genaux_unregister_output_request)

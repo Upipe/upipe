@@ -29,7 +29,7 @@
 
       @item All parameters to @ref upipe_control belong to the caller. The @ref upipe must either duplicate or use (increment the refcount) structures it wants to keep. However if the control command is supposed to return information (such as control structures) from the @ref upipe, the structure belongs to the callee and should be duplicated or used, if required, by the caller.
 
-      @item A pipe shall not throw a @ref UPROBE_NEED_UPUMP_MGR event before receiving its first buffer, or being sent @ref UPIPE_ATTACH_UPUMP_MGR. An exception is allowed for source pipes, but it is legal for the application to not give a upump_mgr right away, and the source pipe should not throw a fatal error if that happens.
+      @item A pipe shall not throw a @ref UPROBE_NEED_UPUMP_MGR event before receiving its first buffer, being sent @ref UPIPE_ATTACH_UPUMP_MGR or being registered a @ref urequest. An exception is allowed for source pipes, but it is legal for the application to not give a upump_mgr right away, and the source pipe should not throw a fatal error if that happens.
 
     @end list
 
