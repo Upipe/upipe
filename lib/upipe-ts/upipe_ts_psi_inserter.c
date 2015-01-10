@@ -83,6 +83,11 @@ struct upipe_ts_psii {
     /** list of output requests */
     struct uchain request_list;
 
+    /** manager of the pseudo inner sink */
+    struct upipe_mgr inner_sink_mgr;
+    /** pseudo inner sink to get urefs from ts_encaps */
+    struct upipe inner_sink;
+
     /** list of input subpipes */
     struct uchain subs;
 
@@ -97,6 +102,8 @@ UPIPE_HELPER_UPIPE(upipe_ts_psii, upipe, UPIPE_TS_PSII_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psii, urefcount, upipe_ts_psii_free)
 UPIPE_HELPER_VOID(upipe_ts_psii)
 UPIPE_HELPER_OUTPUT(upipe_ts_psii, output, flow_def, output_state, request_list)
+
+UBASE_FROM_TO(upipe_ts_psii, upipe, inner_sink, inner_sink)
 
 /** @internal @This is the private context of a program of a ts_psii pipe. */
 struct upipe_ts_psii_sub {
@@ -207,7 +214,7 @@ static struct upipe *upipe_ts_psii_sub_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
     if (likely(upipe_ts_psii->output != NULL))
-        upipe_set_output(upipe_ts_psii_sub->encaps, upipe_ts_psii->output);
+        upipe_set_output(upipe_ts_psii_sub->encaps, &upipe_ts_psii->inner_sink);
 
     return upipe;
 }
@@ -448,6 +455,83 @@ static void upipe_ts_psii_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
+/** @internal @This receives data.
+ *
+ * @param sink description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_psii_inner_sink_input(struct upipe *sink,
+                                           struct uref *uref,
+                                           struct upump **upump_p)
+{
+    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_inner_sink(sink);
+    struct upipe *upipe = upipe_ts_psii_to_upipe(upipe_ts_psii);
+    upipe_ts_psii_output(upipe, uref, upump_p);
+}
+
+/** @internal @This processes control commands.
+ *
+ * @param sink description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_ts_psii_inner_sink_control(struct upipe *sink,
+                                            int command, va_list args)
+{
+    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_inner_sink(sink);
+    struct upipe *upipe = upipe_ts_psii_to_upipe(upipe_ts_psii);
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psii_free_output_proxy(upipe, request);
+        }
+        case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** @internal @This initializes the inner pseudo sink pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_psii_init_inner_sink(struct upipe *upipe)
+{
+    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
+    struct upipe_mgr *inner_sink_mgr = &upipe_ts_psii->inner_sink_mgr;
+    inner_sink_mgr->refcount = NULL;
+    inner_sink_mgr->signature = UPIPE_TS_PSII_INNER_SINK_SIGNATURE;
+    inner_sink_mgr->upipe_alloc = NULL;
+    inner_sink_mgr->upipe_input = upipe_ts_psii_inner_sink_input;
+    inner_sink_mgr->upipe_control = upipe_ts_psii_inner_sink_control;
+    inner_sink_mgr->upipe_mgr_control = NULL;
+
+    struct upipe *sink = &upipe_ts_psii->inner_sink;
+    sink->refcount = upipe_ts_psii_to_urefcount(upipe_ts_psii);
+    upipe_init(sink, inner_sink_mgr,
+               uprobe_pfx_alloc(uprobe_use(upipe->uprobe), UPROBE_LOG_VERBOSE,
+                                "inner sink"));
+}
+
+/** @internal @This cleans up the inner pseudo sink pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_psii_clean_inner_sink(struct upipe *upipe)
+{
+    struct upipe_ts_psii *upipe_ts_psii = upipe_ts_psii_from_upipe(upipe);
+    struct upipe *sink = &upipe_ts_psii->inner_sink;
+    upipe_clean(sink);
+}
+
 /** @internal @This allocates a ts_psii pipe.
  *
  * @param mgr common management structure
@@ -467,6 +551,7 @@ static struct upipe *upipe_ts_psii_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_psii_init_urefcount(upipe);
     upipe_ts_psii_init_output(upipe);
+    upipe_ts_psii_init_inner_sink(upipe);
     upipe_ts_psii_init_sub_mgr(upipe);
     upipe_ts_psii_init_sub_subs(upipe);
 
@@ -608,6 +693,7 @@ static void upipe_ts_psii_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_ts_psii_clean_sub_subs(upipe);
+    upipe_ts_psii_clean_inner_sink(upipe);
     upipe_ts_psii_clean_output(upipe);
     upipe_ts_psii_clean_urefcount(upipe);
     upipe_ts_psii_free_void(upipe);

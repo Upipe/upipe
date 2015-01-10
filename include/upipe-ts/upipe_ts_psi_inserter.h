@@ -33,6 +33,7 @@ extern "C" {
 
 #define UPIPE_TS_PSII_SIGNATURE UBASE_FOURCC('t','P','i',' ')
 #define UPIPE_TS_PSII_SUB_SIGNATURE UBASE_FOURCC('t','P','i','s')
+#define UPIPE_TS_PSII_INNER_SINK_SIGNATURE UBASE_FOURCC('t','P','i','S')
 
 /** @This extends upipe_command with specific commands for ts_psii_sub. */
 enum upipe_ts_psii_sub_command {

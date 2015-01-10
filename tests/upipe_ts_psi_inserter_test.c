@@ -65,6 +65,7 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static unsigned int nb_packets = 0;
+static bool expect_flow_def = true;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -106,6 +107,7 @@ static int test_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
+            assert(expect_flow_def);
             return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *urequest = va_arg(args, struct urequest *);
@@ -212,6 +214,7 @@ int main(int argc, char *argv[])
     assert(uref != NULL);
     uref_clock_set_cr_sys(uref, (UCLOCK_FREQ / 10) * 4);
     uref_clock_set_cr_dts_delay(uref, 0);
+    expect_flow_def = false;
     upipe_input(upipe_ts_psii, uref, NULL);
     assert(nb_packets == 2);
     nb_packets = 0;
