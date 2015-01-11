@@ -105,34 +105,6 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
     return true;
 }
 
-/** @This resizes a umem.
- *
- * @param mgr management structure
- * @param umem caller-allocated structure, previously successfully passed to
- * @ref umem_alloc, and filled in with the new pointer and size
- * @param new_size new requested size of the umem
- * @return false if the memory couldn't be allocated (umem left untouched)
- */
-static bool umem_pool_realloc(struct umem *umem, size_t new_size)
-{
-    if (likely(new_size <= umem->real_size)) {
-        umem->size = new_size;
-        return true;
-    }
-
-    size_t real_size;
-    umem_pool_find(umem->mgr, new_size, &real_size);
-
-    uint8_t *buffer = realloc(umem->buffer, real_size);
-    if (unlikely(buffer == NULL))
-        return false;
-
-    umem->buffer = buffer;
-    umem->size = new_size;
-    umem->real_size = real_size;
-    return true;
-}
-
 /** @This frees a umem.
  *
  * @param mgr management structure
@@ -150,6 +122,31 @@ static void umem_pool_free(struct umem *umem)
         free(umem->buffer);
     umem->buffer = NULL;
     umem->mgr = NULL;
+}
+
+/** @This resizes a umem. We do not realloc() the buffer because it would
+ * artificially grow the size of a pool, and create a malloc/free contention.
+ *
+ * @param mgr management structure
+ * @param umem caller-allocated structure, previously successfully passed to
+ * @ref umem_alloc, and filled in with the new pointer and size
+ * @param new_size new requested size of the umem
+ * @return false if the memory couldn't be allocated (umem left untouched)
+ */
+static bool umem_pool_realloc(struct umem *umem, size_t new_size)
+{
+    if (likely(new_size <= umem->real_size)) {
+        umem->size = new_size;
+        return true;
+    }
+
+    struct umem new_umem;
+    if (!umem_pool_alloc(umem->mgr, &new_umem, new_size))
+        return false;
+    memcpy(new_umem.buffer, umem->buffer, umem->size);
+    umem_pool_free(umem);
+    *umem = new_umem;
+    return true;
 }
 
 /** @This instructs an existing umem manager to release all structures
