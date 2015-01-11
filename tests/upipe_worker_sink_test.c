@@ -68,6 +68,7 @@
 static struct uprobe *logger;
 static bool transferred = false;
 static unsigned int nb_packets = 0;
+static pthread_t wsink_thread_id;
 
 /** helper phony pipe */
 struct test_pipe {
@@ -106,6 +107,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg(upipe, "input");
     uref_free(uref);
     nb_packets--;
+    assert(pthread_equal(pthread_self(), wsink_thread_id));
 }
 
 /** helper phony pipe */
@@ -115,10 +117,14 @@ static int test_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_dbg(upipe, "attached");
             transferred = true;
+            assert(pthread_equal(pthread_self(), wsink_thread_id));
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             upipe_dbg(upipe, "flow_def set");
+            if (transferred) {
+                assert(pthread_equal(pthread_self(), wsink_thread_id));
+            }
             return UBASE_ERR_NONE;
         }
         default:
@@ -202,9 +208,8 @@ int main(int argc, char **argv)
         upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
     assert(upipe_xfer_mgr != NULL);
 
-    pthread_t id;
     upipe_mgr_use(upipe_xfer_mgr);
-    assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
+    assert(pthread_create(&wsink_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
 
     struct upipe_mgr *upipe_wsink_mgr = upipe_wsink_mgr_alloc(upipe_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);
@@ -230,7 +235,7 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     uprobe_err(logger, NULL, "joining");
-    assert(!pthread_join(id, NULL));
+    assert(!pthread_join(wsink_thread_id, NULL));
     uprobe_err(logger, NULL, "joined");
     assert(transferred);
     assert(!nb_packets);

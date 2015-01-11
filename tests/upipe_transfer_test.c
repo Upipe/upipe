@@ -59,6 +59,7 @@ static struct upump_mgr *upump_mgr = NULL;
 static bool transferred = false;
 static bool got_uri = false;
 static uatomic_uint32_t source_end;
+static pthread_t xfer_thread_id;
 
 /** helper phony pipe */
 struct test_pipe {
@@ -95,6 +96,7 @@ static int test_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
             transferred = true;
+            assert(pthread_equal(pthread_self(), xfer_thread_id));
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_URI: {
@@ -102,6 +104,7 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             assert(!strcmp(uri, "toto"));
             got_uri = true;
             upipe_throw_source_end(upipe);
+            assert(pthread_equal(pthread_self(), xfer_thread_id));
             return UBASE_ERR_NONE;
         }
         default:
@@ -182,9 +185,8 @@ int main(int argc, char **argv)
         upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
     assert(upipe_xfer_mgr != NULL);
 
-    pthread_t id;
     upipe_mgr_use(upipe_xfer_mgr);
-    assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
+    assert(pthread_create(&xfer_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
 
     struct upipe *upipe_handle = upipe_xfer_alloc(upipe_xfer_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_upump_mgr), UPROBE_LOG_VERBOSE,
@@ -200,7 +202,7 @@ int main(int argc, char **argv)
 
     ev_loop(loop, 0);
 
-    assert(!pthread_join(id, NULL));
+    assert(!pthread_join(xfer_thread_id, NULL));
     assert(transferred);
     assert(uatomic_load(&source_end) == 1);
 

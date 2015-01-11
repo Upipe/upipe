@@ -69,6 +69,7 @@
 static struct uprobe *logger;
 static bool transferred = false;
 static unsigned int nb_packets = 0;
+static pthread_t wlin_thread_id;
 
 /** helper phony pipe */
 struct test_pipe {
@@ -111,6 +112,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg(upipe, "input");
     upipe_input(test_pipe->output, uref, upump_p);
     nb_packets--;
+    assert(pthread_equal(pthread_self(), wlin_thread_id));
 }
 
 /** helper phony pipe */
@@ -121,11 +123,15 @@ static int test_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_dbg(upipe, "attached");
             transferred = true;
+            assert(pthread_equal(pthread_self(), wlin_thread_id));
             return UBASE_ERR_NONE;
         }
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             *p = test_pipe->output;
+            if (transferred) {
+                assert(pthread_equal(pthread_self(), wlin_thread_id));
+            }
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_OUTPUT: {
@@ -133,10 +139,14 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             struct upipe *output = va_arg(args, struct upipe *);
             assert(output != NULL);
             test_pipe->output = upipe_use(output);
+            if (transferred) {
+                assert(pthread_equal(pthread_self(), wlin_thread_id));
+            }
             return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             upipe_dbg(upipe, "flow_def set");
+            assert(pthread_equal(pthread_self(), wlin_thread_id));
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_set_flow_def(test_pipe->output, flow_def);
         }
@@ -221,9 +231,8 @@ int main(int argc, char **argv)
         upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
     assert(upipe_xfer_mgr != NULL);
 
-    pthread_t id;
     upipe_mgr_use(upipe_xfer_mgr);
-    assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
+    assert(pthread_create(&wlin_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
 
     struct upipe_mgr *upipe_wlin_mgr = upipe_wlin_mgr_alloc(upipe_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
@@ -257,10 +266,11 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     uprobe_err(logger, NULL, "joining");
-    assert(!pthread_join(id, NULL));
+    assert(!pthread_join(wlin_thread_id, NULL));
     uprobe_err(logger, NULL, "joined");
     assert(transferred);
     assert(!nb_packets);
+    transferred = false;
 
     /* same test with 2 pipes */
     upipe_test = upipe_void_alloc(&test_mgr,
@@ -277,7 +287,7 @@ int main(int argc, char **argv)
     assert(upipe_xfer_mgr != NULL);
 
     upipe_mgr_use(upipe_xfer_mgr);
-    assert(pthread_create(&id, NULL, thread, upipe_xfer_mgr) == 0);
+    assert(pthread_create(&wlin_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
 
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(upipe_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
@@ -311,7 +321,7 @@ int main(int argc, char **argv)
     ev_loop(loop, 0);
 
     uprobe_err(logger, NULL, "joining");
-    assert(!pthread_join(id, NULL));
+    assert(!pthread_join(wlin_thread_id, NULL));
     uprobe_err(logger, NULL, "joined");
     assert(transferred);
     assert(!nb_packets);
