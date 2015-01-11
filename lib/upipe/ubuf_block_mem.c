@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +37,9 @@
 #include <upipe/ubuf_block_common.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/ubuf_mem_common.h>
+#include <upipe/uref.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_block_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -222,8 +225,7 @@ static int ubuf_block_mem_splice(struct ubuf *ubuf,
  * @param args arguments of the command
  * @return an error code
  */
-static int ubuf_block_mem_control(struct ubuf *ubuf,
-                                             int command, va_list args)
+static int ubuf_block_mem_control(struct ubuf *ubuf, int command, va_list args)
 {
     switch (command) {
         case UBUF_DUP: {
@@ -292,6 +294,33 @@ static void ubuf_block_mem_free_inner(struct upool *upool, void *_block_mem)
     free(block_mem);
 }
 
+/** @This checks if the given flow format can be allocated with the manager.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param flow_format flow format to check
+ * @return an error code
+ */
+static int ubuf_block_mem_mgr_check(struct ubuf_mgr *mgr,
+                                    struct uref *flow_format)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_format, &def))
+    if (ubase_ncmp(def, "block."))
+        return UBASE_ERR_INVALID;
+
+    uint64_t align = 0;
+    int64_t align_offset = 0;
+    uref_block_flow_get_align(flow_format, &align);
+    uref_block_flow_get_align_offset(flow_format, &align_offset);
+
+    struct ubuf_block_mem_mgr *block_mem_mgr =
+        ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
+    if (align && (block_mem_mgr->align % align ||
+                  block_mem_mgr->align_offset != align_offset))
+        return UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
+}
+
 /** @This handles manager control commands.
  *
  * @param mgr pointer to ubuf manager
@@ -303,6 +332,10 @@ static int ubuf_block_mem_mgr_control(struct ubuf_mgr *mgr,
                                       int command, va_list args)
 {
     switch (command) {
+        case UBUF_MGR_CHECK: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return ubuf_block_mem_mgr_check(mgr, flow_format);
+        }
         case UBUF_MGR_VACUUM: {
             ubuf_block_mem_mgr_vacuum_pool(mgr);
             return UBASE_ERR_NONE;

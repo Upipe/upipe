@@ -140,6 +140,7 @@
         @item @ref uprobe_uref_mgr_alloc @item give a uref manager to pipes requiring one @item @tt -lupipe
         @item @ref uprobe_uclock_alloc @item give a uclock to pipes requiring one @item @tt -lupipe
         @item @ref uprobe_ubuf_mem_alloc @item allocate and give a ubuf manager to pipes that require one @item @tt -lupipe
+        @item @ref uprobe_ubuf_mem_pool_alloc @item allocate and give a ubuf manager to pipes that require one, and recycle existing ubuf managers @item @tt -lupipe
         @item @ref uprobe_selflow_alloc @item select flows according to criteria @item @tt -lupipe
         @item @ref uprobe_dejitter_alloc @item dejitter packets coming from a network by averaging reference clocks @item @tt -lupipe
         @item @ref uprobe_xfer_alloc @item forward probes from one thread to another, in conjunction with @ref upipe_xfer_alloc @item @tt -lupipe

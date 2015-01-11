@@ -62,6 +62,7 @@ pkginclude_HEADERS = \
 	uprobe_stdio.h \
 	uprobe_transfer.h \
 	uprobe_ubuf_mem.h \
+	uprobe_ubuf_mem_pool.h \
 	uprobe_uclock.h \
 	uprobe_upump_mgr.h \
 	uprobe_uref_mgr.h \

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +37,9 @@
 #include <upipe/ubuf_pic_common.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/ubuf_mem_common.h>
+#include <upipe/uref.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -130,8 +133,7 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
     if (unlikely(!ubase_check(ubuf_pic_common_check_size(mgr, hsize, vsize))))
         return NULL;
 
-    struct ubuf_pic_mem_mgr *pic_mgr =
-        ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
     struct ubuf_pic_mem *pic_mem = ubuf_pic_mem_alloc_pool(mgr);
     if (unlikely(pic_mem == NULL))
         return NULL;
@@ -389,6 +391,65 @@ static void ubuf_pic_mem_free_inner(struct upool *upool, void *_pic_mem)
     free(pic_mem);
 }
 
+/** @This checks if the given flow format can be allocated with the manager.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param flow_format flow format to check
+ * @return an error code
+ */
+static int ubuf_pic_mem_mgr_check(struct ubuf_mgr *mgr,
+                                  struct uref *flow_format)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_format, &def))
+    if (ubase_ncmp(def, "pic."))
+        return UBASE_ERR_INVALID;
+
+    uint8_t macropixel;
+    uint8_t planes;
+    uint8_t hmprepend = 0, hmappend = 0, vprepend = 0, vappend = 0;
+    uint64_t align = 0;
+    int64_t align_hmoffset = 0;
+
+    UBASE_RETURN(uref_pic_flow_get_macropixel(flow_format, &macropixel))
+    UBASE_RETURN(uref_pic_flow_get_planes(flow_format, &planes))
+    uref_pic_flow_get_hmprepend(flow_format, &hmprepend);
+    uref_pic_flow_get_hmappend(flow_format, &hmappend);
+    uref_pic_flow_get_vprepend(flow_format, &vprepend);
+    uref_pic_flow_get_vappend(flow_format, &vappend);
+    uref_pic_flow_get_align(flow_format, &align);
+    uref_pic_flow_get_align_hmoffset(flow_format, &align_hmoffset);
+
+    struct ubuf_pic_common_mgr *common_mgr =
+        ubuf_pic_common_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_pic_mem_mgr *pic_mgr = ubuf_pic_mem_mgr_from_ubuf_mgr(mgr);
+    if (common_mgr->macropixel != macropixel ||
+        common_mgr->nb_planes != planes ||
+        pic_mgr->hmprepend != hmprepend || pic_mgr->hmappend != hmappend ||
+        pic_mgr->vprepend != vprepend || pic_mgr->vappend != vappend)
+        return UBASE_ERR_INVALID;
+    if (align && (pic_mgr->align % align ||
+                  pic_mgr->align_hmoffset != align_hmoffset))
+        return UBASE_ERR_INVALID;
+
+    for (uint8_t i = 0; i < planes; i++) {
+        struct ubuf_pic_common_mgr_plane *plane = common_mgr->planes[i];
+        const char *chroma;
+        uint8_t hsub, vsub, macropixel_size;
+        UBASE_RETURN(uref_pic_flow_get_chroma(flow_format, &chroma, i))
+        UBASE_RETURN(uref_pic_flow_get_hsubsampling(flow_format, &hsub, i))
+        UBASE_RETURN(uref_pic_flow_get_vsubsampling(flow_format, &vsub, i))
+        UBASE_RETURN(uref_pic_flow_get_macropixel_size(flow_format,
+                                                       &macropixel_size, i))
+
+        if (strcmp(plane->chroma, chroma) ||
+            plane->hsub != hsub || plane->vsub != vsub ||
+            plane->macropixel_size != macropixel_size)
+            return UBASE_ERR_INVALID;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @This handles manager control commands.
  *
  * @param mgr pointer to ubuf manager
@@ -400,6 +461,10 @@ static int ubuf_pic_mem_mgr_control(struct ubuf_mgr *mgr,
                                     int command, va_list args)
 {
     switch (command) {
+        case UBUF_MGR_CHECK: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return ubuf_pic_mem_mgr_check(mgr, flow_format);
+        }
         case UBUF_MGR_VACUUM: {
             ubuf_pic_mem_mgr_vacuum_pool(mgr);
             return UBASE_ERR_NONE;

@@ -45,6 +45,8 @@ extern "C" {
 
 /** @hidden */
 struct ubuf_mgr;
+/** @hidden */
+struct uref;
 
 /** @This is allocated by a manager and eventually points to a buffer
  * containing data. */
@@ -131,6 +133,9 @@ enum ubuf_command {
 
 /** @This defines standard manger commands which ubuf managers may implement. */
 enum ubuf_mgr_command {
+    /** check if the given flow format can be allocated with the manager
+     * (struct uref *) */
+    UBUF_MGR_CHECK,
     /** release all buffers kept in pools (void) */
     UBUF_MGR_VACUUM,
 
@@ -294,6 +299,18 @@ static inline int ubuf_mgr_control(struct ubuf_mgr *mgr, int command, ...)
     err = ubuf_mgr_control_va(mgr, command, args);
     va_end(args);
     return err;
+}
+
+/** @This checks if the given flow format can be allocated with the ubuf
+ * manager.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param flow_format flow format to check
+ * @return an error code
+ */
+static inline int ubuf_mgr_check(struct ubuf_mgr *mgr, struct uref *flow_format)
+{
+    return ubuf_mgr_control(mgr, UBUF_MGR_CHECK, flow_format);
 }
 
 /** @This instructs an existing ubuf manager to release all structures currently

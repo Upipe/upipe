@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +37,9 @@
 #include <upipe/ubuf_sound_common.h>
 #include <upipe/ubuf_sound_mem.h>
 #include <upipe/ubuf_mem_common.h>
+#include <upipe/uref.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_sound_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -329,6 +332,49 @@ static void ubuf_sound_mem_free_inner(struct upool *upool, void *_sound_mem)
     free(sound_mem);
 }
 
+/** @This checks if the given flow format can be allocated with the manager.
+ *
+ * @param mgr pointer to ubuf manager
+ * @param flow_format flow format to check
+ * @return an error code
+ */
+static int ubuf_sound_mem_mgr_check(struct ubuf_mgr *mgr,
+                                    struct uref *flow_format)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_format, &def))
+    if (ubase_ncmp(def, "sound."))
+        return UBASE_ERR_INVALID;
+
+    uint8_t sample_size;
+    uint8_t planes;
+    uint64_t align = 0;
+
+    UBASE_RETURN(uref_sound_flow_get_sample_size(flow_format, &sample_size))
+    UBASE_RETURN(uref_sound_flow_get_planes(flow_format, &planes))
+    uref_sound_flow_get_align(flow_format, &align);
+
+    struct ubuf_sound_common_mgr *common_mgr =
+        ubuf_sound_common_mgr_from_ubuf_mgr(mgr);
+    struct ubuf_sound_mem_mgr *sound_mgr =
+        ubuf_sound_mem_mgr_from_ubuf_mgr(mgr);
+    if (common_mgr->sample_size != sample_size ||
+        common_mgr->nb_planes != planes)
+        return UBASE_ERR_INVALID;
+    if (align && sound_mgr->align % align)
+        return UBASE_ERR_INVALID;
+
+    for (uint8_t i = 0; i < planes; i++) {
+        struct ubuf_sound_common_mgr_plane *plane = common_mgr->planes[i];
+        const char *channel;
+        UBASE_RETURN(uref_sound_flow_get_channel(flow_format, &channel, i))
+
+        if (strcmp(plane->channel, channel))
+            return UBASE_ERR_INVALID;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @This handles manager control commands.
  *
  * @param mgr pointer to ubuf manager
@@ -340,6 +386,10 @@ static int ubuf_sound_mem_mgr_control(struct ubuf_mgr *mgr,
                                       int command, va_list args)
 {
     switch (command) {
+        case UBUF_MGR_CHECK: {
+            struct uref *flow_format = va_arg(args, struct uref *);
+            return ubuf_sound_mem_mgr_check(mgr, flow_format);
+        }
         case UBUF_MGR_VACUUM: {
             ubuf_sound_mem_mgr_vacuum_pool(mgr);
             return UBASE_ERR_NONE;

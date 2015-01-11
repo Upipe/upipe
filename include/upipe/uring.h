@@ -236,9 +236,9 @@ static inline void uring_lifo_push(struct uring *uring, uring_lifo *lifo_p,
  * (head and tail) and associated tags. The bit-field definition is:
  * @table 2
  * @item bits @item description
- * @item 24 @item tail tag
+ * @item 8 @item tail tag
  * @item 8 @item tail index
- * @item 24 @item head tag
+ * @item 8 @item head tag
  * @item 8 @item head index
  * @end table
  */

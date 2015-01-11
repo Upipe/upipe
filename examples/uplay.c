@@ -38,7 +38,7 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_ubuf_mem.h>
+#include <upipe/uprobe_ubuf_mem_pool.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/uprobe_transfer.h>
@@ -592,8 +592,8 @@ int main(int argc, char **argv)
     assert(uprobe_main != NULL);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     assert(uprobe_main != NULL);
-    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, umem_mgr, UBUF_POOL_DEPTH,
-                                        UBUF_SHARED_POOL_DEPTH);
+    uprobe_main = uprobe_ubuf_mem_pool_alloc(uprobe_main, umem_mgr,
+            UBUF_POOL_DEPTH, UBUF_SHARED_POOL_DEPTH);
     assert(uprobe_main != NULL);
     uprobe_main = uprobe_pthread_upump_mgr_alloc(uprobe_main);
     assert(uprobe_main != NULL);

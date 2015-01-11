@@ -22,6 +22,7 @@ check_PROGRAMS = \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
 	uprobe_ubuf_mem_test \
+	uprobe_ubuf_mem_pool_test \
 	uprobe_uclock_test \
 	uprobe_uref_mgr_test \
 	umem_alloc_test \
@@ -65,6 +66,7 @@ TESTS = \
 	uprobe_dejitter_test \
 	uprobe_select_flows_test \
 	uprobe_ubuf_mem_test \
+	uprobe_ubuf_mem_pool_test \
 	uprobe_uclock_test \
 	uprobe_uref_mgr_test \
 	uref_std_test \

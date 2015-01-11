@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012, 2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -53,59 +53,70 @@ extern "C" {
  * support larger atomic operations. */
 typedef volatile uint32_t uatomic_uint32_t;
 
-/** @This initializes a uatomic variable. It must be executed before any other
- * uatomic call. It is not thread-safe.
- *
- * @param obj pointer to a uatomic variable
- * @param value initial value
- */
-static inline void uatomic_init(uatomic_uint32_t *obj, uint32_t value)
-{
-    *obj = value;
-    __sync_synchronize();
-}
+/** @This defines an atomic pointer. */
+typedef void * volatile uatomic_ptr_t;
 
-/** @This sets the value of the uatomic variable.
- *
- * @param obj pointer to a uatomic variable
- * @param value value to set
- */
-static inline void uatomic_store(uatomic_uint32_t *obj, uint32_t value)
-{
-    *obj = value;
-    __sync_synchronize();
+/** @This defines a set of functions to manipulate atomic variables. */
+#define UATOMIC_TEMPLATE(type, ctype, atomictype)                           \
+/** @This initializes a uatomic variable. It must be executed before any    \
+ * other uatomic call. It is not thread-safe.                               \
+ *                                                                          \
+ * @param obj pointer to a uatomic variable                                 \
+ * @param value initial value                                               \
+ */                                                                         \
+static inline void type##_init(atomictype *obj, ctype value)                \
+{                                                                           \
+    *obj = value;                                                           \
+    __sync_synchronize();                                                   \
+}                                                                           \
+/** @This sets the value of the uatomic variable.                           \
+ *                                                                          \
+ * @param obj pointer to a uatomic variable                                 \
+ * @param value value to set                                                \
+ */                                                                         \
+static inline void type##_store(atomictype *obj, ctype value)               \
+{                                                                           \
+    *obj = value;                                                           \
+    __sync_synchronize();                                                   \
+}                                                                           \
+/** @This returns the value of the uatomic variable.                        \
+ *                                                                          \
+ * @param obj pointer to a uatomic variable                                 \
+ * @return the value                                                        \
+ */                                                                         \
+static inline ctype type##_load(atomictype *obj)                            \
+{                                                                           \
+    __sync_synchronize();                                                   \
+    return *obj;                                                            \
+}                                                                           \
+/** @This atomically replaces the uatomic variable, if it contains an       \
+ * expected value, with a desired value.                                    \
+ *                                                                          \
+ * @param obj pointer to a uatomic variable                                 \
+ * @param expected reference to expected value, overwritten with actual     \
+ * value if it fails                                                        \
+ * @param desired desired value                                             \
+ * @return false if the exchange failed                                     \
+ */                                                                         \
+static inline bool type##_compare_exchange(atomictype *obj,                 \
+                                           ctype *expected, ctype desired)  \
+{                                                                           \
+    bool ret;                                                               \
+    ret = __sync_bool_compare_and_swap(obj, *expected, desired);            \
+    if (unlikely(!ret))                                                     \
+        *expected = *obj;                                                   \
+    return ret;                                                             \
+}                                                                           \
+/** @This cleans up the uatomic variable.                                   \
+ *                                                                          \
+ * @param obj pointer to a uatomic variable                                 \
+ */                                                                         \
+static inline void type##_clean(atomictype *obj)                            \
+{                                                                           \
 }
-
-/** @This returns the value of the uatomic variable.
- *
- * @param obj pointer to a uatomic variable
- * @return value
- */
-static inline uint32_t uatomic_load(uatomic_uint32_t *obj)
-{
-    __sync_synchronize();
-    return *obj;
-}
-
-/** @This atomically replaces the uatomic variable, if it contains an expected
- * value, with a desired value.
- *
- * @param obj pointer to a uatomic variable
- * @param expected reference to expected value, overwritten with actual value
- * if it fails
- * @param desired desired value
- * @return false if the exchange failed
- */
-static inline bool uatomic_compare_exchange(uatomic_uint32_t *obj,
-                                            uint32_t *expected,
-                                            uint32_t desired)
-{
-    bool ret;
-    ret = __sync_bool_compare_and_swap(obj, *expected, desired);
-    if (unlikely(!ret))
-        *expected = *obj;
-    return ret;
-}
+UATOMIC_TEMPLATE(uatomic, uint32_t, uatomic_uint32_t)
+UATOMIC_TEMPLATE(uatomic_ptr, void *, uatomic_ptr_t)
+#undef UATOMIC_TEMPLATE
 
 /** @This increments a uatomic variable.
  *
@@ -131,14 +142,6 @@ static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,
     return __sync_fetch_and_sub(obj, operand);
 }
 
-/** @This cleans up the uatomic variable.
- *
- * @param obj pointer to a uatomic variable
- */
-static inline void uatomic_clean(uatomic_uint32_t *obj)
-{
-}
-
 
 #elif defined(UPIPE_HAVE_SEMAPHORE_H) /* mkdoc:skip */
 
@@ -148,47 +151,52 @@ static inline void uatomic_clean(uatomic_uint32_t *obj)
 
 #include <semaphore.h>
 
-typedef struct uatomic_uint32_t {
-    sem_t lock;
-    uint32_t value;
-} uatomic_uint32_t;
-
-static inline void uatomic_init(uatomic_uint32_t *obj, uint32_t value)
-{
-    obj->value = value;
-    sem_init(&obj->lock, 0, 1);
+/** @This defines a set of functions to manipulate atomic variables. */
+#define UATOMIC_TEMPLATE(type, ctype, atomictype)                           \
+typedef struct atomictype {                                                 \
+    sem_t lock;                                                             \
+    ctype value;                                                            \
+} atomictype;                                                               \
+static inline void type##_init(atomictype *obj, ctype value)                \
+{                                                                           \
+    obj->value = value;                                                     \
+    sem_init(&obj->lock, 0, 1);                                             \
+}                                                                           \
+static inline void type##_store(atomictype *obj, ctype value)               \
+{                                                                           \
+    while (sem_wait(&obj->lock) == -1);                                     \
+    obj->value = value;                                                     \
+    sem_post(&obj->lock);                                                   \
+}                                                                           \
+static inline ctype type##_load(atomictype *obj)                            \
+{                                                                           \
+    ctype ret;                                                              \
+    while (sem_wait(&obj->lock) == -1);                                     \
+    ret = obj->value;                                                       \
+    sem_post(&obj->lock);                                                   \
+    return ret;                                                             \
+}                                                                           \
+static inline bool type##_compare_exchange(atomictype *obj,                 \
+                                           ctype *expected, ctype desired)  \
+{                                                                           \
+    bool ret;                                                               \
+    while (sem_wait(&obj->lock) == -1);                                     \
+    ret = obj->value == *expected;                                          \
+    if (likely(ret))                                                        \
+        obj->value = desired;                                               \
+    else                                                                    \
+        *expected = obj->value;                                             \
+    sem_post(&obj->lock);                                                   \
+    return ret;                                                             \
+}                                                                           \
+static inline void type##_clean(atomictype *obj)                            \
+{                                                                           \
+    sem_destroy(&obj->lock);                                                \
 }
+UATOMIC_TEMPLATE(uatomic, uint32_t, uatomic_uint32_t)
+UATOMIC_TEMPLATE(uatomic_ptr, void *, uatomic_ptr_t)
+#undef UATOMIC_TEMPLATE
 
-static inline void uatomic_store(uatomic_uint32_t *obj, uint32_t value)
-{
-    while (sem_wait(&obj->lock) == -1);
-    obj->value = value;
-    sem_post(&obj->lock);
-}
-
-static inline uint32_t uatomic_load(uatomic_uint32_t *obj)
-{
-    uint32_t ret;
-    while (sem_wait(&obj->lock) == -1);
-    ret = obj->value;
-    sem_post(&obj->lock);
-    return ret;
-}
-
-static inline bool uatomic_compare_exchange(uatomic_uint32_t *obj,
-                                            uint32_t *expected,
-                                            uint32_t desired)
-{
-    bool ret;
-    while (sem_wait(&obj->lock) == -1);
-    ret = obj->value == *expected;
-    if (likely(ret))
-        obj->value = desired;
-    else
-        *expected = obj->value;
-    sem_post(&obj->lock);
-    return ret;
-}
 static inline uint32_t uatomic_fetch_add(uatomic_uint32_t *obj,
                                          uint32_t operand)
 {
@@ -211,10 +219,6 @@ static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,
     return ret;
 }
 
-static inline void uatomic_clean(uatomic_uint32_t *obj)
-{
-    sem_destroy(&obj->lock);
-}
 
 
 #else /* mkdoc:skip */
@@ -227,6 +231,27 @@ static inline void uatomic_clean(uatomic_uint32_t *obj)
 #error no atomic support
 
 #endif
+
+/** @This loads an atomic pointer.
+ *
+ * @param obj pointer to a uatomic variable
+ * @param type type of the pointer
+ * @return the loaded value
+ */
+#define uatomic_ptr_load_ptr(obj, type)                                     \
+    (type)uatomic_ptr_load(obj)
+
+/** @This atomically replaces the uatomic pointer, if it contains an
+ * expected value, with a desired value.
+ *
+ * @param obj pointer to a uatomic variable
+ * @param expected reference to expected value, overwritten with actual
+ * value if it fails
+ * @param desired desired value
+ * @return false if the exchange failed
+ */
+#define uatomic_ptr_compare_exchange_ptr(obj, expected, desired)            \
+    uatomic_ptr_compare_exchange(obj, (void **)expected, desired)
 
 #ifdef __cplusplus
 }
