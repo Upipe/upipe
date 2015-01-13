@@ -151,8 +151,7 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
  * ubuf
  * @return an error code
  */
-static int ubuf_block_mem_dup(struct ubuf *ubuf,
-                                         struct ubuf **new_ubuf_p)
+static int ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf_block_mem *new_block = ubuf_block_mem_alloc_pool(ubuf->mgr);
@@ -194,9 +193,8 @@ static int ubuf_block_mem_single(struct ubuf *ubuf)
  * @param size final size of the buffer
  * @return an error code
  */
-static int ubuf_block_mem_splice(struct ubuf *ubuf,
-                                            struct ubuf **new_ubuf_p,
-                                            int offset, int size)
+static int ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
+                                 int offset, int size)
 {
     assert(new_ubuf_p != NULL);
     struct ubuf_block_mem *new_block = ubuf_block_mem_alloc_pool(ubuf->mgr);

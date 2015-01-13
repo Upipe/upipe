@@ -106,12 +106,21 @@ static inline int ubuf_block_common_dup(struct ubuf *ubuf,
     new_block->size = block->size;
     new_block->total_size = block->total_size;
     new_block->buffer = block->buffer;
-    if (block->next_ubuf != NULL)
-        if (unlikely((new_block->next_ubuf = ubuf_dup(block->next_ubuf))
-                       == NULL))
-            return UBASE_ERR_ALLOC;
     new_block->cached_ubuf = new_ubuf;
     new_block->cached_offset = 0;
+
+    struct ubuf *next_ubuf = block->next_ubuf;
+    while (next_ubuf != NULL) {
+        struct ubuf_block *next_block = ubuf_block_from_ubuf(next_ubuf);
+        struct ubuf *saved_ubuf = next_block->next_ubuf;
+        next_block->next_ubuf = NULL;
+        new_block->next_ubuf = ubuf_dup(next_ubuf);
+        next_block->next_ubuf = saved_ubuf;
+        if (unlikely(new_block->next_ubuf == NULL))
+            return UBASE_ERR_ALLOC;
+        new_block = ubuf_block_from_ubuf(new_block->next_ubuf);
+        next_ubuf = saved_ubuf;
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -138,15 +147,32 @@ static inline int ubuf_block_common_splice(struct ubuf *ubuf,
     new_block->total_size = size;
     new_block->buffer = block->buffer;
     size -= new_block->size;
+    new_block->cached_ubuf = new_ubuf;
+    new_block->cached_offset = 0;
 
     if (size > 0) {
+        struct ubuf *next_ubuf = block->next_ubuf;
+        while (next_ubuf != NULL) {
+            struct ubuf_block *next_block = ubuf_block_from_ubuf(next_ubuf);
+            struct ubuf *saved_ubuf = next_block->next_ubuf;
+            next_block->next_ubuf = NULL;
+            new_block->next_ubuf = ubuf_dup(next_ubuf);
+            next_block->next_ubuf = saved_ubuf;
+            if (unlikely(new_block->next_ubuf == NULL))
+                return UBASE_ERR_ALLOC;
+            new_block = ubuf_block_from_ubuf(new_block->next_ubuf);
+            next_ubuf = saved_ubuf;
+            if (new_block->size > size)
+                new_block->size = size;
+            new_block->total_size = size;
+            size -= new_block->size;
+        }
+
         if (unlikely(block->next_ubuf == NULL ||
                      (new_block->next_ubuf = ubuf_block_splice(block->next_ubuf,
                                                              0, size)) == NULL))
             return UBASE_ERR_ALLOC;
     }
-    new_block->cached_ubuf = new_ubuf;
-    new_block->cached_offset = 0;
     return UBASE_ERR_NONE;
 }
 
@@ -158,8 +184,14 @@ static inline int ubuf_block_common_splice(struct ubuf *ubuf,
 static inline void ubuf_block_common_clean(struct ubuf *ubuf)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    if (block->next_ubuf != NULL)
-        ubuf_free(block->next_ubuf);
+    struct ubuf *next_ubuf = block->next_ubuf;
+    while (next_ubuf != NULL) {
+        struct ubuf_block *next_block = ubuf_block_from_ubuf(next_ubuf);
+        struct ubuf *saved_ubuf = next_block->next_ubuf;
+        next_block->next_ubuf = NULL;
+        ubuf_free(next_ubuf);
+        next_ubuf = saved_ubuf;
+    }
 }
 
 #ifdef __cplusplus
