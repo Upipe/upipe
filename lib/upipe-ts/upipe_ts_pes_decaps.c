@@ -268,6 +268,11 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         }
 
         uint64_t dts_pts_delay = (POW2_33 + pts - dts) % POW2_33;
+        if (dts_pts_delay > POW2_33 / 2) {
+            upipe_warn_va(upipe, "invalid PTS field (%"PRIu64" < %"PRIu64")",
+                          pts, dts);
+            dts_pts_delay = 0;
+        }
         dts_pts_delay *= UCLOCK_FREQ / 90000;
         dts *= UCLOCK_FREQ / 90000;
         uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts);
