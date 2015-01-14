@@ -108,6 +108,12 @@
 
 /* true if we receive raw udp */
 static bool udp = false;
+/** selflow string for video */
+static const char *select_video = "auto";
+/** selflow string for audio */
+static const char *select_audio = "auto";
+/** selflow string for program */
+static const char *select_program = "auto";
 /* upump manager for the main thread */
 static struct upump_mgr *main_upump_mgr = NULL;
 /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
@@ -476,10 +482,10 @@ static void uplay_start(struct upump *upump)
                     uprobe_selflow_alloc(
                         uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
                             uprobe_use(&uprobe_video_s),
-                            UPROBE_SELFLOW_PIC, "auto"),
+                            UPROBE_SELFLOW_PIC, select_video),
                         uprobe_use(&uprobe_audio_s),
-                        UPROBE_SELFLOW_SOUND, "auto"),
-                    UPROBE_SELFLOW_VOID, "auto"),
+                        UPROBE_SELFLOW_SOUND, select_audio),
+                    UPROBE_SELFLOW_VOID, select_program),
                 UPROBE_LOG_VERBOSE, "ts demux"));
     upipe_release(ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
@@ -544,7 +550,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-V <video>] [-P <program>] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -552,7 +558,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udq")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:P:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -562,6 +568,15 @@ int main(int argc, char **argv)
                 break;
             case 'q':
                 loglevel++;
+                break;
+            case 'A':
+                select_audio = optarg;
+                break;
+            case 'V':
+                select_video = optarg;
+                break;
+            case 'P':
+                select_program = optarg;
                 break;
             default:
                 usage(argv[0]);
