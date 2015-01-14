@@ -240,11 +240,11 @@ static int upipe_trickp_sub_set_flow_def(struct upipe *upipe,
         upipe_trickp_sub_from_upipe(upipe);
     const char *def;
     if (likely(ubase_check(uref_flow_get_def(flow_def, &def)))) {
-        if (!ubase_ncmp(def, "pic.sub."))
+        if (!ubase_ncmp(def, "pic.sub.") || strstr(def, ".pic.sub."))
             upipe_trickp_sub->type = UPIPE_TRICKP_SUBPIC;
-        else if (!ubase_ncmp(def, "pic."))
+        else if (!ubase_ncmp(def, "pic.") || strstr(def, ".pic."))
             upipe_trickp_sub->type = UPIPE_TRICKP_PIC;
-        else if (!ubase_ncmp(def, "sound."))
+        else if (!ubase_ncmp(def, "sound.") || strstr(def, ".sound."))
             upipe_trickp_sub->type = UPIPE_TRICKP_SOUND;
         else
             upipe_trickp_sub->type = UPIPE_TRICKP_UNKNOWN;
