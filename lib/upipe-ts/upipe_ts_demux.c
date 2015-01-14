@@ -599,8 +599,11 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
             uref_clock_get_dts_pts_delay(uref, &dts_pts_delay);
             if (dts + dts_pts_delay > program->timestamp_highest)
                 program->timestamp_highest = dts + dts_pts_delay;
+            upipe_verbose_va(upipe, "read DTS %"PRIu64" -> %"PRIu64" (pts delay %"PRIu64")",
+                             dts_orig, dts, dts_pts_delay);
         } else
-            upipe_warn_va(upipe, "too long delay for PTS (%"PRIu64")", delta);
+            upipe_warn_va(upipe, "too long delay for DTS %"PRIu64" (%"PRIu64")",
+                          dts_orig, delta);
     }
 
     return upipe_throw(upipe, event, uref);
@@ -1176,6 +1179,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
+    upipe_verbose_va(upipe, "read PCR %"PRIu64, pcr_orig);
 
     /* handle 2^33 wrap-arounds */
     uint64_t delta =

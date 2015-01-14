@@ -208,7 +208,7 @@ static int uprobe_selflow_set_internal(struct uprobe *uprobe, const char *flows)
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(sub->split_pipe,
                     uprobe_pfx_alloc_va(uprobe_use(&sub->uprobe),
-                                        UPROBE_LOG_DEBUG,
+                                        UPROBE_LOG_VERBOSE,
                                         "flow %"PRIu64, sub->flow_id),
                     sub->flow_def);
                 if (unlikely(sub->subpipe == NULL))
@@ -404,7 +404,7 @@ static int uprobe_selflow_throw(struct uprobe *uprobe, struct upipe *upipe,
             if (sub->subpipe == NULL) {
                 sub->subpipe = upipe_flow_alloc_sub(upipe,
                     uprobe_pfx_alloc_va(uprobe_use(&sub->uprobe),
-                                        UPROBE_LOG_DEBUG,
+                                        UPROBE_LOG_VERBOSE,
                                         "flow %"PRIu64, flow_id),
                     sub->flow_def);
                 if (unlikely(sub->subpipe == NULL))

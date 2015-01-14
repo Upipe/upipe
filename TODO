@@ -1,5 +1,4 @@
 Plans for core:
- - reduce stack consumption in ubuf
  - thread pool support in upump-ev
 
 Plans for modules:

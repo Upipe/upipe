@@ -220,6 +220,8 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     if (unlikely(now < systime)) {
         upipe_udpsink_check_upump_mgr(upipe);
         if (likely(upipe_udpsink->upump_mgr != NULL)) {
+            upipe_verbose_va(upipe, "sleeping %"PRIu64" (%"PRIu64")",
+                             systime - now, systime);
             upipe_udpsink_wait_upump(upipe, systime - now,
                                      upipe_udpsink_watcher);
             return false;

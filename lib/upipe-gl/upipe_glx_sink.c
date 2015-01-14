@@ -412,6 +412,8 @@ static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
             pts += upipe_glx_sink->latency;
             uint64_t now = uclock_now(upipe_glx_sink->uclock);
             if (now < pts) {
+                upipe_verbose_va(upipe, "sleeping %"PRIu64" (%"PRIu64")",
+                                 pts - now, pts);
                 upipe_glx_sink_wait_upump(upipe, pts - now,
                                           upipe_glx_sink_write_watcher);
                 return false;

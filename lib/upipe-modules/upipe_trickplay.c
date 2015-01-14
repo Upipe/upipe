@@ -186,11 +186,14 @@ static bool upipe_trickp_sub_process(struct upipe *upipe, struct uref *uref,
     uint64_t date;
     int type;
     uref_clock_get_date_prog(uref, &date, &type);
-    if (likely(type != UREF_DATE_NONE))
-        uref_clock_set_date_sys(uref,
+    if (likely(type != UREF_DATE_NONE)) {
+        uint64_t date_sys =
                 upipe_trickp_get_date_sys(upipe_trickp_to_upipe(upipe_trickp),
-                                          date),
-                type);
+                                          date);
+        uref_clock_set_date_sys(uref, date_sys, type);
+        upipe_verbose_va(upipe, "stamping %"PRIu64" -> %"PRIu64,
+                         date, date_sys);
+    }
 
     upipe_trickp_sub_output(upipe, uref, upump_p);
     return true;
