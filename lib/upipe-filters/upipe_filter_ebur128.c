@@ -57,8 +57,10 @@ struct upipe_filter_ebur128 {
     struct upipe *output;
     /** output flow */
     struct uref *output_flow;
-    /** has flow def been sent ?*/
-    bool output_flow_sent;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
 
     /** ebur128 state */
     ebur128_state *st;
@@ -73,7 +75,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_filter_ebur128, urefcount,
                        upipe_filter_ebur128_free)
 UPIPE_HELPER_VOID(upipe_filter_ebur128)
 UPIPE_HELPER_OUTPUT(upipe_filter_ebur128, output,
-                    output_flow, output_flow_sent)
+                    output_flow, output_state, request_list)
 
 /** @internal @This allocates a filter pipe.
  *
@@ -197,8 +199,14 @@ static int upipe_filter_ebur128_control(struct upipe *upipe,
                                         int command, va_list args)
 {
     switch (command) {
-        case UPIPE_AMEND_FLOW_FORMAT:
-            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_filter_ebur128_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_filter_ebur128_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_filter_ebur128_get_flow_def(upipe, p);
