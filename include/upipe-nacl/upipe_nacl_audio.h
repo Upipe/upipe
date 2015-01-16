@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen
+ * Authors: Xavier Boulet
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,44 +25,30 @@
  */
 
 /** @file
- * @short Upipe ebur128
+ * @short Upipe NaCl module to play audio samples
  */
 
-#ifndef _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
+#ifndef _UPIPE_MODULES_UPIPE_NACL_AUDIO_H_
 /** @hidden */
-#define _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
+#define _UPIPE_MODULES_UPIPE_NACL_AUDIO_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
-#include <stdint.h>
-#include <ppapi_simple/ps.h>
-#define UPIPE_FILTER_EBUR128_SIGNATURE UBASE_FOURCC('r', '1', '2', '8')
+#include <ppapi/c/pp_resource.h>
 
-enum upipe_filter_ebur128_command {
+#define UPIPE_NACL_AUDIO_SIGNATURE UBASE_FOURCC('S','a','u','d')
 
-    UPIPE_FILTER_EBUR127_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    UPIPE_FILTER_EBUR127_SET_TIME_LENGTH,
-};
-
-
-/** @This returns the management structure for all avformat sources.
+/** @This returns the management structure for nacl_audio pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_filter_ebur128_mgr_alloc(void);
+struct upipe_mgr *upipe_nacl_audio_mgr_alloc(void);
 
-static inline struct upipe *_upipe_filter_ebur128_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, int n_pipe)
+static inline struct upipe *_upipe_nacl_audio_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, PP_Resource loop)
 {
-    return upipe_alloc(mgr, uprobe, UPIPE_FILTER_EBUR128_SIGNATURE,n_pipe);
-}
-
-static inline enum ubase_err upipe_filter_ebur128_set_time_length(struct upipe *upipe, int time_ms)
-{
-    return upipe_control(upipe, UPIPE_FILTER_EBUR127_SET_TIME_LENGTH, UPIPE_FILTER_EBUR128_SIGNATURE, time_ms);
+    return upipe_alloc(mgr, uprobe, UPIPE_NACL_AUDIO_SIGNATURE, loop);
 }
 
 #ifdef __cplusplus

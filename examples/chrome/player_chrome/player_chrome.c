@@ -107,10 +107,8 @@
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_trickplay.h>
-#include <upipe-nacl/upipe_display.h>
-#include <upipe-nacl/upipe_sound.h>
-#include <upipe-nacl/upipe_src_udp_chrome.h>
-#include <upipe-nacl/upipe_src_tcp_chrome.h>
+#include <upipe-nacl/upipe_nacl_graphic2d.h>
+#include <upipe-nacl/upipe_nacl_audio.h>
 #include <upipe-amt/upipe_amt_source.h>
 
 #include <ppapi/c/pp_errors.h>
@@ -239,6 +237,12 @@ struct upipe *upipe_src = NULL;
 struct upipe *video_sink = NULL;
 /* audio sink */
 struct upipe *audio_sink = NULL;
+
+struct thread_data {
+    PPB_MessageLoop* message_loop_interface;
+    PP_Resource loop;
+    int instance_id;
+};
 
 /* probe for video subpipe of demux */
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -611,18 +615,18 @@ int upipe_demo(int argc, char *argv[]) {
     PP_Resource image = ppb_imagedata_interface->Create(PSGetInstanceId(),
             PP_IMAGEDATAFORMAT_BGRA_PREMUL, &(g_Context.size), PP_FALSE);
 
-    /* upipe_display */
-    struct upipe_mgr *display_mgr = upipe_display_mgr_alloc();
-    video_sink = _upipe_display_alloc(display_mgr,
+    /* upipe_nacl_graphic2d */
+    struct upipe_mgr *nacl_graphic2d_mgr = upipe_nacl_graphic2d_mgr_alloc();
+    video_sink = _upipe_nacl_graphic2d_alloc(nacl_graphic2d_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
                             "display"), image, display_loop);
     assert(video_sink != NULL);
-    upipe_mgr_release(display_mgr);
+    upipe_mgr_release(nacl_graphic2d_mgr);
     upipe_attach_uclock(video_sink);
 
-    upipe_display_set_hposition(video_sink, 0);
-    upipe_display_set_vposition(video_sink, 0);
-    upipe_display_set_context(video_sink, g_Context);
+    upipe_nacl_graphic2d_set_hposition(video_sink, 0);
+    upipe_nacl_graphic2d_set_vposition(video_sink, 0);
+    upipe_nacl_graphic2d_set_context(video_sink, g_Context);
 
     PP_Resource sound_loop =
         ppb_message_loop_interface->Create(PSGetInstanceId());
@@ -634,11 +638,12 @@ int upipe_demo(int argc, char *argv[]) {
     pthread_t sound_thread;
     pthread_create(&sound_thread, NULL, &thread_main, sound_threadData);
 
-    /* upipe_sound */
-    struct upipe_mgr *sound_mgr = upipe_sound_mgr_alloc();
-    audio_sink = _upipe_sound_alloc(sound_mgr,
+    /* upipe_nacl_audio */
+    struct upipe_mgr *nacl_audio_mgr = upipe_nacl_audio_mgr_alloc();
+    audio_sink = _upipe_nacl_audio_alloc(nacl_audio_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_LEVEL,
                              "sound"), sound_loop);
+    upipe_mgr_release(nacl_audio_mgr);
 
     /* wait for an event asking to open a URI */
     printf("entering event loop\n");
