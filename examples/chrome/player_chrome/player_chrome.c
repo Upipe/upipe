@@ -53,7 +53,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uprobe_output.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uref_mgr.h>
@@ -79,7 +78,7 @@
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
-
+#include <upipe-filters/upipe_filter_format.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-swresample/upipe_swr.h>
 
@@ -94,7 +93,6 @@
 
 #include <upump-ev/upump_ev.h>
 
-#include <upipe-ebur128/ebur128.h>
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
@@ -257,7 +255,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     /* TODO: write a bin pipe with deint and sws */
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec video"));
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
@@ -272,7 +270,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     uref_pic_flow_set_vsize(uref, g_Context.size.height);
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     struct upipe *yuvrgb = upipe_flow_alloc_output(avcdec, upipe_sws_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "rgb"),
             uref);
     assert(yuvrgb != NULL);
@@ -282,7 +280,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "wlin video"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -293,7 +291,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp video"));
 
     upipe_set_output(avcdec, video_sink);
@@ -315,30 +313,31 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
 
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
+    upipe_mgr_release(swr_mgr);
+
     struct uref *uref = uref_sibling_alloc(flow_def);
-    uref_flow_set_def(uref, "sound.s16.");
-    uref_sound_flow_set_channels(uref, 2);
-    uref_sound_flow_set_sample_size(uref, 3);
-    uref_sound_flow_set_planes(uref, 0);
-    uref_sound_flow_add_plane(uref, "lr");
-    struct upipe_mgr *upipe_swr_mgr = upipe_swr_mgr_alloc();
-    struct upipe *swr = upipe_flow_alloc_output(avcdec, upipe_swr_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
-                             UPROBE_LOG_VERBOSE, "swr"),
+    uref_flow_set_def(uref, "sound.");
+
+    struct upipe *ffmt = upipe_flow_alloc_output(avcdec, ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
             uref);
-    assert(swr != NULL);
+    assert(ffmt != NULL);
     uref_free(uref);
-    upipe_mgr_release(upipe_swr_mgr);
-    upipe_release(swr);
+    upipe_mgr_release(ffmt_mgr);
+    upipe_release(ffmt);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "wlin audio"),
             avcdec,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -349,7 +348,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp audio"));
 
     upipe_set_output(avcdec, audio_sink);
@@ -403,7 +402,7 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
         struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
         assert(upipe_udpsrc_mgr != NULL);
         upipe_src = upipe_void_alloc(upipe_udpsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_src),
+                uprobe_pfx_alloc(uprobe_src,
                                  UPROBE_LOG_VERBOSE, "udpsrc"));
         upipe_mgr_release(upipe_udpsrc_mgr);
 
@@ -415,7 +414,7 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
         struct upipe_mgr *upipe_amtsrc_mgr = upipe_amtsrc_mgr_alloc(relay);
         assert(upipe_amtsrc_mgr != NULL);
         upipe_src = upipe_void_alloc(upipe_amtsrc_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_src),
+                uprobe_pfx_alloc(uprobe_src,
                                  UPROBE_LOG_VERBOSE, "amtsrc"));
         upipe_mgr_release(upipe_amtsrc_mgr);
 
@@ -428,7 +427,7 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
 
         struct upipe_mgr *rtpd_mgr = upipe_rtpd_mgr_alloc();
         struct upipe *rtpd = upipe_void_alloc_output(upipe_src, rtpd_mgr,
-                uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(uprobe_main)),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "rtpd"));
         assert(rtpd != NULL);
         upipe_release(rtpd);
@@ -449,7 +448,7 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
 
     /* deport to the source thread */
     upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
-            uprobe_pfx_alloc(uprobe_output_alloc(uprobe_use(&uprobe_src_s)),
+            uprobe_pfx_alloc(uprobe_use(&uprobe_src_s),
                              UPROBE_LOG_VERBOSE, "wsrc"),
             upipe_src,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -476,9 +475,9 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
                 uprobe_selflow_alloc(uprobe_use(uprobe_main),
                     uprobe_selflow_alloc(
                         uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
-                            uprobe_output_alloc(uprobe_use(&uprobe_video_s)),
+                            uprobe_use(&uprobe_video_s),
                             UPROBE_SELFLOW_PIC, "auto"),
-                        uprobe_output_alloc(uprobe_use(&uprobe_audio_s)),
+                        uprobe_use(&uprobe_audio_s),
                         UPROBE_SELFLOW_SOUND, "auto"),
                     UPROBE_SELFLOW_VOID, "auto"),
                 UPROBE_LOG_VERBOSE, "ts demux"));

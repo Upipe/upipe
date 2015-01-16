@@ -43,7 +43,6 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/uqueue.h>
@@ -219,6 +218,7 @@ static void upipe_sound_input(struct upipe *upipe, struct uref *uref,
     uint8_t nb_planes = 0;
     uint8_t nb_chan = 0;
     uint8_t sample_size;
+
     if(unlikely(!ubase_check(ubuf_sound_size(uref->ubuf, &nb_samples, NULL))))    {
         printf("error ubuf_sound_size\n");
         uref_free(uref);
@@ -263,7 +263,6 @@ static struct upipe* upipe_sound_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_sound_init_urefcount(upipe);
-    upipe_sound_init_ubuf_mgr(upipe);
     upipe_sound->var_interface = (PPB_Var*)PSGetInterface(PPB_VAR_INTERFACE);
     upipe_sound->message_loop_interface = (PPB_MessageLoop*)PSGetInterface(PPB_MESSAGELOOP_INTERFACE);
     upipe_sound->audio_config_interface = (PPB_AudioConfig*)PSGetInterface(PPB_AUDIO_CONFIG_INTERFACE);
@@ -315,6 +314,26 @@ static int upipe_sound_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
 }
 
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_sound_provide_flow_format(struct upipe *upipe,
+                                           struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    uref_sound_flow_clear_format(flow_format);
+    uref_flow_set_def(flow_format, "sound.s16.");
+    uref_sound_flow_set_channels(flow_format, 2);
+    uref_sound_flow_set_sample_size(flow_format, 4);
+    uref_sound_flow_set_planes(flow_format, 0);
+    uref_sound_flow_add_plane(flow_format, "lr");
+    return urequest_provide_flow_format(request, flow_format);
+}
+
 /** @internal @This processes control commands on the pipe.
  *
  * @param upipe description structure of the pipe
@@ -327,6 +346,8 @@ static int upipe_sound_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_sound_provide_flow_format(upipe, request);
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:
@@ -348,7 +369,6 @@ static void upipe_sound_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    upipe_sound_clean_ubuf_mgr(upipe);
     upipe_sound_clean_urefcount(upipe);
     upipe_sound_free_void(upipe);
 }

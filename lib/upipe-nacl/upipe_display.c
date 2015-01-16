@@ -53,7 +53,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_sink.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_av_pixfmt.h>
 
 #include <stdlib.h>
@@ -135,7 +135,7 @@ UPIPE_HELPER_UCLOCK(upipe_display, uclock, uclock_request, NULL, upipe_throw_pro
 
 UPIPE_HELPER_UPUMP_MGR(upipe_display, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_display, upump, upump_mgr);
-UPIPE_HELPER_SINK(upipe_display, urefs, nb_urefs, max_urefs, blockers, upipe_display_input_);
+UPIPE_HELPER_INPUT(upipe_display, urefs, nb_urefs, max_urefs, blockers, upipe_display_input_);
 
 #if GLES
     const float kFovY = 45.0f;
@@ -374,8 +374,8 @@ static void upipe_display_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     upipe_display_set_upump(upipe, NULL);
-    upipe_display_output_sink(upipe);
-    upipe_display_unblock_sink(upipe);
+    upipe_display_output_input(upipe);
+    upipe_display_unblock_input(upipe);
 }
 
 /** @internal @This render a picture.
@@ -465,10 +465,10 @@ void startCallBack_display(void* user_data, int32_t result) {
 static void upipe_display_input(struct upipe *upipe, struct uref *uref, 
                 struct upump **upump_p)
 {
-    if(!upipe_display_check_sink(upipe) || !upipe_display_input_(upipe, uref, upump_p))
+    if(!upipe_display_check_input(upipe) || !upipe_display_input_(upipe, uref, upump_p))
     {
-        upipe_display_hold_sink(upipe, uref);
-        upipe_display_block_sink(upipe, upump_p);
+        upipe_display_hold_input(upipe, uref);
+        upipe_display_block_input(upipe, upump_p);
     }
 }
 
@@ -542,7 +542,7 @@ static struct upipe* upipe_display_alloc(struct upipe_mgr *mgr,
     upipe_display->loop = va_arg(args, PP_Resource);
     upipe_display_init_upump_mgr(upipe);
     upipe_display_init_upump(upipe);
-    upipe_display_init_sink(upipe);
+    upipe_display_init_input(upipe);
     upipe_display_init_uclock(upipe);
     upipe_display->latency= 0;
     upipe_display->position_v = 0;
@@ -592,7 +592,7 @@ static void upipe_display_free(struct upipe *upipe)
     upipe_display_clean_urefcount(upipe);
     upipe_display_clean_upump_mgr(upipe);
     upipe_display_clean_upump(upipe);
-    upipe_display_clean_sink(upipe);
+    upipe_display_clean_input(upipe);
     upipe_display_clean_uclock(upipe);
 
     upipe_display_free_void(upipe);
