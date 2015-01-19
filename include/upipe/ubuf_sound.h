@@ -337,6 +337,35 @@ ubuf_sound_copy_err:
     return NULL;
 }
 
+
+/** @This interleaves planar formats to a user-allocated buffer.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset read offset in samples
+ * @param samples number of samples to interleave
+ * @param sample_size sample size
+ * @param planes number of planes to interleave
+ * @return an error code
+ */
+static inline int ubuf_sound_interleave(struct ubuf *ubuf, uint8_t *buf,
+                                        int offset, int samples,
+                                        uint8_t sample_size, uint8_t planes)
+{
+    int i, j, k;
+    const uint8_t *buffers_p[planes];
+    UBASE_RETURN(ubuf_sound_read_uint8_t(ubuf, offset, samples, buffers_p, planes));
+    UBASE_RETURN(ubuf_sound_unmap(ubuf, offset, samples, planes));
+    for (i=0; i < samples; i++) {
+        for (j=0; j < planes; j++) {
+            for (k=0; k < sample_size; k++) {
+                *buf++ = buffers_p[j][i * sample_size + k];
+            }
+        }
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @This copies part of a ubuf to a newly allocated ubuf, and replaces the
  * old ubuf with the new ubuf.
  *
