@@ -36,7 +36,6 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
-#include <ppapi/c/pp_resource.h>
 
 #define UPIPE_NACL_AUDIO_SIGNATURE UBASE_FOURCC('S','a','u','d')
 
@@ -45,11 +44,6 @@ extern "C" {
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_nacl_audio_mgr_alloc(void);
-
-static inline struct upipe *_upipe_nacl_audio_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe, PP_Resource loop)
-{
-    return upipe_alloc(mgr, uprobe, UPIPE_NACL_AUDIO_SIGNATURE, loop);
-}
 
 #ifdef __cplusplus
 }

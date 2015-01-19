@@ -37,6 +37,7 @@
 #include "upipe_av_internal.h"
 
 #include <stdbool.h>
+#include <ctype.h>
 
 /** structure to protect exclusive access to avcodec_open() */
 struct udeal upipe_av_deal;

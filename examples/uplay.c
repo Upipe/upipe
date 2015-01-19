@@ -65,7 +65,6 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_play.h>
 #include <upipe-modules/upipe_trickplay.h>
-#include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_worker_sink.h>
@@ -669,6 +668,7 @@ int main(int argc, char **argv)
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
     uprobe_clean(&uprobe_audio_s);
+    uprobe_clean(&uprobe_latency_s);
     uprobe_clean(&uprobe_glx_s);
 
     upipe_av_clean();

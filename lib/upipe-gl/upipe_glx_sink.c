@@ -65,10 +65,11 @@
 
 /** @hidden */
 static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
-                                     struct upump **upump_p);
+                                  struct upump **upump_p);
 /** @hidden */
 static void upipe_glx_sink_write_watcher(struct upump *upump);
 
+/** @internal upipe_glx_sink private structure */
 struct upipe_glx_sink {
     /** refcount management structure */
     struct urefcount urefcount;

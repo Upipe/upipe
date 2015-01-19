@@ -25,119 +25,64 @@
  */
 
 
-#undef NDEBUG
-#include "GLES2/gl2.h"
-
 #include <upipe/ubase.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_mem.h>
 #include <upipe/uclock.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
+#include <upipe/uclock_std.h>
 #include <upipe/umem.h>
 #include <upipe/umem_pool.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
+#include <upipe/uref.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_source_read_size.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/uprobe.h>
 #include <upipe/uprobe_dejitter.h>
-#include <upipe/uprobe_ubuf_mem.h>
+#include <upipe/uprobe_ubuf_mem_pool.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_uclock.h>
-#include <upipe/upump.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_std.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
 #include <upipe/uprobe_transfer.h>
+#include <upipe/uprobe.h>
+#include <upipe/upump.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
-
-#include <upipe-av/upipe_av.h>
-#include <upipe-av/upipe_avcodec_decode.h>
-#include <upipe-av/upipe_avcodec_encode.h>
-#include <upipe-filters/upipe_filter_format.h>
-#include <upipe-swscale/upipe_sws.h>
-#include <upipe-swresample/upipe_swr.h>
-
-#include <upipe-nacl/upipe_filter_ebur128.h>
-
-#include <upipe-ts/upipe_ts_demux.h>
-
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_a52_framer.h>
-
-#include <upump-ev/upump_ev.h>
-
-#include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_rtp_decaps.h>
 #include <upipe-modules/upipe_http_source.h>
-#include <upipe-modules/upipe_queue_sink.h>
-#include <upipe-modules/upipe_queue_source.h>
-#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_null.h>
-#include <upipe-modules/upipe_transfer.h>
+#include <upipe-modules/upipe_play.h>
+#include <upipe-modules/upipe_trickplay.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_worker_sink.h>
-#include <upipe-modules/upipe_trickplay.h>
-#include <upipe-nacl/upipe_nacl_graphic2d.h>
-#include <upipe-nacl/upipe_nacl_audio.h>
+#include <upipe-ts/upipe_ts_demux.h>
+#include <upipe-framers/upipe_mpgv_framer.h>
+#include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_mpga_framer.h>
+#include <upipe-framers/upipe_a52_framer.h>
+#include <upipe-filters/upipe_filter_decode.h>
+#include <upipe-filters/upipe_filter_format.h>
+#include <upipe-av/upipe_av.h>
+#include <upipe-av/upipe_avcodec_decode.h>
+#include <upipe-swscale/upipe_sws.h>
+#include <upipe-swresample/upipe_swr.h>
 #include <upipe-amt/upipe_amt_source.h>
 
-#include <ppapi/c/pp_errors.h>
-#include <ppapi/c/pp_module.h>
+#include <upipe-nacl/upipe_nacl_graphic2d.h>
+#include <upipe-nacl/upipe_nacl_audio.h>
+
 #include <ppapi/c/pp_resource.h>
 #include <ppapi/c/pp_var.h>
-#include <ppapi/c/ppp.h>
-#include <ppapi/c/ppp_instance.h>
-#include <ppapi/c/ppp_messaging.h>
-#include <ppapi/c/ppb.h>
-#include <ppapi/c/ppb_audio.h>
-#include <ppapi/c/ppb_audio_config.h>
-#include <ppapi/c/ppb_core.h>
-#include <ppapi/c/ppb_fullscreen.h>
-#include <ppapi/c/ppb_graphics_2d.h>
-#include <ppapi/c/ppb_graphics_3d.h>
-#include <ppapi/c/ppb_image_data.h>
-#include <ppapi/c/ppb_input_event.h>
-#include <ppapi/c/ppb_instance.h>
 #include <ppapi/c/ppb_message_loop.h>
 #include <ppapi/c/ppb_messaging.h>
-#include <ppapi/c/ppb_net_address.h>
-#include <ppapi/c/ppb_opengles2.h>
-#include <ppapi/c/ppb_tcp_socket.h>
-#include <ppapi/c/ppb_udp_socket.h>
 #include <ppapi/c/ppb_var.h>
 #include <ppapi/c/ppb_var_dictionary.h>
 #include <ppapi/c/ppb_view.h>
-#include <ppapi/c/ppb_websocket.h>
 #include <ppapi_simple/ps_event.h>
 #include <ppapi_simple/ps_main.h>
 
@@ -160,6 +105,7 @@
 #include <time.h>
 #include <netinet/in.h>
 
+#define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
 #define UREF_POOL_DEPTH         500
@@ -170,42 +116,18 @@
 #define DEJITTER_DIVIDER        100
 #define XFER_QUEUE              255
 #define XFER_POOL               20
-#define FSRC_OUT_QUEUE_LENGTH   5
 #define SRC_OUT_QUEUE_LENGTH    10000
-#define DEC_IN_QUEUE_LENGTH     5
+#define DEC_IN_QUEUE_LENGTH     50
 #define DEC_OUT_QUEUE_LENGTH    2
-#define SOUND_QUEUE_LENGTH      10
-#define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
 
-#ifndef GLES
-    #define GLES false
-#endif
-#define SWS_RGB !GLES
-
-struct Context g_Context;
-void UpdateContext(uint32_t width, uint32_t height);
-void ProcessEvent(PSEvent* event);
-void *thread_main(void* user_data);
+static void ProcessEvent(PSEvent *event);
 
 /* PPAPI Interfaces */
-PPB_Core* ppb_core_interface= NULL;
-PPB_Instance* ppb_instance_interface = NULL;
-PPB_Var* ppb_var_interface = NULL;
-PPB_Messaging* ppb_messaging_interface = NULL;
-PPB_InputEvent* ppb_input_event_interface = NULL;
-PPB_MessageLoop* ppb_message_loop_interface = NULL;
-PPB_Graphics2D* ppb_graphic2d_interface =NULL;
-PPB_Graphics3D* ppb_graphic3d_interface =NULL;
-PPB_ImageData* ppb_imagedata_interface = NULL;
-PPB_View* ppb_view_interface = NULL;
-PPB_AudioConfig* ppb_audio_config_interface = NULL;
-PPB_Audio* ppb_audio_interface = NULL;
-PPB_NetAddress* ppb_net_address_interface = NULL;
-PPB_UDPSocket* ppb_udp_socket_interface = NULL;
-PPB_TCPSocket* ppb_tcp_socket_interface = NULL;
-PPB_WebSocket* ppb_web_socket_interface = NULL;
-struct PPB_OpenGLES2* ppb_open_gles2_interface = NULL;
-PPB_VarDictionary* ppb_var_dictionary_interface = NULL;
+PPB_Var *ppb_var_interface = NULL;
+PPB_Messaging *ppb_messaging_interface = NULL;
+PPB_MessageLoop *ppb_message_loop_interface = NULL;
+PPB_View *ppb_view_interface = NULL;
+PPB_VarDictionary *ppb_var_dictionary_interface = NULL;
 
 /* main event loop */
 static struct ev_loop *loop;
@@ -222,13 +144,15 @@ struct uprobe uprobe_video_s;
 /* probe for demux audio subpipe */
 struct uprobe uprobe_audio_s;
 /* probe for glx sink */
-struct uprobe uprobe_glx_s;
+struct uprobe uprobe_latency_s;
 /* source thread */
 struct upipe_mgr *upipe_wsrc_mgr = NULL;
 /* decoder thread */
 struct upipe_mgr *upipe_wlin_mgr = NULL;
 /* sink thread */
 struct upipe_mgr *upipe_wsink_mgr = NULL;
+/* play */
+static struct upipe *play = NULL;
 /* trick play */
 struct upipe *trickp = NULL;
 /* source pipe */
@@ -237,12 +161,27 @@ struct upipe *upipe_src = NULL;
 struct upipe *video_sink = NULL;
 /* audio sink */
 struct upipe *audio_sink = NULL;
+/* max sink latency */
+static uint64_t sink_latency = 0;
+/** true if we got the DidChangeView event */
+static bool inited = false;
 
-struct thread_data {
-    PPB_MessageLoop* message_loop_interface;
-    PP_Resource loop;
-    int instance_id;
-};
+/* probe for sinks */
+static int catch_latency(struct uprobe *uprobe, struct upipe *upipe,
+                         int event, va_list args)
+{
+    if (event != UPROBE_SINK_LATENCY)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    uint64_t latency = va_arg(args, uint64_t);
+    if (latency > sink_latency) {
+        upipe_notice_va(upipe, "setting output latency to %"PRIu64" ms",
+                        latency * 1000 / UCLOCK_FREQ);
+        sink_latency = latency;
+        upipe_play_set_output_latency(play, sink_latency);
+    }
+    return UBASE_ERR_NONE;
+}
 
 /* probe for video subpipe of demux */
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -256,31 +195,33 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     if (upipe_wlin_mgr == NULL) /* we're dying */
         return UBASE_ERR_UNHANDLED;
 
-    /* TODO: write a bin pipe with deint and sws */
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "avcdec video"));
+    struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+    upipe_mgr_release(avcdec_mgr);
+    struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
+        uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
+                            UPROBE_LOG_VERBOSE, "avcdec video"));
     assert(avcdec != NULL);
-    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
+
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();
+    upipe_ffmt_mgr_set_sws_mgr(ffmt_mgr, sws_mgr);
+    upipe_mgr_release(sws_mgr);
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
-    uref_pic_flow_set_macropixel(uref, 1);
-    uref_pic_flow_set_planes(uref, 0);
-    uref_pic_flow_add_plane(uref, 1, 1, 3, "r8g8b8");
-    uref_pic_flow_set_hsize(uref, g_Context.size.width);
-    uref_pic_flow_set_vsize(uref, g_Context.size.height);
-    struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
-    struct upipe *yuvrgb = upipe_flow_alloc_output(avcdec, upipe_sws_mgr,
+
+    struct upipe *ffmt = upipe_flow_alloc_output(avcdec, ffmt_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "rgb"),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
             uref);
-    assert(yuvrgb != NULL);
+    assert(ffmt != NULL);
     uref_free(uref);
-    upipe_mgr_release(upipe_sws_mgr);
-    upipe_release(yuvrgb);
+    upipe_mgr_release(ffmt_mgr);
+    upipe_release(ffmt);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
@@ -297,6 +238,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp video"));
+
+    avcdec = upipe_void_chain_output_sub(avcdec, play,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "play video"));
 
     upipe_set_output(avcdec, video_sink);
     upipe_release(avcdec);
@@ -354,6 +299,10 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp audio"));
+
+    avcdec = upipe_void_chain_output_sub(avcdec, play,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "play audio"));
 
     upipe_set_output(avcdec, audio_sink);
     upipe_release(avcdec);
@@ -450,6 +399,13 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
         upipe_attach_uclock(trickp);
     }
 
+    struct upipe_mgr *upipe_play_mgr = upipe_play_mgr_alloc();
+    play = upipe_void_alloc(upipe_play_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "play"));
+    assert(play != NULL);
+    upipe_mgr_release(upipe_play_mgr);
+
     /* deport to the source thread */
     upipe_src = upipe_wsrc_alloc(upipe_wsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(&uprobe_src_s),
@@ -518,23 +474,10 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 int upipe_demo(int argc, char *argv[]) {
     printf("example_main running\n");
     /* PPAPI Interfaces */
-    ppb_core_interface = (PPB_Core*)PSGetInterface(PPB_CORE_INTERFACE);
-    ppb_graphic2d_interface = (PPB_Graphics2D*)PSGetInterface(PPB_GRAPHICS_2D_INTERFACE);
-    ppb_graphic3d_interface = (PPB_Graphics3D*)PSGetInterface(PPB_GRAPHICS_3D_INTERFACE);
-    ppb_instance_interface = (PPB_Instance*)PSGetInterface(PPB_INSTANCE_INTERFACE);
-    ppb_imagedata_interface = (PPB_ImageData*)PSGetInterface(PPB_IMAGEDATA_INTERFACE);
     ppb_view_interface = (PPB_View*)PSGetInterface(PPB_VIEW_INTERFACE);
     ppb_var_interface = (PPB_Var*)PSGetInterface(PPB_VAR_INTERFACE);
-    ppb_input_event_interface = (PPB_InputEvent*) PSGetInterface(PPB_INPUT_EVENT_INTERFACE);
     ppb_message_loop_interface = (PPB_MessageLoop*)PSGetInterface(PPB_MESSAGELOOP_INTERFACE);
     ppb_messaging_interface = (PPB_Messaging*)PSGetInterface(PPB_MESSAGING_INTERFACE);
-    ppb_udp_socket_interface = (PPB_UDPSocket*)PSGetInterface(PPB_UDPSOCKET_INTERFACE);
-    ppb_tcp_socket_interface = (PPB_TCPSocket*)PSGetInterface(PPB_TCPSOCKET_INTERFACE);
-    ppb_web_socket_interface = (PPB_WebSocket*)PSGetInterface(PPB_WEBSOCKET_INTERFACE);
-    ppb_net_address_interface = (PPB_NetAddress*)PSGetInterface(PPB_NETADDRESS_INTERFACE);
-    ppb_audio_config_interface = (PPB_AudioConfig*)PSGetInterface(PPB_AUDIO_CONFIG_INTERFACE);
-    ppb_audio_interface = (PPB_Audio*)PSGetInterface(PPB_AUDIO_INTERFACE);
-    ppb_open_gles2_interface = (struct PPB_OpenGLES2*)PSGetInterface(PPB_OPENGLES2_INTERFACE);
     ppb_var_dictionary_interface = (PPB_VarDictionary*)PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
 
     /* upipe env */
@@ -553,8 +496,8 @@ int upipe_demo(int argc, char *argv[]) {
     uprobe_main = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_LEVEL);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
-    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, umem_mgr, UBUF_POOL_DEPTH,
-                                        UBUF_POOL_DEPTH);
+    uprobe_main = uprobe_ubuf_mem_pool_alloc(uprobe_main, umem_mgr,
+                                             UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
     uprobe_main = uprobe_pthread_upump_mgr_alloc(uprobe_main);
     uref_mgr_release(uref_mgr);
     uclock_release(uclock);
@@ -567,6 +510,7 @@ int upipe_demo(int argc, char *argv[]) {
     uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
     uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
     uprobe_init(&uprobe_audio_s, catch_audio, uprobe_use(uprobe_dejitter));
+    uprobe_init(&uprobe_latency_s, catch_latency, uprobe_use(uprobe_main));
 
     /* upipe-av */
     if (unlikely(!upipe_av_init(false,
@@ -593,62 +537,28 @@ int upipe_demo(int argc, char *argv[]) {
     assert(upipe_wlin_mgr != NULL);
     upipe_mgr_release(dec_xfer_mgr);
 
-    PSEventSetFilter(PSE_ALL);
-    while (!g_Context.bound) {
-        PSEvent* event;
-        while ((event = PSEventTryAcquire()) != NULL) {
-            ProcessEvent(event);
-            PSEventRelease(event);
-        }
-    }
-
-    PP_Resource display_loop =
-        ppb_message_loop_interface->Create(PSGetInstanceId());
-
-    struct thread_data *display_threadData = malloc(sizeof(struct thread_data));
-    display_threadData->loop = display_loop;
-    display_threadData->message_loop_interface = ppb_message_loop_interface;
-    display_threadData->instance_id = PSGetInstanceId();
-    pthread_t display_thread;
-    pthread_create(&display_thread, NULL, &thread_main, display_threadData);
-
-    PP_Resource image = ppb_imagedata_interface->Create(PSGetInstanceId(),
-            PP_IMAGEDATAFORMAT_BGRA_PREMUL, &(g_Context.size), PP_FALSE);
-
     /* upipe_nacl_graphic2d */
     struct upipe_mgr *nacl_graphic2d_mgr = upipe_nacl_graphic2d_mgr_alloc();
-    video_sink = _upipe_nacl_graphic2d_alloc(nacl_graphic2d_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
-                            "display"), image, display_loop);
+    video_sink = upipe_void_alloc(nacl_graphic2d_mgr,
+            uprobe_pfx_alloc(uprobe_use(&uprobe_latency_s), UPROBE_LOG_VERBOSE,
+                            "nacl graphic2d"));
     assert(video_sink != NULL);
     upipe_mgr_release(nacl_graphic2d_mgr);
     upipe_attach_uclock(video_sink);
 
-    upipe_nacl_graphic2d_set_hposition(video_sink, 0);
-    upipe_nacl_graphic2d_set_vposition(video_sink, 0);
-    upipe_nacl_graphic2d_set_context(video_sink, g_Context);
-
-    PP_Resource sound_loop =
-        ppb_message_loop_interface->Create(PSGetInstanceId());
-
-    struct thread_data *sound_threadData = malloc(sizeof(struct thread_data));
-    sound_threadData->loop = sound_loop;
-    sound_threadData->message_loop_interface = ppb_message_loop_interface;
-    sound_threadData->instance_id = PSGetInstanceId();
-    pthread_t sound_thread;
-    pthread_create(&sound_thread, NULL, &thread_main, sound_threadData);
-
     /* upipe_nacl_audio */
     struct upipe_mgr *nacl_audio_mgr = upipe_nacl_audio_mgr_alloc();
-    audio_sink = _upipe_nacl_audio_alloc(nacl_audio_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_LEVEL,
-                             "sound"), sound_loop);
+    audio_sink = upipe_void_alloc(nacl_audio_mgr,
+            uprobe_pfx_alloc(uprobe_use(&uprobe_latency_s), UPROBE_LOG_VERBOSE,
+                             "nacl audio"));
     upipe_mgr_release(nacl_audio_mgr);
+    upipe_attach_uclock(audio_sink);
 
     /* wait for an event asking to open a URI */
     printf("entering event loop\n");
 
-    while (!g_Context.quit) {
+    PSEventSetFilter(PSE_ALL);
+    for ( ; ; ) {
         PSEvent* event;
         while ((event = PSEventWaitAcquire()) != NULL) {
             ProcessEvent(event);
@@ -662,66 +572,15 @@ int upipe_demo(int argc, char *argv[]) {
     uprobe_release(uprobe_dejitter);
     uprobe_release(uprobe_main);
 
-    ppb_message_loop_interface->PostQuit(display_loop, PP_FALSE);
-    ppb_core_interface->ReleaseResource(display_loop);
-    ppb_message_loop_interface->PostQuit(sound_loop, PP_FALSE);
-    ppb_core_interface->ReleaseResource(sound_loop);
-    ppb_core_interface->ReleaseResource(image);
+    uprobe_clean(&uprobe_src_s);
+    uprobe_clean(&uprobe_video_s);
+    uprobe_clean(&uprobe_audio_s);
+    uprobe_clean(&uprobe_latency_s);
+
+    upipe_av_clean();
+
     ev_default_destroy();
     return 0;
-}
-
-void UpdateContext(uint32_t width, uint32_t height) {
-    printf("UpdateContext\n");
-    if (width != g_Context.size.width || height != g_Context.size.height) {
-        size_t size = width * height;
-        size_t index;
-
-        free(g_Context.cell_in);
-        free(g_Context.cell_out);
-        /* Create a new context */
-        g_Context.cell_in = (uint8_t*) malloc(size);
-        g_Context.cell_out = (uint8_t*) malloc(size);
-
-        memset(g_Context.cell_out, 0, size);
-        for (index = 0; index < size; index++) {
-            g_Context.cell_in[index] = rand() & 1;
-        }
-    }
-
-    /* Recreate the graphics context on a view change */
-    ppb_core_interface->ReleaseResource(g_Context.ctx);
-    g_Context.size.width = width;
-    g_Context.size.height = height;
-    #if GLES
-    /*
-    const int32_t attributes[] = {
-    PP_GRAPHICS3DATTRIB_ALPHA_SIZE, 0,
-    PP_GRAPHICS3DATTRIB_BLUE_SIZE, 8,
-    PP_GRAPHICS3DATTRIB_GREEN_SIZE, 8,
-    PP_GRAPHICS3DATTRIB_RED_SIZE, 8,
-    PP_GRAPHICS3DATTRIB_DEPTH_SIZE, 24,
-    PP_GRAPHICS3DATTRIB_STENCIL_SIZE, 0,
-    PP_GRAPHICS3DATTRIB_SAMPLES, 0,
-    PP_GRAPHICS3DATTRIB_SAMPLE_BUFFERS, 0,
-    PP_GRAPHICS3DATTRIB_WIDTH, width,
-    PP_GRAPHICS3DATTRIB_HEIGHT, height,
-    PP_GRAPHICS3DATTRIB_NONE,
-    };
-    */
-    const int32_t attributes[] = {
-      PP_GRAPHICS3DATTRIB_ALPHA_SIZE, 8,
-      PP_GRAPHICS3DATTRIB_DEPTH_SIZE, 24,
-      PP_GRAPHICS3DATTRIB_WIDTH, width,
-      PP_GRAPHICS3DATTRIB_HEIGHT, height,
-      PP_GRAPHICS3DATTRIB_NONE
-    };
-
-    g_Context.ctx = ppb_graphic3d_interface->Create(PSGetInstanceId(), 0, attributes);
-    #else
-    g_Context.ctx = ppb_graphic2d_interface->Create(PSGetInstanceId(), &g_Context.size, PP_TRUE);
-    #endif
-    g_Context.bound = ppb_instance_interface->BindGraphics(PSGetInstanceId(), g_Context.ctx);
 }
 
 /**
@@ -729,7 +588,7 @@ void UpdateContext(uint32_t width, uint32_t height) {
  * @param[in] str The string to convert.
  * @return A new PP_Var with the contents of |str|.
  */
-struct PP_Var CStrToVar(const char* str) {
+static struct PP_Var CStrToVar(const char* str) {
   if (ppb_var_interface != NULL) {
     return ppb_var_interface->VarFromUtf8(str, strlen(str));
   }
@@ -743,7 +602,7 @@ struct PP_Var CStrToVar(const char* str) {
  * @param[in] length The length of |buffer|.
  * @return The number of characters written.
  */
-uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length) {
+static uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length) {
   if (ppb_var_interface != NULL) {
     uint32_t var_length;
     const char* str = ppb_var_interface->VarToUtf8(var, &var_length);
@@ -758,13 +617,17 @@ uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length) {
   return 0;
 }
 
-void ProcessEvent(PSEvent* event) {
+static void ProcessEvent(PSEvent *event) {
     switch(event->type) {
         /* If the view updates, build a new Graphics 2D Context */
         case PSE_INSTANCE_DIDCHANGEVIEW: {
+            printf("UpdateContext\n");
             struct PP_Rect rect;
             ppb_view_interface->GetRect(event->as_resource, &rect);
-            UpdateContext(rect.size.width, rect.size.height);
+            char option[256];
+            sprintf(option, "%ux%u", rect.size.width, rect.size.height);
+            upipe_set_option(video_sink, "size", option);
+            inited = true;
             break;
         }
         case PSE_INSTANCE_HANDLEMESSAGE: {
@@ -787,7 +650,11 @@ void ProcessEvent(PSEvent* event) {
                     char mode_string[256];
                     VarToCStr(mode, mode_string, sizeof(mode_string));
 
-                    int err = demo_start(value_string, relay_string, mode_string);
+                    int err;
+                    if (!inited)
+                        err = UBASE_ERR_EXTERNAL;
+                    else
+                        err = demo_start(value_string, relay_string, mode_string);
                     if (!ubase_check(err)) {
                         /* send error message */
                         char error[256];
@@ -806,11 +673,4 @@ void ProcessEvent(PSEvent* event) {
     }
 } 
 
-/*Attach & run a message loop in a thread*/
-void* thread_main(void* user_data) {
-    struct thread_data* data = (struct thread_data*)(user_data);
-    data->message_loop_interface->AttachToCurrentThread(data->loop);
-    data->message_loop_interface->Run(data->loop);
-    return NULL;
-}
 PPAPI_SIMPLE_REGISTER_MAIN(upipe_demo);

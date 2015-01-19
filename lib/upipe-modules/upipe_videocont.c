@@ -424,7 +424,7 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
                                          struct uref *out_flow,
                                          struct uref *in_flow)
 {
-    size_t hsize, vsize;
+    uint64_t hsize, vsize;
     struct urational sar;
     uref_pic_flow_clear_format(out_flow);
     uref_pic_flow_copy_format(out_flow, in_flow);

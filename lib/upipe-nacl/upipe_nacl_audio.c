@@ -29,31 +29,17 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe/ubuf_sound_common.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_clock.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref.h>
 #include <upipe/uref_sound.h>
-#include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/uqueue.h>
-#include <upipe-av/upipe_av_pixfmt.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe-nacl/upipe_nacl_audio.h>
 
 #include <stdlib.h>
@@ -64,195 +50,254 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
-#include <time.h>
 
-#include <ppapi/c/pp_errors.h>
-#include <ppapi/c/pp_module.h>
 #include <ppapi/c/pp_resource.h>
-#include <ppapi/c/pp_var.h>
-#include <ppapi/c/ppp.h>
-#include <ppapi/c/ppp_instance.h>
-#include <ppapi/c/ppp_messaging.h>
-#include <ppapi/c/ppb.h>
+#include <ppapi/c/pp_time.h>
 #include <ppapi/c/ppb_audio.h>
 #include <ppapi/c/ppb_audio_config.h>
 #include <ppapi/c/ppb_core.h>
-#include <ppapi/c/ppb_fullscreen.h>
-#include <ppapi/c/ppb_graphics_2d.h>
-#include <ppapi/c/ppb_image_data.h>
-#include <ppapi/c/ppb_input_event.h>
-#include <ppapi/c/ppb_instance.h>
-#include <ppapi/c/ppb_message_loop.h>
-#include <ppapi/c/ppb_messaging.h>
-#include <ppapi/c/ppb_net_address.h>
-#include <ppapi/c/ppb_udp_socket.h>
-#include <ppapi/c/ppb_var.h>
-#include <ppapi/c/ppb_view.h>
-#include <ppapi_simple/ps_event.h>
-#include <ppapi_simple/ps_main.h>
 #include <ppapi_simple/ps.h>
-#include <nacl_io/nacl_io.h>
 
-#define UQUEUE_SIZE 255
-#define COUNT 512
+/** maximum length of the internal uqueue */
+#define MAX_QUEUE_LENGTH 255
+/** tolerance on PTSs (plus or minus) */
+#define PTS_TOLERANCE (UCLOCK_FREQ / 25)
+/** we expect s16 sound */
+#define EXPECTED_FLOW_DEF "sound.s16."
+/** we only accept 48 kHz */
+#define SAMPLE_RATE 48000
+/** we ask NaCl to output this number of samples each tick */
+#define NB_SAMPLES 1024
 
-struct buffer_temp {
-    int16_t* buffer;
-    int size;
-};
-
-struct audio_data {
-    int count;
-    int nb_samples;
-    struct uref *flow_def;
-    struct uqueue* bufferAudio;
-    struct buffer_temp* bufferTemp;
-};
-
-struct start_data {
-    PP_Resource loop;
-    PPB_Audio* audio_interface;
-    PP_Resource pp_audio;
-};
+/** @hidden */
+static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
+                                    PP_TimeDelta latency, void *user_data);
 
 /** @internal upipe_nacl_audio private structure */
 struct upipe_nacl_audio {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** output flow */
-    struct uref *flow_def;
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
+    /** delay applied to system clock ref when uclock is provided */
+    uint64_t latency;
+    /** buffered uref (accessed from a different thread) */
+    struct uref *uref;
+    /** queue of urefs to play */
+    struct uqueue uqueue;
+    /** number of samples per chunk */
+    uint32_t nb_samples;
+    /** pointer to NaCl core interface */
+    PPB_Core *core_interface;
+    /** pointer to NaCl audio interface */
+    PPB_Audio *audio_interface;
+    /** handle to NaCl audio config resource */
+    PP_Resource audio_config;
+    /** handle to NaCl audio resource */
+    PP_Resource audio;
+    /** true if the playback was started */
+    bool started;
 
     /** public upipe structure */
     struct upipe upipe;
 
-    /** PPAPI Interfaces + PP_Resources*/
-    PPB_Var* var_interface;
-    PPB_MessageLoop* message_loop_interface;
-    PPB_Audio* audio_interface;
-    PPB_AudioConfig* audio_config_interface;
-    PP_Resource loop;
-    PP_Resource audio_config;
-    PP_Resource audio;
-    
-    /** */
-    struct start_data startData;
-    struct audio_data audioData;
-    bool started;
-    struct uqueue bufferAudio;
     /** extra data for the queue structure */
-    uint8_t extra[];
+    uint8_t uqueue_extra[];
 };
 
 UPIPE_HELPER_UPIPE(upipe_nacl_audio, upipe, UPIPE_NACL_AUDIO_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_nacl_audio, urefcount, upipe_nacl_audio_free);
-UPIPE_HELPER_VOID(upipe_nacl_audio);
+UPIPE_HELPER_UCLOCK(upipe_nacl_audio, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL);
 
-void startCallBack(void* user_data, int32_t result) {
-    struct start_data* data = (struct start_data*)(user_data); 
-    data->audio_interface->StartPlayback(data->pp_audio);
+/** @internal @This allocates an nacl audio pipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
+ * @return pointer to upipe or NULL in case of allocation error
+ */
+static struct upipe *upipe_nacl_audio_alloc(struct upipe_mgr *mgr,
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
+{
+    if (signature != UPIPE_VOID_SIGNATURE)
+        return NULL;
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        malloc(sizeof(struct upipe_nacl_audio) +
+               uqueue_sizeof(MAX_QUEUE_LENGTH));
+    if (unlikely(upipe_nacl_audio == NULL))
+        return NULL;
+
+    if(unlikely(!uqueue_init(&upipe_nacl_audio->uqueue, MAX_QUEUE_LENGTH,
+                             upipe_nacl_audio->uqueue_extra))) {
+        free(upipe_nacl_audio);
+        return NULL;
+    }
+
+    struct upipe *upipe = upipe_nacl_audio_to_upipe(upipe_nacl_audio);
+    upipe_init(upipe, mgr, uprobe);
+
+    upipe_nacl_audio_init_urefcount(upipe);
+    upipe_nacl_audio_init_uclock(upipe);
+    upipe_nacl_audio->started = false;
+
+    PPB_AudioConfig *audio_config_interface =
+        (PPB_AudioConfig *)PSGetInterface(PPB_AUDIO_CONFIG_INTERFACE);
+    upipe_nacl_audio->nb_samples =
+        audio_config_interface->RecommendSampleFrameCount(PSGetInstanceId(),
+                SAMPLE_RATE, NB_SAMPLES);
+    upipe_nacl_audio->audio_config =
+        audio_config_interface->CreateStereo16Bit(PSGetInstanceId(),
+                SAMPLE_RATE, upipe_nacl_audio->nb_samples);
+
+    upipe_nacl_audio->core_interface =
+        (PPB_Core *)PSGetInterface(PPB_CORE_INTERFACE);
+    upipe_nacl_audio->audio_interface =
+        (PPB_Audio *)PSGetInterface(PPB_AUDIO_INTERFACE);
+    upipe_nacl_audio->audio =
+        upipe_nacl_audio->audio_interface->Create(PSGetInstanceId(),
+                                upipe_nacl_audio->audio_config,
+                                upipe_nacl_audio_worker, upipe);
+
+    upipe_throw_ready(upipe);
+    return upipe;
 }
 
-/** @internal @This fill the sound buffer.*/
-void AudioCallback(void* sample_buffer,uint32_t buffer_size, PP_TimeDelta latency, void* user_data) {
-    struct audio_data* audioData = (struct audio_data*)(user_data);
-    int16_t* buff = (int16_t*)(sample_buffer);
-    uint8_t nb_chan; 
-    uint8_t nb_planes;
-    int i=0;
-    int j=0;    
-    uref_sound_flow_get_planes(audioData->flow_def, &nb_planes);
-    uref_sound_flow_get_channels(audioData->flow_def, &nb_chan);
-    const char** chan = malloc(nb_chan*sizeof(char*));
-    if(audioData->bufferTemp->size > audioData->count*nb_chan/nb_planes)
-    {
-        for(i=0;i < audioData->count * nb_chan;i=i+nb_planes)
-        {
-            for(j=0;j<nb_planes;j++)
-            {
-                buff[i+j]=audioData->bufferTemp->buffer[(int)(i/nb_planes)+j*audioData->nb_samples];
-            }
-        }
-        for(j=0;j<nb_planes;j++)
-        {
-            for(i=0; i < audioData->bufferTemp->size - audioData->count*nb_chan/nb_planes; i++)
-            {
-                audioData->bufferTemp->buffer[i+j*audioData->nb_samples] = audioData->bufferTemp->buffer[i+j*audioData->nb_samples+audioData->count*nb_chan/nb_planes];
-            }
-        }
-        audioData->bufferTemp->size -= audioData->count*nb_chan/nb_planes;
-    }
-    else if(unlikely(uqueue_length(audioData->bufferAudio) == 0))
-    {
-        for(i=0;i < audioData->count * nb_chan;i+=nb_chan)
-        {
-            for(j=0;j<nb_chan;j++)
-            {
-                buff[i+j]=0;
-            }
-        }
-    }
-    else
-    {
-        /*uref*/
-        const int16_t** buff2 = malloc(nb_planes*sizeof(int16_t*));
-        struct uref* uref = uqueue_pop(audioData->bufferAudio,struct uref*);
-        for(i = 0; i< nb_planes; i++)
-        {
-            uref_sound_flow_get_channel(audioData->flow_def, &chan[i], i);
-            ubuf_sound_plane_read_int16_t(uref->ubuf,chan[i], 0, -1, &(buff2[i]));
-            ubuf_sound_unmap(uref->ubuf,0,-1,1);
-        }
-        if(nb_chan == nb_planes) {
-            /*reading bufftemp*/
-            for(i=0;i<nb_chan*audioData->bufferTemp->size;i+=nb_chan)
-            {    
-                for(j=0;j<nb_chan;j++)
-                {
-                    buff[i+j]=audioData->bufferTemp->buffer[(int)(i/nb_chan)+j*audioData->nb_samples ];
-                }
-            }
-            /*reading beginning of uref*/
-            for(i=nb_chan*audioData->bufferTemp->size;i < audioData->count * nb_chan;i=i+nb_chan)
-            {
-                for(j=0;j<nb_chan;j++)
-                {
-                    buff[i+j]=buff2[j][(int)((i/nb_chan)-audioData->bufferTemp->size)];
-                }
-            }
-            /*saving end of uref in bufftemp*/
-            for(j=0;j<nb_chan;j++)
-            {
-                for(i=0; i < audioData->nb_samples - audioData->count + audioData->bufferTemp->size; i++)
-                {
-                    audioData->bufferTemp->buffer[i+j*audioData->nb_samples] = buff2[j][i+audioData->count - audioData->bufferTemp->size];
-                }
-            }
-            audioData->bufferTemp->size = audioData->nb_samples - audioData->count + audioData->bufferTemp->size;
-        }
-        else {
-            /*reading bufftemp*/
-            for(i=0;i<audioData->bufferTemp->size;i++)
-            {    
-                buff[i]=audioData->bufferTemp->buffer[i];
-            }
-            /*reading beginning of uref*/
-            for(i=audioData->bufferTemp->size;i < audioData->count * nb_chan; i++)
-            {
-                buff[i]=buff2[0][i-audioData->bufferTemp->size];
-            }
-            /*saving end of uref in bufftemp*/
-            for(i=0; i < audioData->nb_samples - audioData->count * nb_chan + audioData->bufferTemp->size; i++)
-            {
-                audioData->bufferTemp->buffer[i] = buff2[0][i+audioData->count * nb_chan - audioData->bufferTemp->size];
-            }
-            audioData->bufferTemp->size = audioData->nb_samples - audioData->count * nb_chan + audioData->bufferTemp->size;
-        }
-        free(chan);
+/** @internal @This is called to consume frames out of the first buffered uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param frames number of frames to consume
+ */
+static void upipe_nacl_audio_consume(struct upipe *upipe, uint32_t frames)
+{
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    struct uref *uref = upipe_nacl_audio->uref;
+    assert(uref != NULL);
+
+    size_t uref_size;
+    if (ubase_check(uref_sound_size(uref, &uref_size, NULL)) &&
+        uref_size <= frames) {
+        upipe_nacl_audio->uref = NULL;
         uref_free(uref);
-        free(buff2);
-    }    
+    } else {
+        uref_sound_resize(uref, frames, -1);
+        uint64_t pts;
+        if (ubase_check(uref_clock_get_pts_sys(uref, &pts)))
+            uref_clock_set_pts_sys(uref,
+                    pts + frames * UCLOCK_FREQ / SAMPLE_RATE);
+        /* We should also change the duration but we don't use it. */
+    }
+}
+
+/** @internal @This is called back to fill NaCl audio buffer.
+ * Please note that this function runs in a different thread.
+ *
+ * @param sample_buffer buffer to fill
+ * @param buffer_size size of the buffer in octets
+ * @param latency how long before the audio data is to be presented
+ * @param user_data opaque pointing to the pipe
+ */
+static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
+                                    PP_TimeDelta latency, void *user_data)
+{
+    struct upipe *upipe = (struct upipe *)user_data;
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    uint64_t next_pts = UINT64_MAX;
+
+    if (likely(upipe_nacl_audio->uclock != NULL)) {
+        /* This is slightly off. */
+        next_pts = uclock_now(upipe_nacl_audio->uclock) +
+                   (uint64_t)(latency * UCLOCK_FREQ);
+    }
+
+    uint32_t frames = buffer_size / 4;
+
+    while (frames > 0) {
+        if (upipe_nacl_audio->uref == NULL)
+            upipe_nacl_audio->uref = uqueue_pop(&upipe_nacl_audio->uqueue,
+                                                struct uref *);
+        if (unlikely(upipe_nacl_audio->uref == NULL)) {
+            upipe_dbg_va(upipe, "playing %u frames of silence (empty)", frames);
+            memset(sample_buffer, 0, frames * 4);
+            sample_buffer += frames * 4;
+            break;
+        }
+
+        struct uref *uref = upipe_nacl_audio->uref;
+        if (next_pts != UINT64_MAX) {
+            uint64_t uref_pts;
+            if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref,
+                                &uref_pts)))) {
+                upipe_nacl_audio->uref = NULL;
+                uref_free(uref);
+                upipe_warn(upipe, "non-dated uref received");
+                continue;
+            }
+
+            int64_t tolerance = uref_pts - next_pts;
+            if (tolerance > (int64_t)PTS_TOLERANCE) {
+                uint32_t silence_frames =
+                    tolerance * SAMPLE_RATE / UCLOCK_FREQ;
+                if (silence_frames > frames)
+                    silence_frames = frames;
+                upipe_dbg_va(upipe, "playing %u frames of silence (wait)",
+                             silence_frames);
+                memset(sample_buffer, 0, silence_frames * 4);
+                sample_buffer += silence_frames * 4;
+                frames -= silence_frames;
+                continue;
+            } else if (-tolerance > (int64_t)PTS_TOLERANCE) {
+                uint32_t dropped_frames =
+                    (-tolerance) * SAMPLE_RATE / UCLOCK_FREQ;
+                upipe_warn_va(upipe, "late buffer received, dropping %u frames",
+                              dropped_frames);
+                upipe_nacl_audio_consume(upipe, dropped_frames);
+                continue;
+            }
+        }
+
+        size_t size;
+        const void *uref_buffer;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &size, NULL)) ||
+                     !ubase_check(uref_sound_plane_read_void(uref, "lr", 0, -1,
+                                                             &uref_buffer)))) {
+            upipe_nacl_audio->uref = NULL;
+            uref_free(uref);
+            upipe_warn(upipe, "cannot read ubuf buffer");
+            continue;
+        }
+
+        uint32_t copied_frames = size < frames ? size : frames;
+        memcpy(sample_buffer, uref_buffer, copied_frames * 4);
+        uref_sound_plane_unmap(uref, "lr", 0, -1);
+        sample_buffer += copied_frames * 4;
+
+        upipe_nacl_audio_consume(upipe, copied_frames);
+        frames -= copied_frames;
+    }
 } 
+
+/** @internal @This opens the NaCl audio interface.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_nacl_audio_open(struct upipe *upipe)
+{
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+
+    upipe_nacl_audio->audio_interface->StartPlayback(upipe_nacl_audio->audio);
+    upipe_nacl_audio->started = true;
+    return true;
+}
 
 /** @internal @This handles input.
  *
@@ -261,79 +306,33 @@ void AudioCallback(void* sample_buffer,uint32_t buffer_size, PP_TimeDelta latenc
  * @param upump_p reference to upump structure
  */
 static void upipe_nacl_audio_input(struct upipe *upipe, struct uref *uref, 
-                struct upump **upump_p)
+                                   struct upump **upump_p)
 {    
-    struct upipe_nacl_audio *upipe_nacl_audio = upipe_nacl_audio_from_upipe(upipe);
-    size_t nb_samples = 0;
-    uint8_t nb_planes = 0;
-    uint8_t nb_chan = 0;
-    uint8_t sample_size;
-
-    if(unlikely(!ubase_check(ubuf_sound_size(uref->ubuf, &nb_samples, NULL))))    {
-        printf("error ubuf_sound_size\n");
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    size_t uref_size;
+    if (unlikely(!ubase_check(uref_sound_size(uref, &uref_size, NULL)))) {
+        upipe_warn(upipe, "unable to read uref");
         uref_free(uref);
         return;
     }
-    if(unlikely(!uqueue_push(&upipe_nacl_audio->bufferAudio, uref)))   {
-            uref_free(uref);
-            return;
-    }
-    if(unlikely(upipe_nacl_audio->audioData.bufferTemp->buffer == NULL))   {
-        uref_sound_flow_get_planes(upipe_nacl_audio->flow_def, &nb_planes);
-        uref_sound_flow_get_channels(upipe_nacl_audio->flow_def, &nb_chan);
-        uref_sound_flow_get_sample_size(upipe_nacl_audio->flow_def, &sample_size);
-        upipe_nacl_audio->audioData.nb_samples = nb_samples*(nb_chan/nb_planes);
-        upipe_nacl_audio->audioData.bufferTemp->buffer = malloc(nb_planes* upipe_nacl_audio->audioData.nb_samples * sizeof(int16_t));
-        upipe_nacl_audio->audioData.bufferTemp->size = 0;
-    }
-    if(unlikely(!upipe_nacl_audio->started && uqueue_length(&upipe_nacl_audio->bufferAudio) > 1))   {
-        upipe_nacl_audio->started = true;
-        upipe_nacl_audio->startData.loop = upipe_nacl_audio->loop;
-        upipe_nacl_audio->startData.audio_interface = upipe_nacl_audio->audio_interface;
-        upipe_nacl_audio->startData.pp_audio = upipe_nacl_audio->audio; 
-        struct PP_CompletionCallback startCB = PP_MakeCompletionCallback(startCallBack,&(upipe_nacl_audio->startData));
-        upipe_nacl_audio->message_loop_interface->PostWork(upipe_nacl_audio->loop, startCB,0);
-    }
-}
 
-/** @internal @This allocates a sound pipe.
- *
- * @param mgr common management structure
- * @param uprobe structure used to raise events
- * @param signature signature of the pipe allocator
- * @param args optional arguments
- * @return pointer to upipe or NULL in case of allocation error
- */
-static struct upipe* upipe_nacl_audio_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe,
-                                     uint32_t signature, va_list args)
-{
-    struct upipe_nacl_audio *upipe_nacl_audio = malloc(sizeof(struct upipe_nacl_audio)+uqueue_sizeof(UQUEUE_SIZE));
-    struct upipe *upipe = upipe_nacl_audio_to_upipe(upipe_nacl_audio);
-    upipe_init(upipe, mgr, uprobe);
-
-    upipe_nacl_audio_init_urefcount(upipe);
-    upipe_nacl_audio->var_interface = (PPB_Var*)PSGetInterface(PPB_VAR_INTERFACE);
-    upipe_nacl_audio->message_loop_interface = (PPB_MessageLoop*)PSGetInterface(PPB_MESSAGELOOP_INTERFACE);
-    upipe_nacl_audio->audio_config_interface = (PPB_AudioConfig*)PSGetInterface(PPB_AUDIO_CONFIG_INTERFACE);
-    upipe_nacl_audio->audio_interface = (PPB_Audio*)PSGetInterface(PPB_AUDIO_INTERFACE);
-    upipe_nacl_audio->loop = va_arg(args,PP_Resource);
-    upipe_nacl_audio->started = false;
-    
-    if(unlikely(!uqueue_init(&(upipe_nacl_audio->bufferAudio), UQUEUE_SIZE, upipe_nacl_audio->extra)))
-    {
-        free(upipe_nacl_audio);
-        return NULL;
+    if (unlikely(!upipe_nacl_audio->started && !upipe_nacl_audio_open(upipe))) {
+        upipe_warn(upipe, "unable to open device");
+        uref_free(uref);
+        return;
     }
 
-    upipe_nacl_audio->audioData.bufferTemp = malloc(sizeof(struct buffer_temp));
-    upipe_nacl_audio->audioData.bufferTemp->buffer = NULL;
-    upipe_nacl_audio->audioData.bufferTemp->size = 0;
-    upipe_nacl_audio->audioData.nb_samples = 0;
-    upipe_nacl_audio->audioData.bufferAudio = &upipe_nacl_audio->bufferAudio;
-    
-    upipe_throw_ready(upipe);
-    return upipe;
+    uint64_t uref_pts;
+    if (likely(ubase_check(uref_clock_get_pts_sys(uref, &uref_pts)))) {
+        uref_pts += upipe_nacl_audio->latency;
+        uref_clock_set_pts_sys(uref, uref_pts);
+    }
+
+    if (unlikely(!uqueue_push(&upipe_nacl_audio->uqueue, uref))) {
+        upipe_warn(upipe, "unable to queue buffer");
+        uref_free(uref);
+    }
 }
 
 /** @internal @This sets the input flow definition.
@@ -342,26 +341,26 @@ static struct upipe* upipe_nacl_audio_alloc(struct upipe_mgr *mgr,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static int upipe_nacl_audio_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_nacl_audio_set_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
 {
-    struct upipe_nacl_audio *upipe_nacl_audio = upipe_nacl_audio_from_upipe(upipe);
-    if (flow_def == NULL) {
+    if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    }
 
-    upipe_nacl_audio->flow_def = uref_dup(flow_def);
-    uint64_t sample_rate;
-    uref_sound_flow_get_rate(upipe_nacl_audio->flow_def, &sample_rate);
-    uint32_t count = upipe_nacl_audio->audio_config_interface->RecommendSampleFrameCount(PSGetInstanceId(),sample_rate, COUNT);
-    upipe_nacl_audio->audio_config = upipe_nacl_audio->audio_config_interface->CreateStereo16Bit(PSGetInstanceId(), sample_rate, count);
-    uint8_t nb_planes = 0;
-    uref_sound_flow_get_planes(upipe_nacl_audio->flow_def, &nb_planes);
-    upipe_nacl_audio->audioData.count = count;
-    upipe_nacl_audio->audioData.flow_def = upipe_nacl_audio->flow_def;
-    upipe_nacl_audio->audio = upipe_nacl_audio->audio_interface->Create(PSGetInstanceId(),upipe_nacl_audio->audio_config,AudioCallback,&(upipe_nacl_audio->audioData));
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+    UBASE_RETURN(uref_sound_flow_match_rate(flow_def, SAMPLE_RATE, SAMPLE_RATE))
+    UBASE_RETURN(uref_sound_flow_match_channels(flow_def, 2, 2))
+    UBASE_RETURN(uref_sound_flow_match_planes(flow_def, 1, 1))
+    UBASE_RETURN(uref_sound_flow_check_channel(flow_def, "lr"))
 
+    upipe_nacl_audio->latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_nacl_audio->latency);
+
+    upipe_sink_throw_latency(upipe,
+            (uint64_t)NB_SAMPLES * 4 * UCLOCK_FREQ / SAMPLE_RATE);
     return UBASE_ERR_NONE;
-
 }
 
 /** @internal @This provides a flow format suggestion.
@@ -371,16 +370,17 @@ static int upipe_nacl_audio_set_flow_def(struct upipe *upipe, struct uref *flow_
  * @return an error code
  */
 static int upipe_nacl_audio_provide_flow_format(struct upipe *upipe,
-                                           struct urequest *request)
+                                                struct urequest *request)
 {
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
     uref_sound_flow_clear_format(flow_format);
-    uref_flow_set_def(flow_format, "sound.s16.");
+    uref_flow_set_def(flow_format, EXPECTED_FLOW_DEF);
     uref_sound_flow_set_channels(flow_format, 2);
     uref_sound_flow_set_sample_size(flow_format, 4);
     uref_sound_flow_set_planes(flow_format, 0);
     uref_sound_flow_add_plane(flow_format, "lr");
+    uref_sound_flow_set_rate(flow_format, SAMPLE_RATE);
     return urequest_provide_flow_format(request, flow_format);
 }
 
@@ -391,9 +391,13 @@ static int upipe_nacl_audio_provide_flow_format(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_nacl_audio_control(struct upipe *upipe, int command, va_list args)
+static int upipe_nacl_audio_control(struct upipe *upipe,
+                                    int command, va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_nacl_audio_require_uclock(upipe);
+            return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
@@ -417,10 +421,23 @@ static int upipe_nacl_audio_control(struct upipe *upipe, int command, va_list ar
  */
 static void upipe_nacl_audio_free(struct upipe *upipe)
 {
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    upipe_nacl_audio->audio_interface->StopPlayback(upipe_nacl_audio->audio);
+    upipe_nacl_audio->core_interface->ReleaseResource(upipe_nacl_audio->audio);
+    upipe_nacl_audio->core_interface->ReleaseResource(upipe_nacl_audio->audio_config);
+
+    struct uref *uref;
+    while ((uref = uqueue_pop(&upipe_nacl_audio->uqueue,
+                              struct uref *)) != NULL)
+        uref_free(uref);
+
+    uqueue_clean(&upipe_nacl_audio->uqueue);
+    upipe_nacl_audio_clean_uclock(upipe);
     upipe_nacl_audio_clean_urefcount(upipe);
-    upipe_nacl_audio_free_void(upipe);
+    free(upipe_nacl_audio);
 }
 
 /** module manager static descriptor */

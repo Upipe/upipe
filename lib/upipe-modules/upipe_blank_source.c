@@ -346,7 +346,7 @@ static int upipe_blksrc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_ALLOC;
     }
 
-    size_t hsize, vsize;
+    uint64_t hsize, vsize;
     struct urational sar;
     uref_pic_flow_clear_format(flow_def_dup);
     uref_pic_flow_copy_format(flow_def_dup, flow_def);
