@@ -122,8 +122,6 @@ struct upipe_alsink {
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
-    /** duration of temporary uref storage */
-    uint64_t urefs_duration;
     /** list of blockers */
     struct uchain blockers;
 
@@ -164,7 +162,6 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
     upipe_alsink->latency = 0;
     upipe_alsink->rate = 0;
     upipe_alsink->uri = strdup(DEFAULT_DEVICE);
-    upipe_alsink->urefs_duration = 0;
     upipe_alsink->handle = NULL;
     upipe_alsink->max_urefs = BUFFER_UREFS;
     upipe_throw_ready(upipe);
@@ -462,9 +459,6 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
                     pts + frames * UCLOCK_FREQ / upipe_alsink->rate);
         /* We should also change the duration but we don't use it. */
     }
-
-    upipe_alsink->urefs_duration -= (uint64_t)frames * UCLOCK_FREQ /
-                                    upipe_alsink->rate;
 }
 
 /** @internal @This is called when we need to output data to alsa.
@@ -555,6 +549,8 @@ static void upipe_alsink_timer(struct upump *upump)
                 upipe_alsink_consume(upipe, dropped_frames);
                 continue;
             }
+            upipe_verbose_va(upipe, "playing from uref pts %"PRIu64,
+                             uref_pts);
         }
 
         size_t size;
@@ -574,9 +570,7 @@ static void upipe_alsink_timer(struct upump *upump)
         frames -= result;
     }
 
-    if (upipe_alsink->urefs_duration < upipe_alsink->period_duration *
-                                       BUFFER_PERIODS)
-        upipe_alsink_unblock_input(upipe);
+    upipe_alsink_unblock_input(upipe);
     if (!was_empty && upipe_alsink_check_input(upipe)) {
         /* All packets have been output, release again the pipe that has been
          * used in @ref upipe_alsink_input. */
@@ -607,9 +601,6 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t uref_duration = (uint64_t)uref_size * UCLOCK_FREQ /
-        upipe_alsink->rate;
-
     if (upipe_alsink_check_input(upipe)) {
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
@@ -617,10 +608,7 @@ static void upipe_alsink_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_alsink_hold_input(upipe, uref);
-    upipe_alsink->urefs_duration += uref_duration;
-    if (upipe_alsink->urefs_duration >= upipe_alsink->period_duration *
-                                        BUFFER_PERIODS)
-        upipe_alsink_block_input(upipe, upump_p);
+    upipe_alsink_block_input(upipe, upump_p);
 }
 
 /** @internal @This sets the input flow definition.

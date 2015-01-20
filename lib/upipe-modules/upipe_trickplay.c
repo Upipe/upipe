@@ -45,6 +45,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <assert.h>
 
@@ -162,6 +163,10 @@ static struct upipe *upipe_trickp_sub_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_trickp_sub->urefs);
     upipe_trickp_sub->type = UPIPE_TRICKP_UNKNOWN;
 
+    struct upipe_trickp *upipe_trickp = upipe_trickp_from_sub_mgr(upipe->mgr);
+    if (upipe_trickp->rate.den)
+        upipe_trickp_sub->max_urefs = UINT_MAX;
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -218,11 +223,8 @@ static void upipe_trickp_sub_input(struct upipe *upipe, struct uref *uref,
     } else if (upipe_trickp->systime_offset == 0) {
         upipe_trickp_sub_hold_input(upipe, uref);
         upipe_trickp_check_start(upipe_trickp_to_upipe(upipe_trickp), NULL);
-    } else if (!upipe_trickp_sub_check_input(upipe) ||
-               !upipe_trickp_sub_process(upipe, uref, upump_p)) {
-        upipe_trickp_sub_hold_input(upipe, uref);
-        upipe_trickp_sub_block_input(upipe, upump_p);
-    }
+    } else
+        upipe_trickp_sub_process(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -402,7 +404,8 @@ static int upipe_trickp_check_start(struct upipe *upipe, struct uref *uref)
             uref_clock_get_date_prog(uref, &ts, &type);
             if (unlikely(type == UREF_DATE_NONE)) {
                 upipe_warn(upipe, "non-dated uref");
-                ulist_pop(&upipe_trickp_sub->urefs);
+                upipe_trickp_sub_pop_input(
+                        upipe_trickp_sub_to_upipe(upipe_trickp_sub));
                 uref_free(uref);
                 continue;
             }
@@ -416,14 +419,14 @@ static int upipe_trickp_check_start(struct upipe *upipe, struct uref *uref)
         return UBASE_ERR_NONE;
     upipe_trickp->ts_origin = earliest_ts;
     upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock);
+    upipe_verbose_va(upipe, "setting origin=%"PRIu64" now=%"PRIu64,
+                     upipe_trickp->ts_origin, upipe_trickp->systime_offset);
 
     ulist_foreach (&upipe_trickp->subs, uchain) {
         struct upipe_trickp_sub *upipe_trickp_sub =
             upipe_trickp_sub_from_uchain(uchain);
         upipe_trickp_sub_output_input(
                     upipe_trickp_sub_to_upipe(upipe_trickp_sub));
-        upipe_trickp_sub_unblock_input(
-                upipe_trickp_sub_to_upipe(upipe_trickp_sub));
     }
     return UBASE_ERR_NONE;
 }
@@ -483,6 +486,27 @@ static inline int _upipe_trickp_set_rate(struct upipe *upipe,
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     upipe_trickp->rate = rate;
     upipe_trickp_reset_uclock(upipe);
+    if (rate.den) {
+        upipe_dbg_va(upipe, "setting rate to %f", (float)rate.num/rate.den);
+        struct uchain *uchain;
+        ulist_foreach (&upipe_trickp->subs, uchain) {
+            struct upipe_trickp_sub *upipe_trickp_sub =
+                upipe_trickp_sub_from_uchain(uchain);
+            upipe_trickp_sub->max_urefs = UINT_MAX;
+            upipe_trickp_sub_unblock_input(
+                    upipe_trickp_sub_to_upipe(upipe_trickp_sub));
+        }
+    } else {
+        upipe_dbg_va(upipe, "setting rate to pause");
+        struct uchain *uchain;
+        ulist_foreach (&upipe_trickp->subs, uchain) {
+            struct upipe_trickp_sub *upipe_trickp_sub =
+                upipe_trickp_sub_from_uchain(uchain);
+            upipe_trickp_sub->max_urefs = 0;
+            upipe_trickp_sub_unblock_input(
+                    upipe_trickp_sub_to_upipe(upipe_trickp_sub));
+        }
+    }
     upipe_trickp_check_start(upipe, NULL);
     return UBASE_ERR_NONE;
 }
