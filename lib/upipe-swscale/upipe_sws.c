@@ -56,6 +56,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 
 /** @hidden */
@@ -64,7 +65,7 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_sws_check(struct upipe *upipe, struct uref *flow_format);
 
-/** upipe_sws structure with swscale parameters */ 
+/** upipe_sws structure with swscale parameters */
 struct upipe_sws {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -98,8 +99,8 @@ struct upipe_sws {
 
     /** swscale flags */
     int flags;
-    /** swscale image conversion context */
-    struct SwsContext *convert_ctx;
+    /** swscale image conversion context [0] for progressive, [1,2] interlaced */
+    struct SwsContext *convert_ctx[3];
     /** input pixel format */
     enum PixelFormat input_pix_fmt;
     /** requested output pixel format */
@@ -152,6 +153,13 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    int progressive = uref_pic_get_progressive(uref);
+    if (!ubase_check(progressive)) {
+        upipe_warn(upipe, "invalid buffer received");
+        uref_free(uref);
+        return true;
+    }
+
     uint64_t output_hsize, output_vsize;
     if (!ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) ||
         !ubase_check(uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize))) {
@@ -160,10 +168,13 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         output_vsize = input_vsize;
     }
 
-    upipe_sws->convert_ctx = sws_getCachedContext(upipe_sws->convert_ctx,
-                input_hsize, input_vsize, upipe_sws->input_pix_fmt,
-                output_hsize, output_vsize, upipe_sws->output_pix_fmt,
-                upipe_sws->flags, NULL, NULL, NULL);
+    int i;
+    for (i = 0; i < 3; i++) {
+        upipe_sws->convert_ctx[i] = sws_getCachedContext(upipe_sws->convert_ctx[i],
+                    input_hsize, input_vsize >> !!i, upipe_sws->input_pix_fmt,
+                    output_hsize, output_vsize >> !!i, upipe_sws->output_pix_fmt,
+                    upipe_sws->flags, NULL, NULL, NULL);
+    }
 
     if (unlikely(upipe_sws->convert_ctx == NULL)) {
         upipe_err(upipe, "sws_getContext failed");
@@ -174,7 +185,6 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
     /* map input */
     const uint8_t *input_planes[UPIPE_AV_MAX_PLANES + 1];
     int input_strides[UPIPE_AV_MAX_PLANES + 1];
-    int i;
     for (i = 0; i < UPIPE_AV_MAX_PLANES &&
                 upipe_sws->input_chroma_map[i] != NULL; i++) {
         const uint8_t *data;
@@ -190,7 +200,7 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
         input_planes[i] = data;
-        input_strides[i] = stride;
+        input_strides[i] = stride * (1+!progressive);
     }
     input_planes[i] = NULL;
     input_strides[i] = 0;
@@ -227,15 +237,33 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
         output_planes[i] = data;
-        output_strides[i] = stride;
+        output_strides[i] = stride * (1+!progressive);
     }
     output_planes[i] = NULL;
     output_strides[i] = 0;
 
     /* fire ! */
-    int ret = sws_scale(upipe_sws->convert_ctx,
+    int ret = 0, ret2 = 1;
+    if (progressive) {
+        ret = sws_scale(upipe_sws->convert_ctx[0],
                         input_planes, input_strides, 0, input_vsize,
                         output_planes, output_strides);
+    }
+    else {
+        ret = sws_scale(upipe_sws->convert_ctx[1],
+                        input_planes, input_strides, 0, (input_vsize+1)/2,
+                        output_planes, output_strides);
+
+        for (i = 0; i < UPIPE_AV_MAX_PLANES &&
+                    upipe_sws->input_chroma_map[i] != NULL; i++) {
+            input_planes[i] += input_strides[i] >> 1;
+            output_planes[i] += output_strides[i] >> 1;
+        }
+
+        ret2 = sws_scale(upipe_sws->convert_ctx[2],
+                         input_planes, input_strides, 0, input_vsize/2,
+                         output_planes, output_strides);
+    }
 
     /* unmap pictures */
     for (i = 0; i < UPIPE_AV_MAX_PLANES &&
@@ -248,7 +276,7 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
                              0, 0, -1, -1);
 
     /* clean and attach */
-    if (unlikely(ret <= 0)) {
+    if (unlikely(ret <= 0) || unlikely(ret2 <= 0)) {
         upipe_warn(upipe, "error during sws conversion");
         ubuf_free(ubuf);
         uref_free(uref);
@@ -389,6 +417,19 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         urational_simplify(&sar);
         UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
     }
+
+    if (upipe_sws->input_pix_fmt == AV_PIX_FMT_YUV420P) {
+        av_opt_set_int(upipe_sws->convert_ctx[0], "src_v_chr_pos", 128, 0);
+        av_opt_set_int(upipe_sws->convert_ctx[1], "src_v_chr_pos", 64, 0);
+        av_opt_set_int(upipe_sws->convert_ctx[2], "src_v_chr_pos", 192, 0);
+    }
+
+    if (upipe_sws->input_pix_fmt == AV_PIX_FMT_YUV420P) {
+        av_opt_set_int(upipe_sws->convert_ctx[0], "dst_v_chr_pos", 128, 0);
+        av_opt_set_int(upipe_sws->convert_ctx[1], "dst_v_chr_pos", 64, 0);
+        av_opt_set_int(upipe_sws->convert_ctx[2], "dst_v_chr_pos", 192, 0);
+    }
+
     upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
 }
@@ -513,8 +554,17 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws_init_flow_def(upipe);
     upipe_sws_init_input(upipe);
 
-    upipe_sws->convert_ctx = NULL;
-    upipe_sws->flags = SWS_BICUBIC;
+    memset(upipe_sws->convert_ctx, 0, sizeof(upipe_sws->convert_ctx));
+    for (int i = 0; i < 3; i++) {
+        upipe_sws->convert_ctx[i] = sws_alloc_context();
+        if (!upipe_sws->convert_ctx[i]) {
+            uref_free(flow_def);
+            upipe_sws_free_flow(upipe);
+            goto fail;
+        }
+    }
+
+    upipe_sws->flags = SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
 
     upipe_throw_ready(upipe);
 
@@ -524,6 +574,15 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
     upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;
+
+fail:
+    for (int i = 0; i < 3; i++) {
+        if (likely(upipe_sws->convert_ctx[i]))
+            sws_freeContext(upipe_sws->convert_ctx[i]);
+        upipe_sws->convert_ctx[i] = NULL;
+    }
+
+    return NULL;
 }
 
 /** @This frees a upipe.
@@ -533,8 +592,11 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
 static void upipe_sws_free(struct upipe *upipe)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
-    if (likely(upipe_sws->convert_ctx))
-        sws_freeContext(upipe_sws->convert_ctx);
+    for (int i = 0; i < 3; i++) {
+        if (likely(upipe_sws->convert_ctx[i]))
+            sws_freeContext(upipe_sws->convert_ctx[i]);
+        upipe_sws->convert_ctx[i] = NULL;
+    }
 
     upipe_throw_dead(upipe);
     upipe_sws_clean_input(upipe);
