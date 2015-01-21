@@ -39,6 +39,9 @@
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-nacl/upipe_nacl_audio.h>
 
@@ -59,7 +62,7 @@
 #include <ppapi_simple/ps.h>
 
 /** maximum length of the internal uqueue */
-#define MAX_QUEUE_LENGTH 255
+#define MAX_QUEUE_LENGTH 5
 /** tolerance on PTSs (plus or minus) */
 #define PTS_TOLERANCE (UCLOCK_FREQ / 25)
 /** we expect s16 sound */
@@ -77,6 +80,11 @@ static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
 struct upipe_nacl_audio {
     /** refcount management structure */
     struct urefcount urefcount;
+
+    /** upump manager */
+    struct upump_mgr *upump_mgr;
+    /** write watcher */
+    struct upump *upump;
 
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
@@ -102,6 +110,15 @@ struct upipe_nacl_audio {
     /** true if the playback was started */
     bool started;
 
+    /** temporary uref storage */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers */
+    struct uchain blockers;
+
     /** public upipe structure */
     struct upipe upipe;
 
@@ -111,6 +128,9 @@ struct upipe_nacl_audio {
 
 UPIPE_HELPER_UPIPE(upipe_nacl_audio, upipe, UPIPE_NACL_AUDIO_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_nacl_audio, urefcount, upipe_nacl_audio_free);
+UPIPE_HELPER_UPUMP_MGR(upipe_nacl_audio, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_nacl_audio, upump, upump_mgr)
+UPIPE_HELPER_INPUT(upipe_nacl_audio, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_UCLOCK(upipe_nacl_audio, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL);
 
 /** @internal @This allocates an nacl audio pipe.
@@ -143,6 +163,9 @@ static struct upipe *upipe_nacl_audio_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_nacl_audio_init_urefcount(upipe);
+    upipe_nacl_audio_init_input(upipe);
+    upipe_nacl_audio_init_upump_mgr(upipe);
+    upipe_nacl_audio_init_upump(upipe);
     upipe_nacl_audio_init_uclock(upipe);
     upipe_nacl_audio->started = false;
 
@@ -166,6 +189,50 @@ static struct upipe *upipe_nacl_audio_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This is called when the queue can be written again.
+ * Unblock the sink.
+ *
+ * @param upump description structure of the watcher
+ */
+static void upipe_nacl_audio_watcher(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    if (upipe_nacl_audio_output_input(upipe)) {
+        upump_stop(upump);
+    }
+    upipe_nacl_audio_unblock_input(upipe);
+}
+
+/** @internal @This checks and creates the upump watcher to wait for the
+ * availability of the queue.
+ *
+ * @param upipe description structure of the pipe
+ * @return false in case of error
+ */
+static bool upipe_nacl_audio_check_watcher(struct upipe *upipe)
+{
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    if (likely(upipe_nacl_audio->upump != NULL))
+        return true;
+
+    upipe_nacl_audio_check_upump_mgr(upipe);
+    if (upipe_nacl_audio->upump_mgr == NULL)
+        return false;
+
+    struct upump *upump =
+        uqueue_upump_alloc_push(&upipe_nacl_audio->uqueue,
+                                upipe_nacl_audio->upump_mgr,
+                                upipe_nacl_audio_watcher, upipe);
+    if (unlikely(upump == NULL)) {
+        upipe_err_va(upipe, "can't create watcher");
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return false;
+    }
+    upipe_nacl_audio_set_upump(upipe, upump);
+    return true;
 }
 
 /** @internal @This is called to consume frames out of the first buffered uref.
@@ -299,7 +366,22 @@ static bool upipe_nacl_audio_open(struct upipe *upipe)
     return true;
 }
 
-/** @internal @This handles input.
+/** @internal @This handles data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to upump structure
+ * @return true if the uref was handled
+ */
+static bool upipe_nacl_audio_handle(struct upipe *upipe, struct uref *uref,
+                                    struct upump **upump_p)
+{
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    return uqueue_push(&upipe_nacl_audio->uqueue, uref);
+}
+
+/** @internal @This inputs data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -329,9 +411,18 @@ static void upipe_nacl_audio_input(struct upipe *upipe, struct uref *uref,
         uref_clock_set_pts_sys(uref, uref_pts);
     }
 
-    if (unlikely(!uqueue_push(&upipe_nacl_audio->uqueue, uref))) {
-        upipe_warn(upipe, "unable to queue buffer");
-        uref_free(uref);
+    if (!upipe_nacl_audio_check_input(upipe)) {
+        upipe_nacl_audio_hold_input(upipe, uref);
+        upipe_nacl_audio_block_input(upipe, upump_p);
+    } else if (!upipe_nacl_audio_handle(upipe, uref, upump_p)) {
+        if (!upipe_nacl_audio_check_watcher(upipe)) {
+            upipe_warn(upipe, "unable to spool uref");
+            uref_free(uref);
+            return;
+        }
+        upipe_nacl_audio_hold_input(upipe, uref);
+        upipe_nacl_audio_block_input(upipe, upump_p);
+        upump_start(upipe_nacl_audio->upump);
     }
 }
 
@@ -391,13 +482,16 @@ static int upipe_nacl_audio_provide_flow_format(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_nacl_audio_control(struct upipe *upipe,
-                                    int command, va_list args)
+static int _upipe_nacl_audio_control(struct upipe *upipe,
+                                     int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             upipe_nacl_audio_require_uclock(upipe);
             return UBASE_ERR_NONE;
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_nacl_audio_set_upump(upipe, NULL);
+            return upipe_nacl_audio_attach_upump_mgr(upipe);
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
@@ -413,6 +507,28 @@ static int upipe_nacl_audio_control(struct upipe *upipe,
         default:
             return UBASE_ERR_UNHANDLED;
     }
+}
+
+/** @internal @This processes control commands on the pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param control type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_nacl_audio_control(struct upipe *upipe,
+                                    int command, va_list args)
+{
+    UBASE_RETURN(_upipe_nacl_audio_control(upipe, command, args));
+
+    struct upipe_nacl_audio *upipe_nacl_audio =
+        upipe_nacl_audio_from_upipe(upipe);
+    if (unlikely(!upipe_nacl_audio_check_input(upipe))) {
+        upipe_nacl_audio_check_watcher(upipe);
+        upump_start(upipe_nacl_audio->upump);
+    }
+
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -434,8 +550,10 @@ static void upipe_nacl_audio_free(struct upipe *upipe)
                               struct uref *)) != NULL)
         uref_free(uref);
 
-    uqueue_clean(&upipe_nacl_audio->uqueue);
     upipe_nacl_audio_clean_uclock(upipe);
+    upipe_nacl_audio_clean_upump_mgr(upipe);
+    upipe_nacl_audio_clean_upump(upipe);
+    uqueue_clean(&upipe_nacl_audio->uqueue);
     upipe_nacl_audio_clean_urefcount(upipe);
     free(upipe_nacl_audio);
 }

@@ -524,9 +524,10 @@ static int upipe_nacl_graphic2d_control(struct upipe *upipe,
             struct urequest *request = va_arg(args, struct urequest *);
             return upipe_nacl_graphic2d_register_request(upipe, request);
         }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
-
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_nacl_graphic2d_unregister_request(upipe, request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref*);
             return upipe_nacl_graphic2d_set_flow_def(upipe, flow_def);
