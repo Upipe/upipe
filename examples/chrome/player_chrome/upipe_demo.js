@@ -64,6 +64,16 @@ function attachListeners() {
   document.getElementById('any').addEventListener('click', function () {
     run("any");
   });
+  document.getElementById('stop').addEventListener('click', function () {
+    common.naclModule.postMessage({
+      'message': 'stop'
+    });
+  });
+  document.getElementById('quit').addEventListener('click', function () {
+    common.naclModule.postMessage({
+      'message': 'quit'
+    });
+  });
 }
 
 first_message = [1,1,1,1,1,1];

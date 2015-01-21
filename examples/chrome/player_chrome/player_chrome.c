@@ -120,7 +120,7 @@
 #define DEC_IN_QUEUE_LENGTH     50
 #define DEC_OUT_QUEUE_LENGTH    2
 
-static void ProcessEvent(PSEvent *event);
+static void demo_stop(void);
 
 /* PPAPI Interfaces */
 PPB_Var *ppb_var_interface = NULL;
@@ -131,6 +131,8 @@ PPB_VarDictionary *ppb_var_dictionary_interface = NULL;
 
 /* main event loop */
 static struct ev_loop *loop;
+/** NaCl event loop timer */
+static struct upump *event_upump;
 /* upump manager for the main thread */
 struct upump_mgr *main_upump_mgr = NULL;
 /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
@@ -314,12 +316,8 @@ static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
                      int event, va_list args)
 {
     if (event == UPROBE_SOURCE_END && main_upump_mgr != NULL) {
-        upipe_dbg(upipe, "caught source end, dying (or not)");
-#if 0 /* FIXME */
-        struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
-                                                     demo_stop, (void *)0);
-        upump_start(idler_stop);
-#endif
+        upipe_dbg(upipe, "caught source end, dying");
+        demo_stop();
         return UBASE_ERR_NONE;
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
@@ -445,8 +443,27 @@ static int demo_start(const char *uri, const char *relay, const char *mode)
     upipe_mgr_release(upipe_ts_demux_mgr);
 
     /* ev-loop */
-    ev_loop(loop, 0);
     return UBASE_ERR_NONE;
+}
+
+static void demo_stop(void)
+{
+    uprobe_notice(uprobe_main, NULL, "stopping");
+    if (upipe_src != NULL) {
+        struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
+        struct upipe *null = upipe_void_alloc(upipe_null_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                                 UPROBE_LOG_VERBOSE, "null"));
+        upipe_mgr_release(upipe_null_mgr);
+        upipe_set_output(upipe_src, null);
+        upipe_release(null);
+    }
+    upipe_release(upipe_src);
+    upipe_src = NULL;
+    upipe_release(trickp);
+    trickp = NULL;
+    upipe_release(play);
+    play = NULL;
 }
 
 static struct upump_mgr *upump_mgr_alloc(void)
@@ -471,14 +488,139 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
     ev_loop_destroy(loop);
 }
 
-int upipe_demo(int argc, char *argv[]) {
-    printf("example_main running\n");
+/**
+ * Create a new PP_Var from a C string.
+ * @param[in] str The string to convert.
+ * @return A new PP_Var with the contents of |str|.
+ */
+static struct PP_Var CStrToVar(const char* str)
+{
+    if (ppb_var_interface != NULL) {
+        return ppb_var_interface->VarFromUtf8(str, strlen(str));
+    }
+    return PP_MakeUndefined();
+}
+
+/**
+ * Convert a PP_Var to a C string, given a buffer.
+ * @param[in] var The PP_Var to convert.
+ * @param[out] buffer The buffer to write to.
+ * @param[in] length The length of |buffer|.
+ * @return The number of characters written.
+ */
+static uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length)
+{
+    if (ppb_var_interface != NULL) {
+        uint32_t var_length;
+        const char* str = ppb_var_interface->VarToUtf8(var, &var_length);
+        /* str is NOT NULL-terminated. Copy using memcpy. */
+        uint32_t min_length = MIN(var_length, length - 1);
+        memcpy(buffer, str, min_length);
+        buffer[min_length] = 0;
+
+        return min_length;
+    }
+
+    return 0;
+}
+
+static void upipe_process_event(PSEvent *event)
+{
+    switch(event->type) {
+        /* If the view updates, build a new Graphics 2D Context */
+        case PSE_INSTANCE_DIDCHANGEVIEW: {
+            printf("UpdateContext\n");
+            struct PP_Rect rect;
+            ppb_view_interface->GetRect(event->as_resource, &rect);
+            char option[256];
+            sprintf(option, "%ux%u", rect.size.width, rect.size.height);
+            upipe_set_option(video_sink, "size", option);
+            inited = true;
+            break;
+        }
+
+        case PSE_INSTANCE_HANDLEMESSAGE: {
+            struct PP_Var var = event->as_var;
+            if (var.type == PP_VARTYPE_DICTIONARY) {
+                struct PP_Var message = ppb_var_dictionary_interface->Get(var,
+                        CStrToVar("message"));
+                char message_string[256];
+                VarToCStr(message, message_string, sizeof(message_string));
+                if (!strcmp(message_string, "set_uri")) {
+                    struct PP_Var value = ppb_var_dictionary_interface->Get(var,
+                            CStrToVar("value"));
+                    char value_string[256];
+                    VarToCStr(value, value_string, sizeof(value_string));
+
+                    struct PP_Var relay = ppb_var_dictionary_interface->Get(var,
+                            CStrToVar("relay"));
+                    char relay_string[256];
+                    VarToCStr(relay, relay_string, sizeof(relay_string));
+
+                    struct PP_Var mode = ppb_var_dictionary_interface->Get(var,
+                            CStrToVar("mode"));
+                    char mode_string[256];
+                    VarToCStr(mode, mode_string, sizeof(mode_string));
+
+                    int err;
+                    if (!inited)
+                        err = UBASE_ERR_EXTERNAL;
+                    else
+                        err = demo_start(value_string, relay_string,
+                                         mode_string);
+                    if (!ubase_check(err)) {
+                        /* send error message */
+                        char error[256];
+                        sprintf(error, "error:%d", err);
+                        struct PP_Var pp_message =
+                            ppb_var_interface->VarFromUtf8(error,
+                                                           strlen(error));
+                        ppb_messaging_interface->PostMessage(PSGetInstanceId(),
+                                                             pp_message);
+                    }
+                } else if (!strcmp(message_string, "stop")) {
+                    demo_stop();
+                } else if (!strcmp(message_string, "quit")) {
+                    demo_stop();
+                    upump_stop(event_upump);
+                    upipe_release(video_sink);
+                    upipe_release(audio_sink);
+                    upipe_mgr_release(upipe_wsrc_mgr);
+                    upipe_mgr_release(upipe_wlin_mgr);
+                }
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void upipe_event_timer(struct upump *upump)
+{
+    PSEventSetFilter(PSE_ALL);
+    PSEvent *event;
+    while ((event = PSEventTryAcquire()) != NULL) {
+        upipe_process_event(event);
+        PSEventRelease(event);
+    }
+}
+
+int upipe_demo(int argc, char *argv[])
+{
+    printf("upipe_demo running\n");
+
     /* PPAPI Interfaces */
-    ppb_view_interface = (PPB_View*)PSGetInterface(PPB_VIEW_INTERFACE);
-    ppb_var_interface = (PPB_Var*)PSGetInterface(PPB_VAR_INTERFACE);
-    ppb_message_loop_interface = (PPB_MessageLoop*)PSGetInterface(PPB_MESSAGELOOP_INTERFACE);
-    ppb_messaging_interface = (PPB_Messaging*)PSGetInterface(PPB_MESSAGING_INTERFACE);
-    ppb_var_dictionary_interface = (PPB_VarDictionary*)PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
+    ppb_view_interface =
+        (PPB_View *)PSGetInterface(PPB_VIEW_INTERFACE);
+    ppb_var_interface =
+        (PPB_Var *)PSGetInterface(PPB_VAR_INTERFACE);
+    ppb_message_loop_interface =
+        (PPB_MessageLoop *)PSGetInterface(PPB_MESSAGELOOP_INTERFACE);
+    ppb_messaging_interface =
+        (PPB_Messaging *)PSGetInterface(PPB_MESSAGING_INTERFACE);
+    ppb_var_dictionary_interface =
+        (PPB_VarDictionary *)PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
 
     /* upipe env */
     loop = ev_default_loop(0);
@@ -492,7 +634,7 @@ int upipe_demo(int argc, char *argv[]) {
     udict_mgr_release(udict_mgr);
     struct uclock *uclock = uclock_std_alloc(0);
 
-    /*default probe */
+    /* default probe */
     uprobe_main = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_LEVEL);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
@@ -504,7 +646,7 @@ int upipe_demo(int argc, char *argv[]) {
     umem_mgr_release(umem_mgr);
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
-    /* probes audio & video & dejitter*/
+    /* probes audio & video & dejitter */
     uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(uprobe_main),
                                             DEJITTER_DIVIDER);
     uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
@@ -554,20 +696,19 @@ int upipe_demo(int argc, char *argv[]) {
     upipe_mgr_release(nacl_audio_mgr);
     upipe_attach_uclock(audio_sink);
 
+    /* NaCl event loop */
+    event_upump = upump_alloc_timer(main_upump_mgr, upipe_event_timer, NULL,
+                                    0, UCLOCK_FREQ / 25);
+    assert(event_upump != NULL);
+    upump_start(event_upump);
+
     /* wait for an event asking to open a URI */
     printf("entering event loop\n");
-
-    PSEventSetFilter(PSE_ALL);
-    for ( ; ; ) {
-        PSEvent* event;
-        while ((event = PSEventWaitAcquire()) != NULL) {
-            ProcessEvent(event);
-            PSEventRelease(event);
-        }
-    }
+    ev_loop(loop, 0);
     printf("exiting event loop\n");
 
-    /* release & free*/
+    /* release & free */
+    upump_free(event_upump);
     upump_mgr_release(main_upump_mgr);
     uprobe_release(uprobe_dejitter);
     uprobe_release(uprobe_main);
@@ -580,97 +721,8 @@ int upipe_demo(int argc, char *argv[]) {
     upipe_av_clean();
 
     ev_default_destroy();
+    printf("upipe_demo exiting\n");
     return 0;
 }
-
-/**
- * Create a new PP_Var from a C string.
- * @param[in] str The string to convert.
- * @return A new PP_Var with the contents of |str|.
- */
-static struct PP_Var CStrToVar(const char* str) {
-  if (ppb_var_interface != NULL) {
-    return ppb_var_interface->VarFromUtf8(str, strlen(str));
-  }
-  return PP_MakeUndefined();
-}
-
-/**
- * Convert a PP_Var to a C string, given a buffer.
- * @param[in] var The PP_Var to convert.
- * @param[out] buffer The buffer to write to.
- * @param[in] length The length of |buffer|.
- * @return The number of characters written.
- */
-static uint32_t VarToCStr(struct PP_Var var, char* buffer, uint32_t length) {
-  if (ppb_var_interface != NULL) {
-    uint32_t var_length;
-    const char* str = ppb_var_interface->VarToUtf8(var, &var_length);
-    /* str is NOT NULL-terminated. Copy using memcpy. */
-    uint32_t min_length = MIN(var_length, length - 1);
-    memcpy(buffer, str, min_length);
-    buffer[min_length] = 0;
-
-    return min_length;
-  }
-
-  return 0;
-}
-
-static void ProcessEvent(PSEvent *event) {
-    switch(event->type) {
-        /* If the view updates, build a new Graphics 2D Context */
-        case PSE_INSTANCE_DIDCHANGEVIEW: {
-            printf("UpdateContext\n");
-            struct PP_Rect rect;
-            ppb_view_interface->GetRect(event->as_resource, &rect);
-            char option[256];
-            sprintf(option, "%ux%u", rect.size.width, rect.size.height);
-            upipe_set_option(video_sink, "size", option);
-            inited = true;
-            break;
-        }
-        case PSE_INSTANCE_HANDLEMESSAGE: {
-            struct PP_Var var = event->as_var;
-            if (var.type == PP_VARTYPE_DICTIONARY) {
-                struct PP_Var message = ppb_var_dictionary_interface->Get(var,
-                        CStrToVar("message"));
-                char message_string[256];
-                VarToCStr(message, message_string, sizeof(message_string));
-                if (!strcmp(message_string, "set_uri")) {
-                    struct PP_Var value = ppb_var_dictionary_interface->Get(var, CStrToVar("value"));
-                    char value_string[256];
-                    VarToCStr(value, value_string, sizeof(value_string));
-
-                    struct PP_Var relay = ppb_var_dictionary_interface->Get(var, CStrToVar("relay"));
-                    char relay_string[256];
-                    VarToCStr(relay, relay_string, sizeof(relay_string));
-
-                    struct PP_Var mode = ppb_var_dictionary_interface->Get(var, CStrToVar("mode"));
-                    char mode_string[256];
-                    VarToCStr(mode, mode_string, sizeof(mode_string));
-
-                    int err;
-                    if (!inited)
-                        err = UBASE_ERR_EXTERNAL;
-                    else
-                        err = demo_start(value_string, relay_string, mode_string);
-                    if (!ubase_check(err)) {
-                        /* send error message */
-                        char error[256];
-                        sprintf(error, "error:%d", err);
-                        struct PP_Var pp_message =
-                            ppb_var_interface->VarFromUtf8(error, strlen(error));
-                        ppb_messaging_interface->PostMessage(PSGetInstanceId(),
-                                                             pp_message);
-                    }
-                }
-            }
-            break;
-        }
-        default:
-            break;
-    }
-} 
 
 PPAPI_SIMPLE_REGISTER_MAIN(upipe_demo);

@@ -7,7 +7,7 @@
   <script type="text/javascript" src="common.js"></script>
   <script type="text/javascript" src="upipe_demo.js"></script>
 </head>
-<body data-width="720" data-height="576" data-name="player_chrome" data-tools="glibc" data-configs="Debug Release" data-path="{tc}/{config}">
+<body data-width="1024" data-height="576" data-name="player_chrome" data-tools="glibc" data-configs="Debug Release" data-path="{tc}/{config}">
   <h1>Upipe Native Client Demo</h1>
   <h2>Status: <code id="statusField">NO-STATUS</code></h2>
   <div>
@@ -15,18 +15,20 @@
     video using Upipe flexible dataflow framework.
     <br>
     Multicast address:
-    <input type="text" id="multicastAddr" value="232.1.1.1" />
+    <input type="text" id="multicastAddr" value="192.168.0.1" />
     Port:
     <input type="number" id="multicastPort" min="0" max="65535" value="5004" />
     Source address:
-    <input type="text" id="sourceAddr" value="192.168.0.1" />
+    <input type="text" id="sourceAddr" value="192.168.0.7" />
     AMT relay:
-    <input type="text" id="relayAddr" value="192.168.255.1" />
+    <input type="text" id="relayAddr" value="195.21.20.97" />
     <br>
-    <input type="submit" id="udp" value="Run UDP" />
-    <input type="submit" id="ssm" value="Run SSM" />
-    <input type="submit" id="amt" value="Run AMT" />
-    <input type="submit" id="any" value="Run Any" />
+    <input type="submit" id="udp" value="Play UDP" />
+    <input type="submit" id="ssm" value="Play SSM" />
+    <input type="submit" id="amt" value="Play AMT" />
+    <input type="submit" id="any" value="Play Any" />
+    <input type="submit" id="stop" value="Stop" />
+    <input type="submit" id="quit" value="Quit" />
   </div>
   <!-- The NaCl plugin will be embedded inside the element with id "listener".
       See common.js.-->
