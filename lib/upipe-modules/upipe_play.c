@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,7 +57,7 @@ struct upipe_play {
     /** max latency of the subpipes */
     uint64_t input_latency;
     /** output latency */
-    uint64_t output_latency;
+    uint64_t sink_latency;
     /** total latency */
     uint64_t latency;
 
@@ -82,6 +82,9 @@ struct upipe_play_sub {
     /** structure for double-linked lists */
     struct uchain uchain;
 
+    /** sink latency request */
+    struct urequest latency_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet on this output */
@@ -102,7 +105,26 @@ UPIPE_HELPER_OUTPUT(upipe_play_sub, output, flow_def, output_state, request_list
 
 UPIPE_HELPER_SUBPIPE(upipe_play, upipe_play_sub, sub, sub_mgr, subs, uchain)
 
+/** @hidden */
 static void upipe_play_set_input_latency(struct upipe *upipe, uint64_t latency);
+/** @hidden */
+static void upipe_play_set_sink_latency(struct upipe *upipe, uint64_t latency);
+
+/** @This handles the result of a sink latency request.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_play_sub_provide_latency(struct urequest *urequest,
+                                                 va_list args)
+{
+    struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);
+    uint64_t latency = va_arg(args, uint64_t);
+    struct upipe_play *upipe_play = upipe_play_from_sub_mgr(upipe->mgr);
+    if (latency > upipe_play->sink_latency)
+        upipe_play_set_sink_latency(upipe_play_to_upipe(upipe_play), latency);
+    return UBASE_ERR_NONE;
+}
 
 /** @internal @This allocates an output subpipe of a play pipe.
  *
@@ -121,10 +143,17 @@ static struct upipe *upipe_play_sub_alloc(struct upipe_mgr *mgr,
                                                     args);
     if (unlikely(upipe == NULL))
         return NULL;
+    struct upipe_play_sub *upipe_play_sub = upipe_play_sub_from_upipe(upipe);
     upipe_play_sub_init_urefcount(upipe);
     upipe_play_sub_init_output(upipe);
     upipe_play_sub_init_sub(upipe);
     upipe_throw_ready(upipe);
+
+    urequest_init_sink_latency(&upipe_play_sub->latency_request,
+                               upipe_play_sub_provide_latency, NULL);
+    urequest_set_opaque(&upipe_play_sub->latency_request, upipe);
+    upipe_play_sub_register_output_request(upipe,
+                                           &upipe_play_sub->latency_request);
     return upipe;
 }
 
@@ -275,7 +304,7 @@ static struct upipe *upipe_play_alloc(struct upipe_mgr *mgr,
     upipe_play_init_sub_subs(upipe);
     struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
     upipe_play->input_latency = 0;
-    upipe_play->output_latency = upipe_play->latency = DEFAULT_OUTPUT_LATENCY;
+    upipe_play->sink_latency = upipe_play->latency = DEFAULT_OUTPUT_LATENCY;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -288,7 +317,7 @@ static void upipe_play_set_latency(struct upipe *upipe)
 {
     struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
     upipe_play->latency = upipe_play->input_latency +
-                          upipe_play->output_latency;
+                          upipe_play->sink_latency;
 
     struct uchain *uchain;
     ulist_foreach (&upipe_play->subs, uchain) {
@@ -307,6 +336,20 @@ static void upipe_play_set_input_latency(struct upipe *upipe, uint64_t latency)
 {
     struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
     upipe_play->input_latency = latency;
+    upipe_dbg_va(upipe, "setting input latency to %"PRIu64, latency);
+    upipe_play_set_latency(upipe);
+}
+
+/** @internal @This sets the sink latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param latency sink latency
+ */
+static void upipe_play_set_sink_latency(struct upipe *upipe, uint64_t latency)
+{
+    struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
+    upipe_play->sink_latency = latency;
+    upipe_dbg_va(upipe, "setting sink latency to %"PRIu64, latency);
     upipe_play_set_latency(upipe);
 }
 
@@ -316,26 +359,11 @@ static void upipe_play_set_input_latency(struct upipe *upipe, uint64_t latency)
  * @param latency_p filled with the current output latency
  * @return an error code
  */
-static inline int _upipe_play_get_output_latency(struct upipe *upipe,
+static inline int _upipe_play_get_sink_latency(struct upipe *upipe,
                                                  uint64_t *latency_p)
 {
     struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
-    *latency_p = upipe_play->output_latency;
-    return UBASE_ERR_NONE;
-}
-
-/** @This sets the playing output latency.
- *
- * @param upipe description structure of the pipe
- * @param latency new output latency
- * @return an error code
- */
-static inline int _upipe_play_set_output_latency(struct upipe *upipe,
-                                                 uint64_t latency)
-{
-    struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
-    upipe_play->output_latency = latency;
-    upipe_play_set_latency(upipe);
+    *latency_p = upipe_play->sink_latency;
     return UBASE_ERR_NONE;
 }
 
@@ -356,17 +384,6 @@ static int upipe_play_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_play_iterate_sub(upipe, p);
-        }
-
-        case UPIPE_PLAY_GET_OUTPUT_LATENCY: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_PLAY_SIGNATURE)
-            uint64_t *p = va_arg(args, uint64_t *);
-            return _upipe_play_get_output_latency(upipe, p);
-        }
-        case UPIPE_PLAY_SET_OUTPUT_LATENCY: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_PLAY_SIGNATURE)
-            uint64_t latency = va_arg(args, uint64_t);
-            return _upipe_play_set_output_latency(upipe, latency);
         }
 
         default:

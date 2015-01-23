@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -61,6 +61,9 @@ static int uprobe_ubuf_mem_throw(struct uprobe *uprobe, struct upipe *upipe,
     va_copy(args_copy, args);
     struct urequest *urequest = va_arg(args_copy, struct urequest *);
     va_end(args_copy);
+
+    if (urequest->type == UREQUEST_SINK_LATENCY)
+        return urequest_provide_sink_latency(urequest, 0);
 
     if (urequest->type != UREQUEST_UBUF_MGR &&
         urequest->type != UREQUEST_FLOW_FORMAT)

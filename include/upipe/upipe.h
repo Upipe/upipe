@@ -760,20 +760,6 @@ static inline int upipe_throw_new_rap(struct upipe *upipe, struct uref *uref)
     return upipe_throw(upipe, UPROBE_NEW_RAP, uref);
 }
 
-/** @This throws a latency event. This event is thrown whenever a sink pipe
- * requests an extra latency.
- *
- * @param upipe description structure of the pipe
- * @param latency extra latency
- * @return an error code
- */
-static inline int upipe_sink_throw_latency(struct upipe *upipe,
-                                           uint64_t latency)
-{
-    upipe_dbg_va(upipe, "throw sink latency %"PRIu64, latency);
-    return upipe_throw(upipe, UPROBE_SINK_LATENCY, latency);
-}
-
 /** @This throws an update event. This event is thrown whenever a split pipe
  * declares a new output flow list.
  *

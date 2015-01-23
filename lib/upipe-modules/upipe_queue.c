@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -132,6 +132,7 @@ struct upipe_queue_upstream *
     upstream->uref_mgr = NULL;
     upstream->ubuf_mgr = NULL;
     upstream->uclock = NULL;
+    upstream->uint64 = 0;
     return upstream;
 }
 

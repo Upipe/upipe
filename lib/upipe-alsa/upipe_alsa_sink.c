@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -82,6 +82,16 @@
 /** @hidden */
 static void upipe_alsink_timer(struct upump *upump);
 
+/** @internal element of a list of urequests */
+struct upipe_alsink_request {
+    /** structure for double-linked lists */
+    struct uchain uchain;
+    /** pointer to upstream request */
+    struct urequest *upstream;
+};
+
+UBASE_FROM_TO(upipe_alsink_request, uchain, uchain, uchain)
+
 /** @internal @This is the private context of a file sink pipe. */
 struct upipe_alsink {
     /** refcount management structure */
@@ -125,6 +135,9 @@ struct upipe_alsink {
     /** list of blockers */
     struct uchain blockers;
 
+    /** list of sink_latency urequests */
+    struct uchain urequests;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -164,8 +177,27 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
     upipe_alsink->uri = strdup(DEFAULT_DEVICE);
     upipe_alsink->handle = NULL;
     upipe_alsink->max_urefs = BUFFER_UREFS;
+    ulist_init(&upipe_alsink->urequests);
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This updates the sink latency.
+ *
+ * @param upipe description structure of the pipe
+ * @param lantecy new latency
+ * @return an error code
+ */
+static int upipe_alsink_update_latency(struct upipe *upipe, uint64_t latency)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_alsink->urequests, uchain, uchain_tmp) {
+        struct upipe_alsink_request *proxy =
+            upipe_alsink_request_from_uchain(uchain);
+        urequest_provide_sink_latency(proxy->upstream, latency);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This opens the ALSA device.
@@ -250,7 +282,7 @@ static bool upipe_alsink_open(struct upipe *upipe)
         goto open_error;
     }
 
-    upipe_sink_throw_latency(upipe, upipe_alsink->period_duration * 2);
+    upipe_alsink_update_latency(upipe, upipe_alsink->period_duration * 2);
 
     /* Apply HW parameter settings to PCM device. */
     if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
@@ -800,6 +832,58 @@ static int upipe_alsink_flush(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This registers a urequest.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_alsink_register_request(struct upipe *upipe,
+                                         struct urequest *request)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    if (request->type != UREQUEST_SINK_LATENCY)
+        return upipe_throw_provide_request(upipe, request);
+
+    struct upipe_alsink_request *proxy =
+        malloc(sizeof(struct upipe_alsink_request));
+    UBASE_ALLOC_RETURN(proxy)
+    uchain_init(upipe_alsink_request_to_uchain(proxy));
+    proxy->upstream = request;
+    ulist_add(&upipe_alsink->urequests,
+              upipe_alsink_request_to_uchain(proxy));
+
+    return urequest_provide_sink_latency(proxy->upstream,
+            upipe_alsink->handle != NULL ? upipe_alsink->period_duration * 2 :
+                                           0);
+}
+
+/** @internal @This unregisters a urequest.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_alsink_unregister_request(struct upipe *upipe,
+                                           struct urequest *request)
+{
+    struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
+    if (request->type != UREQUEST_SINK_LATENCY)
+        return UBASE_ERR_NONE;
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_alsink->urequests, uchain, uchain_tmp) {
+        struct upipe_alsink_request *proxy =
+            upipe_alsink_request_from_uchain(uchain);
+        if (proxy->upstream == request) {
+            ulist_delete(uchain);
+            free(proxy);
+            return UBASE_ERR_NONE;
+        }
+    }
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a file sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -819,10 +903,12 @@ static int upipe_alsink_control(struct upipe *upipe, int command, va_list args)
             return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
+            return upipe_alsink_register_request(upipe, request);
         }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_alsink_unregister_request(upipe, request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_alsink_set_flow_def(upipe, flow_def);
@@ -851,6 +937,15 @@ static void upipe_alsink_free(struct upipe *upipe)
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     upipe_alsink_close(upipe);
     upipe_throw_dead(upipe);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_alsink->urequests,
+                          uchain, uchain_tmp) {
+        struct upipe_alsink_request *proxy =
+            upipe_alsink_request_from_uchain(uchain);
+        ulist_delete(uchain);
+        free(proxy);
+    }
 
     free(upipe_alsink->uri);
     upipe_alsink_clean_uclock(upipe);

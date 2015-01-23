@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -205,6 +205,9 @@ static int upipe_qsrc_provide_request(struct urequest *urequest, va_list args)
             break;
         case UREQUEST_UCLOCK:
             upstream->uclock = va_arg(args, struct uclock *);
+            break;
+        case UREQUEST_SINK_LATENCY:
+            upstream->uint64 = va_arg(args, uint64_t);
             break;
         default:
             upipe_warn_va(upipe, "unknown request type %d", urequest->type);

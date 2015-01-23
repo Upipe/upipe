@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -466,6 +466,9 @@ static void upipe_qsink_oob(struct upump *upump)
         case UREQUEST_UCLOCK:
             urequest_provide_uclock(request->upstream, upstream->uclock);
             upstream->uclock = NULL;
+            break;
+        case UREQUEST_SINK_LATENCY:
+            urequest_provide_sink_latency(request->upstream, upstream->uint64);
             break;
     }
 

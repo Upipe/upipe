@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -164,6 +164,8 @@ struct upipe_queue_upstream {
     struct ubuf_mgr *ubuf_mgr;
     /** optional uclock */
     struct uclock *uclock;
+    /** optional uint64_t */
+    uint64_t uint64;
 };
 
 /** @internal @This allocates an upstream message.

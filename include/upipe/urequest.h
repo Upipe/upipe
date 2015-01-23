@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <upipe/ubase.h>
+#include <upipe/uref.h>
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -43,9 +44,9 @@ extern "C" {
 /** @hidden */
 struct uclock;
 /** @hidden */
-struct uref_mgr;
-/** @hidden */
 struct ubuf_mgr;
+/** @hidden */
+struct urequest;
 
 /** @This defines standard requests which upipe modules may need. */
 enum urequest_type {
@@ -57,6 +58,8 @@ enum urequest_type {
     UREQUEST_UBUF_MGR,
     /** a uclock is requested (struct uclock *) */
     UREQUEST_UCLOCK,
+    /** the latency of the sink is requested (uint64_t) */
+    UREQUEST_SINK_LATENCY,
 
     /** non-standard requests implemented by a module type can start from
      * there (first arg = signature) */
@@ -169,6 +172,21 @@ static inline void urequest_init_uclock(struct urequest *urequest,
 {
     urequest_init(urequest, UREQUEST_UCLOCK, NULL, urequest_provide,
                   urequest_free);
+}
+
+/** @This initializes a urequest structure asking for the sink latency. The
+ * downstream pipes will provide a modified flow format that will be compatible.
+ *
+ * @param urequest pointer to urequest
+ * @param urequest_provide function used to provide a structure
+ * @param urequest_free function used to free the request
+ */
+static inline void urequest_init_sink_latency(struct urequest *urequest,
+                                              urequest_func urequest_provide,
+                                              urequest_free_func urequest_free)
+{
+    urequest_init(urequest, UREQUEST_SINK_LATENCY, NULL,
+                  urequest_provide, urequest_free);
 }
 
 /** @This cleans up a urequest structure.
@@ -299,6 +317,21 @@ static inline int urequest_provide_uclock(struct urequest *urequest,
     if (unlikely(urequest->type != UREQUEST_UCLOCK))
         return UBASE_ERR_INVALID;
     return urequest_provide(urequest, uclock);
+}
+
+/** @This provides a urequest with a new sink latency. All arguments
+ * belong to the callee.
+ *
+ * @param urequest pointer to urequest
+ * @param latency sink latency
+ * @return an error code
+ */
+static inline int urequest_provide_sink_latency(struct urequest *urequest,
+                                                uint64_t latency)
+{
+    if (unlikely(urequest->type != UREQUEST_SINK_LATENCY))
+        return UBASE_ERR_INVALID;
+    return urequest_provide(urequest, latency);
 }
 
 #ifdef __cplusplus

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -31,6 +31,7 @@
 
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
+#include <upipe/urequest.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -53,6 +54,8 @@
 #define UREF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
+static struct urequest *request;
+
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
@@ -65,10 +68,51 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SOURCE_END:
+        case UPROBE_PROVIDE_REQUEST:
             break;
     }
     return UBASE_ERR_NONE;
 }
+
+/** helper phony pipe */
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
+{
+    struct upipe *upipe = malloc(sizeof(struct upipe));
+    assert(upipe != NULL);
+    upipe_init(upipe, mgr, uprobe);
+    return upipe;
+}
+
+/** helper phony pipe */
+static int test_control(struct upipe *upipe, int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+            request = va_arg(args, struct urequest *);
+            return UBASE_ERR_NONE;
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+        default:
+            assert(0);
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** helper phony pipe */
+static void test_free(struct upipe *upipe)
+{
+    upipe_clean(upipe);
+    free(upipe);
+}
+
+/** helper phony pipe */
+static struct upipe_mgr test_mgr = {
+    .refcount = NULL,
+    .upipe_alloc = test_alloc,
+    .upipe_input = NULL,
+    .upipe_control = test_control
+};
 
 int main(int argc, char *argv[])
 {
@@ -96,31 +140,39 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "play 1"));
     assert(upipe_play1 != NULL);
 
+    struct upipe *test_sink1 = upipe_void_alloc_output(upipe_play1, &test_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "sink 1"));
+    assert(test_sink1 != NULL);
+
     struct upipe *upipe_play2 = upipe_void_alloc_sub(upipe_play,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "play 2"));
     assert(upipe_play2 != NULL);
+
+    struct upipe *test_sink2 = upipe_void_alloc_output(upipe_play2, &test_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "sink 2"));
+    assert(test_sink2 != NULL);
 
     struct uref *input_flow_def = uref_alloc(uref_mgr);
     assert(input_flow_def != NULL);
     ubase_assert(uref_flow_set_def(input_flow_def, "void."));
     ubase_assert(uref_clock_set_latency(input_flow_def, UCLOCK_FREQ));
     ubase_assert(upipe_set_flow_def(upipe_play1, input_flow_def));
-    ubase_assert(upipe_play_set_output_latency(upipe_play, 0));
+    ubase_assert(urequest_provide_sink_latency(request, 0));
 
     struct uref *output_flow_def;
     ubase_assert(upipe_get_flow_def(upipe_play1, &output_flow_def));
     uint64_t latency;
     ubase_assert(uref_clock_get_latency(output_flow_def, &latency));
-    assert(latency == UCLOCK_FREQ);
+    assert(latency == UCLOCK_FREQ + UCLOCK_FREQ / 50);
 
     ubase_assert(uref_clock_set_latency(input_flow_def, UCLOCK_FREQ * 2));
     ubase_assert(upipe_set_flow_def(upipe_play2, input_flow_def));
 
     ubase_assert(upipe_get_flow_def(upipe_play1, &output_flow_def));
     ubase_assert(uref_clock_get_latency(output_flow_def, &latency));
-    assert(latency == UCLOCK_FREQ * 2);
+    assert(latency == UCLOCK_FREQ * 2 + UCLOCK_FREQ / 50);
 
-    ubase_assert(upipe_play_set_output_latency(upipe_play, UCLOCK_FREQ));
+    ubase_assert(urequest_provide_sink_latency(request, UCLOCK_FREQ));
 
     ubase_assert(upipe_get_flow_def(upipe_play1, &output_flow_def));
     ubase_assert(uref_clock_get_latency(output_flow_def, &latency));
@@ -136,6 +188,9 @@ int main(int argc, char *argv[])
     upipe_release(upipe_play1);
     upipe_release(upipe_play2);
     upipe_mgr_release(upipe_play_mgr); // nop
+
+    test_free(test_sink1);
+    test_free(test_sink2);
 
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

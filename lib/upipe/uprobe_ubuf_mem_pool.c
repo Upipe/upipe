@@ -73,6 +73,9 @@ static int uprobe_ubuf_mem_pool_throw(struct uprobe *uprobe,
     struct urequest *urequest = va_arg(args_copy, struct urequest *);
     va_end(args_copy);
 
+    if (urequest->type == UREQUEST_SINK_LATENCY)
+        return urequest_provide_sink_latency(urequest, 0);
+
     if (urequest->type != UREQUEST_UBUF_MGR &&
         urequest->type != UREQUEST_FLOW_FORMAT)
         return uprobe_throw_next(uprobe, upipe, event, args);
