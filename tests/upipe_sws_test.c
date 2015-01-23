@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -329,6 +329,7 @@ int main(int argc, char **argv)
     uref1 = uref_pic_alloc(uref_mgr, ubuf_mgr, SRCSIZE, SRCSIZE);
     assert(uref1 != NULL);
     assert(uref1->ubuf != NULL);
+    ubase_assert(uref_pic_set_progressive(uref1));
 
     /* fill reference picture */
     fill_in(uref1, "y8", 1, 1, 1);
@@ -341,11 +342,13 @@ int main(int argc, char **argv)
     uref2 = uref_pic_alloc(uref_mgr, ubuf_mgr, DSTSIZE, DSTSIZE);
     assert(uref2);
     assert(uref2->ubuf);
+    ubase_assert(uref_pic_set_progressive(uref2));
 
     img_convert_ctx = sws_getCachedContext(NULL,
-                                    SRCSIZE, SRCSIZE, PIX_FMT_YUV420P,
-                                    DSTSIZE, DSTSIZE, PIX_FMT_YUV420P,
-                                    SWS_BICUBIC, NULL, NULL, NULL); 
+                SRCSIZE, SRCSIZE, PIX_FMT_YUV420P,
+                DSTSIZE, DSTSIZE, PIX_FMT_YUV420P,
+                SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS,
+                NULL, NULL, NULL);
     assert(img_convert_ctx);
 
     filldata(uref1, strides, slices, READ);

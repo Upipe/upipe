@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -156,12 +156,7 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    int progressive = uref_pic_get_progressive(uref);
-    if (!ubase_check(progressive)) {
-        upipe_warn(upipe, "invalid buffer received");
-        uref_free(uref);
-        return true;
-    }
+    int progressive = ubase_check(uref_pic_get_progressive(uref)) ? 1 : 0;
 
     uint64_t output_hsize, output_vsize;
     if (!ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) ||
