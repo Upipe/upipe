@@ -73,7 +73,7 @@
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-amt/upipe_amt_source.h>
 
-#include <upipe-nacl/upipe_nacl_graphic2d.h>
+#include <upipe-nacl/upipe_nacl_graphics2d.h>
 #include <upipe-nacl/upipe_nacl_audio.h>
 
 #include <ppapi/c/pp_resource.h>
@@ -657,13 +657,13 @@ int upipe_demo(int argc, char *argv[])
     assert(upipe_wlin_mgr != NULL);
     upipe_mgr_release(dec_xfer_mgr);
 
-    /* upipe_nacl_graphic2d */
-    struct upipe_mgr *nacl_graphic2d_mgr = upipe_nacl_graphic2d_mgr_alloc();
-    video_sink = upipe_void_alloc(nacl_graphic2d_mgr,
+    /* upipe_nacl_graphics2d */
+    struct upipe_mgr *nacl_g2d_mgr = upipe_nacl_g2d_mgr_alloc();
+    video_sink = upipe_void_alloc(nacl_g2d_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
-                            "nacl graphic2d"));
+                            "nacl g2d"));
     assert(video_sink != NULL);
-    upipe_mgr_release(nacl_graphic2d_mgr);
+    upipe_mgr_release(nacl_g2d_mgr);
     upipe_attach_uclock(video_sink);
 
     /* upipe_nacl_audio */

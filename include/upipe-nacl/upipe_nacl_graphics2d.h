@@ -28,22 +28,22 @@
  * @short Upipe NaCl module to play video frames
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_NACL_GRAPHIC2D_H_
+#ifndef _UPIPE_MODULES_UPIPE_NACL_GRAPHICS2D_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_NACL_GRAPHIC2D_H_
+#define _UPIPE_MODULES_UPIPE_NACL_GRAPHICS2D_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
 
-#define UPIPE_NACL_GRAPHIC2D_SIGNATURE UBASE_FOURCC('S','g','r','2')
+#define UPIPE_NACL_G2D_SIGNATURE UBASE_FOURCC('S','g','2','d')
 
-/** @This returns the management structure for nacl_graphic2d pipes.
+/** @This returns the management structure for nacl_g2d pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_nacl_graphic2d_mgr_alloc(void);
+struct upipe_mgr *upipe_nacl_g2d_mgr_alloc(void);
 
 #ifdef __cplusplus
 }
