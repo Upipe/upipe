@@ -62,7 +62,7 @@
 #include <ppapi_simple/ps.h>
 
 /** maximum length of the internal uqueue */
-#define MAX_QUEUE_LENGTH 5
+#define MAX_QUEUE_LENGTH 6
 /** tolerance on PTSs (plus or minus) */
 #define PTS_TOLERANCE (UCLOCK_FREQ / 25)
 /** we expect s16 sound */
@@ -448,9 +448,6 @@ static int upipe_nacl_audio_set_flow_def(struct upipe *upipe,
 
     upipe_nacl_audio->latency = 0;
     uref_clock_get_latency(flow_def, &upipe_nacl_audio->latency);
-
-    upipe_sink_throw_latency(upipe,
-            (uint64_t)NB_SAMPLES * 4 * UCLOCK_FREQ / SAMPLE_RATE);
     return UBASE_ERR_NONE;
 }
 
@@ -496,6 +493,9 @@ static int _upipe_nacl_audio_control(struct upipe *upipe,
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_nacl_audio_provide_flow_format(upipe, request);
+            if (request->type == UREQUEST_SINK_LATENCY)
+                return urequest_provide_sink_latency(request,
+                    (uint64_t)NB_SAMPLES * 3 * UCLOCK_FREQ / SAMPLE_RATE);
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:

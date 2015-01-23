@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Xavier Boulet
  *          Christophe Massiot
@@ -145,8 +145,6 @@ struct uprobe uprobe_src_s;
 struct uprobe uprobe_video_s;
 /* probe for demux audio subpipe */
 struct uprobe uprobe_audio_s;
-/* probe for glx sink */
-struct uprobe uprobe_latency_s;
 /* source thread */
 struct upipe_mgr *upipe_wsrc_mgr = NULL;
 /* decoder thread */
@@ -163,27 +161,8 @@ struct upipe *upipe_src = NULL;
 struct upipe *video_sink = NULL;
 /* audio sink */
 struct upipe *audio_sink = NULL;
-/* max sink latency */
-static uint64_t sink_latency = 0;
 /** true if we got the DidChangeView event */
 static bool inited = false;
-
-/* probe for sinks */
-static int catch_latency(struct uprobe *uprobe, struct upipe *upipe,
-                         int event, va_list args)
-{
-    if (event != UPROBE_SINK_LATENCY)
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    uint64_t latency = va_arg(args, uint64_t);
-    if (latency > sink_latency) {
-        upipe_notice_va(upipe, "setting output latency to %"PRIu64" ms",
-                        latency * 1000 / UCLOCK_FREQ);
-        sink_latency = latency;
-        upipe_play_set_output_latency(play, sink_latency);
-    }
-    return UBASE_ERR_NONE;
-}
 
 /* probe for video subpipe of demux */
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -652,7 +631,6 @@ int upipe_demo(int argc, char *argv[])
     uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
     uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
     uprobe_init(&uprobe_audio_s, catch_audio, uprobe_use(uprobe_dejitter));
-    uprobe_init(&uprobe_latency_s, catch_latency, uprobe_use(uprobe_main));
 
     /* upipe-av */
     if (unlikely(!upipe_av_init(false,
@@ -682,7 +660,7 @@ int upipe_demo(int argc, char *argv[])
     /* upipe_nacl_graphic2d */
     struct upipe_mgr *nacl_graphic2d_mgr = upipe_nacl_graphic2d_mgr_alloc();
     video_sink = upipe_void_alloc(nacl_graphic2d_mgr,
-            uprobe_pfx_alloc(uprobe_use(&uprobe_latency_s), UPROBE_LOG_VERBOSE,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
                             "nacl graphic2d"));
     assert(video_sink != NULL);
     upipe_mgr_release(nacl_graphic2d_mgr);
@@ -691,7 +669,7 @@ int upipe_demo(int argc, char *argv[])
     /* upipe_nacl_audio */
     struct upipe_mgr *nacl_audio_mgr = upipe_nacl_audio_mgr_alloc();
     audio_sink = upipe_void_alloc(nacl_audio_mgr,
-            uprobe_pfx_alloc(uprobe_use(&uprobe_latency_s), UPROBE_LOG_VERBOSE,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
                              "nacl audio"));
     upipe_mgr_release(nacl_audio_mgr);
     upipe_attach_uclock(audio_sink);
@@ -716,7 +694,6 @@ int upipe_demo(int argc, char *argv[])
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
     uprobe_clean(&uprobe_audio_s);
-    uprobe_clean(&uprobe_latency_s);
 
     upipe_av_clean();
 
