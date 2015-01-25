@@ -105,6 +105,8 @@
 #include <time.h>
 #include <netinet/in.h>
 
+#include <libswscale/swscale.h>
+
 #define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
@@ -203,6 +205,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     uref_free(uref);
     upipe_mgr_release(ffmt_mgr);
     upipe_release(ffmt);
+    upipe_sws_set_flags(ffmt, SWS_FAST_BILINEAR);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,

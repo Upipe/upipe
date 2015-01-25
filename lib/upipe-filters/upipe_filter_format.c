@@ -46,6 +46,7 @@
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-filters/upipe_filter_blend.h>
+#include <upipe-swscale/upipe_sws.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -118,6 +119,9 @@ struct upipe_ffmt {
     /** list of blockers (used during udeal) */
     struct uchain blockers;
 
+    /** swscale flags */
+    int sws_flags;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -188,6 +192,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
         upipe_ffmt_to_urefcount_real(upipe_ffmt);
     upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
+    upipe_ffmt->sws_flags = 0;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -333,6 +338,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             else
                 upipe_set_output(upipe_ffmt->first_inner, sws);
             upipe_ffmt_store_last_inner(upipe, sws);
+            if (upipe_ffmt->sws_flags)
+                upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
         }
 
     } else { /* sound. */
@@ -412,6 +419,22 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the swscale flags.
+ *
+ * @param upipe description structure of the pipe
+ * @param flags swscale flags
+ * @return an error code
+ */
+static int upipe_ffmt_set_sws_flags(struct upipe *upipe, int flags)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    upipe_ffmt->sws_flags = flags;
+    if (upipe_ffmt->last_inner != NULL && flags)
+        /* it may not be sws but it will just return an error */
+        upipe_sws_set_flags(upipe_ffmt->last_inner, flags);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ffmt pipe.
  *
  * @param upipe description structure of the pipe
@@ -421,9 +444,16 @@ static int upipe_ffmt_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
 {
-    if (command == UPIPE_SET_FLOW_DEF) {
-        struct uref *flow_def = va_arg(args, struct uref *);
-        return upipe_ffmt_set_flow_def(upipe, flow_def);
+    switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_ffmt_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_SWS_SET_FLAGS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SWS_SIGNATURE)
+            int flags = va_arg(args, int);
+            return upipe_ffmt_set_sws_flags(upipe, flags);
+        }
     }
 
     int err = upipe_ffmt_control_bin_input(upipe, command, args);

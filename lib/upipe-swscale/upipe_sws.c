@@ -455,6 +455,7 @@ static int _upipe_sws_set_flags(struct upipe *upipe, int flags)
 {
     struct upipe_sws *upipe_sws = upipe_sws_from_upipe(upipe);
     upipe_sws->flags = flags;
+    upipe_dbg_va(upipe, "setting flags to %d", flags);
     return UBASE_ERR_NONE;
 }
 
