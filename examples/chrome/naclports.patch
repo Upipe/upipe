@@ -1,0 +1,307 @@
+Index: ports/amt/build.sh
+===================================================================
+--- ports/amt/build.sh	(revision 0)
++++ ports/amt/build.sh	(working copy)
+@@ -0,0 +1,25 @@
++#!/bin/bash
++
++BUILD_DIR=${SRC_DIR}
++
++if [ "${NACL_LIBC}" = "newlib" ]; then
++  LIBS+=" -lglibc-compat"
++  NACLPORTS_CPPFLAGS+=" -I${NACLPORTS_INCLUDE}/glibc-compat"
++fi
++
++ConfigureStep() {
++  true
++}
++
++BuildStep() {
++  rm -f lib/linux/libamt*
++  cd build/linux
++  LogExecute make CC=${NACLCC} AR=${NACLAR}
++}
++
++InstallStep() {
++  install -d ${DESTDIR_LIB}
++  install -d ${DESTDIR_INCLUDE}
++  cp lib/linux/libamt.a ${DESTDIR_LIB}
++  cp include/amt.h ${DESTDIR_INCLUDE}
++}
+Index: ports/amt/nacl.patch
+===================================================================
+--- ports/amt/nacl.patch	(revision 0)
++++ ports/amt/nacl.patch	(working copy)
+@@ -0,0 +1,140 @@
++diff --git a/build/linux/makefile b/build/linux/makefile
++index ce701a9..3972366 100644
++--- a/build/linux/makefile
+++++ b/build/linux/makefile
++@@ -20,8 +20,9 @@ HEADERS =$(HSRC) $(HSRC_SOCK)
++ ADD_INCLUDE_DIR=-I$(LIBAPI_DIR) -I$(SOURCE_DIR) -I$(EX_CODE) 
++ 
++ # standard options
++-CC=gcc
++-LIBS=-static-libgcc -lpthread
+++#CC=gcc
+++#LIBS=-static-libgcc -lpthread
+++LIBS=-lpthread
++ WFLAGS=-Wpadded -Wall -Wstrict-prototypes -Wpointer-arith  
++ 
++ ifdef PLATFORM32
++@@ -29,9 +30,12 @@ CFLAGS=-m32 -march=i686 -DP32BITS -g -c  $(ADD_INCLUDE_DIR)
++ TARGET=libamt.a
++ else
++ CFLAGS=-g -c  $(ADD_INCLUDE_DIR)
++-TARGET=libamt64.a
+++#TARGET=libamt64.a
+++TARGET=libamt.a
++ endif
++ 
+++CFLAGS += -fPIC
+++
++ #CFLAGS=-g -c -O3 $(ADD_INCLUDE_DIR)
++ 
++ OBJECTS=$(addprefix $(TARGET_DIR)/, $(addsuffix .o,$(basename $(notdir $(CSOURCES)))))
++diff --git a/ex_sock/ex_sock.c b/ex_sock/ex_sock.c
++index c9095d0..502a906 100644
++--- a/ex_sock/ex_sock.c
+++++ b/ex_sock/ex_sock.c
++@@ -132,6 +132,7 @@ ex_sock_t * ex_makeUDPSock(u32 localIP, u16 *sServerPort, u32 remoteIP, u16 remo
++       EX_ERR_CHECK(0, "ex_makeUDPSock:failed to create the socket\n", NULL);
++   }
++ 
+++#if 0
++   // include struct in_pktinfo in the message "ancilliary" control data
++   res = setsockopt(pSock->sockClient, IPPROTO_IP, IP_PKTINFO, &enable, sizeof(enable));
++   if (res < 0 ) {
++@@ -139,6 +140,7 @@ ex_sock_t * ex_makeUDPSock(u32 localIP, u16 *sServerPort, u32 remoteIP, u16 remo
++       free(pSock);
++       EX_ERR_CHECK(0, "ex_makeUDPSock:failed to set IPPROTO_IP\n", NULL);
++   }
+++#endif
++ 
++   // make it reusable
++   if (reuse) {
++@@ -273,7 +275,9 @@ int ex_joinSSMGroup(s32 s, u32 groupIP, u32 sourceIP, u32 interfaceIP)
++ 
++     //setsockopt(s, IPPROTO_IP, IP_UNBLOCK_SOURCE, (char *) &imr, sizeof(imr));  
++     
++-     return setsockopt(s, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, (char *) &imr, sizeof(imr));  
+++     if (setsockopt(s, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, (char *) &imr, sizeof(imr)))
+++         printf("unable to add source membership\n");
+++     return 0;
++ }
++ 
++ int ex_leaveSSMGroup(s32 s, u32 groupIP, u32 sourceIP, u32 interfaceIP) 
++diff --git a/src/amt.c b/src/amt.c
++index fbc10c2..a7f23c6 100644
++--- a/src/amt.c
+++++ b/src/amt.c
++@@ -44,18 +44,18 @@ official policies, either expressed or implied, of Cisco.
++ #include <sys/types.h>
++ #include <sys/socket.h>
++ #include <sys/ioctl.h>
++-#include <net/if.h>
+++//#include <net/if.h>
++ #include <netinet/in.h>
++-#include <ifaddrs.h>
+++//#include <ifaddrs.h>
++ #include <netdb.h>
++ #include <unistd.h>
++ #include <signal.h>
++ #include <sys/time.h>
++ #include <sys/wait.h>
++-#include <syslog.h>
+++//#include <syslog.h>
++ #include <arpa/inet.h>
++-#include <sys/ipc.h>
++-#include <sys/msg.h>
+++//#include <sys/ipc.h>
+++//#include <sys/msg.h>
++ #include <pthread.h>
++ #include <assert.h>  
++ #include <unistd.h>
++diff --git a/src/amt_impl.c b/src/amt_impl.c
++index 05dca5d..71217fc 100644
++--- a/src/amt_impl.c
+++++ b/src/amt_impl.c
++@@ -101,6 +101,7 @@ static u16 checksum(u16 *buf, int size)
++ //------------ read packet ----------------
++ static void dump_msg(u8 *buf, int size)
++ {
+++    return; /* avoid segfaulting if size is too high */
++     char msg[2048];
++     int i, ndx=0, max_l=2000;
++     AMT_TRACE(AMT_LEVEL_9, "message dump with size=%u -- \n", size);
++@@ -129,6 +130,7 @@ static int readPacket_auxmsg(struct pollfd *ufds, u8 *buf, int maxSize, u32 *gro
++ 	// size = -1;
++         //handleExcept(pEp);
++     } else if (ufds->revents & POLLIN || ufds->revents & POLLPRI) { 
+++#if 0
++ 	struct cmsghdr *cmsg;	
++ 	res = recvmsg(ufds->fd, &auxMsg, 0);
++ 	AMT_ERR_CHECK(res>=0, AMT_ERR, "failed to read packet with "
++@@ -145,6 +147,12 @@ static int readPacket_auxmsg(struct pollfd *ufds, u8 *buf, int maxSize, u32 *gro
++ 		break;
++ 	    }
++ 	}
+++#else
+++        struct sockaddr tmp;
+++        u32 tmp_size = sizeof(struct sockaddr );
+++        size = recvfrom(ufds->fd, buf, maxSize, 0, &tmp, &tmp_size);
+++        *srcIP = ntohl(((struct sockaddr_in *)&tmp)->sin_addr.s_addr);
+++#endif
++     }
++     return size;
++ }
++@@ -447,7 +455,7 @@ static int relay_leaveSSM(amt_ssm_t *pSSM)
++ 		  inet_ntoa(pRelay->sock->clientAddr.sin_addr),
++ 		   ntohl(mr->grp[0].ssm), ntohl(mr->grp[0].srcIP[0]));
++ 	// reset count if the channel is active
++-	pSSM->retryCount = (pSSM->active>0)?0:++pSSM->retryCount;
+++	pSSM->retryCount = (pSSM->active>0)?0:pSSM->retryCount+1;
++ 	pSSM->active--;
++ 
++ 	pSSM->expiredTime = getExpiredTime(pSSM->retryCount, AMT_RELAY_TIMEOUT); 
++@@ -1467,7 +1475,7 @@ int poll_impl(amt_read_event_t *rs, int size, int timeout)
++ 			  res, p, srcIP,group );
++ 		for (k=0; k<p->mark; k++) {
++ 		    amt_ssm_t *pSSM = (amt_ssm_t *) ((amt_read_event_t *)ssmPointer[i].bPointer[k])->handle;
++-		    if (pSSM->srcIP == srcIP && pSSM->groupIP == group) {
+++		    if (pSSM->sock->sockServ == ufds[i].fd) {
++ 			((amt_read_event_t *)ssmPointer[i].bPointer[k])->rstate = AMT_READ_IN;
++ 			pSSM->ssmState = AMT_SSM_STATE_SSM_JOINED;
++ 			p->bufSize = len;
+Index: ports/amt/pkg_info
+===================================================================
+--- ports/amt/pkg_info	(revision 0)
++++ ports/amt/pkg_info	(working copy)
+@@ -0,0 +1,5 @@
++NAME=amt
++VERSION=master
++URL=https://github.com/cisco/SSMAMTtools.git@HEAD
++LICENSE=BSD
++SHA1=2dcd772b2a8dd1d97d6b10552d575fb3544a6ca0
+Index: ports/bitstream/build.sh
+===================================================================
+--- ports/bitstream/build.sh	(revision 0)
++++ ports/bitstream/build.sh	(working copy)
+@@ -0,0 +1,12 @@
++#!/bin/bash
++
++BUILD_DIR=${SRC_DIR}
++
++InstallStep() {
++  if [ -n "${MAKEFLAGS:-}" ]; then
++    echo "MAKEFLAGS=${MAKEFLAGS}"
++    export MAKEFLAGS
++  fi
++  export PATH=${NACL_BIN_PATH}:${PATH}
++  LogExecute make ${INSTALL_TARGETS:-install} DESTDIR=${DESTDIR} PREFIX=/payload
++}
+Index: ports/bitstream/pkg_info
+===================================================================
+--- ports/bitstream/pkg_info	(revision 0)
++++ ports/bitstream/pkg_info	(working copy)
+@@ -0,0 +1,4 @@
++NAME=bitstream
++VERSION=master
++URL=git://git.videolan.org/bitstream.git@HEAD
++LICENSE=MIT
+Index: ports/ffmpeg/build.sh
+===================================================================
+--- ports/ffmpeg/build.sh	(revision 1656)
++++ ports/ffmpeg/build.sh	(working copy)
+@@ -12,8 +12,10 @@
+     extra_args="--cc=pnacl-clang --arch=pnacl"
+   elif [ "${NACL_ARCH}" = arm ]; then
+     extra_args="--arch=arm"
++  elif [ "${NACL_ARCH}" = x86_64 ]; then
++    extra_args="--arch=x64_64"
+   else
+-    extra_args="--arch=x86"
++    extra_args="--arch=x86_32"
+   fi
+ 
+   LogExecute ${SRC_DIR}/configure \
+Index: ports/ffmpeg/nacl.patch
+===================================================================
+--- ports/ffmpeg/nacl.patch	(revision 1656)
++++ ports/ffmpeg/nacl.patch	(working copy)
+@@ -20,3 +20,22 @@
+      struct rusage rusage;
+      getrusage(RUSAGE_SELF, &rusage);
+      return (int64_t)rusage.ru_maxrss * 1024;
++--- a/configure        2015-01-25 16:13:47.000000000 +0100
+++++ b/configure        2015-01-25 16:14:42.000000000 +0100
++@@ -3232,6 +3232,7 @@
++         arch="tilegx"
++     ;;
++     i[3-6]86|i86pc|BePC|x86pc|x86_64|x86_32|amd64)
+++        subarch=$arch
++         arch="x86"
++     ;;
++ esac
++@@ -3512,7 +3513,7 @@
++         spic=$shared
++     ;;
++     x86)
++-        check_64bit x86_32 x86_64 'sizeof(void *) > 4'
+++        #check_64bit x86_32 x86_64 'sizeof(void *) > 4'
++         if test "$subarch" = "x86_64"; then
++             spic=$shared
++         fi
+Index: ports/libev/build.sh
+===================================================================
+--- ports/libev/build.sh	(revision 0)
++++ ports/libev/build.sh	(working copy)
+@@ -0,0 +1,7 @@
++#!/bin/bash
++
++
++if [ "${NACL_LIBC}" = "newlib" ]; then
++  LIBS+=" -lglibc-compat"
++  NACLPORTS_CPPFLAGS+=" -I${NACLPORTS_INCLUDE}/glibc-compat"
++fi
+Index: ports/libev/pkg_info
+===================================================================
+--- ports/libev/pkg_info	(revision 0)
++++ ports/libev/pkg_info	(working copy)
+@@ -0,0 +1,6 @@
++NAME=libev
++VERSION=4.19
++URL=http://dist.schmorp.de/libev/libev-4.19.tar.gz
++LICENSE=MIT
++DEPENDS=(libtool)
++SHA1=5a25212eb976703243fadf3a027e0fe031f29474
+Index: ports/upipe/build.sh
+===================================================================
+--- ports/upipe/build.sh	(revision 0)
++++ ports/upipe/build.sh	(working copy)
+@@ -0,0 +1,14 @@
++#!/bin/bash
++
++BUILD_DIR=${SRC_DIR}
++CONFIG_SUB=autotools/config.sub
++
++if [ "${NACL_LIBC}" = "newlib" ]; then
++  export LIBS=" -lglibc-compat -lm"
++  export NACLPORTS_CPPFLAGS+=" -I${NACLPORTS_INCLUDE}/glibc-compat"
++fi
++
++ConfigureStep() {
++  LogExecute ./bootstrap
++  DefaultConfigureStep
++}
+Index: ports/upipe/pkg_info
+===================================================================
+--- ports/upipe/pkg_info	(revision 0)
++++ ports/upipe/pkg_info	(working copy)
+@@ -0,0 +1,6 @@
++NAME=upipe
++VERSION=master
++URL=https://github.com/cmassiot/upipe.git@HEAD
++LICENSE=MIT
++DEPENDS=(libtool libev ffmpeg bitstream glibc-compat)
++SHA1=c37f32622ad19a3962a69ecbecbeb1115807382b

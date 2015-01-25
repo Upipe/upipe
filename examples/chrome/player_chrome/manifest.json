@@ -1,28 +1,25 @@
 {
-  "name": "player chrome",
-  "version": "34.0.1847.116",
-  "minimum_chrome_version": "34.0.1847.116",
+  // Required
   "manifest_version": 2,
-  "description": "player chrome",
+  "name": "player Upipe",
+  "version": "0.4",
+
+  // Recommended
+  "description": "A multimedia player based on the Upipe framework",
+
+  // Optional
+  "minimum_chrome_version": "35",
   "offline_enabled": true,
-  "icons": {
-    "128": "icon128.png"
-  },
-  "app": {
-    "background": {
-      "scripts": ["background.js"]
+  "sockets": {
+    "udp": {
+      "send": "*",
+      "bind": "*",
+      "multicastMembership": "*"
     }
-  },
-  "key": "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCMN716Qyu0l2EHNFqIJVqVysFcTR6urqhaGGqW4UK7slBaURz9+Sb1b4Ot5P1uQNE5c+CTU5Vu61wpqmSqMMxqHLWdPPMh8uRlyctsb2cxWwG6XoGSvpX29NsQVUFXd4v2tkJm3G9t+V0X8TYskrvWQmnyOW8OEIDvrBhUEfFxWQIDAQAB",
-  "oauth2": {
-    "client_id": "903965034255.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive"]
   },
   "permissions": [
     {
         "socket": [
-			"tcp-connect:*:*",
-            "resolve-host", 
             "udp-bind:*:*", 
             "udp-send-to:*:*"
         ]
