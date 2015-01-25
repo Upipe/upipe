@@ -74,16 +74,21 @@ AC_CHECK_FUNC(x264_param_default_mpeg2,
 CFLAGS="$CFLAGS_save" LDFLAGS="$LDFLAGS_save"
 
 
+AC_CHECK_FUNC(writev,
+                AM_CONDITIONAL(HAVE_WRITEV, true),
+                AM_CONDITIONAL(HAVE_WRITEV, false)
+)
 AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
 AC_CHECK_HEADERS([ppapi/c/ppb.h], AM_CONDITIONAL(HAVE_NACL, true), AM_CONDITIONAL(HAVE_NACL, false))
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
 AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, true) AM_CONDITIONAL(HAVE_OSX_DARWIN, true)], AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, false))
 AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
+AC_CHECK_HEADERS([dlfcn.h], AM_CONDITIONAL(HAVE_DLFCN_H, true), AM_CONDITIONAL(HAVE_DLFCN_H, false))
 AC_CHECK_HEADERS([amt.h], AM_CONDITIONAL(HAVE_AMT, true), AM_CONDITIONAL(HAVE_AMT, false))
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h])
+AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h net/if.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL

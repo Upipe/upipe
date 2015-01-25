@@ -120,7 +120,7 @@
 #define XFER_POOL               20
 #define SRC_OUT_QUEUE_LENGTH    10000
 #define DEC_IN_QUEUE_LENGTH     50
-#define DEC_OUT_QUEUE_LENGTH    2
+#define DEC_OUT_QUEUE_LENGTH    5
 
 static void demo_stop(void);
 

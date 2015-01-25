@@ -2,7 +2,6 @@ lib_LTLIBRARIES = libupipe_modules.la
 
 libupipe_modules_la_SOURCES = \
 	upipe_file_source.c \
-	upipe_file_sink.c \
 	upipe_transfer.c \
 	upipe_play.c \
 	upipe_trickplay.c \
@@ -14,7 +13,6 @@ libupipe_modules_la_SOURCES = \
 	upipe_queue_source.c \
 	upipe_queue_sink.c \
 	upipe_udp_source.c \
-	upipe_udp_sink.c \
 	upipe_udp.c \
 	upipe_udp.h \
 	upipe_http_source.c \
@@ -43,6 +41,12 @@ libupipe_modules_la_SOURCES = \
 	upipe_worker_linear.c \
 	upipe_worker_sink.c \
 	upipe_worker_source.c
+
+if HAVE_WRITEV
+libupipe_modules_la_SOURCES += \
+	upipe_file_sink.c \
+	upipe_udp_sink.c
+endif
 
 if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \

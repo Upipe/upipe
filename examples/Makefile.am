@@ -31,7 +31,9 @@ blackmagic_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEAV_LIBS)
 
 
 if HAVE_EV
+if HAVE_WRITEV
 noinst_PROGRAMS += udpmulticat
+endif
 
 if HAVE_BITSTREAM
 noinst_PROGRAMS += upipe_duration
@@ -39,10 +41,15 @@ endif
 
 if HAVE_AVFORMAT
 noinst_PROGRAMS += transcode
+
+if HAVE_DLFCN_H
 noinst_PROGRAMS += blackmagic
+endif
 
 if HAVE_BITSTREAM
+if HAVE_WRITEV
 noinst_PROGRAMS += extract_pic
+endif
 
 if HAVE_GLX
 noinst_PROGRAMS += glxplay

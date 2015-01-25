@@ -38,10 +38,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <net/if.h>
 #include <netdb.h>
 #include <errno.h>
 
+#ifdef UPIPE_HAVE_NET_IF_H
+#include <net/if.h>
+#endif
 #include "upipe_udp.h"
 
 /** union sockaddru: wrapper to avoid strict-aliasing issues */
@@ -112,7 +114,7 @@ void udp_raw_set_len(uint8_t *raw_header, uint16_t len)
  */
 static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *ifrindex)
 {
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(__native_client__)
     int fd;
     struct ifreq ifr;
 
@@ -418,11 +420,13 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 char *option = config_stropt(ARG_OPTION("ifaddr="));
                 if_addr = inet_addr(option);
                 free( option );
+#if !defined(__APPLE__) && !defined(__native_client__)
             } else if ( IS_OPTION("ifname=") ) {
                 ifname = config_stropt( ARG_OPTION("ifname=") );
                 if (strlen(ifname) >= IFNAMSIZ) {
                     ifname[IFNAMSIZ-1] = '\0';
                 }
+#endif
             } else if (IS_OPTION("srcaddr=")) {
                 char *option = config_stropt(ARG_OPTION("srcaddr="));
                 src_addr = inet_addr(option);
@@ -495,7 +499,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         upipe_err_va(upipe, "unable to open socket (%m)");
         return -1;
     }
-    #ifdef __APPLE__
+    #if !defined(__APPLE__) && !defined(__native_client__)
     if (*use_raw) {
         int hincl = 1;
         if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) < 0) {
@@ -525,7 +529,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         }
 
         if (bind_addr.ss.ss_family != AF_UNSPEC) {
-            #ifndef __APPLE__
+            #if !defined(__APPLE__) && !defined(__native_client__)
             if (IN6_IS_ADDR_MULTICAST(&bind_addr.sin6.sin6_addr)) {
                 struct ipv6_mreq imr;
                 union sockaddru bind_addr_any = bind_addr;
@@ -574,6 +578,7 @@ normal_bind:
         /* Join the multicast group if the socket is a multicast address */
         if (bind_addr.ss.ss_family == AF_INET
               && IN_MULTICAST(ntohl(bind_addr.sin.sin_addr.s_addr))) {
+#ifndef __native_client__
             if (connect_addr.ss.ss_family != AF_UNSPEC) {
                 /* Source-specific multicast */
                 struct ip_mreq_source imr;
@@ -607,7 +612,9 @@ normal_bind:
                     close(fd);
                     return -1;
                 }
-            } else {
+            } else
+#endif
+            {
                 /* Regular multicast */
                 struct ip_mreq imr;
                 imr.imr_multiaddr = bind_addr.sin.sin_addr;
