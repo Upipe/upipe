@@ -474,6 +474,7 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
     upipe_throw_dead(upipe);
     upipe_ffmt_clean_input(upipe);
     upipe_ffmt_clean_flow_format(upipe);
+    uref_free(upipe_ffmt->flow_def_input);
     uref_free(upipe_ffmt->flow_def_wanted);
     uprobe_clean(&upipe_ffmt->proxy_probe);
     uprobe_clean(&upipe_ffmt->last_inner_probe);
