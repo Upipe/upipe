@@ -518,14 +518,6 @@ static int upipe_glx_sink_provide_flow_format(struct upipe *upipe,
     uref_pic_flow_set_planes(flow_format, 0);
     uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
     uref_pic_set_progressive(flow_format);
-    struct urational sar;
-    uint64_t width;
-    if (ubase_check(uref_pic_flow_get_sar(flow_format, &sar)) &&
-        ubase_check(uref_pic_flow_get_hsize(flow_format, &width))) {
-        uref_pic_flow_set_hsize(flow_format, width * sar.num / sar.den);
-        sar.num = sar.den = 1;
-        uref_pic_flow_set_sar(flow_format, sar);
-    }
     return urequest_provide_flow_format(request, flow_format);
 }
 

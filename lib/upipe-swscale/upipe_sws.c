@@ -567,9 +567,6 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
 
-    struct urational sar;
-    sar.num = sar.den = 1;
-    UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
     upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;
