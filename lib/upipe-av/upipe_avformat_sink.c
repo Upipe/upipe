@@ -552,6 +552,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         struct uchain *uchain = ulist_pop(&input->urefs);
         struct uref *uref = uref_from_uchain(uchain);
 
+        upipe_use(upipe_avfsink_sub_to_upipe(input));
         if (ulist_empty(&input->urefs)) {
             uint64_t duration;
             if (ubase_check(uref_clock_get_duration(uref, &duration)))
@@ -588,6 +589,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (unlikely(!size)) {
             upipe_warn(upipe, "Received packet with size 0, dropping");
             uref_free(uref);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
             continue;
         }
         avpkt.size = size;
@@ -597,6 +599,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (unlikely(avpkt.data == NULL)) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
             return;
         }
         uref_block_extract(uref, 0, avpkt.size, avpkt.data); 
@@ -605,6 +608,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (input->next_dts > upipe_avfsink->highest_next_dts) {
             upipe_avfsink->highest_next_dts = input->next_dts;
         }
+
+        upipe_release(upipe_avfsink_sub_to_upipe(input));
 
         int error = av_write_frame(upipe_avfsink->context, &avpkt);
         free(avpkt.data);
