@@ -214,10 +214,16 @@ static inline enum PixelFormat
         AV_PIX_FMT_YUVJ444P,
         AV_PIX_FMT_YUYV422,
         AV_PIX_FMT_UYVY422,
+        AV_PIX_FMT_YUV420P10LE,
+        AV_PIX_FMT_YUV420P10BE,
         AV_PIX_FMT_YUV420P16LE,
         AV_PIX_FMT_YUV420P16BE,
+        AV_PIX_FMT_YUV422P10LE,
+        AV_PIX_FMT_YUV422P10BE,
         AV_PIX_FMT_YUV422P16LE,
         AV_PIX_FMT_YUV422P16BE,
+        AV_PIX_FMT_YUV444P10LE,
+        AV_PIX_FMT_YUV444P10BE,
         AV_PIX_FMT_YUV444P16LE,
         AV_PIX_FMT_YUV444P16BE,
         AV_PIX_FMT_RGB24,
@@ -293,6 +299,30 @@ static inline enum PixelFormat
                     return *pix_fmts;
                 }
                 break;
+            case AV_PIX_FMT_YUV420P10LE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10l"))) {
+                    chroma_p[0] = "y10l";
+                    chroma_p[1] = "u10l";
+                    chroma_p[2] = "v10l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV420P10BE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10b"))) {
+                    chroma_p[0] = "y10b";
+                    chroma_p[1] = "u10b";
+                    chroma_p[2] = "v10b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
             case AV_PIX_FMT_YUV420P16LE:
                 if (macropixel == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16l")) &&
@@ -317,6 +347,30 @@ static inline enum PixelFormat
                     return *pix_fmts;
                 }
                 break;
+            case AV_PIX_FMT_YUV422P10LE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10l"))) {
+                    chroma_p[0] = "y10l";
+                    chroma_p[1] = "u10l";
+                    chroma_p[2] = "v10l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV422P10BE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10b"))) {
+                    chroma_p[0] = "y10b";
+                    chroma_p[1] = "u10b";
+                    chroma_p[2] = "v10b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
             case AV_PIX_FMT_YUV422P16LE:
                 if (macropixel == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y16l")) &&
@@ -337,6 +391,30 @@ static inline enum PixelFormat
                     chroma_p[0] = "y16b";
                     chroma_p[1] = "u16b";
                     chroma_p[2] = "v16b";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV444P10LE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "u10l")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "v10l"))) {
+                    chroma_p[0] = "y10l";
+                    chroma_p[1] = "u10l";
+                    chroma_p[2] = "v10l";
+                    chroma_p[3] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_YUV444P10BE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "u10b")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "v10b"))) {
+                    chroma_p[0] = "y10b";
+                    chroma_p[1] = "u10b";
+                    chroma_p[2] = "v10b";
                     chroma_p[3] = NULL;
                     return *pix_fmts;
                 }
