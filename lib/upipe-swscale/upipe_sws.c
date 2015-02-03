@@ -422,7 +422,7 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         av_opt_set_int(upipe_sws->convert_ctx[2], "src_v_chr_pos", 192, 0);
     }
 
-    if (upipe_sws->input_pix_fmt == AV_PIX_FMT_YUV420P) {
+    if (upipe_sws->output_pix_fmt == AV_PIX_FMT_YUV420P) {
         av_opt_set_int(upipe_sws->convert_ctx[0], "dst_v_chr_pos", 128, 0);
         av_opt_set_int(upipe_sws->convert_ctx[1], "dst_v_chr_pos", 64, 0);
         av_opt_set_int(upipe_sws->convert_ctx[2], "dst_v_chr_pos", 192, 0);
