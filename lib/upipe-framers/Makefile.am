@@ -8,6 +8,7 @@ libupipe_framers_la_SOURCES = \
 	upipe_h264_framer.c \
 	upipe_mpgv_framer.c \
 	upipe_a52_framer.c \
+	upipe_opus_framer.c \
 	upipe_mpga_framer.c \
 	upipe_telx_framer.c \
 	upipe_dvbsub_framer.c
