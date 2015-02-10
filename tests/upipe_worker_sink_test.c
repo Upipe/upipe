@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,6 +35,7 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
+#include <upipe-pthread/uprobe_pthread_assert.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -63,7 +64,7 @@
 #define UPUMP_BLOCKER_POOL 0
 #define XFER_QUEUE 255
 #define XFER_POOL 1
-#define WSINK_QUEUE 1024
+#define WSINK_QUEUE 1
 
 static struct uprobe *logger;
 static bool transferred = false;
@@ -199,9 +200,17 @@ int main(int argc, char **argv)
     logger = uprobe_pthread_upump_mgr_alloc(logger);
     uprobe_pthread_upump_mgr_set(logger, upump_mgr);
     assert(logger != NULL);
+    struct uprobe *uprobe_main =
+        uprobe_pthread_assert_alloc(uprobe_use(logger));
+    assert(uprobe_main != NULL);
+    uprobe_pthread_assert_set(uprobe_main, pthread_self());
+    struct uprobe *uprobe_remote =
+        uprobe_pthread_assert_alloc(uprobe_use(logger));
+    assert(uprobe_remote != NULL);
 
     struct upipe *upipe_test = upipe_void_alloc(&test_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "test"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
+                             "test"));
     assert(upipe_test != NULL);
 
     struct upipe_mgr *upipe_xfer_mgr =
@@ -210,15 +219,18 @@ int main(int argc, char **argv)
 
     upipe_mgr_use(upipe_xfer_mgr);
     assert(pthread_create(&wsink_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
+    uprobe_pthread_assert_set(uprobe_remote, wsink_thread_id);
 
     struct upipe_mgr *upipe_wsink_mgr = upipe_wsink_mgr_alloc(upipe_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);
     upipe_mgr_release(upipe_xfer_mgr);
 
     struct upipe *upipe_handle = upipe_wsink_alloc(upipe_wsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "wsink"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
+                             "wsink"),
             upipe_test,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "wsink_x"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
+                             "wsink_x"),
             WSINK_QUEUE);
     /* from now on upipe_test shouldn't be accessed from this thread */
     assert(upipe_handle != NULL);
@@ -240,6 +252,8 @@ int main(int argc, char **argv)
     assert(transferred);
     assert(!nb_packets);
 
+    uprobe_release(uprobe_remote);
+    uprobe_release(uprobe_main);
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
