@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -215,7 +215,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         goto upipe_wlin_alloc_err3;
 
     struct upipe *out_qsink = upipe_qsink_alloc(wlin_mgr->qsink_mgr,
-            uprobe_pfx_alloc(uprobe_remote, UPROBE_LOG_VERBOSE,
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
                              "out_qsink"),
             out_qsrc);
     if (unlikely(out_qsink == NULL)) {
@@ -273,6 +273,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
             in_queue_length > UINT8_MAX ? UINT8_MAX : in_queue_length);
     if (unlikely(in_qsrc == NULL))
         goto upipe_wlin_alloc_err4;
+    uprobe_release(uprobe_remote);
 
     struct upipe *in_qsink = upipe_qsink_alloc(wlin_mgr->qsink_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
@@ -288,7 +289,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
                                   in_queue_length - UINT8_MAX);
 
     struct upipe *in_qsrc_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_wlin->in_qsrc_probe),
+            uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
                              UPROBE_LOG_VERBOSE, "in_qsrc_xfer"),
             in_qsrc);
     if (unlikely(in_qsrc_xfer == NULL))

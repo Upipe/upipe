@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -205,7 +205,7 @@ static struct upipe *_upipe_wsink_alloc(struct upipe_mgr *mgr,
         upipe_set_max_length(upipe_wsink->in_qsink, queue_length - UINT8_MAX);
 
     struct upipe *in_qsrc_xfer = upipe_xfer_alloc(wsink_mgr->xfer_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_wsink->in_qsrc_probe),
+            uprobe_pfx_alloc(uprobe_use(&upipe_wsink->proxy_probe),
                              UPROBE_LOG_VERBOSE, "in_qsrc_xfer"),
             in_qsrc);
     if (unlikely(in_qsrc_xfer == NULL))
