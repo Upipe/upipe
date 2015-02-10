@@ -612,7 +612,7 @@ int main(int argc, char **argv)
     /* worker threads */
     struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL);
+            upump_mgr_work, upump_mgr_free, NULL, NULL);
     assert(src_xfer_mgr != NULL);
     upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
     assert(upipe_wsrc_mgr != NULL);
@@ -620,7 +620,7 @@ int main(int argc, char **argv)
 
     struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL);
+            upump_mgr_work, upump_mgr_free, NULL, NULL);
     assert(dec_xfer_mgr != NULL);
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
@@ -628,7 +628,7 @@ int main(int argc, char **argv)
 
     struct upipe_mgr *sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL);
+            upump_mgr_work, upump_mgr_free, NULL, NULL);
     assert(sink_xfer_mgr != NULL);
     upipe_wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);

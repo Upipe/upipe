@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -137,6 +137,7 @@ static void upipe_pthread_stop(struct upump *upump)
  * @param upump_mgr_alloc callback creating the event loop in the new thread
  * @param upump_mgr_work callback running the event loop in the new thread
  * @param upump_mgr_free callback freeing the event loop in the new thread
+ * @param pthread_id_p reference to created thread ID (may be NULL)
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
@@ -145,7 +146,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
         upipe_pthread_upump_mgr_work upump_mgr_work,
         upipe_pthread_upump_mgr_free upump_mgr_free,
-        const pthread_attr_t *restrict attr)
+        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         malloc(sizeof(struct upipe_pthread_ctx));
@@ -176,9 +177,11 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     pthread_ctx->upump_mgr_work = upump_mgr_work;
     pthread_ctx->upump_mgr_free = upump_mgr_free;
 
-    if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr, upipe_pthread_start,
-                                pthread_ctx) != 0))
+    if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr,
+                                upipe_pthread_start, pthread_ctx) != 0))
         goto upipe_pthread_xfer_mgr_alloc_err5;
+    if (pthread_id_p != NULL)
+        *pthread_id_p = pthread_ctx->pthread_id;
 
     upump_start(upump);
     return xfer_mgr;
