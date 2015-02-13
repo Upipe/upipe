@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -59,10 +59,19 @@ extern "C" {
 #   define unlikely(x)     __builtin_expect(!!(x),0)
 #endif
 
+/** @This marks a function or variable as possibly unused (suppresses compiler
+ * warnings). */
+#define UBASE_UNUSED __attribute__ ((unused))
+/** @This marks a function or variable as deprecated (forces compiler
+ * warnings). */
+#define UBASE_DEPRECATED __attribute__ ((deprecated))
+
 #else /* mkdoc:skip */
 #define likely(x)       !!(x)
 #define unlikely(x)     !!(x)
 
+#define UBASE_UNUSED
+#define UBASE_DEPRECATED
 #endif
 
 #ifndef container_of
@@ -87,7 +96,7 @@ extern "C" {
  * @param STRUCTURE pointer to struct STRUCTURE                             \
  * @return pointer to struct SUBSTRUCT                                      \
  */                                                                         \
-static inline struct SUBSTRUCT *                                            \
+static UBASE_UNUSED inline struct SUBSTRUCT *                               \
     STRUCTURE##_to_##SUBNAME(struct STRUCTURE *s)                           \
 {                                                                           \
     return &s->SUB;                                                         \
@@ -97,7 +106,7 @@ static inline struct SUBSTRUCT *                                            \
  * @param sub pointer to struct SUBSTRUCT                                   \
  * @return pointer to struct STRUCTURE                                      \
  */                                                                         \
-static inline struct STRUCTURE *                                            \
+static UBASE_UNUSED inline struct STRUCTURE *                               \
     STRUCTURE##_from_##SUBNAME(struct SUBSTRUCT *sub)                       \
 {                                                                           \
     return container_of(sub, struct STRUCTURE, SUB);                        \
@@ -120,18 +129,6 @@ static inline struct STRUCTURE *                                            \
         char *string = NULL;                                                \
         return command;                                                     \
     }
-
-#ifdef __GNUC__
-/** @This marks a function or variable as possibly unused (suppresses compiler
- * warnings). */
-#define UBASE_UNUSED __attribute__ ((unused))
-/** @This marks a function or variable as deprecated (forces compiler
- * warnings). */
-#define UBASE_DEPRECATED __attribute__ ((deprecated))
-#else  /* mkdoc:skip */
-#define UBASE_UNUSED
-#define UBASE_DEPRECATED
-#endif
 
 /** @This is designed to chain uref and ubuf in a list. */
 struct uchain {

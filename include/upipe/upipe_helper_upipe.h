@@ -71,7 +71,8 @@ extern "C" {
  * @param STRUCTURE pointer to the private STRUCTURE structure              \
  * @return pointer to the public upipe structure                            \
  */                                                                         \
-static inline struct upipe *STRUCTURE##_to_upipe(struct STRUCTURE *s)       \
+static UBASE_UNUSED inline struct upipe *                                   \
+    STRUCTURE##_to_upipe(struct STRUCTURE *s)                               \
 {                                                                           \
     return &s->UPIPE;                                                       \
 }                                                                           \
@@ -80,7 +81,8 @@ static inline struct upipe *STRUCTURE##_to_upipe(struct STRUCTURE *s)       \
  * @param upipe public description structure of the pipe                    \
  * @return pointer to the private STRUCTURE structure                       \
  */                                                                         \
-static inline struct STRUCTURE *STRUCTURE##_from_upipe(struct upipe *upipe) \
+static UBASE_UNUSED inline struct STRUCTURE *                               \
+    STRUCTURE##_from_upipe(struct upipe *upipe)                             \
 {                                                                           \
     assert(upipe->mgr->signature == SIGNATURE);                             \
     return container_of(upipe, struct STRUCTURE, UPIPE);                    \

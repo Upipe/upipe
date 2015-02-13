@@ -68,7 +68,8 @@ extern "C" {
  * @param STRUCTURE pointer to the private STRUCTURE structure              \
  * @return pointer to the public uprobe structure                           \
  */                                                                         \
-static inline struct uprobe *STRUCTURE##_to_uprobe(struct STRUCTURE *s)     \
+static UBASE_UNUSED inline struct uprobe *                                  \
+    STRUCTURE##_to_uprobe(struct STRUCTURE *s)                             \
 {                                                                           \
     return &s->UPROBE;                                                      \
 }                                                                           \
@@ -77,7 +78,7 @@ static inline struct uprobe *STRUCTURE##_to_uprobe(struct STRUCTURE *s)     \
  * @param uprobe public description structure of the probe                  \
  * @return pointer to the private STRUCTURE structure                       \
  */                                                                         \
-static inline struct STRUCTURE *                                            \
+static UBASE_UNUSED inline struct STRUCTURE *                               \
     STRUCTURE##_from_uprobe(struct uprobe *uprobe)                          \
 {                                                                           \
     return container_of(uprobe, struct STRUCTURE, UPROBE);                  \

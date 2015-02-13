@@ -296,6 +296,7 @@ static void *test_thread(void *_thread)
     upump_free(thread->fetchav_pump);
     upump_mgr_release(upump_mgr);
     ev_loop_destroy(loop);
+    return NULL;
 }
 
 static void usage(const char *argv0) {

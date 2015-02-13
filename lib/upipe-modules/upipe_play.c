@@ -353,20 +353,6 @@ static void upipe_play_set_sink_latency(struct upipe *upipe, uint64_t latency)
     upipe_play_set_latency(upipe);
 }
 
-/** @This returns the current output latency.
- *
- * @param upipe description structure of the pipe
- * @param latency_p filled with the current output latency
- * @return an error code
- */
-static inline int _upipe_play_get_sink_latency(struct upipe *upipe,
-                                                 uint64_t *latency_p)
-{
-    struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
-    *latency_p = upipe_play->sink_latency;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a play pipe.
  *
  * @param upipe description structure of the pipe

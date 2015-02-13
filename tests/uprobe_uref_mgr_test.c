@@ -53,7 +53,7 @@ static struct uref_mgr *uref_mgr;
 /** helper phony pipe to test uprobe_ubuf_mem */
 static int uprobe_test_provide_uref_mgr(struct urequest *urequest, va_list args)
 {
-    struct uref_mgr *m = va_arg(args, struct uclock *);
+    struct uref_mgr *m = va_arg(args, struct uref_mgr *);
     assert(m == uref_mgr);
     uref_mgr_release(m);
     return UBASE_ERR_NONE;

@@ -163,7 +163,8 @@ extern "C" {
  * @param STRUCTURE pointer to the private STRUCTURE structure              \
  * @return pointer to the public MGR structure                              \
  */                                                                         \
-static inline struct upipe_mgr *STRUCTURE##_to_##MGR(struct STRUCTURE *s)   \
+static UBASE_UNUSED inline struct upipe_mgr *                               \
+    STRUCTURE##_to_##MGR(struct STRUCTURE *s)                               \
 {                                                                           \
     return &s->MGR;                                                         \
 }                                                                           \
@@ -172,7 +173,7 @@ static inline struct upipe_mgr *STRUCTURE##_to_##MGR(struct STRUCTURE *s)   \
  * @param mgr public MGR structure of the pipe                              \
  * @return pointer to the private STRUCTURE structure                       \
  */                                                                         \
-static inline struct STRUCTURE *                                            \
+static UBASE_UNUSED inline struct STRUCTURE *                               \
     STRUCTURE##_from_##MGR(struct upipe_mgr *mgr)                           \
 {                                                                           \
     struct STRUCTURE *s = container_of(mgr, struct STRUCTURE, MGR);         \

@@ -390,7 +390,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
             case 0x4: /* Hierarchy descriptor */
             case 0x5: /* Registration descriptor */
                     if ((valid = desc05_validate(desc))) {
-                        uint8_t *identifier;
+                        const uint8_t *identifier;
                         if ((identifier = desc05_get_identifier(desc))) {
                             if (!memcmp(identifier, "Opus", 4)){
                                 UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
