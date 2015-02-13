@@ -315,6 +315,9 @@ static void upipe_opusf_output_frame(struct upipe *upipe, struct upump **upump_p
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
+    if (upipe_opusf->got_discontinuity)
+        uref_flow_set_discontinuity(uref);
+    upipe_opusf->got_discontinuity = false;
     upipe_opusf_output(upipe, uref, upump_p);
 }
 
