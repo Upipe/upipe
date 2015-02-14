@@ -74,7 +74,6 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#include <bitstream/atsc/a52.h>
 #include <ev.h>
 
 #define UDICT_POOL_DEPTH    10
@@ -241,10 +240,6 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             upipe_warn_va(upipe, "flow def %s is not supported", def);
             break;
         }
-
-        if (!ubase_ncmp(def, "block.ac3.sound."))
-            ubase_assert(uref_sound_flow_set_samples(flow_def,
-                                                A52_FRAME_SAMPLES));
 
         /* flow */
         uint64_t id = 0;

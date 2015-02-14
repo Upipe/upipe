@@ -44,7 +44,6 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
-#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
@@ -66,7 +65,6 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#include <bitstream/atsc/a52.h>
 #include <ev.h>
 
 #define UDICT_POOL_DEPTH 10
@@ -99,7 +97,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
             break;
-        case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
             while (ubase_check(upipe_split_iterate(upipe, &flow_def)) &&
@@ -112,10 +109,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
                                   def);
                     break;
                 }
-
-                if (!ubase_ncmp(def, "block.ac3.sound."))
-                    ubase_assert(uref_sound_flow_set_samples(flow_def,
-                                                        A52_FRAME_SAMPLES));
 
                 uint64_t id;
                 ubase_assert(uref_flow_get_id(flow_def, &id));
