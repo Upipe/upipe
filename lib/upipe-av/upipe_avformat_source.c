@@ -598,8 +598,12 @@ static struct uref *alloc_audio_def(struct uref_mgr *uref_mgr,
 
     CHK(uref_sound_flow_set_channels(flow_def, codec->channels))
     CHK(uref_sound_flow_set_rate(flow_def, codec->sample_rate))
-    if (codec->frame_size)
+    if (codec->frame_size) {
         CHK(uref_sound_flow_set_samples(flow_def, codec->frame_size))
+    } else {
+        CHK(uref_sound_flow_set_samples(flow_def,
+                    av_get_audio_frame_duration(codec, 0)))
+    }
     return flow_def;
 }
 
