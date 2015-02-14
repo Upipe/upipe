@@ -96,6 +96,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_CLOCK_REF:
         case UPROBE_CLOCK_TS:
+        case UPROBE_NEW_FLOW_DEF:
             break;
         case UPROBE_SPLIT_UPDATE: {
             struct uref *flow_def = NULL;
