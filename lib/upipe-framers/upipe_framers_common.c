@@ -60,7 +60,7 @@ const uint8_t *upipe_framers_mpeg_scan(const uint8_t *restrict p,
 
     if (p > end)
         p = end;
-    *state = (p[-4] << 24) | (p[-3] << 16) | (p[-2] << 8) | p[-1];
+    *state = ((uint32_t)p[-4] << 24) | (p[-3] << 16) | (p[-2] << 8) | p[-1];
 
     return p;
 }
