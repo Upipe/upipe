@@ -98,14 +98,11 @@ struct upipe_qsink {
 };
 
 UPIPE_HELPER_UPIPE(upipe_qsink, upipe, UPIPE_QSINK_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_qsink, urefcount, upipe_qsink_no_input)
+UPIPE_HELPER_UREFCOUNT(upipe_qsink, urefcount, upipe_qsink_free)
 UPIPE_HELPER_UPUMP_MGR(upipe_qsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_qsink, upump_oob, upump_mgr)
 UPIPE_HELPER_INPUT(upipe_qsink, urefs, nb_urefs, max_urefs, blockers, upipe_qsink_output)
-
-/** @hidden */
-static void upipe_qsink_free(struct upipe *upipe);
 
 /** @internal @This allocates a queue sink pipe.
  *
@@ -136,12 +133,11 @@ static struct upipe *_upipe_qsink_alloc(struct upipe_mgr *mgr,
     upipe_qsink_init_upump(upipe);
     upipe_qsink_init_upump_oob(upipe);
     upipe_qsink_init_input(upipe);
-    upipe_qsink->qsrc = NULL;
+    upipe_qsink->qsrc = upipe_use(qsrc);
     upipe_qsink->flow_def = NULL;
     upipe_qsink->flow_def_sent = false;
     upipe_qsink->output = NULL;
     ulist_init(&upipe_qsink->request_list);
-    upipe_qsink->qsrc = upipe_use(qsrc);
 
     upipe_throw_ready(upipe);
     upipe_notice_va(upipe, "using queue source %p", qsrc);
@@ -175,12 +171,14 @@ static bool upipe_qsink_output(struct upipe *upipe, struct uref *uref,
 static void upipe_qsink_watcher(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    if (upipe_qsink_output_input(upipe)) {
-        upump_stop(upump);
-    }
+    upipe_qsink_output_input(upipe);
     upipe_qsink_unblock_input(upipe);
-    if (upipe_dead(upipe) && upipe_qsink_check_input(upipe))
-        upipe_qsink_free(upipe);
+    if (upipe_qsink_check_input(upipe)) {
+        upump_stop(upump);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_qsink_input. */
+        upipe_release(upipe);
+    }
 }
 
 /** @internal @This checks and creates the upump watcher to wait for the
@@ -194,9 +192,6 @@ static bool upipe_qsink_check_watcher(struct upipe *upipe)
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
     if (likely(upipe_qsink->upump != NULL))
         return true;
-
-    if (upipe_qsink->qsrc == NULL)
-        return false;
 
     upipe_qsink_check_upump_mgr(upipe);
     if (upipe_qsink->upump_mgr == NULL)
@@ -225,11 +220,6 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (unlikely(upipe_qsink->qsrc == NULL)) {
-        uref_free(uref);
-        upipe_warn(upipe, "received a buffer before opening a queue");
-        return;
-    }
     if (!upipe_qsink->flow_def_sent && upipe_qsink->flow_def != NULL) {
         struct uref *flow_def;
         if ((flow_def = uref_dup(upipe_qsink->flow_def)) == NULL)
@@ -249,9 +239,12 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
             return;
         }
+        upump_start(upipe_qsink->upump);
         upipe_qsink_hold_input(upipe, uref);
         upipe_qsink_block_input(upipe, upump_p);
-        upump_start(upipe_qsink->upump);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
     }
 }
 
@@ -323,6 +316,9 @@ static int upipe_qsink_flush(struct upipe *upipe)
     if (upipe_qsink_flush_input(upipe)) {
         struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
         upump_stop(upipe_qsink->upump);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_qsink_input. */
+        upipe_release(upipe);
     }
     return UBASE_ERR_NONE;
 }
@@ -554,16 +550,16 @@ static int upipe_qsink_control(struct upipe *upipe, int command, va_list args)
 static void upipe_qsink_free(struct upipe *upipe)
 {
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (likely(upipe_qsink->qsrc != NULL)) {
-        upipe_notice_va(upipe, "releasing queue source %p", upipe_qsink->qsrc);
-        upipe_release(upipe_qsink->qsrc);
-    }
+
+    /* play source end */
+    upipe_notice_va(upipe, "ending queue source %p", upipe_qsink->qsrc);
+    upipe_qsink_push_downstream(upipe, UPIPE_QUEUE_DOWNSTREAM_SOURCE_END, NULL);
+    upipe_release(upipe_qsink->qsrc);
+
     upipe_throw_dead(upipe);
 
-    if (upipe_qsink->output != NULL)
-        upipe_release(upipe_qsink->output);
-    if (upipe_qsink->flow_def != NULL)
-        uref_free(upipe_qsink->flow_def);
+    upipe_release(upipe_qsink->output);
+    uref_free(upipe_qsink->flow_def);
     upipe_qsink_clean_upump(upipe);
     upipe_qsink_clean_upump_oob(upipe);
     upipe_qsink_clean_upump_mgr(upipe);
@@ -571,26 +567,6 @@ static void upipe_qsink_free(struct upipe *upipe)
     upipe_qsink_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_qsink);
-}
-
-/** @This is called when there is no external reference to the pipe anymore.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_qsink_no_input(struct upipe *upipe)
-{
-    struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
-    if (upipe_qsink->qsrc == NULL) {
-        upipe_qsink_free(upipe);
-        return;
-    }
-
-    /* play source end */
-    upipe_notice_va(upipe, "ending queue source %p", upipe_qsink->qsrc);
-    upipe_qsink_push_downstream(upipe, UPIPE_QUEUE_DOWNSTREAM_SOURCE_END, NULL);
-
-    if (upipe_qsink_check_input(upipe))
-        upipe_qsink_free(upipe);
 }
 
 /** module manager static descriptor */
