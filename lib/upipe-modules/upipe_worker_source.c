@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -130,10 +130,9 @@ static int upipe_wsrc_proxy_probe(struct uprobe *uprobe, struct upipe *inner,
 static int upipe_wsrc_qsrc_probe(struct uprobe *uprobe, struct upipe *inner,
                                  int event, va_list args)
 {
-    if (event != UPROBE_SOURCE_END)
-        return uprobe_throw_next(uprobe, inner, event, args);
-    upipe_release(inner);
-    return UBASE_ERR_NONE;
+    if (event == UPROBE_SOURCE_END)
+        return UBASE_ERR_NONE;
+    return uprobe_throw_next(uprobe, inner, event, args);
 }
 
 /** @internal @This allocates a wsrc pipe.
@@ -196,7 +195,6 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     if (queue_length > UINT8_MAX)
         upipe_set_max_length(out_qsink, queue_length - UINT8_MAX);
 
-    upipe_use(out_qsrc); /* because of upipe_release in probe */
     upipe_attach_upump_mgr(out_qsrc);
     upipe_wsrc_store_last_inner(upipe, out_qsrc);
 

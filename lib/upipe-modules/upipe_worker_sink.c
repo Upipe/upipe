@@ -210,7 +210,6 @@ static struct upipe *_upipe_wsink_alloc(struct upipe_mgr *mgr,
             in_qsrc);
     if (unlikely(in_qsrc_xfer == NULL))
         goto upipe_wsink_alloc_err3;
-    upipe_set_output(upipe_wsink->in_qsink, in_qsrc_xfer);
     upipe_set_output(in_qsrc_xfer, remote);
     upipe_attach_upump_mgr(in_qsrc_xfer);
     upipe_release(remote);

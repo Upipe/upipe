@@ -152,10 +152,9 @@ static int upipe_wlin_in_qsrc_probe(struct uprobe *uprobe, struct upipe *inner,
 static int upipe_wlin_out_qsrc_probe(struct uprobe *uprobe, struct upipe *inner,
                                      int event, va_list args)
 {
-    if (event != UPROBE_SOURCE_END)
-        return uprobe_throw_next(uprobe, inner, event, args);
-    upipe_release(inner);
-    return UBASE_ERR_NONE;
+    if (event == UPROBE_SOURCE_END)
+        return UBASE_ERR_NONE;
+    return uprobe_throw_next(uprobe, inner, event, args);
 }
 
 /** @internal @This allocates a wlin pipe.
@@ -225,7 +224,6 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     if (out_queue_length > UINT8_MAX)
         upipe_set_max_length(out_qsink, out_queue_length - UINT8_MAX);
 
-    upipe_use(out_qsrc); /* because of upipe_release in probe */
     upipe_attach_upump_mgr(out_qsrc);
     upipe_wlin_store_last_inner(upipe, out_qsrc);
 
@@ -294,7 +292,6 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
             in_qsrc);
     if (unlikely(in_qsrc_xfer == NULL))
         goto upipe_wlin_alloc_err4;
-    upipe_set_output(upipe_wlin->in_qsink, in_qsrc_xfer);
     upipe_set_output(in_qsrc_xfer, remote);
     upipe_attach_upump_mgr(in_qsrc_xfer);
     upipe_release(remote);
