@@ -30,6 +30,9 @@
  * @table 2
  * @item queue_length @item maximum length of the queue (<= 255)
  * @end table
+ *
+ * Also note that this module is exceptional in that upipe_release() may be
+ * called from another thread. The release function is thread-safe.
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_QUEUE_SOURCE_H_

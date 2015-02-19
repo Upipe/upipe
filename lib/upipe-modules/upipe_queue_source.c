@@ -25,6 +25,14 @@
 
 /** @file
  * @short Upipe source module for queues
+ *
+ * Note that the allocator requires an additional parameter:
+ * @table 2
+ * @item queue_length @item maximum length of the queue (<= 255)
+ * @end table
+ *
+ * Also note that this module is exceptional in that upipe_release() may be
+ * called from another thread. The release function is thread-safe.
  */
 
 #include <upipe/ubase.h>
@@ -156,9 +164,7 @@ static void upipe_qsrc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_use(upipe);
     upipe_qsrc_output(upipe, uref, upump_p);
-    upipe_release(upipe);
 }
 
 /** @internal @This reads data from the queue and outputs it.
