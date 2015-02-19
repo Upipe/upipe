@@ -112,7 +112,7 @@ extern "C" {
  * @item @code
  *  int upipe_foo_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
  * @end code
- * Typically called from your upipe_foo_output_control() handler, such as:
+ * Typically called from your upipe_foo_control() handler, such as:
  * @code
  *  case UPIPE_GET_SUB_MGR: {
  *      struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
@@ -123,7 +123,7 @@ extern "C" {
  * @item @code
  *  int upipe_foo_iterate_sub(struct upipe *upipe, struct upipe **p)
  * @end code
- * Typically called from your upipe_foo_output_control() handler, such as:
+ * Typically called from your upipe_foo_control() handler, such as:
  * @code
  *  case UPIPE_ITERATE_SUB: {
  *      struct upipe **p = va_arg(args, struct upipe **);

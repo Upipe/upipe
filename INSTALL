@@ -60,5 +60,32 @@ are however provided in the tests/ and examples/ directories.
 
 @end section
 
+@section T {Debugging}
+
+Upipe's code makes intensive use of the @ref #container_of macro.
+Debugging with gdb can be made easier by adding the following lines to your
+.gdbinit file:
+
+@code R
+set print pretty on
+define container_of
+    p ((struct $arg1*)((void*)$arg0 - (void*)&((struct $arg1*)0)->$arg2))
+end
+@end code
+
+Then, supposing you big structure is upipe_foo, and you have a member called
+upipe to which you have a pointer (also called upipe), you can call it from
+gdb's shell to get a pointer to upipe_foo:
+
+@code R
+(gdb) container_of upipe upipe_foo upipe
+$5 = (struct upipe_foo *) 0x7f9db9873000
+(gdb) print *$5
+$6 = {
+[...]
+@end code
+
+@end section
+
 @end section
 
