@@ -465,6 +465,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
                                                  context->frame_size))
     UBASE_FATAL(upipe, uref_sound_flow_set_sample_size(flow_def_attr,
                      av_get_bytes_per_sample(context->sample_fmt)))
+    UBASE_FATAL(upipe, uref_sound_flow_set_align(flow_def_attr, 32))
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
         if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
