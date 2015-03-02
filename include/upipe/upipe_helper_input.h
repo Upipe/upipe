@@ -161,7 +161,8 @@ static void STRUCTURE##_init_input(struct upipe *upipe)                     \
  *                                                                          \
  * @param blocker description structure of the blocker                      \
  */                                                                         \
-static void STRUCTURE##_block_input_cb(struct upump_blocker *blocker)       \
+static UBASE_UNUSED void                                                    \
+    STRUCTURE##_block_input_cb(struct upump_blocker *blocker)               \
 {                                                                           \
     ulist_delete(upump_blocker_to_uchain(blocker));                         \
     upump_blocker_free(blocker);                                            \
@@ -171,8 +172,8 @@ static void STRUCTURE##_block_input_cb(struct upump_blocker *blocker)       \
  * @param upipe description structure of the pipe                           \
  * @param upump_p reference to source pump to block                         \
  */                                                                         \
-static void STRUCTURE##_block_input(struct upipe *upipe,                    \
-                                    struct upump **upump_p)                 \
+static UBASE_UNUSED void                                                    \
+    STRUCTURE##_block_input(struct upipe *upipe, struct upump **upump_p)    \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (upump_p == NULL || *upump_p == NULL ||                              \
@@ -187,7 +188,8 @@ static void STRUCTURE##_block_input(struct upipe *upipe,                    \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_unblock_input(struct upipe *upipe)                  \
+static UBASE_UNUSED void                                                    \
+    STRUCTURE##_unblock_input(struct upipe *upipe)                          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->NB_UREFS > s->MAX_UREFS)                                         \
@@ -229,8 +231,9 @@ static UBASE_UNUSED struct uref *STRUCTURE##_pop_input(struct upipe *upipe) \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain = ulist_pop(&s->UREFS);                           \
-    if (uchain != NULL)                                                     \
-        s->NB_UREFS--;                                                      \
+    if (uchain == NULL)                                                     \
+        return NULL;                                                        \
+    s->NB_UREFS--;                                                          \
     return uref_from_uchain(uchain);                                        \
 }                                                                           \
 /** @internal @This outputs all urefs that have been held.                  \
