@@ -35,6 +35,7 @@ check_PROGRAMS = \
 	uclock_std_test \
 	upipe_play_test \
 	upipe_trickplay_test \
+	upipe_even_test \
 	upipe_null_test \
 	upipe_dup_test \
 	upipe_genaux_test \
@@ -42,6 +43,7 @@ check_PROGRAMS = \
 	upipe_probe_uref_test \
 	upipe_delay_test \
 	upipe_skip_test \
+	upipe_aggregate_test \
 	upipe_htons_test \
 	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
@@ -74,12 +76,14 @@ TESTS = \
 	upipe_null_test \
 	upipe_play_test \
 	upipe_trickplay_test \
+	upipe_even_test \
 	upipe_dup_test \
 	upipe_genaux_test \
 	upipe_multicat_probe_test \
 	upipe_probe_uref_test \
 	upipe_delay_test \
 	upipe_skip_test \
+	upipe_aggregate_test \
 	upipe_htons_test \
 	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
@@ -253,11 +257,13 @@ upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_
 upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_play_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_even_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dup_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_genaux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_delay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_skip_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_aggregate_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setflowdef_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

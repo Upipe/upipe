@@ -14,6 +14,7 @@ myinclude_HEADERS = \
 	upipe_delay.h \
 	upipe_null.h \
 	upipe_skip.h \
+	upipe_aggregate.h \
 	upipe_worker_linear.h \
 	upipe_worker_sink.h \
 	upipe_worker_source.h \
@@ -27,6 +28,7 @@ myinclude_HEADERS = \
 	upipe_setrap.h \
 	upipe_play.h \
 	upipe_trickplay.h \
+	upipe_even.h \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
 	upipe_http_source.h \

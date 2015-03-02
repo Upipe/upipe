@@ -5,6 +5,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_transfer.c \
 	upipe_play.c \
 	upipe_trickplay.c \
+	upipe_even.c \
 	upipe_dup.c \
 	upipe_idem.c \
 	upipe_null.c \
@@ -26,6 +27,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_nodemux.c \
 	upipe_delay.c \
 	upipe_skip.c \
+	upipe_aggregate.c \
 	upipe_htons.c \
 	upipe_chunk_stream.c \
 	upipe_setflowdef.c \

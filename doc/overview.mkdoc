@@ -95,6 +95,9 @@
         @item @ref upipe_wlin_mgr_alloc (also note @ref upipe_wlin_alloc) @item pipe manager allowing to deport a linear pipe to a different thread @item @tt -lupipe-modules
         @item @ref upipe_wsink_mgr_alloc (also note @ref upipe_wsink_alloc) @item pipe manager allowing to deport a sink pipe to a different thread @item @tt -lupipe-modules
         @item @ref upipe_trickp_mgr_alloc @item pipe facilitating trick play operations @item @tt -lupipe-modules
+        @item @ref upipe_even_mgr_alloc @item pipe evening the start and end of a stream @item @tt -lupipe-modules
+        @item @ref upipe_skip_mgr_alloc @item pipe skipping the beginning of each uref @item @tt -lupipe-modules
+        @item @ref upipe_aggregate_mgr_alloc @item pipe aggregating several urefs into one @item @tt -lupipe-modules
         @item @ref upipe_setflowdef_mgr_alloc @item pipe setting given attributes on incoming flow definitions @item @tt -lupipe-modules
         @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
         @item @ref upipe_setrap_mgr_alloc @item pipe setting attribute k.systime_rap on all incoming buffers @item @tt -lupipe-modules
