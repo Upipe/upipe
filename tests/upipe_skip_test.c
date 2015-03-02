@@ -189,8 +189,8 @@ int main(int argc, char **argv)
     struct upipe *skip = upipe_void_alloc(upipe_skip_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                                  "skip"));
-    ubase_assert(upipe_set_flow_def(skip, uref));
     assert(skip);
+    ubase_assert(upipe_set_flow_def(skip, uref));
 
     uref_free(uref);
     ubase_assert(upipe_get_flow_def(skip, &uref));

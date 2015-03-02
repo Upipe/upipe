@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -160,10 +160,6 @@ int main(int argc, char *argv[])
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
-#if 0
-    struct uclock *uclock = uclock_std_alloc(0);
-    assert(uclock != NULL);
-#endif
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
@@ -172,12 +168,6 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
-#if 0
-    if (delay) {
-        logger = uprobe_uclock_alloc(logger, uclock);
-        assert(logger != NULL);
-    }
-#endif
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
@@ -189,12 +179,6 @@ int main(int argc, char *argv[])
     upipe_avfsink = upipe_void_alloc(upipe_avfsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsink"));
     assert(upipe_avfsink != NULL);
-#if 0
-    if (delay) {
-        ubase_assert(upipe_attach_uclock(upipe_avfsink));
-        ubase_assert(upipe_sink_set_delay(upipe_avfsink, delay));
-    }
-#endif
     ubase_assert(upipe_set_uri(upipe_avfsink, sink_url));
 
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
@@ -202,10 +186,6 @@ int main(int argc, char *argv[])
     upipe_avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "avfsrc"));
     assert(upipe_avfsrc != NULL);
-#if 0
-    if (delay)
-        ubase_assert(upipe_attach_uclock(upipe_avfsrc));
-#endif
     ubase_assert(upipe_set_uri(upipe_avfsrc, src_url));
 
     ev_loop(loop, 0);
@@ -225,9 +205,6 @@ int main(int argc, char *argv[])
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-#if 0
-    uclock_release(uclock);
-#endif
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 

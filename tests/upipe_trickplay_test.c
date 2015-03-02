@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
     assert(count_sound == 43);
     assert(count_subpic == 0);
     count_pic = 0;
-    count_sound = 0,
+    count_sound = 0;
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
