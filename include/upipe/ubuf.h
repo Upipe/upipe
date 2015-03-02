@@ -238,7 +238,8 @@ static inline struct ubuf *ubuf_dup(struct ubuf *ubuf)
  */
 static inline void ubuf_free(struct ubuf *ubuf)
 {
-    assert(ubuf != NULL);
+    if (ubuf == NULL)
+        return;
     ubuf->mgr->ubuf_free(ubuf);
 }
 

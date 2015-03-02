@@ -246,6 +246,8 @@ static inline void upump_stop(struct upump *upump)
  */
 static inline void upump_free(struct upump *upump)
 {
+    if (upump == NULL)
+        return;
     upump->mgr->upump_free(upump);
 }
 

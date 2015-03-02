@@ -772,6 +772,8 @@ static inline int udict_name(struct udict *udict, enum udict_type type,
  */
 static inline void udict_free(struct udict *udict)
 {
+    if (udict == NULL)
+        return;
     udict->mgr->udict_free(udict);
 }
 
