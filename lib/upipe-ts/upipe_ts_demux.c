@@ -1284,7 +1284,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     upipe_ts_demux_program->pcr_split_output =
         upipe_flow_alloc_sub(demux->split,
                      uprobe_pfx_alloc_va(
-                         uprobe_use(upipe_ts_demux_to_upipe(demux)->uprobe),
+                         uprobe_use(&demux->proxy_probe),
                          UPROBE_LOG_VERBOSE, "split output PCR %"PRIu64,
                          upipe_ts_demux_program->pcr_pid),
                      flow_def);
@@ -2156,6 +2156,9 @@ static void upipe_ts_demux_free(struct urefcount *urefcount_real)
 static void upipe_ts_demux_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    /* release the packet blocked in ts_sync */
+    upipe_ts_demux_store_first_inner(upipe, NULL);
+
     upipe_ts_demux_throw_sub_programs(upipe, UPROBE_SOURCE_END);
     /* close PAT to release programs */
     if (upipe_ts_demux->psi_split_output_pat != NULL) {
@@ -2169,7 +2172,6 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
     upipe_ts_demux_store_last_inner(upipe, NULL);
     upipe_split_throw_update(upipe);
 
-    upipe_ts_demux_store_first_inner(upipe, NULL);
     if (upipe_ts_demux->split != NULL)
         upipe_release(upipe_ts_demux->split);
     if (upipe_ts_demux->setrap != NULL)

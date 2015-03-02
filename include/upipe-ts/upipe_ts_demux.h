@@ -41,7 +41,7 @@ enum uprobe_ts_demux_event {
     UPROBE_TS_DEMUX_SENTINEL = UPROBE_LOCAL,
 
     /** ts_split events begin here */
-    UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000,
+    UPROBE_TS_DEMUX_SPLIT = UPROBE_LOCAL + 0x1000
 };
 
 /** @This extends upipe_command with specific commands for ts demux. */
