@@ -19,7 +19,7 @@
  */
 
 /** @file
- * @short Upipe module decapsulating (removing) PES heade of packets
+ * @short Upipe module decapsulating (removing) PES header of packets
  */
 
 #include <upipe/ubase.h>

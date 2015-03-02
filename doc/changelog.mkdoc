@@ -17,6 +17,8 @@
 
         @item upipe_attach_uref_mgr and upipe_attach_ubuf_mgr do no longer exist, as these structures should be provided automatically.
 
+        @item The @ref upipe_pthread_xfer_mgr_alloc call now has an extra argument, allowing to get the pthread ID of the created thread.
+
       @end list
 
     @end section
