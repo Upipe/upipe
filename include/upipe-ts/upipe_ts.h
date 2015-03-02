@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -42,6 +42,24 @@ enum upipe_ts_conformance {
     /** ISDB conformance */
     UPIPE_TS_CONFORMANCE_ISDB
 };
+
+/** @This returns a string describing the conformance.
+ *
+ * @param conformance coded conformance
+ * @return a constant string describing the conformance
+ */
+static inline const char *
+    upipe_ts_conformance_print(enum upipe_ts_conformance conformance)
+{
+    switch (conformance) {
+        case UPIPE_TS_CONFORMANCE_AUTO: return "auto";
+        case UPIPE_TS_CONFORMANCE_ISO: return "ISO";
+        case UPIPE_TS_CONFORMANCE_DVB: return "DVB";
+        case UPIPE_TS_CONFORMANCE_ATSC: return "ATSC";
+        case UPIPE_TS_CONFORMANCE_ISDB: return "ISDB";
+        default: return "unknown";
+    }
+}
 
 #ifdef __cplusplus
 }

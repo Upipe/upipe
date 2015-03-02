@@ -14,13 +14,9 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_split.c \
 	upipe_ts_sync.c \
 	upipe_ts_demux.c \
-	upipe_ts_aggregate.c \
-	upipe_ts_encaps.c \
-	upipe_ts_join.c \
-	upipe_ts_pes_encaps.c \
-	upipe_ts_psi_generator.c \
-	upipe_ts_psi_inserter.c \
 	upipe_ts_tstd.c \
+	upipe_ts_encaps.c \
+	upipe_ts_psi_generator.c \
 	upipe_ts_mux.c
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

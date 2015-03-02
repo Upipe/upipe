@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,6 +35,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -59,6 +60,11 @@ struct upipe_ts_psig {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** flow format packet */
@@ -79,6 +85,14 @@ struct upipe_ts_psig {
     uint16_t tsid;
     /** PAT version */
     uint8_t pat_version;
+    /** PAT interval */
+    uint64_t pat_interval;
+    /** PAT sections */
+    struct uchain pat_sections;
+    /** PAT last cr_sys */
+    uint64_t pat_cr_sys;
+    /** true if the PAT update was frozen */
+    bool frozen;
 
     /** list of program subpipes */
     struct uchain programs;
@@ -94,10 +108,17 @@ UPIPE_HELPER_UPIPE(upipe_ts_psig, upipe, UPIPE_TS_PSIG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_psig, urefcount, upipe_ts_psig_free)
 UPIPE_HELPER_VOID(upipe_ts_psig)
 UPIPE_HELPER_OUTPUT(upipe_ts_psig, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UREF_MGR(upipe_ts_psig, uref_mgr, uref_mgr_request,
+                      upipe_ts_psig_check,
+                      upipe_ts_psig_register_output_request,
+                      upipe_ts_psig_unregister_output_request)
 UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_ts_psig_check,
                       upipe_ts_psig_register_output_request,
                       upipe_ts_psig_unregister_output_request)
+
+/** @hidden */
+static void upipe_ts_psig_build(struct upipe *upipe);
 
 /** @internal @This is the private context of a program of a ts_psig pipe. */
 struct upipe_ts_psig_program {
@@ -127,6 +148,14 @@ struct upipe_ts_psig_program {
     uint8_t *descriptors;
     /** descriptors size */
     size_t descriptors_size;
+    /** PMT interval */
+    uint64_t pmt_interval;
+    /** PMT section */
+    struct ubuf *pmt_section;
+    /** PMT last cr_sys */
+    uint64_t pmt_cr_sys;
+    /** true if the PMT update was frozen */
+    bool frozen;
 
     /** list of flow subpipes */
     struct uchain flows;
@@ -147,6 +176,9 @@ UPIPE_HELPER_OUTPUT(upipe_ts_psig_program, output, flow_def, output_state, reque
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_psig, upipe_ts_psig_program, program, program_mgr,
                      programs, uchain)
+
+/** @hidden */
+static void upipe_ts_psig_program_build(struct upipe *upipe);
 
 /** @internal @This is the private context of an elementary stream of a
  * ts_psig pipe. */
@@ -251,10 +283,12 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
         free(upipe_ts_psig_flow->descriptors);
         upipe_ts_psig_flow->descriptors = descriptors;
 
-        struct upipe_ts_psig_program *upipe_ts_psig_program =
+        struct upipe_ts_psig_program *program =
             upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
-        upipe_ts_psig_program->pmt_version++;
-        upipe_ts_psig_program->pmt_version &= 0x1f;
+        program->pmt_version++;
+        program->pmt_version &= 0x1f;
+
+        upipe_ts_psig_program_build(upipe_ts_psig_program_to_upipe(program));
     } else
         free(descriptors);
     return UBASE_ERR_NONE;
@@ -271,6 +305,24 @@ static int upipe_ts_psig_flow_control(struct upipe *upipe,
                                       int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct upipe_ts_psig_program *upipe_ts_psig_program =
+                upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
+            struct upipe_ts_psig *upipe_ts_psig =
+                upipe_ts_psig_from_program_mgr(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program)->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_alloc_output_proxy(
+                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct upipe_ts_psig_program *upipe_ts_psig_program =
+                upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
+            struct upipe_ts_psig *upipe_ts_psig =
+                upipe_ts_psig_from_program_mgr(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program)->mgr);
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_ts_psig_free_output_proxy(
+                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_psig_flow_set_flow_def(upipe, flow_def);
@@ -293,7 +345,7 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
 {
     struct upipe_ts_psig_flow *upipe_ts_psig_flow =
         upipe_ts_psig_flow_from_upipe(upipe);
-    struct upipe_ts_psig_program *upipe_ts_psig_program =
+    struct upipe_ts_psig_program *program =
         upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
@@ -301,8 +353,11 @@ static void upipe_ts_psig_flow_free(struct upipe *upipe)
         uref_free(upipe_ts_psig_flow->flow_def_input);
     free(upipe_ts_psig_flow->descriptors);
     upipe_ts_psig_flow_clean_sub(upipe);
-    upipe_ts_psig_program->pmt_version++;
-    upipe_ts_psig_program->pmt_version &= 0x1f;
+
+    program->pmt_version++;
+    program->pmt_version &= 0x1f;
+    upipe_ts_psig_program_build(upipe_ts_psig_program_to_upipe(program));
+
     upipe_ts_psig_flow_clean_urefcount(upipe);
     upipe_ts_psig_flow_free_void(upipe);
 }
@@ -355,41 +410,41 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_program->pcr_pid = 8191;
     upipe_ts_psig_program->descriptors = NULL;
     upipe_ts_psig_program->descriptors_size = 0;
+    upipe_ts_psig_program->pmt_interval = 0;
+    upipe_ts_psig_program->pmt_section = NULL;
+    upipe_ts_psig_program->pmt_cr_sys = 0;
+    upipe_ts_psig_program->frozen = false;
     upipe_ts_psig_program_init_sub(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-/** @internal @This generates a PMT PSI section, using the uref received.
+/** @internal @This generates a new PMT PSI section.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
-                                        struct upump **upump_p)
+static void upipe_ts_psig_program_build(struct upipe *upipe)
 {
-    struct upipe_ts_psig_program *upipe_ts_psig_program =
+    struct upipe_ts_psig_program *program =
         upipe_ts_psig_program_from_upipe(upipe);
-    struct upipe_ts_psig *upipe_ts_psig =
+    struct upipe_ts_psig *psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
-    if (unlikely(upipe_ts_psig->flow_def == NULL)) {
-        uref_free(uref);
+    if (unlikely(program->flow_def == NULL))
+        return;
+    if (unlikely(psig->frozen)) {
+        upipe_dbg_va(upipe, "not rebuilding a PMT");
         return;
     }
-    uref_block_delete_start(uref);
 
     upipe_notice_va(upipe,
                     "new PMT program=%"PRIu16" version=%"PRIu8" pcrpid=%"PRIu16,
-                    upipe_ts_psig_program->program_number,
-                    upipe_ts_psig_program->pmt_version,
-                    upipe_ts_psig_program->pcr_pid);
+                    program->program_number, program->pmt_version,
+                    program->pcr_pid);
 
-    struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_psig->ubuf_mgr,
+    struct ubuf *ubuf = ubuf_block_alloc(psig->ubuf_mgr,
                                          PSI_MAX_SIZE + PSI_HEADER_SIZE);
     if (unlikely(ubuf == NULL)) {
-        uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -398,7 +453,6 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     int size = -1;
     if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
         ubuf_free(ubuf);
-        uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -406,15 +460,15 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     pmt_init(buffer);
     /* set length later */
     psi_set_length(buffer, PSI_MAX_SIZE);
-    pmt_set_program(buffer, upipe_ts_psig_program->program_number);
-    psi_set_version(buffer, upipe_ts_psig_program->pmt_version);
+    pmt_set_program(buffer, program->program_number);
+    psi_set_version(buffer, program->pmt_version);
     psi_set_current(buffer);
-    pmt_set_pcrpid(buffer, upipe_ts_psig_program->pcr_pid);
+    pmt_set_pcrpid(buffer, program->pcr_pid);
     uint8_t *descs = pmt_get_descs(buffer);
-    descs_set_length(descs, upipe_ts_psig_program->descriptors_size);
-    if (upipe_ts_psig_program->descriptors_size) {
-        memcpy(descs_get_desc(descs, 0), upipe_ts_psig_program->descriptors,
-               upipe_ts_psig_program->descriptors_size);
+    descs_set_length(descs, program->descriptors_size);
+    if (program->descriptors_size) {
+        memcpy(descs_get_desc(descs, 0), program->descriptors,
+               program->descriptors_size);
         if (!descs_validate(descs)) {
             upipe_warn(upipe, "invalid PMT descriptor loop");
             upipe_throw_error(upipe, UBASE_ERR_INVALID);
@@ -423,32 +477,30 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
 
     uint16_t j = 0;
     struct uchain *uchain;
-    ulist_foreach (&upipe_ts_psig_program->flows, uchain) {
-        struct upipe_ts_psig_flow *upipe_ts_psig_flow =
+    ulist_foreach (&program->flows, uchain) {
+        struct upipe_ts_psig_flow *flow =
             upipe_ts_psig_flow_from_uchain(uchain);
-        if (upipe_ts_psig_flow->pid == 8192)
+        if (flow->pid == 8192)
             continue;
         upipe_notice_va(upipe, " * ES pid=%"PRIu16" streamtype=0x%"PRIx8,
-                        upipe_ts_psig_flow->pid,
-                        upipe_ts_psig_flow->stream_type);
+                        flow->pid, flow->stream_type);
 
         uint8_t *es = pmt_get_es(buffer, j);
         if (unlikely(es == NULL ||
-                     !pmt_validate_es(buffer, es,
-                                      upipe_ts_psig_flow->descriptors_size))) {
+                     !pmt_validate_es(buffer, es, flow->descriptors_size))) {
             upipe_warn(upipe, "PMT too large");
             upipe_throw_error(upipe, UBASE_ERR_INVALID);
             break;
         }
 
         pmtn_init(es);
-        pmtn_set_streamtype(es, upipe_ts_psig_flow->stream_type);
-        pmtn_set_pid(es, upipe_ts_psig_flow->pid);
+        pmtn_set_streamtype(es, flow->stream_type);
+        pmtn_set_pid(es, flow->pid);
         descs = pmtn_get_descs(es);
-        descs_set_length(descs, upipe_ts_psig_flow->descriptors_size);
-        if (upipe_ts_psig_flow->descriptors_size) {
-            memcpy(descs_get_desc(descs, 0), upipe_ts_psig_flow->descriptors,
-                   upipe_ts_psig_flow->descriptors_size);
+        descs_set_length(descs, flow->descriptors_size);
+        if (flow->descriptors_size) {
+            memcpy(descs_get_desc(descs, 0), flow->descriptors,
+                   flow->descriptors_size);
             if (!descs_validate(descs)) {
                 upipe_warn(upipe, "invalid ES descriptor loop");
                 upipe_throw_error(upipe, UBASE_ERR_INVALID);
@@ -462,14 +514,51 @@ static void upipe_ts_psig_program_input(struct upipe *upipe, struct uref *uref,
     uint16_t pmt_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
     psi_set_crc(buffer);
     ubuf_block_unmap(ubuf, 0);
-
     ubuf_block_resize(ubuf, 0, pmt_size);
+
+    ubuf_free(program->pmt_section);
+    program->pmt_section = ubuf;
+    program->pmt_cr_sys = 0;
+    upipe_notice(upipe, "end PMT");
+
+    struct uref *flow_def = program->flow_def;
+    program->flow_def = NULL;
+    uref_block_flow_set_size(flow_def, pmt_size);
+    upipe_ts_psig_program_store_flow_def(upipe, flow_def);
+}
+
+/** @internal @This sends a PMT PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_psig_program_send(struct upipe *upipe, uint64_t cr_sys)
+{
+    struct upipe_ts_psig_program *program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    struct upipe_ts_psig *psig =
+        upipe_ts_psig_from_program_mgr(upipe->mgr);
+    if (unlikely(psig->flow_def == NULL || psig->uref_mgr == NULL ||
+                 program->pmt_section == NULL))
+        return;
+
+    program->pmt_cr_sys = cr_sys;
+    upipe_verbose_va(upipe, "sending PMT (%"PRIu64")", cr_sys);
+
+    struct uref *uref = uref_alloc(psig->uref_mgr);
+    struct ubuf *ubuf = ubuf_dup(program->pmt_section);
+    if (unlikely(uref == NULL || ubuf == NULL)) {
+        uref_free(uref);
+        ubuf_free(ubuf);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
     uref_attach_ubuf(uref, ubuf);
     uref_block_set_start(uref);
     uref_block_set_end(uref);
-    upipe_ts_psig_program_output(upipe, uref, upump_p);
-
-    upipe_notice(upipe, "end PMT");
+    uref_clock_set_cr_sys(uref, cr_sys);
+    upipe_ts_psig_program_output(upipe, uref, NULL);
 }
 
 /** @internal @This sets the input flow definition.
@@ -518,10 +607,11 @@ static int upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
         free(upipe_ts_psig_program->descriptors);
         upipe_ts_psig_program->descriptors = descriptors;
 
-        struct upipe_ts_psig *upipe_ts_psig =
-            upipe_ts_psig_from_program_mgr(upipe->mgr);
-        upipe_ts_psig->pat_version++;
-        upipe_ts_psig->pat_version &= 0x1f;
+        struct upipe_ts_psig *psig = upipe_ts_psig_from_program_mgr(upipe->mgr);
+        psig->pat_version++;
+        psig->pat_version &= 0x1f;
+
+        upipe_ts_psig_build(upipe_ts_psig_to_upipe(psig));
     } else
         free(descriptors);
     return UBASE_ERR_NONE;
@@ -558,6 +648,37 @@ static int _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current PMT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static int upipe_ts_psig_program_get_pmt_interval(struct upipe *upipe,
+                                                  uint64_t *interval_p)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    assert(interval_p != NULL);
+    *interval_p = upipe_ts_psig_program->pmt_interval;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the PMT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static int upipe_ts_psig_program_set_pmt_interval(struct upipe *upipe,
+                                                  uint64_t interval)
+{
+    struct upipe_ts_psig_program *upipe_ts_psig_program =
+        upipe_ts_psig_program_from_upipe(upipe);
+    upipe_ts_psig_program->pmt_interval = interval;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current version.
  *
  * @param upipe description structure of the pipe
@@ -588,6 +709,7 @@ static int upipe_ts_psig_program_set_version(struct upipe *upipe,
     upipe_dbg_va(upipe, "setting version to %u\n", version);
     upipe_ts_psig_program->pmt_version = version;
     upipe_ts_psig_program->pmt_version &= 0x1f;
+    upipe_ts_psig_program_build(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -655,6 +777,16 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
             unsigned int pcr_pid = va_arg(args, unsigned int);
             return _upipe_ts_psig_program_set_pcr_pid(upipe, pcr_pid);
         }
+        case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *interval_p = va_arg(args, uint64_t *);
+            return upipe_ts_psig_program_get_pmt_interval(upipe, interval_p);
+        }
+        case UPIPE_TS_MUX_SET_PMT_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t interval = va_arg(args, uint64_t);
+            return upipe_ts_psig_program_set_pmt_interval(upipe, interval);
+        }
         case UPIPE_TS_MUX_GET_VERSION: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int *version_p = va_arg(args, unsigned int *);
@@ -664,6 +796,13 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int version = va_arg(args, unsigned int);
             return upipe_ts_psig_program_set_version(upipe, version);
+        }
+        case UPIPE_TS_MUX_FREEZE_PSI: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            struct upipe_ts_psig_program *upipe_ts_psig_program =
+                upipe_ts_psig_program_from_upipe(upipe);
+            upipe_ts_psig_program->frozen = true;
+            return UBASE_ERR_NONE;
         }
 
         default:
@@ -679,16 +818,19 @@ static void upipe_ts_psig_program_free(struct upipe *upipe)
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
-    struct upipe_ts_psig *upipe_ts_psig =
-        upipe_ts_psig_from_program_mgr(upipe->mgr);
+    struct upipe_ts_psig *psig = upipe_ts_psig_from_program_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
 
     upipe_ts_psig_program_clean_sub_flows(upipe);
     upipe_ts_psig_program_clean_sub(upipe);
     upipe_ts_psig_program_clean_output(upipe);
     free(upipe_ts_psig_program->descriptors);
-    upipe_ts_psig->pat_version++;
-    upipe_ts_psig->pat_version &= 0x1f;
+    ubuf_free(upipe_ts_psig_program->pmt_section);
+
+    psig->pat_version++;
+    psig->pat_version &= 0x1f;
+    upipe_ts_psig_build(upipe_ts_psig_to_upipe(psig));
+
     upipe_ts_psig_program_clean_urefcount(upipe);
     upipe_ts_psig_program_free_void(upipe);
 }
@@ -704,7 +846,7 @@ static void upipe_ts_psig_init_program_mgr(struct upipe *upipe)
     program_mgr->refcount = upipe_ts_psig_to_urefcount(upipe_ts_psig);
     program_mgr->signature = UPIPE_TS_PSIG_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_psig_program_alloc;
-    program_mgr->upipe_input = upipe_ts_psig_program_input;
+    program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_psig_program_control;
 }
 
@@ -727,40 +869,47 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
 
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig_init_urefcount(upipe);
+    upipe_ts_psig_init_uref_mgr(upipe);
     upipe_ts_psig_init_ubuf_mgr(upipe);
     upipe_ts_psig_init_output(upipe);
     upipe_ts_psig_init_program_mgr(upipe);
     upipe_ts_psig_init_sub_programs(upipe);
     upipe_ts_psig->tsid = 0;
     upipe_ts_psig->pat_version = 0;
+    upipe_ts_psig->pat_interval = 0;
+    ulist_init(&upipe_ts_psig->pat_sections);
+    upipe_ts_psig->pat_cr_sys = 0;
+    upipe_ts_psig->frozen = false;
 
     upipe_throw_ready(upipe);
+    upipe_ts_psig_demand_uref_mgr(upipe);
     return upipe;
 }
 
-/** @internal @This generates a PAT PSI section, using the uref received.
+/** @internal @This builds new PAT PSI sections.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
-                                struct upump **upump_p)
+static void upipe_ts_psig_build(struct upipe *upipe)
 {
-    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
-    if (unlikely(upipe_ts_psig->flow_def == NULL)) {
-        uref_free(uref);
+    struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
+    if (unlikely(psig->flow_def == NULL))
+        return;
+    if (unlikely(psig->frozen)) {
+        upipe_dbg_va(upipe, "not rebuilding a PAT");
         return;
     }
-    uref_block_delete_start(uref);
 
     upipe_notice_va(upipe, "new PAT tsid=%"PRIu16" version=%"PRIu8,
-                    upipe_ts_psig->tsid, upipe_ts_psig->pat_version);
+                    psig->tsid, psig->pat_version);
 
     unsigned int nb_sections = 0;
-    struct uchain sections;
-    ulist_init(&sections);
-    struct uchain *program_chain = &upipe_ts_psig->programs;
+    struct uchain *program_chain = &psig->programs;
+    uint64_t total_size = 0;
+
+    struct uchain *section_chain;
+    while ((section_chain = ulist_pop(&psig->pat_sections)) != NULL)
+        ubuf_free(ubuf_from_uchain(section_chain));
 
     do {
         if (unlikely(nb_sections >= PSI_TABLE_MAX_SECTIONS)) {
@@ -769,10 +918,9 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
             break;
         }
 
-        struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_psig->ubuf_mgr,
+        struct ubuf *ubuf = ubuf_block_alloc(psig->ubuf_mgr,
                                              PSI_MAX_SIZE + PSI_HEADER_SIZE);
         if (unlikely(ubuf == NULL)) {
-            uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
@@ -781,7 +929,6 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         int size = -1;
         if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
             ubuf_free(ubuf);
-            uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
@@ -789,8 +936,8 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         pat_init(buffer);
         /* set length later */
         psi_set_length(buffer, PSI_MAX_SIZE);
-        pat_set_tsid(buffer, upipe_ts_psig->tsid);
-        psi_set_version(buffer, upipe_ts_psig->pat_version);
+        pat_set_tsid(buffer, psig->tsid);
+        psi_set_version(buffer, psig->pat_version);
         psi_set_current(buffer);
         psi_set_section(buffer, nb_sections);
         /* set last section in the end */
@@ -798,7 +945,7 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         uint16_t j = 0;
         uint8_t *program;
         while ((program = pat_get_program(buffer, j)) != NULL &&
-               !ulist_is_last(&upipe_ts_psig->programs, program_chain)) {
+               !ulist_is_last(&psig->programs, program_chain)) {
             program_chain = program_chain->next;
 
             struct upipe_ts_psig_program *upipe_ts_psig_program =
@@ -820,22 +967,16 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         ubuf_block_unmap(ubuf, 0);
 
         ubuf_block_resize(ubuf, 0, pat_size);
-        ulist_add(&sections, ubuf_to_uchain(ubuf));
+        ulist_add(&psig->pat_sections, ubuf_to_uchain(ubuf));
         nb_sections++;
-    } while (!ulist_is_last(&upipe_ts_psig->programs, program_chain));
+        total_size += pat_size;
+    } while (!ulist_is_last(&psig->programs, program_chain));
 
-    upipe_notice_va(upipe, "end PAT (%u sections)", nb_sections);
-
-    struct uchain *section_chain;
-    while ((section_chain = ulist_pop(&sections)) != NULL) {
-        bool last = ulist_empty(&sections);
+    ulist_foreach (&psig->pat_sections, section_chain) {
         struct ubuf *ubuf = ubuf_from_uchain(section_chain);
         uint8_t *buffer;
         int size = -1;
         if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
-            if (last)
-                uref_free(uref);
-            ubuf_free(ubuf);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
         }
@@ -844,23 +985,51 @@ static void upipe_ts_psig_input(struct upipe *upipe, struct uref *uref,
         psi_set_crc(buffer);
 
         ubuf_block_unmap(ubuf, 0);
+    }
 
-        struct uref *output;
-        if (last)
-            output = uref;
-        else {
-            output = uref_dup(uref);
-            if (unlikely(output == NULL)) {
-                ubuf_free(ubuf);
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                continue;
-            }
+    psig->pat_cr_sys = 0;
+
+    upipe_notice_va(upipe, "end PAT (%u sections)", nb_sections);
+
+    struct uref *flow_def = psig->flow_def;
+    psig->flow_def = NULL;
+    uref_block_flow_set_size(flow_def, total_size);
+    upipe_ts_psig_store_flow_def(upipe, flow_def);
+}
+
+/** @internal @This sends a PAT PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_psig_send(struct upipe *upipe, uint64_t cr_sys)
+{
+    struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
+    if (unlikely(psig->flow_def == NULL || ulist_empty(&psig->pat_sections)))
+        return;
+
+    psig->pat_cr_sys = cr_sys;
+    upipe_verbose_va(upipe, "sending PAT (%"PRIu64")", cr_sys);
+
+    struct uchain *section_chain;
+    ulist_foreach (&psig->pat_sections, section_chain) {
+        bool last = ulist_is_last(&psig->pat_sections, section_chain);
+        struct ubuf *ubuf = ubuf_dup(ubuf_from_uchain(section_chain));
+        struct uref *uref = uref_alloc(psig->uref_mgr);
+        if (unlikely(uref == NULL || ubuf == NULL)) {
+            ubuf_free(ubuf);
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            continue;
         }
-        uref_attach_ubuf(output, ubuf);
-        uref_block_set_start(output);
+
+        uref_attach_ubuf(uref, ubuf);
+        uref_block_set_start(uref);
         if (last)
-            uref_block_set_end(output);
-        upipe_ts_psig_output(upipe, output, upump_p);
+            uref_block_set_end(uref);
+        uref_clock_set_cr_sys(uref, cr_sys);
+        upipe_ts_psig_output(upipe, uref, NULL);
     }
 }
 
@@ -874,6 +1043,18 @@ static int upipe_ts_psig_check(struct upipe *upipe, struct uref *flow_format)
 {
     if (flow_format != NULL)
         upipe_ts_psig_store_flow_def(upipe, flow_format);
+
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    if (ulist_empty(&upipe_ts_psig->pat_sections))
+        upipe_ts_psig_build(upipe);
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_psig->programs, uchain) {
+        struct upipe_ts_psig_program *program =
+            upipe_ts_psig_program_from_uchain(uchain);
+        if (program->pmt_section == NULL)
+            upipe_ts_psig_program_build(upipe_ts_psig_program_to_upipe(program));
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -906,6 +1087,35 @@ static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current PAT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static int upipe_ts_psig_get_pat_interval(struct upipe *upipe,
+                                          uint64_t *interval_p)
+{
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    assert(interval_p != NULL);
+    *interval_p = upipe_ts_psig->pat_interval;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the PAT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static int upipe_ts_psig_set_pat_interval(struct upipe *upipe,
+                                          uint64_t interval)
+{
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    upipe_ts_psig->pat_interval = interval;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current version.
  *
  * @param upipe description structure of the pipe
@@ -934,6 +1144,30 @@ static int upipe_ts_psig_set_version(struct upipe *upipe,
     upipe_dbg_va(upipe, "setting version to %u\n", version);
     upipe_ts_psig->pat_version = version;
     upipe_ts_psig->pat_version &= 0x1f;
+    upipe_ts_psig_build(upipe);
+    return UBASE_ERR_NONE;
+}
+
+/** @This prepares the next PSI sections for the given date.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_sys current muxing date
+ * @return an error code
+ */
+static int _upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys)
+{
+    struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    if (upipe_ts_psig->pat_cr_sys + upipe_ts_psig->pat_interval <= cr_sys)
+        upipe_ts_psig_send(upipe, cr_sys);
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_psig->programs, uchain) {
+        struct upipe_ts_psig_program *program =
+            upipe_ts_psig_program_from_uchain(uchain);
+        if (program->pmt_cr_sys + program->pmt_interval <= cr_sys)
+            upipe_ts_psig_program_send(upipe_ts_psig_program_to_upipe(program),
+                                       cr_sys);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -980,6 +1214,16 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
             return upipe_ts_psig_iterate_sub(upipe, p);
         }
 
+        case UPIPE_TS_MUX_GET_PAT_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *interval_p = va_arg(args, uint64_t *);
+            return upipe_ts_psig_get_pat_interval(upipe, interval_p);
+        }
+        case UPIPE_TS_MUX_SET_PAT_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t interval = va_arg(args, uint64_t);
+            return upipe_ts_psig_set_pat_interval(upipe, interval);
+        }
         case UPIPE_TS_MUX_GET_VERSION: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int *version_p = va_arg(args, unsigned int *);
@@ -989,6 +1233,18 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             unsigned int version = va_arg(args, unsigned int);
             return upipe_ts_psig_set_version(upipe, version);
+        }
+        case UPIPE_TS_MUX_FREEZE_PSI: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
+            psig->frozen = true;
+            return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_TS_PSIG_PREPARE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_SIGNATURE)
+            uint64_t cr_sys = va_arg(args, uint64_t);
+            return _upipe_ts_psig_prepare(upipe, cr_sys);
         }
 
         default:
@@ -1002,10 +1258,16 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
  */
 static void upipe_ts_psig_free(struct upipe *upipe)
 {
+    struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
     upipe_throw_dead(upipe);
+
+    struct uchain *section_chain;
+    while ((section_chain = ulist_pop(&psig->pat_sections)) != NULL)
+        ubuf_free(ubuf_from_uchain(section_chain));
     upipe_ts_psig_clean_sub_programs(upipe);
     upipe_ts_psig_clean_output(upipe);
     upipe_ts_psig_clean_ubuf_mgr(upipe);
+    upipe_ts_psig_clean_uref_mgr(upipe);
     upipe_ts_psig_clean_urefcount(upipe);
     upipe_ts_psig_free_void(upipe);
 }
@@ -1016,7 +1278,7 @@ static struct upipe_mgr upipe_ts_psig_mgr = {
     .signature = UPIPE_TS_PSIG_SIGNATURE,
 
     .upipe_alloc = upipe_ts_psig_alloc,
-    .upipe_input = upipe_ts_psig_input,
+    .upipe_input = NULL,
     .upipe_control = upipe_ts_psig_control,
 
     .upipe_mgr_control = NULL

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,6 +38,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-ts/upipe_ts_tstd.h>
+#include <upipe-ts/upipe_ts_mux.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -60,6 +61,8 @@ struct upipe_ts_tstd {
     /** list of output requests */
     struct uchain request_list;
 
+    /** maximum retention delay */
+    uint64_t max_delay;
     /** buffer size, in octets */
     uint64_t bs;
     /** octetrate of incoming flow */
@@ -141,6 +144,14 @@ static int upipe_ts_tstd_set_flow_def(struct upipe *upipe,
                                                &upipe_ts_tstd->octetrate))
     uint64_t bs;
     UBASE_RETURN(uref_block_flow_get_buffer_size(flow_def, &bs))
+
+    if (bs * UCLOCK_FREQ / upipe_ts_tstd->octetrate >
+            upipe_ts_tstd->max_delay) {
+        bs = upipe_ts_tstd->max_delay * upipe_ts_tstd->octetrate / UCLOCK_FREQ;
+        upipe_warn_va(upipe,
+                "exceeding max retention delay, adjusting buffer to %"PRIu64,
+                bs);
+    }
     upipe_ts_tstd->fullness += bs - upipe_ts_tstd->bs;
     upipe_ts_tstd->bs = bs;
     upipe_ts_tstd->remainder = 0;
@@ -156,6 +167,35 @@ static int upipe_ts_tstd_set_flow_def(struct upipe *upipe,
         UBASE_RETURN(uref_clock_set_latency(flow_def_dup, latency))
     }
     upipe_ts_tstd_store_flow_def(upipe, flow_def_dup);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the current maximum retention delay.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay_p filled in with the delay
+ * @return an error code
+ */
+static int upipe_ts_tstd_get_max_delay(struct upipe *upipe, uint64_t *delay_p)
+{
+    struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
+    assert(delay_p != NULL);
+    *delay_p = upipe_ts_tstd->max_delay;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the maximum retention delay.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay new delay
+ * @return an error code
+ */
+static int upipe_ts_tstd_set_max_delay(struct upipe *upipe, uint64_t delay)
+{
+    struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
+    upipe_ts_tstd->max_delay = delay;
+    if (upipe_ts_tstd->flow_def != NULL)
+        return upipe_ts_tstd_set_flow_def(upipe, upipe_ts_tstd->flow_def);
     return UBASE_ERR_NONE;
 }
 
@@ -195,6 +235,16 @@ static int upipe_ts_tstd_control(struct upipe *upipe, int command, va_list args)
             return upipe_ts_tstd_set_output(upipe, output);
         }
 
+        case UPIPE_TS_MUX_GET_MAX_DELAY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *delay_p = va_arg(args, uint64_t *);
+            return upipe_ts_tstd_get_max_delay(upipe, delay_p);
+        }
+        case UPIPE_TS_MUX_SET_MAX_DELAY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t delay = va_arg(args, uint64_t);
+            return upipe_ts_tstd_set_max_delay(upipe, delay);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -220,6 +270,7 @@ static struct upipe *upipe_ts_tstd_alloc(struct upipe_mgr *mgr,
     upipe_ts_tstd_init_urefcount(upipe);
     upipe_ts_tstd_init_output(upipe);
     struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
+    upipe_ts_tstd->max_delay = UINT64_MAX;
     upipe_ts_tstd->bs = upipe_ts_tstd->fullness = 0;
     upipe_ts_tstd->last_dts = UINT64_MAX;
     upipe_throw_ready(upipe);

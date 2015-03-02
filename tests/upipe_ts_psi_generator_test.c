@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -64,8 +65,9 @@
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
+static uint64_t psi_cr = UINT32_MAX;
 static bool pat = true;
-static uint8_t program = 0;
+static uint8_t program = 1;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -100,21 +102,24 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     uint64_t cr;
     ubase_assert(uref_clock_get_cr_sys(uref, &cr));
+    assert(cr == psi_cr);
     const uint8_t *buffer;
     int size = -1;
     ubase_assert(uref_block_read(uref, 0, &size, &buffer));
+    upipe_dbg_va(upipe, "received table %"PRIu8, psi_get_tableid(buffer));
     assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
     assert(psi_validate(buffer));
     assert(psi_check_crc(buffer));
     if (pat) {
-        assert(cr == UCLOCK_FREQ);
         assert(pat_validate(buffer));
         const uint8_t *program = pat_get_program((uint8_t *)buffer, 0);
         assert(program != NULL);
-        assert(patn_get_program(program) == 1);
-        assert(patn_get_pid(program) == 66);
-        program = pat_get_program((uint8_t *)buffer, 1);
-        assert(program != NULL);
+        if (psi_cr != UINT32_MAX + UCLOCK_FREQ * 12) {
+            assert(patn_get_program(program) == 1);
+            assert(patn_get_pid(program) == 66);
+            program = pat_get_program((uint8_t *)buffer, 1);
+            assert(program != NULL);
+        }
         assert(patn_get_program(program) == 2);
         assert(patn_get_pid(program) == 1500);
         program = pat_get_program((uint8_t *)buffer, 2);
@@ -123,16 +128,17 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     } else {
         assert(pmt_validate(buffer));
         if (program == 1) {
-            assert(cr == UCLOCK_FREQ * 2);
             assert(pmt_get_pcrpid(buffer) == 67);
             assert(pmt_get_desclength(buffer) == 0);
             const uint8_t *es = pmt_get_es((uint8_t *)buffer, 0);
             assert(es != NULL);
-            assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_VIDEO_MPEG2);
-            assert(pmtn_get_pid(es) == 67);
-            assert(pmtn_get_desclength(es) == 0);
-            es = pmt_get_es((uint8_t *)buffer, 1);
-            assert(es != NULL);
+            if (psi_cr != UINT32_MAX + UCLOCK_FREQ * 11) {
+                assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_VIDEO_MPEG2);
+                assert(pmtn_get_pid(es) == 67);
+                assert(pmtn_get_desclength(es) == 0);
+                es = pmt_get_es((uint8_t *)buffer, 1);
+                assert(es != NULL);
+            }
             assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_AUDIO_MPEG2);
             assert(pmtn_get_pid(es) == 68);
             assert(pmtn_get_desclength(es) ==
@@ -148,8 +154,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             assert(desc0a_get_language((uint8_t *)desc, 1) == NULL);
             assert(descs_get_desc(pmtn_get_descs((uint8_t *)es), 1) == NULL);
             assert(pmt_get_es((uint8_t *)buffer, 2) == NULL);
+            program = 2;
         } else {
-            assert(cr == UCLOCK_FREQ * 3);
             assert(pmt_get_pcrpid(buffer) == 8191);
             assert(pmt_get_desclength(buffer) == 0);
             const uint8_t *es = pmt_get_es((uint8_t *)buffer, 0);
@@ -158,8 +164,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             assert(pmtn_get_pid(es) == 1501);
             assert(pmtn_get_desclength(es) == 0);
             assert(pmt_get_es((uint8_t *)buffer, 1) == NULL);
+            program = 0;
         }
-        program = 0;
     }
     uref_block_unmap(uref, 0);
     uref_free(uref);
@@ -217,6 +223,8 @@ int main(int argc, char *argv[])
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
+    assert(logger != NULL);
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
@@ -242,6 +250,8 @@ int main(int argc, char *argv[])
                                                 uprobe_use(logger));
     assert(upipe_sink != NULL);
     ubase_assert(upipe_set_output(upipe_ts_psig, upipe_sink));
+    ubase_assert(upipe_ts_mux_set_pat_interval(upipe_ts_psig,
+                                               UCLOCK_FREQ * 10));
 
     /* programs */
     uref = uref_alloc(uref_mgr);
@@ -256,6 +266,8 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_program1, uref));
     ubase_assert(upipe_set_output(upipe_ts_psig_program1, upipe_sink));
     ubase_assert(upipe_ts_psig_program_set_pcr_pid(upipe_ts_psig_program1, 67));
+    ubase_assert(upipe_ts_mux_set_pmt_interval(upipe_ts_psig_program1,
+                                               UCLOCK_FREQ * 10));
 
     ubase_assert(uref_flow_set_id(uref, 2));
     ubase_assert(uref_ts_flow_set_pid(uref, 1500));
@@ -265,6 +277,8 @@ int main(int argc, char *argv[])
     assert(upipe_ts_psig_program2 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_program2, uref));
     ubase_assert(upipe_set_output(upipe_ts_psig_program2, upipe_sink));
+    ubase_assert(upipe_ts_mux_set_pmt_interval(upipe_ts_psig_program2,
+                                               UCLOCK_FREQ * 10));
     uref_free(uref);
 
     /* flows */
@@ -315,34 +329,48 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_flow_def(upipe_ts_psig_flow1501, uref));
     uref_free(uref);
 
-    uref = uref_alloc(uref_mgr);
-    assert(uref != NULL);
-    uref_clock_set_cr_sys(uref, UCLOCK_FREQ);
-    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
-    upipe_input(upipe_ts_psig, uref, NULL);
+    upipe_dbg(upipe_ts_psig, "preparing PAT and 2 PMTs");
+    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig, UINT32_MAX));
     assert(pat == false);
-
-    uref = uref_alloc(uref_mgr);
-    assert(uref != NULL);
-    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 2);
-    uref_clock_set_cr_orig(uref, UCLOCK_FREQ * 2);
-    program = 1;
-    upipe_input(upipe_ts_psig_program1, uref, NULL);
     assert(program == 0);
 
-    uref = uref_alloc(uref_mgr);
-    assert(uref != NULL);
-    uref_clock_set_cr_sys(uref, UCLOCK_FREQ * 3);
-    uref_clock_set_cr_orig(uref, UCLOCK_FREQ * 3);
-    program = 2;
-    upipe_input(upipe_ts_psig_program2, uref, NULL);
+    pat = true;
+    program = 1;
+    upipe_dbg(upipe_ts_psig, "preparing nothing");
+    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
+                                       UINT32_MAX + UCLOCK_FREQ));
+    assert(pat == true);
+    assert(program == 1);
+
+    psi_cr = UINT32_MAX + 10 * UCLOCK_FREQ;
+    upipe_dbg(upipe_ts_psig, "preparing PAT and 2 PMTs");
+    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
+                                       UINT32_MAX + 10 * UCLOCK_FREQ));
+    assert(pat == false);
     assert(program == 0);
 
     upipe_release(upipe_ts_psig_flow67);
+    program = 1;
+    psi_cr = UINT32_MAX + 11 * UCLOCK_FREQ;
+    upipe_dbg(upipe_ts_psig, "preparing 1 PMT");
+    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
+                                       UINT32_MAX + 11 * UCLOCK_FREQ));
+    assert(pat == false);
+    assert(program == 2);
+
     upipe_release(upipe_ts_psig_flow68);
+    upipe_release(upipe_ts_psig_program1);
+    pat = true;
+    program = 0;
+    psi_cr = UINT32_MAX + 12 * UCLOCK_FREQ;
+    upipe_dbg(upipe_ts_psig, "preparing PAT");
+    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
+                                       UINT32_MAX + 12 * UCLOCK_FREQ));
+    assert(pat == false);
+    assert(program == 0);
+
     upipe_release(upipe_ts_psig_flow1501);
 
-    upipe_release(upipe_ts_psig_program1);
     upipe_release(upipe_ts_psig_program2);
 
     upipe_release(upipe_ts_psig);

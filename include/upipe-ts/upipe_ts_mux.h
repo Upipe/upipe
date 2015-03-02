@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,18 +33,40 @@ extern "C" {
 #include <upipe-ts/upipe_ts.h>
 
 #define UPIPE_TS_MUX_SIGNATURE UBASE_FOURCC('t','s','m','x')
+#define UPIPE_TS_MUX_INNER_SINK_SIGNATURE UBASE_FOURCC('t','s','m','S')
 #define UPIPE_TS_MUX_PROGRAM_SIGNATURE UBASE_FOURCC('t','s','m','p')
 #define UPIPE_TS_MUX_INPUT_SIGNATURE UBASE_FOURCC('t','s','m','i')
 
-/** @This defines the modes of multiplexing, by order of strictness. */
-enum upipe_ts_mux_mode {
-    /** variable octetrate */
-    UPIPE_TS_MUX_MODE_VBR,
-    /** capped octetrate, drop extra packets */
-    UPIPE_TS_MUX_MODE_CAPPED,
-    /** constant octetrate, drop extra packets */
-    UPIPE_TS_MUX_MODE_CBR
+/** @This extends uprobe_event with specific events for ts mux. */
+enum uprobe_ts_mux_event {
+    UPROBE_TS_MUX_SENTINEL = UPROBE_LOCAL,
+
+    /** last continuity counter for an input (unsigned int) */
+    UPROBE_TS_MUX_LAST_CC
 };
+
+/** @This defines the modes of multiplexing. */
+enum upipe_ts_mux_mode {
+    /** constant octetrate */
+    UPIPE_TS_MUX_MODE_CBR,
+    /** capped octetrate */
+    UPIPE_TS_MUX_MODE_CAPPED
+};
+
+/** @This returns a string describing the mode.
+ *
+ * @param mode coded mode
+ * @return a constant string describing the mode
+ */
+static inline const char *
+    upipe_ts_mux_mode_print(enum upipe_ts_mux_mode mode)
+{
+    switch (mode) {
+        case UPIPE_TS_MUX_MODE_CBR: return "CBR";
+        case UPIPE_TS_MUX_MODE_CAPPED: return "Capped VBR";
+        default: return "unknown";
+    }
+}
 
 /** @This extends upipe_command with specific commands for ts mux. */
 enum upipe_ts_mux_command {
@@ -54,6 +76,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_CONFORMANCE,
     /** sets the conformance (int) */
     UPIPE_TS_MUX_SET_CONFORMANCE,
+    /** returns the current continuity counter (unsigned int *) */
+    UPIPE_TS_MUX_GET_CC,
+    /** sets the continuity counter (unsigned int) */
+    UPIPE_TS_MUX_SET_CC,
     /** returns the current PAT interval (uint64_t *) */
     UPIPE_TS_MUX_GET_PAT_INTERVAL,
     /** sets the PAT interval (uint64_t) */
@@ -66,6 +92,14 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_PCR_INTERVAL,
     /** sets the PCR interval (uint64_t) */
     UPIPE_TS_MUX_SET_PCR_INTERVAL,
+    /** returns the current maximum retention delay (uint64_t *) */
+    UPIPE_TS_MUX_GET_MAX_DELAY,
+    /** sets the maximum retention delay (uint64_t) */
+    UPIPE_TS_MUX_SET_MAX_DELAY,
+    /** returns the current muxing delay (uint64_t *) */
+    UPIPE_TS_MUX_GET_MUX_DELAY,
+    /** sets the muxing delay (uint64_t) */
+    UPIPE_TS_MUX_SET_MUX_DELAY,
     /** returns the current mux octetrate (uint64_t *) */
     UPIPE_TS_MUX_GET_OCTETRATE,
     /** sets the mux octetrate (uint64_t) */
@@ -85,7 +119,16 @@ enum upipe_ts_mux_command {
     /** returns the current version number of the table (unsigned int *) */
     UPIPE_TS_MUX_GET_VERSION,
     /** sets the version number of the table (unsigned int) */
-    UPIPE_TS_MUX_SET_VERSION
+    UPIPE_TS_MUX_SET_VERSION,
+    /** stops updating a PSI table upon sub removal */
+    UPIPE_TS_MUX_FREEZE_PSI,
+
+    /** ts_encaps commands begin here */
+    UPIPE_TS_MUX_ENCAPS = UPIPE_CONTROL_LOCAL + 0x1000,
+    /** ts_psig commands begin here */
+    UPIPE_TS_MUX_PSIG = UPIPE_CONTROL_LOCAL + 0x2000,
+    /** ts_psig_program commands begin here */
+    UPIPE_TS_MUX_PSIG_PROGRAM = UPIPE_CONTROL_LOCAL + 0x3000
 };
 
 /** @This returns the current conformance mode. It cannot return
@@ -115,6 +158,30 @@ static inline int
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_CONFORMANCE,
                          UPIPE_TS_MUX_SIGNATURE, conformance);
+}
+
+/** @This returns the current continuity counter.
+ *
+ * @param upipe description structure of the pipe
+ * @param cc_p filled in with the countinuity counter
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_cc(struct upipe *upipe, unsigned int *cc_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_CC,
+                         UPIPE_TS_MUX_SIGNATURE, cc_p);
+}
+
+/** @This sets the continuity counter.
+ *
+ * @param upipe description structure of the pipe
+ * @param cc new continuity counter
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_cc(struct upipe *upipe, unsigned int cc)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_CC,
+                         UPIPE_TS_MUX_SIGNATURE, cc);
 }
 
 /** @This returns the current PAT interval.
@@ -195,6 +262,33 @@ static inline int upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PCR_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current maximum retention delay.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay_p filled in with the delay
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_max_delay(struct upipe *upipe,
+                                             uint64_t *delay_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_MAX_DELAY,
+                         UPIPE_TS_MUX_SIGNATURE, delay_p);
+}
+
+/** @This sets the maximum retention delay. It may also be called on an input
+ * subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay new delay
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_max_delay(struct upipe *upipe,
+                                             uint64_t delay)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_MAX_DELAY,
+                         UPIPE_TS_MUX_SIGNATURE, delay);
 }
 
 /** @This returns the current mux octetrate. It may also be called on
@@ -332,6 +426,17 @@ static inline int upipe_ts_mux_set_version(struct upipe *upipe,
                          UPIPE_TS_MUX_SIGNATURE, version);
 }
 
+/** @This stops updating a PSI table upon sub removal.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_ts_mux_freeze_psi(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_FREEZE_PSI,
+                         UPIPE_TS_MUX_SIGNATURE);
+}
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager
@@ -348,12 +453,9 @@ enum upipe_ts_mux_mgr_command {
     /** sets the manager for name subpipes (struct upipe_mgr *) */          \
     UPIPE_TS_MUX_MGR_SET_##NAME##_MGR,
 
-    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_agg, TS_AGG)
-    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_join, TS_JOIN)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_encaps, TS_ENCAPS)
-    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_pese, TS_PESE)
+    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_tstd, TS_TSTD)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psig, TS_PSIG)
-    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psii, TS_PSII)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR
 };
 
@@ -387,12 +489,9 @@ static inline int                                                           \
                              UPIPE_TS_MUX_SIGNATURE, m);                    \
 }
 
-UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_join, TS_JOIN)
-UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_agg, TS_AGG)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_encaps, TS_ENCAPS)
-UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_pese, TS_PESE)
+UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_tstd, TS_TSTD)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psig, TS_PSIG)
-UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psii, TS_PSII)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR2
 
 #ifdef __cplusplus
