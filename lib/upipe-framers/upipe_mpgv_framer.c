@@ -441,7 +441,13 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     }
     UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar))
     upipe_mpgvf->fps = frame_rate;
-    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, bitrate * 400 / 8))
+    if (max_octetrate < bitrate * 400 / 8)
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
+                                                         max_octetrate))
+    else {
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
+                                                         bitrate * 400 / 8))
+    }
     UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def,
                                                 vbvbuffer * 16 * 1024 / 8))
 
