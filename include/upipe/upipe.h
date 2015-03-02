@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -117,14 +117,6 @@ enum upipe_command {
     UPIPE_SOURCE_GET_READ_SIZE,
     /** sets read buffer size (unsigned int) */
     UPIPE_SOURCE_SET_READ_SIZE,
-
-    /*
-     * Sink elements commands
-     */
-    /** gets delay applied to systime attribute (uint64_t *) */
-    UPIPE_SINK_GET_DELAY,
-    /** sets delay applied to systime attribute (uint64_t) */
-    UPIPE_SINK_SET_DELAY,
 
     /*
      * Split elements commands
@@ -865,13 +857,15 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
  * is required from the pipe. Also note that all arguments are owned by the
  * caller.
  *
+ * This version doesn't print debug messages to avoid overflowing the console.
+ *
  * @param upipe description structure of the pipe
  * @param command control command to send
  * @param args optional read or write parameters
  * @return an error code
  */
-static inline int upipe_control_va(struct upipe *upipe,
-                                   int command, va_list args)
+static inline int upipe_control_nodbg_va(struct upipe *upipe,
+                                         int command, va_list args)
 {
     assert(upipe != NULL);
     if (upipe->mgr->upipe_control == NULL)
@@ -881,9 +875,48 @@ static inline int upipe_control_va(struct upipe *upipe,
     upipe_use(upipe);
     err = upipe->mgr->upipe_control(upipe, command, args);
     upipe_release(upipe);
+    return err;
+}
+
+/** @internal @This sends a control command to the pipe. Note that all control
+ * commands must be executed from the same thread - no reentrancy or locking
+ * is required from the pipe. Also note that all arguments are owned by the
+ * caller.
+ *
+ * @param upipe description structure of the pipe
+ * @param command control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline int upipe_control_va(struct upipe *upipe,
+                                   int command, va_list args)
+{
+    int err = upipe_control_nodbg_va(upipe, command, args);
     if (unlikely(!ubase_check(err)))
         upipe_dbg_va(upipe, "returned error 0x%x to command 0x%x", err,
                      command);
+    return err;
+}
+
+/** @internal @This sends a control command to the pipe. Note that all control
+ * commands must be executed from the same thread - no reentrancy or locking
+ * is required from the pipe. Also note that all arguments are owned by the
+ * caller.
+ *
+ * This version doesn't print debug messages to avoid overflowing the console.
+ *
+ * @param upipe description structure of the pipe
+ * @param command control command to send, followed by optional read or write
+ * parameters
+ * @return an error code
+ */
+static inline int upipe_control_nodbg(struct upipe *upipe, int command, ...)
+{
+    int err;
+    va_list args;
+    va_start(args, command);
+    err = upipe_control_nodbg_va(upipe, command, args);
+    va_end(args);
     return err;
 }
 
@@ -950,9 +983,6 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, max_length, MAX_LENGTH, unsigned int,
 
 UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
                        unsigned int, read size of the source)
-
-UPIPE_CONTROL_TEMPLATE(upipe_sink, UPIPE_SINK, delay, DELAY, uint64_t,
-                       delay applied to systime attribute)
 #undef UPIPE_CONTROL_TEMPLATE
 
 /** @This gets a string option.

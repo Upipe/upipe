@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,6 +52,7 @@
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
+#include <upipe-modules/upipe_delay.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -158,8 +159,6 @@ int main(int argc, char *argv[])
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
     ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
-    if (delay)
-        ubase_assert(upipe_attach_uclock(upipe_fsrc));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
     if (ubase_check(upipe_fsrc_get_size(upipe_fsrc, &size)))
@@ -167,25 +166,36 @@ int main(int argc, char *argv[])
     else
         fprintf(stdout, "source path is not a regular file\n");
 
+    struct upipe *upipe;
+    if (delay) {
+        ubase_assert(upipe_attach_uclock(upipe_fsrc));
+        struct upipe_mgr *upipe_delay_mgr = upipe_delay_mgr_alloc();
+        assert(upipe_delay_mgr != NULL);
+        upipe = upipe_void_alloc_output(upipe_fsrc,
+                upipe_delay_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                                 "delay"));
+        assert(upipe != NULL);
+        upipe_delay_set_delay(upipe, delay);
+    } else
+        upipe = upipe_use(upipe_fsrc);
+
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
     assert(upipe_fsink_mgr != NULL);
-    struct upipe *upipe_fsink = upipe_void_alloc_output(upipe_fsrc,
+    struct upipe *upipe_fsink = upipe_void_chain_output(upipe,
             upipe_fsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "file sink"));
     assert(upipe_fsink != NULL);
-    if (delay) {
+    if (delay)
         ubase_assert(upipe_attach_uclock(upipe_fsink));
-        ubase_assert(upipe_sink_set_delay(upipe_fsink, delay));
-    }
     ubase_assert(upipe_fsink_set_path(upipe_fsink, sink_file, mode));
+    upipe_release(upipe_fsink);
 
     ev_loop(loop, 0);
 
     upipe_release(upipe_fsrc);
     upipe_mgr_release(upipe_fsrc_mgr); // nop
-
-    upipe_release(upipe_fsink);
     upipe_mgr_release(upipe_fsink_mgr); // nop
 
     upump_mgr_release(upump_mgr);
