@@ -86,6 +86,16 @@ static const unsigned int adts_samplerate_table[16] = {
     16000, 12000, 11025, 8000,  7350,  0,     0,     0
 };
 
+/** @This represents the coding type of the audio ES. */
+enum upipe_mpgaf_type {
+    /** MPEG-1 and 2 layers 1, 2 and 3 */
+    UPIPE_MPGAF_MP2,
+    /** MPEG-2 Advanced Audio Coding */
+    UPIPE_MPGAF_AAC,
+    /** Unknown */
+    UPIPE_MPGAF_UNKNOWN
+};
+
 /** @internal @This is the private context of an mpgaf pipe. */
 struct upipe_mpgaf {
     /** refcount management structure */
@@ -106,6 +116,8 @@ struct upipe_mpgaf {
     struct uref *flow_def_attr;
     /** latency in the input flow */
     uint64_t input_latency;
+    /** coding type */
+    enum upipe_mpgaf_type type;
 
     /* sync parsing stuff */
     /** number of octets in a frame */
@@ -199,6 +211,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf_init_uref_stream(upipe);
     upipe_mpgaf_init_output(upipe);
     upipe_mpgaf_init_flow_def(upipe);
+    upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
     upipe_mpgaf->input_latency = 0;
     upipe_mpgaf->samplerate = 0;
     upipe_mpgaf->got_discontinuity = false;
@@ -478,15 +491,28 @@ static bool upipe_mpgaf_parse_header(struct upipe *upipe)
     if (unlikely(!ubase_check(uref_block_extract(upipe_mpgaf->next_uref, 0, 2, header))))
         return true;
 
+    enum upipe_mpgaf_type type;
     switch (mpga_get_layer(header)) {
         case MPGA_LAYER_1:
         case MPGA_LAYER_2:
         case MPGA_LAYER_3:
-            return upipe_mpgaf_parse_mpeg(upipe);
+            type = UPIPE_MPGAF_MP2;
+            break;
         case MPGA_LAYER_ADTS:
-            return upipe_mpgaf_parse_adts(upipe);
+            type = UPIPE_MPGAF_AAC;
+            break;
+        default:
+            return false;
     }
-    return false; /* never reached */
+
+    if (unlikely(upipe_mpgaf->type != UPIPE_MPGAF_UNKNOWN &&
+                 upipe_mpgaf->type != type)) {
+        upipe_warn(upipe, "invalid header");
+        return false;
+    }
+    if (type == UPIPE_MPGAF_MP2)
+        return upipe_mpgaf_parse_mpeg(upipe);
+    return upipe_mpgaf_parse_adts(upipe);
 }
 
 /** @internal @This handles and outputs a frame.
@@ -648,7 +674,9 @@ static int upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    if (unlikely(!ubase_check(uref_flow_match_def(flow_def, "block."))))
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (unlikely(ubase_ncmp(def, "block.")))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
@@ -659,6 +687,11 @@ static int upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     upipe_mpgaf->input_latency = 0;
     uref_clock_get_latency(flow_def, &upipe_mpgaf->input_latency);
+    upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
+    if (!ubase_ncmp(def, "block.mp2."))
+        upipe_mpgaf->type = UPIPE_MPGAF_MP2;
+    else if (!ubase_ncmp(def, "block.aac."))
+        upipe_mpgaf->type = UPIPE_MPGAF_AAC;
 
     if (unlikely(upipe_mpgaf->samplerate &&
                  !ubase_check(uref_clock_set_latency(flow_def_dup,
