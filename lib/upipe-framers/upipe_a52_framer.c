@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -550,7 +550,12 @@ static int upipe_a52f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
+    const char *def;
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 (ubase_ncmp(def, "block.ac3.") &&
+                  ubase_ncmp(def, "block.eac3.") &&
+                  strcmp(def, "block."))))
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

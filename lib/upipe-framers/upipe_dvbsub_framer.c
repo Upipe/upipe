@@ -254,7 +254,11 @@ static int upipe_dvbsubf_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
+    const char *def;
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 (ubase_ncmp(def, "block.dvb_subtitle.") &&
+                  strcmp(def, "block."))))
+        return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

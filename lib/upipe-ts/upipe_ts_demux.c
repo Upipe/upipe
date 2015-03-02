@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1086,9 +1086,6 @@ static int upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
 
-    /* send the event upstream */
-    upipe_split_throw_update(upipe);
-
     /* send source_end on the removed or changed outputs */
     struct uchain *uchain;
     struct upipe_ts_demux_output *output = NULL;
@@ -1114,6 +1111,10 @@ static int upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
         if (id != output->pid)
             upipe_throw_source_end(upipe_ts_demux_output_to_upipe(output));
     }
+
+    /* send the event upstream */
+    upipe_split_throw_update(upipe);
+
     if (output != NULL)
         upipe_release(upipe_ts_demux_output_to_upipe(output));
     return UBASE_ERR_NONE;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -675,8 +675,10 @@ static int upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     const char *def;
-    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (unlikely(ubase_ncmp(def, "block.")))
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 (ubase_ncmp(def, "block.mp2.") &&
+                  ubase_ncmp(def, "block.aac.") &&
+                  strcmp(def, "block."))))
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
