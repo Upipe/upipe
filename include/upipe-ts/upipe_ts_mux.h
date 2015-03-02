@@ -112,10 +112,6 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_MODE,
     /** sets the mode (int) */
     UPIPE_TS_MUX_SET_MODE,
-    /** returns the configured MTU (unsigned int *) */
-    UPIPE_TS_MUX_GET_MTU,
-    /** sets the MTU (unsigned int) */
-    UPIPE_TS_MUX_SET_MTU,
     /** returns the current version number of the table (unsigned int *) */
     UPIPE_TS_MUX_GET_VERSION,
     /** sets the version number of the table (unsigned int) */
@@ -291,8 +287,7 @@ static inline int upipe_ts_mux_set_max_delay(struct upipe *upipe,
                          UPIPE_TS_MUX_SIGNATURE, delay);
 }
 
-/** @This returns the current mux octetrate. It may also be called on
- * upipe_ts_aggregate.
+/** @This returns the current mux octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate_p filled in with the octetrate
@@ -305,7 +300,7 @@ static inline int upipe_ts_mux_get_octetrate(struct upipe *upipe,
                          UPIPE_TS_MUX_SIGNATURE, octetrate_p);
 }
 
-/** @This sets the mux octetrate. It may also be called on upipe_ts_aggregate.
+/** @This sets the mux octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
@@ -345,8 +340,7 @@ static inline int
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
 }
 
-/** @This returns the current mode. It may also be called on
- * upipe_ts_aggregate.
+/** @This returns the current mode.
  *
  * @param upipe description structure of the pipe
  * @param mode_p filled in with the mode
@@ -359,7 +353,7 @@ static inline int
                          UPIPE_TS_MUX_SIGNATURE, mode_p);
 }
 
-/** @This sets the mode. It may also be called on upipe_ts_aggregate.
+/** @This sets the mode.
  *
  * @param upipe description structure of the pipe
  * @param mode new mode
@@ -370,32 +364,6 @@ static inline int upipe_ts_mux_set_mode(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_MODE,
                          UPIPE_TS_MUX_SIGNATURE, mode);
-}
-
-/** @This returns the configured mtu of TS packets. It may also be called on
- * upipe_ts_aggregate.
- *
- * @param upipe description structure of the pipe
- * @param mtu_p filled in with the configured mtu, in octets
- * @return an error code
- */
-static inline int upipe_ts_mux_get_mtu(struct upipe *upipe, unsigned int *mtu_p)
-{
-    return upipe_control(upipe, UPIPE_TS_MUX_GET_MTU,
-                         UPIPE_TS_MUX_SIGNATURE, mtu_p);
-}
-
-/** @This sets the configured mtu of TS packets. It may also be called on
- * upipe_ts_aggregate.
- *
- * @param upipe description structure of the pipe
- * @param mtu configured mtu, in octets
- * @return an error code
- */
-static inline int upipe_ts_mux_set_mtu(struct upipe *upipe, unsigned int mtu)
-{
-    return upipe_control(upipe, UPIPE_TS_MUX_SET_MTU,
-                         UPIPE_TS_MUX_SIGNATURE, mtu);
 }
 
 /** @This returns the current version of the PSI table. It may also be called on

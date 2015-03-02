@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -46,7 +46,7 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_source_read_size.h>
+#include <upipe/upipe_helper_output_size.h>
 #include <upipe-modules/upipe_http_source.h>
 
 #include <stdlib.h>
@@ -115,7 +115,7 @@ struct upipe_http_src {
     /** read watcher */
     struct upump *upump;
     /** read size */
-    unsigned int read_size;
+    unsigned int output_size;
 
     /** socket descriptor */
     int fd;
@@ -151,7 +151,7 @@ UPIPE_HELPER_UCLOCK(upipe_http_src, uclock, uclock_request, upipe_http_src_check
 
 UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump, upump_mgr)
-UPIPE_HELPER_SOURCE_READ_SIZE(upipe_http_src, read_size)
+UPIPE_HELPER_OUTPUT_SIZE(upipe_http_src, output_size)
 
 /** @internal @This allocates a http source pipe.
  *
@@ -175,7 +175,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src_init_upump_mgr(upipe);
     upipe_http_src_init_upump(upipe);
     upipe_http_src_init_uclock(upipe);
-    upipe_http_src_init_read_size(upipe, UBUF_DEFAULT_SIZE);
+    upipe_http_src_init_output_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_http_src->fd = -1;
     upipe_http_src->url = NULL;
     upipe_throw_ready(upipe);
@@ -245,11 +245,11 @@ static void upipe_http_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    char *buffer = malloc(upipe_http_src->read_size); /* FIXME use ubuf/umem */
+    char *buffer = malloc(upipe_http_src->output_size); /* FIXME use ubuf/umem */
     assert(buffer);
-    memset(buffer, 0, upipe_http_src->read_size);
+    memset(buffer, 0, upipe_http_src->output_size);
 
-    ssize_t len = recv(upipe_http_src->fd, buffer, upipe_http_src->read_size, 0);
+    ssize_t len = recv(upipe_http_src->fd, buffer, upipe_http_src->output_size, 0);
 
     if (unlikely(len == -1)) {
         free(buffer);
@@ -312,6 +312,7 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_http_src->ubuf_mgr == NULL) {
         struct uref *flow_format =
             uref_block_flow_alloc_def(upipe_http_src->uref_mgr, NULL);
+        uref_block_flow_set_size(flow_format, upipe_http_src->output_size);
         if (unlikely(flow_format == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -564,13 +565,13 @@ static int _upipe_http_src_control(struct upipe *upipe,
             return upipe_http_src_set_output(upipe, output);
         }
 
-        case UPIPE_SOURCE_GET_READ_SIZE: {
+        case UPIPE_GET_OUTPUT_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_http_src_get_read_size(upipe, p);
+            return upipe_http_src_get_output_size(upipe, p);
         }
-        case UPIPE_SOURCE_SET_READ_SIZE: {
-            unsigned int read_size = va_arg(args, unsigned int);
-            return upipe_http_src_set_read_size(upipe, read_size);
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int output_size = va_arg(args, unsigned int);
+            return upipe_http_src_set_output_size(upipe, output_size);
         }
 
         case UPIPE_GET_URI: {
@@ -617,7 +618,7 @@ static void upipe_http_src_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_http_src->url);
-    upipe_http_src_clean_read_size(upipe);
+    upipe_http_src_clean_output_size(upipe);
     upipe_http_src_clean_uclock(upipe);
     upipe_http_src_clean_upump(upipe);
     upipe_http_src_clean_upump_mgr(upipe);

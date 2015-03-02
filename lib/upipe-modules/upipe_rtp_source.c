@@ -186,8 +186,8 @@ static int upipe_rtpsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
         case UPIPE_ATTACH_UBUF_MGR:
         case UPIPE_ATTACH_UCLOCK:
-        case UPIPE_SOURCE_GET_READ_SIZE:
-        case UPIPE_SOURCE_SET_READ_SIZE:
+        case UPIPE_GET_OUTPUT_SIZE:
+        case UPIPE_SET_OUTPUT_SIZE:
         case UPIPE_GET_URI:
         case UPIPE_SET_URI:
             return upipe_control_va(upipe_rtpsrc->source, command, args);

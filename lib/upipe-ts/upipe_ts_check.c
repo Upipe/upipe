@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -19,8 +19,16 @@
  */
 
 /** @file
- * @short Upipe module checking that a buffer contains a given number of
- * aligned TS packets
+ * @short Upipe module checking that a buffer contains a given number of aligned TS packets
+ *
+ * This module also accepts @ref upipe_set_output_size, with the following
+ * common values:
+ * @table 2
+ * @item size (in octets) @item description
+ * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
+ * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
+ * @item 204 @item TS packet followed by a 16-octet checksum
+ * @end table
  */
 
 #include <upipe/ubase.h>
@@ -34,6 +42,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_output_size.h>
 #include <upipe-ts/upipe_ts_check.h>
 
 #include <stdlib.h>
@@ -67,7 +76,7 @@ struct upipe_ts_check {
     struct uchain request_list;
 
     /** TS packet size */
-    size_t ts_size;
+    size_t output_size;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -77,6 +86,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_check, upipe, UPIPE_TS_CHECK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_check, urefcount, upipe_ts_check_free)
 UPIPE_HELPER_VOID(upipe_ts_check)
 UPIPE_HELPER_OUTPUT(upipe_ts_check, output, flow_def, output_state, request_list)
+UPIPE_HELPER_OUTPUT_SIZE(upipe_ts_check, output_size)
 
 /** @internal @This allocates a ts_check pipe.
  *
@@ -95,10 +105,9 @@ static struct upipe *upipe_ts_check_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
     upipe_ts_check_init_urefcount(upipe);
     upipe_ts_check_init_output(upipe);
-    upipe_ts_check->ts_size = TS_SIZE;
+    upipe_ts_check_init_output_size(upipe, TS_SIZE);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -150,9 +159,9 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    while (size > upipe_ts_check->ts_size) {
+    while (size > upipe_ts_check->output_size) {
         struct uref *output = uref_block_splice(uref, 0,
-                                                upipe_ts_check->ts_size);
+                                                upipe_ts_check->output_size);
         if (unlikely(output == NULL)) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -163,10 +172,10 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        uref_block_resize(uref, upipe_ts_check->ts_size, -1);
-        size -= upipe_ts_check->ts_size;
+        uref_block_resize(uref, upipe_ts_check->output_size, -1);
+        size -= upipe_ts_check->output_size;
     }
-    if (size == upipe_ts_check->ts_size)
+    if (size == upipe_ts_check->output_size)
         upipe_ts_check_check(upipe, uref, upump_p);
 }
 
@@ -187,46 +196,11 @@ static int upipe_ts_check_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    /* FIXME make it dependant on the output size */
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
+    UBASE_RETURN(uref_block_flow_set_size(flow_def_dup,
+                                          upipe_ts_check->output_size))
+    UBASE_RETURN(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))
     upipe_ts_check_store_flow_def(upipe, flow_def_dup);
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This returns the configured size of TS packets.
- *
- * @param upipe description structure of the pipe
- * @param size_p filled in with the configured size, in octets
- * @return an error code
- */
-static int _upipe_ts_check_get_size(struct upipe *upipe, int *size_p)
-{
-    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
-    assert(size_p != NULL);
-    *size_p = upipe_ts_check->ts_size;
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the configured size of TS packets. Common values are:
- * @table 2
- * @item size (in octets) @item description
- * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
- * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
- * @item 204 @item TS packet followed by a 16-octet checksum
- * @end table
- *
- * @param upipe description structure of the pipe
- * @param size configured size, in octets
- * @return an error code
- */
-static int _upipe_ts_check_set_size(struct upipe *upipe, int size)
-{
-    struct upipe_ts_check *upipe_ts_check = upipe_ts_check_from_upipe(upipe);
-    if (size < 0)
-        return UBASE_ERR_INVALID;
-    /* FIXME change the flow definition */
-    upipe_ts_check->ts_size = size;
     return UBASE_ERR_NONE;
 }
 
@@ -265,16 +239,13 @@ static int upipe_ts_check_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_check_set_output(upipe, output);
         }
-
-        case UPIPE_TS_CHECK_GET_SIZE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_CHECK_SIGNATURE)
-            int *size_p = va_arg(args, int *);
-            return _upipe_ts_check_get_size(upipe, size_p);
+        case UPIPE_GET_OUTPUT_SIZE: {
+            unsigned int *size_p = va_arg(args, unsigned int *);
+            return upipe_ts_check_get_output_size(upipe, size_p);
         }
-        case UPIPE_TS_CHECK_SET_SIZE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_CHECK_SIGNATURE)
-            int size = va_arg(args, int);
-            return _upipe_ts_check_set_size(upipe, size);
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int size = va_arg(args, unsigned int);
+            return upipe_ts_check_set_output_size(upipe, size);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -290,6 +261,7 @@ static void upipe_ts_check_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_ts_check_clean_output(upipe);
+    upipe_ts_check_clean_output_size(upipe);
     upipe_ts_check_clean_urefcount(upipe);
     upipe_ts_check_free_void(upipe);
 }

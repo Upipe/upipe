@@ -109,14 +109,10 @@ enum upipe_command {
     UPIPE_ATTACH_UBUF_MGR,
     /** gets output flow definition (struct uref **) */
     UPIPE_GET_FLOW_DEF,
-
-    /*
-     * Source elements commands
-     */
-    /** gets read buffer size (unsigned int *) */
-    UPIPE_SOURCE_GET_READ_SIZE,
-    /** sets read buffer size (unsigned int) */
-    UPIPE_SOURCE_SET_READ_SIZE,
+    /** gets output packet size (unsigned int *) */
+    UPIPE_GET_OUTPUT_SIZE,
+    /** sets output packet size (unsigned int) */
+    UPIPE_SET_OUTPUT_SIZE,
 
     /*
      * Split elements commands
@@ -980,9 +976,8 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
                        pipe acting as output (unsafe, use only internally))
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, max_length, MAX_LENGTH, unsigned int,
                        max length of the internal queue)
-
-UPIPE_CONTROL_TEMPLATE(upipe_source, UPIPE_SOURCE, read_size, READ_SIZE,
-                       unsigned int, read size of the source)
+UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output_size, OUTPUT_SIZE,
+                       unsigned int, packet size of the output)
 #undef UPIPE_CONTROL_TEMPLATE
 
 /** @This gets a string option.

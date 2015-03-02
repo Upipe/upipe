@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
             Benjamin Cohen
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
                              "udp source"));
     assert(upipe_udpsrc != NULL);
     ubase_assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
-    ubase_assert(upipe_source_set_read_size(upipe_udpsrc, READ_SIZE));
+    ubase_assert(upipe_set_output_size(upipe_udpsrc, READ_SIZE));
     ubase_assert(upipe_attach_uclock(upipe_udpsrc));
 	srand(42);
 

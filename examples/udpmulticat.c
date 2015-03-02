@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
     struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "udp source"));
-    upipe_source_set_read_size(upipe_udpsrc, READ_SIZE);
+    upipe_set_output_size(upipe_udpsrc, READ_SIZE);
     upipe_attach_uclock(upipe_udpsrc);
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;

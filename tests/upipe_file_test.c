@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
-    ubase_assert(upipe_source_set_read_size(upipe_fsrc, READ_SIZE));
+    ubase_assert(upipe_set_output_size(upipe_fsrc, READ_SIZE));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
     uint64_t size;
     if (ubase_check(upipe_fsrc_get_size(upipe_fsrc, &size)))

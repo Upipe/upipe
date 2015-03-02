@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -20,6 +20,15 @@
 
 /** @file
  * @short Upipe module syncing on a transport stream
+ *
+ * This module also accepts @ref upipe_set_output_size, with the following
+ * common values:
+ * @table 2
+ * @item size (in octets) @item description
+ * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
+ * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
+ * @item 204 @item TS packet followed by a 16-octet checksum
+ * @end table
  */
 
 #ifndef _UPIPE_TS_UPIPE_TS_SYNC_H_
@@ -37,10 +46,6 @@ extern "C" {
 enum upipe_ts_sync_command {
     UPIPE_TS_SYNC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the configured size of TS packets (int *) */
-    UPIPE_TS_SYNC_GET_SIZE,
-    /** sets the configured size of TS packets (int) */
-    UPIPE_TS_SYNC_SET_SIZE,
     /** returns the configured number of packets to synchronize with (int *) */
     UPIPE_TS_SYNC_GET_SYNC,
     /** sets the configured number of packets to synchronize with (int) */
@@ -53,43 +58,13 @@ enum upipe_ts_sync_command {
  */
 struct upipe_mgr *upipe_ts_sync_mgr_alloc(void);
 
-/** @This returns the configured size of TS packets.
- *
- * @param upipe description structure of the pipe
- * @param size_p filled in with the configured size, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_sync_get_size(struct upipe *upipe, int *size_p)
-{
-    return upipe_control(upipe, UPIPE_TS_SYNC_GET_SIZE, UPIPE_TS_SYNC_SIGNATURE,
-                         size_p);
-}
-
-/** @This sets the configured size of TS packets. Common values are:
- * @table 2
- * @item size (in octets) @item description
- * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
- * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
- * @item 204 @item TS packet followed by a 16-octet checksum
- * @end table
- *
- * @param upipe description structure of the pipe
- * @param size configured size, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_sync_set_size(struct upipe *upipe, int size)
-{
-    return upipe_control(upipe, UPIPE_TS_SYNC_SET_SIZE, UPIPE_TS_SYNC_SIGNATURE,
-                         size);
-}
-
 /** @This returns the configured number of packets to synchronize with.
  *
  * @param upipe description structure of the pipe
  * @param sync_p filled in with number of packets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
+static inline int upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
 {
     return upipe_control(upipe, UPIPE_TS_SYNC_GET_SYNC, UPIPE_TS_SYNC_SIGNATURE,
                          sync_p);
@@ -101,9 +76,9 @@ static inline bool upipe_ts_sync_get_sync(struct upipe *upipe, int *sync_p)
  *
  * @param upipe description structure of the pipe
  * @param sync number of packets
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
+static inline int upipe_ts_sync_set_sync(struct upipe *upipe, int sync)
 {
     return upipe_control(upipe, UPIPE_TS_SYNC_SET_SYNC, UPIPE_TS_SYNC_SIGNATURE,
                          sync);

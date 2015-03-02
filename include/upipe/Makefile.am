@@ -39,7 +39,7 @@ pkginclude_HEADERS = \
 	upipe_helper_flow.h \
 	upipe_helper_input.h \
 	upipe_helper_output.h \
-	upipe_helper_source_read_size.h \
+	upipe_helper_output_size.h \
 	upipe_helper_subpipe.h \
 	upipe_helper_sync.h \
 	upipe_helper_ubuf_mgr.h \

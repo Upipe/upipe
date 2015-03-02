@@ -2431,7 +2431,9 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
     if (unlikely(!ubase_check(uref_clock_set_latency(flow_def,
                                 mux->latency + mux->mux_delay)) ||
                  !ubase_check(uref_block_flow_set_octetrate(flow_def,
-                                mux->total_octetrate))))
+                                mux->total_octetrate)) ||
+                 !ubase_check(uref_block_flow_set_size(flow_def,
+                                mux->mtu))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_mux_store_flow_def(upipe, flow_def);
 
@@ -2482,6 +2484,41 @@ static int upipe_ts_mux_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     int err = upipe_set_flow_def(upipe_ts_mux->psig, flow_def_dup);
     uref_free(flow_def_dup);
     return err;
+}
+
+/** @internal @This returns the configured mtu.
+ *
+ * @param upipe description structure of the pipe
+ * @param mtu_p filled in with the configured mtu, in octets
+ * @return an error code
+ */
+static int upipe_ts_mux_get_output_size(struct upipe *upipe,
+                                        unsigned int *mtu_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(mtu_p != NULL);
+    *mtu_p = upipe_ts_mux->mtu;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the configured mtu.
+ *
+ * @param upipe description structure of the pipe
+ * @param mtu configured mtu, in octets
+ * @return an error code
+ */
+static int upipe_ts_mux_set_output_size(struct upipe *upipe, unsigned int mtu)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    if (unlikely(mtu < TS_SIZE))
+        return UBASE_ERR_INVALID;
+    mtu -= mtu % TS_SIZE;
+    upipe_ts_mux->mtu = mtu;
+    upipe_ts_mux->interval = (upipe_ts_mux->mtu * UCLOCK_FREQ +
+                              upipe_ts_mux->total_octetrate - 1) /
+                             upipe_ts_mux->total_octetrate;
+    upipe_ts_mux_build_flow_def(upipe);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current conformance mode. It cannot
@@ -2775,39 +2812,6 @@ static int _upipe_ts_mux_set_mode(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This returns the configured mtu.
- *
- * @param upipe description structure of the pipe
- * @param mtu_p filled in with the configured mtu, in octets
- * @return an error code
- */
-static int _upipe_ts_mux_get_mtu(struct upipe *upipe, unsigned int *mtu_p)
-{
-    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    assert(mtu_p != NULL);
-    *mtu_p = upipe_ts_mux->mtu;
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the configured mtu.
- *
- * @param upipe description structure of the pipe
- * @param mtu configured mtu, in octets
- * @return an error code
- */
-static int _upipe_ts_mux_set_mtu(struct upipe *upipe, unsigned int mtu)
-{
-    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    if (unlikely(mtu < TS_SIZE))
-        return UBASE_ERR_INVALID;
-    mtu -= mtu % TS_SIZE;
-    upipe_ts_mux->mtu = mtu;
-    upipe_ts_mux->interval = (upipe_ts_mux->mtu * UCLOCK_FREQ +
-                              upipe_ts_mux->total_octetrate - 1) /
-                             upipe_ts_mux->total_octetrate;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a ts_mux pipe.
  *
  * @param upipe description structure of the pipe
@@ -2840,6 +2844,14 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_mux_set_output(upipe, output);
+        }
+        case UPIPE_GET_OUTPUT_SIZE: {
+            unsigned int *mtu_p = va_arg(args, unsigned int *);
+            return upipe_ts_mux_get_output_size(upipe, mtu_p);
+        }
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int mtu = va_arg(args, unsigned int);
+            return upipe_ts_mux_set_output_size(upipe, mtu);
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
@@ -2932,16 +2944,6 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             enum upipe_ts_mux_mode mode = va_arg(args, enum upipe_ts_mux_mode);
             return _upipe_ts_mux_set_mode(upipe, mode);
-        }
-        case UPIPE_TS_MUX_GET_MTU: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
-            unsigned int *mtu_p = va_arg(args, unsigned int *);
-            return _upipe_ts_mux_get_mtu(upipe, mtu_p);
-        }
-        case UPIPE_TS_MUX_SET_MTU: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
-            unsigned int mtu = va_arg(args, unsigned int);
-            return _upipe_ts_mux_set_mtu(upipe, mtu);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:

@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_output_size.h>
 #include <upipe-modules/upipe_aggregate.h>
 
 #include <stdlib.h>
@@ -68,7 +69,7 @@ struct upipe_agg {
     struct uchain request_list;
 
     /** MTU */
-    size_t mtu;
+    size_t output_size;
     /** incoming buffer size */
     size_t input_size;
 
@@ -85,6 +86,7 @@ UPIPE_HELPER_UPIPE(upipe_agg, upipe, UPIPE_AGG_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_agg, urefcount, upipe_agg_free)
 UPIPE_HELPER_VOID(upipe_agg)
 UPIPE_HELPER_OUTPUT(upipe_agg, output, flow_def, output_state, request_list)
+UPIPE_HELPER_OUTPUT_SIZE(upipe_agg, output_size)
 
 /** @internal @This allocates a agg pipe.
  *
@@ -105,7 +107,7 @@ static struct upipe *upipe_agg_alloc(struct upipe_mgr *mgr,
     struct upipe_agg *upipe_agg = upipe_agg_from_upipe(upipe);
     upipe_agg_init_urefcount(upipe);
     upipe_agg_init_output(upipe);
-    upipe_agg->mtu = DEFAULT_MTU;
+    upipe_agg_init_output_size(upipe, DEFAULT_MTU);
     upipe_agg->input_size = 0;
     upipe_agg->size = 0;
     upipe_agg->aggregated = NULL;
@@ -124,20 +126,20 @@ static void upipe_agg_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_agg *upipe_agg = upipe_agg_from_upipe(upipe);
     size_t size = 0;
-    const size_t mtu = upipe_agg->mtu;
+    const size_t output_size = upipe_agg->output_size;
 
     uref_block_size(uref, &size);
 
     /* check for invalid or too large size */
-    if (unlikely(size == 0 || size > mtu)) {
+    if (unlikely(size == 0 || size > output_size)) {
         upipe_warn_va(upipe,
-            "received packet of invalid size: %zu (mtu == %zu)", size, mtu);
+            "received packet of invalid size: %zu (output_size == %zu)", size, output_size);
         uref_free(uref);
         return;
     }
 
     /* flush if incoming packet makes aggregated overflow */
-    if (upipe_agg->size + size > mtu) {
+    if (upipe_agg->size + size > output_size) {
         upipe_agg_output(upipe, upipe_agg->aggregated, upump_p);
         upipe_agg->aggregated = NULL;
     }
@@ -161,7 +163,7 @@ static void upipe_agg_input(struct upipe *upipe, struct uref *uref,
     /* anticipate next packet size and flush now if necessary */
     if (upipe_agg->input_size)
         size = upipe_agg->input_size;
-    if (unlikely(upipe_agg->size + size > mtu)) {
+    if (unlikely(upipe_agg->size + size > output_size)) {
         upipe_agg_output(upipe, upipe_agg->aggregated, upump_p);
         upipe_agg->aggregated = NULL;
         upipe_agg->size = 0;
@@ -187,42 +189,8 @@ static int upipe_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
-    UBASE_RETURN(uref_block_flow_set_size(flow_def_dup, upipe_agg->mtu))
+    UBASE_RETURN(uref_block_flow_set_size(flow_def_dup, upipe_agg->output_size))
     upipe_agg_store_flow_def(upipe, flow_def_dup);
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This returns the configured mtu.
- *
- * @param upipe description structure of the pipe
- * @param mtu_p filled in with the configured mtu, in octets
- * @return false in case of error
- */
-static int _upipe_agg_get_mtu(struct upipe *upipe, int *mtu_p)
-{
-    struct upipe_agg *upipe_agg = upipe_agg_from_upipe(upipe);
-    assert(mtu_p != NULL);
-    *mtu_p = upipe_agg->mtu;
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the configured mtu.
- * @param upipe description structure of the pipe
- * @param mtu configured mtu, in octets
- * @return false in case of error
- */
-static int _upipe_agg_set_mtu(struct upipe *upipe, int mtu)
-{
-    struct upipe_agg *upipe_agg = upipe_agg_from_upipe(upipe);
-    if (mtu < 0)
-        return UBASE_ERR_INVALID;
-    upipe_agg->mtu = mtu;
-    if (upipe_agg->flow_def != NULL) {
-        struct uref *flow_def = upipe_agg->flow_def;
-        upipe_agg->flow_def = NULL;
-        UBASE_RETURN(uref_block_flow_set_size(flow_def, upipe_agg->mtu))
-        upipe_agg_store_flow_def(upipe, flow_def);
-    }
     return UBASE_ERR_NONE;
 }
 
@@ -260,21 +228,16 @@ static int upipe_agg_control(struct upipe *upipe, int command, va_list args)
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_agg_set_output(upipe, output);
         }
-
-        case UPIPE_AGG_GET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AGG_SIGNATURE);
-            int *mtu_p = va_arg(args, int *);
-            return _upipe_agg_get_mtu(upipe, mtu_p);
+        case UPIPE_GET_OUTPUT_SIZE: {
+            unsigned int *output_size_p = va_arg(args, unsigned int *);
+            return upipe_agg_get_output_size(upipe, output_size_p);
         }
-        case UPIPE_AGG_SET_MTU: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_AGG_SIGNATURE);
-            int mtu = va_arg(args, int);
-            return _upipe_agg_set_mtu(upipe, mtu);
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int output_size = va_arg(args, unsigned int);
+            return upipe_agg_set_output_size(upipe, output_size);
         }
         default:
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -291,6 +254,7 @@ static void upipe_agg_free(struct upipe *upipe)
     }
     upipe_throw_dead(upipe);
     upipe_agg_clean_output(upipe);
+    upipe_agg_clean_output_size(upipe);
     upipe_agg_clean_urefcount(upipe);
     upipe_agg_free_void(upipe);
 }

@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_agg, upipe_sink));
     upipe_release(upipe_sink);
 
-    ubase_assert(upipe_agg_set_mtu(upipe_agg, 376));
+    ubase_assert(upipe_set_output_size(upipe_agg, 376));
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 188);
     upipe_input(upipe_agg, uref, NULL);

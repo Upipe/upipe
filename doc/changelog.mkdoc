@@ -19,6 +19,8 @@
 
         @item The @ref upipe_pthread_xfer_mgr_alloc call now has an extra argument, allowing to get the pthread ID of the created thread.
 
+        @item The upipe_source_{get,set}_read_size calls have been renamed to @ref upipe_get_output_size and @ref upipe_set_output_size.
+
       @end list
 
     @end section

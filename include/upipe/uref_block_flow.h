@@ -105,6 +105,9 @@ static inline void uref_block_flow_clear_format(struct uref *uref)
     uref_block_flow_delete_max_octetrate(uref);
     uref_block_flow_delete_buffer_size(uref);
     uref_block_flow_delete_max_buffer_size(uref);
+    uref_block_flow_delete_align(uref);
+    uref_block_flow_delete_align_offset(uref);
+    uref_block_flow_delete_size(uref);
 }
 
 #undef UREF_BLOCK_FLOW_DEF

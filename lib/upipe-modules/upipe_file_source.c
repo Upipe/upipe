@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,7 +47,7 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_source_read_size.h>
+#include <upipe/upipe_helper_output_size.h>
 #include <upipe-modules/upipe_file_source.h>
 
 #include <stdlib.h>
@@ -109,7 +109,7 @@ struct upipe_fsrc {
     /** read watcher */
     struct upump *upump;
     /** read size */
-    unsigned int read_size;
+    unsigned int output_size;
 
     /** true if the file is regular and doesn't support poll() */
     bool regular_file;
@@ -140,7 +140,7 @@ UPIPE_HELPER_UCLOCK(upipe_fsrc, uclock, uclock_request, upipe_fsrc_check,
 
 UPIPE_HELPER_UPUMP_MGR(upipe_fsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsrc, upump, upump_mgr)
-UPIPE_HELPER_SOURCE_READ_SIZE(upipe_fsrc, read_size)
+UPIPE_HELPER_OUTPUT_SIZE(upipe_fsrc, output_size)
 
 /** @internal @This allocates a file source pipe.
  *
@@ -163,7 +163,7 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc_init_upump_mgr(upipe);
     upipe_fsrc_init_upump(upipe);
     upipe_fsrc_init_uclock(upipe);
-    upipe_fsrc_init_read_size(upipe, UBUF_DEFAULT_SIZE);
+    upipe_fsrc_init_output_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_fsrc->fd = -1;
     upipe_fsrc->path = NULL;
     upipe_throw_ready(upipe);
@@ -186,23 +186,23 @@ static void upipe_fsrc_worker(struct upump *upump)
 
     struct uref *uref = uref_block_alloc(upipe_fsrc->uref_mgr,
                                          upipe_fsrc->ubuf_mgr,
-                                         upipe_fsrc->read_size);
+                                         upipe_fsrc->output_size);
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
     uint8_t *buffer;
-    int read_size = -1;
-    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size,
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size,
                                                &buffer)))) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    assert(read_size == upipe_fsrc->read_size);
+    assert(output_size == upipe_fsrc->output_size);
 
-    ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->read_size);
+    ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->output_size);
     uref_block_unmap(uref, 0);
 
     if (unlikely(ret == -1)) {
@@ -235,7 +235,7 @@ static void upipe_fsrc_worker(struct upump *upump)
     }
     if (upipe_fsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
-    if (unlikely(ret != upipe_fsrc->read_size))
+    if (unlikely(ret != upipe_fsrc->output_size))
         uref_block_resize(uref, 0, ret);
     upipe_use(upipe);
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
@@ -266,6 +266,7 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_fsrc->ubuf_mgr == NULL) {
         struct uref *flow_format =
             uref_block_flow_alloc_def(upipe_fsrc->uref_mgr, NULL);
+        uref_block_flow_set_size(flow_format, upipe_fsrc->output_size);
         if (unlikely(flow_format == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -445,13 +446,13 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
             return upipe_fsrc_set_output(upipe, output);
         }
 
-        case UPIPE_SOURCE_GET_READ_SIZE: {
+        case UPIPE_GET_OUTPUT_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_fsrc_get_read_size(upipe, p);
+            return upipe_fsrc_get_output_size(upipe, p);
         }
-        case UPIPE_SOURCE_SET_READ_SIZE: {
-            unsigned int read_size = va_arg(args, unsigned int);
-            return upipe_fsrc_set_read_size(upipe, read_size);
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int output_size = va_arg(args, unsigned int);
+            return upipe_fsrc_set_output_size(upipe, output_size);
         }
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
@@ -513,7 +514,7 @@ static void upipe_fsrc_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_fsrc->path);
-    upipe_fsrc_clean_read_size(upipe);
+    upipe_fsrc_clean_output_size(upipe);
     upipe_fsrc_clean_uclock(upipe);
     upipe_fsrc_clean_upump(upipe);
     upipe_fsrc_clean_upump_mgr(upipe);

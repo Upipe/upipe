@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "http"));
     assert(upipe_http_src != NULL);
-    assert(upipe_source_set_read_size(upipe_http_src, READ_SIZE));
+    assert(upipe_set_output_size(upipe_http_src, READ_SIZE));
     assert(upipe_set_uri(upipe_http_src, url));
     assert(upipe_set_output(upipe_http_src, upipe_null));
     upipe_release(upipe_null);

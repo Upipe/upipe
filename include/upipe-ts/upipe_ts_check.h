@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -19,8 +19,16 @@
  */
 
 /** @file
- * @short Upipe module checking that a buffer contains a given number of
- * aligned TS packets
+ * @short Upipe module checking that a buffer contains a given number of aligned TS packets
+ *
+ * This module also accepts @ref upipe_set_output_size, with the following
+ * common values:
+ * @table 2
+ * @item size (in octets) @item description
+ * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
+ * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
+ * @item 204 @item TS packet followed by a 16-octet checksum
+ * @end table
  */
 
 #ifndef _UPIPE_TS_UPIPE_TS_CHECK_H_
@@ -34,51 +42,11 @@ extern "C" {
 
 #define UPIPE_TS_CHECK_SIGNATURE UBASE_FOURCC('t','s','c','k')
 
-/** @This extends upipe_command with specific commands for ts check. */
-enum upipe_ts_check_command {
-    UPIPE_TS_CHECK_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the configured size of TS packets (int *) */
-    UPIPE_TS_CHECK_GET_SIZE,
-    /** sets the configured size of TS packets (int) */
-    UPIPE_TS_CHECK_SET_SIZE
-};
-
 /** @This returns the management structure for all ts_check pipes.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_ts_check_mgr_alloc(void);
-
-/** @This returns the configured size of TS packets.
- *
- * @param upipe description structure of the pipe
- * @param size_p filled in with the configured size, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_check_get_size(struct upipe *upipe, int *size_p)
-{
-    return upipe_control(upipe, UPIPE_TS_CHECK_GET_SIZE,
-                         UPIPE_TS_CHECK_SIGNATURE, size_p);
-}
-
-/** @This sets the configured size of TS packets. Common values are:
- * @table 2
- * @item size (in octets) @item description
- * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
- * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
- * @item 204 @item TS packet followed by a 16-octet checksum
- * @end table
- *
- * @param upipe description structure of the pipe
- * @param size configured size, in octets
- * @return false in case of error
- */
-static inline bool upipe_ts_check_set_size(struct upipe *upipe, int size)
-{
-    return upipe_control(upipe, UPIPE_TS_CHECK_SET_SIZE,
-                         UPIPE_TS_CHECK_SIGNATURE, size);
-}
 
 #ifdef __cplusplus
 }

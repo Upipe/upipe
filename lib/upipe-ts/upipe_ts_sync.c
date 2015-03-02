@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -20,6 +20,15 @@
 
 /** @file
  * @short Upipe module syncing on a transport stream
+ *
+ * This module also accepts @ref upipe_set_output_size, with the following
+ * common values:
+ * @table 2
+ * @item size (in octets) @item description
+ * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
+ * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
+ * @item 204 @item TS packet followed by a 16-octet checksum
+ * @end table
  */
 
 #include <upipe/ubase.h>
@@ -35,6 +44,7 @@
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_output_size.h>
 #include <upipe-ts/upipe_ts_sync.h>
 
 #include <stdlib.h>
@@ -71,7 +81,7 @@ struct upipe_ts_sync {
     struct uchain request_list;
 
     /** TS packet size */
-    size_t ts_size;
+    size_t output_size;
     /** number of packets to sync with */
     unsigned int ts_sync;
     /** next uref to be processed */
@@ -94,6 +104,7 @@ UPIPE_HELPER_SYNC(upipe_ts_sync, acquired)
 UPIPE_HELPER_UREF_STREAM(upipe_ts_sync, next_uref, next_uref_size, urefs, NULL)
 
 UPIPE_HELPER_OUTPUT(upipe_ts_sync, output, flow_def, output_state, request_list)
+UPIPE_HELPER_OUTPUT_SIZE(upipe_ts_sync, output_size)
 
 /** @internal @This allocates a ts_sync pipe.
  *
@@ -116,7 +127,7 @@ static struct upipe *upipe_ts_sync_alloc(struct upipe_mgr *mgr,
     upipe_ts_sync_init_urefcount(upipe);
     upipe_ts_sync_init_sync(upipe);
     upipe_ts_sync_init_output(upipe);
-    upipe_ts_sync->ts_size = TS_SIZE;
+    upipe_ts_sync_init_output_size(upipe, TS_SIZE);
     upipe_ts_sync->ts_sync = DEFAULT_TS_SYNC;
     upipe_ts_sync->next_uref = NULL;
     ulist_init(&upipe_ts_sync->urefs);
@@ -142,8 +153,8 @@ static bool upipe_ts_sync_check(struct upipe *upipe, size_t *offset_p)
 
         /* first octet at *offset_p is a sync word */
         int ts_sync = upipe_ts_sync->ts_sync - 1;
-        for (int offset = *offset_p + upipe_ts_sync->ts_size; ts_sync;
-             ts_sync--, offset += upipe_ts_sync->ts_size) {
+        for (int offset = *offset_p + upipe_ts_sync->output_size; ts_sync;
+             ts_sync--, offset += upipe_ts_sync->output_size) {
             const uint8_t *buffer;
             int size = 1;
             uint8_t word;
@@ -178,11 +189,11 @@ static void upipe_ts_sync_flush(struct upipe *upipe, struct upump **upump_p)
         size_t offset = 0, size;
         while (upipe_ts_sync->next_uref != NULL &&
                ubase_check(uref_block_size(upipe_ts_sync->next_uref, &size)) &&
-               size >= upipe_ts_sync->ts_size &&
+               size >= upipe_ts_sync->output_size &&
                ubase_check(uref_block_scan(upipe_ts_sync->next_uref, &offset, TS_SYNC)) &&
                !offset) {
             struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
-                                                        upipe_ts_sync->ts_size);
+                                                        upipe_ts_sync->output_size);
             if (unlikely(output == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 continue;
@@ -223,7 +234,7 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
         /* upipe_ts_sync_check said there is at least one TS packet there. */
         upipe_ts_sync_sync_acquired(upipe);
         struct uref *output = upipe_ts_sync_extract_uref_stream(upipe,
-                                                    upipe_ts_sync->ts_size);
+                                                    upipe_ts_sync->output_size);
         if (unlikely(output == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
@@ -249,46 +260,11 @@ static int upipe_ts_sync_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    /* FIXME make it dependant on the output size */
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))))
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
+    UBASE_RETURN(uref_block_flow_set_size(flow_def_dup,
+                                          upipe_ts_sync->output_size))
+    UBASE_RETURN(uref_flow_set_def(flow_def_dup, OUTPUT_FLOW_DEF))
     upipe_ts_sync_store_flow_def(upipe, flow_def_dup);
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This returns the configured size of TS packets.
- *
- * @param upipe description structure of the pipe
- * @param size_p filled in with the configured size, in octets
- * @return an error code
- */
-static int _upipe_ts_sync_get_size(struct upipe *upipe, int *size_p)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    assert(size_p != NULL);
-    *size_p = upipe_ts_sync->ts_size;
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the configured size of TS packets. Common values are:
- * @table 2
- * @item size (in octets) @item description
- * @item 188 @item standard size of TS packets according to ISO/IEC 13818-1
- * @item 196 @item TS packet followed by an 8-octet timestamp or checksum
- * @item 204 @item TS packet followed by a 16-octet checksum
- * @end table
- *
- * @param upipe description structure of the pipe
- * @param size configured size, in octets
- * @return an error code
- */
-static int _upipe_ts_sync_set_size(struct upipe *upipe, int size)
-{
-    struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (size < 0)
-        return UBASE_ERR_INVALID;
-    upipe_ts_sync->ts_size = size;
-    /* FIXME change flow definition */
     return UBASE_ERR_NONE;
 }
 
@@ -359,17 +335,15 @@ static int upipe_ts_sync_control(struct upipe *upipe,
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_sync_set_output(upipe, output);
         }
+        case UPIPE_GET_OUTPUT_SIZE: {
+            unsigned int *size_p = va_arg(args, unsigned int *);
+            return upipe_ts_sync_get_output_size(upipe, size_p);
+        }
+        case UPIPE_SET_OUTPUT_SIZE: {
+            unsigned int size = va_arg(args, unsigned int);
+            return upipe_ts_sync_set_output_size(upipe, size);
+        }
 
-        case UPIPE_TS_SYNC_GET_SIZE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
-            int *size_p = va_arg(args, int *);
-            return _upipe_ts_sync_get_size(upipe, size_p);
-        }
-        case UPIPE_TS_SYNC_SET_SIZE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
-            int size = va_arg(args, int);
-            return _upipe_ts_sync_set_size(upipe, size);
-        }
         case UPIPE_TS_SYNC_GET_SYNC: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
             unsigned int signature = va_arg(args, unsigned int);
@@ -398,6 +372,7 @@ static void upipe_ts_sync_free(struct upipe *upipe)
 
     upipe_ts_sync_clean_uref_stream(upipe);
     upipe_ts_sync_clean_output(upipe);
+    upipe_ts_sync_clean_output_size(upipe);
     upipe_ts_sync_clean_sync(upipe);
     upipe_ts_sync_clean_urefcount(upipe);
     upipe_ts_sync_free_void(upipe);
