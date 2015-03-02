@@ -239,14 +239,7 @@ static int STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p) \
 static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
 {                                                                           \
     struct STRUCTURE_SUB *sub = STRUCTURE_SUB##_from_upipe(upipe);          \
-    struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
-    struct uchain *uchain, *uchain_tmp;                                     \
-    ulist_delete_foreach (&s->ULIST, uchain, uchain_tmp) {                  \
-        if (STRUCTURE_SUB##_from_uchain(uchain) == sub) {                   \
-            ulist_delete(uchain);                                           \
-            break;                                                          \
-        }                                                                   \
-    }                                                                       \
+    ulist_delete(STRUCTURE_SUB##_to_uchain(sub));                           \
 }                                                                           \
 /** @This initializes the private members for this helper in STRUCTURE.     \
  *                                                                          \
