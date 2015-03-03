@@ -62,6 +62,7 @@
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_a52_framer.h>
+#include <upipe-framers/upipe_video_trim.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_queue_source.h>
@@ -85,13 +86,14 @@
 #define UPUMP_BLOCKER_POOL 0
 #define FRAME_QUEUE_LENGTH 255
 #define READ_SIZE 4096
-#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static const char *src_file, *sink_file;
 static struct uref_mgr *uref_mgr;
 static struct upump_mgr *upump_mgr;
 
 static struct upipe_mgr *upipe_noclock_mgr;
+static struct upipe_mgr *upipe_vtrim_mgr;
 static struct upipe *upipe_even;
 
 static struct uprobe *logger;
@@ -184,7 +186,9 @@ static int catch_ts_demux_program(struct uprobe *uprobe,
                 }
                 if (found)
                     continue;
-                upipe_notice_va(upipe, "add flow %"PRIu64, flow_id);
+                const char *def;
+                ubase_assert(uref_flow_get_def(flow_def, &def));
+                upipe_notice_va(upipe, "add flow %"PRIu64" (%s)", flow_id, def);
 
                 output = upipe_flow_alloc_sub(upipe,
                     uprobe_pfx_alloc_va(&uprobe_demux_output_s,
@@ -197,6 +201,13 @@ static int catch_ts_demux_program(struct uprobe *uprobe,
                                         UPROBE_LOG_LEVEL,
                                         "noclock %"PRIu64, flow_id));
                 assert(output != NULL);
+                if (strstr(def, ".pic.") != NULL) {
+                    output = upipe_void_chain_output(output, upipe_vtrim_mgr,
+                        uprobe_pfx_alloc_va(uprobe_use(logger),
+                                            UPROBE_LOG_LEVEL,
+                                            "vtrim %"PRIu64, flow_id));
+                    assert(output != NULL);
+                }
                 output = upipe_void_chain_output_sub(output, upipe_even,
                     uprobe_pfx_alloc_va(uprobe_use(logger),
                                         UPROBE_LOG_LEVEL,
@@ -326,6 +337,8 @@ int main(int argc, char *argv[])
 
     upipe_noclock_mgr = upipe_noclock_mgr_alloc();
     assert(upipe_noclock_mgr != NULL);
+    upipe_vtrim_mgr = upipe_vtrim_mgr_alloc();
+    assert(upipe_vtrim_mgr != NULL);
 
     struct upipe_mgr *upipe_even_mgr = upipe_even_mgr_alloc();
     assert(upipe_even_mgr != NULL);
@@ -394,7 +407,7 @@ int main(int argc, char *argv[])
                              "ts mux"));
     assert(upipe_ts != NULL);
     upipe_mgr_release(upipe_ts_mux_mgr);
-    ubase_assert(upipe_ts_mux_set_mode(upipe_ts, UPIPE_TS_MUX_MODE_CBR));
+    ubase_assert(upipe_ts_mux_set_mode(upipe_ts, UPIPE_TS_MUX_MODE_CAPPED));
 
     /* file sink */
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();

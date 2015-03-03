@@ -7,6 +7,7 @@ myinclude_HEADERS = \
 	upipe_opus_framer.h \
 	upipe_telx_framer.h \
 	upipe_dvbsub_framer.h \
+	upipe_video_trim.h \
 	uref_mpgv.h \
 	uref_h264_flow.h \
 	uref_mpgv_flow.h

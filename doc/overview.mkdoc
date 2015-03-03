@@ -119,6 +119,7 @@
         @item @ref upipe_a52f_mgr_alloc @item linear pipe gathering A52 audio streams into frames @item @tt -lupipe-framers
         @item @ref upipe_telxf_mgr_alloc @item linear pipe gathering teletext streams into frames @item @tt -lupipe-framers
         @item @ref upipe_dvbsubf_mgr_alloc @item linear pipe gathering DVB subtitling streams into frames @item @tt -lupipe-framers
+        @item @ref upipe_vtrim_mgr_alloc @item pipe trimming dead frames off a video stream @item @tt -lupipe-framers
         @item @ref upipe_ffmt_mgr_alloc @item linear pipe transforming the format into another specified (potentially for an encoder) @item @tt -lupipe-filters
         @item @ref upipe_fdec_mgr_alloc @item linear pipe decoding a stream @item @tt -lupipe-filters
         @item @ref upipe_fenc_mgr_alloc @item linear pipe encoding a stream @item @tt -lupipe-filters
