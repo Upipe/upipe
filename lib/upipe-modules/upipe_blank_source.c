@@ -48,7 +48,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_source_read_size.h>
 #include <upipe-modules/upipe_blank_source.h>
 
 #include <stdlib.h>
