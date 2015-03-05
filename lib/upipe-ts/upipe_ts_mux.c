@@ -75,6 +75,8 @@
 #define PCR_TOLERANCE_PPM 30
 /** default muxing delay */
 #define DEFAULT_MUX_DELAY (UCLOCK_FREQ / 100)
+/** minimum allowed buffering (== max decoder VBV) */
+#define MIN_BUFFERING (UCLOCK_FREQ * 10)
 /** T-STD TB octet rate for PSI tables */
 #define TB_RATE_PSI 125000
 /** T-STD TB octet rate for misc audio */
@@ -945,8 +947,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
     } else
         upipe_set_max_length(upipe_ts_mux_input->encaps,
-                2 * upipe_ts_mux->latency * au_per_sec.num / au_per_sec.den /
-                UCLOCK_FREQ);
+                (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
+                au_per_sec.den / UCLOCK_FREQ);
 
     upipe_notice_va(upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms",
@@ -1292,6 +1294,37 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
         }
         upipe_ts_psig_program_set_pcr_pid(upipe_ts_mux_program->psig_program,
                                           pcr_pid);
+    }
+}
+
+/** @internal @This sets the cr_prog of the program to 0.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_mux_program_set_cr_prog(struct upipe *upipe)
+{
+    struct upipe_ts_mux_program *program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    uint64_t min_cr_sys = UINT64_MAX;
+
+    struct uchain *uchain;
+    ulist_foreach (&program->inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain(uchain);
+        uint64_t cr_sys;
+        int err = upipe_ts_encaps_peek(input->encaps, &cr_sys);
+        ubase_assert(err);
+        if (cr_sys < min_cr_sys)
+            min_cr_sys = cr_sys;
+    }
+
+    ulist_foreach (&program->inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain(uchain);
+        uint64_t cr_sys;
+        int err = upipe_ts_encaps_peek(input->encaps, &cr_sys);
+        ubase_assert(err);
+        upipe_ts_encaps_set_cr_prog(input->encaps, cr_sys - min_cr_sys);
     }
 }
 
@@ -2164,6 +2197,22 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
     return min_cr_sys;
 }
 
+/** @internal @This sets the cr_prog of all programs to 0.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_mux_set_cr_prog(struct upipe *upipe)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    struct uchain *uchain_program;
+    ulist_foreach (&mux->programs, uchain_program) {
+        struct upipe_ts_mux_program *program =
+            upipe_ts_mux_program_from_uchain(uchain_program);
+        upipe_ts_mux_program_set_cr_prog(
+                upipe_ts_mux_program_to_upipe(program));
+    }
+}
+
 /** @internal @This checks if a packet must be output in file mode.
  *
  * @param upipe description structure of the pipe
@@ -2178,8 +2227,9 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
             UINT64_MAX) {
         upipe_verbose(upipe, "work file running");
         if (mux->cr_sys == UINT64_MAX) {
-            mux->cr_sys = min_cr_sys + mux->latency;
             upipe_verbose_va(upipe, "work file min=%"PRIu64, min_cr_sys);
+            mux->cr_sys = min_cr_sys + mux->latency;
+            upipe_ts_mux_set_cr_prog(upipe);
             upipe_ts_psig_prepare(mux->psig, min_cr_sys);
         }
 
@@ -2448,7 +2498,7 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
                 upipe_ts_mux_input_from_uchain(uchain_input);
             if (input->encaps != NULL && input->au_per_sec.den)
                 upipe_set_max_length(input->encaps,
-                        2 * mux->latency * input->au_per_sec.num /
+                        (MIN_BUFFERING + mux->latency) * input->au_per_sec.num /
                         input->au_per_sec.den / UCLOCK_FREQ);
         }
     }

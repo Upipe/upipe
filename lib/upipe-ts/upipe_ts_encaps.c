@@ -138,7 +138,9 @@ struct upipe_ts_encaps {
     /** muxing date of the last PCR */
     uint64_t last_pcr;
     /** offset between cr_sys and cr_prog */
-    int64_t pcr_prog_offset;
+    int64_t sys_prog_offset;
+    /** offset between cr_prog and coded value */
+    int64_t cr_prog_offset;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -194,7 +196,8 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->last_prepare = 0;
     upipe_ts_encaps->last_pcr = 0;
-    upipe_ts_encaps->pcr_prog_offset = INT64_MAX;
+    upipe_ts_encaps->sys_prog_offset = INT64_MAX;
+    upipe_ts_encaps->cr_prog_offset = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -248,9 +251,9 @@ static bool upipe_ts_encaps_promote_uref(struct upipe *upipe)
         } else {
             upipe_ts_encaps->uref = uref;
             if (upipe_ts_encaps->pcr_interval)
-                upipe_ts_encaps->pcr_prog_offset = cr_prog - cr_sys;
+                upipe_ts_encaps->sys_prog_offset = cr_prog - cr_sys;
             else
-                upipe_ts_encaps->pcr_prog_offset = INT64_MAX;
+                upipe_ts_encaps->sys_prog_offset = INT64_MAX;
             upipe_ts_encaps->start = true;
             upipe_ts_encaps->random = ubase_check(uref_flow_get_random(uref));
             upipe_ts_encaps->discontinuity =
@@ -415,10 +418,10 @@ static int upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @This returns the date of the next access unit.
+/** @This returns the cr_sys of the next access unit.
  *
  * @param upipe description structure of the pipe
- * @param cr_sys_p filled in with the date of the next access unit
+ * @param cr_sys_p filled in with the cr_sys of the next access unit
  * @return an error code
  */
 static int _upipe_ts_encaps_peek(struct upipe *upipe, uint64_t *cr_sys_p)
@@ -442,13 +445,35 @@ static int _upipe_ts_encaps_peek(struct upipe *upipe, uint64_t *cr_sys_p)
     }
 }
 
-/** @This returns the date of the next TS packet, and deletes all data
- * prior the given date.
+/** @This sets the cr_prog of the next access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_prog cr_prog of the next access unit
+ * @return an error code
+ */
+static int _upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    if (encaps->uref == NULL)
+        return UBASE_ERR_INVALID;
+
+    uint64_t uref_cr_prog;
+    if (unlikely(!ubase_check(uref_clock_get_cr_prog(encaps->uref,
+                                                     &uref_cr_prog)))) {
+        upipe_warn(upipe, "non-dated packet");
+        return UBASE_ERR_UNHANDLED;
+    }
+    encaps->cr_prog_offset = cr_prog - uref_cr_prog;
+    return UBASE_ERR_NONE;
+}
+
+/** @This returns the cr_sys and dts_sys of the next TS packet, and deletes
+ * all data prior the given date.
  *
  * @param upipe description structure of the pipe
  * @param cr_sys data before cr_sys will be deleted
- * @param cr_sys_p filled in with the date of the next TS packet
- * @param dts_sys_p filled in with the DTS of the next TS packet
+ * @param cr_sys_p filled in with the cr_sys of the next TS packet
+ * @param dts_sys_p filled in with the dts_sys of the next TS packet
  * @return an error code
  */
 static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
@@ -460,7 +485,7 @@ static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
 
     encaps->last_prepare = cr_sys;
 
-    if (encaps->pcr_interval && encaps->pcr_prog_offset != INT64_MAX &&
+    if (encaps->pcr_interval && encaps->sys_prog_offset != INT64_MAX &&
         encaps->last_pcr + encaps->pcr_interval <= cr_sys) {
         *cr_sys_p = cr_sys;
         *dts_sys_p = cr_sys;
@@ -567,11 +592,14 @@ static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
         if (alignment)
             pes_set_dataalignment(buffer);
         if (pts_prog != UINT64_MAX) {
-            pes_set_pts(buffer, (pts_prog / SCALE_33) % POW2_33);
+            pes_set_pts(buffer,
+                    ((pts_prog + encaps->cr_prog_offset) / SCALE_33) % POW2_33);
             if (dts_prog != UINT64_MAX &&
                 ((pts_prog / SCALE_33) % POW2_33) !=
                     ((dts_prog / SCALE_33) % POW2_33))
-                pes_set_dts(buffer, (dts_prog / SCALE_33) % POW2_33);
+                pes_set_dts(buffer,
+                            ((dts_prog + encaps->cr_prog_offset) / SCALE_33) %
+                            POW2_33);
         }
     }
 
@@ -684,6 +712,7 @@ static struct ubuf *upipe_ts_encaps_build_ts(struct upipe *upipe,
         if (random)
             tsaf_set_randomaccess(buffer);
         if (pcr_prog != UINT64_MAX) {
+            pcr_prog += encaps->cr_prog_offset;
             tsaf_set_pcr(buffer, (pcr_prog / SCALE_33) % POW2_33);
             tsaf_set_pcrext(buffer, pcr_prog % SCALE_33);
         }
@@ -753,11 +782,11 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
     return UBASE_ERR_NONE;
 }
 
-/** @This returns a ubuf containing a TS packet, and the DTS of the packet.
+/** @This returns a ubuf containing a TS packet, and the dts_sys of the packet.
  *
  * @param upipe description structure of the pipe
  * @param ubuf_p filled in with a pointer to the ubuf
- * @param dts_sys_p filled in with the DTS, or UINT64_MAX
+ * @param dts_sys_p filled in with the dts_sys, or UINT64_MAX
  * @return an error code
  */
 static int _upipe_ts_encaps_splice(struct upipe *upipe, struct ubuf **ubuf_p,
@@ -768,9 +797,9 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         return UBASE_ERR_INVALID;
 
     uint64_t pcr_prog = UINT64_MAX;
-    if (encaps->pcr_interval && encaps->pcr_prog_offset != INT64_MAX &&
+    if (encaps->pcr_interval && encaps->sys_prog_offset != INT64_MAX &&
         encaps->last_pcr + encaps->pcr_interval <= encaps->last_prepare) {
-        pcr_prog = encaps->last_prepare + encaps->pcr_prog_offset;
+        pcr_prog = encaps->last_prepare + encaps->sys_prog_offset;
         encaps->last_pcr = encaps->last_prepare;
     }
 
@@ -886,6 +915,11 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
             uint64_t *cr_sys_p = va_arg(args, uint64_t *);
             return _upipe_ts_encaps_peek(upipe, cr_sys_p);
+        }
+        case UPIPE_TS_ENCAPS_SET_CR_PROG: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
+            uint64_t cr_prog = va_arg(args, uint64_t);
+            return _upipe_ts_encaps_set_cr_prog(upipe, cr_prog);
         }
         case UPIPE_TS_ENCAPS_PREPARE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
