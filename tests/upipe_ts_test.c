@@ -408,6 +408,7 @@ int main(int argc, char *argv[])
     assert(upipe_ts != NULL);
     upipe_mgr_release(upipe_ts_mux_mgr);
     ubase_assert(upipe_ts_mux_set_mode(upipe_ts, UPIPE_TS_MUX_MODE_CAPPED));
+    ubase_assert(upipe_ts_mux_set_cr_prog(upipe_ts, 0));
 
     /* file sink */
     struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();

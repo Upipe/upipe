@@ -418,6 +418,28 @@ static int upipe_ts_encaps_set_pcr_interval(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the cr_prog of the next access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_prog cr_prog of the next access unit
+ * @return an error code
+ */
+static int upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    if (encaps->uref == NULL)
+        return UBASE_ERR_INVALID;
+
+    uint64_t uref_cr_prog;
+    if (unlikely(!ubase_check(uref_clock_get_cr_prog(encaps->uref,
+                                                     &uref_cr_prog)))) {
+        upipe_warn(upipe, "non-dated packet");
+        return UBASE_ERR_UNHANDLED;
+    }
+    encaps->cr_prog_offset = cr_prog - uref_cr_prog;
+    return UBASE_ERR_NONE;
+}
+
 /** @This returns the cr_sys of the next access unit.
  *
  * @param upipe description structure of the pipe
@@ -443,28 +465,6 @@ static int _upipe_ts_encaps_peek(struct upipe *upipe, uint64_t *cr_sys_p)
 
         return UBASE_ERR_NONE;
     }
-}
-
-/** @This sets the cr_prog of the next access unit.
- *
- * @param upipe description structure of the pipe
- * @param cr_prog cr_prog of the next access unit
- * @return an error code
- */
-static int _upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
-{
-    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
-    if (encaps->uref == NULL)
-        return UBASE_ERR_INVALID;
-
-    uint64_t uref_cr_prog;
-    if (unlikely(!ubase_check(uref_clock_get_cr_prog(encaps->uref,
-                                                     &uref_cr_prog)))) {
-        upipe_warn(upipe, "non-dated packet");
-        return UBASE_ERR_UNHANDLED;
-    }
-    encaps->cr_prog_offset = cr_prog - uref_cr_prog;
-    return UBASE_ERR_NONE;
 }
 
 /** @This returns the cr_sys and dts_sys of the next TS packet, and deletes
@@ -911,15 +911,15 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
             uint64_t pcr_interval = va_arg(args, uint64_t);
             return upipe_ts_encaps_set_pcr_interval(upipe, pcr_interval);
         }
+        case UPIPE_TS_MUX_SET_CR_PROG: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t cr_prog = va_arg(args, uint64_t);
+            return upipe_ts_encaps_set_cr_prog(upipe, cr_prog);
+        }
         case UPIPE_TS_ENCAPS_PEEK: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
             uint64_t *cr_sys_p = va_arg(args, uint64_t *);
             return _upipe_ts_encaps_peek(upipe, cr_sys_p);
-        }
-        case UPIPE_TS_ENCAPS_SET_CR_PROG: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
-            uint64_t cr_prog = va_arg(args, uint64_t);
-            return _upipe_ts_encaps_set_cr_prog(upipe, cr_prog);
         }
         case UPIPE_TS_ENCAPS_PREPARE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)

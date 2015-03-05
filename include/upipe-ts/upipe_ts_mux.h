@@ -80,6 +80,8 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_CC,
     /** sets the continuity counter (unsigned int) */
     UPIPE_TS_MUX_SET_CC,
+    /** sets the initial cr_prog of the next access unit (uint64_t) */
+    UPIPE_TS_MUX_SET_CR_PROG,
     /** returns the current PAT interval (uint64_t *) */
     UPIPE_TS_MUX_GET_PAT_INTERVAL,
     /** sets the PAT interval (uint64_t) */
@@ -178,6 +180,19 @@ static inline int upipe_ts_mux_set_cc(struct upipe *upipe, unsigned int cc)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_CC,
                          UPIPE_TS_MUX_SIGNATURE, cc);
+}
+
+/** @This sets the cr_prog of the next access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_prog cr_prog of the next access unit
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_cr_prog(struct upipe *upipe,
+                                           uint64_t cr_prog)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_CR_PROG,
+                         UPIPE_TS_MUX_SIGNATURE, cr_prog);
 }
 
 /** @This returns the current PAT interval.

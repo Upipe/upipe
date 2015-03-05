@@ -40,8 +40,6 @@ enum upipe_ts_encaps_command {
 
     /** returns the cr_sys of the next access unit (uint64_t *) */
     UPIPE_TS_ENCAPS_PEEK,
-    /** sets the cr_prog of the next access unit (uint64_t) */
-    UPIPE_TS_ENCAPS_SET_CR_PROG,
     /** returns the cr_sys and dts_sys of the next TS packet (uint64_t,
      * uint64_t *, uint64_t *) */
     UPIPE_TS_ENCAPS_PREPARE,
@@ -60,19 +58,6 @@ static inline int upipe_ts_encaps_peek(struct upipe *upipe, uint64_t *cr_sys_p)
 {
     return upipe_control_nodbg(upipe, UPIPE_TS_ENCAPS_PEEK,
                                UPIPE_TS_ENCAPS_SIGNATURE, cr_sys_p);
-}
-
-/** @This sets the cr_prog of the next access unit.
- *
- * @param upipe description structure of the pipe
- * @param cr_prog cr_prog of the next access unit
- * @return an error code
- */
-static inline int upipe_ts_encaps_set_cr_prog(struct upipe *upipe,
-                                              uint64_t cr_prog)
-{
-    return upipe_control_nodbg(upipe, UPIPE_TS_ENCAPS_SET_CR_PROG,
-                               UPIPE_TS_ENCAPS_SIGNATURE, cr_prog);
 }
 
 /** @This returns the cr_sys and dts_sys of the next TS packet, and deletes

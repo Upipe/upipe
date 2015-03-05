@@ -227,6 +227,8 @@ struct upipe_ts_mux {
     uint64_t max_delay;
     /** muxing delay */
     uint64_t mux_delay;
+    /** initial cr_prog */
+    uint64_t initial_cr_prog;
     /** last attributed automatic SID */
     uint16_t sid_auto;
     /** last attributed automatic PID */
@@ -1297,11 +1299,13 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
     }
 }
 
-/** @internal @This sets the cr_prog of the program to 0.
+/** @internal @This sets the initial cr_prog of the program to 0.
  *
  * @param upipe description structure of the pipe
+ * @param cr_prog initial cr_prog value
  */
-static void upipe_ts_mux_program_set_cr_prog(struct upipe *upipe)
+static void upipe_ts_mux_program_init_cr_prog(struct upipe *upipe,
+                                              uint64_t cr_prog)
 {
     struct upipe_ts_mux_program *program =
         upipe_ts_mux_program_from_upipe(upipe);
@@ -1324,7 +1328,7 @@ static void upipe_ts_mux_program_set_cr_prog(struct upipe *upipe)
         uint64_t cr_sys;
         int err = upipe_ts_encaps_peek(input->encaps, &cr_sys);
         ubase_assert(err);
-        upipe_ts_encaps_set_cr_prog(input->encaps, cr_sys - min_cr_sys);
+        upipe_ts_mux_set_cr_prog(input->encaps, cr_prog + cr_sys - min_cr_sys);
     }
 }
 
@@ -1807,6 +1811,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pcr_interval = DEFAULT_PCR_INTERVAL;
     upipe_ts_mux->max_delay = UINT64_MAX;
     upipe_ts_mux->mux_delay = DEFAULT_MUX_DELAY;
+    upipe_ts_mux->initial_cr_prog = UINT64_MAX;
     upipe_ts_mux->sid_auto = DEFAULT_SID_AUTO;
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
     upipe_ts_mux->fixed_octetrate = 0;
@@ -2197,19 +2202,20 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
     return min_cr_sys;
 }
 
-/** @internal @This sets the cr_prog of all programs to 0.
+/** @internal @This sets the initial cr_prog of all programs.
  *
  * @param upipe description structure of the pipe
+ * @param cr_prog initial cr_prog value
  */
-static void upipe_ts_mux_set_cr_prog(struct upipe *upipe)
+static void upipe_ts_mux_init_cr_prog(struct upipe *upipe, uint64_t cr_prog)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     struct uchain *uchain_program;
     ulist_foreach (&mux->programs, uchain_program) {
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_uchain(uchain_program);
-        upipe_ts_mux_program_set_cr_prog(
-                upipe_ts_mux_program_to_upipe(program));
+        upipe_ts_mux_program_init_cr_prog(
+                upipe_ts_mux_program_to_upipe(program), cr_prog);
     }
 }
 
@@ -2229,7 +2235,10 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
         if (mux->cr_sys == UINT64_MAX) {
             upipe_verbose_va(upipe, "work file min=%"PRIu64, min_cr_sys);
             mux->cr_sys = min_cr_sys + mux->latency;
-            upipe_ts_mux_set_cr_prog(upipe);
+            if (mux->initial_cr_prog != UINT64_MAX) {
+                upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
+                mux->initial_cr_prog = UINT64_MAX;
+            }
             upipe_ts_psig_prepare(mux->psig, min_cr_sys);
         }
 
@@ -2773,6 +2782,21 @@ static int _upipe_ts_mux_set_max_delay(struct upipe *upipe, uint64_t delay)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the initial cr_prog.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_prog initial cr_prog
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    if (upipe_ts_mux->cr_sys != UINT64_MAX)
+        return UBASE_ERR_BUSY;
+    upipe_ts_mux->initial_cr_prog = cr_prog;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current padding octetrate.
  *
  * @param upipe description structure of the pipe
@@ -2963,6 +2987,11 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t delay = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_max_delay(upipe, delay);
+        }
+        case UPIPE_TS_MUX_SET_CR_PROG: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t cr_prog = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_cr_prog(upipe, cr_prog);
         }
         case UPIPE_TS_MUX_GET_PADDING_OCTETRATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
