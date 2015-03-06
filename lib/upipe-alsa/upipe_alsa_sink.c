@@ -150,6 +150,114 @@ UPIPE_HELPER_UPUMP(upipe_alsink, upump, upump_mgr)
 UPIPE_HELPER_INPUT(upipe_alsink, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_UCLOCK(upipe_alsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
+/** @internal @This returns the ALSA format, computed from flow definition.
+ *
+ * @param flow_def flow definition packet
+ * @return ALSA format, or SND_PCM_FORMAT_UNKNOWN in case of error
+ */
+static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
+        return SND_PCM_FORMAT_UNKNOWN;
+
+    def += strlen(EXPECTED_FLOW_DEF);
+    snd_pcm_format_t format;
+    if (!ubase_ncmp(def, "s16le."))
+        format = SND_PCM_FORMAT_S16_LE;
+    else if (!ubase_ncmp(def, "s16be."))
+        format = SND_PCM_FORMAT_S16_BE;
+    else if (!ubase_ncmp(def, "s16."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S16_BE;
+#else
+        format = SND_PCM_FORMAT_S16_LE;
+#endif
+    else if (!ubase_ncmp(def, "u16le."))
+        format = SND_PCM_FORMAT_U16_LE;
+    else if (!ubase_ncmp(def, "u16be."))
+        format = SND_PCM_FORMAT_U16_BE;
+    else if (!ubase_ncmp(def, "u16."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U16_BE;
+#else
+        format = SND_PCM_FORMAT_U16_LE;
+#endif
+    else if (!ubase_ncmp(def, "s8."))
+        format = SND_PCM_FORMAT_S8;
+    else if (!ubase_ncmp(def, "u8."))
+        format = SND_PCM_FORMAT_U8;
+    else if (!ubase_ncmp(def, "mulaw."))
+        format = SND_PCM_FORMAT_MU_LAW;
+    else if (!ubase_ncmp(def, "alaw."))
+        format = SND_PCM_FORMAT_A_LAW;
+    else if (!ubase_ncmp(def, "s32le."))
+        format = SND_PCM_FORMAT_S32_LE;
+    else if (!ubase_ncmp(def, "s32be."))
+        format = SND_PCM_FORMAT_S32_BE;
+    else if (!ubase_ncmp(def, "s32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S32_BE;
+#else
+        format = SND_PCM_FORMAT_S32_LE;
+#endif
+    else if (!ubase_ncmp(def, "u32le."))
+        format = SND_PCM_FORMAT_U32_LE;
+    else if (!ubase_ncmp(def, "u32be."))
+        format = SND_PCM_FORMAT_U32_BE;
+    else if (!ubase_ncmp(def, "u32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U32_BE;
+#else
+        format = SND_PCM_FORMAT_U32_LE;
+#endif
+    else if (!ubase_ncmp(def, "s24le."))
+        format = SND_PCM_FORMAT_S24_LE;
+    else if (!ubase_ncmp(def, "s24be."))
+        format = SND_PCM_FORMAT_S24_BE;
+    else if (!ubase_ncmp(def, "s24."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_S24_BE;
+#else
+        format = SND_PCM_FORMAT_S24_LE;
+#endif
+    else if (!ubase_ncmp(def, "u24le."))
+        format = SND_PCM_FORMAT_U24_LE;
+    else if (!ubase_ncmp(def, "u24be."))
+        format = SND_PCM_FORMAT_U24_BE;
+    else if (!ubase_ncmp(def, "u24."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_U24_BE;
+#else
+        format = SND_PCM_FORMAT_U24_LE;
+#endif
+    else if (!ubase_ncmp(def, "f32le."))
+        format = SND_PCM_FORMAT_FLOAT_LE;
+    else if (!ubase_ncmp(def, "f32be."))
+        format = SND_PCM_FORMAT_FLOAT_BE;
+    else if (!ubase_ncmp(def, "f32."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_FLOAT_BE;
+#else
+        format = SND_PCM_FORMAT_FLOAT_LE;
+#endif
+    else if (!ubase_ncmp(def, "f64le."))
+        format = SND_PCM_FORMAT_FLOAT64_LE;
+    else if (!ubase_ncmp(def, "f64be."))
+        format = SND_PCM_FORMAT_FLOAT64_BE;
+    else if (!ubase_ncmp(def, "f64."))
+#ifdef UPIPE_WORDS_BIGENDIAN
+        format = SND_PCM_FORMAT_FLOAT64_BE;
+#else
+        format = SND_PCM_FORMAT_FLOAT64_LE;
+#endif
+    else
+        format = SND_PCM_FORMAT_UNKNOWN;
+
+    return format;
+}
+
 /** @internal @This allocates a file sink pipe.
  *
  * @param mgr common management structure
@@ -185,7 +293,7 @@ static struct upipe *upipe_alsink_alloc(struct upipe_mgr *mgr,
 /** @internal @This updates the sink latency.
  *
  * @param upipe description structure of the pipe
- * @param lantecy new latency
+ * @param latency new latency
  * @return an error code
  */
 static int upipe_alsink_update_latency(struct upipe *upipe, uint64_t latency)
@@ -282,7 +390,7 @@ static bool upipe_alsink_open(struct upipe *upipe)
         goto open_error;
     }
 
-    upipe_alsink_update_latency(upipe, upipe_alsink->period_duration * 2);
+    upipe_alsink_update_latency(upipe, upipe_alsink->period_duration * 3);
 
     /* Apply HW parameter settings to PCM device. */
     if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
@@ -654,118 +762,23 @@ static int upipe_alsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
-    const char *def;
     uint64_t rate;
     uint8_t channels;
     uint8_t planes;
-    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
+    snd_pcm_format_t format = upipe_alsink_format_from_flow_def(flow_def);
+    if (format == SND_PCM_FORMAT_UNKNOWN) {
+        upipe_err(upipe, "unknown sound format");
         return UBASE_ERR_INVALID;
+    }
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate))
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels))
     UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes))
-
-    def += strlen(EXPECTED_FLOW_DEF);
-    snd_pcm_format_t format;
-    if (!ubase_ncmp(def, "s16le."))
-        format = SND_PCM_FORMAT_S16_LE;
-    else if (!ubase_ncmp(def, "s16be."))
-        format = SND_PCM_FORMAT_S16_BE;
-    else if (!ubase_ncmp(def, "s16."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_S16_BE;
-#else
-        format = SND_PCM_FORMAT_S16_LE;
-#endif
-    else if (!ubase_ncmp(def, "u16le."))
-        format = SND_PCM_FORMAT_U16_LE;
-    else if (!ubase_ncmp(def, "u16be."))
-        format = SND_PCM_FORMAT_U16_BE;
-    else if (!ubase_ncmp(def, "u16."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_U16_BE;
-#else
-        format = SND_PCM_FORMAT_U16_LE;
-#endif
-    else if (!ubase_ncmp(def, "s8."))
-        format = SND_PCM_FORMAT_S8;
-    else if (!ubase_ncmp(def, "u8."))
-        format = SND_PCM_FORMAT_U8;
-    else if (!ubase_ncmp(def, "mulaw."))
-        format = SND_PCM_FORMAT_MU_LAW;
-    else if (!ubase_ncmp(def, "alaw."))
-        format = SND_PCM_FORMAT_A_LAW;
-    else if (!ubase_ncmp(def, "s32le."))
-        format = SND_PCM_FORMAT_S32_LE;
-    else if (!ubase_ncmp(def, "s32be."))
-        format = SND_PCM_FORMAT_S32_BE;
-    else if (!ubase_ncmp(def, "s32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_S32_BE;
-#else
-        format = SND_PCM_FORMAT_S32_LE;
-#endif
-    else if (!ubase_ncmp(def, "u32le."))
-        format = SND_PCM_FORMAT_U32_LE;
-    else if (!ubase_ncmp(def, "u32be."))
-        format = SND_PCM_FORMAT_U32_BE;
-    else if (!ubase_ncmp(def, "u32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_U32_BE;
-#else
-        format = SND_PCM_FORMAT_U32_LE;
-#endif
-    else if (!ubase_ncmp(def, "s24le."))
-        format = SND_PCM_FORMAT_S24_LE;
-    else if (!ubase_ncmp(def, "s24be."))
-        format = SND_PCM_FORMAT_S24_BE;
-    else if (!ubase_ncmp(def, "s24."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_S24_BE;
-#else
-        format = SND_PCM_FORMAT_S24_LE;
-#endif
-    else if (!ubase_ncmp(def, "u24le."))
-        format = SND_PCM_FORMAT_U24_LE;
-    else if (!ubase_ncmp(def, "u24be."))
-        format = SND_PCM_FORMAT_U24_BE;
-    else if (!ubase_ncmp(def, "u24."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_U24_BE;
-#else
-        format = SND_PCM_FORMAT_U24_LE;
-#endif
-    else if (!ubase_ncmp(def, "f32le."))
-        format = SND_PCM_FORMAT_FLOAT_LE;
-    else if (!ubase_ncmp(def, "f32be."))
-        format = SND_PCM_FORMAT_FLOAT_BE;
-    else if (!ubase_ncmp(def, "f32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_FLOAT_BE;
-#else
-        format = SND_PCM_FORMAT_FLOAT_LE;
-#endif
-    else if (!ubase_ncmp(def, "f64le."))
-        format = SND_PCM_FORMAT_FLOAT64_LE;
-    else if (!ubase_ncmp(def, "f64be."))
-        format = SND_PCM_FORMAT_FLOAT64_BE;
-    else if (!ubase_ncmp(def, "f64."))
-#ifdef UPIPE_WORDS_BIGENDIAN
-        format = SND_PCM_FORMAT_FLOAT64_BE;
-#else
-        format = SND_PCM_FORMAT_FLOAT64_LE;
-#endif
-    else {
-        upipe_err_va(upipe, "unknown format %s", def);
-        return UBASE_ERR_INVALID;
-    }
 
     if (upipe_alsink->handle != NULL) {
         if (format != upipe_alsink->format ||
             rate != upipe_alsink->rate ||
             channels != upipe_alsink->channels)
             return UBASE_ERR_INVALID;
-
     } else {
         upipe_alsink->rate = rate;
         upipe_alsink->channels = channels;
@@ -854,7 +867,7 @@ static int upipe_alsink_register_request(struct upipe *upipe,
               upipe_alsink_request_to_uchain(proxy));
 
     return urequest_provide_sink_latency(proxy->upstream,
-            upipe_alsink->handle != NULL ? upipe_alsink->period_duration * 2 :
+            upipe_alsink->handle != NULL ? upipe_alsink->period_duration * 3 :
                                            0);
 }
 

@@ -101,8 +101,8 @@
 #define XFER_POOL               20
 #define FSRC_OUT_QUEUE_LENGTH   5
 #define SRC_OUT_QUEUE_LENGTH    10000
-#define DEC_IN_QUEUE_LENGTH     5
-#define DEC_OUT_QUEUE_LENGTH    2
+#define DEC_IN_QUEUE_LENGTH     25
+#define DEC_OUT_QUEUE_LENGTH    5
 #define SOUND_QUEUE_LENGTH      10
 
 /* true if we receive raw udp */
