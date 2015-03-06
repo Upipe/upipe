@@ -341,10 +341,9 @@ static void STRUCTURE##_store_flow_def(struct upipe *upipe,                 \
         s->FLOW_DEF = flow_def; /* doesn't change the state */              \
         return;                                                             \
     }                                                                       \
-    if (unlikely(s->FLOW_DEF != NULL)) {                                    \
+    if (unlikely(s->FLOW_DEF != NULL))                                      \
         uref_free(s->FLOW_DEF);                                             \
-        s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_NONE;                         \
-    }                                                                       \
+    s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_NONE;                             \
     s->FLOW_DEF = flow_def;                                                 \
     if (flow_def != NULL)                                                   \
         upipe_throw_new_flow_def(upipe, flow_def);                          \
