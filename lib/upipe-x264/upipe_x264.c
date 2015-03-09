@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -41,6 +41,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/upipe.h>
@@ -518,7 +519,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     size_t width, height;
     x264_picture_t pic;
     x264_nal_t *nals;
-    int i, nals_num, size = 0;
+    int i, nals_num, size = 0, header_size = 0;
     struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
     x264_param_t curparams;
@@ -614,8 +615,12 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     uref = pic.opaque;
     assert(uref);
 
-    for (i=0; i < nals_num; i++) {
+    for (i = 0; i < nals_num; i++) {
         size += nals[i].i_payload;
+        if (nals[i].i_type == NAL_SPS || nals[i].i_type == NAL_PPS ||
+            nals[i].i_type == NAL_AUD || nals[i].i_type == NAL_FILLER ||
+            nals[i].i_type == NAL_UNKNOWN)
+            header_size += size;
     }
 
     /* alloc ubuf, map, copy, unmap */
@@ -628,6 +633,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
     memcpy(buf, nals[0].p_payload, size);
     ubuf_block_unmap(ubuf_block, 0);
     uref_attach_ubuf(uref, ubuf_block);
+    uref_block_set_header_size(uref, header_size);
 
     /* set dts */
     uint64_t dts_pts_delay = (uint64_t)(pic.i_pts - pic.i_dts) * UCLOCK_FREQ
