@@ -45,7 +45,9 @@ enum upipe_ts_encaps_command {
     UPIPE_TS_ENCAPS_PREPARE,
     /** returns a ubuf containing a TS packet and its dts_sys (struct ubuf **,
      * uint64_t *) */
-    UPIPE_TS_ENCAPS_SPLICE
+    UPIPE_TS_ENCAPS_SPLICE,
+    /** signals an end of stream (void) */
+    UPIPE_TS_ENCAPS_EOS
 };
 
 /** @This returns the cr_sys of the next access unit.
@@ -91,6 +93,16 @@ static inline int upipe_ts_encaps_splice(struct upipe *upipe,
 {
     return upipe_control_nodbg(upipe, UPIPE_TS_ENCAPS_SPLICE,
                                UPIPE_TS_ENCAPS_SIGNATURE, ubuf_p, dts_sys_p);
+}
+
+/** @This signals an end of stream, so that buffered packets can be released.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_ts_encaps_eos(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_TS_ENCAPS_EOS, UPIPE_TS_ENCAPS_SIGNATURE);
 }
 
 /** @This returns the management structure for all ts_encaps pipes.

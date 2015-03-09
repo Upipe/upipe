@@ -29,6 +29,7 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
@@ -64,6 +65,8 @@
 #define T_STD_MAX_RETENTION UCLOCK_FREQ
 /** PID for padding stream */
 #define PADDING_PID 8191
+/** define to get header verbosity */
+#undef VERBOSE_HEADERS
 
 /** @hidden */
 static int upipe_ts_encaps_check(struct upipe *upipe, struct uref *flow_format);
@@ -91,12 +94,6 @@ struct upipe_ts_encaps {
 
     /** current uref being worked on */
     struct uref *uref;
-    /** true if this is the start of an access unit */
-    bool start;
-    /** true if this is a random access point */
-    bool random;
-    /** true if there was a discontinuity */
-    bool discontinuity;
     /** temporary uref storage */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -128,6 +125,8 @@ struct upipe_ts_encaps {
     uint8_t pes_header_size;
     /** minimum PES duration */
     uint64_t pes_min_duration;
+    /** PES alignment */
+    bool pes_alignment;
 
     /** a padding packet for PSI streams */
     struct ubuf *padding;
@@ -137,10 +136,16 @@ struct upipe_ts_encaps {
     uint64_t last_prepare;
     /** muxing date of the last PCR */
     uint64_t last_pcr;
+    /** earliest date at which we can mux data */
+    uint64_t next_prepare;
+    /** payload size of the last muxed packets */
+    size_t last_prepare_size;
     /** offset between cr_sys and cr_prog */
     int64_t sys_prog_offset;
     /** offset between cr_prog and coded value */
     int64_t cr_prog_offset;
+    /** true if end of stream was received */
+    bool eos;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -179,9 +184,6 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps_init_ubuf_mgr(upipe);
     upipe_ts_encaps_init_input(upipe);
     upipe_ts_encaps->uref = NULL;
-    upipe_ts_encaps->start = true;
-    upipe_ts_encaps->random = true;
-    upipe_ts_encaps->discontinuity = true;
     upipe_ts_encaps->pid = 8192;
     upipe_ts_encaps->octetrate = 0;
     upipe_ts_encaps->tb_rate = 0;
@@ -192,12 +194,16 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps->pes_id = 0;
     upipe_ts_encaps->pes_header_size = 0;
     upipe_ts_encaps->pes_min_duration = 0;
+    upipe_ts_encaps->pes_alignment = true;
     upipe_ts_encaps->padding = NULL;
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->last_prepare = 0;
     upipe_ts_encaps->last_pcr = 0;
+    upipe_ts_encaps->next_prepare = 0;
+    upipe_ts_encaps->last_prepare_size = 0;
     upipe_ts_encaps->sys_prog_offset = INT64_MAX;
     upipe_ts_encaps->cr_prog_offset = 0;
+    upipe_ts_encaps->eos = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -210,30 +216,39 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
  */
 static bool upipe_ts_encaps_promote_uref(struct upipe *upipe)
 {
-    struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
     bool flow_def_changed = false;
 
-    while (upipe_ts_encaps->uref == NULL) {
+    while (encaps->uref == NULL) {
         struct uref *uref = upipe_ts_encaps_pop_input(upipe);
         if (uref == NULL)
             break;
 
+        bool has_cr = ubase_check(uref_block_get_end(uref));
         const char *def;
         uint64_t cr_prog, cr_sys;
         if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-            upipe_ts_encaps->psi = !ubase_ncmp(def, "block.mpegts.mpegtspsi.");
+            encaps->psi = !ubase_ncmp(def, "block.mpegts.mpegtspsi.");
             uref_flow_set_def(uref, "void.");
-            uref_block_flow_get_octetrate(uref, &upipe_ts_encaps->octetrate);
-            uref_ts_flow_get_tb_rate(uref, &upipe_ts_encaps->tb_rate);
+            uref_block_flow_get_octetrate(uref, &encaps->octetrate);
+            uref_ts_flow_get_tb_rate(uref, &encaps->tb_rate);
             uint64_t pid = PADDING_PID;
             uref_ts_flow_get_pid(uref, &pid);
-            upipe_ts_encaps->pid = pid;
-            upipe_ts_encaps->ts_delay = 0;
-            uref_ts_flow_get_ts_delay(uref, &upipe_ts_encaps->ts_delay);
-            upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
-            uref_ts_flow_get_max_delay(uref, &upipe_ts_encaps->max_delay);
-            if (ubase_ncmp(def, FLOW_DEF_PSI))
-                uref_ts_flow_get_pes_id(uref, &upipe_ts_encaps->pes_id);
+            encaps->pid = pid;
+            encaps->ts_delay = 0;
+            uref_ts_flow_get_ts_delay(uref, &encaps->ts_delay);
+            encaps->max_delay = T_STD_MAX_RETENTION;
+            uref_ts_flow_get_max_delay(uref, &encaps->max_delay);
+            if (ubase_ncmp(def, FLOW_DEF_PSI)) {
+                uref_ts_flow_get_pes_id(uref, &encaps->pes_id);
+                encaps->pes_header_size = 0;
+                uref_ts_flow_get_pes_header(uref, &encaps->pes_header_size);
+                encaps->pes_min_duration = 0;
+                uref_ts_flow_get_pes_min_duration(uref,
+                                                  &encaps->pes_min_duration);
+                encaps->pes_alignment =
+                    ubase_check(uref_ts_flow_get_pes_alignment(uref));
+            }
 
             upipe_ts_encaps_store_flow_def(upipe, uref);
             /* trigger set_flow_def */
@@ -242,22 +257,18 @@ static bool upipe_ts_encaps_promote_uref(struct upipe *upipe)
 
         } else if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref,
                                                 &cr_sys)) ||
-                            (upipe_ts_encaps->pcr_interval &&
+                            (encaps->pcr_interval && has_cr &&
                              !ubase_check(uref_clock_get_cr_prog(uref,
                                                 &cr_prog))))) {
             upipe_warn(upipe, "dropping non-dated packet");
             uref_free(uref);
 
         } else {
-            upipe_ts_encaps->uref = uref;
-            if (upipe_ts_encaps->pcr_interval)
-                upipe_ts_encaps->sys_prog_offset = cr_prog - cr_sys;
-            else
-                upipe_ts_encaps->sys_prog_offset = INT64_MAX;
-            upipe_ts_encaps->start = true;
-            upipe_ts_encaps->random = ubase_check(uref_flow_get_random(uref));
-            upipe_ts_encaps->discontinuity =
-                ubase_check(uref_flow_get_discontinuity(uref));
+            encaps->uref = uref;
+            if (!encaps->pcr_interval)
+                encaps->sys_prog_offset = INT64_MAX;
+            else if (has_cr)
+                encaps->sys_prog_offset = cr_prog - cr_sys;
         }
     }
     return flow_def_changed;
@@ -295,6 +306,9 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    uref_block_set_start(uref);
+    uref_block_set_end(uref);
+    uref_attr_set_priv(uref, 0);
     upipe_ts_encaps_hold_input(upipe, uref);
     upipe_ts_encaps_promote_uref(upipe);
 }
@@ -436,6 +450,9 @@ static int upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
         upipe_warn(upipe, "non-dated packet");
         return UBASE_ERR_UNHANDLED;
     }
+    size_t uref_size = 0;
+    uref_block_size(encaps->uref, &uref_size);
+    uref_cr_prog -= (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate;
     encaps->cr_prog_offset = cr_prog - uref_cr_prog;
     return UBASE_ERR_NONE;
 }
@@ -456,14 +473,48 @@ static int _upipe_ts_encaps_peek(struct upipe *upipe, uint64_t *cr_sys_p)
         if (encaps->uref == NULL)
             return UBASE_ERR_UNHANDLED;
 
+        size_t uref_size;
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(encaps->uref,
-                                                        cr_sys_p)))) {
+                                                        cr_sys_p)) ||
+                     !ubase_check(uref_block_size(encaps->uref, &uref_size)))) {
             upipe_warn(upipe, "dropping non-dated packet");
             upipe_ts_encaps_consume_uref(upipe);
             continue;
         }
+        *cr_sys_p -= (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate;
 
-        return UBASE_ERR_NONE;
+        if (encaps->eos)
+            return UBASE_ERR_NONE;
+
+        struct uchain *uchain = &encaps->urefs;
+        if (encaps->pes_min_duration) {
+            uint64_t duration;
+            if (!ubase_check(uref_clock_get_duration(encaps->uref, &duration)))
+                return UBASE_ERR_NONE;
+
+            while (duration < encaps->pes_min_duration) {
+                if (ulist_is_last(&encaps->urefs, uchain))
+                    return UBASE_ERR_UNHANDLED;
+
+                uchain = uchain->next;
+                struct uref *uref = uref_from_uchain(uchain);
+                uint64_t uref_duration;
+                if (!ubase_check(uref_clock_get_duration(uref, &uref_duration)))
+                    return UBASE_ERR_NONE;
+                duration += uref_duration;
+            }
+        }
+
+        if (encaps->pes_alignment)
+            return UBASE_ERR_NONE;
+
+        while (!ulist_is_last(&encaps->urefs, uchain)) {
+            uchain = uchain->next;
+            struct uref *uref = uref_from_uchain(uchain);
+            if (ubase_check(uref_block_get_start(uref)))
+                return UBASE_ERR_NONE;
+        }
+        return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -483,6 +534,12 @@ static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
     if (unlikely(encaps->ubuf_mgr == NULL))
         return UBASE_ERR_UNHANDLED;
 
+    if (encaps->last_prepare != cr_sys && encaps->last_prepare_size) {
+        encaps->next_prepare = encaps->last_prepare +
+            encaps->last_prepare_size * UCLOCK_FREQ / encaps->tb_rate;
+        encaps->last_prepare_size = 0;
+    }
+
     encaps->last_prepare = cr_sys;
 
     if (encaps->pcr_interval && encaps->sys_prog_offset != INT64_MAX &&
@@ -492,59 +549,56 @@ static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
         return UBASE_ERR_NONE;
     }
 
+    if (encaps->next_prepare > cr_sys) {
+        upipe_verbose(upipe, "delaying to avoid overflowing T-STD buffer");
+        return UBASE_ERR_UNHANDLED;
+    }
+
     for ( ; ; ) {
         if (encaps->uref == NULL)
             return UBASE_ERR_UNHANDLED;
 
         uint64_t uref_cr_sys;
+        size_t uref_size;
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(encaps->uref,
-                                                        &uref_cr_sys)))) {
+                                                        &uref_cr_sys)) ||
+                     !ubase_check(uref_block_size(encaps->uref, &uref_size)) ||
+                     !uref_size)) {
             upipe_warn(upipe, "dropping non-dated packet");
             upipe_ts_encaps_consume_uref(upipe);
             continue;
         }
+        uref_cr_sys -= (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate;
 
         uint64_t uref_dts_sys;
-        if (uref_cr_sys > cr_sys ||
-            !ubase_check(uref_clock_get_dts_sys(encaps->uref, &uref_dts_sys))) {
+        if (!ubase_check(uref_clock_get_dts_sys(encaps->uref, &uref_dts_sys))) {
             *cr_sys_p = uref_cr_sys;
             *dts_sys_p = UINT64_MAX;
             return UBASE_ERR_NONE;
         }
 
-        size_t size;
-        if (!ubase_check(uref_block_size(encaps->uref, &size)) || !size) {
-            upipe_warn_va(upipe, "dropping empty packet");
-            upipe_ts_encaps_consume_uref(upipe);
-            continue;
-        }
-
-        uint64_t peak_duration = (uint64_t)size * UCLOCK_FREQ / encaps->tb_rate;
-        if (unlikely(uref_dts_sys - peak_duration < cr_sys)) {
+        uref_dts_sys -= (uint64_t)uref_size * UCLOCK_FREQ / encaps->tb_rate;
+        if (unlikely(uref_dts_sys < cr_sys)) {
             upipe_warn_va(upipe, "dropping late packet (%"PRIu64")",
-                          cr_sys - (uref_dts_sys - peak_duration));
+                          cr_sys - uref_dts_sys);
             upipe_ts_encaps_consume_uref(upipe);
             continue;
         }
 
         *cr_sys_p = uref_cr_sys;
-        *dts_sys_p = uref_dts_sys - peak_duration;
+        *dts_sys_p = uref_dts_sys;
         return UBASE_ERR_NONE;
     }
 }
 
-/** @internal @This builds a PES header.
+/** @internal @This returns the size of the next PES header.
  *
  * @param upipe description structure of the pipe
- * @param payload_size size of the payload
- * @param alignement true if the data alignment flag must be set
  * @param pts_prog value of the PTS field, in 27 MHz units
  * @param dts_prog value of the DTS field, in 27 MHz units
- * @return allocated PES header
+ * @return size of the next PES header
  */
-static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
-                                              size_t payload_size,
-                                              bool alignment,
+static size_t upipe_ts_encaps_pes_header_size(struct upipe *upipe,
                                               uint64_t pts_prog,
                                               uint64_t dts_prog)
 {
@@ -564,8 +618,45 @@ static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
         header_size = PES_HEADER_SIZE;
     if (header_size < encaps->pes_header_size)
         header_size = encaps->pes_header_size;
+    return header_size;
+}
 
+/** @internal @This builds a PES header.
+ *
+ * @param upipe description structure of the pipe
+ * @param payload_size size of the payload
+ * @param alignement true if the data alignment flag must be set
+ * @param pts_prog value of the PTS field, in 27 MHz units
+ * @param dts_prog value of the DTS field, in 27 MHz units
+ * @return allocated PES header
+ */
+static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
+                                              size_t payload_size,
+                                              bool alignment,
+                                              uint64_t pts_prog,
+                                              uint64_t dts_prog)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    size_t header_size = upipe_ts_encaps_pes_header_size(upipe,
+                                                         pts_prog, dts_prog);
+    if (encaps->pes_id != PES_STREAM_ID_PRIVATE_2) {
+        if (pts_prog != UINT64_MAX) {
+            if (dts_prog != UINT64_MAX &&
+                ((pts_prog / SCALE_33) % POW2_33) !=
+                    ((dts_prog / SCALE_33) % POW2_33))
+                header_size = PES_HEADER_SIZE_PTSDTS;
+            else
+                header_size = PES_HEADER_SIZE_PTS;
+        } else
+            header_size = PES_HEADER_SIZE_NOPTS;
+    } else
+        header_size = PES_HEADER_SIZE;
+    if (header_size < encaps->pes_header_size)
+        header_size = encaps->pes_header_size;
+
+#ifdef VERBOSE_HEADERS
     upipe_verbose_va(upipe, "preparing PES header (size %zu)", header_size);
+#endif
     struct ubuf *ubuf = ubuf_block_alloc(encaps->ubuf_mgr, header_size);
     uint8_t *buffer;
     int size = -1;
@@ -607,6 +698,116 @@ static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
     return ubuf;
 }
 
+/** @internal @This counts the number of PCRs we plan to insert for the next
+ * access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param nb_pcr_p filled with number of PCRs
+ * @return true if the first packet has a PCR
+ */
+static bool upipe_ts_encaps_count_pcr_au(struct upipe *upipe,
+                                         size_t *nb_pcr_p)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    *nb_pcr_p = 0;
+    if (!encaps->pcr_interval)
+        return false;
+
+    bool first_has_pcr = false;
+    uint64_t last_pcr = encaps->last_pcr;
+    struct uchain *uchain;
+    bool first = true;
+    ulist_foreach (&encaps->urefs, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        if (!first && ubase_check(uref_block_get_start(uref)))
+            break;
+
+        uint64_t cr_sys;
+        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
+            break;
+        size_t uref_size = 0;
+        uref_block_size(uref, &uref_size);
+
+        if (unlikely(last_pcr == UINT64_MAX)) {
+            last_pcr = cr_sys -
+                (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate -
+                encaps->pcr_interval;
+        }
+
+        if (first &&
+            last_pcr + encaps->pcr_interval <=
+                cr_sys - (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate)
+            first_has_pcr = true;
+        first = false;
+
+        while (last_pcr + encaps->pcr_interval <= cr_sys) {
+            last_pcr += encaps->pcr_interval;
+            (*nb_pcr_p)++;
+        }
+    }
+    return first_has_pcr;
+}
+
+/** @internal @This copies the last incomplete TS of an access unit to the
+ * beginning of the next access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref_au1 uref containing the first access unit
+ * @param uchain place where to insert the overlapped uref
+ * @param last_ts_size number of octets to transfer to access unit 2
+ * @return an error code
+ */
+static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
+                                      struct uref *uref_au1,
+                                      struct uchain *uchain,
+                                      size_t last_ts_size)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    size_t size;
+    UBASE_RETURN(uref_block_size(uref_au1, &size));
+    struct uref *uref_overlap = uref_dup(uref_au1);
+    UBASE_ALLOC_RETURN(uref_overlap);
+    struct uref *uref_au2 = uref_from_uchain(uchain->next);
+    uref_block_resize(uref_au1, 0, size - last_ts_size);
+    uref_block_resize(uref_overlap, size - last_ts_size, last_ts_size);
+    ulist_insert(uchain, uchain->next, uref_to_uchain(uref_overlap));
+    encaps->nb_urefs++;
+
+    uint64_t dts_sys = UINT64_MAX;
+    uref_clock_get_dts_sys(uref_au1, &dts_sys);
+    uint64_t cr_sys;
+    UBASE_RETURN(uref_clock_get_cr_sys(uref_au1, &cr_sys));
+
+    /* Adjust AU1's dts_sys and cr_sys */
+    cr_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->octetrate;
+    uref_clock_set_cr_sys(uref_au1, cr_sys);
+    if (dts_sys != UINT64_MAX) {
+        dts_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->tb_rate;
+        uref_clock_set_cr_dts_delay(uref_au1, dts_sys - cr_sys);
+    }
+
+    uint64_t dts_pts_delay = 0;
+    uref_clock_get_dts_pts_delay(uref_au2, &dts_pts_delay);
+    uint64_t dts_prog = UINT64_MAX;
+    uref_clock_get_dts_prog(uref_au2, &dts_prog);
+
+    /* Adjust overlap's dts_prog and pts_prog */
+    uref_clock_delete_date_prog(uref_overlap);
+    uref_clock_delete_dts_pts_delay(uref_overlap);
+    if (dts_prog != UINT64_MAX) {
+        uref_clock_set_dts_prog(uref_overlap, dts_prog);
+        uref_clock_set_dts_pts_delay(uref_overlap, dts_pts_delay);
+    }
+    uref_block_set_start(uref_overlap);
+    uref_block_delete_end(uref_overlap);
+    uref_flow_delete_discontinuity(uref_overlap);
+    uref_flow_delete_random(uref_overlap);
+
+    /* AU2 is no longer the start of an acess unit */
+    uref_block_delete_start(uref_au2);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This prepares a new access unit for splicing.
  *
  * @param upipe description structure of the pipe
@@ -615,10 +816,11 @@ static struct ubuf *upipe_ts_encaps_build_pes(struct upipe *upipe,
 static int upipe_ts_encaps_promote_au(struct upipe *upipe)
 {
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
-    /* TODO buffer overlap */
     if (encaps->psi) {
         /* Prepend pointer_field */
+#ifdef VERBOSE_HEADERS
         upipe_verbose_va(upipe, "preparing PSI pointer_field");
+#endif
         struct ubuf *ubuf = ubuf_block_alloc(encaps->ubuf_mgr, 1);
         uint8_t *buffer;
         int size = -1;
@@ -632,6 +834,7 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
         ubuf_block_unmap(ubuf, 0);
         struct ubuf *section = uref_detach_ubuf(encaps->uref);
         uref_attach_ubuf(encaps->uref, ubuf);
+        uref_attr_set_priv(encaps->uref, 1);
         if (unlikely(!ubase_check(uref_block_append(encaps->uref, section)))) {
             ubuf_free(section);
             return UBASE_ERR_ALLOC;
@@ -639,14 +842,102 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
         return UBASE_ERR_NONE;
     }
 
-    size_t uref_size;
-    UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
+    size_t size;
+    UBASE_RETURN(uref_block_size(encaps->uref, &size));
+    uint64_t duration = 0;
+    uref_clock_get_duration(encaps->uref, &duration);
+    struct uchain *uchain = &encaps->urefs;
+    while (!ulist_is_last(&encaps->urefs, uchain)) {
+        if (ubase_check(uref_block_get_start(uref_from_uchain(uchain->next))))
+            break;
+        uchain = uchain->next;
+        struct uref *uref = uref_from_uchain(uchain);
+        size_t uref_size;
+        UBASE_RETURN(uref_block_size(uref, &uref_size));
+        size += uref_size;
+        uint64_t uref_duration = 0;
+        uref_clock_get_duration(uref, &uref_duration);
+        duration += uref_duration;
+    }
+#ifdef VERBOSE_HEADERS
+    upipe_verbose_va(upipe, "promoting a%s access unit of size %zu",
+            ubase_check(uref_flow_get_random(encaps->uref)) ? " random" : "n",
+            size);
+#endif
 
     uint64_t pts_prog = UINT64_MAX, dts_prog = UINT64_MAX;
     uref_clock_get_pts_prog(encaps->uref, &pts_prog);
     uref_clock_get_dts_prog(encaps->uref, &dts_prog);
-    struct ubuf *ubuf =
-        upipe_ts_encaps_build_pes(upipe, uref_size, true, pts_prog, dts_prog);
+
+    if (encaps->pes_min_duration) {
+        while (duration < encaps->pes_min_duration) {
+            if (ulist_is_last(&encaps->urefs, uchain))
+                break;
+
+            uchain = uchain->next;
+            struct uref *uref = uref_from_uchain(uchain);
+            uint64_t uref_duration;
+            size_t uref_size;
+            if (ubase_check(uref_flow_get_random(uref)) ||
+                ubase_check(uref_flow_get_discontinuity(uref)) ||
+                !ubase_check(uref_clock_get_duration(uref, &uref_duration)) ||
+                !ubase_check(uref_block_size(uref, &uref_size)))
+                break;
+            duration += uref_duration;
+            size += uref_size;
+            uref_block_delete_start(uref);
+            upipe_verbose_va(upipe, "aggregating an access unit");
+        }
+    }
+
+    if (!encaps->pes_alignment && !ulist_is_last(&encaps->urefs, uchain) &&
+        !ubase_check(uref_flow_get_random(uref_from_uchain(uchain->next))) &&
+        !ubase_check(uref_flow_get_discontinuity(uref_from_uchain(uchain->next)))) {
+        size_t nb_pcr;
+        bool first_has_pcr = upipe_ts_encaps_count_pcr_au(upipe, &nb_pcr);
+        size_t pes_header_size = upipe_ts_encaps_pes_header_size(upipe,
+                                    pts_prog, dts_prog);
+        size_t next_ts_size = TS_SIZE - pes_header_size -
+            (first_has_pcr ? TS_HEADER_SIZE_PCR :
+             (ubase_check(uref_flow_get_random(encaps->uref)) ||
+              ubase_check(uref_flow_get_discontinuity(encaps->uref))) ?
+             TS_HEADER_SIZE_AF : TS_HEADER_SIZE);
+        size_t uref_size = 0;
+        if (&encaps->urefs == uchain)
+            uref_block_size(encaps->uref, &uref_size);
+        else
+            uref_block_size(uref_from_uchain(uchain), &uref_size);
+
+        if (uref_size > next_ts_size) {
+            size_t last_ts_size = size;
+            while (last_ts_size > next_ts_size) {
+                last_ts_size -= next_ts_size;
+                next_ts_size = TS_SIZE -
+                               (nb_pcr ? TS_HEADER_SIZE_PCR : TS_HEADER_SIZE);
+                if (nb_pcr)
+                    nb_pcr--;
+            }
+
+            if (last_ts_size && !nb_pcr) {
+                upipe_verbose_va(upipe, "overlapping an access unit (%zu)",
+                                 last_ts_size);
+                if (&encaps->urefs == uchain) {
+                    UBASE_RETURN(upipe_ts_encaps_overlap_au(upipe, encaps->uref,
+                                uchain, last_ts_size));
+                } else {
+                    UBASE_RETURN(upipe_ts_encaps_overlap_au(upipe,
+                                uref_from_uchain(uchain), uchain, last_ts_size));
+                }
+                size -= last_ts_size;
+            }
+        }
+    }
+
+    struct ubuf *ubuf = upipe_ts_encaps_build_pes(upipe, size,
+            ubase_check(uref_block_get_end(encaps->uref)), pts_prog, dts_prog);
+    size_t header_size = 0;
+    ubuf_block_size(ubuf, &header_size);
+    uref_attr_set_priv(encaps->uref, header_size);
     struct ubuf *section = uref_detach_ubuf(encaps->uref);
     uref_attach_ubuf(encaps->uref, ubuf);
     if (unlikely(!ubase_check(uref_block_append(encaps->uref, section)))) {
@@ -683,7 +974,11 @@ static struct ubuf *upipe_ts_encaps_build_ts(struct upipe *upipe,
     if (!encaps->psi && payload_size < TS_SIZE - header_size)
         header_size = TS_SIZE - payload_size;
 
-    upipe_verbose_va(upipe, "preparing TS header (size %zu)", header_size);
+#ifdef VERBOSE_HEADERS
+    upipe_verbose_va(upipe, "preparing TS header (size %zu%s%s%s)", header_size,
+                     start ? ", start" : "", random ? ", random" : "",
+                     discontinuity ? ", disc" : "");
+#endif
     struct ubuf *ubuf = ubuf_block_alloc(encaps->ubuf_mgr, header_size);
     uint8_t *buffer;
     int size = -1;
@@ -734,49 +1029,73 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
                                     uint64_t *dts_sys_p)
 {
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
-    size_t uref_size;
-    UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
+    *dts_sys_p = UINT64_MAX;
 
     size_t ubuf_size;
     UBASE_RETURN(ubuf_block_size(*ubuf_p, &ubuf_size));
+    for ( ; ; ) {
+        size_t uref_size;
+        UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
+        uint64_t header_size = 0;
+        uref_attr_get_priv(encaps->uref, &header_size);
 
-    size_t payload_size = uref_size < TS_SIZE - ubuf_size ?
-                          uref_size : TS_SIZE - ubuf_size;
-    struct ubuf *payload = ubuf_block_splice(encaps->uref->ubuf, 0,
-                                             payload_size);
-    if (unlikely(payload == NULL ||
-                 !ubase_check(ubuf_block_append(*ubuf_p, payload)) ||
-                 !ubase_check(uref_block_resize(encaps->uref,
-                                                payload_size, -1)))) {
-        ubuf_free(payload);
-        ubuf_free(*ubuf_p);
-        return UBASE_ERR_ALLOC;
+        uint64_t dts_sys = UINT64_MAX;
+        uref_clock_get_dts_sys(encaps->uref, &dts_sys);
+
+        if (dts_sys != UINT64_MAX && *dts_sys_p == UINT64_MAX)
+            *dts_sys_p = dts_sys -
+                (uint64_t)(uref_size - header_size) * UCLOCK_FREQ /
+                encaps->tb_rate;
+
+        uint64_t cr_sys;
+        UBASE_RETURN(uref_clock_get_cr_sys(encaps->uref, &cr_sys));
+
+        struct ubuf *payload;
+        if (uref_size >= TS_SIZE - ubuf_size) {
+            size_t payload_size = TS_SIZE - ubuf_size;
+            payload = ubuf_block_splice(encaps->uref->ubuf, 0, payload_size);
+            uref_block_resize(encaps->uref, payload_size, -1);
+            if (payload_size >= header_size) {
+                uref_attr_set_priv(encaps->uref, 0);
+                encaps->last_prepare_size += payload_size - header_size;
+            } else
+                uref_attr_set_priv(encaps->uref, header_size - payload_size);
+        } else {
+            payload = uref_detach_ubuf(encaps->uref);
+        }
+
+        if (unlikely(payload == NULL ||
+                     !ubase_check(ubuf_block_append(*ubuf_p, payload)))) {
+            ubuf_free(payload);
+            ubuf_free(*ubuf_p);
+            return UBASE_ERR_ALLOC;
+        }
+
+        if (uref_size <= TS_SIZE - ubuf_size)
+            upipe_ts_encaps_consume_uref(upipe);
+
+        if (uref_size >= TS_SIZE - ubuf_size) {
+            ubuf_size = TS_SIZE;
+            break;
+        }
+
+        ubuf_size += uref_size;
+        if (encaps->uref == NULL ||
+            ubase_check(uref_block_get_start(encaps->uref)))
+            break;
     }
 
-    if (ubuf_size + payload_size < TS_SIZE) {
+    if (ubuf_size < TS_SIZE) {
         /* With PSI, pad with 0xff */
         struct ubuf *padding = ubuf_dup(encaps->padding);
         if (unlikely(padding == NULL ||
                      !ubase_check(ubuf_block_resize(padding, 0,
-                             TS_SIZE - ubuf_size - payload_size)) ||
+                             TS_SIZE - ubuf_size)) ||
                      !ubase_check(ubuf_block_append(*ubuf_p, padding)))) {
             ubuf_free(padding);
             ubuf_free(*ubuf_p);
             return UBASE_ERR_ALLOC;
         }
-    }
-
-    uint64_t dts_sys = *dts_sys_p = UINT64_MAX;
-    uref_clock_get_dts_sys(encaps->uref, &dts_sys);
-
-    uint64_t cr_sys;
-    UBASE_RETURN(uref_clock_get_cr_sys(encaps->uref, &cr_sys));
-    cr_sys += (uint64_t)payload_size * UCLOCK_FREQ / encaps->octetrate;
-    uref_clock_set_cr_sys(encaps->uref, cr_sys);
-
-    if (dts_sys != UINT64_MAX) {
-        uref_clock_set_cr_dts_delay(encaps->uref, dts_sys - cr_sys);
-        *dts_sys_p = dts_sys - (uint64_t)uref_size * UCLOCK_FREQ / encaps->tb_rate;
     }
 
     return UBASE_ERR_NONE;
@@ -803,7 +1122,7 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         encaps->last_pcr = encaps->last_prepare;
     }
 
-    if (encaps->uref == NULL) {
+    if (encaps->uref == NULL || encaps->next_prepare > encaps->last_prepare) {
         if (unlikely(pcr_prog == UINT64_MAX))
             return UBASE_ERR_INVALID;
 
@@ -813,26 +1132,35 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         return UBASE_ERR_NONE;
     }
 
-    if (encaps->start) {
+    bool start = ubase_check(uref_block_get_start(encaps->uref));
+    if (start) {
         UBASE_RETURN(upipe_ts_encaps_promote_au(upipe));
     }
 
-    size_t uref_size;
-    UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
+    size_t size;
+    UBASE_RETURN(uref_block_size(encaps->uref, &size));
 
-    *ubuf_p = upipe_ts_encaps_build_ts(upipe, uref_size, encaps->start,
-            pcr_prog, encaps->random, encaps->discontinuity);
+    struct uchain *uchain = &encaps->urefs;
+    ulist_foreach (&encaps->urefs, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        if (ubase_check(uref_block_get_start(uref)))
+            break;
+
+        size_t uref_size = 0;
+        uref_block_size(uref, &uref_size);
+        size += uref_size;
+    }
+
+    *ubuf_p = upipe_ts_encaps_build_ts(upipe, size, start, pcr_prog,
+            ubase_check(uref_flow_get_random(encaps->uref)),
+            ubase_check(uref_flow_get_discontinuity(encaps->uref)));
+    uref_block_delete_start(encaps->uref);
+    uref_flow_delete_random(encaps->uref);
+    uref_flow_delete_discontinuity(encaps->uref);
 
     UBASE_RETURN(upipe_ts_encaps_complete(upipe, ubuf_p, dts_sys_p));
     if (pcr_prog != UINT64_MAX)
         *dts_sys_p = encaps->last_prepare;
-    encaps->start = false;
-    encaps->random = false;
-    encaps->discontinuity = false;
-
-    UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
-    if (!uref_size)
-        upipe_ts_encaps_consume_uref(upipe);
 
     return UBASE_ERR_NONE;
 }
@@ -933,6 +1261,12 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
             struct ubuf **ubuf_p = va_arg(args, struct ubuf **);
             uint64_t *dts_sys_p = va_arg(args, uint64_t *);
             return _upipe_ts_encaps_splice(upipe, ubuf_p, dts_sys_p);
+        }
+        case UPIPE_TS_ENCAPS_EOS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
+            struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+            encaps->eos = true;
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;

@@ -602,6 +602,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     uint64_t max_delay = MAX_DELAY;
     struct urational au_per_sec;
     au_per_sec.num = au_per_sec.den = 0;
+    bool au_irregular = true;
     bool pes_alignment = false;
 
     if (strstr(def, ".pic.sub.") != NULL) {
@@ -609,6 +610,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         if (!ubase_ncmp(def, "block.dvb_teletext.")) {
             buffer_size = BS_TELX;
             max_delay = MAX_DELAY_TELX;
+            au_irregular = false;
             pes_alignment = true;
             UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
                                                 PMT_STREAMTYPE_PRIVATE_PES))
@@ -658,6 +660,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
 
         } else if (!ubase_ncmp(def, "block.dvb_subtitle.")) {
+            au_irregular = false;
             pes_alignment = true;
             buffer_size = BS_DVBSUB;
             uref_block_flow_get_buffer_size(flow_def, &buffer_size);
@@ -749,11 +752,6 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         uref_pic_flow_get_fps(flow_def, &au_per_sec);
         /* PES header overhead */
         pes_overhead += PES_HEADER_SIZE_PTSDTS *
-            (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
-        /* At worst we'll have 183 octets wasted per frame, if all frames
-         * are I-frames or if we are aligned. This includes PCR overhead.
-         */
-        pes_overhead += (TS_SIZE - TS_HEADER_SIZE) *
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
 
     } else if (strstr(def, ".sound.") != NULL) {
@@ -865,10 +863,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         uref_sound_flow_get_rate(flow_def, &rate);
         uref_sound_flow_get_samples(flow_def, &samples);
         unsigned int nb_frames = 1;
-#if 0
         while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
             nb_frames++;
-#endif
         samples *= nb_frames;
 
         au_per_sec.num = rate;
@@ -878,11 +874,12 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         /* PES header overhead */
         pes_overhead += PES_HEADER_SIZE_PTS *
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
-        if (1 || !pes_alignment) {
-            /* TS padding overhead */
-            pes_overhead += TS_SIZE *
-                (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
-        }
+    }
+
+    if (au_irregular && pes_alignment) {
+        /* TS padding overhead */
+        pes_overhead += (TS_SIZE - TS_HEADER_SIZE) *
+            (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
     }
 
     if (buffer_size > max_delay * octetrate / UCLOCK_FREQ) {
@@ -1992,18 +1989,15 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
 
     /* Order of priority: 1. PSI */
     if (upipe_ts_mux_prepare(upipe, mux->pat_encaps, original_cr_sys, &cr_sys,
-                             &encaps))
+                             &encaps) || cr_sys <= original_cr_sys)
         goto upipe_ts_mux_splice_done;
     ulist_foreach (&mux->programs, uchain_program) {
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_uchain(uchain_program);
         if (upipe_ts_mux_prepare(upipe, program->pmt_encaps, original_cr_sys,
-                                 &cr_sys, &encaps))
+                                 &cr_sys, &encaps) || cr_sys <= original_cr_sys)
             goto upipe_ts_mux_splice_done;
     }
-
-    if (cr_sys <= original_cr_sys)
-        goto upipe_ts_mux_splice_done;
 
     /* 2. Inputs */
     ulist_foreach (&mux->programs, uchain_program) {

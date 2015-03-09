@@ -92,9 +92,17 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static void check_buffer(const uint8_t *buffer, size_t size,
+                         size_t *total_size_p)
+{
+    int i;
+    for (i = 0; i < size; i++)
+        assert(buffer[i] == (*total_size_p)-- % 256);
+}
+
 static void check_ubuf(struct ubuf *ubuf, uint8_t stream_id, bool unitstart,
-                       bool randomaccess, bool discontinuity, uint64_t pcr_prog,
-                       uint64_t dts_prog, uint64_t pts_prog,
+                       bool randomaccess, bool discontinuity, bool alignment,
+                       uint64_t pcr_prog, uint64_t dts_prog, uint64_t pts_prog,
                        size_t *total_size_p, uint64_t *payload_size_p)
 {
     assert(ubuf != NULL);
@@ -159,7 +167,7 @@ static void check_ubuf(struct ubuf *ubuf, uint8_t stream_id, bool unitstart,
             if (stream_id != PES_STREAM_ID_PRIVATE_2) {
                 assert(size >= PES_HEADER_SIZE_NOPTS);
                 assert(pes_validate_header(buffer));
-                assert(pes_get_dataalignment(buffer));
+                assert(pes_get_dataalignment(buffer) == alignment);
                 assert(size == pes_get_headerlength(buffer) +
                                PES_HEADER_SIZE_NOPTS);
 
@@ -188,24 +196,29 @@ static void check_ubuf(struct ubuf *ubuf, uint8_t stream_id, bool unitstart,
 
     if (offset != TS_SIZE) {
         /* check payload */
-        size = -1;
-        ubase_assert(ubuf_block_read(ubuf, offset, &size, &buffer));
-        if (size + offset != TS_SIZE)
-            assert(!stream_id);
-        int i;
-        for (i = 0; i < size; i++)
-            assert(buffer[i] == (*total_size_p)-- % 256);
-        ubuf_block_unmap(ubuf, offset);
-        *payload_size_p += size;
-
-        if (size + offset != TS_SIZE) {
-            /* check padding */
-            offset += size;
+        if (!stream_id) {
+            size = -1;
             ubase_assert(ubuf_block_read(ubuf, offset, &size, &buffer));
-            assert(size + offset == TS_SIZE);
-            for (i = 0; i < size; i++)
-                assert(buffer[i] == 0xff);
+            check_buffer(buffer, size, total_size_p);
             ubuf_block_unmap(ubuf, offset);
+            *payload_size_p += size;
+
+            if (size + offset != TS_SIZE) {
+                /* check padding */
+                offset += size;
+                ubase_assert(ubuf_block_read(ubuf, offset, &size, &buffer));
+                assert(size + offset == TS_SIZE);
+                int i;
+                for (i = 0; i < size; i++)
+                    assert(buffer[i] == 0xff);
+                ubuf_block_unmap(ubuf, offset);
+            }
+        } else {
+            uint8_t copy[TS_SIZE - offset];
+            buffer = ubuf_block_peek(ubuf, offset, TS_SIZE - offset, copy);
+            assert(buffer != NULL);
+            check_buffer(buffer, TS_SIZE - offset, total_size_p);
+            ubase_assert(ubuf_block_peek_unmap(ubuf, offset, copy, buffer));
         }
     }
 }
@@ -239,9 +252,10 @@ int main(int argc, char *argv[])
     flow_def = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(flow_def != NULL);
     ubase_assert(uref_block_flow_set_octetrate(flow_def, 2206));
-    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 2206));
+    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 4412));
     ubase_assert(uref_ts_flow_set_pid(flow_def, 68));
     ubase_assert(uref_ts_flow_set_pes_id(flow_def, PES_STREAM_ID_VIDEO_MPEG));
+    ubase_assert(uref_ts_flow_set_pes_alignment(flow_def));
 
     struct upipe_mgr *upipe_ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     assert(upipe_ts_encaps_mgr != NULL);
@@ -256,9 +270,9 @@ int main(int argc, char *argv[])
     ubase_assert(!upipe_ts_encaps_prepare(upipe_ts_encaps, UINT32_MAX,
                                           &cr_sys, &dts_sys));
     struct ubuf *ubuf;
-    ubase_assert(!upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
+    ubase_nassert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
     ubase_assert(upipe_ts_mux_set_pcr_interval(upipe_ts_encaps, UCLOCK_FREQ));
-    ubase_assert(!upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+    ubase_nassert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
 
     uint8_t *buffer;
     int size;
@@ -272,8 +286,8 @@ int main(int argc, char *argv[])
     for (i = 0; i < total_size; i++)
         buffer[i] = (total_size - i) % 256;
     uref_block_unmap(uref, 0);
-    uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
-    uref_clock_set_dts_sys(uref, UINT32_MAX + UCLOCK_FREQ);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + UCLOCK_FREQ);
     uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
     uref_clock_set_dts_pts_delay(uref, UCLOCK_FREQ);
     uref_block_set_start(uref);
@@ -286,43 +300,43 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_ts_mux_set_cc(upipe_ts_encaps, last_cc));
 
     total_size += 19; /* PES header */
-    unsigned int nb_ts = (total_size + 2 + TS_SIZE - TS_HEADER_SIZE - 1) /
+    unsigned int nb_ts = (total_size + 8 + TS_SIZE - TS_HEADER_SIZE - 1) /
                          (TS_SIZE - TS_HEADER_SIZE);
-    uint64_t cr_sys_calc = UINT32_MAX;
+    uint64_t payload_size;
     for (i = 0; i < nb_ts; i++) {
         uint64_t cr_sys;
         uint64_t mux_sys = UINT32_MAX + i * UCLOCK_FREQ / nb_ts;
         ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps, mux_sys,
                                              &cr_sys, &dts_sys));
-        assert(cr_sys == cr_sys_calc);
 
         ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
 
-        uint64_t payload_size;
         if (i == 0) {
+            assert(cr_sys == mux_sys);
             assert(dts_sys == mux_sys);
-            check_ubuf(ubuf, PES_STREAM_ID_VIDEO_MPEG, true, true, true,
-                       0, UCLOCK_FREQ, 2 * UCLOCK_FREQ, &total_size,
+            check_ubuf(ubuf, PES_STREAM_ID_VIDEO_MPEG, true, true, true, true,
+                       0, 2 * UCLOCK_FREQ, 3 * UCLOCK_FREQ, &total_size,
                        &payload_size);
         } else {
-            assert(dts_sys == UINT32_MAX + UCLOCK_FREQ -
-                              (uint64_t)total_size * UCLOCK_FREQ / 2206);
-            check_ubuf(ubuf, 0, false, false, false,
+            assert(cr_sys == UINT32_MAX + UCLOCK_FREQ -
+                             (uint64_t)total_size * UCLOCK_FREQ / 2206);
+            assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ -
+                             (uint64_t)total_size * UCLOCK_FREQ / 4412);
+            check_ubuf(ubuf, 0, false, false, false, false,
                        UINT64_MAX, UINT64_MAX, UINT64_MAX,
                        &total_size, &payload_size);
         }
-        cr_sys_calc += (uint64_t)payload_size * UCLOCK_FREQ / 2206;
         ubuf_free(ubuf);
     }
     assert(total_size == 0);
 
     ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps,
-                UINT32_MAX + UCLOCK_FREQ, &cr_sys, &dts_sys));
+                 UINT32_MAX + UCLOCK_FREQ, &cr_sys, &dts_sys));
     assert(cr_sys == UINT32_MAX + UCLOCK_FREQ);
-    upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys);
+    ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
     assert(dts_sys == UINT32_MAX + UCLOCK_FREQ);
-    check_ubuf(ubuf, 0, false, false, false,
-               UCLOCK_FREQ, UINT64_MAX, UINT64_MAX, &total_size, &cr_sys_calc);
+    check_ubuf(ubuf, 0, false, false, false, false,
+               UCLOCK_FREQ, UINT64_MAX, UINT64_MAX, &total_size, &payload_size);
     ubuf_free(ubuf);
 
     upipe_release(upipe_ts_encaps);
@@ -331,9 +345,10 @@ int main(int argc, char *argv[])
     assert(flow_def != NULL);
     /* This is calculated so that there is no padding. */
     ubase_assert(uref_block_flow_set_octetrate(flow_def, 2194));
-    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 2200));
+    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 4400));
     ubase_assert(uref_ts_flow_set_pid(flow_def, 68));
     ubase_assert(uref_ts_flow_set_pes_id(flow_def, PES_STREAM_ID_PRIVATE_2));
+    ubase_assert(uref_ts_flow_set_pes_alignment(flow_def));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -352,8 +367,8 @@ int main(int argc, char *argv[])
     for (i = 0; i < total_size; i++)
         buffer[i] = (total_size - i) % 256;
     uref_block_unmap(uref, 0);
-    uref_clock_set_dts_prog(uref, UCLOCK_FREQ);
-    uref_clock_set_dts_sys(uref, UINT32_MAX + UCLOCK_FREQ);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + UCLOCK_FREQ);
     uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
     uref_clock_set_dts_pts_delay(uref, UCLOCK_FREQ);
     uref_block_set_start(uref);
@@ -364,29 +379,172 @@ int main(int argc, char *argv[])
     total_size += 6; /* PES header */
     nb_ts = (total_size + 2 + TS_SIZE - TS_HEADER_SIZE - 1) /
             (TS_SIZE - TS_HEADER_SIZE);
-    cr_sys_calc = UINT32_MAX;
     for (i = 0; i < nb_ts; i++) {
         uint64_t cr_sys;
         uint64_t mux_sys = UINT32_MAX + i * UCLOCK_FREQ / (nb_ts + 1);
         ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps, mux_sys,
                                              &cr_sys, &dts_sys));
-        assert(cr_sys == cr_sys_calc);
 
         ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
 
-        uint64_t payload_size;
         if (i == 0) {
-            check_ubuf(ubuf, PES_STREAM_ID_PRIVATE_2, true, false, false,
+            assert(cr_sys == mux_sys);
+            check_ubuf(ubuf, PES_STREAM_ID_PRIVATE_2, true, false, false, true,
                        0, UINT64_MAX, UINT64_MAX, &total_size, &payload_size);
         } else {
-            check_ubuf(ubuf, 0, false, false, false,
+            assert(cr_sys == UINT32_MAX + UCLOCK_FREQ -
+                             (uint64_t)total_size * UCLOCK_FREQ / 2194);
+            check_ubuf(ubuf, 0, false, false, false, false,
                        UINT64_MAX, UINT64_MAX, UINT64_MAX,
                        &total_size, &payload_size);
         }
-        cr_sys_calc += (uint64_t)payload_size * UCLOCK_FREQ / 2194;
         ubuf_free(ubuf);
     }
     assert(total_size == 0);
+
+    upipe_release(upipe_ts_encaps);
+
+    flow_def = uref_block_flow_alloc_def(uref_mgr, NULL);
+    assert(flow_def != NULL);
+    ubase_assert(uref_block_flow_set_octetrate(flow_def, 2));
+    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 2));
+    ubase_assert(uref_ts_flow_set_pid(flow_def, 68));
+    ubase_assert(uref_ts_flow_set_pes_id(flow_def, PES_STREAM_ID_AUDIO_MPEG));
+    ubase_assert(uref_ts_flow_set_pes_alignment(flow_def));
+    ubase_assert(uref_ts_flow_set_pes_min_duration(flow_def, UCLOCK_FREQ));
+
+    upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "ts encaps"));
+    assert(upipe_ts_encaps != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_ts_encaps, flow_def));
+    uref_free(flow_def);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 1);
+    buffer[0] = 2;
+    uref_block_unmap(uref, 0);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + UCLOCK_FREQ);
+    uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_clock_set_duration(uref, UCLOCK_FREQ / 2);
+    upipe_input(upipe_ts_encaps, uref, NULL);
+    last_cc = 12;
+    ubase_assert(upipe_ts_mux_set_cc(upipe_ts_encaps, last_cc));
+    ubase_nassert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 1);
+    buffer[0] = 1;
+    uref_block_unmap(uref, 0);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ + UCLOCK_FREQ / 2);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + 3 * UCLOCK_FREQ / 2);
+    uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_clock_set_duration(uref, UCLOCK_FREQ / 2);
+    upipe_input(upipe_ts_encaps, uref, NULL);
+    ubase_assert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ / 2);
+    ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps,
+                UINT32_MAX + UCLOCK_FREQ / 2, &cr_sys, &dts_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ / 2);
+    assert(dts_sys == UINT32_MAX + 3 * UCLOCK_FREQ / 2);
+
+    ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
+    assert(dts_sys == UINT32_MAX + 3 * UCLOCK_FREQ / 2);
+    total_size = 2 + 14;
+    check_ubuf(ubuf, PES_STREAM_ID_AUDIO_MPEG, true, false, false, true,
+               UINT64_MAX, UINT64_MAX, UCLOCK_FREQ * 2,
+               &total_size, &payload_size);
+    ubuf_free(ubuf);
+
+    upipe_release(upipe_ts_encaps);
+
+    flow_def = uref_block_flow_alloc_def(uref_mgr, NULL);
+    assert(flow_def != NULL);
+    ubase_assert(uref_block_flow_set_octetrate(flow_def, 170));
+    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 170));
+    ubase_assert(uref_ts_flow_set_pid(flow_def, 68));
+    ubase_assert(uref_ts_flow_set_pes_id(flow_def, PES_STREAM_ID_AUDIO_MPEG));
+
+    upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "ts encaps"));
+    assert(upipe_ts_encaps != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_ts_encaps, flow_def));
+    uref_free(flow_def);
+
+    total_size = 168;
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 169);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 169);
+    for (i = 0; i < total_size; i++)
+        buffer[i] = (total_size - i) % 256;
+    buffer[total_size] = 2;
+    uref_block_unmap(uref, 0);
+    uref_clock_set_cr_prog(uref, UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + UCLOCK_FREQ);
+    uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_flow_set_random(uref);
+    upipe_input(upipe_ts_encaps, uref, NULL);
+    last_cc = 9;
+    ubase_assert(upipe_ts_mux_set_cc(upipe_ts_encaps, last_cc));
+    ubase_nassert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 1);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 1);
+    buffer[0] = 1;
+    uref_block_unmap(uref, 0);
+    uref_clock_set_cr_prog(uref, 2 * UCLOCK_FREQ);
+    uref_clock_set_cr_sys(uref, UINT32_MAX + 2 * UCLOCK_FREQ);
+    uref_clock_set_cr_dts_delay(uref, UCLOCK_FREQ);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    upipe_input(upipe_ts_encaps, uref, NULL);
+    ubase_assert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170);
+    ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps,
+                UINT32_MAX, &cr_sys, &dts_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170);
+    assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170);
+
+    ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
+    /* rounding issue */
+    assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - 168 * UCLOCK_FREQ / 170 - UCLOCK_FREQ / 170);
+    total_size += 14;
+    check_ubuf(ubuf, PES_STREAM_ID_AUDIO_MPEG, true, true, false, true,
+               UINT64_MAX, UINT64_MAX, UCLOCK_FREQ * 2,
+               &total_size, &payload_size);
+    ubuf_free(ubuf);
+
+    ubase_nassert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+    ubase_assert(upipe_ts_encaps_eos(upipe_ts_encaps));
+    ubase_assert(upipe_ts_encaps_peek(upipe_ts_encaps, &cr_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ - UCLOCK_FREQ / 170);
+    ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps,
+                UINT32_MAX, &cr_sys, &dts_sys));
+    assert(cr_sys == UINT32_MAX + UCLOCK_FREQ - UCLOCK_FREQ / 170);
+    assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - UCLOCK_FREQ / 170);
+
+    ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
+    assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - UCLOCK_FREQ / 170);
+    total_size = 14 + 2;
+    check_ubuf(ubuf, PES_STREAM_ID_AUDIO_MPEG, true, false, false, false,
+               UINT64_MAX, UINT64_MAX, UCLOCK_FREQ * 3,
+               &total_size, &payload_size);
+    ubuf_free(ubuf);
 
     upipe_release(upipe_ts_encaps);
 
@@ -394,7 +552,7 @@ int main(int argc, char *argv[])
     assert(flow_def != NULL);
     /* This is calculated so that there is no padding. */
     ubase_assert(uref_block_flow_set_octetrate(flow_def, 1024));
-    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 1025));
+    ubase_assert(uref_ts_flow_set_tb_rate(flow_def, 2050));
     ubase_assert(uref_ts_flow_set_pid(flow_def, 68));
 
     upipe_ts_encaps = upipe_void_alloc(upipe_ts_encaps_mgr,
@@ -421,27 +579,27 @@ int main(int argc, char *argv[])
     total_size += 1; /* pointer_field */
     nb_ts = (total_size + TS_SIZE - TS_HEADER_SIZE - 1) /
             (TS_SIZE - TS_HEADER_SIZE);
-    cr_sys_calc = UINT32_MAX;
     for (i = 0; i < nb_ts; i++) {
         uint64_t cr_sys;
         uint64_t mux_sys = UINT32_MAX + i * UCLOCK_FREQ / nb_ts;
         ubase_assert(upipe_ts_encaps_prepare(upipe_ts_encaps, mux_sys,
                                              &cr_sys, &dts_sys));
-        assert(cr_sys == cr_sys_calc);
 
         ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, &ubuf, &dts_sys));
 
-        uint64_t payload_size;
         if (i == 0) {
-            check_ubuf(ubuf, 0, true, false, false,
+            assert(cr_sys == UINT32_MAX -
+                             (uint64_t)(total_size - 1) * UCLOCK_FREQ / 1024);
+            check_ubuf(ubuf, 0, true, false, false, false,
                        UINT64_MAX, UINT64_MAX, UINT64_MAX, &total_size,
                        &payload_size);
         } else {
-            check_ubuf(ubuf, 0, false, false, false,
+            assert(cr_sys == UINT32_MAX -
+                             (uint64_t)total_size * UCLOCK_FREQ / 1024);
+            check_ubuf(ubuf, 0, false, false, false, false,
                        UINT64_MAX, UINT64_MAX, UINT64_MAX, &total_size,
                        &payload_size);
         }
-        cr_sys_calc += (uint64_t)payload_size * UCLOCK_FREQ / 1024;
         ubuf_free(ubuf);
     }
     assert(total_size == 0);
