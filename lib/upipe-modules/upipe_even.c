@@ -172,11 +172,13 @@ static void upipe_even_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_even_sub *upipe_even_sub = upipe_even_sub_from_upipe(upipe);
     struct upipe_even *upipe_even = upipe_even_from_sub_mgr(upipe->mgr);
     uint64_t date;
-    int type;
-    uref_clock_get_date_sys(uref, &date, &type);
-    if (unlikely(type == UREF_DATE_NONE)) {
-        upipe_warn(upipe, "dropping non-dated buffer");
-        uref_free(uref);
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &date)))) {
+        int type;
+        uref_clock_get_date_sys(uref, &date, &type);
+        if (unlikely(type == UREF_DATE_NONE)) {
+            upipe_warn(upipe, "dropping non-dated buffer");
+            uref_free(uref);
+        }
     }
     uint64_t duration = 0;
     uref_clock_get_duration(uref, &duration);
@@ -203,19 +205,21 @@ static void upipe_even_sub_process(struct upipe *upipe, struct upump **upump_p)
         if (uchain == NULL)
             break; /* not ready */
         struct uref *uref = uref_from_uchain(uchain);
-        uint64_t ts;
-        int type;
-        uref_clock_get_date_sys(uref, &ts, &type);
-        assert(type != UREF_DATE_NONE);
+        uint64_t date;
+        if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &date)))) {
+            int type;
+            uref_clock_get_date_sys(uref, &date, &type);
+            assert(type != UREF_DATE_NONE);
+        }
         uint64_t duration = 0;
         uref_clock_get_duration(uref, &duration);
-        if (unlikely(ts + duration < upipe_even->first_date)) {
+        if (unlikely(date + duration < upipe_even->first_date)) {
             upipe_dbg(upipe, "removing orphan uref");
             upipe_even_sub_pop_input(upipe_even_sub_to_upipe(upipe_even_sub));
             uref_free(uref);
             continue;
         }
-        if (ts > upipe_even->last_date)
+        if (date > upipe_even->last_date)
             break;
 
         upipe_even_sub_pop_input(upipe_even_sub_to_upipe(upipe_even_sub));
