@@ -620,7 +620,7 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         if (nals[i].i_type == NAL_SPS || nals[i].i_type == NAL_PPS ||
             nals[i].i_type == NAL_AUD || nals[i].i_type == NAL_FILLER ||
             nals[i].i_type == NAL_UNKNOWN)
-            header_size += size;
+            header_size += nals[i].i_payload;
     }
 
     /* alloc ubuf, map, copy, unmap */
