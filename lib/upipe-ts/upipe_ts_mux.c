@@ -250,6 +250,8 @@ struct upipe_ts_mux {
     enum upipe_ts_mux_mode mode;
     /** MTU */
     size_t mtu;
+    /** size of the TB buffer */
+    size_t tb_size;
 
     /** max latency of the subpipes */
     uint64_t latency;
@@ -541,6 +543,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     }
 
     upipe_ts_mux_input_store_first_inner(upipe, tstd);
+    upipe_ts_encaps_set_tb_size(upipe_ts_mux_input->encaps,
+                                upipe_ts_mux->tb_size);
     upipe_set_opaque(upipe_ts_mux_input->encaps, upipe_ts_mux_input);
     upipe_set_output(psig_flow,
                      upipe_ts_mux_to_inner_sink(upipe_ts_mux));
@@ -906,11 +910,6 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     uint64_t ts_overhead = TS_HEADER_SIZE *
         (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
         (TS_SIZE - TS_HEADER_SIZE);
-    uint64_t ts_delay;
-    if (!ubase_check(uref_ts_flow_get_ts_delay(flow_def, &ts_delay)))
-        UBASE_FATAL(upipe, uref_ts_flow_set_ts_delay(flow_def_dup,
-                (uint64_t)T_STD_TS_BUFFER * UCLOCK_FREQ /
-                (octetrate + pes_overhead + ts_overhead)));
 
     uint64_t pid = upipe_ts_mux_input->pid;
     uref_ts_flow_get_pid(flow_def, &pid);
@@ -1209,6 +1208,8 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
     upipe_ts_mux_program_store_first_inner(upipe, psig_program);
+    upipe_ts_encaps_set_tb_size(upipe_ts_mux_program->pmt_encaps,
+                                upipe_ts_mux->tb_size);
     upipe_set_output(upipe_ts_mux_program->pmt_encaps,
                      upipe_ts_mux_to_inner_sink(upipe_ts_mux));
     upipe_ts_mux_program_update(upipe);
@@ -1819,6 +1820,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->total_octetrate = 0;
     upipe_ts_mux->interval = 0;
     upipe_ts_mux->mode = UPIPE_TS_MUX_MODE_CBR;
+    upipe_ts_mux->tb_size = T_STD_TS_BUFFER;
     upipe_ts_mux->mtu = TS_SIZE;
     upipe_ts_mux->latency = 0;
     upipe_ts_mux->cr_sys = UINT64_MAX;
@@ -1850,6 +1852,8 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
     upipe_ts_mux_store_first_inner(upipe, psig);
+    upipe_ts_encaps_set_tb_size(upipe_ts_mux->pat_encaps,
+                                upipe_ts_mux->tb_size);
     upipe_set_output(upipe_ts_mux->pat_encaps,
                      upipe_ts_mux_to_inner_sink(upipe_ts_mux));
     upipe_ts_mux_require_uref_mgr(upipe);
@@ -2580,6 +2584,26 @@ static int upipe_ts_mux_set_output_size(struct upipe *upipe, unsigned int mtu)
     upipe_ts_mux->interval = (upipe_ts_mux->mtu * UCLOCK_FREQ +
                               upipe_ts_mux->total_octetrate - 1) /
                              upipe_ts_mux->total_octetrate;
+
+    upipe_ts_mux->tb_size = T_STD_TS_BUFFER + mtu - TS_SIZE;
+    upipe_ts_encaps_set_tb_size(upipe_ts_mux->pat_encaps,
+                                upipe_ts_mux->tb_size);
+
+    struct uchain *uchain_program;
+    ulist_foreach (&upipe_ts_mux->programs, uchain_program) {
+        struct upipe_ts_mux_program *program =
+            upipe_ts_mux_program_from_uchain(uchain_program);
+        upipe_ts_encaps_set_tb_size(program->pmt_encaps,
+                                    upipe_ts_mux->tb_size);
+
+        struct uchain *uchain_input;
+        ulist_foreach (&program->inputs, uchain_input) {
+            struct upipe_ts_mux_input *input =
+                upipe_ts_mux_input_from_uchain(uchain_input);
+            upipe_ts_encaps_set_tb_size(input->encaps,
+                                        upipe_ts_mux->tb_size);
+        }
+    }
     upipe_ts_mux_build_flow_def(upipe);
     return UBASE_ERR_NONE;
 }

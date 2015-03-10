@@ -65,6 +65,8 @@
 #define T_STD_MAX_RETENTION UCLOCK_FREQ
 /** PID for padding stream */
 #define PADDING_PID 8191
+/** TB buffer size in octets (T-STD model) */
+#define TB_SIZE 512
 /** define to get header verbosity */
 #undef VERBOSE_HEADERS
 
@@ -107,10 +109,10 @@ struct upipe_ts_encaps {
     uint16_t pid;
     /** octetrate */
     uint64_t octetrate;
+    /** T-STD TB size */
+    size_t tb_size;
     /** T-STD TB rate */
     uint64_t tb_rate;
-    /** T-STD TS delay (TB buffer) */
-    uint64_t ts_delay;
     /** T-STD max retention time */
     uint64_t max_delay;
     /** true if we chop PSI sections */
@@ -134,12 +136,10 @@ struct upipe_ts_encaps {
     uint8_t last_cc;
     /** last time prepare was called */
     uint64_t last_prepare;
+    /** available buffer space in TB (octets) */
+    size_t tb_buffer;
     /** muxing date of the last PCR */
     uint64_t last_pcr;
-    /** earliest date at which we can mux data */
-    uint64_t next_prepare;
-    /** payload size of the last muxed packets */
-    size_t last_prepare_size;
     /** offset between cr_sys and cr_prog */
     int64_t sys_prog_offset;
     /** offset between cr_prog and coded value */
@@ -186,8 +186,8 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps->uref = NULL;
     upipe_ts_encaps->pid = 8192;
     upipe_ts_encaps->octetrate = 0;
+    upipe_ts_encaps->tb_size = TB_SIZE;
     upipe_ts_encaps->tb_rate = 0;
-    upipe_ts_encaps->ts_delay = 0;
     upipe_ts_encaps->max_delay = T_STD_MAX_RETENTION;
     upipe_ts_encaps->psi = false;
     upipe_ts_encaps->pcr_interval = 0;
@@ -199,8 +199,7 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps->last_cc = 0;
     upipe_ts_encaps->last_prepare = 0;
     upipe_ts_encaps->last_pcr = 0;
-    upipe_ts_encaps->next_prepare = 0;
-    upipe_ts_encaps->last_prepare_size = 0;
+    upipe_ts_encaps->tb_buffer = TB_SIZE;
     upipe_ts_encaps->sys_prog_offset = INT64_MAX;
     upipe_ts_encaps->cr_prog_offset = 0;
     upipe_ts_encaps->eos = false;
@@ -235,8 +234,6 @@ static bool upipe_ts_encaps_promote_uref(struct upipe *upipe)
             uint64_t pid = PADDING_PID;
             uref_ts_flow_get_pid(uref, &pid);
             encaps->pid = pid;
-            encaps->ts_delay = 0;
-            uref_ts_flow_get_ts_delay(uref, &encaps->ts_delay);
             encaps->max_delay = T_STD_MAX_RETENTION;
             uref_ts_flow_get_max_delay(uref, &encaps->max_delay);
             if (ubase_ncmp(def, FLOW_DEF_PSI)) {
@@ -457,6 +454,21 @@ static int upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the size of the TB buffer.
+ *
+ * @param upipe description structure of the pipe
+ * @param tb_size size of the TB buffer
+ * @return an error code
+ */
+static int _upipe_ts_encaps_set_tb_size(struct upipe *upipe,
+                                        unsigned int tb_size)
+{
+    struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    encaps->tb_buffer += tb_size - encaps->tb_size;
+    encaps->tb_size = tb_size;
+    return UBASE_ERR_NONE;
+}
+
 /** @This returns the cr_sys of the next access unit.
  *
  * @param upipe description structure of the pipe
@@ -534,10 +546,11 @@ static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
     if (unlikely(encaps->ubuf_mgr == NULL))
         return UBASE_ERR_UNHANDLED;
 
-    if (encaps->last_prepare != cr_sys && encaps->last_prepare_size) {
-        encaps->next_prepare = encaps->last_prepare +
-            encaps->last_prepare_size * UCLOCK_FREQ / encaps->tb_rate;
-        encaps->last_prepare_size = 0;
+    if (encaps->last_prepare < cr_sys) {
+        encaps->tb_buffer += (cr_sys - encaps->last_prepare) * encaps->tb_rate /
+                             UCLOCK_FREQ;
+        if (encaps->tb_buffer > encaps->tb_size)
+            encaps->tb_buffer = encaps->tb_size;
     }
 
     encaps->last_prepare = cr_sys;
@@ -549,7 +562,7 @@ static int _upipe_ts_encaps_prepare(struct upipe *upipe, uint64_t cr_sys,
         return UBASE_ERR_NONE;
     }
 
-    if (encaps->next_prepare > cr_sys) {
+    if (encaps->tb_buffer < TS_SIZE - TS_HEADER_SIZE) {
         upipe_verbose(upipe, "delaying to avoid overflowing T-STD buffer");
         return UBASE_ERR_UNHANDLED;
     }
@@ -1055,13 +1068,14 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
             size_t payload_size = TS_SIZE - ubuf_size;
             payload = ubuf_block_splice(encaps->uref->ubuf, 0, payload_size);
             uref_block_resize(encaps->uref, payload_size, -1);
-            if (payload_size >= header_size) {
+            if (payload_size >= header_size)
                 uref_attr_set_priv(encaps->uref, 0);
-                encaps->last_prepare_size += payload_size - header_size;
-            } else
+            else
                 uref_attr_set_priv(encaps->uref, header_size - payload_size);
+            encaps->tb_buffer -= payload_size;
         } else {
             payload = uref_detach_ubuf(encaps->uref);
+            encaps->tb_buffer -= uref_size;
         }
 
         if (unlikely(payload == NULL ||
@@ -1122,7 +1136,7 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         encaps->last_pcr = encaps->last_prepare;
     }
 
-    if (encaps->uref == NULL || encaps->next_prepare > encaps->last_prepare) {
+    if (encaps->uref == NULL || encaps->tb_buffer < TS_SIZE - TS_HEADER_SIZE) {
         if (unlikely(pcr_prog == UINT64_MAX))
             return UBASE_ERR_INVALID;
 
@@ -1243,6 +1257,11 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t cr_prog = va_arg(args, uint64_t);
             return upipe_ts_encaps_set_cr_prog(upipe, cr_prog);
+        }
+        case UPIPE_TS_ENCAPS_SET_TB_SIZE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
+            unsigned int tb_size = va_arg(args, unsigned int);
+            return _upipe_ts_encaps_set_tb_size(upipe, tb_size);
         }
         case UPIPE_TS_ENCAPS_PEEK: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)

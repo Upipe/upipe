@@ -38,6 +38,8 @@ extern "C" {
 enum upipe_ts_encaps_command {
     UPIPE_TS_ENCAPS_SENTINEL = UPIPE_TS_MUX_ENCAPS,
 
+    /** sets the size of the TB buffer (unsigned int) */
+    UPIPE_TS_ENCAPS_SET_TB_SIZE,
     /** returns the cr_sys of the next access unit (uint64_t *) */
     UPIPE_TS_ENCAPS_PEEK,
     /** returns the cr_sys and dts_sys of the next TS packet (uint64_t,
@@ -49,6 +51,19 @@ enum upipe_ts_encaps_command {
     /** signals an end of stream (void) */
     UPIPE_TS_ENCAPS_EOS
 };
+
+/** @This sets the size of the TB buffer.
+ *
+ * @param upipe description structure of the pipe
+ * @param tb_size size of the TB buffer
+ * @return an error code
+ */
+static inline int upipe_ts_encaps_set_tb_size(struct upipe *upipe,
+                                              unsigned int tb_size)
+{
+    return upipe_control(upipe, UPIPE_TS_ENCAPS_SET_TB_SIZE,
+                         UPIPE_TS_ENCAPS_SIGNATURE, tb_size);
+}
 
 /** @This returns the cr_sys of the next access unit.
  *
