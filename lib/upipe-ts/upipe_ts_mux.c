@@ -133,6 +133,9 @@
 /** default first automatic PID */
 #define DEFAULT_PID_AUTO 256
 
+/** define to debug file mode */
+#undef DEBUG_FILE
+
 /** @internal @This is the private context of a ts_mux manager. */
 struct upipe_ts_mux_mgr {
     /** refcount management structure */
@@ -2087,6 +2090,8 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
         mux->cr_sys = uclock_now(mux->uclock);
 
     upipe_ts_mux_increment(upipe);
+    if (mux->uref != NULL) /* capped VBR */
+        uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
 
     size_t uref_size;
     while (mux->uref == NULL ||
@@ -2222,10 +2227,14 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     uint64_t min_cr_sys;
+#ifdef DEBUG_FILE
     upipe_verbose(upipe, "work file starting");
+#endif
     while ((min_cr_sys = upipe_ts_mux_check_available(upipe)) !=
             UINT64_MAX) {
+#ifdef DEBUG_FILE
         upipe_verbose(upipe, "work file running");
+#endif
         if (mux->cr_sys == UINT64_MAX) {
             upipe_verbose_va(upipe, "work file min=%"PRIu64, min_cr_sys);
             mux->cr_sys = min_cr_sys + mux->latency;
@@ -2270,7 +2279,9 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
         upipe_ts_mux_complete(upipe, upump_p);
         upipe_ts_mux_increment(upipe);
     }
+#ifdef DEBUG_FILE
     upipe_verbose(upipe, "work file leaving");
+#endif
 }
 
 /** @internal @This checks if a packet must be output in live mode.
