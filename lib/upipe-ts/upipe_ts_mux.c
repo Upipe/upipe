@@ -2434,7 +2434,6 @@ static void upipe_ts_mux_update(struct upipe *upipe)
         mux->total_octetrate = total_octetrate;
         upipe_ts_mux_build_flow_def(upipe);
         upipe_ts_mux_set_upump(upipe, NULL);
-        upipe_ts_mux_work(upipe, NULL);
     }
 
     if (mux->total_octetrate) {
