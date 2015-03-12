@@ -2810,6 +2810,33 @@ static int _upipe_ts_mux_set_max_delay(struct upipe *upipe, uint64_t delay)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current mux delay (live mode).
+ *
+ * @param upipe description structure of the pipe
+ * @param delay_p filled in with the delay
+ * @return an error code
+ */
+static int _upipe_ts_mux_get_mux_delay(struct upipe *upipe, uint64_t *delay_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(delay_p != NULL);
+    *delay_p = upipe_ts_mux->mux_delay;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the mux delay (live mode).
+ *
+ * @param upipe description structure of the pipe
+ * @param delay new delay
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_mux_delay(struct upipe *upipe, uint64_t delay)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->mux_delay = delay;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the initial cr_prog.
  *
  * @param upipe description structure of the pipe
@@ -3015,6 +3042,16 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t delay = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_max_delay(upipe, delay);
+        }
+        case UPIPE_TS_MUX_GET_MUX_DELAY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *delay_p = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_get_mux_delay(upipe, delay_p);
+        }
+        case UPIPE_TS_MUX_SET_MUX_DELAY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t delay = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_mux_delay(upipe, delay);
         }
         case UPIPE_TS_MUX_SET_CR_PROG: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)

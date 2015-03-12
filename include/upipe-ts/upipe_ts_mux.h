@@ -302,6 +302,32 @@ static inline int upipe_ts_mux_set_max_delay(struct upipe *upipe,
                          UPIPE_TS_MUX_SIGNATURE, delay);
 }
 
+/** @This returns the current mux delay (live mode).
+ *
+ * @param upipe description structure of the pipe
+ * @param delay_p filled in with the delay
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_mux_delay(struct upipe *upipe,
+                                             uint64_t *delay_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_MAX_DELAY,
+                         UPIPE_TS_MUX_SIGNATURE, delay_p);
+}
+
+/** @This sets the mux delay (live mode).
+ *
+ * @param upipe description structure of the pipe
+ * @param delay new delay
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_mux_delay(struct upipe *upipe,
+                                             uint64_t delay)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_MAX_DELAY,
+                         UPIPE_TS_MUX_SIGNATURE, delay);
+}
+
 /** @This returns the current mux octetrate.
  *
  * @param upipe description structure of the pipe
