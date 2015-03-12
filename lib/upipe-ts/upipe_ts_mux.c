@@ -2412,9 +2412,10 @@ static void upipe_ts_mux_notice(struct upipe *upipe)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     upipe_notice_va(upipe,
-            "now operating in %s mode at %"PRIu64" bits/s (conformance %s)",
+            "now operating in %s mode at %"PRIu64" bits/s (conformance %s) with end-to-end latency %"PRIu64" ms",
             upipe_ts_mux_mode_print(mux->mode), mux->total_octetrate * 8,
-            upipe_ts_conformance_print(mux->conformance));
+            upipe_ts_conformance_print(mux->conformance),
+            (mux->latency + mux->mux_delay) * 1000 / UCLOCK_FREQ);
 }
 
 /** @This calculates the total octetrate used by a stream and updates the
