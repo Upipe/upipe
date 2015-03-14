@@ -483,6 +483,8 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         latency += (uint64_t)delayed * UCLOCK_FREQ
                      * params->i_fps_den
                      / params->i_fps_num;
+    /* add one frame for the time of encoding the current frame */
+    latency += UCLOCK_FREQ * params->i_fps_den / params->i_fps_num;
     upipe_x264->initial_latency = latency;
 
     latency += upipe_x264->sc_latency;
