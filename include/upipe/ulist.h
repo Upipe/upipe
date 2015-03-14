@@ -50,6 +50,17 @@ static inline void ulist_init(struct uchain *ulist)
     ulist->next = ulist->prev = ulist;
 }
 
+/** @This checks if the element is the first of the list.
+ *
+ * @param ulist pointer to a ulist
+ * @param element pointer to element
+ * @return true if the element is the first
+ */
+static inline bool ulist_is_first(struct uchain *ulist, struct uchain *element)
+{
+    return element == ulist;
+}
+
 /** @This checks if the element is the last of the list.
  *
  * @param ulist pointer to a ulist
