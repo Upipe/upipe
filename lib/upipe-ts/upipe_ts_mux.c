@@ -1052,6 +1052,7 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
     upipe_use(upipe_ts_mux_to_upipe(mux));
 
     upipe_ts_mux_input->deleted = true;
+    upipe_ts_encaps_eos(upipe_ts_mux_input->encaps);
     upipe_ts_mux_input_clean_bin_input(upipe);
     urefcount_release(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input));
 
