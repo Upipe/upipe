@@ -706,7 +706,7 @@ static int upipe_ts_psig_program_set_version(struct upipe *upipe,
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
-    upipe_dbg_va(upipe, "setting version to %u\n", version);
+    upipe_dbg_va(upipe, "setting version to %u", version);
     upipe_ts_psig_program->pmt_version = version;
     upipe_ts_psig_program->pmt_version &= 0x1f;
     upipe_ts_psig_program_build(upipe);
