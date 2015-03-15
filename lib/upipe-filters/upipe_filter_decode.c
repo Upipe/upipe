@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -185,6 +185,11 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_err_va(upipe, "couldn't allocate avcdec");
         return UBASE_ERR_UNHANDLED;
     }
+    if (unlikely(!ubase_check(upipe_set_flow_def(avcdec, flow_def)))) {
+        upipe_err_va(upipe, "couldn't set avcdec flow def");
+        upipe_release(avcdec);
+        return UBASE_ERR_UNHANDLED;
+    }
     if (upipe_fdec->options != NULL && upipe_fdec->options->udict != NULL) {
         const char *key = NULL;
         enum udict_type type = UDICT_TYPE_END;
@@ -198,11 +203,6 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             if (!ubase_check(upipe_set_option(avcdec, key, value)))
                 upipe_warn_va(upipe, "option %s=%s invalid", key, value);
         }
-    }
-    if (unlikely(!ubase_check(upipe_set_flow_def(avcdec, flow_def)))) {
-        upipe_err_va(upipe, "couldn't set avcdec flow def");
-        upipe_release(avcdec);
-        return UBASE_ERR_UNHANDLED;
     }
 
     upipe_fdec_store_first_inner(upipe, upipe_use(avcdec));
