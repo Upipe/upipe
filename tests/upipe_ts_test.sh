@@ -2,12 +2,15 @@
 
 UNAME=$(uname)
 
+srcdir="$1"
+shift
+
 TMP="`mktemp -d tmp.XXXXXXXXXX`"
-if ! ./upipe_file_test Makefile "$TMP"/test; then
+if ! ./upipe_ts_test $srcdir/upipe_ts_test.ts "$TMP"/test.ts; then
 	rm -rf "$TMP"
 	exit 1
 fi
-if ! cmp --quiet "$TMP"/test Makefile; then
+if ! cmp --quiet "$TMP"/test.ts $srcdir/upipe_ts_test.ts; then
 	rm -rf "$TMP"
 	exit 2
 fi
@@ -25,7 +28,7 @@ if [ "$UNAME" = "Darwin" ]; then
 fi
 
 # Run in valgrind, with leak checking enabled
-libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_file_test Makefile "$TMP"/test2 > /dev/null 2> "$TMP"/logs
+libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_ts_test $srcdir/upipe_ts_test.ts "$TMP"/test2.ts > /dev/null 2> "$TMP"/logs
 RET=$?
 if test -s "$TMP"/logs; then
         cat "$TMP"/logs >&2

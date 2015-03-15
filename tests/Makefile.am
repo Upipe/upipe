@@ -7,6 +7,7 @@ dist_check_SCRIPTS = \
 	udict_inline_test.sh \
 	upipe_file_test.sh \
 	upipe_multicat_test.sh \
+	upipe_ts_test.sh \
 	valgrind_wrapper.sh
 
 dist_check_DATA = \
@@ -14,7 +15,8 @@ dist_check_DATA = \
 	valgrind_osx.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
-	uprobe_prefix_test.txt
+	uprobe_prefix_test.txt \
+	upipe_ts_test.ts
 
 check_PROGRAMS = \
 	uprobe_stdio_test \
@@ -210,7 +212,8 @@ TESTS += \
 	upipe_ts_demux_test \
 	upipe_ts_encaps_test \
 	upipe_ts_psi_generator_test \
-	upipe_ts_tstd_test
+	upipe_ts_tstd_test \
+	upipe_ts_test.sh
 endif
 
 if HAVE_X264

@@ -17,7 +17,7 @@ fi
 
 # valgrind suppressions
 VALGRIND_SUPPRESSIONS=" --suppressions=$srcdir/valgrind.supp "
-if [ "$UNAME" == "Darwin" ]; then
+if [ "$UNAME" = "Darwin" ]; then
     VALGRIND_SUPPRESSIONS+=" --suppressions=$srcdir/valgrind_osx.supp "
 fi
 

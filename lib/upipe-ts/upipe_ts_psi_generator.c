@@ -1141,7 +1141,7 @@ static int upipe_ts_psig_set_version(struct upipe *upipe,
                                      unsigned int version)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
-    upipe_dbg_va(upipe, "setting version to %u\n", version);
+    upipe_dbg_va(upipe, "setting version to %u", version);
     upipe_ts_psig->pat_version = version;
     upipe_ts_psig->pat_version &= 0x1f;
     upipe_ts_psig_build(upipe);
