@@ -1639,7 +1639,7 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump **upump_p)
                     upipe_h264f->au_size - upipe_h264f->au_last_nal_start_size;
                 return false;
             }
-            if (upipe_h264f->au_slice_nal == UINT8_MAX)
+            if (!upipe_h264f->au_slice)
                 return false;
             break;
 
@@ -1654,13 +1654,12 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump **upump_p)
         case H264NAL_TYPE_SPSX:
         case H264NAL_TYPE_SSPS:
         case H264NAL_TYPE_PPS:
-            if (upipe_h264f->au_slice_nal == UINT8_MAX)
+            if (!upipe_h264f->au_slice)
                 return false;
             break;
 
         default:
-            if (nal_type < 14 || nal_type > 18 ||
-                upipe_h264f->au_slice_nal == UINT8_MAX)
+            if (nal_type < 14 || nal_type > 18 || !upipe_h264f->au_slice)
                 return false;
             break;
     }
