@@ -1412,6 +1412,145 @@ static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
     return uref_attr_delete_va(uref, UDICT_TYPE_INT, format, args);         \
 }
 
+/*
+ * Float (double) attributes
+ */
+
+/* @This allows to define accessors for a float attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_FLOAT(group, attr, name, desc)                            \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, double *p)   \
+{                                                                           \
+    return uref_attr_get_float(uref, p, UDICT_TYPE_FLOAT, name);              \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, double v)    \
+{                                                                           \
+    return uref_attr_set_float(uref, v, UDICT_TYPE_FLOAT, name);              \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, UDICT_TYPE_FLOAT, name);                  \
+}                                                                           \
+/** @This compares the desc attribute in two refs.                          \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    double v1, v2;                                                          \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 - v2;                                                         \
+}
+
+/* @This allows to define accessors for a shorthand int attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_FLOAT_SH(group, attr, type, desc)                         \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, double *p)   \
+{                                                                           \
+    return uref_attr_get_float(uref, p, type, NULL);                          \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, double v)    \
+{                                                                           \
+    return uref_attr_set_float(uref, v, type, NULL);                          \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, type, NULL);                              \
+}
+
+/* @This allows to define accessors for a int attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_FLOAT_VA(group, attr, format, desc, args_decl, args)      \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, double *p,   \
+                                            args_decl)                      \
+{                                                                           \
+    return uref_attr_get_float_va(uref, p, UDICT_TYPE_FLOAT, format, args);   \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, double v,    \
+                                            args_decl)                      \
+{                                                                           \
+    return uref_attr_set_float_va(uref, v, UDICT_TYPE_FLOAT, format, args);   \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
+{                                                                           \
+    return uref_attr_delete_va(uref, UDICT_TYPE_FLOAT, format, args);       \
+}
+
 
 /*
  * Rational attributes

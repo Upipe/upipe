@@ -157,6 +157,17 @@ static inline int uref_sound_resize(struct uref *uref, int skip, int new_size)
     return ubuf_sound_resize(uref->ubuf, skip, new_size);
 }
 
+/** @see ubuf_sound_interleave */
+static inline int uref_sound_interleave(struct uref *uref, uint8_t *buf,
+                                        int offset, int samples,
+                                        uint8_t sample_size, uint8_t planes)
+{
+    if (uref->ubuf == NULL)
+        return UBASE_ERR_INVALID;
+    return ubuf_sound_interleave(uref->ubuf, buf, offset,
+                                 samples, sample_size, planes);
+}
+
 /** @This allocates a new ubuf of size new_size, and copies part of
  * the old sound ubuf to the new one, switches the ubufs and frees
  * the old one.
