@@ -428,6 +428,8 @@ struct upipe_ts_mux_input {
     uint64_t max_delay;
     /** number of access units per second */
     struct urational au_per_sec;
+    /** original number of access units per second before aggregation */
+    struct urational original_au_per_sec;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -511,6 +513,8 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input->encaps = NULL;
     upipe_ts_mux_input->max_delay = program->max_delay;
     upipe_ts_mux_input->au_per_sec.num = upipe_ts_mux_input->au_per_sec.den = 0;
+    upipe_ts_mux_input->original_au_per_sec.num =
+        upipe_ts_mux_input->original_au_per_sec.den = 0;
 
     upipe_ts_mux_input_init_sub(upipe);
     uprobe_init(&upipe_ts_mux_input->probe, upipe_ts_mux_input_probe, NULL);
@@ -566,7 +570,8 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(
                 upipe_ts_mux_program_to_upipe(program)->mgr);
 
-    upipe_ts_mux_input_bin_input(upipe, uref, upump_p);
+    upipe_ts_mux_input_bin_input(upipe, uref,
+            upipe_ts_mux->uclock == NULL ? upump_p : NULL);
     upipe_ts_mux_work(upipe_ts_mux_to_upipe(upipe_ts_mux), upump_p);
 }
 
@@ -607,8 +612,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
     uint64_t buffer_size = 0;
     uint64_t max_delay = MAX_DELAY;
-    struct urational au_per_sec;
+    struct urational au_per_sec, original_au_per_sec;
     au_per_sec.num = au_per_sec.den = 0;
+    original_au_per_sec.num = original_au_per_sec.den = 0;
     bool au_irregular = true;
     bool pes_alignment = false;
 
@@ -869,6 +875,10 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         uint64_t rate = 48000, samples = 1152;
         uref_sound_flow_get_rate(flow_def, &rate);
         uref_sound_flow_get_samples(flow_def, &samples);
+        original_au_per_sec.num = rate;
+        original_au_per_sec.den = samples;
+        urational_simplify(&original_au_per_sec);
+
         unsigned int nb_frames = 1;
         while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
             nb_frames++;
@@ -906,6 +916,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         UBASE_FATAL(upipe, uref_ts_flow_set_pes_alignment(flow_def_dup))
     }
     upipe_ts_mux_input->au_per_sec = au_per_sec;
+    if (!original_au_per_sec.den)
+        original_au_per_sec = au_per_sec;
+    upipe_ts_mux_input->original_au_per_sec = original_au_per_sec;
 
     uint64_t ts_overhead = TS_HEADER_SIZE *
         (octetrate + pes_overhead + TS_SIZE - TS_HEADER_SIZE - 1) /
@@ -2515,10 +2528,11 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         ulist_foreach (&program->inputs, uchain_input) {
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->encaps != NULL && input->au_per_sec.den)
+            if (input->encaps != NULL && input->original_au_per_sec.den)
                 upipe_set_max_length(input->encaps,
-                        (MIN_BUFFERING + mux->latency) * input->au_per_sec.num /
-                        input->au_per_sec.den / UCLOCK_FREQ);
+                        (MIN_BUFFERING + mux->latency) *
+                        input->original_au_per_sec.num /
+                        input->original_au_per_sec.den / UCLOCK_FREQ);
         }
     }
 }

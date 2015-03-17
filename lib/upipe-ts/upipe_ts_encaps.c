@@ -222,6 +222,7 @@ static bool upipe_ts_encaps_promote_uref(struct upipe *upipe)
         struct uref *uref = upipe_ts_encaps_pop_input(upipe);
         if (uref == NULL)
             break;
+        upipe_ts_encaps_unblock_input(upipe);
 
         bool has_cr = ubase_check(uref_block_get_end(uref));
         const char *def;
@@ -297,8 +298,8 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_encaps *upipe_ts_encaps = upipe_ts_encaps_from_upipe(upipe);
 
     if (unlikely(upipe_ts_encaps->max_urefs &&
-                 upipe_ts_encaps->nb_urefs >= upipe_ts_encaps->max_urefs)) {
-        upipe_dbg(upipe, "too many queued packets, dropping");
+                 upipe_ts_encaps->nb_urefs >= upipe_ts_encaps->max_urefs * 2)) {
+        upipe_warn(upipe, "too many queued packets, dropping");
         uref_free(uref);
         return;
     }
@@ -307,6 +308,7 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
     uref_block_set_end(uref);
     uref_attr_set_priv(uref, 0);
     upipe_ts_encaps_hold_input(upipe, uref);
+    upipe_ts_encaps_block_input(upipe, upump_p);
     upipe_ts_encaps_promote_uref(upipe);
 }
 
