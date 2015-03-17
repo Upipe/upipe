@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -86,6 +86,15 @@ struct upipe_avfsrc {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
+    /** pipe acting as output */
+    struct upipe *output;
+    /** output flow definition */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
+
     /** uref manager */
     struct uref_mgr *uref_mgr;
     /** uref manager request */
@@ -132,6 +141,7 @@ struct upipe_avfsrc {
 UPIPE_HELPER_UPIPE(upipe_avfsrc, upipe, UPIPE_AVFSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_avfsrc, urefcount, upipe_avfsrc_no_input)
 UPIPE_HELPER_VOID(upipe_avfsrc)
+UPIPE_HELPER_OUTPUT(upipe_avfsrc, output, flow_def, output_state, request_list)
 
 UPIPE_HELPER_UREF_MGR(upipe_avfsrc, uref_mgr, uref_mgr_request, NULL,
                       upipe_throw_provide_request, NULL)
@@ -354,6 +364,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_urefcount(upipe);
     urefcount_init(upipe_avfsrc_to_urefcount_real(upipe_avfsrc),
                    upipe_avfsrc_free);
+    upipe_avfsrc_init_output(upipe);
     upipe_avfsrc_init_sub_mgr(upipe);
     upipe_avfsrc_init_sub_subs(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
@@ -903,6 +914,12 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         return UBASE_ERR_ALLOC;
     upipe_avfsrc_check_upump_mgr(upipe);
 
+    struct uref *flow_def = uref_alloc_control(upipe_avfsrc->uref_mgr);
+    uref_flow_set_def(flow_def, "void.");
+    upipe_avfsrc_store_flow_def(upipe, flow_def);
+    /* Force sending flow def */
+    upipe_avfsrc_output(upipe, NULL, NULL);
+
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsrc->options, 0);
     int error = avformat_open_input(&upipe_avfsrc->context, url, NULL,
@@ -970,6 +987,18 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
             upipe_avfsrc_set_upump(upipe, NULL);
             upipe_avfsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_avfsrc_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_avfsrc_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_avfsrc_set_output(upipe, output);
+        }
 
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
@@ -1085,6 +1114,7 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
     upipe_avfsrc_clean_upump(upipe);
     upipe_avfsrc_clean_upump_mgr(upipe);
     upipe_avfsrc_clean_uref_mgr(upipe);
+    upipe_avfsrc_clean_output(upipe);
     urefcount_clean(urefcount_real);
     upipe_avfsrc_clean_urefcount(upipe);
     upipe_avfsrc_free_void(upipe);
