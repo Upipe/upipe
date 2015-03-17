@@ -115,7 +115,7 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_filter_ebur128 *upipe_filter_ebur128 =
                                  upipe_filter_ebur128_from_upipe(upipe);
-    double peak0 = 0, peak1 = 0, loud = 0;
+    double loud = 0, lra = 0, global = 0;
     size_t samples;
     if (unlikely(!ubase_check(uref_sound_size(uref, &samples, NULL)))) {
         upipe_warn(upipe, "invalid sound buffer");
@@ -123,9 +123,9 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
         return;
     }
     const char *channel = NULL;
-    const uint8_t *buf = NULL;
+    const int16_t *buf = NULL;
     if (ubase_check(uref_sound_plane_iterate(uref, &channel)) && channel) {
-        if (unlikely(!ubase_check(uref_sound_plane_read_uint8_t(uref,
+        if (unlikely(!ubase_check(uref_sound_plane_read_int16_t(uref,
                 channel, 0, -1, &buf)))) {
             upipe_warn(upipe, "error mapping sound buffer");
             uref_free(uref);
@@ -135,16 +135,18 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
         if (unlikely((uintptr_t)buf & 1)) {
             upipe_warn(upipe, "unaligned buffer");
         }
-        ebur128_add_frames_short(upipe_filter_ebur128->st,
-                                 (const short*) buf, samples);
+        ebur128_add_frames_short(upipe_filter_ebur128->st, buf, samples);
         uref_sound_plane_unmap(uref, channel, 0, -1);
     }
     ebur128_loudness_momentary(upipe_filter_ebur128->st, &loud);
-    ebur128_sample_peak(upipe_filter_ebur128->st, 0, &peak0);
-    ebur128_sample_peak(upipe_filter_ebur128->st, 1, &peak1);
+    ebur128_loudness_range(upipe_filter_ebur128->st, &lra);
+    ebur128_loudness_global(upipe_filter_ebur128->st, &global);
 
-    //upipe_verbose_va(upipe, "loud %f \tsample peak %f \t%f", loud, peak0, peak1);
-    upipe_verbose_va(upipe, "loud %f", loud);
+    uref_ebur128_set_momentary(uref, loud);
+    uref_ebur128_set_lra(uref, lra);
+    uref_ebur128_set_global(uref, global);
+
+    upipe_verbose_va(upipe, "loud %f lra %f global %f", loud, lra, global);
 
     upipe_filter_ebur128_output(upipe, uref, upump_p);
 }
@@ -162,11 +164,13 @@ static int upipe_filter_ebur128_set_flow_def(struct upipe *upipe,
                                  upipe_filter_ebur128_from_upipe(upipe);
     if (flow == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow, "sound."))
-    uint8_t channels;
+    UBASE_RETURN(uref_flow_match_def(flow, "sound.s16."))
+    uint8_t channels, planes;
     uint64_t rate;
     if (unlikely(!ubase_check(uref_sound_flow_get_rate(flow, &rate))
-            || !ubase_check(uref_sound_flow_get_channels(flow, &channels)))) {
+            || !ubase_check(uref_sound_flow_get_channels(flow, &channels))
+            || !ubase_check(uref_sound_flow_get_planes(flow, &planes))
+            || planes != 1)) {
         return UBASE_ERR_INVALID;
     }
 
@@ -177,15 +181,59 @@ static int upipe_filter_ebur128_set_flow_def(struct upipe *upipe,
     }
 
     if (unlikely(upipe_filter_ebur128->st)) {
-        ebur128_destroy(&upipe_filter_ebur128->st);
+        //ebur128_destroy(&upipe_filter_ebur128->st);
         ebur128_change_parameters(upipe_filter_ebur128->st, channels, rate);
     } else {
     upipe_filter_ebur128->st = ebur128_init(channels, rate,
-                                            EBUR128_MODE_SAMPLE_PEAK);
+            EBUR128_MODE_LRA | EBUR128_MODE_I | EBUR128_MODE_HISTOGRAM);
     }
 
     upipe_filter_ebur128_store_flow_def(upipe, flow_dup);
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_filter_ebur128_provide_flow_format(struct upipe *upipe,
+                                                    struct urequest *request)
+{
+    struct uref *flow = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow);
+
+    uint8_t planes;
+    if (ubase_check(uref_sound_flow_get_planes(request->uref, &planes))
+                                                         && planes != 1) {
+        /* compute sample size */
+        uint8_t sample_size = 0;
+        uref_sound_flow_get_sample_size(request->uref, &sample_size);
+        sample_size *= planes;
+
+        /* construct packed channel name from planar names */
+        char packed_channel[planes+1];
+        uint8_t plane;
+        for (plane=0; plane < planes; plane++) {
+            const char *planar_channel = "";
+            uref_sound_flow_get_channel(request->uref, &planar_channel, plane);
+            packed_channel[plane] = *planar_channel;
+        }
+        packed_channel[planes] = '\0';
+
+        /* set attributes */
+        uref_sound_flow_clear_format(flow);
+        UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow, planes));
+        UBASE_FATAL(upipe, uref_sound_flow_set_sample_size(flow, sample_size));
+        UBASE_FATAL(upipe, uref_sound_flow_set_channel(flow,
+                                                       packed_channel, 0));
+        UBASE_FATAL(upipe, uref_sound_flow_set_planes(flow, 1));
+    }
+
+    UBASE_FATAL(upipe, uref_flow_set_def(flow, "sound.s16."));
+
+    return urequest_provide_flow_format(request, flow);
 }
 
 /** @internal @This processes control commands on the pipe.
@@ -201,6 +249,8 @@ static int upipe_filter_ebur128_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_filter_ebur128_provide_flow_format(upipe, request);
             return upipe_filter_ebur128_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {

@@ -38,6 +38,10 @@ extern "C" {
 #include <upipe/uref_attr.h>
 #include <stdint.h>
 
+UREF_ATTR_FLOAT(ebur128, momentary, "ebur128.momentary", momentary loudness)
+UREF_ATTR_FLOAT(ebur128, lra, "ebur128.lra", loudness range)
+UREF_ATTR_FLOAT(ebur128, global, "ebur128.global", global integrated loudness)
+
 #define UPIPE_FILTER_EBUR128_SIGNATURE UBASE_FOURCC('r', '1', '2', '8')
 
 /** @This returns the management structure for all avformat sources.
