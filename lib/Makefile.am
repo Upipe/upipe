@@ -15,7 +15,6 @@ SUBDIRS = \
 	upipe-osx \
 	upipe-alsa \
 	upipe-blackmagic \
-	upipe-ebur128 \
 	upipe-nacl \
 	upipe-amt
 
