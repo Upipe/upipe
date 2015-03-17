@@ -7,6 +7,7 @@
 #include <math.h> /* You may have to define _USE_MATH_DEFINES if you use MSVC */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* This can be replaced by any BSD-like queue implementation. */
 #include <sys/queue.h>
@@ -270,6 +271,9 @@ ebur128_state* ebur128_init(unsigned int channels,
                                        st->channels *
                                        sizeof(double));
   CHECK_ERROR(!st->d->audio_data, 0, free_true_peak)
+  memset(st->d->audio_data, 0, st->d->audio_data_frames *
+                                       st->channels *
+                                       sizeof(double));
   ebur128_init_filter(st);
 
   if (st->d->use_histogram) {
