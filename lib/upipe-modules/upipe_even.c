@@ -178,6 +178,7 @@ static void upipe_even_sub_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(type == UREF_DATE_NONE)) {
             upipe_warn(upipe, "dropping non-dated buffer");
             uref_free(uref);
+            return;
         }
     }
     uint64_t duration = 0;
