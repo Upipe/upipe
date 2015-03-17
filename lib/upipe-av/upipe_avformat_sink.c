@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -622,11 +622,27 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         free(avpkt.data);
         if (unlikely(error < 0)) {
             upipe_av_strerror(error, buf);
-            upipe_err_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
-            upipe_throw_sink_end(upipe);
+            upipe_warn_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
+            upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
             return;
         }
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_avfsink_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+
+    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the content of an avformat option.
@@ -837,6 +853,10 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avfsink_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_avfsink_get_sub_mgr(upipe, p);
