@@ -267,6 +267,8 @@ struct upipe_ts_mux {
     uint64_t cr_sys_remainder;
     /** current aggregation */
     struct uref *uref;
+    /** size of current aggregation */
+    size_t uref_size;
 
     /** manager of the pseudo inner sink */
     struct upipe_mgr inner_sink_mgr;
@@ -1962,6 +1964,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->cr_sys = UINT64_MAX;
     upipe_ts_mux->cr_sys_remainder = 0;
     upipe_ts_mux->uref = NULL;
+    upipe_ts_mux->uref_size = 0;
 
     uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, NULL);
     upipe_ts_mux->probe.refcount = upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
@@ -2219,6 +2222,7 @@ static void upipe_ts_mux_append(struct upipe *upipe, struct ubuf *ubuf,
                     dts_sys - (mux->cr_sys - mux->latency));
         uref_block_append(mux->uref, ubuf);
     }
+    mux->uref_size += TS_SIZE;
 }
 
 /** @internal @This completes a uref and outputs it.
@@ -2231,6 +2235,7 @@ static void upipe_ts_mux_complete(struct upipe *upipe, struct upump **upump_p)
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     struct uref *uref = mux->uref;
     mux->uref = NULL;
+    mux->uref_size = 0;
     upipe_ts_mux_output(upipe, uref, upump_p);
 }
 
@@ -2249,10 +2254,7 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
     if (mux->uref != NULL) /* capped VBR */
         uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
 
-    size_t uref_size;
-    while (mux->uref == NULL ||
-           (ubase_check(uref_block_size(mux->uref, &uref_size)) &&
-            uref_size < mux->mtu)) {
+    while (mux->uref_size < mux->mtu) {
         struct ubuf *ubuf;
         uint64_t dts_sys;
         upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
@@ -2266,9 +2268,7 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
         (mux->uref != NULL &&
          ubase_check(uref_clock_get_dts_sys(mux->uref, &dts_sys)) &&
          dts_sys + mux->latency < upipe_ts_mux_show_increment(upipe))) {
-        while (mux->uref == NULL ||
-               (ubase_check(uref_block_size(mux->uref, &uref_size)) &&
-                uref_size < mux->mtu)) {
+        while (mux->uref_size < mux->mtu) {
             struct ubuf *ubuf = ubuf_dup(mux->padding);
             if (ubuf == NULL)
                 break;
@@ -2276,9 +2276,7 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
         }
     }
 
-    if (mux->uref != NULL &&
-        ubase_check(uref_block_size(mux->uref, &uref_size)) &&
-        uref_size >= mux->mtu)
+    if (mux->uref_size >= mux->mtu)
         upipe_ts_mux_complete(upipe, &mux->upump);
 
     /* Check for deleted inputs */
@@ -2400,12 +2398,10 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
 
         struct ubuf *ubuf;
         uint64_t dts_sys;
-        size_t uref_size;
         upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
         if (ubuf != NULL) {
             upipe_ts_mux_append(upipe, ubuf, dts_sys);
-            if (ubase_check(uref_block_size(mux->uref, &uref_size)) &&
-                uref_size >= mux->mtu) {
+            if (mux->uref_size >= mux->mtu) {
                 upipe_ts_mux_complete(upipe, &mux->upump);
                 upipe_ts_mux_increment(upipe);
             }
@@ -2420,9 +2416,7 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
             continue;
         }
 
-        while (mux->uref == NULL ||
-               (ubase_check(uref_block_size(mux->uref, &uref_size)) &&
-                uref_size < mux->mtu)) {
+        while (mux->uref_size < mux->mtu) {
             struct ubuf *ubuf = ubuf_dup(mux->padding);
             if (ubuf == NULL)
                 break;
