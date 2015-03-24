@@ -303,6 +303,8 @@ static void usage(const char *argv0) {
 
 int main(int argc, char *argv[])
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     if (argc != 3)
         usage(argv[0]);
     src_file = argv[1];

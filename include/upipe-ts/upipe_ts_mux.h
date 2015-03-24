@@ -42,7 +42,10 @@ enum uprobe_ts_mux_event {
     UPROBE_TS_MUX_SENTINEL = UPROBE_LOCAL,
 
     /** last continuity counter for an input (unsigned int) */
-    UPROBE_TS_MUX_LAST_CC
+    UPROBE_TS_MUX_LAST_CC,
+
+    /** ts_encaps events begin here */
+    UPROBE_TS_MUX_ENCAPS = UPROBE_LOCAL + 0x1000
 };
 
 /** @This defines the modes of multiplexing. */
