@@ -19,6 +19,7 @@ libupipe_la_SOURCES = \
 	uprobe_output.c \
 	uprobe_select_flows.c \
 	uprobe_stdio.c \
+	uprobe_syslog.c \
 	uprobe_transfer.c \
 	uprobe_ubuf_mem.c \
 	uprobe_ubuf_mem_pool.c \
