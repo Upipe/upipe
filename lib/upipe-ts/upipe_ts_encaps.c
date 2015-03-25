@@ -114,6 +114,8 @@ struct upipe_ts_encaps {
     unsigned int max_urefs;
     /** list of blockers (used during udeal) */
     struct uchain blockers;
+    /** size of the current access unit */
+    size_t au_size;
 
     /** PID */
     uint16_t pid;
@@ -207,9 +209,11 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps_init_ubuf_mgr(upipe);
     upipe_ts_encaps_init_input(upipe);
     upipe_ts_encaps->uref = NULL;
+    upipe_ts_encaps->uref_size = 0;
     upipe_ts_encaps->uref_cr_sys = UINT64_MAX;
     upipe_ts_encaps->uref_dts_sys = UINT64_MAX;
     upipe_ts_encaps->uref_ready = false;
+    upipe_ts_encaps->au_size = 0;
     upipe_ts_encaps->pid = 8192;
     upipe_ts_encaps->octetrate = 0;
     upipe_ts_encaps->tb_size = TB_SIZE;
@@ -654,9 +658,8 @@ static int upipe_ts_encaps_set_cr_prog(struct upipe *upipe, uint64_t cr_prog)
         upipe_warn(upipe, "non-dated packet");
         return UBASE_ERR_UNHANDLED;
     }
-    size_t uref_size = 0;
-    uref_block_size(encaps->uref, &uref_size);
-    uref_cr_prog -= (uint64_t)uref_size * UCLOCK_FREQ / encaps->octetrate;
+    uref_cr_prog -= (uint64_t)encaps->uref_size * UCLOCK_FREQ /
+                    encaps->octetrate;
     encaps->cr_prog_offset = cr_prog - uref_cr_prog;
     return UBASE_ERR_NONE;
 }
@@ -927,11 +930,11 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
             return UBASE_ERR_ALLOC;
         }
         encaps->uref_size++;
+        encaps->au_size = encaps->uref_size;
         return UBASE_ERR_NONE;
     }
 
-    size_t size;
-    UBASE_RETURN(uref_block_size(encaps->uref, &size));
+    size_t size = encaps->uref_size;
     uint64_t duration = 0;
     uref_clock_get_duration(encaps->uref, &duration);
     struct uchain *uchain = &encaps->urefs;
@@ -1040,6 +1043,7 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
         return UBASE_ERR_ALLOC;
     }
     encaps->uref_size += header_size;
+    encaps->au_size = size + header_size;
     return UBASE_ERR_NONE;
 }
 
@@ -1131,8 +1135,7 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
     size_t ubuf_size;
     UBASE_RETURN(ubuf_block_size(*ubuf_p, &ubuf_size));
     for ( ; ; ) {
-        size_t uref_size;
-        UBASE_RETURN(uref_block_size(encaps->uref, &uref_size));
+        size_t uref_size = encaps->uref_size;
         uint64_t header_size = 0;
         uref_attr_get_priv(encaps->uref, &header_size);
 
@@ -1152,7 +1155,8 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
             size_t payload_size = TS_SIZE - ubuf_size;
             payload = ubuf_block_splice(encaps->uref->ubuf, 0, payload_size);
             encaps->uref_size -= payload_size;
-            uref_block_resize(encaps->uref, payload_size, -1);
+            encaps->au_size -= payload_size;
+            uref_block_resize(encaps->uref, payload_size, encaps->uref_size);
             if (payload_size >= header_size)
                 uref_attr_set_priv(encaps->uref, 0);
             else
@@ -1161,6 +1165,7 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
         } else {
             payload = uref_detach_ubuf(encaps->uref);
             encaps->tb_buffer -= uref_size;
+            encaps->au_size -= uref_size;
         }
 
         if (unlikely(payload == NULL ||
@@ -1264,21 +1269,7 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
         UBASE_RETURN(upipe_ts_encaps_promote_au(upipe));
     }
 
-    size_t size;
-    UBASE_RETURN(uref_block_size(encaps->uref, &size));
-
-    struct uchain *uchain = &encaps->urefs;
-    ulist_foreach (&encaps->urefs, uchain) {
-        struct uref *uref = uref_from_uchain(uchain);
-        if (ubase_check(uref_block_get_start(uref)))
-            break;
-
-        size_t uref_size = 0;
-        uref_block_size(uref, &uref_size);
-        size += uref_size;
-    }
-
-    *ubuf_p = upipe_ts_encaps_build_ts(upipe, size, start, pcr_prog,
+    *ubuf_p = upipe_ts_encaps_build_ts(upipe, encaps->au_size, start, pcr_prog,
             ubase_check(uref_flow_get_random(encaps->uref)),
             ubase_check(uref_flow_get_discontinuity(encaps->uref)));
     uref_block_delete_start(encaps->uref);
