@@ -2174,7 +2174,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         }
     }
 
-    if (cr_sys - mux->interval > original_cr_sys)
+    if (cr_sys > original_cr_sys)
         return;
 
     int err;
