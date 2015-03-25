@@ -177,6 +177,10 @@ int main(int argc, char **argv)
     assert(size == 65);
 
     /* test ubuf_block_splice */
+    ubuf2 = ubuf_block_splice(ubuf1, 0, -1);
+    assert(ubuf2 != NULL);
+    ubuf_free(ubuf2);
+
     ubuf2 = ubuf_block_splice(ubuf1, 49, -1);
     assert(ubuf2 != NULL);
 
