@@ -421,7 +421,8 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
                 if (unlikely(upipe_xfer->upump == NULL))
                     return UBASE_ERR_UPUMP;
                 upump_start(upipe_xfer->upump);
-            }
+            } else
+                upipe_warn(upipe, "unable to allocate upstream queue");
             union upipe_xfer_arg arg = { .pipe = NULL };
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_ATTACH_UPUMP_MGR,
                                        upipe_xfer->upipe_remote, arg);

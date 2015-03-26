@@ -358,7 +358,8 @@ static int upipe_qsink_push_downstream(struct upipe *upipe,
             }
             upipe_qsink_set_upump_oob(upipe, upump);
             upump_start(upump);
-        }
+        } else
+            upipe_warn(upipe, "unable to create upstream watcher");
     }
     return UBASE_ERR_NONE;
 }
