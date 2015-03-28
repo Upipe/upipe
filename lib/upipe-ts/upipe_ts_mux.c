@@ -1031,6 +1031,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms",
             def, pid, octetrate * 8, latency * 1000 / UCLOCK_FREQ);
     upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
+    upipe_ts_mux_program_update(upipe_ts_mux_program_to_upipe(program));
     return UBASE_ERR_NONE;
 }
 
@@ -1203,12 +1204,13 @@ static int upipe_ts_mux_program_psig_program_probe(struct uprobe *uprobe,
         return upipe_throw_proxy(upipe, inner, event, args);
 
     struct uref *flow_def = va_arg(args, struct uref *);
-    uint64_t pmt_size = TS_SIZE - TS_HEADER_SIZE;
+    uint64_t pmt_size = PMT_HEADER_SIZE;
     uref_block_flow_get_size(flow_def, &pmt_size);
     /* pointer_field overhead */
     pmt_size++;
     /* TS header overhead */
-    pmt_size = TS_SIZE * (pmt_size * TS_HEADER_SIZE - 1) / TS_HEADER_SIZE;
+    pmt_size = (pmt_size + TS_SIZE - TS_HEADER_SIZE - 1) /
+               (TS_SIZE - TS_HEADER_SIZE) * TS_SIZE;
     if (pmt_size != upipe_ts_mux_program->pmt_size) {
         upipe_ts_mux_program->pmt_size = pmt_size;
         upipe_ts_mux_program_update(upipe);
@@ -1874,7 +1876,8 @@ static int upipe_ts_mux_psig_probe(struct uprobe *uprobe, struct upipe *inner,
     pat_size += (pat_size + PSI_MAX_SIZE + PSI_HEADER_SIZE - 1) /
                 (PSI_MAX_SIZE + PSI_HEADER_SIZE);
     /* TS header overhead */
-    pat_size = TS_SIZE * (pat_size * TS_HEADER_SIZE - 1) / TS_HEADER_SIZE;
+    pat_size = (pat_size + TS_SIZE - TS_HEADER_SIZE - 1) /
+               (TS_SIZE - TS_HEADER_SIZE) * TS_SIZE;
     if (pat_size != upipe_ts_mux->pat_size) {
         upipe_ts_mux->pat_size = pat_size;
         upipe_ts_mux_update(upipe);
@@ -2180,8 +2183,10 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
     int err;
 upipe_ts_mux_splice_done:
     err = upipe_ts_encaps_splice(encaps, original_cr_sys, ubuf_p, dts_sys_p);
-    if (!ubase_check(err))
+    if (!ubase_check(err)) {
         upipe_warn(upipe, "internal error in splice");
+        upipe_throw_fatal(upipe, err);
+    }
 
     input = upipe_get_opaque(encaps, struct upipe_ts_mux_input *);
     if (input != NULL && input->deleted && !input->encaps_ready) {
@@ -2599,14 +2604,19 @@ static void upipe_ts_mux_update(struct upipe *upipe)
         mux->interval = (mux->mtu * UCLOCK_FREQ + mux->total_octetrate - 1) /
                         mux->total_octetrate;
         upipe_ts_mux_set_pat_interval(mux->psig,
-                mux->pat_interval - mux->interval);
+                mux->interval < mux->pat_interval / 2 ?
+                mux->pat_interval - (mux->pat_interval % mux->interval) :
+                mux->pat_interval);
 
         struct uchain *uchain_program;
         ulist_foreach (&mux->programs, uchain_program) {
             struct upipe_ts_mux_program *program =
                 upipe_ts_mux_program_from_uchain(uchain_program);
             upipe_ts_mux_set_pmt_interval(program->psig_program,
-                    program->pmt_interval - mux->interval);
+                    mux->interval < program->pmt_interval / 2 ?
+                    program->pmt_interval -
+                    (program->pmt_interval % mux->interval) :
+                    program->pmt_interval);
 
             struct uchain *uchain_input;
             ulist_foreach (&program->inputs, uchain_input) {
@@ -2614,7 +2624,10 @@ static void upipe_ts_mux_update(struct upipe *upipe)
                     upipe_ts_mux_input_from_uchain(uchain_input);
                 if (input->pcr && input->encaps != NULL)
                     upipe_ts_mux_set_pcr_interval(input->encaps,
-                            program->pcr_interval - mux->interval);
+                            mux->interval < program->pcr_interval / 2 ?
+                            program->pcr_interval -
+                            (program->pcr_interval % mux->interval) :
+                            program->pcr_interval);
             }
         }
     }
