@@ -212,6 +212,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     assert(avcdec != NULL);
     upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
+    upipe_set_option(avcdec, "thread_type", "1");
 
     struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
     struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();

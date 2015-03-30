@@ -2458,7 +2458,8 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
         uint64_t now = uclock_now(mux->uclock);
         if (next_cr_sys > now + mux->mux_delay) {
             upump = upump_alloc_timer(mux->upump_mgr, upipe_ts_mux_watcher,
-                                      upipe, next_cr_sys - now, 0);
+                                      upipe, next_cr_sys - now - mux->mux_delay,
+                                      0);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
