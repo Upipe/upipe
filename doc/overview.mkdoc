@@ -97,7 +97,7 @@
         @item @ref upipe_trickp_mgr_alloc @item pipe facilitating trick play operations @item @tt -lupipe-modules
         @item @ref upipe_even_mgr_alloc @item pipe evening the start and end of a stream @item @tt -lupipe-modules
         @item @ref upipe_skip_mgr_alloc @item pipe skipping the beginning of each uref @item @tt -lupipe-modules
-        @item @ref upipe_aggregate_mgr_alloc @item pipe aggregating several urefs into one @item @tt -lupipe-modules
+        @item @ref upipe_agg_mgr_alloc @item pipe aggregating several urefs into one @item @tt -lupipe-modules
         @item @ref upipe_setflowdef_mgr_alloc @item pipe setting given attributes on incoming flow definitions @item @tt -lupipe-modules
         @item @ref upipe_setattr_mgr_alloc @item pipe setting given attributes on all incoming buffers @item @tt -lupipe-modules
         @item @ref upipe_setrap_mgr_alloc @item pipe setting attribute k.systime_rap on all incoming buffers @item @tt -lupipe-modules
@@ -183,7 +183,7 @@
         @item @ref #UPIPE_HELPER_UCLOCK @item helper for pipes which requires a uclock
         @item @ref #UPIPE_HELPER_OUTPUT @item helper for the management of the output
         @item @ref #UPIPE_HELPER_UBUF_MGR @item helper for the management of the ubuf manager for the output
-        @item @ref #UPIPE_HELPER_SOURCE_READ_SIZE @item helper for source pipes reading data in chunks of a configuration size
+        @item @ref #UPIPE_HELPER_OUTPUT_SIZE @item helper for pipes outputting data in chunks of a configuration size
         @item @ref #UPIPE_HELPER_INPUT @item helper for pipes having an input, which need to block input pumps and buffer urefs
         @item @ref #UPIPE_HELPER_UREF_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes

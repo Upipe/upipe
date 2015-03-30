@@ -26,7 +26,8 @@
 /** @file
  * @short Bin pipe wrapping a queue, a linear subpipeline and a queue
  *
- * It allows to transfer an existing linear subpipeline to a remote upump_mgr,
+ * It allows to transfer an existing linear subpipeline (the given pipe, its
+ * output, the output of its output, etc.) to a remote upump_mgr,
  * while setting up a queue to send the packets to the linear subpipeline,
  * and a queue to retrieve the processed packets in the main upump_mgr.
  *

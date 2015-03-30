@@ -26,7 +26,8 @@
 /** @file
  * @short Bin pipe wrapping a queue and a sink subpipeline
  *
- * It allows to transfer an existing sink subpipeline to a remote upump_mgr,
+ * It allows to transfer an existing sink subpipeline (the given pipe, its
+ * output, the outputs of its output, etc.) to a remote upump_mgr,
  * while setting up a queue to send the packets to the sink in the remote
  * upump_mgr.
  *

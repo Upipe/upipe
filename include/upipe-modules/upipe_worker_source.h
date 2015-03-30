@@ -26,7 +26,8 @@
 /** @file
  * @short Bin pipe wrapping a source subpipeline and a queue
  *
- * It allows to transfer an existing source subpipeline to a remote upump_mgr,
+ * It allows to transfer an existing source subpipeline (the given pipe, its
+ * output, the output of its output, etc.) to a remote upump_mgr,
  * while setting up a queue to retrieve the packets in the main upump_mgr.
  *
  * Please note that the remote subpipeline is not "used" so its refcount is not
