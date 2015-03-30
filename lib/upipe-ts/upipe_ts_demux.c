@@ -904,13 +904,8 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
         }
 
         upipe_set_flow_def(upipe_ts_demux_output->setrap, flow_def);
-        int err = UBASE_ERR_NONE;
-        if (upipe_ts_demux_output->last_inner != NULL)
-            /* also set the framer to catch incompatibilities */
-            err = upipe_set_flow_def(upipe_ts_demux_output->last_inner,
-                                     flow_def);
         uref_free(flow_def);
-        return err == UBASE_ERR_NONE;
+        return true;
     }
     return false;
 }
