@@ -495,15 +495,13 @@ static void upipe_h264f_stream_parse_scaling(struct ubuf_block_stream *s,
  * @param s ubuf block stream
  * @param octetrate_p filled in with the octet rate
  * @param cpb_size_p filled in with the CPB buffer size
- * @return true if the stream is CBR
  */
-static bool upipe_h264f_stream_parse_hrd(struct upipe *upipe,
+static void upipe_h264f_stream_parse_hrd(struct upipe *upipe,
                                          struct ubuf_block_stream *s,
                                          uint64_t *octetrate_p,
                                          uint64_t *cpb_size_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    bool ret = false;
     uint32_t cpb_cnt = upipe_h264f_stream_ue(s) + 1;
     upipe_h264f_stream_fill_bits(s, 8);
     uint8_t bitrate_scale = ubuf_block_stream_show_bits(s, 4);
@@ -515,11 +513,9 @@ static bool upipe_h264f_stream_parse_hrd(struct upipe *upipe,
     uint64_t cpb_size =
         ((upipe_h264f_stream_ue(s) + 1) << (4 + cpb_size_scale)) / 8;
     upipe_h264f_stream_fill_bits(s, 1);
-    if (ubuf_block_stream_show_bits(s, 1)) { /* cbr_flag */
-        *octetrate_p = octetrate;
-        *cpb_size_p = cpb_size;
-        ret = true;
-    }
+    ubuf_block_stream_skip_bits(s, 1); /* cbr_flag */
+    *octetrate_p = octetrate;
+    *cpb_size_p = cpb_size;
     ubuf_block_stream_skip_bits(s, 1);
     cpb_cnt--;
     while (cpb_cnt) {
@@ -540,7 +536,6 @@ static bool upipe_h264f_stream_parse_hrd(struct upipe *upipe,
     upipe_h264f->dpb_output_delay_length =
         ubuf_block_stream_show_bits(s, 5) + 1;
     ubuf_block_stream_skip_bits(s, 10);
-    return ret;
 }
 
 /** @internal @This handles a sequence parameter set.
@@ -1050,8 +1045,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h264f_stream_fill_bits(s, 1);
         bool nal_hrd_present = !!ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
-        if (nal_hrd_present &&
-            upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
+        if (nal_hrd_present) {
+            upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size);
             UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
             UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def, cpb_size))
             upipe_h264f->octet_rate = octetrate;
@@ -1060,8 +1055,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h264f_stream_fill_bits(s, 1);
         bool vcl_hrd_present = !!ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
-        if (vcl_hrd_present &&
-            upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size)) {
+        if (vcl_hrd_present) {
+            upipe_h264f_stream_parse_hrd(upipe, s, &octetrate, &cpb_size);
             UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
             UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def, cpb_size))
         }
