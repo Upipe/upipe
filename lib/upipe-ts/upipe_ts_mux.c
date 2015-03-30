@@ -1028,8 +1028,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 au_per_sec.den / UCLOCK_FREQ);
 
     upipe_notice_va(upipe,
-            "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms",
-            def, pid, octetrate * 8, latency * 1000 / UCLOCK_FREQ);
+            "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms, buffer %"PRIu64" ms",
+            def, pid, octetrate * 8, latency * 1000 / UCLOCK_FREQ,
+            upipe_ts_mux_input->buffer_duration * 1000 / UCLOCK_FREQ);
     upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
     upipe_ts_mux_program_update(upipe_ts_mux_program_to_upipe(program));
     return UBASE_ERR_NONE;
@@ -2455,14 +2456,14 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
     if (likely(mux->cr_sys != UINT64_MAX)) {
         uint64_t next_cr_sys = upipe_ts_mux_show_increment(upipe);
         uint64_t now = uclock_now(mux->uclock);
-        if (next_cr_sys > now) {
+        if (next_cr_sys > now + mux->mux_delay) {
             upump = upump_alloc_timer(mux->upump_mgr, upipe_ts_mux_watcher,
                                       upipe, next_cr_sys - now, 0);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
             }
-        } else if (next_cr_sys > now - mux->mux_delay) {
+        } else if (next_cr_sys > now) {
             _upipe_ts_mux_watcher(upipe);
             return;
         } else
@@ -2992,6 +2993,7 @@ static int _upipe_ts_mux_set_mux_delay(struct upipe *upipe, uint64_t delay)
 {
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->mux_delay = delay;
+    upipe_ts_mux_build_flow_def(upipe);
     return UBASE_ERR_NONE;
 }
 
