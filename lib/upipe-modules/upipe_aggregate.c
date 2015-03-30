@@ -29,10 +29,12 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -186,10 +188,20 @@ static int upipe_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_agg->input_size = 0;
     uref_block_flow_get_size(flow_def, &upipe_agg->input_size);
 
+    uint64_t octetrate = 0;
+    uref_block_flow_get_octetrate(flow_def, &octetrate);
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
     UBASE_RETURN(uref_block_flow_set_size(flow_def_dup, upipe_agg->output_size))
+
+    if (octetrate) {
+        UBASE_RETURN(uref_clock_set_latency(flow_def_dup, latency +
+                    (uint64_t)upipe_agg->output_size * UCLOCK_FREQ / octetrate))
+    }
     upipe_agg_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
