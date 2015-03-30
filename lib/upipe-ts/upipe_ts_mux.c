@@ -1480,12 +1480,7 @@ static int upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
     }
 
     uint64_t pid = 0;
-    if (ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
-        upipe_ts_mux_find_pid(upipe_ts_mux_to_upipe(mux), pid)) {
-        upipe_warn_va(upipe_ts_mux_to_upipe(mux),
-                      "PID %"PRIu64" already exists", pid);
-        pid = 0;
-    }
+    uref_ts_flow_get_pid(flow_def, &pid);
     if (pid == 0) {
         do {
             pid = mux->pid_auto++;
