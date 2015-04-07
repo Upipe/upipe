@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -179,6 +179,54 @@ UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
 UPIPE_HELPER_INPUT(upipe_avcenc, urefs, nb_urefs, max_urefs, blockers, upipe_avcenc_encode)
+
+/** @This allows to convert from Upipe color space to avcenc color space. */
+struct upipe_avcenc_color {
+    /** Upipe color */
+    const char *upipe_color;
+    /** avcenc color */
+    const char *avcenc_color;
+};
+
+/** @This converts transfer characteristics from Upipe to avcenc. */
+static const struct upipe_avcenc_color upipe_avcenc_color_trc[] = {
+    { "bt470m", "gamma22" },
+    { "bt470bg", "gamma28" },
+    { "log100", "log" },
+    { "log316", "log_sqrt" },
+    { "iec61966-2-4", "iec61966_2_4" },
+    { "bt1361e", "bt1361" },
+    { "iec61966-2-1", "iec61966_2_1" },
+    { "bt2020-10", "bt2020-10bit" },
+    { "bt2020-12", "bt2020-12bit" },
+    { NULL, NULL }
+};
+
+/** @This converts matrix coefficients from Upipe to avcenc. */
+static const struct upipe_avcenc_color upipe_avcenc_color_space[] = {
+    { "GBR", "rgb" },
+    { "YCgCo", "ycocg" },
+    { "bt2020nc", "bt2020_ncl" },
+    { "bt2020c", "bt2020_cl" },
+    { NULL, NULL }
+};
+
+/** @internal @This converts a Upipe color space to avcenc color space.
+ *
+ * @param list conversion list
+ * @param upipe_color Upipe color
+ * @return avcenc color
+ */
+static const char *
+    upipe_avcenc_convert_color(const struct upipe_avcenc_color *list,
+                               const char *upipe_color)
+{
+    int i = 0;
+    while (list[i].upipe_color != NULL)
+        if (!strcmp(list[i].upipe_color, upipe_color))
+            return list[i].avcenc_color;
+    return upipe_color;
+}
 
 /** @hidden */
 static void upipe_avcenc_free(struct upipe *upipe);
@@ -607,6 +655,38 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         context->sample_aspect_ratio.num = sar.num;
         context->sample_aspect_ratio.den = sar.den;
     }
+
+    /* set color options if it was changed in the input */
+    const char *content;
+    int ret;
+    content = ubase_check(uref_pic_flow_get_full_range(
+                    upipe_avcenc->flow_def_input)) ? "jpeg" : "mpeg";
+    if ((ret = av_opt_set(upipe_avcenc->context, "color_range", content,
+                          AV_OPT_SEARCH_CHILDREN)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "color_range", content, ret);
+    if (ubase_check(uref_pic_flow_get_colour_primaries(
+                    upipe_avcenc->flow_def_input, &content)) &&
+        (ret = av_opt_set(upipe_avcenc->context, "color_primaries", content,
+                          AV_OPT_SEARCH_CHILDREN)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "color_primaries", content, ret);
+    if (ubase_check(uref_pic_flow_get_transfer_characteristics(
+                    upipe_avcenc->flow_def_input, &content)) &&
+        (ret = av_opt_set(upipe_avcenc->context, "color_trc",
+                          upipe_avcenc_convert_color(upipe_avcenc_color_trc,
+                                                     content),
+                          AV_OPT_SEARCH_CHILDREN)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "color_trc", content, ret);
+    if (ubase_check(uref_pic_flow_get_matrix_coefficients(
+                    upipe_avcenc->flow_def_input, &content)) &&
+        (ret = av_opt_set(upipe_avcenc->context, "colorspace",
+                          upipe_avcenc_convert_color(upipe_avcenc_color_space,
+                                                     content),
+                          AV_OPT_SEARCH_CHILDREN)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "colorspace", content, ret);
 
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));

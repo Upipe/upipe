@@ -111,6 +111,14 @@ struct upipe_sws {
     const char *input_chroma_map[UPIPE_AV_MAX_PLANES];
     /** output chroma map */
     const char *output_chroma_map[UPIPE_AV_MAX_PLANES];
+    /** input colorspace */
+    int input_colorspace;
+    /** output colorspace */
+    int output_colorspace;
+    /** input color range */
+    int input_color_range;
+    /** output color range */
+    int output_color_range;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -126,6 +134,32 @@ UPIPE_HELPER_UBUF_MGR(upipe_sws, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sws_register_output_request,
                       upipe_sws_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_sws, urefs, nb_urefs, max_urefs, blockers, upipe_sws_handle)
+
+/** @internal @This converts Upipe color space to sws color space.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return sws color space
+ */
+static int upipe_sws_convert_color(struct upipe *upipe, struct uref *flow_def)
+{
+    int colorspace = -1;
+    const char *matrix_coefficients;
+    if (ubase_check(uref_pic_flow_get_matrix_coefficients(flow_def,
+                    &matrix_coefficients))) {
+        if (!strcmp(matrix_coefficients, "bt709"))
+            colorspace = SWS_CS_ITU709;
+        else if (!strcmp(matrix_coefficients, "fcc"))
+            colorspace = SWS_CS_FCC;
+        else if (!strcmp(matrix_coefficients, "smpte170m"))
+            colorspace = SWS_CS_SMPTE170M;
+        else if (!strcmp(matrix_coefficients, "smpte240m"))
+            colorspace = SWS_CS_SMPTE240M;
+        else
+            upipe_warn_va(upipe, "unknown color space %s", matrix_coefficients);
+    }
+    return colorspace;
+}
 
 /** @internal @This handles data.
  *
@@ -172,12 +206,34 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
                     input_hsize, input_vsize >> !!i, upipe_sws->input_pix_fmt,
                     output_hsize, output_vsize >> !!i, upipe_sws->output_pix_fmt,
                     upipe_sws->flags, NULL, NULL, NULL);
-    }
 
-    if (unlikely(upipe_sws->convert_ctx == NULL)) {
-        upipe_err(upipe, "sws_getContext failed");
-        uref_free(uref);
-        return true;
+        if (unlikely(upipe_sws->convert_ctx[i] == NULL)) {
+            upipe_err(upipe, "sws_getContext failed");
+            uref_free(uref);
+            return true;
+        }
+
+        int in_full, out_full, brightness, contrast, saturation;
+        const int *inv_table, *table;
+
+        sws_getColorspaceDetails(upipe_sws->convert_ctx[i],
+                                 (int **)&inv_table, &in_full,
+                                 (int **)&table, &out_full,
+                                 &brightness, &contrast, &saturation);
+
+        if (upipe_sws->input_colorspace != -1)
+            inv_table = sws_getCoefficients(upipe_sws->input_colorspace);
+        if (upipe_sws->input_color_range != -1)
+            in_full = upipe_sws->input_color_range;
+        if (upipe_sws->output_colorspace != -1)
+            table = sws_getCoefficients(upipe_sws->output_colorspace);
+        if (upipe_sws->output_color_range != -1)
+            out_full = upipe_sws->output_color_range;
+
+        if (unlikely(sws_setColorspaceDetails(upipe_sws->convert_ctx[i],
+                        inv_table, in_full, table, out_full,
+                        brightness, contrast, saturation)) < 0)
+            upipe_warn(upipe, "unable to set color space data");
     }
 
     /* map input */
@@ -395,6 +451,9 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_EXTERNAL;
     }
+    upipe_sws->input_colorspace = upipe_sws_convert_color(upipe, flow_def);
+    upipe_sws->input_color_range =
+        ubase_check(uref_pic_flow_get_full_range(flow_def)) ? 1 : 0;
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
@@ -567,6 +626,9 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
 
+    upipe_sws->output_colorspace = upipe_sws_convert_color(upipe, flow_def);
+    upipe_sws->output_color_range =
+        ubase_check(uref_pic_flow_get_full_range(flow_def)) ? 1 : 0;
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
     upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;

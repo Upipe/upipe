@@ -373,6 +373,37 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     if (!ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input)))
         params->b_interlaced = true;
 
+    const char *content;
+    int ret;
+    if (ubase_check(uref_pic_flow_get_video_format(
+                    upipe_x264->flow_def_input, &content)) &&
+        (ret = x264_param_parse(&upipe_x264->params, "videoformat",
+                                content)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "videoformat", content, ret);
+    content =
+        ubase_check(uref_pic_flow_get_full_range(upipe_x264->flow_def_input)) ?
+        "1" : "0";
+    if ((ret = x264_param_parse(&upipe_x264->params, "fullrange", content)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "fullrange", content, ret);
+    if (ubase_check(uref_pic_flow_get_colour_primaries(
+                    upipe_x264->flow_def_input, &content)) &&
+        (ret = x264_param_parse(&upipe_x264->params, "colorprim", content)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "colorprim", content, ret);
+    if (ubase_check(uref_pic_flow_get_transfer_characteristics(
+                    upipe_x264->flow_def_input, &content)) &&
+        (ret = x264_param_parse(&upipe_x264->params, "transfer", content)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "transfer", content, ret);
+    if (ubase_check(uref_pic_flow_get_matrix_coefficients(
+                    upipe_x264->flow_def_input, &content)) &&
+        (ret = x264_param_parse(&upipe_x264->params, "colormatrix",
+                                content)) < 0)
+        upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                     "colormatrix", content, ret);
+
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
         if (!ubase_check(_upipe_x264_reconfigure(upipe)))

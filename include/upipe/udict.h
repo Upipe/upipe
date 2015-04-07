@@ -103,6 +103,16 @@ enum udict_type {
     UDICT_TYPE_PIC_HSIZE_VISIBLE,
     /** p.vsizevis */
     UDICT_TYPE_PIC_VSIZE_VISIBLE,
+    /** p.format */
+    UDICT_TYPE_PIC_VIDEO_FORMAT,
+    /** p.fullrange */
+    UDICT_TYPE_PIC_FULL_RANGE,
+    /** p.colorprim */
+    UDICT_TYPE_PIC_COLOUR_PRIMARIES,
+    /** p.transfer */
+    UDICT_TYPE_PIC_TRANSFER_CHARACTERISTICS,
+    /** p.colmatrix */
+    UDICT_TYPE_PIC_MATRIX_COEFFICIENTS,
     /** p.hposition */
     UDICT_TYPE_PIC_HPOSITION,
     /** p.vposition */

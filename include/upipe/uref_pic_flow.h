@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -80,6 +80,16 @@ UREF_ATTR_UNSIGNED_SH(pic_flow, hsize_visible, UDICT_TYPE_PIC_HSIZE_VISIBLE,
         horizontal visible size)
 UREF_ATTR_UNSIGNED_SH(pic_flow, vsize_visible, UDICT_TYPE_PIC_VSIZE_VISIBLE,
         vertical visible size)
+UREF_ATTR_STRING_SH(pic_flow, video_format, UDICT_TYPE_PIC_VIDEO_FORMAT,
+        video format)
+UREF_ATTR_VOID_SH(pic_flow, full_range, UDICT_TYPE_PIC_FULL_RANGE,
+        colour full range)
+UREF_ATTR_STRING_SH(pic_flow, colour_primaries, UDICT_TYPE_PIC_COLOUR_PRIMARIES,
+        colour primaries)
+UREF_ATTR_STRING_SH(pic_flow, transfer_characteristics,
+        UDICT_TYPE_PIC_TRANSFER_CHARACTERISTICS, transfer characteristics)
+UREF_ATTR_STRING_SH(pic_flow, matrix_coefficients,
+        UDICT_TYPE_PIC_MATRIX_COEFFICIENTS, matrix coefficients)
 
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.

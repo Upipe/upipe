@@ -451,6 +451,11 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def,
                                                 vbvbuffer * 16 * 1024 / 8))
 
+    uint8_t video_format = 5;
+    uint8_t colour_primaries = 1;
+    uint8_t transfer_characteristics = 1;
+    uint8_t matrix_coefficients = 1;
+
     if (upipe_mpgvf->sequence_display != NULL) {
         size_t size;
         uint8_t display_buffer[MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE];
@@ -458,13 +463,19 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         if (unlikely(!ubase_check(ubuf_block_size(upipe_mpgvf->sequence_display,
                                   &size)) ||
                      (display = ubuf_block_peek(upipe_mpgvf->sequence_display,
-                                                0, size,
-                                                display_buffer)) == NULL)) {
+                        0,
+                        size > MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE ?
+                        MP2VSEQDX_HEADER_SIZE + MP2VSEQDX_COLOR_SIZE : size,
+                        display_buffer)) == NULL)) {
             uref_free(flow_def);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
 
+        video_format = mp2vseqdx_get_format(display);
+        colour_primaries = mp2vseqdx_get_primaries(display);
+        transfer_characteristics = mp2vseqdx_get_transfer(display);
+        matrix_coefficients = mp2vseqdx_get_matrixcoeffs(display);
         uint16_t display_horizontal = mp2vseqdx_get_horizontal(display);
         uint16_t display_vertical = mp2vseqdx_get_vertical(display);
 
@@ -474,6 +485,109 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
                                                      display_horizontal))
         UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def,
                                                      display_vertical))
+    }
+
+    const char *video_format_str = NULL;
+    switch (video_format) {
+        case 0:
+            video_format_str = "component";
+            break;
+        case 1:
+            video_format_str = "pal";
+            break;
+        case 2:
+            video_format_str = "ntsc";
+            break;
+        case 3:
+            video_format_str = "secam";
+            break;
+        case 4:
+            video_format_str = "mac";
+            break;
+        default:
+            break;
+    }
+    if (video_format_str != NULL) {
+        UBASE_FATAL(upipe, uref_pic_flow_set_video_format(flow_def,
+                    video_format_str))
+    }
+
+    const char *colour_primaries_str = NULL;
+    switch (colour_primaries) {
+        case 1:
+            colour_primaries_str = "bt709";
+            break;
+        case 4:
+            colour_primaries_str = "bt470m";
+            break;
+        case 5:
+            colour_primaries_str = "bt470bg";
+            break;
+        case 6:
+            colour_primaries_str = "smpte170m";
+            break;
+        case 7:
+            colour_primaries_str = "smpte240m";
+            break;
+        default:
+            break;
+    }
+    if (colour_primaries_str != NULL) {
+        UBASE_FATAL(upipe, uref_pic_flow_set_colour_primaries(flow_def,
+                    colour_primaries_str))
+    }
+
+    const char *transfer_characteristics_str = NULL;
+    switch (transfer_characteristics) {
+        case 1:
+            transfer_characteristics_str = "bt709";
+            break;
+        case 4:
+            transfer_characteristics_str = "bt470m";
+            break;
+        case 5:
+            transfer_characteristics_str = "bt470bg";
+            break;
+        case 6:
+            transfer_characteristics_str = "smpte170m";
+            break;
+        case 7:
+            transfer_characteristics_str = "smpte240m";
+            break;
+        case 8:
+            transfer_characteristics_str = "linear";
+            break;
+        default:
+            break;
+    }
+    if (transfer_characteristics_str != NULL) {
+        UBASE_FATAL(upipe, uref_pic_flow_set_transfer_characteristics(flow_def,
+                    transfer_characteristics_str))
+    }
+
+    const char *matrix_coefficients_str = NULL;
+    switch (matrix_coefficients) {
+        case 1:
+            matrix_coefficients_str = "bt709";
+            break;
+        case 4:
+            matrix_coefficients_str = "fcc";
+            break;
+        case 5:
+            matrix_coefficients_str = "bt470bg";
+            break;
+        case 6:
+            matrix_coefficients_str = "smpte170m";
+            break;
+        case 7:
+            matrix_coefficients_str = "smpte240m";
+            break;
+        default:
+            break;
+    }
+    if (matrix_coefficients_str != NULL) {
+        UBASE_FATAL(upipe, uref_pic_flow_set_matrix_coefficients(flow_def,
+                    matrix_coefficients_str))
     }
 
     flow_def = upipe_mpgvf_store_flow_def_attr(upipe, flow_def);
