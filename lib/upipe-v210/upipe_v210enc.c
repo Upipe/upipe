@@ -26,45 +26,98 @@
  * @short Upipe v210enc module
  */
 
-#include "upipe_v210enc.h"
+#include <upipe/ubase.h>
+#include <upipe/uprobe.h>
+#include <upipe/uref.h>
+#include <upipe/ubuf.h>
+#include <upipe/uref_pic_flow.h>
+#include <upipe/uref_pic.h>
+#include <upipe/upipe.h>
+#include <upipe/uref_flow.h>
+#include <upipe/uref_dump.h>
+#include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+
+#include <upipe-v210/upipe_v210enc.h>
+
+#include <libavutil/common.h>
+#include <libavutil/cpu.h>
+#include <libavutil/intreadwrite.h>
+
+#define UPIPE_V210_MAX_PLANES 3
+
+/** upipe_v210enc structure with v210enc parameters */
+struct upipe_v210enc {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
+    /** output pipe */
+    struct upipe *output;
+    /** flow_definition packet */
+    struct uref *flow_def;
+    /** output state */
+    enum upipe_helper_output_state output_state;
+    /** list of output requests */
+    struct uchain request_list;
+
+    /** temporary uref storage (used during urequest) */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during udeal) */
+    struct uchain blockers;
+
+    /** input bit depth **/
+    int input_bit_depth;
+
+    /** cpu flags **/
+    int cpu_flags;
+
+    /** 8-bit line packing function **/
+    upipe_v210enc_pack_line_8 pack_line_8;
+    /** 10-bit line packing function **/
+    upipe_v210enc_pack_line_10 pack_line_10;
+
+    /** input chroma map */
+    const char *input_chroma_map[UPIPE_V210_MAX_PLANES+1];
+    /** output chroma map */
+    const char *output_chroma_map;
+
+    /** public upipe structure */
+    struct upipe upipe;
+};
 
 /** @hidden */
 static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
-                             struct upump **upump_p);
+                                 struct upump **upump_p);
 /** @hidden */
 static int upipe_v210enc_check(struct upipe *upipe, struct uref *flow_format);
 
-
 UPIPE_HELPER_UPIPE(upipe_v210enc, upipe, UPIPE_V210ENC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_v210enc, urefcount, upipe_v210enc_free);
-static struct upipe *upipe_v210enc_alloc_void(struct upipe_mgr *mgr,          
-                                            struct uprobe *uprobe,          
-                                            uint32_t signature,             
-                                            va_list args)                   
-{                                                                           
-    if (signature != UPIPE_VOID_SIGNATURE) {                                
-        uprobe_release(uprobe);                                             
-        return NULL;                                                        
-    }                                                                       
-    struct upipe_v210enc *s =                                                   
-        (struct upipe_v210enc *)malloc(sizeof(struct upipe_v210enc));               
-    if (unlikely(s == NULL)) {                                              
-        uprobe_release(uprobe);                                             
-        return NULL;                                                        
-    }                                                                       
-    struct upipe *upipe = upipe_v210enc_to_upipe(s);                          
-    upipe_init(upipe, mgr, uprobe);                                         
-    return upipe;                                                           
-}
-
-static void upipe_v210enc_free_void(struct upipe *upipe)                      
-{                                                                           
-    struct upipe_v210enc *s = upipe_v210enc_from_upipe(upipe);                    
-    upipe_clean(upipe);                                                     
-    free(s);                                                                
-}
-
-
+UPIPE_HELPER_VOID(upipe_v210enc);
 UPIPE_HELPER_OUTPUT(upipe_v210enc, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_v210enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_v210enc_check,
@@ -423,6 +476,78 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the 8-bit packing function.
+ *
+ * @param upipe description structure of the pipe
+ * @param pack packing function
+ * @return an error code
+ */
+static inline int _upipe_v210enc_set_pack_line_8(struct upipe *upipe,
+        upipe_v210enc_pack_line_8 pack)
+{
+    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
+    if (unlikely(!pack)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_v210enc->pack_line_8 = pack;
+    return UBASE_ERR_NONE;
+}
+
+/** @This gets the 8-bit packing function.
+ *
+ * @param upipe description structure of the pipe
+ * @param pack_p written with the packing function
+ * @return an error code
+ */
+static inline int _upipe_v210enc_get_pack_line_8(struct upipe *upipe,
+        upipe_v210enc_pack_line_8 *pack_p)
+{
+    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
+    if (unlikely(!pack_p)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    *pack_p = upipe_v210enc->pack_line_8;
+    return UBASE_ERR_NONE;
+}
+
+/** @This sets the 10-bit packing function.
+ *
+ * @param upipe description structure of the pipe
+ * @param pack packing function
+ * @return an error code
+ */
+static inline int _upipe_v210enc_set_pack_line_10(struct upipe *upipe,
+        upipe_v210enc_pack_line_10 pack)
+{
+    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
+    if (unlikely(!pack)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_v210enc->pack_line_10 = pack;
+    return UBASE_ERR_NONE;
+}
+
+/** @This gets the 10-bit packing function.
+ *
+ * @param upipe description structure of the pipe
+ * @param pack_p written with the packing function
+ * @return an error code
+ */
+static inline int _upipe_v210enc_get_pack_line_10(struct upipe *upipe,
+        upipe_v210enc_pack_line_10 *pack_p)
+{
+    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
+    if (unlikely(!pack_p)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    *pack_p = upipe_v210enc->pack_line_10;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -464,6 +589,27 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_v210enc_set_flow_def(upipe, flow);
+        }
+
+        case UPIPE_V210ENC_SET_PACK_LINE_8: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
+            return _upipe_v210enc_set_pack_line_8(upipe,
+                   va_arg(args, upipe_v210enc_pack_line_8));
+        }
+        case UPIPE_V210ENC_GET_PACK_LINE_8: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
+            return _upipe_v210enc_get_pack_line_8(upipe,
+                   va_arg(args, upipe_v210enc_pack_line_8 *));
+        }
+        case UPIPE_V210ENC_SET_PACK_LINE_10: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
+            return _upipe_v210enc_set_pack_line_10(upipe,
+                   va_arg(args, upipe_v210enc_pack_line_10));
+        }
+        case UPIPE_V210ENC_GET_PACK_LINE_10: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
+            return _upipe_v210enc_get_pack_line_10(upipe,
+                   va_arg(args, upipe_v210enc_pack_line_10 *));
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -507,8 +653,6 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_v210enc_free(struct upipe *upipe)
 {
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
     upipe_v210enc_clean_input(upipe);
     upipe_v210enc_clean_output(upipe);
