@@ -94,7 +94,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             assert(uref != NULL);
             uint64_t patd_tsid;
             ubase_assert(uref_flow_get_id(uref, &patd_tsid));
-            assert(uref != NULL);
             assert(patd_tsid == tsid);
             break;
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,6 +35,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_flow_def.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psi_decoder.h"
@@ -46,6 +47,7 @@
 #include <assert.h>
 
 #include <bitstream/mpeg/psi.h>
+#include <bitstream/dvb/si.h>
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspat."
@@ -63,9 +65,11 @@ struct upipe_ts_patd {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain request_list;
-
     /** input flow definition */
     struct uref *flow_def_input;
+    /** attributes in the sequence header */
+    struct uref *flow_def_attr;
+
     /** currently in effect PAT table */
     UPIPE_TS_PSID_TABLE_DECLARE(pat);
     /** PAT table being gathered */
@@ -85,6 +89,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_patd, upipe, UPIPE_TS_PATD_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_patd, urefcount, upipe_ts_patd_free)
 UPIPE_HELPER_VOID(upipe_ts_patd)
 UPIPE_HELPER_OUTPUT(upipe_ts_patd, output, flow_def, output_state, request_list)
+UPIPE_HELPER_FLOW_DEF(upipe_ts_patd, flow_def_input, flow_def_attr)
 
 /** @internal @This allocates a ts_patd pipe.
  *
@@ -106,7 +111,7 @@ static struct upipe *upipe_ts_patd_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     upipe_ts_patd_init_urefcount(upipe);
     upipe_ts_patd_init_output(upipe);
-    upipe_ts_patd->flow_def_input = NULL;
+    upipe_ts_patd_init_flow_def(upipe);
     upipe_ts_psid_table_init(upipe_ts_patd->pat);
     upipe_ts_psid_table_init(upipe_ts_patd->next_pat);
     upipe_ts_patd->tsid = -1;
@@ -139,7 +144,7 @@ static void upipe_ts_patd_clean_programs(struct upipe *upipe)
  * @param pat_program iterator pointing to program definition
  */
 #define UPIPE_TS_PATD_TABLE_PEEK(upipe, sections, pat_program)              \
-    upipe_ts_psid_table_foreach(sections, section) {                        \
+    upipe_ts_psid_table_foreach (sections, section) {                       \
         size_t size = 0;                                                    \
         UBASE_FATAL(upipe, uref_block_size(section, &size))                 \
                                                                             \
@@ -173,7 +178,7 @@ static void upipe_ts_patd_clean_programs(struct upipe *upipe)
 #define UPIPE_TS_PATD_TABLE_PEEK_END(upipe, sections, pat_program)          \
         }                                                                   \
         if (unlikely(offset + PAT_PROGRAM_SIZE <= size - PSI_CRC_SIZE)) {   \
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                     \
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                      \
             break;                                                          \
         }                                                                   \
     }
@@ -216,7 +221,7 @@ static bool upipe_ts_patd_table_validate(struct upipe *upipe)
 {
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
     {
-        upipe_ts_psid_table_foreach(upipe_ts_patd->next_pat, section) {
+        upipe_ts_psid_table_foreach (upipe_ts_patd->next_pat, section) {
             if (!upipe_ts_psid_check_crc(section))
                 return false;
         }
@@ -309,7 +314,7 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(tsid != upipe_ts_patd->tsid)) {
-        struct uref *flow_def = uref_dup(upipe_ts_patd->flow_def_input);
+        struct uref *flow_def = upipe_ts_patd_alloc_flow_def_attr(upipe);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
@@ -318,6 +323,12 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_patd->tsid = tsid;
         UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
         UBASE_FATAL(upipe, uref_flow_set_id(flow_def, tsid))
+        flow_def = upipe_ts_patd_store_flow_def_attr(upipe, flow_def);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return;
+        }
         upipe_ts_patd_store_flow_def(upipe, flow_def);
         /* Force sending flow def */
         upipe_ts_patd_output(upipe, NULL, upump_p);
@@ -325,6 +336,8 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
 
     upipe_ts_patd_table_rap(upipe, uref);
     upipe_ts_patd_clean_programs(upipe);
+    uref_free(upipe_ts_patd->nit);
+    upipe_ts_patd->nit = NULL;
 
     UPIPE_TS_PATD_TABLE_PEEK(upipe, upipe_ts_patd->next_pat, pat_program)
 
@@ -332,10 +345,6 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
     uint16_t pid = patn_get_pid(pat_program);
 
     UPIPE_TS_PATD_TABLE_PEEK_UNMAP(upipe, upipe_ts_patd->next_pat, pat_program)
-
-    if (upipe_ts_patd->nit != NULL)
-        uref_free(upipe_ts_patd->nit);
-    upipe_ts_patd->nit = NULL;
 
     struct uref *flow_def = uref_dup(upipe_ts_patd->flow_def_input);
     if (likely(flow_def != NULL)) {
@@ -363,7 +372,7 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
             UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def, pid))
             ulist_add(&upipe_ts_patd->programs, uref_to_uchain(flow_def));
 
-        } else if (pid == 16) {
+        } else if (pid == NIT_PID) {
             /* NIT in DVB systems - prepare filter on table 0x40, current */
             uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
             uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
@@ -373,7 +382,7 @@ static void upipe_ts_patd_input(struct upipe *upipe, struct uref *uref,
             psi_set_syntax(mask);
             psi_set_current(filter);
             psi_set_current(mask);
-            psi_set_tableid(filter, 0x40);
+            psi_set_tableid(filter, NIT_TABLE_ID_ACTUAL);
             psi_set_tableid(mask, 0xff);
 
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
@@ -417,10 +426,12 @@ static int upipe_ts_patd_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    if (upipe_ts_patd->flow_def_input != NULL)
-        uref_free(upipe_ts_patd->flow_def_input);
-    upipe_ts_patd->flow_def_input = flow_def_dup;
+    flow_def = upipe_ts_patd_store_flow_def_input(upipe, flow_def_dup);
+    if (flow_def != NULL) {
+        upipe_ts_patd_store_flow_def(upipe, flow_def);
+        /* Force sending flow def */
+        upipe_ts_patd_output(upipe, NULL, NULL);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -521,14 +532,12 @@ static void upipe_ts_patd_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     struct upipe_ts_patd *upipe_ts_patd = upipe_ts_patd_from_upipe(upipe);
-    if (upipe_ts_patd->flow_def_input)
-        uref_free(upipe_ts_patd->flow_def_input);
-    if (upipe_ts_patd->nit)
-        uref_free(upipe_ts_patd->nit);
+    uref_free(upipe_ts_patd->nit);
     upipe_ts_psid_table_clean(upipe_ts_patd->pat);
     upipe_ts_psid_table_clean(upipe_ts_patd->next_pat);
     upipe_ts_patd_clean_programs(upipe);
     upipe_ts_patd_clean_output(upipe);
+    upipe_ts_patd_clean_flow_def(upipe);
     upipe_ts_patd_clean_urefcount(upipe);
     upipe_ts_patd_free_void(upipe);
 }
