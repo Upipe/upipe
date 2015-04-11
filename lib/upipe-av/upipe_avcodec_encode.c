@@ -222,9 +222,11 @@ static const char *
                                const char *upipe_color)
 {
     int i = 0;
-    while (list[i].upipe_color != NULL)
+    while (list[i].upipe_color != NULL) {
         if (!strcmp(list[i].upipe_color, upipe_color))
             return list[i].avcenc_color;
+        i++;
+    }
     return upipe_color;
 }
 
