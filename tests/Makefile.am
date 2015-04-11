@@ -3,6 +3,7 @@ AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
+	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
 	upipe_file_test.sh \

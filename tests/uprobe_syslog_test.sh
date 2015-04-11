@@ -1,11 +1,9 @@
 #!/bin/sh
 
 srcdir="$1"
-DIR="`mktemp -d tmp.XXXXXXXXXX`"
-./uprobe_syslog_test > "$DIR"/logs
+./uprobe_syslog_test
 RET=$?
 if test $RET -ne 0; then
-	rm -rf "$DIR"
 	exit $RET
 fi
 
