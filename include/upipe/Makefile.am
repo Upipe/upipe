@@ -37,6 +37,7 @@ pkginclude_HEADERS = \
 	upipe_helper_flow_def.h \
 	upipe_helper_flow_format.h \
 	upipe_helper_flow.h \
+	upipe_helper_iconv.h \
 	upipe_helper_input.h \
 	upipe_helper_output.h \
 	upipe_helper_output_size.h \

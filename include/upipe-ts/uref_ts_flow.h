@@ -67,6 +67,17 @@ UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%"PRIu8"]",
         subtitling composition page according to EN 300 468, uint8_t nb, nb)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
         subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED(ts_flow, onid, "t.onid", original network ID)
+UREF_ATTR_VOID(ts_flow, eit, "t.eit", presence of EITp/f)
+UREF_ATTR_VOID(ts_flow, eit_schedule, "t.eits", presence of EIT schedule)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, running_status, "t.run", running status)
+UREF_ATTR_VOID(ts_flow, scrambled, "t.ca", scrambled service)
+UREF_ATTR_STRING(ts_flow, provider_name, "t.provname", provider name)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, service_type, "t.servtype", service type)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, sdt_descriptors, "t.sdt.descs",
+        number of SDT descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%"PRIu8"]",
+        SDT descriptor, uint8_t nb, nb)
 
 /** @This returns the value of a PSI section filter.
  *
@@ -117,63 +128,65 @@ static inline int uref_ts_flow_delete_psi_filter(struct uref *uref)
     return uref_ts_flow_delete_psi_filter_internal(uref);
 }
 
-/** @This registers a new descriptor in the TS flow definition packet.
- *
- * @param uref pointer to the uref
- * @param desc descriptor
- * @param desc_len size of descriptor
- * @return an error code
- */
-static inline enum ubase_err uref_ts_flow_add_descriptor(struct uref *uref,
-        const uint8_t *desc, size_t desc_len)
-{
-    uint8_t descriptors = 0;
-    uref_ts_flow_get_descriptors(uref, &descriptors);
-    UBASE_RETURN(uref_ts_flow_set_descriptors(uref, descriptors + 1))
-    UBASE_RETURN(uref_ts_flow_set_descriptor(uref, desc, desc_len, descriptors))
-    return UBASE_ERR_NONE;
+#define DECLARE_DESCRIPTOR(name)                                            \
+/** @This registers a new name in the TS flow definition packet.            \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param desc descriptor                                                   \
+ * @param desc_len size of name                                             \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_ts_flow_add_##name(struct uref *uref,                \
+        const uint8_t *desc, size_t desc_len)                               \
+{                                                                           \
+    uint8_t descriptors = 0;                                                \
+    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
+    UBASE_RETURN(uref_ts_flow_set_##name##s(uref, descriptors + 1))         \
+    UBASE_RETURN(uref_ts_flow_set_##name(uref, desc, desc_len, descriptors))\
+    return UBASE_ERR_NONE;                                                  \
+}                                                                           \
+/** @This gets the total size of name##s.                                   \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return the size of name##s                                              \
+ */                                                                         \
+static inline size_t uref_ts_flow_size_##name##s(struct uref *uref)         \
+{                                                                           \
+    uint8_t descriptors = 0;                                                \
+    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
+    size_t descs_len = 0;                                                   \
+    for (uint8_t j = 0; j < descriptors; j++) {                             \
+        const uint8_t *desc;                                                \
+        size_t desc_len;                                                    \
+        if (ubase_check(uref_ts_flow_get_##name(uref, &desc, &desc_len, j)))\
+            descs_len += desc_len;                                          \
+    }                                                                       \
+    return descs_len;                                                       \
+}                                                                           \
+/** @This extracts all name##s.                                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param descs_p filled in with the name##s (size to be calculated with    \
+ * @ref uref_ts_flow_size_##name##s)                                        \
+ */                                                                         \
+static inline void uref_ts_flow_extract_##name##s(struct uref *uref,        \
+                                                  uint8_t *descs_p)         \
+{                                                                           \
+    uint8_t descriptors = 0;                                                \
+    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
+    for (uint8_t j = 0; j < descriptors; j++) {                             \
+        const uint8_t *desc;                                                \
+        size_t desc_len;                                                    \
+        if (ubase_check(uref_ts_flow_get_##name(uref, &desc, &desc_len,     \
+                                                j))) {                      \
+            memcpy(descs_p, desc, desc_len);                                \
+            descs_p += desc_len;                                            \
+        }                                                                   \
+    }                                                                       \
 }
-
-/** @This gets the total size of descriptors.
- *
- * @param uref pointer to the uref
- * @return the size of descriptors
- */
-static inline size_t uref_ts_flow_size_descriptors(struct uref *uref)
-{
-    uint8_t descriptors = 0;
-    uref_ts_flow_get_descriptors(uref, &descriptors);
-    size_t descs_len = 0;
-    for (uint8_t j = 0; j < descriptors; j++) {
-        const uint8_t *desc;
-        size_t desc_len;
-        if (ubase_check(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, j)))
-            descs_len += desc_len;
-    }
-    return descs_len;
-}
-
-/** @This extracts all descriptors.
- *
- * @param uref pointer to the uref
- * @param descs_p filled in with the descriptors (size to be calculated with
- * @ref uref_ts_flow_size_descriptors)
- */
-static inline void uref_ts_flow_extract_descriptors(struct uref *uref,
-                                                    uint8_t *descs_p)
-{
-    uint8_t descriptors = 0;
-    uref_ts_flow_get_descriptors(uref, &descriptors);
-    for (uint8_t j = 0; j < descriptors; j++) {
-        const uint8_t *desc;
-        size_t desc_len;
-        if (ubase_check(uref_ts_flow_get_descriptor(uref, &desc, &desc_len,
-                                                    j))) {
-            memcpy(descs_p, desc, desc_len);
-            descs_p += desc_len;
-        }
-    }
-}
+DECLARE_DESCRIPTOR(descriptor)
+DECLARE_DESCRIPTOR(sdt_descriptor)
+#undef DECLARE_DESCRIPTOR
 
 #ifdef __cplusplus
 }
