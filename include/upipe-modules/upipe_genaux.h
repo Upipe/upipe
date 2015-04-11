@@ -77,7 +77,7 @@ static inline int upipe_genaux_set_getattr(struct upipe *upipe,
 static inline int upipe_genaux_get_getattr(struct upipe *upipe,
                             int (**get)(struct uref*, uint64_t*))
 {
-    return upipe_control(upipe, UPIPE_GENAUX_SET_GETATTR,
+    return upipe_control(upipe, UPIPE_GENAUX_GET_GETATTR,
                          UPIPE_GENAUX_SIGNATURE, get);
 }
 
