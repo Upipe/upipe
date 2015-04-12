@@ -119,6 +119,8 @@ struct upipe_sws {
     int input_color_range;
     /** output color range */
     int output_color_range;
+    /** true if the we already tried to set the colorspace, but failed at it */
+    bool colorspace_invalid;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -213,13 +215,19 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
 
+        if (upipe_sws->colorspace_invalid)
+            continue;
+
         int in_full, out_full, brightness, contrast, saturation;
         const int *inv_table, *table;
 
-        sws_getColorspaceDetails(upipe_sws->convert_ctx[i],
-                                 (int **)&inv_table, &in_full,
-                                 (int **)&table, &out_full,
-                                 &brightness, &contrast, &saturation);
+        if (unlikely(sws_getColorspaceDetails(upipe_sws->convert_ctx[i],
+                        (int **)&inv_table, &in_full, (int **)&table, &out_full,
+                        &brightness, &contrast, &saturation) < 0)) {
+            upipe_warn(upipe, "unable to set color space data");
+            upipe_sws->colorspace_invalid = true;
+            continue;
+        }
 
         if (upipe_sws->input_colorspace != -1)
             inv_table = sws_getCoefficients(upipe_sws->input_colorspace);
@@ -232,8 +240,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
 
         if (unlikely(sws_setColorspaceDetails(upipe_sws->convert_ctx[i],
                         inv_table, in_full, table, out_full,
-                        brightness, contrast, saturation)) < 0)
+                        brightness, contrast, saturation) < 0)) {
             upipe_warn(upipe, "unable to set color space data");
+            upipe_sws->colorspace_invalid = true;
+        }
     }
 
     /* map input */
@@ -486,6 +496,7 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         av_opt_set_int(upipe_sws->convert_ctx[1], "dst_v_chr_pos", 64, 0);
         av_opt_set_int(upipe_sws->convert_ctx[2], "dst_v_chr_pos", 192, 0);
     }
+    upipe_sws->colorspace_invalid = false;
 
     upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
@@ -611,6 +622,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws_init_output(upipe);
     upipe_sws_init_flow_def(upipe);
     upipe_sws_init_input(upipe);
+    upipe_sws->colorspace_invalid = false;
 
     memset(upipe_sws->convert_ctx, 0, sizeof(upipe_sws->convert_ctx));
     for (int i = 0; i < 3; i++) {
