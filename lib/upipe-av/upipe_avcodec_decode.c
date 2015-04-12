@@ -892,6 +892,7 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
     struct uref *uref = frame->opaque;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
     uref->uchain.next = NULL;
+    upipe_avcdec->uref = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
@@ -1047,11 +1048,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     /* Track current uref in pipe structure - required for buffer allocation
      * in upipe_avcdec_get_buffer */
-    if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->ubuf == NULL) {
-        /* For audio, we keep the uref in the main structure because
-         * sometimes avcodec calls get_buffer twice with different contexts. */
-        uref_free(upipe_avcdec->uref);
-    }
+    uref_free(upipe_avcdec->uref);
     upipe_avcdec->uref = uref;
 
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
