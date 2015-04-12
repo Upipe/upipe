@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -120,6 +120,8 @@ struct upipe_avcdec {
     enum PixelFormat pix_fmt;
     /** sample format used for the ubuf manager */
     enum AVSampleFormat sample_fmt;
+    /** number of channels used for the ubuf manager */
+    unsigned int channels;
 
     /** avcodec_open watcher */
     struct upump *upump_av_deal;
@@ -430,8 +432,16 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
         return -1;
 
     struct uref *uref = upipe_avcdec->uref;
-    upipe_avcdec->uref = NULL;
     frame->opaque = uref;
+
+    if (uref->ubuf != NULL) {
+        if (context->codec->capabilities & CODEC_CAP_DR1)
+            uref_sound_unmap(uref, 0, -1, AV_NUM_DATA_POINTERS);
+        ubuf_free(uref_detach_ubuf(uref));
+    }
+    if (uref->uchain.next != NULL)
+        uref_free(uref_from_uchain(uref->uchain.next));
+    uref->uchain.next = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
@@ -440,10 +450,12 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
                      framenum, frame->opaque);
 
     /* Check if we have a new sample format. */
-    if (unlikely(context->sample_fmt != upipe_avcdec->sample_fmt)) {
+    if (unlikely(context->sample_fmt != upipe_avcdec->sample_fmt ||
+                 context->channels != upipe_avcdec->channels)) {
         ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
         upipe_avcdec->ubuf_mgr = NULL;
         upipe_avcdec->sample_fmt = context->sample_fmt;
+        upipe_avcdec->channels = context->channels;
     }
 
     /* Prepare flow definition attributes. */
@@ -882,10 +894,10 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
     uref->uchain.next = NULL;
 
     uint64_t framenum = 0;
-    uref_pic_get_number(frame->opaque, &framenum);
+    uref_pic_get_number(uref, &framenum);
 
-    upipe_verbose_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64,
-                     upipe_avcdec->counter, framenum);
+    upipe_verbose_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64" (%p)",
+                     upipe_avcdec->counter, framenum, uref);
 
     /* In case it has been reduced. */
     UBASE_ERROR(upipe, uref_sound_resize(uref, 0, frame->nb_samples))
@@ -1035,7 +1047,11 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     /* Track current uref in pipe structure - required for buffer allocation
      * in upipe_avcdec_get_buffer */
-    uref_free(upipe_avcdec->uref);
+    if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->ubuf == NULL) {
+        /* For audio, we keep the uref in the main structure because
+         * sometimes avcodec calls get_buffer twice with different contexts. */
+        uref_free(upipe_avcdec->uref);
+    }
     upipe_avcdec->uref = uref;
 
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
@@ -1346,6 +1362,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->close = false;
     upipe_avcdec->pix_fmt = PIX_FMT_NONE;
     upipe_avcdec->sample_fmt = AV_SAMPLE_FMT_NONE;
+    upipe_avcdec->channels = 0;
     upipe_avcdec->uref = NULL;
     upipe_avcdec->flow_def_provided = NULL;
 
