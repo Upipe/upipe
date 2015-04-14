@@ -72,12 +72,13 @@ pkginclude_HEADERS = \
 	upump_common.h \
 	upump.h \
 	uqueue.h \
+	urefcount.h \
 	uref_attr.h \
 	uref_block_flow.h \
 	uref_block.h \
 	uref_clock.h \
 	uref_dump.h \
-	urefcount.h \
+	uref_event.h \
 	uref_flow.h \
 	uref.h \
 	uref_pic_flow.h \

@@ -67,6 +67,7 @@ UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%"PRIu8"]",
         subtitling composition page according to EN 300 468, uint8_t nb, nb)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
         subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED(ts_flow, tsid, "t.tsid", transport stream ID)
 UREF_ATTR_UNSIGNED(ts_flow, onid, "t.onid", original network ID)
 UREF_ATTR_VOID(ts_flow, eit, "t.eit", presence of EITp/f)
 UREF_ATTR_VOID(ts_flow, eit_schedule, "t.eits", presence of EIT schedule)
@@ -78,6 +79,8 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, sdt_descriptors, "t.sdt.descs",
         number of SDT descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%"PRIu8"]",
         SDT descriptor, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, last_table_id, "t.lasttid",
+        last table ID)
 
 /** @This returns the value of a PSI section filter.
  *

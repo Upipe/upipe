@@ -69,6 +69,8 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "f.rawdef", UDICT_TYPE_STRING },
     { "f.langs", UDICT_TYPE_SMALL_UNSIGNED },
 
+    { "e.events", UDICT_TYPE_UNSIGNED },
+
     { "k.duration", UDICT_TYPE_UNSIGNED },
     { "k.latency", UDICT_TYPE_UNSIGNED },
 

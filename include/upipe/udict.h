@@ -83,6 +83,9 @@ enum udict_type {
     /** f.langs */
     UDICT_TYPE_FLOW_LANGUAGES,
 
+    /** e.events */
+    UDICT_TYPE_EVENT_EVENTS,
+
     /** k.duration */
     UDICT_TYPE_CLOCK_DURATION,
     /** f.latency */
