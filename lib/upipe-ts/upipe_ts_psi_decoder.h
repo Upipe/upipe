@@ -33,71 +33,7 @@
 
 #include <bitstream/mpeg/psi.h>
 
-/** @This checks the CRC of a PSI section.
- *
- * @param section PSI section
- * @return false if the CRC is invalid
- */
-static inline bool upipe_ts_psid_check_crc(struct uref *section)
-{
-    uint8_t buffer[PSI_HEADER_SIZE];
-    const uint8_t *section_header = uref_block_peek(section, 0, PSI_HEADER_SIZE,
-                                                    buffer);
-    assert(section_header != NULL);
-    uint16_t size = psi_get_length(section_header) +
-                    PSI_HEADER_SIZE - PSI_CRC_SIZE;
-    int err = uref_block_peek_unmap(section, 0, buffer, section_header);
-    ubase_assert(err);
-
-    uint32_t crc = 0xffffffff;
-    int offset = 0;
-    while (size > 0) {
-        int read_size = size;
-        const uint8_t *read_buffer;
-        if (unlikely(!ubase_check(uref_block_read(section, offset, &read_size,
-                                                  &read_buffer))))
-            return false;
-        for (int i = 0; i < read_size; i++)
-            crc = (crc << 8) ^ p_psi_crc_table[(crc >> 24) ^ (read_buffer[i])];
-        if (unlikely(!ubase_check(uref_block_unmap(section, offset))))
-            return false;
-        size -= read_size;
-        offset += read_size;
-    }
-
-    uint8_t buffer2[4];
-    const uint8_t *section_crc = uref_block_peek(section, offset, 4, buffer2);
-    assert(section_crc != NULL);
-    bool checked = section_crc[0] == (crc >> 24) &&
-                   section_crc[1] == ((crc >> 16) & 0xff) &&
-                   section_crc[2] == ((crc >> 8) & 0xff) &&
-                   section_crc[3] == (crc & 0xff);
-    err = uref_block_peek_unmap(section, offset, buffer2, section_crc);
-    ubase_assert(err);
-    return checked;
-}
-
-/** @This validates a PSI section.
- *
- * @param section PSI section
- * @return false if the section is invalid
- */
-static inline bool upipe_ts_psid_validate(struct uref *section)
-{
-    uint8_t buffer[PSI_HEADER_SIZE];
-    const uint8_t *section_header = uref_block_peek(section, 0, PSI_HEADER_SIZE,
-                                                    buffer);
-    assert(section_header != NULL);
-    bool checked = !psi_get_syntax(section_header) ||
-                   psi_get_length(section_header) >= PSI_HEADER_SIZE_SYNTAX1 -
-                                                PSI_HEADER_SIZE + PSI_CRC_SIZE;
-    int err = uref_block_peek_unmap(section, 0, buffer, section_header);
-    ubase_assert(err);
-
-    return checked;
-}
-
-/** @This compares two PSI sections
+/** @This compares two PSI sections.
  *
  * @param section1 PSI section 1
  * @param section2 PSI section 2
@@ -106,6 +42,10 @@ static inline bool upipe_ts_psid_validate(struct uref *section)
 static inline bool upipe_ts_psid_equal(struct uref *section1,
                                        struct uref *section2)
 {
+    if (section1 == NULL && section2 == NULL)
+        return true;
+    if (section1 == NULL || section2 == NULL)
+        return false;
     return ubase_check(uref_block_equal(section1, section2));
 }
 
@@ -137,7 +77,7 @@ static inline void upipe_ts_psid_table_clean(struct uref **sections)
             uref_free(sections[i]);
 }
 
-/** @This validates a PSI table.
+/** @This checks if a PSI table is valid.
  *
  * @param sections PSI table
  * @return false if the table is invalid
@@ -163,8 +103,10 @@ static inline void upipe_ts_psid_table_copy(struct uref **dest,
  * may only be called if @ref upipe_ts_psid_table_validate is true.
  *
  * @param sections PSI table
+ * @return last section number
  */
-static inline uint8_t upipe_ts_psid_table_get_lastsection(struct uref **sections)
+static inline uint8_t
+    upipe_ts_psid_table_get_lastsection(struct uref **sections)
 {
     uint8_t buffer[PSI_HEADER_SIZE_SYNTAX1];
     const uint8_t *section_header = uref_block_peek(sections[0], 0,
@@ -172,10 +114,29 @@ static inline uint8_t upipe_ts_psid_table_get_lastsection(struct uref **sections
                                                     buffer);
     assert(section_header != NULL);
     uint8_t last_section = psi_get_lastsection(section_header);
-    int err = uref_block_peek_unmap(sections[0], 0, buffer,
-                                               section_header);
+    int err = uref_block_peek_unmap(sections[0], 0, buffer, section_header);
     ubase_assert(err);
     return last_section;
+}
+
+/** @This returns the table id extension from the given table. This function
+ * may only be called if @ref upipe_ts_psid_table_validate is true.
+ *
+ * @param sections PSI table
+ * @return table id extension
+ */
+static inline uint16_t
+    upipe_ts_psid_table_get_tableidext(struct uref **sections)
+{
+    uint8_t buffer[PSI_HEADER_SIZE_SYNTAX1];
+    const uint8_t *section_header = uref_block_peek(sections[0], 0,
+                                                    PSI_HEADER_SIZE_SYNTAX1,
+                                                    buffer);
+    assert(section_header != NULL);
+    uint16_t tableidext = psi_get_tableidext(section_header);
+    int err = uref_block_peek_unmap(sections[0], 0, buffer, section_header);
+    ubase_assert(err);
+    return tableidext;
 }
 
 /** @This inserts a new section that composes a table.
@@ -202,8 +163,7 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
     int err = uref_block_peek_unmap(uref, 0, buffer, section_header);
     ubase_assert(err);
 
-    if (unlikely(sections[section] != NULL))
-        uref_free(sections[section]);
+    uref_free(sections[section]);
     sections[section] = uref;
 
     int i;
@@ -226,8 +186,7 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
 
     /* free spurious, invalid sections */
     for ( ; i < PSI_TABLE_MAX_SECTIONS; i++) {
-        if (sections[i] != NULL)
-            uref_free(sections[i]);
+        uref_free(sections[i]);
         sections[i] = NULL;
     }
 
@@ -241,7 +200,8 @@ static inline bool upipe_ts_psid_table_section(struct uref **sections,
  * @param n section number
  * @return uref containing the wanted section
  */
-static inline struct uref *upipe_ts_psid_table_get_section(struct uref **sections, uint8_t n)
+static inline struct uref *
+    upipe_ts_psid_table_get_section(struct uref **sections, uint8_t n)
 {
     return sections[n];
 }
@@ -283,3 +243,21 @@ static inline bool upipe_ts_psid_table_compare(struct uref **sections1,
 
     return true;
 }
+
+/** @This calls @ref ubuf_block_merge on all sections of the PSI table.
+ *
+ * @param sections PSI table
+ * @param ubuf_mgr ubuf manager used for @ref ubuf_block_merge
+ * @return an error code
+ */
+static inline int upipe_ts_psid_table_merge(struct uref **sections,
+                                            struct ubuf_mgr *ubuf_mgr)
+{
+    upipe_ts_psid_table_foreach (sections, section) {
+        if (section == NULL)
+            continue;
+        UBASE_RETURN(uref_block_merge(section, ubuf_mgr, 0, -1));
+    }
+    return UBASE_ERR_NONE;
+}
+

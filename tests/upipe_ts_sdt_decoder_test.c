@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -153,6 +154,10 @@ int main(int argc, char *argv[])
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
+    uprobe_stdio = uprobe_ubuf_mem_alloc(uprobe_stdio, umem_mgr,
+                                         UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
+    assert(uprobe_stdio != NULL);
+
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.mpegtssdt.");

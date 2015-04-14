@@ -35,6 +35,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_iconv.h>
 #include <upipe-ts/upipe_ts_sdt_decoder.h>
@@ -56,10 +57,20 @@
 /** we only store UTF-8 */
 #define NATIVE_ENCODING "UTF-8"
 
+/** @hidden */
+static int upipe_ts_sdtd_check(struct upipe *upipe, struct uref *flow_format);
+
 /** @internal @This is the private context of a ts_sdtd pipe. */
 struct upipe_ts_sdtd {
     /** refcount management structure */
     struct urefcount urefcount;
+
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** pipe acting as output */
     struct upipe *output;
@@ -98,6 +109,10 @@ UPIPE_HELPER_UPIPE(upipe_ts_sdtd, upipe, UPIPE_TS_SDTD_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_sdtd, urefcount, upipe_ts_sdtd_free)
 UPIPE_HELPER_VOID(upipe_ts_sdtd)
 UPIPE_HELPER_OUTPUT(upipe_ts_sdtd, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UBUF_MGR(upipe_ts_sdtd, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_ts_sdtd_check,
+                      upipe_ts_sdtd_register_output_request,
+                      upipe_ts_sdtd_unregister_output_request)
 UPIPE_HELPER_FLOW_DEF(upipe_ts_sdtd, flow_def_input, flow_def_attr)
 UPIPE_HELPER_ICONV(upipe_ts_sdtd, NATIVE_ENCODING, current_encoding, iconv_handle)
 
@@ -121,6 +136,7 @@ static struct upipe *upipe_ts_sdtd_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
     upipe_ts_sdtd_init_urefcount(upipe);
     upipe_ts_sdtd_init_output(upipe);
+    upipe_ts_sdtd_init_ubuf_mgr(upipe);
     upipe_ts_sdtd_init_flow_def(upipe);
     upipe_ts_sdtd_init_iconv(upipe);
     upipe_ts_psid_table_init(upipe_ts_sdtd->sdt);
@@ -146,75 +162,43 @@ static void upipe_ts_sdtd_clean_services(struct upipe *upipe)
     }
 }
 
-/** @internal @This walks through the services in a SDT. This is the first part:
- * read data from sdt_service afterwards.
+/** @internal @This checks if the service is already in the table with different
+ * parameters.
  *
  * @param upipe description structure of the pipe
- * @param sections SDT table
- * @param sdt_service iterator pointing to service definition
- * @param desc iterator pointing to descriptors of the service
- * @param desclength pointing to size of service descriptors
+ * @param wanted_service service to check
+ * @return true if there is no different instance of the service in the table
  */
-#define UPIPE_TS_SDTD_TABLE_PEEK(upipe, sections, sdt_service, desc,        \
-                                 desclength)                                \
-    upipe_ts_psid_table_foreach (sections, section) {                       \
-        size_t size = 0;                                                    \
-        UBASE_FATAL(upipe, uref_block_size(section, &size))                 \
-                                                                            \
-        int offset = SDT_HEADER_SIZE;                                       \
-        while (offset + SDT_SERVICE_SIZE <= size - PSI_CRC_SIZE) {          \
-            uint8_t service_buffer[SDT_SERVICE_SIZE];                       \
-            const uint8_t *sdt_service = uref_block_peek(section, offset,   \
-                                                         SDT_SERVICE_SIZE,  \
-                                                         service_buffer);   \
-            if (unlikely(sdt_service == NULL))                              \
-                break;                                                      \
-            uint16_t desclength = sdtn_get_desclength(sdt_service);         \
-            /* + 1 is to avoid [0] */                                       \
-            uint8_t desc_buffer[desclength + 1];                            \
-            const uint8_t *desc;                                            \
-            if (desclength) {                                               \
-                desc = uref_block_peek(section, offset + SDT_SERVICE_SIZE,  \
-                                       desclength, desc_buffer);            \
-                if (unlikely(desc == NULL)) {                               \
-                    uref_block_peek_unmap(section, offset, service_buffer,  \
-                                          sdt_service);                     \
-                    break;                                                  \
-                }                                                           \
-            } else                                                          \
-                desc = NULL;
+static bool upipe_ts_sdtd_table_compare_service(struct upipe *upipe,
+                                                const uint8_t *wanted_service)
+{
+    struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
+    upipe_ts_psid_table_foreach (upipe_ts_sdtd->next_sdt, section_uref) {
+        const uint8_t *section;
+        int size = -1;
+        if (unlikely(!ubase_check(uref_block_read(section_uref, 0, &size,
+                                                  &section))))
+            continue;
 
-/** @internal @This walks through the services in a SDT. This is the second
- * part: do the actions afterwards.
- *
- * @param upipe description structure of the pipe
- * @param sections SDT table
- * @param sdt_service iterator pointing to service definition
- * @param desc iterator pointing to descriptors of the ES
- * @param desclength pointing to size of ES descriptors
- */
-#define UPIPE_TS_SDTD_TABLE_PEEK_UNMAP(upipe, sections, sdt_service, desc,  \
-                                       desclength)                          \
-            uref_block_peek_unmap(section, offset, service_buffer,          \
-                                  sdt_service);                             \
-            if (desc != NULL)                                               \
-                uref_block_peek_unmap(section, offset + SDT_SERVICE_SIZE,   \
-                                      desc_buffer, desc);                   \
-            offset += SDT_SERVICE_SIZE + desclength;
+        const uint8_t *service;
+        int j = 0;
+        while ((service = sdt_get_service((uint8_t *)section, j)) != NULL) {
+            j++;
+            if (sdtn_get_sid(service) == sdtn_get_sid(wanted_service)) {
+                bool result = (service == wanted_service) ||
+                    (sdtn_get_desclength(service) ==
+                     sdtn_get_desclength(wanted_service) &&
+                     !memcmp(service, wanted_service,
+                             SDT_SERVICE_SIZE + sdtn_get_desclength(service)));
+                uref_block_unmap(section_uref, 0);
+                return result;
+            }
+        }
 
-/** @internal @This walks through the services in a SDT. This is the last part.
- *
- * @param upipe description structure of the pipe
- * @param sections SDT table
- * @param sdt_service iterator pointing to service definition
- */
-#define UPIPE_TS_SDTD_TABLE_PEEK_END(upipe, sections, sdt_service)          \
-        }                                                                   \
-        if (unlikely(offset + SDT_SERVICE_SIZE <= size - PSI_CRC_SIZE)) {   \
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);                      \
-            break;                                                          \
-        }                                                                   \
+        uref_block_unmap(section_uref, 0);
     }
+    return true;
+}
 
 /** @internal @This validates the next SDT.
  *
@@ -224,11 +208,40 @@ static void upipe_ts_sdtd_clean_services(struct upipe *upipe)
 static bool upipe_ts_sdtd_table_validate(struct upipe *upipe)
 {
     struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
-    {
-        upipe_ts_psid_table_foreach (upipe_ts_sdtd->next_sdt, section) {
-            if (!upipe_ts_psid_check_crc(section))
-                return false;
+    bool first = true;
+    uint16_t onid;
+    upipe_ts_psid_table_foreach (upipe_ts_sdtd->next_sdt, section_uref) {
+        const uint8_t *section;
+        int size = -1;
+        if (unlikely(!ubase_check(uref_block_read(section_uref, 0, &size,
+                                                  &section))))
+            return false;
+
+        if (!sdt_validate(section) || !psi_check_crc(section)) {
+            uref_block_unmap(section_uref, 0);
+            return false;
         }
+
+        if (first) {
+            first = false;
+            onid = sdt_get_onid(section);
+        } else if (sdt_get_onid(section) != onid) {
+            uref_block_unmap(section_uref, 0);
+            return false;
+        }
+
+        const uint8_t *service;
+        int j = 0;
+        while ((service = sdt_get_service((uint8_t *)section, j)) != NULL) {
+            j++;
+            /* check that the service is not already in the table */
+            if (!upipe_ts_sdtd_table_compare_service(upipe, service)) {
+                uref_block_unmap(section_uref, 0);
+                return false;
+            }
+        }
+
+        uref_block_unmap(section_uref, 0);
     }
     return true;
 }
@@ -295,6 +308,45 @@ static void upipe_ts_sdtd_parse_descs(struct upipe *upipe,
     }
 }
 
+/** @internal @This builds the flow definition corresponding to a service.
+ *
+ * @param upipe description structure of the pipe
+ * @param service service structure in SDT
+ */
+static void upipe_ts_sdtd_build_service(struct upipe *upipe,
+                                        const uint8_t *service)
+{
+    struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
+    struct uref *flow_def = uref_dup(upipe_ts_sdtd->flow_def_input);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint16_t sid = sdtn_get_sid(service);
+    bool eitschedule = sdtn_get_eitschedule(service);
+    bool eitpresent = sdtn_get_eitpresent(service);
+    uint8_t running = sdtn_get_running(service);
+    bool ca = sdtn_get_ca(service);
+
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
+    UBASE_FATAL(upipe, uref_flow_set_id(flow_def, sid))
+    if (eitpresent) {
+        UBASE_FATAL(upipe, uref_ts_flow_set_eit(flow_def))
+        if (eitschedule) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_eit_schedule(flow_def))
+        }
+    }
+    UBASE_FATAL(upipe, uref_ts_flow_set_running_status(flow_def, running))
+    if (ca) {
+        UBASE_FATAL(upipe, uref_ts_flow_set_scrambled(flow_def))
+    }
+    upipe_ts_sdtd_parse_descs(upipe, flow_def,
+            descs_get_desc(sdtn_get_descs((uint8_t *)service), 0),
+            sdtn_get_desclength(service));
+    ulist_add(&upipe_ts_sdtd->services, uref_to_uchain(flow_def));
+}
+
 /** @internal @This parses a new PSI section.
  *
  * @param upipe description structure of the pipe
@@ -306,24 +358,6 @@ static void upipe_ts_sdtd_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
     assert(upipe_ts_sdtd->flow_def_input != NULL);
-    uint8_t buffer[SDT_HEADER_SIZE];
-    const uint8_t *sdt_header = uref_block_peek(uref, 0, SDT_HEADER_SIZE,
-                                                buffer);
-    if (unlikely(sdt_header == NULL)) {
-        upipe_warn(upipe, "invalid SDT section received");
-        uref_free(uref);
-        return;
-    }
-    bool validate = sdt_validate(sdt_header);
-    uint16_t tsid = psi_get_tableidext(sdt_header);
-    uint16_t onid = sdt_get_onid(sdt_header);
-    UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 0, buffer, sdt_header))
-
-    if (unlikely(!validate)) {
-        upipe_warn(upipe, "invalid SDT section received");
-        uref_free(uref);
-        return;
-    }
 
     if (!upipe_ts_psid_table_section(upipe_ts_sdtd->next_sdt, uref))
         return;
@@ -337,72 +371,63 @@ static void upipe_ts_sdtd_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (!upipe_ts_sdtd_table_validate(upipe)) {
+    if (!ubase_check(upipe_ts_psid_table_merge(upipe_ts_sdtd->next_sdt,
+                                               upipe_ts_sdtd->ubuf_mgr)) ||
+        !upipe_ts_sdtd_table_validate(upipe)) {
         upipe_warn(upipe, "invalid SDT section received");
         upipe_ts_psid_table_clean(upipe_ts_sdtd->next_sdt);
         upipe_ts_psid_table_init(upipe_ts_sdtd->next_sdt);
         return;
     }
 
-    if (unlikely(tsid != upipe_ts_sdtd->tsid ||
-                 onid != upipe_ts_sdtd->onid)) {
-        struct uref *flow_def = upipe_ts_sdtd_alloc_flow_def_attr(upipe);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(uref);
-            return;
-        }
-        upipe_ts_sdtd->tsid = tsid;
-        upipe_ts_sdtd->onid = onid;
-        UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
-        UBASE_FATAL(upipe, uref_flow_set_id(flow_def, tsid))
-        UBASE_FATAL(upipe, uref_ts_flow_set_onid(flow_def, onid))
-        flow_def = upipe_ts_sdtd_store_flow_def_attr(upipe, flow_def);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(uref);
-            return;
-        }
-        upipe_ts_sdtd_store_flow_def(upipe, flow_def);
-        /* Force sending flow def */
-        upipe_ts_sdtd_output(upipe, NULL, upump_p);
-    }
-
     upipe_ts_sdtd_clean_services(upipe);
 
-    UPIPE_TS_SDTD_TABLE_PEEK(upipe, upipe_ts_sdtd->next_sdt, sdt_service,
-                             desc, desclength)
+    bool first = true;
+    upipe_ts_psid_table_foreach (upipe_ts_sdtd->next_sdt, section_uref) {
+        const uint8_t *section;
+        int size = -1;
+        if (unlikely(!ubase_check(uref_block_read(section_uref, 0, &size,
+                                                  &section))))
+            continue;
 
-    uint16_t sid = sdtn_get_sid(sdt_service);
-    bool eitschedule = sdtn_get_eitschedule(sdt_service);
-    bool eitpresent = sdtn_get_eitpresent(sdt_service);
-    uint8_t running = sdtn_get_running(sdt_service);
-    bool ca = sdtn_get_ca(sdt_service);
+        if (first) {
+            first = false;
+            uint16_t tsid = sdt_get_tsid(section);
+            uint16_t onid = sdt_get_onid(section);
 
-    struct uref *flow_def = uref_dup(upipe_ts_sdtd->flow_def_input);
-    if (likely(flow_def != NULL)) {
-        UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
-        UBASE_FATAL(upipe, uref_flow_set_id(flow_def, sid))
-        if (eitpresent) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_eit(flow_def))
-            if (eitschedule) {
-                UBASE_FATAL(upipe, uref_ts_flow_set_eit_schedule(flow_def))
+            if (unlikely(tsid != upipe_ts_sdtd->tsid ||
+                         onid != upipe_ts_sdtd->onid)) {
+                struct uref *flow_def =
+                    upipe_ts_sdtd_alloc_flow_def_attr(upipe);
+                if (unlikely(flow_def == NULL)) {
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                    return;
+                }
+                upipe_ts_sdtd->tsid = tsid;
+                upipe_ts_sdtd->onid = onid;
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
+                UBASE_FATAL(upipe, uref_flow_set_id(flow_def, tsid))
+                UBASE_FATAL(upipe, uref_ts_flow_set_onid(flow_def, onid))
+                flow_def = upipe_ts_sdtd_store_flow_def_attr(upipe, flow_def);
+                if (unlikely(flow_def == NULL)) {
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                    return;
+                }
+                upipe_ts_sdtd_store_flow_def(upipe, flow_def);
+                /* Force sending flow def */
+                upipe_ts_sdtd_output(upipe, NULL, upump_p);
             }
         }
-        UBASE_FATAL(upipe, uref_ts_flow_set_running_status(flow_def, running))
-        if (ca) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_scrambled(flow_def))
+
+        const uint8_t *service;
+        int j = 0;
+        while ((service = sdt_get_service((uint8_t *)section, j)) != NULL) {
+            j++;
+            upipe_ts_sdtd_build_service(upipe, service);
         }
-        upipe_ts_sdtd_parse_descs(upipe, flow_def, desc, desclength);
-        ulist_add(&upipe_ts_sdtd->services, uref_to_uchain(flow_def));
 
-    } else
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-
-    UPIPE_TS_SDTD_TABLE_PEEK_UNMAP(upipe, upipe_ts_sdtd->next_sdt, sdt_service,
-                                   desc, desclength)
-
-    UPIPE_TS_SDTD_TABLE_PEEK_END(upipe, upipe_ts_sdtd->next_sdt, sdt_service)
+        uref_block_unmap(section_uref, 0);
+    }
 
     /* Switch tables. */
     if (upipe_ts_psid_table_validate(upipe_ts_sdtd->sdt))
@@ -411,6 +436,26 @@ static void upipe_ts_sdtd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_psid_table_init(upipe_ts_sdtd->next_sdt);
 
     upipe_split_throw_update(upipe);
+}
+
+/** @internal @This receives an ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_ts_sdtd_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL) {
+        flow_format = upipe_ts_sdtd_store_flow_def_input(upipe, flow_format);
+        if (flow_format != NULL) {
+            upipe_ts_sdtd_store_flow_def(upipe, flow_format);
+            /* Force sending flow def */
+            upipe_ts_sdtd_output(upipe, NULL, NULL);
+        }
+    }
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -430,12 +475,7 @@ static int upipe_ts_sdtd_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    flow_def = upipe_ts_sdtd_store_flow_def_input(upipe, flow_def_dup);
-    if (flow_def != NULL) {
-        upipe_ts_sdtd_store_flow_def(upipe, flow_def);
-        /* Force sending flow def */
-        upipe_ts_sdtd_output(upipe, NULL, NULL);
-    }
+    upipe_ts_sdtd_demand_ubuf_mgr(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
 
@@ -519,6 +559,7 @@ static void upipe_ts_sdtd_free(struct upipe *upipe)
     upipe_ts_psid_table_clean(upipe_ts_sdtd->next_sdt);
     upipe_ts_sdtd_clean_services(upipe);
     upipe_ts_sdtd_clean_output(upipe);
+    upipe_ts_sdtd_clean_ubuf_mgr(upipe);
     upipe_ts_sdtd_clean_flow_def(upipe);
     upipe_ts_sdtd_clean_iconv(upipe);
     upipe_ts_sdtd_clean_urefcount(upipe);
