@@ -70,6 +70,7 @@
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/upipe_ts_pes_decaps.h>
 #include <upipe-ts/upipe_ts_sdt_decoder.h>
+#include <upipe-ts/upipe_ts_tdt_decoder.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -134,6 +135,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_patd_mgr;
     /** pointer to ts_sdtd manager */
     struct upipe_mgr *ts_sdtd_mgr;
+    /** pointer to ts_tdtd manager */
+    struct upipe_mgr *ts_tdtd_mgr;
     /** pointer to ts_pmtd manager */
     struct upipe_mgr *ts_pmtd_mgr;
     /** pointer to ts_eitd manager */
@@ -218,6 +221,13 @@ struct upipe_ts_demux {
     uint64_t sdt_tsid;
     /** ONID found in the SDT */
     uint64_t sdt_onid;
+
+    /** psi_pid structure for TDT */
+    struct upipe_ts_demux_psi_pid *psi_pid_tdt;
+    /** ts_psi_split_output inner pipe for TDT */
+    struct upipe *psi_split_output_tdt;
+    /** pointer to optional ts_tdtd inner pipe */
+    struct upipe *tdtd;
 
     /** list of PIDs carrying PSI */
     struct uchain psi_pids;
@@ -1894,35 +1904,28 @@ static int upipe_ts_demux_psim_probe(struct uprobe *uprobe, struct upipe *psim,
     return upipe_set_output(psim, psi_pid->psi_split);
 }
 
-/** @internal @This changes the current conformance, and start necessary
- * decoders.
+/** @internal @This updates the SDT decoder.
  *
  * @param upipe description structure of the pipe
- * @param conformance new conformance
  */
-static void upipe_ts_demux_conformance_change(struct upipe *upipe,
-        enum upipe_ts_conformance conformance)
+static void upipe_ts_demux_update_sdt(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (upipe_ts_demux->conformance == conformance)
+    if (upipe_ts_demux->conformance != UPIPE_TS_CONFORMANCE_DVB) {
+        if (upipe_ts_demux->psi_split_output_sdt != NULL) {
+            upipe_release(upipe_ts_demux->psi_split_output_sdt);
+            upipe_ts_demux->psi_split_output_sdt = NULL;
+        }
+        if (upipe_ts_demux->psi_pid_sdt != NULL) {
+            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_sdt);
+            upipe_ts_demux->psi_pid_sdt = NULL;
+        }
+        upipe_release(upipe_ts_demux->sdtd);
+        upipe_ts_demux->sdtd = NULL;
         return;
-
-    upipe_notice_va(upipe, "changing conformance to %s",
-                    upipe_ts_conformance_print(conformance));
-    upipe_ts_demux->conformance = conformance;
-
-    if (upipe_ts_demux->psi_split_output_sdt != NULL) {
-        upipe_release(upipe_ts_demux->psi_split_output_sdt);
-        upipe_ts_demux->psi_split_output_sdt = NULL;
     }
-    if (upipe_ts_demux->psi_pid_sdt != NULL) {
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_sdt);
-        upipe_ts_demux->psi_pid_sdt = NULL;
-    }
-    upipe_release(upipe_ts_demux->sdtd);
-    upipe_ts_demux->sdtd = NULL;
 
-    if (conformance == UPIPE_TS_CONFORMANCE_ISO)
+    if (upipe_ts_demux->psi_pid_sdt != NULL)
         return;
 
     /* get psi_split inner pipe */
@@ -1974,6 +1977,99 @@ static void upipe_ts_demux_conformance_change(struct upipe *upipe,
                                     UPROBE_LOG_VERBOSE, "sdtd"));
     if (unlikely(upipe_ts_demux->sdtd == NULL))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+}
+
+/** @internal @This updates the TDT decoder.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_update_tdt(struct upipe *upipe)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    if (upipe_ts_demux->conformance != UPIPE_TS_CONFORMANCE_DVB) {
+        if (upipe_ts_demux->psi_split_output_tdt != NULL) {
+            upipe_release(upipe_ts_demux->psi_split_output_tdt);
+            upipe_ts_demux->psi_split_output_tdt = NULL;
+        }
+        if (upipe_ts_demux->psi_pid_tdt != NULL) {
+            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_tdt);
+            upipe_ts_demux->psi_pid_tdt = NULL;
+        }
+        upipe_release(upipe_ts_demux->tdtd);
+        upipe_ts_demux->tdtd = NULL;
+        return;
+    }
+
+    if (upipe_ts_demux->psi_pid_tdt != NULL)
+        return;
+
+    /* get psi_split inner pipe */
+    upipe_ts_demux->psi_pid_tdt = upipe_ts_demux_psi_pid_use(upipe, TDT_PID);
+    if (unlikely(upipe_ts_demux->psi_pid_tdt == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    /* set filter on table 0x70 */
+    uint8_t filter[PSI_HEADER_SIZE];
+    uint8_t mask[PSI_HEADER_SIZE];
+    memset(filter, 0, PSI_HEADER_SIZE);
+    memset(mask, 0, PSI_HEADER_SIZE);
+    psi_set_syntax(mask);
+    psi_set_tableid(filter, TDT_TABLE_ID);
+    psi_set_tableid(mask, 0xff);
+    struct uref *flow_def =
+        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    if (unlikely(flow_def == NULL ||
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtstdt.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                              PSI_HEADER_SIZE)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, TDT_PID)) ||
+                 (upipe_ts_demux->psi_split_output_tdt =
+                      upipe_flow_alloc_sub(
+                          upipe_ts_demux->psi_pid_tdt->psi_split,
+                          uprobe_pfx_alloc(
+                              uprobe_use(&upipe_ts_demux->proxy_probe),
+                              UPROBE_LOG_VERBOSE, "psi_split output tdt"),
+                          flow_def)) == NULL)) {
+        if (flow_def != NULL)
+            uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    uref_free(flow_def);
+
+    /* allocate TDT decoder */
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
+    upipe_ts_demux->tdtd =
+        upipe_void_alloc_output(upipe_ts_demux->psi_split_output_tdt,
+                   ts_demux_mgr->ts_tdtd_mgr,
+                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->proxy_probe),
+                                    UPROBE_LOG_VERBOSE, "tdtd"));
+    if (unlikely(upipe_ts_demux->tdtd == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+}
+
+/** @internal @This changes the current conformance, and start necessary
+ * decoders.
+ *
+ * @param upipe description structure of the pipe
+ * @param conformance new conformance
+ */
+static void upipe_ts_demux_conformance_change(struct upipe *upipe,
+        enum upipe_ts_conformance conformance)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    if (upipe_ts_demux->conformance == conformance)
+        return;
+
+    upipe_notice_va(upipe, "changing conformance to %s",
+                    upipe_ts_conformance_print(conformance));
+    upipe_ts_demux->conformance = conformance;
+
+    upipe_ts_demux_update_sdt(upipe);
+    upipe_ts_demux_update_tdt(upipe);
 }
 
 /** @internal @This tries to guess the conformance of the stream from the
@@ -2301,7 +2397,9 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux->null = NULL;
     upipe_ts_demux->psi_split_output_pat = upipe_ts_demux->patd = NULL;
     upipe_ts_demux->psi_split_output_sdt = upipe_ts_demux->sdtd = NULL;
-    upipe_ts_demux->psi_pid_pat = upipe_ts_demux->psi_pid_sdt = NULL;
+    upipe_ts_demux->psi_split_output_tdt = upipe_ts_demux->tdtd = NULL;
+    upipe_ts_demux->psi_pid_pat = upipe_ts_demux->psi_pid_sdt =
+        upipe_ts_demux->psi_pid_tdt = NULL;
     upipe_ts_demux->sdt_tsid = upipe_ts_demux->sdt_onid = UINT64_MAX;
     ulist_init(&upipe_ts_demux->pat_programs);
 
@@ -2687,6 +2785,18 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
     upipe_release(upipe_ts_demux->sdtd);
     upipe_ts_demux->sdtd = NULL;
 
+    /* close TDT */
+    if (upipe_ts_demux->psi_split_output_tdt != NULL) {
+        upipe_release(upipe_ts_demux->psi_split_output_tdt);
+        upipe_ts_demux->psi_split_output_tdt = NULL;
+    }
+    if (upipe_ts_demux->psi_pid_tdt != NULL) {
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_tdt);
+        upipe_ts_demux->psi_pid_tdt = NULL;
+    }
+    upipe_release(upipe_ts_demux->tdtd);
+    upipe_ts_demux->tdtd = NULL;
+
     upipe_ts_demux_clean_pat_programs(upipe);
     upipe_split_throw_update(upipe);
 
@@ -2719,6 +2829,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_psi_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sdtd_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_tdtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_eitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
@@ -2773,6 +2884,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
         GET_SET_MGR(ts_patd, TS_PATD)
         GET_SET_MGR(ts_sdtd, TS_SDTD)
+        GET_SET_MGR(ts_tdtd, TS_TDTD)
         GET_SET_MGR(ts_pmtd, TS_PMTD)
         GET_SET_MGR(ts_eitd, TS_EITD)
         GET_SET_MGR(ts_pesd, TS_PESD)
@@ -2813,6 +2925,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     ts_demux_mgr->ts_sdtd_mgr = upipe_ts_sdtd_mgr_alloc();
+    ts_demux_mgr->ts_tdtd_mgr = upipe_ts_tdtd_mgr_alloc();
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_eitd_mgr = upipe_ts_eitd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();

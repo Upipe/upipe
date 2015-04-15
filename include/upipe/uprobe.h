@@ -98,6 +98,9 @@ enum uprobe_event {
     /** a pipe signals that a uref carries a presentation and/or a
      * decoding timestamp (struct uref *) */
     UPROBE_CLOCK_TS,
+    /** a pipe signals that a uref contains a UTC clock reference
+     * (struct uref *, uint64_t) */
+    UPROBE_CLOCK_UTC,
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */

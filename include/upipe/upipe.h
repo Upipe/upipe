@@ -812,6 +812,21 @@ static inline int upipe_throw_clock_ts(struct upipe *upipe, struct uref *uref)
     return upipe_throw(upipe, UPROBE_CLOCK_TS, uref);
 }
 
+/** @This throws an event telling that the given uref carries a UTC clock
+ * reference.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying a clock reference
+ * @param clock_utc UTC clock reference, in 27 MHz scale starting at Epoch
+ * (1970-01-01T00:00:00Z)
+ * @return an error code
+ */
+static inline int upipe_throw_clock_utc(struct upipe *upipe, struct uref *uref,
+                                        uint64_t clock_utc)
+{
+    return upipe_throw(upipe, UPROBE_CLOCK_UTC, uref, clock_utc);
+}
+
 /** @This catches an event coming from an inner pipe, and rethrows is as if
  * it were sent by the outermost pipe.
  *

@@ -13,6 +13,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
 	upipe_ts_sdt_decoder.c \
+	upipe_ts_tdt_decoder.c \
 	upipe_ts_split.c \
 	upipe_ts_sync.c \
 	upipe_ts_demux.c \
