@@ -27,19 +27,21 @@
  * @short Upipe flow definition attributes for TS
  */
 
-#ifndef _UPIPE_UREF_TS_FLOW_H_
+#ifndef _UPIPE_TS_UREF_TS_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_TS_FLOW_H_
+#define _UPIPE_TS_UREF_TS_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+#include <upipe-ts/uref_ts_attr.h>
 
 #include <string.h>
 #include <stdint.h>
 
+/* PMT */
 UREF_ATTR_UNSIGNED(ts_flow, pid, "t.pid", PID)
 UREF_ATTR_UNSIGNED(ts_flow, pcr_pid, "t.pcr_pid", PCR PID)
 UREF_ATTR_UNSIGNED(ts_flow, max_delay, "t.maxdelay", maximum retention time)
@@ -54,6 +56,7 @@ UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu8"]", descriptor,
         uint8_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, descriptor)
 UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_type, "t.telxtype[%"PRIu8"]",
         teletext type according to EN 300 468, uint8_t nb, nb)
@@ -67,6 +70,8 @@ UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%"PRIu8"]",
         subtitling composition page according to EN 300 468, uint8_t nb, nb)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
         subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
+
+/* SDT */
 UREF_ATTR_UNSIGNED(ts_flow, tsid, "t.tsid", transport stream ID)
 UREF_ATTR_UNSIGNED(ts_flow, onid, "t.onid", original network ID)
 UREF_ATTR_VOID(ts_flow, eit, "t.eit", presence of EITp/f)
@@ -79,8 +84,30 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, sdt_descriptors, "t.sdt.descs",
         number of SDT descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%"PRIu8"]",
         SDT descriptor, uint8_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, sdt_descriptor)
+
+/* EIT */
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, last_table_id, "t.lasttid",
         last table ID)
+
+/* NIT */
+UREF_ATTR_UNSIGNED(ts_flow, nid, "t.nid", network ID)
+UREF_ATTR_STRING(ts_flow, network_name, "t.netwname", network name)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, nit_descriptors, "t.nit.descs",
+        number of NIT descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, nit_descriptor, "t.nit.desc[%"PRIu8"]",
+        NIT descriptor, uint8_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, nit_descriptor)
+UREF_ATTR_UNSIGNED(ts_flow, nit_ts, "t.nit.ts", ts number)
+UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_tsid, "t.nit.tstsid[%"PRIu64"]",
+        ts transport stream ID, uint64_t ts, ts)
+UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_onid, "t.nit.tsonid[%"PRIu64"]",
+        ts original network ID, uint64_t ts, ts)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, nit_ts_descriptors,
+        "t.nit.tsdescs[%"PRIu64"]", number of NIT TS descriptors,
+        uint64_t ts, ts)
+UREF_TS_ATTR_SUBDESCRIPTOR(ts_flow, nit_ts_descriptor,
+        "t.nit.tsdesc[%"PRIu64"][%"PRIu8"]")
 
 /** @This returns the value of a PSI section filter.
  *
@@ -130,66 +157,6 @@ static inline int uref_ts_flow_delete_psi_filter(struct uref *uref)
 {
     return uref_ts_flow_delete_psi_filter_internal(uref);
 }
-
-#define DECLARE_DESCRIPTOR(name)                                            \
-/** @This registers a new name in the TS flow definition packet.            \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @param desc descriptor                                                   \
- * @param desc_len size of name                                             \
- * @return an error code                                                    \
- */                                                                         \
-static inline int uref_ts_flow_add_##name(struct uref *uref,                \
-        const uint8_t *desc, size_t desc_len)                               \
-{                                                                           \
-    uint8_t descriptors = 0;                                                \
-    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
-    UBASE_RETURN(uref_ts_flow_set_##name##s(uref, descriptors + 1))         \
-    UBASE_RETURN(uref_ts_flow_set_##name(uref, desc, desc_len, descriptors))\
-    return UBASE_ERR_NONE;                                                  \
-}                                                                           \
-/** @This gets the total size of name##s.                                   \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @return the size of name##s                                              \
- */                                                                         \
-static inline size_t uref_ts_flow_size_##name##s(struct uref *uref)         \
-{                                                                           \
-    uint8_t descriptors = 0;                                                \
-    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
-    size_t descs_len = 0;                                                   \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
-        const uint8_t *desc;                                                \
-        size_t desc_len;                                                    \
-        if (ubase_check(uref_ts_flow_get_##name(uref, &desc, &desc_len, j)))\
-            descs_len += desc_len;                                          \
-    }                                                                       \
-    return descs_len;                                                       \
-}                                                                           \
-/** @This extracts all name##s.                                             \
- *                                                                          \
- * @param uref pointer to the uref                                          \
- * @param descs_p filled in with the name##s (size to be calculated with    \
- * @ref uref_ts_flow_size_##name##s)                                        \
- */                                                                         \
-static inline void uref_ts_flow_extract_##name##s(struct uref *uref,        \
-                                                  uint8_t *descs_p)         \
-{                                                                           \
-    uint8_t descriptors = 0;                                                \
-    uref_ts_flow_get_##name##s(uref, &descriptors);                         \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
-        const uint8_t *desc;                                                \
-        size_t desc_len;                                                    \
-        if (ubase_check(uref_ts_flow_get_##name(uref, &desc, &desc_len,     \
-                                                j))) {                      \
-            memcpy(descs_p, desc, desc_len);                                \
-            descs_p += desc_len;                                            \
-        }                                                                   \
-    }                                                                       \
-}
-DECLARE_DESCRIPTOR(descriptor)
-DECLARE_DESCRIPTOR(sdt_descriptor)
-#undef DECLARE_DESCRIPTOR
 
 #ifdef __cplusplus
 }

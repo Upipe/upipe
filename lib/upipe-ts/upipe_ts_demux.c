@@ -64,6 +64,7 @@
 #include <upipe-ts/upipe_ts_check.h>
 #include <upipe-ts/upipe_ts_decaps.h>
 #include <upipe-ts/upipe_ts_eit_decoder.h>
+#include <upipe-ts/upipe_ts_nit_decoder.h>
 #include <upipe-ts/upipe_ts_psi_merge.h>
 #include <upipe-ts/upipe_ts_psi_split.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
@@ -133,6 +134,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_psi_split_mgr;
     /** pointer to ts_patd manager */
     struct upipe_mgr *ts_patd_mgr;
+    /** pointer to ts_nitd manager */
+    struct upipe_mgr *ts_nitd_mgr;
     /** pointer to ts_sdtd manager */
     struct upipe_mgr *ts_sdtd_mgr;
     /** pointer to ts_tdtd manager */
@@ -211,16 +214,19 @@ struct upipe_ts_demux {
     /** list of available programs (from PAT) */
     struct uchain pat_programs;
 
+    /** psi_pid structure for NIT */
+    struct upipe_ts_demux_psi_pid *psi_pid_nit;
+    /** ts_psi_split_output inner pipe for NIT */
+    struct upipe *psi_split_output_nit;
+    /** pointer to optional ts_nitd inner pipe */
+    struct upipe *nitd;
+
     /** psi_pid structure for SDT */
     struct upipe_ts_demux_psi_pid *psi_pid_sdt;
     /** ts_psi_split_output inner pipe for SDT */
     struct upipe *psi_split_output_sdt;
     /** pointer to optional ts_sdtd inner pipe */
     struct upipe *sdtd;
-    /** TSID found in the SDT */
-    uint64_t sdt_tsid;
-    /** ONID found in the SDT */
-    uint64_t sdt_onid;
 
     /** psi_pid structure for TDT */
     struct upipe_ts_demux_psi_pid *psi_pid_tdt;
@@ -246,6 +252,8 @@ struct upipe_ts_demux {
     struct uprobe psim_probe;
     /** probe to get events from ts_patd inner pipe */
     struct uprobe patd_probe;
+    /** probe to get events from ts_nitd inner pipe */
+    struct uprobe nitd_probe;
     /** probe to get events from ts_sdtd inner pipe */
     struct uprobe sdtd_probe;
     /** probe to get events from ts_sync or ts_check inner pipe */
@@ -1048,13 +1056,13 @@ static void upipe_ts_demux_program_build_flow_def(struct upipe *upipe)
         upipe_ts_demux_program_from_upipe(upipe);
     struct uref *flow_def_pmt;
     if (!ubase_check(upipe_get_flow_def(upipe_ts_demux_program->pmtd,
-                                        &flow_def_pmt)))
+                                        &flow_def_pmt)) || flow_def_pmt == NULL)
         return;
 
     struct uref *flow_def = NULL;
     if (upipe_ts_demux_program->eitd != NULL &&
         ubase_check(upipe_get_flow_def(upipe_ts_demux_program->eitd,
-                                       &flow_def))) {
+                                       &flow_def)) && flow_def != NULL) {
         flow_def = uref_dup(flow_def);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1445,10 +1453,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                          upipe_ts_demux_program->pcr_pid),
                      flow_def);
     uref_free(flow_def);
-    if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL ||
-                 !ubase_check(upipe_get_flow_def(
-                         upipe_ts_demux_program->pcr_split_output,
-                         &flow_def)))) {
+    if (unlikely(upipe_ts_demux_program->pcr_split_output == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -1904,6 +1909,81 @@ static int upipe_ts_demux_psim_probe(struct uprobe *uprobe, struct upipe *psim,
     return upipe_set_output(psim, psi_pid->psi_split);
 }
 
+/** @internal @This updates the NIT decoder.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_update_nit(struct upipe *upipe)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    if (upipe_ts_demux->conformance != UPIPE_TS_CONFORMANCE_DVB) {
+        if (upipe_ts_demux->psi_split_output_nit != NULL) {
+            upipe_release(upipe_ts_demux->psi_split_output_nit);
+            upipe_ts_demux->psi_split_output_nit = NULL;
+        }
+        if (upipe_ts_demux->psi_pid_nit != NULL) {
+            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_nit);
+            upipe_ts_demux->psi_pid_nit = NULL;
+        }
+        upipe_release(upipe_ts_demux->nitd);
+        upipe_ts_demux->nitd = NULL;
+        return;
+    }
+
+    if (upipe_ts_demux->psi_pid_nit != NULL)
+        return;
+
+    /* get psi_split inner pipe */
+    upipe_ts_demux->psi_pid_nit = upipe_ts_demux_psi_pid_use(upipe, NIT_PID);
+    if (unlikely(upipe_ts_demux->psi_pid_nit == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    /* set filter on table 0x40, current */
+    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    psi_set_syntax(filter);
+    psi_set_syntax(mask);
+    psi_set_tableid(filter, NIT_TABLE_ID_ACTUAL);
+    psi_set_tableid(mask, 0xff);
+    psi_set_current(filter);
+    psi_set_current(mask);
+    struct uref *flow_def =
+        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    if (unlikely(flow_def == NULL ||
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtsnit.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                              PSI_HEADER_SIZE_SYNTAX1)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, NIT_PID)) ||
+                 (upipe_ts_demux->psi_split_output_nit =
+                      upipe_flow_alloc_sub(
+                          upipe_ts_demux->psi_pid_nit->psi_split,
+                          uprobe_pfx_alloc(
+                              uprobe_use(&upipe_ts_demux->proxy_probe),
+                              UPROBE_LOG_VERBOSE, "psi_split output nit"),
+                          flow_def)) == NULL)) {
+        if (flow_def != NULL)
+            uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    uref_free(flow_def);
+
+    /* allocate NIT decoder */
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
+    upipe_ts_demux->nitd =
+        upipe_void_alloc_output(upipe_ts_demux->psi_split_output_nit,
+                   ts_demux_mgr->ts_nitd_mgr,
+                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->nitd_probe),
+                                    UPROBE_LOG_VERBOSE, "nitd"));
+    if (unlikely(upipe_ts_demux->nitd == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+}
+
 /** @internal @This updates the SDT decoder.
  *
  * @param upipe description structure of the pipe
@@ -2068,6 +2148,7 @@ static void upipe_ts_demux_conformance_change(struct upipe *upipe,
                     upipe_ts_conformance_print(conformance));
     upipe_ts_demux->conformance = conformance;
 
+    upipe_ts_demux_update_nit(upipe);
     upipe_ts_demux_update_sdt(upipe);
     upipe_ts_demux_update_tdt(upipe);
 }
@@ -2103,48 +2184,60 @@ static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
 static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    struct uref *flow_def = upipe_ts_demux->flow_def;
-    upipe_ts_demux->flow_def = NULL;
-    if (unlikely(flow_def == NULL))
+    struct uref *flow_def_pat;
+    if (!ubase_check(upipe_get_flow_def(upipe_ts_demux->patd, &flow_def_pat)) ||
+        flow_def_pat == NULL)
         return;
+    uint64_t tsid = UINT64_MAX;
+    uref_flow_get_id(flow_def_pat, &tsid);
 
-    uint64_t tsid;
-    if (upipe_ts_demux->sdt_tsid != UINT64_MAX &&
-        ubase_check(uref_flow_get_id(flow_def, &tsid)) &&
-        tsid != upipe_ts_demux->sdt_tsid)
+    struct uref *flow_def_sdt = NULL;
+    if (upipe_ts_demux->sdtd != NULL)
+        upipe_get_flow_def(upipe_ts_demux->sdtd, &flow_def_sdt);
+    if (flow_def_sdt != NULL) {
+        uint64_t sdt_tsid;
+        if (unlikely(tsid != UINT64_MAX &&
+                     uref_flow_get_id(flow_def_sdt, &sdt_tsid) &&
+                     tsid != sdt_tsid))
         upipe_warn_va(upipe,
                 "TSID mismatch between PAT (%"PRIu64") and SDT (%"PRIu64")",
-                tsid, upipe_ts_demux->sdt_tsid);
-
-    if (upipe_ts_demux->sdt_onid != UINT64_MAX) {
-        UBASE_FATAL(upipe,
-                uref_ts_flow_set_onid(flow_def, upipe_ts_demux->sdt_onid));
+                tsid, sdt_tsid);
     }
+
+    struct uref *flow_def = NULL;
+    if (upipe_ts_demux->nitd != NULL &&
+        ubase_check(upipe_get_flow_def(upipe_ts_demux->nitd, &flow_def)) &&
+        flow_def != NULL) {
+        flow_def = uref_dup(flow_def);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        if (flow_def_sdt != NULL)
+            uref_attr_import(flow_def, flow_def_sdt);
+        uref_attr_import(flow_def, flow_def_pat);
+
+    } else if (flow_def_sdt != NULL) {
+        flow_def = uref_dup(flow_def_sdt);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        uref_attr_import(flow_def, flow_def_pat);
+
+    } else {
+        flow_def = uref_dup(flow_def_pat);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+    }
+
     upipe_ts_demux_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
     upipe_ts_demux_output(upipe, NULL, NULL);
-}
-
-/** @internal @This catches new_flow_def events coming from patd inner pipe.
- *
- * @param upipe description structure of the pipe
- * @param patd pointer to the inner pipe
- * @param event event triggered by the inner pipe
- * @param args arguments of the event
- * @return an error code
- */
-static int upipe_ts_demux_patd_new_flow_def(struct upipe *upipe,
-                                            struct upipe *patd,
-                                            int event, va_list args)
-{
-    struct uref *flow_def = va_arg(args, struct uref *);
-    UBASE_ALLOC_RETURN(flow_def);
-
-    flow_def = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def);
-    upipe_ts_demux_store_flow_def(upipe, flow_def);
-    upipe_ts_demux_build_flow_def(upipe);
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches new_rap events coming from patd inner pipe.
@@ -2236,7 +2329,8 @@ static int upipe_ts_demux_patd_probe(struct uprobe *uprobe,
 
     switch (event) {
         case UPROBE_NEW_FLOW_DEF:
-            return upipe_ts_demux_patd_new_flow_def(upipe, patd, event, args);
+            upipe_ts_demux_build_flow_def(upipe);
+            return UBASE_ERR_NONE;
         case UPROBE_NEED_OUTPUT:
             return UBASE_ERR_NONE;
         case UPROBE_NEW_RAP:
@@ -2248,27 +2342,31 @@ static int upipe_ts_demux_patd_probe(struct uprobe *uprobe,
     }
 }
 
-/** @internal @This catches new_flow_def events coming from sdtd inner pipe.
+/** @internal @This catches events coming from nitd inner pipe.
  *
- * @param upipe description structure of the pipe
- * @param sdtd pointer to the inner pipe
+ * @param uprobe pointer to the probe in upipe_ts_demux
+ * @param nitd pointer to the inner pipe
  * @param event event triggered by the inner pipe
  * @param args arguments of the event
  * @return an error code
  */
-static int upipe_ts_demux_sdtd_new_flow_def(struct upipe *upipe,
-                                            struct upipe *sdtd,
-                                            int event, va_list args)
+static int upipe_ts_demux_nitd_probe(struct uprobe *uprobe,
+                                     struct upipe *nitd,
+                                     int event, va_list args)
 {
-    struct uref *flow_def = va_arg(args, struct uref *);
-    UBASE_ALLOC_RETURN(flow_def);
+    struct upipe_ts_demux *upipe_ts_demux =
+        container_of(uprobe, struct upipe_ts_demux, nitd_probe);
+    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
 
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    upipe_ts_demux->sdt_tsid = upipe_ts_demux->sdt_onid = UINT64_MAX;
-    uref_flow_get_id(flow_def, &upipe_ts_demux->sdt_tsid);
-    uref_ts_flow_get_onid(flow_def, &upipe_ts_demux->sdt_onid);
-    upipe_ts_demux_build_flow_def(upipe);
-    return UBASE_ERR_NONE;
+    switch (event) {
+        case UPROBE_NEW_FLOW_DEF:
+            upipe_ts_demux_build_flow_def(upipe);
+            return UBASE_ERR_NONE;
+        case UPROBE_NEED_OUTPUT:
+            return UBASE_ERR_NONE;
+        default:
+            return upipe_throw_proxy(upipe, nitd, event, args);
+    }
 }
 
 /** @internal @This catches events coming from sdtd inner pipe.
@@ -2289,7 +2387,8 @@ static int upipe_ts_demux_sdtd_probe(struct uprobe *uprobe,
 
     switch (event) {
         case UPROBE_NEW_FLOW_DEF:
-            return upipe_ts_demux_sdtd_new_flow_def(upipe, sdtd, event, args);
+            upipe_ts_demux_build_flow_def(upipe);
+            return UBASE_ERR_NONE;
         case UPROBE_NEED_OUTPUT:
             return UBASE_ERR_NONE;
         case UPROBE_SPLIT_UPDATE:
@@ -2396,11 +2495,11 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux->input = upipe_ts_demux->split = upipe_ts_demux->setrap =
         upipe_ts_demux->null = NULL;
     upipe_ts_demux->psi_split_output_pat = upipe_ts_demux->patd = NULL;
+    upipe_ts_demux->psi_split_output_nit = upipe_ts_demux->nitd = NULL;
     upipe_ts_demux->psi_split_output_sdt = upipe_ts_demux->sdtd = NULL;
     upipe_ts_demux->psi_split_output_tdt = upipe_ts_demux->tdtd = NULL;
-    upipe_ts_demux->psi_pid_pat = upipe_ts_demux->psi_pid_sdt =
-        upipe_ts_demux->psi_pid_tdt = NULL;
-    upipe_ts_demux->sdt_tsid = upipe_ts_demux->sdt_onid = UINT64_MAX;
+    upipe_ts_demux->psi_pid_pat = upipe_ts_demux->psi_pid_nit =
+        upipe_ts_demux->psi_pid_sdt = upipe_ts_demux->psi_pid_tdt = NULL;
     ulist_init(&upipe_ts_demux->pat_programs);
 
     ulist_init(&upipe_ts_demux->psi_pids);
@@ -2418,6 +2517,9 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->patd_probe, upipe_ts_demux_patd_probe, NULL);
     upipe_ts_demux->patd_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
+    uprobe_init(&upipe_ts_demux->nitd_probe, upipe_ts_demux_nitd_probe, NULL);
+    upipe_ts_demux->nitd_probe.refcount =
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->sdtd_probe, upipe_ts_demux_sdtd_probe, NULL);
     upipe_ts_demux->sdtd_probe.refcount =
@@ -2738,7 +2840,9 @@ static void upipe_ts_demux_free(struct urefcount *urefcount_real)
     upipe_throw_dead(upipe);
     uprobe_clean(&upipe_ts_demux->psi_pid_plumber);
     uprobe_clean(&upipe_ts_demux->psim_probe);
+    uprobe_clean(&upipe_ts_demux->nitd_probe);
     uprobe_clean(&upipe_ts_demux->patd_probe);
+    uprobe_clean(&upipe_ts_demux->sdtd_probe);
     uprobe_clean(&upipe_ts_demux->input_probe);
     uprobe_clean(&upipe_ts_demux->split_probe);
     uref_free(upipe_ts_demux->flow_def_input);
@@ -2772,6 +2876,18 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
     }
     upipe_release(upipe_ts_demux->patd);
     upipe_ts_demux->patd = NULL;
+
+    /* close NIT */
+    if (upipe_ts_demux->psi_split_output_nit != NULL) {
+        upipe_release(upipe_ts_demux->psi_split_output_nit);
+        upipe_ts_demux->psi_split_output_nit = NULL;
+    }
+    if (upipe_ts_demux->psi_pid_nit != NULL) {
+        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_nit);
+        upipe_ts_demux->psi_pid_nit = NULL;
+    }
+    upipe_release(upipe_ts_demux->nitd);
+    upipe_ts_demux->nitd = NULL;
 
     /* close SDT */
     if (upipe_ts_demux->psi_split_output_sdt != NULL) {
@@ -2828,6 +2944,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_psim_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_psi_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_nitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sdtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_tdtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
@@ -2883,6 +3000,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_psim, TS_PSIM)
         GET_SET_MGR(ts_psi_split, TS_PSI_SPLIT)
         GET_SET_MGR(ts_patd, TS_PATD)
+        GET_SET_MGR(ts_nitd, TS_NITD)
         GET_SET_MGR(ts_sdtd, TS_SDTD)
         GET_SET_MGR(ts_tdtd, TS_TDTD)
         GET_SET_MGR(ts_pmtd, TS_PMTD)
@@ -2924,6 +3042,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_psim_mgr = upipe_ts_psim_mgr_alloc();
     ts_demux_mgr->ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
+    ts_demux_mgr->ts_nitd_mgr = upipe_ts_nitd_mgr_alloc();
     ts_demux_mgr->ts_sdtd_mgr = upipe_ts_sdtd_mgr_alloc();
     ts_demux_mgr->ts_tdtd_mgr = upipe_ts_tdtd_mgr_alloc();
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
