@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
                    DESC41_HEADER_SIZE + DESC41_SERVICE_SIZE + PSI_CRC_SIZE);
     nit_init(buffer, true);
     nit_set_length(buffer, DESC40_HEADER_SIZE + strlen("meuh") +
-                           NIT_TS_SIZE +
+                           NIT_HEADER2_SIZE + NIT_TS_SIZE +
                            DESC41_HEADER_SIZE + DESC41_SERVICE_SIZE);
     nit_set_nid(buffer, nid);
     psi_set_version(buffer, 0);
