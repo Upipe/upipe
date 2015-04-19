@@ -11,6 +11,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_pes_decaps.c \
 	upipe_ts_pat_decoder.c \
 	upipe_ts_pmt_decoder.c \
+	upipe_ts_psi_join.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
 	upipe_ts_sdt_decoder.c \

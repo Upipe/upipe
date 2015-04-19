@@ -467,6 +467,7 @@ enum upipe_ts_mux_mgr_command {
 
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_encaps, TS_ENCAPS)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_tstd, TS_TSTD)
+    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psi_join, TS_PSI_JOIN)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psig, TS_PSIG)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR
 };
@@ -503,6 +504,7 @@ static inline int                                                           \
 
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_encaps, TS_ENCAPS)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_tstd, TS_TSTD)
+UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psi_join, TS_PSI_JOIN)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psig, TS_PSIG)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR2
 

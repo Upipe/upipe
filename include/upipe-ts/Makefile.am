@@ -12,6 +12,7 @@ myinclude_HEADERS = \
 	upipe_ts_pes_decaps.h \
 	upipe_ts_pmt_decoder.h \
 	upipe_ts_psi_generator.h \
+	upipe_ts_psi_join.h \
 	upipe_ts_psi_merge.h \
 	upipe_ts_psi_split.h \
 	upipe_ts_sdt_decoder.h \
