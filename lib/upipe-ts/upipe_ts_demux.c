@@ -308,7 +308,7 @@ struct upipe_ts_demux_program {
     struct uref *flow_def_input;
     /** program number */
     uint64_t program;
-    /** pointer to psi_pid structure */
+    /** psi_pid structure for PMT */
     struct upipe_ts_demux_psi_pid *psi_pid_pmt;
     /** ts_psi_split_output inner pipe */
     struct upipe *psi_split_output_pmt;
@@ -520,7 +520,7 @@ static struct upipe_ts_demux_psi_pid *
 /** @internal @This finds a psi_pid by its number.
  *
  * @param upipe description structure of the pipe
- * @param psi_pid_number psi_pid number (service ID)
+ * @param pid PID
  * @return pointer to substructure
  */
 static struct upipe_ts_demux_psi_pid *
@@ -559,23 +559,16 @@ static struct upipe_ts_demux_psi_pid *
 /** @internal @This releases a PID from being used for PSI, optionally
  * freeing allocated resources.
  *
- * @param upipe description structure of the pipe
- * @param pid PID
+ * @param psi_pid psi_pid structure
  */
-static void upipe_ts_demux_psi_pid_release(struct upipe *upipe,
-                                       struct upipe_ts_demux_psi_pid *psi_pid)
+static void
+    upipe_ts_demux_psi_pid_release(struct upipe_ts_demux_psi_pid *psi_pid)
 {
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     assert(psi_pid != NULL);
 
     psi_pid->refcount--;
     if (!psi_pid->refcount) {
-        struct uchain *uchain, *uchain_tmp;
-        ulist_delete_foreach (&upipe_ts_demux->psi_pids, uchain, uchain_tmp) {
-            if (uchain == upipe_ts_demux_psi_pid_to_uchain(psi_pid)) {
-                ulist_delete(uchain);
-            }
-        }
+        ulist_delete(upipe_ts_demux_psi_pid_to_uchain(psi_pid));
         upipe_release(psi_pid->split_output);
         upipe_release(psi_pid->psi_split);
         free(psi_pid);
@@ -1120,8 +1113,7 @@ static int upipe_ts_demux_program_pmtd_new_flow_def(
     if (!ubase_check(uref_ts_flow_get_eit(flow_def))) {
         if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
             upipe_release(upipe_ts_demux_program->psi_split_output_eit);
-            upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                           upipe_ts_demux_program->psi_pid_eit);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eit);
             upipe_ts_demux_program->psi_split_output_eit = NULL;
         }
         upipe_release(upipe_ts_demux_program->eitd);
@@ -1572,8 +1564,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                              flow_def);
     uref_free(flow_def);
     if (unlikely(upipe_ts_demux_program->psi_split_output_pmt == NULL)) {
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                       upipe_ts_demux_program->psi_pid_pmt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_pmt);
         upipe_ts_demux_program->psi_pid_pmt = NULL;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
@@ -1589,8 +1580,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                     UPROBE_LOG_VERBOSE, "pmtd"));
     if (unlikely(upipe_ts_demux_program->pmtd == NULL)) {
         upipe_release(upipe_ts_demux_program->psi_split_output_pmt);
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                       upipe_ts_demux_program->psi_pid_pmt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_pmt);
         upipe_ts_demux_program->psi_pid_pmt = NULL;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
@@ -1681,22 +1671,18 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
-    struct upipe_ts_demux *demux =
-        upipe_ts_demux_from_program_mgr(upipe->mgr);
     upipe_ts_demux_program_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
     /* close PMT to release ESs */
     if (upipe_ts_demux_program->psi_split_output_pmt != NULL) {
         upipe_release(upipe_ts_demux_program->psi_split_output_pmt);
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                       upipe_ts_demux_program->psi_pid_pmt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_pmt);
         upipe_ts_demux_program->psi_split_output_pmt = NULL;
     }
     upipe_release(upipe_ts_demux_program->pmtd);
     upipe_ts_demux_program->pmtd = NULL;
     if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
         upipe_release(upipe_ts_demux_program->psi_split_output_eit);
-        upipe_ts_demux_psi_pid_release(upipe_ts_demux_to_upipe(demux),
-                                       upipe_ts_demux_program->psi_pid_eit);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eit);
         upipe_ts_demux_program->psi_split_output_eit = NULL;
     }
     upipe_release(upipe_ts_demux_program->eitd);
@@ -1922,7 +1908,7 @@ static void upipe_ts_demux_update_nit(struct upipe *upipe)
             upipe_ts_demux->psi_split_output_nit = NULL;
         }
         if (upipe_ts_demux->psi_pid_nit != NULL) {
-            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_nit);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_nit);
             upipe_ts_demux->psi_pid_nit = NULL;
         }
         upipe_release(upipe_ts_demux->nitd);
@@ -1997,7 +1983,7 @@ static void upipe_ts_demux_update_sdt(struct upipe *upipe)
             upipe_ts_demux->psi_split_output_sdt = NULL;
         }
         if (upipe_ts_demux->psi_pid_sdt != NULL) {
-            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_sdt);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_sdt);
             upipe_ts_demux->psi_pid_sdt = NULL;
         }
         upipe_release(upipe_ts_demux->sdtd);
@@ -2072,7 +2058,7 @@ static void upipe_ts_demux_update_tdt(struct upipe *upipe)
             upipe_ts_demux->psi_split_output_tdt = NULL;
         }
         if (upipe_ts_demux->psi_pid_tdt != NULL) {
-            upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_tdt);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_tdt);
             upipe_ts_demux->psi_pid_tdt = NULL;
         }
         upipe_release(upipe_ts_demux->tdtd);
@@ -2871,7 +2857,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
         upipe_ts_demux->psi_split_output_pat = NULL;
     }
     if (upipe_ts_demux->psi_pid_pat != NULL) {
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_pat);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_pat);
         upipe_ts_demux->psi_pid_pat = NULL;
     }
     upipe_release(upipe_ts_demux->patd);
@@ -2883,7 +2869,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
         upipe_ts_demux->psi_split_output_nit = NULL;
     }
     if (upipe_ts_demux->psi_pid_nit != NULL) {
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_nit);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_nit);
         upipe_ts_demux->psi_pid_nit = NULL;
     }
     upipe_release(upipe_ts_demux->nitd);
@@ -2895,7 +2881,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
         upipe_ts_demux->psi_split_output_sdt = NULL;
     }
     if (upipe_ts_demux->psi_pid_sdt != NULL) {
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_sdt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_sdt);
         upipe_ts_demux->psi_pid_sdt = NULL;
     }
     upipe_release(upipe_ts_demux->sdtd);
@@ -2907,7 +2893,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
         upipe_ts_demux->psi_split_output_tdt = NULL;
     }
     if (upipe_ts_demux->psi_pid_tdt != NULL) {
-        upipe_ts_demux_psi_pid_release(upipe, upipe_ts_demux->psi_pid_tdt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_tdt);
         upipe_ts_demux->psi_pid_tdt = NULL;
     }
     upipe_release(upipe_ts_demux->tdtd);
