@@ -103,6 +103,25 @@ static inline void uref_##group##_extract_##name##s(struct uref *uref,      \
             descs_p += desc_len;                                            \
         }                                                                   \
     }                                                                       \
+}                                                                           \
+/** @This compares all name##s in two urefs.                                \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both are absent or identical                                \
+ */                                                                         \
+static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
+                                                   struct uref *uref2)      \
+{                                                                           \
+    size_t size1 = uref_##group##_size_##name##s(uref1);                    \
+    size_t size2 = uref_##group##_size_##name##s(uref2);                    \
+    if (size1 != size2)                                                     \
+        return size2 - size1;                                               \
+    uint8_t descriptors1[size1];                                            \
+    uref_##group##_extract_##name##s(uref1, descriptors1);                  \
+    uint8_t descriptors2[size1];                                            \
+    uref_##group##_extract_##name##s(uref2, descriptors1);                  \
+    return memcmp(descriptors1, descriptors2, size1);                       \
 }
 
 /** @This declares a set of functions allowing to read or write descriptors
@@ -223,6 +242,27 @@ static inline void uref_##group##_extract_##name##s(struct uref *uref,      \
             descs_p += desc_len;                                            \
         }                                                                   \
     }                                                                       \
+}                                                                           \
+/** @This compares all name##s in two urefs.                                \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @param sub number of the sub                                             \
+ * @return 0 if both are absent or identical                                \
+ */                                                                         \
+static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
+                                                   struct uref *uref2,      \
+                                                   uint64_t sub)            \
+{                                                                           \
+    size_t size1 = uref_##group##_size_##name##s(uref1, sub);               \
+    size_t size2 = uref_##group##_size_##name##s(uref2, sub);               \
+    if (size1 != size2)                                                     \
+        return size2 - size1;                                               \
+    uint8_t descriptors1[size1];                                            \
+    uref_##group##_extract_##name##s(uref1, descriptors1, sub);             \
+    uint8_t descriptors2[size1];                                            \
+    uref_##group##_extract_##name##s(uref2, descriptors1, sub);             \
+    return memcmp(descriptors1, descriptors2, size1);                       \
 }
 
 #ifdef __cplusplus
