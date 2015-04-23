@@ -41,18 +41,20 @@ extern "C" {
 #include <string.h>
 #include <stdint.h>
 
-/* PMT */
 UREF_ATTR_UNSIGNED(ts_flow, pid, "t.pid", PID)
 UREF_ATTR_UNSIGNED(ts_flow, pcr_pid, "t.pcr_pid", PCR PID)
 UREF_ATTR_UNSIGNED(ts_flow, max_delay, "t.maxdelay", maximum retention time)
 UREF_ATTR_UNSIGNED(ts_flow, tb_rate, "t.tbrate", T-STD TB emptying rate)
 UREF_ATTR_OPAQUE(ts_flow, psi_filter_internal, "t.psi.filter", PSI filter)
+UREF_ATTR_UNSIGNED(ts_flow, psi_sections, "t.psi.sec", number of PSI sections)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_id, "t.pes_id", PES stream ID)
 UREF_ATTR_VOID(ts_flow, pes_alignment, "t.pes_align", PES data alignment)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, pes_header, "t.pes_header",
         minimum PES header size)
 UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
         minimum PES duration)
+
+/* PMT */
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu8"]", descriptor,
         uint8_t nb, nb)
