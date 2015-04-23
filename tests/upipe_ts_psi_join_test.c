@@ -48,6 +48,7 @@
 #include <upipe/upipe.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_psi_join.h>
+#include <upipe-ts/uref_ts_flow.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -64,6 +65,9 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static uint8_t received = 0;
+static uint64_t octetrate = 0;
+static uint64_t nb_sections = 0;
+static uint64_t latency = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -79,6 +83,9 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_NEW_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             ubase_assert(uref_flow_match_def(flow_def, "block.mpegtspsi."));
+            ubase_assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
+            ubase_assert(uref_ts_flow_get_psi_sections(flow_def, &nb_sections));
+            ubase_assert(uref_clock_get_latency(flow_def, &latency));
             break;
         }
     }
@@ -167,6 +174,9 @@ int main(int argc, char *argv[])
 
     struct uref *uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
+    ubase_assert(uref_block_flow_set_octetrate(uref, 1));
+    ubase_assert(uref_ts_flow_set_psi_sections(uref, 1));
+    ubase_assert(uref_clock_set_latency(uref, 1));
 
     struct upipe *upipe_ts_psi_join = upipe_flow_alloc(upipe_ts_psi_join_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -185,13 +195,22 @@ int main(int argc, char *argv[])
                                    "ts join input 1"));
     assert(upipe_ts_psi_join_input1 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input1, uref));
+    assert(octetrate == 1);
+    assert(nb_sections == 1);
+    assert(latency == 1);
 
+    octetrate = 0;
+    nb_sections = 0;
+    latency = 0;
     struct upipe *upipe_ts_psi_join_input2 =
         upipe_void_alloc_sub(upipe_ts_psi_join,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                                    "ts join input 2"));
     assert(upipe_ts_psi_join_input2 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input2, uref));
+    assert(octetrate == 2);
+    assert(nb_sections == 2);
+    assert(latency == 1);
     uref_free(uref);
 
     uint8_t *buffer;

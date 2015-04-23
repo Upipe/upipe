@@ -38,6 +38,7 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-ts/upipe_ts_psi_join.h>
+#include <upipe-ts/uref_ts_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -65,9 +66,6 @@ struct upipe_ts_psi_join {
     /** list of output requests */
     struct uchain request_list;
 
-    /** max latency of the subpipes */
-    uint64_t latency;
-
     /** list of input subpipes */
     struct uchain subs;
 
@@ -90,6 +88,13 @@ struct upipe_ts_psi_join_sub {
     struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
+
+    /** octetrate of the input */
+    uint64_t octetrate;
+    /** number of PSI sections of the input */
+    uint64_t nb_sections;
+    /** latency of the input */
+    uint64_t latency;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -121,8 +126,12 @@ static struct upipe *upipe_ts_psi_join_sub_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    struct upipe_ts_psi_join_sub *sub = upipe_ts_psi_join_sub_from_upipe(upipe);
     upipe_ts_psi_join_sub_init_urefcount(upipe);
     upipe_ts_psi_join_sub_init_sub(upipe);
+    sub->octetrate = 0;
+    sub->nb_sections = 0;
+    sub->latency = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -159,11 +168,14 @@ static int upipe_ts_psi_join_sub_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
-    /* we never lower latency */
-    if (latency > upipe_ts_psi_join->latency)
-        upipe_ts_psi_join->latency = latency;
+    struct upipe_ts_psi_join_sub *sub = upipe_ts_psi_join_sub_from_upipe(upipe);
+    sub->octetrate = 0;
+    uref_block_flow_get_octetrate(flow_def, &sub->octetrate);
+    sub->nb_sections = 0;
+    uref_ts_flow_get_psi_sections(flow_def, &sub->nb_sections);
+    sub->latency = 0;
+    uref_clock_get_latency(flow_def, &sub->latency);
+
     return upipe_ts_psi_join_build_flow_def(
             upipe_ts_psi_join_to_upipe(upipe_ts_psi_join));
 }
@@ -259,9 +271,6 @@ static struct upipe *upipe_ts_psi_join_alloc(struct upipe_mgr *mgr,
     upipe_ts_psi_join_init_output(upipe);
     upipe_ts_psi_join_init_sub_mgr(upipe);
     upipe_ts_psi_join_init_sub_subs(upipe);
-    struct upipe_ts_psi_join *upipe_ts_psi_join =
-        upipe_ts_psi_join_from_upipe(upipe);
-    upipe_ts_psi_join->latency = 0;
     upipe_ts_psi_join_store_flow_def(upipe, flow_def);
 
     upipe_throw_ready(upipe);
@@ -319,11 +328,32 @@ static int upipe_ts_psi_join_build_flow_def(struct upipe *upipe)
     struct uref *flow_def = upipe_ts_psi_join->flow_def;
     upipe_ts_psi_join->flow_def = NULL;
 
-    if (upipe_ts_psi_join->latency)
-        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                                                  upipe_ts_psi_join->latency))
-    else
+    uint64_t octetrate = 0;
+    uint64_t nb_sections = 0;
+    uint64_t latency = 0;
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_psi_join->subs, uchain) {
+        struct upipe_ts_psi_join_sub *sub =
+            upipe_ts_psi_join_sub_from_uchain(uchain);
+        octetrate += sub->octetrate;
+        nb_sections += sub->nb_sections;
+        if (sub->latency > latency)
+            latency = sub->latency;
+    }
+
+    if (octetrate) {
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+    } else
+        uref_block_flow_delete_octetrate(flow_def);
+    if (nb_sections) {
+        UBASE_FATAL(upipe, uref_ts_flow_set_psi_sections(flow_def, nb_sections))
+    } else
+        uref_ts_flow_delete_psi_sections(flow_def);
+    if (latency) {
+        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def, latency))
+    } else
         uref_clock_delete_latency(flow_def);
+
     upipe_ts_psi_join_store_flow_def(upipe, flow_def);
     return UBASE_ERR_NONE;
 }
