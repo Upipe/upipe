@@ -38,6 +38,7 @@ extern "C" {
 #include <upipe/urefcount.h>
 
 #include <stdint.h>
+#include <sys/time.h>
 #include <assert.h>
 
 #define UCLOCK_FREQ UINT64_C(27000000)
@@ -49,6 +50,9 @@ struct uclock {
 
     /** function returning the current system time */
     uint64_t (*uclock_now)(struct uclock *);
+
+    /** function converting a system time to Epoch time_t */
+    time_t (*uclock_mktime)(struct uclock *, uint64_t);
 };
 
 /** @This returns the current system time.
@@ -59,6 +63,20 @@ struct uclock {
 static inline uint64_t uclock_now(struct uclock *uclock)
 {
     return uclock->uclock_now(uclock);
+}
+
+/** @This converts a system time to Epoch time_t (seconds from
+ * 1970-01-01 00:00:00 +0000)
+ *
+ * @param uclock pointer to uclock
+ * @param systime system time in 27 MHz ticks
+ * @param number of seconds since the Epoch, or (time_t)-1 if unsupported
+ */
+static inline time_t uclock_mktime(struct uclock *uclock, uint64_t systime)
+{
+    if (uclock->uclock_mktime == NULL)
+        return (time_t)-1;
+    return uclock->uclock_mktime(uclock, systime);
 }
 
 /** @This increments the reference count of a uclock.

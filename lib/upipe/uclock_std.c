@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *          Benjamin Cohen
@@ -88,6 +88,27 @@ static uint64_t uclock_std_now(struct uclock *uclock)
     return now;
 }
 
+/** @This converts a system time to Epoch time_t (seconds from
+ * 1970-01-01 00:00:00 +0000)
+ *
+ * @param uclock pointer to uclock
+ * @param systime system time in 27 MHz ticks
+ * @param number of seconds since the Epoch, or (time_t)-1 if unsupported
+ */
+static time_t uclock_std_mktime(struct uclock *uclock, uint64_t systime)
+{
+    struct uclock_std *std = uclock_std_from_uclock(uclock);
+
+    if (std->flags & UCLOCK_FLAG_REALTIME)
+        return systime / UCLOCK_FREQ;
+
+    uint64_t now = uclock_std_now(uclock);
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) < 0)
+        return (time_t)-1;
+    return tv.tv_sec + ((int64_t)systime - now) / UCLOCK_FREQ;
+}
+
 /** @This frees a uclock.
  *
  * @param urefcount pointer to urefcount
@@ -133,6 +154,7 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
     urefcount_init(uclock_std_to_urefcount(uclock_std), uclock_std_free);
     uclock_std->uclock.refcount = uclock_std_to_urefcount(uclock_std);
     uclock_std->uclock.uclock_now = uclock_std_now;
+    uclock_std->uclock.uclock_mktime = uclock_std_mktime;
 #ifdef __MACH__
     memcpy(&uclock_std->cclock, &cclock, sizeof(cclock));
 #endif

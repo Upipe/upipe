@@ -36,6 +36,7 @@
 #include <assert.h>
 
 #define UREF_POOL_DEPTH 1
+#define TIME_SAMPLE 1429627742
 
 int main(int argc, char **argv)
 {
@@ -50,6 +51,8 @@ int main(int argc, char **argv)
     assert(now_cal);
     printf("Now: %"PRIu64"\n", now);
     printf("Cal: %"PRIu64"\n", now_cal);
+    assert(uclock_mktime(uclock_cal, (uint64_t)TIME_SAMPLE * UCLOCK_FREQ) ==
+           TIME_SAMPLE);
     uclock_release(uclock);
     uclock_release(uclock_cal);
 }
