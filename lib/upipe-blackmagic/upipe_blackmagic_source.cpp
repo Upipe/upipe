@@ -952,6 +952,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_clean_uclock(upipe);
     upipe_bmd_src_clean_urefcount(upipe);
 
+    upipe_clean(upipe);
     free(upipe_bmd_src);
 }
 
