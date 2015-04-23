@@ -39,6 +39,7 @@ extern "C" {
 
 #include <upipe/ubase.h>
 
+#include <stdlib.h>
 #include <stdbool.h>
 
 /** @This initializes a ulist.
@@ -182,6 +183,30 @@ static inline struct uchain *ulist_pop(struct uchain *ulist)
     ulist->next->prev = ulist;
     uchain_init(element);
     return element;
+}
+
+/** @This sorts through a list using a comparison function.
+ *
+ * @param ulist pointer to a ulist
+ * @param compar comparison function accepting two uchains as arguments
+ */
+static inline void ulist_sort(struct uchain *ulist,
+                              int (*compar)(struct uchain **, struct uchain **))
+{
+    size_t depth = ulist_depth(ulist);
+    size_t i;
+    if (!depth)
+        return;
+
+    struct uchain *array[depth];
+    for (i = 0; i < depth; i++)
+        array[i] = ulist_pop(ulist);
+
+    qsort(array, depth, sizeof(struct uchain *),
+            (int (*)(const void *, const void *))compar);
+
+    for (i = 0; i < depth; i++)
+        ulist_add(ulist, array[i]);
 }
 
 /** @This walks through a ulist. Please note that the list may not be altered
