@@ -380,7 +380,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -451,7 +451,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -526,7 +526,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;     \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -585,7 +585,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_VOID, name);                   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -638,7 +638,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -694,7 +694,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_VOID, format, args);        \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -805,7 +805,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -875,7 +875,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -956,7 +956,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1030,7 +1030,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1101,7 +1101,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1178,7 +1178,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v, args));                \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1252,7 +1252,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
     return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;   \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1314,7 +1314,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
@@ -1453,7 +1453,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_FLOAT, name);                  \
 }                                                                           \
-/** @This compares the desc attribute in two refs.                          \
+/** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
  * @param uref2 pointer to the second uref                                  \
