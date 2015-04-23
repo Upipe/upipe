@@ -60,6 +60,8 @@ UREF_ATTR_VOID_VA(flow, hearing_impaired, "f.himp[%"PRIu8"]",
         flow for hearing impaired, uint8_t nb, nb)
 UREF_ATTR_VOID_VA(flow, visual_impaired, "f.vimp[%"PRIu8"]",
         flow for visual impaired, uint8_t nb, nb)
+UREF_ATTR_VOID_VA(flow, audio_clean, "f.clean[%"PRIu8"]",
+        clean effects audio, uint8_t nb, nb)
 UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 UREF_ATTR_VOID(flow, copyright, "f.copyright", copyrighted content)
 UREF_ATTR_VOID(flow, original, "f.original", original or copy)

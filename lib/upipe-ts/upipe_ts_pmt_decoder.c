@@ -230,6 +230,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                         }
                     }
                 }
+                break;
+
             case 0x6: /* Data stream alignment descriptor */
                 break;
 
@@ -250,6 +252,9 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 break;
                             case DESC0A_TYPE_VISUAL_IMP:
                                 UBASE_FATAL(upipe, uref_flow_set_visual_impaired(flow_def, j))
+                                break;
+                            case DESC0A_TYPE_CLEAN:
+                                UBASE_FATAL(upipe, uref_flow_set_audio_clean(flow_def, j))
                                 break;
                             default:
                                 break;
