@@ -218,6 +218,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
             case 0x2: /* Video stream descriptor */
             case 0x3: /* Audio stream descriptor */
             case 0x4: /* Hierarchy descriptor */
+                break;
+
             case 0x5: /* Registration descriptor */
                 if ((valid = desc05_validate(desc))) {
                     const uint8_t *identifier;
@@ -233,6 +235,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                 break;
 
             case 0x6: /* Data stream alignment descriptor */
+            case 0x9: /* Conditional access descriptor */
                 break;
 
             case 0xa: /* ISO 639 language descriptor */
