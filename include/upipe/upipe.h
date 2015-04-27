@@ -1145,7 +1145,7 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }
 
-/** @This declares ten functions to allocate pipes with a certain pipe
+/** @This declares twelve functions to allocate pipes with a certain pipe
  * allocator.
  *
  * Supposing the name of the allocator is upipe_foo, it declares:
@@ -1171,6 +1171,14 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
  * @end code
  * A wrapper to upipe_foo_alloc_output() which additionally releases the
  * upipe argument.
+ *
+ * @item @code
+ *  int upipe_foo_spawn_output(struct upipe *upipe,
+ *                             struct upipe_mgr *upipe_mgr,
+ *                             struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_output() which additionally releases the
+ * allocated pipe.
  *
  * @item @code
  *  struct upipe *upipe_foo_alloc_input(struct upipe *upipe,
@@ -1210,6 +1218,14 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
  * @end code
  * A wrapper to upipe_foo_alloc_output_sub() which additionally releases the
  * upipe argument.
+ *
+ * @item @code
+ *  int upipe_foo_spawn_output_sub(struct upipe *upipe,
+ *                                 struct upipe *super_pipe,
+ *                                 struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_output_sub() which additionally releases the
+ * allocated pipe.
  *
  * @item @code
  *  struct upipe *upipe_foo_alloc_input_sub(struct upipe *upipe,
@@ -1305,6 +1321,30 @@ static inline struct upipe *                                                \
                                                         uprobe  ARGS);      \
     upipe_release(upipe);                                                   \
     return output;                                                          \
+}                                                                           \
+/** @This allocates a new pipe from the given manager, sets it as the       \
+ * output of the given pipe, and releases it.                               \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe (belongs to the callee)   \
+ * @param upipe_mgr manager for the output pipe                             \
+ * @param uprobe structure used to raise events (belongs to the callee),    \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int                                                           \
+    upipe_##GROUP##_spawn_output(struct upipe *upipe,                       \
+                                 struct upipe_mgr *upipe_mgr,               \
+                                 struct uprobe *uprobe  ARGS_DECL)          \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return UBASE_ERR_ALLOC;                                             \
+    struct upipe *output = upipe_##GROUP##_alloc_output(upipe, upipe_mgr,   \
+                                                        uprobe  ARGS);      \
+    upipe_release(output);                                                  \
+    return output == NULL ? UBASE_ERR_ALLOC : UBASE_ERR_NONE;               \
 }                                                                           \
 /** @This allocates a new pipe from the given manager, and sets it as the   \
  * input of the given pipe.                                                 \
@@ -1407,7 +1447,7 @@ static inline struct upipe *                                                \
     return upipe_##GROUP##_alloc_output(upipe, sub_mgr, uprobe  ARGS);      \
 }                                                                           \
 /** @This allocates a subpipe from the given super-pipe, sets it as the     \
- * output of the given pipe, and releases it.                               \
+ * output of the given pipe, and releases the latter.                       \
  *                                                                          \
  * Please note that this function does not _use() the probe, so if you want \
  * to reuse an existing probe, you have to use it first.                    \
@@ -1430,6 +1470,30 @@ static inline struct upipe *                                                \
             super_pipe, uprobe  ARGS);                                      \
     upipe_release(upipe);                                                   \
     return output;                                                          \
+}                                                                           \
+/** @This allocates a subpipe from the given super-pipe, sets it as the     \
+ * output of the given pipe, and releases it.                               \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param super_pipe description structure of the super-pipe                \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int                                                           \
+    upipe_##GROUP##_spawn_output_sub(struct upipe *upipe,                   \
+                                     struct upipe *super_pipe,              \
+                                     struct uprobe *uprobe  ARGS_DECL)      \
+{                                                                           \
+    if (unlikely(upipe == NULL))                                            \
+        return UBASE_ERR_ALLOC;                                             \
+    struct upipe *output = upipe_##GROUP##_alloc_output_sub(upipe,          \
+            super_pipe, uprobe  ARGS);                                      \
+    upipe_release(output);                                                  \
+    return output == NULL ? UBASE_ERR_ALLOC : UBASE_ERR_NONE;               \
 }                                                                           \
 /** @This allocates a subpipe from the given super-pipe, and sets it as the \
  * input of the given pipe.                                                 \
