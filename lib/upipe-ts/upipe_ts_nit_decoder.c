@@ -20,6 +20,9 @@
 
 /** @file
  * @short Upipe module decoding the network information table of DVB streams
+ * Normative references:
+ *  - ETSI EN 300 468 V1.13.1 (2012-08) (SI in DVB systems)
+ *  - ETSI TR 101 211 V1.9.1 (2009-06) (Guidelines of SI in DVB systems)
  */
 
 #include <upipe/ubase.h>
@@ -341,6 +344,7 @@ static void upipe_ts_nitd_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
 
     bool first = true;
     uint64_t ts_number = 0;
@@ -355,16 +359,12 @@ static void upipe_ts_nitd_input(struct upipe *upipe, struct uref *uref,
             first = false;
             uint16_t nid = nit_get_nid(section);
 
-            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
             UBASE_FATAL(upipe, uref_ts_flow_set_nid(flow_def, nid))
-
-            /* The specification isn't clear on this. Are the table
-             * descriptors supposed to be the same in all sections, or are
-             * they cumulative? Assume the former. */
-            upipe_ts_nitd_parse_descs(upipe, flow_def,
-                    descs_get_desc(nit_get_descs((uint8_t *)section), 0),
-                    nit_get_desclength(section));
         }
+
+        upipe_ts_nitd_parse_descs(upipe, flow_def,
+                descs_get_desc(nit_get_descs((uint8_t *)section), 0),
+                nit_get_desclength(section));
 
         const uint8_t *ts;
         int j = 0;
