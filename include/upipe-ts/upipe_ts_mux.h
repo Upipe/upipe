@@ -93,6 +93,22 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_PMT_INTERVAL,
     /** sets the PMT interval (uint64_t) */
     UPIPE_TS_MUX_SET_PMT_INTERVAL,
+    /** returns the current NIT interval (uint64_t *) */
+    UPIPE_TS_MUX_GET_NIT_INTERVAL,
+    /** sets the NIT interval (uint64_t) */
+    UPIPE_TS_MUX_SET_NIT_INTERVAL,
+    /** returns the current SDT interval (uint64_t *) */
+    UPIPE_TS_MUX_GET_SDT_INTERVAL,
+    /** sets the SDT interval (uint64_t) */
+    UPIPE_TS_MUX_SET_SDT_INTERVAL,
+    /** returns the current EIT interval (uint64_t *) */
+    UPIPE_TS_MUX_GET_EIT_INTERVAL,
+    /** sets the EIT interval (uint64_t) */
+    UPIPE_TS_MUX_SET_EIT_INTERVAL,
+    /** returns the current TDT interval (uint64_t *) */
+    UPIPE_TS_MUX_GET_TDT_INTERVAL,
+    /** sets the TDT interval (uint64_t) */
+    UPIPE_TS_MUX_SET_TDT_INTERVAL,
     /** returns the current PCR interval (uint64_t *) */
     UPIPE_TS_MUX_GET_PCR_INTERVAL,
     /** sets the PCR interval (uint64_t) */
@@ -129,7 +145,9 @@ enum upipe_ts_mux_command {
     /** ts_psig commands begin here */
     UPIPE_TS_MUX_PSIG = UPIPE_CONTROL_LOCAL + 0x2000,
     /** ts_psig_program commands begin here */
-    UPIPE_TS_MUX_PSIG_PROGRAM = UPIPE_CONTROL_LOCAL + 0x3000
+    UPIPE_TS_MUX_PSIG_PROGRAM = UPIPE_CONTROL_LOCAL + 0x3000,
+    /** ts_sig commands begin here */
+    UPIPE_TS_MUX_SIG = UPIPE_CONTROL_LOCAL + 0x4000
 };
 
 /** @This returns the current conformance mode. It cannot return
@@ -249,6 +267,114 @@ static inline int upipe_ts_mux_set_pmt_interval(struct upipe *upipe,
                                                 uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PMT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current NIT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_nit_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_NIT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval_p);
+}
+
+/** @This sets the NIT interval. It takes effect at the end of the current
+ * period. It may also be called on a program subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_nit_interval(struct upipe *upipe,
+                                                uint64_t interval)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_NIT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current SDT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_sdt_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_SDT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval_p);
+}
+
+/** @This sets the SDT interval. It takes effect at the end of the current
+ * period. It may also be called on a program subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_sdt_interval(struct upipe *upipe,
+                                                uint64_t interval)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_SDT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current EIT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_eit_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_EIT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval_p);
+}
+
+/** @This sets the EIT interval. It takes effect at the end of the current
+ * period. It may also be called on a program subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_eit_interval(struct upipe *upipe,
+                                                uint64_t interval)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_EIT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current TDT interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_tdt_interval(struct upipe *upipe,
+                                                uint64_t *interval_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_TDT_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval_p);
+}
+
+/** @This sets the TDT interval. It takes effect at the end of the current
+ * period. It may also be called on a program subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_tdt_interval(struct upipe *upipe,
+                                                uint64_t interval)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_TDT_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
 }
 
@@ -469,6 +595,7 @@ enum upipe_ts_mux_mgr_command {
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_tstd, TS_TSTD)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psi_join, TS_PSI_JOIN)
     UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_psig, TS_PSIG)
+    UPIPE_TS_MUX_MGR_GET_SET_MGR(ts_sig, TS_SIG)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR
 };
 
@@ -506,6 +633,7 @@ UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_encaps, TS_ENCAPS)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_tstd, TS_TSTD)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psi_join, TS_PSI_JOIN)
 UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_psig, TS_PSIG)
+UPIPE_TS_MUX_MGR_GET_SET_MGR2(ts_sig, TS_SIG)
 #undef UPIPE_TS_MUX_MGR_GET_SET_MGR2
 
 #ifdef __cplusplus
