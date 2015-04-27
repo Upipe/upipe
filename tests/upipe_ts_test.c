@@ -399,6 +399,8 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_mpgaf_mgr);
     upipe_mgr_release(upipe_a52f_mgr);
     upipe_mgr_release(upipe_fsrc_mgr);
+    ubase_assert(upipe_ts_demux_set_conformance(upipe_ts,
+                                                UPIPE_TS_CONFORMANCE_ISO));
 
     /* TS mux */
     struct upipe_mgr *upipe_ts_mux_mgr = upipe_ts_mux_mgr_alloc();

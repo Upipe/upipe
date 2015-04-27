@@ -31,6 +31,11 @@
  * represents a program; it sets up the ts_split_output and ts_pmtd inner pipes
  * @item demux sink pipe which sets up the ts_split, ts_patd and optional input
  * synchronizer inner pipes
+ *
+ * Normative references:
+ *  - ISO/IEC 13818-1:2007(E) (MPEG-2 Systems)
+ *  - ETSI EN 300 468 V1.13.1 (2012-08) (SI in DVB systems)
+ *  - ETSI TR 101 211 V1.9.1 (2009-06) (Guidelines of SI in DVB systems)
  */
 
 #include <upipe/ubase.h>
@@ -2117,52 +2122,6 @@ static void upipe_ts_demux_update_tdt(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 }
 
-/** @internal @This changes the current conformance, and start necessary
- * decoders.
- *
- * @param upipe description structure of the pipe
- * @param conformance new conformance
- */
-static void upipe_ts_demux_conformance_change(struct upipe *upipe,
-        enum upipe_ts_conformance conformance)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (upipe_ts_demux->conformance == conformance)
-        return;
-
-    upipe_notice_va(upipe, "changing conformance to %s",
-                    upipe_ts_conformance_print(conformance));
-    upipe_ts_demux->conformance = conformance;
-
-    upipe_ts_demux_update_nit(upipe);
-    upipe_ts_demux_update_sdt(upipe);
-    upipe_ts_demux_update_tdt(upipe);
-}
-
-/** @internal @This tries to guess the conformance of the stream from the
- * information that is available to us.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
-{
-    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (!upipe_ts_demux->auto_conformance)
-        return;
-
-    switch (upipe_ts_demux->nit_pid) {
-        default:
-        case 0:
-            /* No NIT yet, nothing to guess */
-            upipe_ts_demux_conformance_change(upipe, UPIPE_TS_CONFORMANCE_ISO);
-            break;
-        case 16:
-            /* Mandatory PID in DVB systems */
-            upipe_ts_demux_conformance_change(upipe, UPIPE_TS_CONFORMANCE_DVB);
-            break;
-    }
-}
-
 /** @internal @This builds the output flow def.
  *
  * @param upipe description structure of the pipe
@@ -2171,7 +2130,8 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     struct uref *flow_def_pat;
-    if (!ubase_check(upipe_get_flow_def(upipe_ts_demux->patd, &flow_def_pat)) ||
+    if (upipe_ts_demux->patd == NULL ||
+        !ubase_check(upipe_get_flow_def(upipe_ts_demux->patd, &flow_def_pat)) ||
         flow_def_pat == NULL)
         return;
     uint64_t tsid = UINT64_MAX;
@@ -2221,9 +2181,62 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
         }
     }
 
+    upipe_ts_conformance_to_flow_def(flow_def, upipe_ts_demux->conformance);
+
     upipe_ts_demux_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
     upipe_ts_demux_output(upipe, NULL, NULL);
+}
+
+/** @internal @This changes the current conformance, and start necessary
+ * decoders.
+ *
+ * @param upipe description structure of the pipe
+ * @param conformance new conformance
+ */
+static void upipe_ts_demux_conformance_change(struct upipe *upipe,
+        enum upipe_ts_conformance conformance)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    if (upipe_ts_demux->conformance == conformance)
+        return;
+
+    upipe_notice_va(upipe, "changing conformance to %s",
+                    upipe_ts_conformance_print(conformance));
+    upipe_ts_demux->conformance = conformance;
+
+    upipe_ts_demux_build_flow_def(upipe);
+    upipe_ts_demux_update_nit(upipe);
+    upipe_ts_demux_update_sdt(upipe);
+    upipe_ts_demux_update_tdt(upipe);
+}
+
+/** @internal @This tries to guess the conformance of the stream from the
+ * information that is available to us.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_demux_conformance_guess(struct upipe *upipe)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    if (!upipe_ts_demux->auto_conformance)
+        return;
+
+    switch (upipe_ts_demux->nit_pid) {
+        default:
+            /* No idea what this is */
+            upipe_ts_demux_conformance_change(upipe, UPIPE_TS_CONFORMANCE_ISO);
+            break;
+        case 0:
+            /* No NIT yet, assume DVB conformance without tables */
+            upipe_ts_demux_conformance_change(upipe,
+                    UPIPE_TS_CONFORMANCE_DVB_NO_TABLES);
+            break;
+        case 16:
+            /* Mandatory PID in DVB systems - could also be ISDB */
+            upipe_ts_demux_conformance_change(upipe, UPIPE_TS_CONFORMANCE_DVB);
+            break;
+    }
 }
 
 /** @internal @This catches new_rap events coming from patd inner pipe.
@@ -2489,7 +2502,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_demux->pat_programs);
 
     ulist_init(&upipe_ts_demux->psi_pids);
-    upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_ISO;
+    upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
     upipe_ts_demux->auto_conformance = true;
     upipe_ts_demux->nit_pid = 0;
     upipe_ts_demux->flow_def_input = NULL;
@@ -2737,6 +2750,7 @@ static int _upipe_ts_demux_set_conformance(struct upipe *upipe,
             break;
         case UPIPE_TS_CONFORMANCE_ISO:
         case UPIPE_TS_CONFORMANCE_DVB:
+        case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
         case UPIPE_TS_CONFORMANCE_ATSC:
         case UPIPE_TS_CONFORMANCE_ISDB:
             upipe_ts_demux->auto_conformance = false;

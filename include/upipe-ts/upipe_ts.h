@@ -29,12 +29,16 @@
 extern "C" {
 #endif
 
+#include <upipe-ts/uref_ts_flow.h>
+
 /** @This is the conformance mode of a transport stream. */
 enum upipe_ts_conformance {
     /** automatic conformance */
     UPIPE_TS_CONFORMANCE_AUTO,
     /** no conformance, just ISO 13818-1 */
     UPIPE_TS_CONFORMANCE_ISO,
+    /** DVB conformance without SI tables (ETSI EN 300 468) */
+    UPIPE_TS_CONFORMANCE_DVB_NO_TABLES,
     /** DVB conformance (ETSI EN 300 468) */
     UPIPE_TS_CONFORMANCE_DVB,
     /** ATSC conformance */
@@ -54,11 +58,60 @@ static inline const char *
     switch (conformance) {
         case UPIPE_TS_CONFORMANCE_AUTO: return "auto";
         case UPIPE_TS_CONFORMANCE_ISO: return "ISO";
+        case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES: return "DVB (no tables)";
         case UPIPE_TS_CONFORMANCE_DVB: return "DVB";
         case UPIPE_TS_CONFORMANCE_ATSC: return "ATSC";
         case UPIPE_TS_CONFORMANCE_ISDB: return "ISDB";
         default: return "unknown";
     }
+}
+
+/** @This encodes a conformance into a flow definition packet.
+ *
+ * @param flow_def flow definition packet
+ * @param conformance coded conformance
+ * @return an error code
+ */
+static inline int upipe_ts_conformance_to_flow_def(struct uref *flow_def,
+        enum upipe_ts_conformance conformance)
+{
+    switch (conformance) {
+        default:
+            uref_ts_flow_delete_conformance(flow_def);
+            return UBASE_ERR_NONE;
+        case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
+            return uref_ts_flow_set_conformance(flow_def, "dvb_no_tables");
+        case UPIPE_TS_CONFORMANCE_DVB:
+            return uref_ts_flow_set_conformance(flow_def, "dvb");
+        case UPIPE_TS_CONFORMANCE_ATSC:
+            return uref_ts_flow_set_conformance(flow_def, "atsc");
+        case UPIPE_TS_CONFORMANCE_ISDB:
+            return uref_ts_flow_set_conformance(flow_def, "isdb");
+    }
+}
+
+/** @This encodes a conformance from a flow definition packet.
+ *
+ * @param flow_def flow definition packet
+ * @return conformance coded conformance
+ */
+static inline enum upipe_ts_conformance
+    upipe_ts_conformance_from_flow_def(struct uref *flow_def)
+{
+    const char *conformance = NULL;
+    uref_ts_flow_get_conformance(flow_def, &conformance);
+
+    if (conformance == NULL)
+        return UPIPE_TS_CONFORMANCE_ISO;
+    if (!strcmp(conformance, "dvb_no_tables"))
+        return UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
+    if (!strcmp(conformance, "dvb"))
+        return UPIPE_TS_CONFORMANCE_DVB;
+    if (!strcmp(conformance, "atsc"))
+        return UPIPE_TS_CONFORMANCE_ATSC;
+    if (!strcmp(conformance, "isdb"))
+        return UPIPE_TS_CONFORMANCE_ISDB;
+    return UPIPE_TS_CONFORMANCE_ISO;
 }
 
 #ifdef __cplusplus
