@@ -313,6 +313,23 @@ static inline void urational_simplify(struct urational *urational)
     urational->den /= gcd;
 }
 
+/** @This adds two rationals.
+ *
+ * @param urational1 pointer to rational 1
+ * @param urational2 pointer to rational 2
+ * @return a rational
+ */
+static inline struct urational urational_add(const struct urational *urational1,
+                                             const struct urational *urational2)
+{
+    struct urational sum;
+    sum.num = urational1->num * (int64_t)urational2->den +
+              urational2->num * (int64_t)urational1->den;
+    sum.den = urational1->den * (int64_t)urational2->den;
+    urational_simplify(&sum);
+    return sum;
+}
+
 /** @This checks if a prefix matches a string.
  *
  * @param string large string
