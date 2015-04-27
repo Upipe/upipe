@@ -29,6 +29,7 @@
 
 #undef NDEBUG
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -66,7 +67,7 @@
 
 static uint8_t received = 0;
 static uint64_t octetrate = 0;
-static uint64_t nb_sections = 0;
+static uint64_t section_interval = 0;
 static uint64_t latency = 0;
 
 /** definition of our uprobe */
@@ -84,7 +85,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             ubase_assert(uref_flow_match_def(flow_def, "block.mpegtspsi."));
             ubase_assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
-            ubase_assert(uref_ts_flow_get_psi_sections(flow_def, &nb_sections));
+            ubase_assert(uref_ts_flow_get_psi_section_interval(flow_def,
+                        &section_interval));
             ubase_assert(uref_clock_get_latency(flow_def, &latency));
             break;
         }
@@ -175,7 +177,7 @@ int main(int argc, char *argv[])
     struct uref *uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
     assert(uref != NULL);
     ubase_assert(uref_block_flow_set_octetrate(uref, 1));
-    ubase_assert(uref_ts_flow_set_psi_sections(uref, 1));
+    ubase_assert(uref_ts_flow_set_psi_section_interval(uref, UCLOCK_FREQ));
     ubase_assert(uref_clock_set_latency(uref, 1));
 
     struct upipe *upipe_ts_psi_join = upipe_flow_alloc(upipe_ts_psi_join_mgr,
@@ -196,11 +198,11 @@ int main(int argc, char *argv[])
     assert(upipe_ts_psi_join_input1 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input1, uref));
     assert(octetrate == 1);
-    assert(nb_sections == 1);
+    assert(section_interval == UCLOCK_FREQ);
     assert(latency == 1);
 
     octetrate = 0;
-    nb_sections = 0;
+    section_interval = 0;
     latency = 0;
     struct upipe *upipe_ts_psi_join_input2 =
         upipe_void_alloc_sub(upipe_ts_psi_join,
@@ -209,7 +211,7 @@ int main(int argc, char *argv[])
     assert(upipe_ts_psi_join_input2 != NULL);
     ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input2, uref));
     assert(octetrate == 2);
-    assert(nb_sections == 2);
+    assert(section_interval == UCLOCK_FREQ / 2);
     assert(latency == 1);
     uref_free(uref);
 

@@ -91,8 +91,8 @@ struct upipe_ts_psi_join_sub {
 
     /** octetrate of the input */
     uint64_t octetrate;
-    /** number of PSI sections of the input */
-    uint64_t nb_sections;
+    /** interval between PSI sections of the input */
+    uint64_t section_interval;
     /** latency of the input */
     uint64_t latency;
 
@@ -130,7 +130,7 @@ static struct upipe *upipe_ts_psi_join_sub_alloc(struct upipe_mgr *mgr,
     upipe_ts_psi_join_sub_init_urefcount(upipe);
     upipe_ts_psi_join_sub_init_sub(upipe);
     sub->octetrate = 0;
-    sub->nb_sections = 0;
+    sub->section_interval = 0;
     sub->latency = 0;
 
     upipe_throw_ready(upipe);
@@ -171,8 +171,8 @@ static int upipe_ts_psi_join_sub_set_flow_def(struct upipe *upipe,
     struct upipe_ts_psi_join_sub *sub = upipe_ts_psi_join_sub_from_upipe(upipe);
     sub->octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &sub->octetrate);
-    sub->nb_sections = 0;
-    uref_ts_flow_get_psi_sections(flow_def, &sub->nb_sections);
+    sub->section_interval = 0;
+    uref_ts_flow_get_psi_section_interval(flow_def, &sub->section_interval);
     sub->latency = 0;
     uref_clock_get_latency(flow_def, &sub->latency);
 
@@ -271,9 +271,9 @@ static struct upipe *upipe_ts_psi_join_alloc(struct upipe_mgr *mgr,
     upipe_ts_psi_join_init_output(upipe);
     upipe_ts_psi_join_init_sub_mgr(upipe);
     upipe_ts_psi_join_init_sub_subs(upipe);
-    upipe_ts_psi_join_store_flow_def(upipe, flow_def);
 
     upipe_throw_ready(upipe);
+    upipe_ts_psi_join_store_flow_def(upipe, flow_def);
 
     return upipe;
 }
@@ -329,14 +329,22 @@ static int upipe_ts_psi_join_build_flow_def(struct upipe *upipe)
     upipe_ts_psi_join->flow_def = NULL;
 
     uint64_t octetrate = 0;
-    uint64_t nb_sections = 0;
+    struct urational section_freq;
+    section_freq.num = 0;
+    section_freq.den = 1;
     uint64_t latency = 0;
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_psi_join->subs, uchain) {
         struct upipe_ts_psi_join_sub *sub =
             upipe_ts_psi_join_sub_from_uchain(uchain);
         octetrate += sub->octetrate;
-        nb_sections += sub->nb_sections;
+        if (sub->section_interval) {
+            struct urational freq;
+            freq.num = 1;
+            freq.den = sub->section_interval;
+            urational_simplify(&freq);
+            section_freq = urational_add(&section_freq, &freq);
+        }
         if (sub->latency > latency)
             latency = sub->latency;
     }
@@ -345,10 +353,11 @@ static int upipe_ts_psi_join_build_flow_def(struct upipe *upipe)
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
     } else
         uref_block_flow_delete_octetrate(flow_def);
-    if (nb_sections) {
-        UBASE_FATAL(upipe, uref_ts_flow_set_psi_sections(flow_def, nb_sections))
+    if (section_freq.num && section_freq.den) {
+        UBASE_FATAL(upipe, uref_ts_flow_set_psi_section_interval(flow_def,
+                    section_freq.den / section_freq.num))
     } else
-        uref_ts_flow_delete_psi_sections(flow_def);
+        uref_ts_flow_delete_psi_section_interval(flow_def);
     if (latency) {
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def, latency))
     } else

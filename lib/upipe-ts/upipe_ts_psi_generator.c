@@ -20,6 +20,10 @@
 
 /** @file
  * @short Upipe module generating PSI tables
+ * Normative references:
+ *  - ISO/IEC 13818-1:2007(E) (MPEG-2 Systems)
+ *  - ETSI EN 300 468 V1.13.1 (2012-08) (SI in DVB systems)
+ *  - ETSI TR 101 211 V1.9.1 (2009-06) (Guidelines of SI in DVB systems)
  */
 
 #include <upipe/ubase.h>
@@ -768,7 +772,8 @@ static void upipe_ts_psig_program_build_flow_def(struct upipe *upipe)
                                        "block.mpegtspsi.mpegtspmt.")) ||
         !ubase_check(uref_ts_flow_set_pid(flow_def, pid)) ||
         !ubase_check(uref_block_flow_set_size(flow_def, program->pmt_size)) ||
-        !ubase_check(uref_ts_flow_set_psi_sections(flow_def, 1)) ||
+        !ubase_check(uref_ts_flow_set_psi_section_interval(flow_def,
+                program->pmt_interval)) ||
         !ubase_check(uref_block_flow_set_octetrate(flow_def,
                 program->pmt_octetrate)) ||
         !ubase_check(uref_ts_flow_set_tb_rate(flow_def, TB_RATE_PSI)))) {
@@ -1292,8 +1297,8 @@ static void upipe_ts_psig_build_flow_def(struct upipe *upipe)
                                        "block.mpegtspsi.mpegtspat.")) ||
         !ubase_check(uref_ts_flow_set_pid(flow_def, PAT_PID)) ||
         !ubase_check(uref_block_flow_set_size(flow_def, psig->pat_size)) ||
-        !ubase_check(uref_ts_flow_set_psi_sections(flow_def,
-                psig->pat_nb_sections)) ||
+        !ubase_check(uref_ts_flow_set_psi_section_interval(flow_def,
+                psig->pat_interval / psig->pat_nb_sections)) ||
         !ubase_check(uref_block_flow_set_octetrate(flow_def,
                 psig->pat_octetrate)) ||
         !ubase_check(uref_ts_flow_set_tb_rate(flow_def, TB_RATE_PSI)))) {
@@ -1479,9 +1484,7 @@ static int upipe_ts_psig_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    uint64_t tsid;
     UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
-    UBASE_RETURN(uref_flow_get_id(flow_def, &tsid))
 
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
