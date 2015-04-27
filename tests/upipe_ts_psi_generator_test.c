@@ -44,6 +44,7 @@
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
@@ -59,11 +60,12 @@
 #include <assert.h>
 
 #include <bitstream/mpeg/psi.h>
+#include <bitstream/dvb/si.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
 #define UBUF_POOL_DEPTH 0
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 static uint64_t psi_cr = UINT32_MAX;
 static bool pat = true;
@@ -130,15 +132,18 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         if (program == 1) {
             assert(pmt_get_pcrpid(buffer) == 67);
             assert(pmt_get_desclength(buffer) == 0);
-            const uint8_t *es = pmt_get_es((uint8_t *)buffer, 0);
-            assert(es != NULL);
+            const uint8_t *es;
+            uint8_t k = 0;
             if (psi_cr != UINT32_MAX + UCLOCK_FREQ * 11) {
+                es = pmt_get_es((uint8_t *)buffer, k++);
+                assert(es != NULL);
                 assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_VIDEO_MPEG2);
                 assert(pmtn_get_pid(es) == 67);
                 assert(pmtn_get_desclength(es) == 0);
-                es = pmt_get_es((uint8_t *)buffer, 1);
-                assert(es != NULL);
             }
+
+            es = pmt_get_es((uint8_t *)buffer, k++);
+            assert(es != NULL);
             assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_AUDIO_MPEG2);
             assert(pmtn_get_pid(es) == 68);
             assert(pmtn_get_desclength(es) ==
@@ -153,7 +158,24 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             assert(desc0an_get_audiotype(descn) == DESC0A_TYPE_CLEAN);
             assert(desc0a_get_language((uint8_t *)desc, 1) == NULL);
             assert(descs_get_desc(pmtn_get_descs((uint8_t *)es), 1) == NULL);
-            assert(pmt_get_es((uint8_t *)buffer, 2) == NULL);
+
+            es = pmt_get_es((uint8_t *)buffer, k++);
+            assert(es != NULL);
+            assert(pmtn_get_streamtype(es) == PMT_STREAMTYPE_PRIVATE_PES);
+            assert(pmtn_get_pid(es) == 69);
+            assert(pmtn_get_desclength(es) ==
+                   DESC56_HEADER_SIZE + DESC56_LANGUAGE_SIZE);
+            desc = descs_get_desc(pmtn_get_descs((uint8_t *)es), 0);
+            assert(desc != NULL);
+            assert(desc56_validate(desc));
+            descn = desc56_get_language((uint8_t *)desc, 0);
+            assert(descn != NULL);
+            assert(!strncmp((const char *)desc56n_get_code(descn), "fra", 3));
+            assert(desc56n_get_teletexttype(descn) == 5);
+            assert(desc56n_get_teletextmagazine(descn) == 0);
+            assert(desc56n_get_teletextpage(descn) == 88);
+
+            assert(pmt_get_es((uint8_t *)buffer, k) == NULL);
             program = 2;
         } else {
             assert(pmt_get_pcrpid(buffer) == 8191);
@@ -285,8 +307,8 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_raw_def(uref, "block.mpeg2video.pic."));
     ubase_assert(uref_ts_flow_set_pid(uref, 67));
-    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_VIDEO_MPEG2));
     struct upipe *upipe_ts_psig_flow67 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -298,16 +320,12 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_raw_def(uref, "block.mp2.sound."));
+    ubase_assert(uref_sound_flow_set_rate(uref, 24000));
     ubase_assert(uref_ts_flow_set_pid(uref, 68));
-    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_MPEG2));
-    uint8_t desc[DESC0A_HEADER_SIZE + DESC0A_LANGUAGE_SIZE];
-    desc0a_init(desc);
-    desc_set_length(desc, DESC0A_LANGUAGE_SIZE);
-    uint8_t *descn = desc0a_get_language(desc, 0);
-    desc0an_set_code(descn, (const uint8_t *)"eng");
-    desc0an_set_audiotype(descn, DESC0A_TYPE_CLEAN);
-    assert(desc0a_validate(desc));
-    ubase_assert(uref_ts_flow_add_descriptor(uref, desc, sizeof(desc)));
+    ubase_assert(uref_flow_set_languages(uref, 1));
+    ubase_assert(uref_flow_set_language(uref, "eng", 0));
+    ubase_assert(uref_flow_set_audio_clean(uref, 0));
     struct upipe *upipe_ts_psig_flow68 =
         upipe_void_alloc_sub(upipe_ts_psig_program1,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -319,8 +337,26 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_raw_def(uref, "block.dvb_teletext.pic.sub."));
+    ubase_assert(uref_ts_flow_set_pid(uref, 69));
+    ubase_assert(uref_flow_set_languages(uref, 1));
+    ubase_assert(uref_flow_set_language(uref, "fra", 0));
+    ubase_assert(uref_ts_flow_set_telx_type(uref, 5, 0));
+    ubase_assert(uref_ts_flow_set_telx_magazine(uref, 0, 0));
+    ubase_assert(uref_ts_flow_set_telx_page(uref, 88, 0));
+    struct upipe *upipe_ts_psig_flow69 =
+        upipe_void_alloc_sub(upipe_ts_psig_program1,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "ts psig flow69"));
+    assert(upipe_ts_psig_flow69 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_ts_psig_flow69, uref));
+    uref_free(uref);
+
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(uref_flow_set_raw_def(uref, "block.aac.sound."));
     ubase_assert(uref_ts_flow_set_pid(uref, 1501));
-    ubase_assert(uref_ts_flow_set_stream_type(uref, PMT_STREAMTYPE_AUDIO_ADTS));
     struct upipe *upipe_ts_psig_flow1501 =
         upipe_void_alloc_sub(upipe_ts_psig_program2,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -359,6 +395,7 @@ int main(int argc, char *argv[])
     assert(program == 2);
 
     upipe_release(upipe_ts_psig_flow68);
+    upipe_release(upipe_ts_psig_flow69);
     upipe_release(upipe_ts_psig_program1);
     pat = true;
     program = 0;

@@ -277,6 +277,7 @@ static int catch_ts_demux(struct uprobe *uprobe, struct upipe *upipe,
                                             UPROBE_LOG_LEVEL,
                                             "ts mux program %"PRIu64, flow_id));
                 assert(program != NULL);
+                ubase_assert(upipe_ts_mux_set_version(program, 1));
                 upipe_release(program);
             }
             return UBASE_ERR_NONE;
@@ -410,6 +411,7 @@ int main(int argc, char *argv[])
     assert(upipe_ts != NULL);
     upipe_mgr_release(upipe_ts_mux_mgr);
     ubase_assert(upipe_ts_mux_set_mode(upipe_ts, UPIPE_TS_MUX_MODE_CAPPED));
+    ubase_assert(upipe_ts_mux_set_version(upipe_ts, 1));
     ubase_assert(upipe_ts_mux_set_cr_prog(upipe_ts, 0));
 
     /* file sink */

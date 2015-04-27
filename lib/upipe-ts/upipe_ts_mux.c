@@ -861,8 +861,11 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (ubase_ncmp(def, "block.") || !octetrate)
         return UBASE_ERR_INVALID;
     struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL ||
+                 !ubase_check(uref_flow_set_raw_def(flow_def_dup, def)))) {
+        uref_free(flow_def_dup);
         return UBASE_ERR_ALLOC;
+    }
 
     uint64_t pes_overhead = 0;
     enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
@@ -881,44 +884,12 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             max_delay = MAX_DELAY_TELX;
             au_irregular = false;
             pes_alignment = true;
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_PRIVATE_PES))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_PRIVATE_1));
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_header(flow_def_dup,
                                                 PES_HEADER_SIZE_TELX));
             UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup,
                                                 TB_RATE_TELX));
-
-            uint8_t languages = 0;
-            uref_flow_get_languages(flow_def, &languages);
-            uint8_t telx_descriptor[DESC56_HEADER_SIZE +
-                                    DESC56_LANGUAGE_SIZE * languages];
-            desc56_init(telx_descriptor);
-            desc_set_length(telx_descriptor,
-                            DESC56_HEADER_SIZE +
-                            DESC56_LANGUAGE_SIZE * languages -
-                            DESC_HEADER_SIZE);
-            for (uint8_t j = 0; j < languages; j++) {
-                uint8_t *language = desc56_get_language(telx_descriptor, j);
-                const char *lang = "unk";
-                uref_flow_get_language(flow_def, &lang, j);
-                if (strlen(lang) < 3)
-                    lang = "unk";
-                desc56n_set_code(language, (const uint8_t *)lang);
-                uint8_t telx_type = DESC56_TELETEXTTYPE_INFORMATION;
-                uref_ts_flow_get_telx_type(flow_def, &telx_type, j);
-                desc56n_set_teletexttype(language, telx_type);
-                uint8_t telx_magazine = 0;
-                uref_ts_flow_get_telx_magazine(flow_def, &telx_magazine, j);
-                desc56n_set_teletextmagazine(language, telx_magazine);
-                uint8_t telx_page = 0;
-                uref_ts_flow_get_telx_page(flow_def, &telx_page, j);
-                desc56n_set_teletextpage(language, telx_page);
-            }
-            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
-                    telx_descriptor,
-                    DESC56_HEADER_SIZE + DESC56_LANGUAGE_SIZE * languages));
 
             /* PES header overhead - worst case is a 30 Hz system */
             au_per_sec.num = 30;
@@ -933,43 +904,10 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             pes_alignment = true;
             buffer_size = BS_DVBSUB;
             uref_block_flow_get_buffer_size(flow_def, &buffer_size);
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_PRIVATE_PES))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_PRIVATE_1));
             UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup,
                                                 octetrate));
-
-            uint8_t languages = 0;
-            uref_flow_get_languages(flow_def, &languages);
-            uint8_t dvbsub_descriptor[DESC59_HEADER_SIZE +
-                                      DESC59_LANGUAGE_SIZE * languages];
-            desc59_init(dvbsub_descriptor);
-            desc_set_length(dvbsub_descriptor,
-                            DESC59_HEADER_SIZE +
-                            DESC59_LANGUAGE_SIZE * languages -
-                            DESC_HEADER_SIZE);
-            for (uint8_t j = 0; j < languages; j++) {
-                uint8_t *language = desc59_get_language(dvbsub_descriptor, j);
-                const char *lang = "unk";
-                uref_flow_get_language(flow_def, &lang, j);
-                if (strlen(lang) < 3)
-                    lang = "unk";
-                desc59n_set_code(language, (const uint8_t *)lang);
-                /* DVB-subtitles (normal) with no AR criticality */
-                uint8_t dvbsub_type = 0x10;
-                uref_ts_flow_get_sub_type(flow_def, &dvbsub_type, j);
-                desc59n_set_subtitlingtype(language, dvbsub_type);
-                uint8_t dvbsub_composition = 0;
-                uref_ts_flow_get_sub_composition(flow_def, &dvbsub_composition, j);
-                desc59n_set_compositionpage(language, dvbsub_composition);
-                uint8_t dvbsub_ancillary = 0;
-                uref_ts_flow_get_sub_ancillary(flow_def, &dvbsub_ancillary, j);
-                desc59n_set_ancillarypage(language, dvbsub_ancillary);
-            }
-            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
-                    dvbsub_descriptor,
-                    DESC59_HEADER_SIZE + DESC59_LANGUAGE_SIZE * languages));
 
             /* PES header overhead - worst case one subtitle by frame in a
              * 30 Hz system */
@@ -982,20 +920,12 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     } else if (strstr(def, ".pic.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_VIDEO;
         if (!ubase_ncmp(def, "block.mpeg1video.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_VIDEO_MPEG1))
             pes_alignment = true;
         } else if (!ubase_ncmp(def, "block.mpeg2video.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_VIDEO_MPEG2));
             pes_alignment = true;
         } else if (!ubase_ncmp(def, "block.mpeg4.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_VIDEO_MPEG4));
             max_delay = MAX_DELAY_14496;
         } else if (!ubase_ncmp(def, "block.h264.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_VIDEO_AVC));
             max_delay = MAX_DELAY_14496;
         }
         UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
@@ -1026,107 +956,47 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     } else if (strstr(def, ".sound.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_AUDIO;
         uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
+        buffer_size = BS_ADTS_2;
 
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
             pes_alignment = true;
-            buffer_size = BS_ADTS_2;
-            uint64_t rate;
-            if (ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) &&
-                rate >= 32000) {
-                UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                   PMT_STREAMTYPE_AUDIO_MPEG1));
-            } else {
-                UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                   PMT_STREAMTYPE_AUDIO_MPEG2));
-            }
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                  PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.aac.")) {
             uint8_t channels = 2;
             uref_sound_flow_get_channels(flow_def_dup, &channels);
-            if (channels <= 2)
-                buffer_size = BS_ADTS_2;
-            else if (channels <= 8)
-                buffer_size = BS_ADTS_8;
-            else if (channels <= 12)
-                buffer_size = BS_ADTS_12;
-            else
+            if (channels > 12)
                 buffer_size = BS_ADTS_48;
+            else if (channels > 8)
+                buffer_size = BS_ADTS_12;
+            else if (channels > 2)
+                buffer_size = BS_ADTS_8;
 
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_AUDIO_ADTS));
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.ac3.")) {
             buffer_size = BS_A52;
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                               PMT_STREAMTYPE_PRIVATE_PES));
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                  PES_STREAM_ID_PRIVATE_1));
-
-            uint8_t ac3_descriptor[DESC6A_HEADER_SIZE];
-            desc6a_init(ac3_descriptor);
-            desc_set_length(ac3_descriptor,
-                            DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
-            desc6a_clear_flags(ac3_descriptor);
-            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
-                    ac3_descriptor, DESC6A_HEADER_SIZE));
             pes_min_duration = 0;
         } else if (!ubase_ncmp(def, "block.eac3.")) {
             buffer_size = BS_A52;
-            UBASE_FATAL(upipe, uref_ts_flow_set_stream_type(flow_def_dup,
-                                                PMT_STREAMTYPE_PRIVATE_PES));
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_PRIVATE_1));
-
-            uint8_t eac3_descriptor[DESC7A_HEADER_SIZE];
-            desc7a_init(eac3_descriptor);
-            desc_set_length(eac3_descriptor,
-                            DESC7A_HEADER_SIZE - DESC_HEADER_SIZE);
-            desc7a_clear_flags(eac3_descriptor);
-            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
-                    eac3_descriptor, DESC7A_HEADER_SIZE));
             pes_min_duration = 0;
-        } else {
-            buffer_size = BS_ADTS_2;
+        } else if (!ubase_ncmp(def, "block.dts.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                PES_STREAM_ID_PRIVATE_1));
+            pes_min_duration = 0;
+        } else if (!ubase_ncmp(def, "block.opus.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
+                                                 PES_STREAM_ID_PRIVATE_1));
         }
 
         UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO));
         if (!ubase_check(uref_ts_flow_get_pes_min_duration(flow_def_dup, &pes_min_duration)))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_min_duration(flow_def_dup,
                                                            pes_min_duration));
-
-        uint8_t languages;
-        if (ubase_check(uref_flow_get_languages(flow_def, &languages)) &&
-            languages) {
-            uint8_t lang_descriptor[DESC0A_HEADER_SIZE +
-                                    DESC0A_LANGUAGE_SIZE * languages];
-            desc0a_init(lang_descriptor);
-            desc_set_length(lang_descriptor,
-                            DESC0A_HEADER_SIZE +
-                            DESC0A_LANGUAGE_SIZE * languages -
-                            DESC_HEADER_SIZE);
-            for (uint8_t j = 0; j < languages; j++) {
-                uint8_t *language = desc0a_get_language(lang_descriptor, j);
-                const char *lang = "unk";
-                uref_flow_get_language(flow_def, &lang, j);
-                if (strlen(lang) < 3)
-                    lang = "unk";
-                desc0an_set_code(language, (const uint8_t *)lang);
-                if (ubase_check(uref_flow_get_hearing_impaired(flow_def, j)))
-                    desc0an_set_audiotype(lang_descriptor + DESC0A_HEADER_SIZE,
-                                          DESC0A_TYPE_HEARING_IMP);
-                else if (ubase_check(uref_flow_get_visual_impaired(flow_def, j)))
-                    desc0an_set_audiotype(lang_descriptor + DESC0A_HEADER_SIZE,
-                                          DESC0A_TYPE_VISUAL_IMP);
-                else
-                    desc0an_set_audiotype(lang_descriptor + DESC0A_HEADER_SIZE,
-                                          DESC0A_TYPE_UNDEFINED);
-            }
-            UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def_dup,
-                    lang_descriptor,
-                    DESC0A_HEADER_SIZE + DESC0A_LANGUAGE_SIZE * languages));
-        }
 
         uint64_t rate = 48000, samples = 1152;
         uref_sound_flow_get_rate(flow_def, &rate);

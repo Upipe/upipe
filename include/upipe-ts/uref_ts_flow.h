@@ -59,7 +59,6 @@ UREF_ATTR_SMALL_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu8"]", descriptor,
         uint8_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, descriptor)
-UREF_ATTR_UNSIGNED(ts_flow, stream_type, "t.streamtype", stream type)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_type, "t.telxtype[%"PRIu8"]",
         teletext type according to EN 300 468, uint8_t nb, nb)
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_magazine, "t.telxmag[%"PRIu8"]",
