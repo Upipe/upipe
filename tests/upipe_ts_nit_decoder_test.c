@@ -92,7 +92,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             uint64_t nitd_nid;
             const char *network_name;
             uint64_t ts_number;
-            uint8_t descs;
+            uint64_t descs;
             ubase_assert(uref_ts_flow_get_nid(uref, &nitd_nid));
             ubase_assert(uref_ts_flow_get_network_name(uref, &network_name));
             ubase_assert(uref_ts_flow_get_nit_ts(uref, &ts_number));

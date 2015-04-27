@@ -57,7 +57,7 @@ extern "C" {
 static inline int uref_##group##_add_##name(struct uref *uref,              \
         const uint8_t *desc, size_t desc_len)                               \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors);                       \
     UBASE_RETURN(uref_##group##_set_##name##s(uref, descriptors + 1))       \
     UBASE_RETURN(uref_##group##_set_##name(uref, desc, desc_len,            \
@@ -71,10 +71,10 @@ static inline int uref_##group##_add_##name(struct uref *uref,              \
  */                                                                         \
 static inline size_t uref_##group##_size_##name##s(struct uref *uref)       \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors);                       \
     size_t descs_len = 0;                                                   \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
+    for (uint64_t j = 0; j < descriptors; j++) {                            \
         const uint8_t *desc;                                                \
         size_t desc_len;                                                    \
         if (ubase_check(uref_##group##_get_##name(uref, &desc, &desc_len,   \
@@ -92,9 +92,9 @@ static inline size_t uref_##group##_size_##name##s(struct uref *uref)       \
 static inline void uref_##group##_extract_##name##s(struct uref *uref,      \
                                                     uint8_t *descs_p)       \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors);                       \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
+    for (uint64_t j = 0; j < descriptors; j++) {                            \
         const uint8_t *desc;                                                \
         size_t desc_len;                                                    \
         if (ubase_check(uref_##group##_get_##name(uref, &desc, &desc_len,   \
@@ -141,7 +141,7 @@ static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
  * @return an error code                                                    \
  */                                                                         \
 static inline int uref_##group##_get_##name(struct uref *uref,              \
-        const uint8_t **p, size_t *size_p, uint64_t sub, uint8_t nb)        \
+        const uint8_t **p, size_t *size_p, uint64_t sub, uint64_t nb)       \
 {                                                                           \
     struct udict_opaque opaque;                                             \
     int err = uref_attr_get_opaque_va(uref, &opaque, UDICT_TYPE_OPAQUE,     \
@@ -161,7 +161,7 @@ static inline int uref_##group##_get_##name(struct uref *uref,              \
  * @return an error code                                                    \
  */                                                                         \
 static inline int uref_##group##_set_##name(struct uref *uref,              \
-        const uint8_t *v, size_t size, uint64_t sub, uint8_t nb)            \
+        const uint8_t *v, size_t size, uint64_t sub, uint64_t nb)           \
 {                                                                           \
     struct udict_opaque opaque;                                             \
     opaque.v = v;                                                           \
@@ -177,7 +177,7 @@ static inline int uref_##group##_set_##name(struct uref *uref,              \
  * @return an error code                                                    \
  */                                                                         \
 static inline int uref_##group##_delete_##name(struct uref *uref,           \
-        uint64_t sub, uint8_t nb)                                           \
+        uint64_t sub, uint64_t nb)                                          \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_OPAQUE, attr, sub, nb);     \
 }                                                                           \
@@ -192,7 +192,7 @@ static inline int uref_##group##_delete_##name(struct uref *uref,           \
 static inline int uref_##group##_add_##name(struct uref *uref,              \
         const uint8_t *desc, size_t desc_len, uint64_t sub)                 \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors, sub);                  \
     UBASE_RETURN(uref_##group##_set_##name##s(uref, descriptors + 1,        \
                 sub))                                                       \
@@ -209,10 +209,10 @@ static inline int uref_##group##_add_##name(struct uref *uref,              \
 static inline size_t uref_##group##_size_##name##s(struct uref *uref,       \
                                                    uint64_t sub)            \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors, sub);                  \
     size_t descs_len = 0;                                                   \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
+    for (uint64_t j = 0; j < descriptors; j++) {                            \
         const uint8_t *desc;                                                \
         size_t desc_len;                                                    \
         if (ubase_check(uref_##group##_get_##name(uref, &desc, &desc_len,   \
@@ -231,9 +231,9 @@ static inline size_t uref_##group##_size_##name##s(struct uref *uref,       \
 static inline void uref_##group##_extract_##name##s(struct uref *uref,      \
         uint8_t *descs_p, uint64_t sub)                                     \
 {                                                                           \
-    uint8_t descriptors = 0;                                                \
+    uint64_t descriptors = 0;                                               \
     uref_##group##_get_##name##s(uref, &descriptors, sub);                  \
-    for (uint8_t j = 0; j < descriptors; j++) {                             \
+    for (uint64_t j = 0; j < descriptors; j++) {                            \
         const uint8_t *desc;                                                \
         size_t desc_len;                                                    \
         if (ubase_check(uref_##group##_get_##name(uref, &desc, &desc_len,   \
