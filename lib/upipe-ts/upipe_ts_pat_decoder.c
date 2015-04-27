@@ -20,6 +20,8 @@
 
 /** @file
  * @short Upipe module decoding the program association table of TS streams
+ * Normative references:
+ *  - ISO/IEC 13818-1:2007(E) (MPEG-2 Systems)
  */
 
 #include <upipe/ubase.h>

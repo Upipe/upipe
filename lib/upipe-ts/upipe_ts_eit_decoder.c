@@ -20,6 +20,9 @@
 
 /** @file
  * @short Upipe module decoding the event description table of DVB streams
+ * Normative references:
+ *  - ETSI EN 300 468 V1.13.1 (2012-08) (SI in DVB systems)
+ *  - ETSI TR 101 211 V1.9.1 (2009-06) (Guidelines of SI in DVB systems)
  */
 
 #include <upipe/ubase.h>
