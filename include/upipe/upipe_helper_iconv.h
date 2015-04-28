@@ -54,22 +54,24 @@ extern "C" {
  * @item @code
  *  void upipe_foo_init_iconv(struct upipe_foo *s)
  * @end code
- * Initializes the acquired field.
+ * Initializes the fields.
  *
  * @item @code
- *  int upipe_foo_iconv_lost(struct upipe_foo *s)
+ *  char *upipe_foo_iconv_append_null(const char *string, size_t length)
  * @end code
- * Throws the @ref UPROBE_ICONV_LOST event, if it hasn't been thrown before.
+ * Called internally in cases where no conversion is needed.
  *
  * @item @code
- *  int upipe_foo_iconv_acquired(struct upipe_foo *s)
+ *  char *upipe_foo_iconv_wrapper(void *s, const char *encoding, char *string,
+ *                                size_t length)
  * @end code
- * Throws the @ref UPROBE_ICONV_ACQUIRED event, if it hasn't been thrown before.
+ * Wraps around iconv in biTStream calls. The returned string must be freed
+ * by the user.
  *
  * @item @code
  *  void upipe_foo_clean_iconv(struct upipe_foo *s)
  * @end code
- * Currently does nothing.
+ * Releases the iconv handle.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure 

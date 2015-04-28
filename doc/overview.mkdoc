@@ -188,6 +188,7 @@
         @item @ref #UPIPE_HELPER_UREF_STREAM @item helper for pipes reading data octet by octet, for instance to constitute packets or frames
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
         @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
+        @item @ref #UPIPE_HELPER_ICONV @item helper for pipes using the biTStream library and needing to convert strings
         @item @ref #UPIPE_HELPER_BIN_INPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the input of the bin
         @item @ref #UPIPE_HELPER_BIN_OUTPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the output of the bin
         @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
