@@ -117,6 +117,8 @@ struct upipe_fsrc {
     int fd;
     /** file path */
     char *path;
+    /** length to read */
+    uint64_t length;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -166,6 +168,7 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc_init_output_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_fsrc->fd = -1;
     upipe_fsrc->path = NULL;
+    upipe_fsrc->length = (uint64_t)-1;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -183,6 +186,20 @@ static void upipe_fsrc_worker(struct upump *upump)
     uint64_t systime = 0; /* to keep gcc quiet */
     if (upipe_fsrc->uclock != NULL)
         systime = uclock_now(upipe_fsrc->uclock);
+
+    if (!upipe_fsrc->length) {
+            upipe_notice_va(upipe, "end of range %s", upipe_fsrc->path);
+            upipe_fsrc_set_upump(upipe, NULL);
+            upipe_throw_source_end(upipe);
+            return;
+    }
+
+    if (upipe_fsrc->length != (uint64_t)-1 &&
+        upipe_fsrc->length < upipe_fsrc->output_size &&
+        unlikely(upipe_fsrc_set_output_size(upipe, upipe_fsrc->length))) {
+            upipe_err(upipe, "fail to set output size");
+            return;
+    }
 
     struct uref *uref = uref_block_alloc(upipe_fsrc->uref_mgr,
                                          upipe_fsrc->ubuf_mgr,
@@ -233,6 +250,8 @@ static void upipe_fsrc_worker(struct upump *upump)
         upipe_throw_source_end(upipe);
         return;
     }
+    if (upipe_fsrc->length != (uint64_t)-1)
+        upipe_fsrc->length -= ret;
     if (upipe_fsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_fsrc->output_size))
@@ -331,6 +350,7 @@ static int upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
     }
     free(upipe_fsrc->path);
     upipe_fsrc->path = NULL;
+    upipe_fsrc->length = (uint64_t)-1;
     upipe_fsrc_set_upump(upipe, NULL);
 
     if (unlikely(path == NULL))
@@ -387,7 +407,7 @@ static int _upipe_fsrc_get_size(struct upipe *upipe,
  * @return an error code
  */
 static int _upipe_fsrc_get_position(struct upipe *upipe,
-                                               uint64_t *position_p)
+                                    uint64_t *position_p)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     assert(position_p != NULL);
@@ -413,6 +433,58 @@ static int _upipe_fsrc_set_position(struct upipe *upipe, uint64_t position)
         return UBASE_ERR_UNHANDLED;
     return lseek(upipe_fsrc->fd, position, SEEK_SET) != (off_t)-1 ?
         UBASE_ERR_NONE : UBASE_ERR_EXTERNAL;
+}
+
+static int _upipe_fsrc_set_length(struct upipe *upipe, uint64_t length)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    if (unlikely(upipe_fsrc->fd == -1))
+        return UBASE_ERR_UNHANDLED;
+    upipe_fsrc->length = length;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_fsrc_get_length(struct upipe *upipe, uint64_t *length_p)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    if (unlikely(upipe_fsrc->fd == -1))
+        return UBASE_ERR_UNHANDLED;
+    if (length_p)
+        *length_p = upipe_fsrc->length;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_fsrc_set_range(struct upipe *upipe, uint64_t offset,
+                                 uint64_t length)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    uint64_t old_length = upipe_fsrc->length;
+    int ret;
+
+    ret = _upipe_fsrc_set_length(upipe, length);
+    if (!ubase_check(ret))
+        return ret;
+
+    ret = _upipe_fsrc_set_position(upipe, offset);
+    if (!ubase_check(ret)) {
+        upipe_fsrc->length = old_length;
+        return ret;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_fsrc_get_range(struct upipe *upipe,
+                                 uint64_t *offset_p,
+                                 uint64_t *length_p)
+{
+    int ret;
+
+    ret = _upipe_fsrc_get_position(upipe, offset_p);
+    if (!ubase_check(ret))
+        return ret;
+
+    return _upipe_fsrc_get_length(upipe, length_p);
 }
 
 /** @internal @This processes control commands on a file source pipe.
@@ -479,6 +551,19 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
             uint64_t position = va_arg(args, uint64_t);
             return _upipe_fsrc_set_position(upipe, position);
         }
+        case UPIPE_FSRC_SET_RANGE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+            uint64_t offset = va_arg(args, uint64_t);
+            uint64_t length = va_arg(args, int64_t);
+            return _upipe_fsrc_set_range(upipe, offset, length);
+        }
+        case UPIPE_FSRC_GET_RANGE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+            uint64_t *offset_p = va_arg(args, uint64_t *);
+            uint64_t *length_p = va_arg(args, uint64_t *);
+            return _upipe_fsrc_get_range(upipe, offset_p, length_p);
+        }
+
         default:
             return UBASE_ERR_NONE;
     }
