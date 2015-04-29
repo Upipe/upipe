@@ -78,6 +78,8 @@ struct upipe_rtp_prepend {
     /** list of output requests */
     struct uchain request_list;
 
+    /** sync timestamp to */
+    enum upipe_rtp_prepend_ts_sync ts_sync;
     /** rtp sequence number */
     uint16_t seqnum;
     /** timestamp clockrate */
@@ -111,9 +113,18 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     lldiv_t div;
     int size = -1;
 
-    /* timestamp (synced to program clock ref, fallback to system clock ref) */
-    if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
-        uref_clock_get_cr_sys(uref, &cr);
+    if (upipe_rtp_prepend->ts_sync == UPIPE_RTP_PREPEND_TS_SYNC_PTS) {
+        /* timestamp (synced to program pts, fallback to system pts) */
+        if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr)))) {
+            uref_clock_get_pts_sys(uref, &cr);
+        }
+    }
+    else {
+        /* timestamp (synced to program clock ref,
+         * fallback to system clock ref) */
+        if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
+            uref_clock_get_cr_sys(uref, &cr);
+        }
     }
     div = lldiv(cr, UCLOCK_FREQ);
     ts = div.quot * upipe_rtp_prepend->clockrate
@@ -225,6 +236,28 @@ static int _upipe_rtp_prepend_get_type(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int
+_upipe_rtp_prepend_get_ts_sync(struct upipe *upipe,
+                               enum upipe_rtp_prepend_ts_sync *ts_sync)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+                       upipe_rtp_prepend_from_upipe(upipe);
+    if (ts_sync)
+        *ts_sync = upipe_rtp_prepend->ts_sync;
+    return UBASE_ERR_NONE;
+}
+
+static int
+_upipe_rtp_prepend_set_ts_sync(struct upipe *upipe,
+                               enum upipe_rtp_prepend_ts_sync ts_sync)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+                       upipe_rtp_prepend_from_upipe(upipe);
+
+    upipe_rtp_prepend->ts_sync = ts_sync;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a rtp_prepend pipe.
  *
  * @param upipe description structure of the pipe
@@ -276,6 +309,19 @@ static int upipe_rtp_prepend_control(struct upipe *upipe,
             return _upipe_rtp_prepend_set_type(upipe, type, rate);
         }
 
+        case UPIPE_RTP_PREPEND_GET_TS_SYNC: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE);
+            enum upipe_rtp_prepend_ts_sync *ts_sync =
+		    va_arg(args, enum upipe_rtp_prepend_ts_sync *);
+            return _upipe_rtp_prepend_get_ts_sync(upipe, ts_sync);
+        }
+        case UPIPE_RTP_PREPEND_SET_TS_SYNC: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE);
+            enum upipe_rtp_prepend_ts_sync ts_sync =
+                va_arg(args, enum upipe_rtp_prepend_ts_sync);
+            return _upipe_rtp_prepend_set_ts_sync(upipe, ts_sync);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -303,6 +349,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend_init_urefcount(upipe);
     upipe_rtp_prepend_init_output(upipe);
 
+    upipe_rtp_prepend->ts_sync = UPIPE_RTP_PREPEND_TS_SYNC_CR;
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
 
     /* transport TS by default (FIXME) */

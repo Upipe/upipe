@@ -48,6 +48,10 @@ enum upipe_rtp_prepend_command {
     UPIPE_RTP_PREPEND_SET_TYPE,
     /** set rtp type/clockrate (uint8_t*, uint32_t*) */
     UPIPE_RTP_PREPEND_GET_TYPE,
+    /** set rtp timestamp sync (enum upipe_rtp_prepend_ts_sync) */
+    UPIPE_RTP_PREPEND_SET_TS_SYNC,
+    /** get rtp timestamp sync (enum upipe_rtp_prepend_ts_sync *) */
+    UPIPE_RTP_PREPEND_GET_TS_SYNC,
 };
 
 /** @This returns the configured RTP type.
@@ -79,6 +83,27 @@ static inline int upipe_rtp_prepend_set_type(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_RTP_PREPEND_SET_TYPE,
                          UPIPE_RTP_PREPEND_SIGNATURE, type, clockrate);
+}
+
+enum upipe_rtp_prepend_ts_sync {
+    UPIPE_RTP_PREPEND_TS_SYNC_CR,
+    UPIPE_RTP_PREPEND_TS_SYNC_PTS,
+};
+
+static inline int
+upipe_rtp_prepend_set_ts_sync(struct upipe *upipe,
+                              enum upipe_rtp_prepend_ts_sync sync)
+{
+    return upipe_control(upipe, UPIPE_RTP_PREPEND_SET_TS_SYNC,
+                         UPIPE_RTP_PREPEND_SIGNATURE, sync);
+}
+
+static inline int
+upipe_rtp_prepend_get_ts_sync(struct upipe *upipe,
+                              enum upipe_rtp_prepend_ts_sync *sync)
+{
+    return upipe_control(upipe, UPIPE_RTP_PREPEND_GET_TS_SYNC,
+                         UPIPE_RTP_PREPEND_SIGNATURE, sync);
 }
 
 /** @This returns the management structure for rtp_prepend pipes.
