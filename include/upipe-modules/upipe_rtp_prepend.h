@@ -86,6 +86,7 @@ static inline int upipe_rtp_prepend_set_type(struct upipe *upipe,
 }
 
 enum upipe_rtp_prepend_ts_sync {
+    UPIPE_RTP_PREPEND_TS_SYNC_AUTO,
     UPIPE_RTP_PREPEND_TS_SYNC_CR,
     UPIPE_RTP_PREPEND_TS_SYNC_PTS,
 };

@@ -96,6 +96,19 @@ UPIPE_HELPER_UREFCOUNT(upipe_rtp_prepend, urefcount, upipe_rtp_prepend_free)
 UPIPE_HELPER_VOID(upipe_rtp_prepend);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, output_state, request_list);
 
+static enum upipe_rtp_prepend_ts_sync
+upipe_rtp_prepend_ts_sync_auto(struct upipe *upipe)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
+
+    switch (upipe_rtp_prepend->type) {
+    case RTP_TYPE_TS:
+        return UPIPE_RTP_PREPEND_TS_SYNC_CR;
+    default:
+        return UPIPE_RTP_PREPEND_TS_SYNC_PTS;
+    }
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -113,19 +126,26 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     lldiv_t div;
     int size = -1;
 
-    if (upipe_rtp_prepend->ts_sync == UPIPE_RTP_PREPEND_TS_SYNC_PTS) {
+    enum upipe_rtp_prepend_ts_sync sync = upipe_rtp_prepend->ts_sync;
+    if (sync == UPIPE_RTP_PREPEND_TS_SYNC_AUTO)
+        sync = upipe_rtp_prepend_ts_sync_auto(upipe);
+
+    if (sync == UPIPE_RTP_PREPEND_TS_SYNC_PTS) {
         /* timestamp (synced to program pts, fallback to system pts) */
         if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr)))) {
             uref_clock_get_pts_sys(uref, &cr);
         }
     }
-    else {
+    else if (sync == UPIPE_RTP_PREPEND_TS_SYNC_CR) {
         /* timestamp (synced to program clock ref,
          * fallback to system clock ref) */
         if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
             uref_clock_get_cr_sys(uref, &cr);
         }
     }
+    else
+        upipe_warn(upipe, "invalid ts sync");
+
     div = lldiv(cr, UCLOCK_FREQ);
     ts = div.quot * upipe_rtp_prepend->clockrate
          + ((uint64_t)div.rem * upipe_rtp_prepend->clockrate)/UCLOCK_FREQ;
@@ -349,7 +369,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend_init_urefcount(upipe);
     upipe_rtp_prepend_init_output(upipe);
 
-    upipe_rtp_prepend->ts_sync = UPIPE_RTP_PREPEND_TS_SYNC_CR;
+    upipe_rtp_prepend->ts_sync = UPIPE_RTP_PREPEND_TS_SYNC_AUTO;
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
 
     /* transport TS by default (FIXME) */
