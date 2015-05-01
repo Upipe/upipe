@@ -48,7 +48,14 @@ enum upipe_fsrc_command {
      * (uint64_t *) */
     UPIPE_FSRC_GET_POSITION,
     /** asks to read at the given position (uint64_t) */
-    UPIPE_FSRC_SET_POSITION
+    UPIPE_FSRC_SET_POSITION,
+
+    /** asks to read at the given position (uint64_t),
+     * the given size (uint64_t) or to the end ((uint64_t)-1) */
+    UPIPE_FSRC_SET_RANGE,
+    /** return the reading range of the currently opened file,
+     * position (uint64_t) and length (uint64_t) */
+    UPIPE_FSRC_GET_RANGE,
 };
 
 /** @This returns the management structure for all file sources.
@@ -94,6 +101,22 @@ static inline int upipe_fsrc_set_position(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FSRC_SET_POSITION, UPIPE_FSRC_SIGNATURE,
                          position);
+}
+
+static inline int upipe_fsrc_set_range(struct upipe *upipe,
+                                       uint64_t offset,
+                                       uint64_t length)
+{
+    return upipe_control(upipe, UPIPE_FSRC_SET_RANGE, UPIPE_FSRC_SIGNATURE,
+                         offset, length);
+}
+
+static inline int upipe_fsrc_get_range(struct upipe *upipe,
+                                       uint64_t *offset_p,
+                                       uint64_t *length_p)
+{
+    return upipe_control(upipe, UPIPE_FSRC_GET_RANGE, UPIPE_FSRC_SIGNATURE,
+                         offset_p, length_p);
 }
 
 #ifdef __cplusplus
