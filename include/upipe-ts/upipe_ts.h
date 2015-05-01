@@ -90,19 +90,16 @@ static inline int upipe_ts_conformance_to_flow_def(struct uref *flow_def,
     }
 }
 
-/** @This encodes a conformance from a flow definition packet.
+/** @This encodes a conformance from a string.
  *
- * @param flow_def flow definition packet
+ * @param conformance string describing the conformance
  * @return conformance coded conformance
  */
 static inline enum upipe_ts_conformance
-    upipe_ts_conformance_from_flow_def(struct uref *flow_def)
+    upipe_ts_conformance_from_string(const char *conformance)
 {
-    const char *conformance = NULL;
-    uref_ts_flow_get_conformance(flow_def, &conformance);
-
     if (conformance == NULL)
-        return UPIPE_TS_CONFORMANCE_ISO;
+        return UPIPE_TS_CONFORMANCE_AUTO;
     if (!strcmp(conformance, "dvb_no_tables"))
         return UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
     if (!strcmp(conformance, "dvb"))
@@ -111,7 +108,20 @@ static inline enum upipe_ts_conformance
         return UPIPE_TS_CONFORMANCE_ATSC;
     if (!strcmp(conformance, "isdb"))
         return UPIPE_TS_CONFORMANCE_ISDB;
-    return UPIPE_TS_CONFORMANCE_ISO;
+    return UPIPE_TS_CONFORMANCE_AUTO;
+}
+
+/** @This encodes a conformance from a flow definition packet.
+ *
+ * @param flow_def flow definition packet
+ * @return coded conformance
+ */
+static inline enum upipe_ts_conformance
+    upipe_ts_conformance_from_flow_def(struct uref *flow_def)
+{
+    const char *conformance = NULL;
+    uref_ts_flow_get_conformance(flow_def, &conformance);
+    return upipe_ts_conformance_from_string(conformance);
 }
 
 #ifdef __cplusplus
