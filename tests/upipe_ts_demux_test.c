@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -159,6 +160,8 @@ int main(int argc, char *argv[])
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     logger = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
+    assert(logger != NULL);
+    logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr,
                                    UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);

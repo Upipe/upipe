@@ -54,6 +54,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
@@ -185,6 +186,11 @@ struct upipe_ts_demux {
     /** refcount management structure exported to the public structure */
     struct urefcount urefcount;
 
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition */
@@ -285,6 +291,9 @@ UPIPE_HELPER_OUTPUT(upipe_ts_demux, output, flow_def, output_state,
                     output_request_list)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_demux, input, input_request_list)
+UPIPE_HELPER_UREF_MGR(upipe_ts_demux, uref_mgr, uref_mgr_request, NULL,
+                      upipe_ts_demux_register_output_request,
+                      upipe_ts_demux_unregister_output_request)
 
 UBASE_FROM_TO(upipe_ts_demux, urefcount, urefcount_real, urefcount_real)
 
@@ -487,8 +496,8 @@ static struct upipe_ts_demux_psi_pid *
         return NULL;
     }
 
-    struct uref *flow_def =
-        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    upipe_ts_demux_demand_uref_mgr(upipe);
+    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.")) ||
                  !ubase_check(uref_ts_flow_set_pid(flow_def, pid)) ||
@@ -1150,7 +1159,7 @@ static int upipe_ts_demux_program_pmtd_new_flow_def(
     psi_set_current(mask);
     eit_set_sid(filter, upipe_ts_demux_program->program);
     eit_set_sid(mask, 0xffff);
-    flow_def = uref_alloc_control(demux->flow_def_input->mgr);
+    flow_def = uref_alloc_control(demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtseit.")) ||
                  !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
@@ -1431,8 +1440,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     if (upipe_ts_demux_program->pcr_split_output != NULL)
         return;
 
-    struct uref *flow_def =
-        uref_alloc_control(upipe_ts_demux_program->flow_def_input->mgr);
+    struct uref *flow_def = uref_alloc_control(demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegts.")) ||
                  !ubase_check(uref_ts_flow_set_pid(flow_def,
@@ -1942,8 +1950,7 @@ static void upipe_ts_demux_update_nit(struct upipe *upipe)
     psi_set_tableid(mask, 0xff);
     psi_set_current(filter);
     psi_set_current(mask);
-    struct uref *flow_def =
-        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtsnit.")) ||
                  !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
@@ -2017,8 +2024,7 @@ static void upipe_ts_demux_update_sdt(struct upipe *upipe)
     psi_set_tableid(mask, 0xff);
     psi_set_current(filter);
     psi_set_current(mask);
-    struct uref *flow_def =
-        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtssdt.")) ||
                  !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
@@ -2089,8 +2095,7 @@ static void upipe_ts_demux_update_tdt(struct upipe *upipe)
     psi_set_syntax(mask);
     psi_set_tableid(filter, TDT_TABLE_ID);
     psi_set_tableid(mask, 0xff);
-    struct uref *flow_def =
-        uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
+    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
     if (unlikely(flow_def == NULL ||
                  !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtstdt.")) ||
                  !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
@@ -2487,6 +2492,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                    upipe_ts_demux_free);
     upipe_ts_demux_init_bin_input(upipe);
     upipe_ts_demux_init_output(upipe);
+    upipe_ts_demux_init_uref_mgr(upipe);
     upipe_ts_demux_init_program_mgr(upipe);
     upipe_ts_demux_init_sub_programs(upipe);
 
@@ -2534,7 +2540,71 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
 
     upipe_throw_ready(upipe);
+
     upipe_ts_demux_sync_lost(upipe);
+    upipe_ts_demux_demand_uref_mgr(upipe);
+
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
+    if (unlikely(upipe_ts_demux->uref_mgr == NULL ||
+                 (upipe_ts_demux->setrap =
+                    upipe_void_alloc(ts_demux_mgr->setrap_mgr,
+                        uprobe_pfx_alloc(
+                            uprobe_use(&upipe_ts_demux->proxy_probe),
+                            UPROBE_LOG_VERBOSE, "setrap"))) == NULL ||
+                 (upipe_ts_demux->split =
+                    upipe_void_alloc_output(upipe_ts_demux->setrap,
+                        ts_demux_mgr->ts_split_mgr,
+                        uprobe_pfx_alloc(
+                            uprobe_use(&upipe_ts_demux->split_probe),
+                            UPROBE_LOG_VERBOSE, "split"))) == NULL ||
+                 (upipe_ts_demux->null =
+                    upipe_void_alloc(ts_demux_mgr->null_mgr,
+                        uprobe_pfx_alloc(
+                            uprobe_use(&upipe_ts_demux->proxy_probe),
+                            UPROBE_LOG_NOTICE, "null"))) == NULL ||
+                 (upipe_ts_demux->psi_pid_pat =
+                    upipe_ts_demux_psi_pid_use(upipe, PAT_PID)) == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return upipe;
+    }
+
+    /* set filter on table 0, current */
+    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    psi_set_syntax(filter);
+    psi_set_syntax(mask);
+    psi_set_tableid(filter, PAT_TABLE_ID);
+    psi_set_tableid(mask, 0xff);
+    psi_set_current(filter);
+    psi_set_current(mask);
+    struct uref *flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
+    if (unlikely(flow_def == NULL ||
+                 !ubase_check(uref_flow_set_def(flow_def,
+                         "block.mpegtspsi.mpegtspat.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def,
+                         filter, mask, PSI_HEADER_SIZE_SYNTAX1)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, PAT_PID)) ||
+                 (upipe_ts_demux->psi_split_output_pat =
+                      upipe_flow_alloc_sub(
+                          upipe_ts_demux->psi_pid_pat->psi_split,
+                          uprobe_pfx_alloc(
+                              uprobe_use(&upipe_ts_demux->proxy_probe),
+                              UPROBE_LOG_VERBOSE, "psi_split output pat"),
+                          flow_def)) == NULL ||
+                 (upipe_ts_demux->patd =
+                  upipe_void_alloc_output(upipe_ts_demux->psi_split_output_pat,
+                      ts_demux_mgr->ts_patd_mgr,
+                      uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->patd_probe),
+                                       UPROBE_LOG_VERBOSE, "patd"))) == NULL)) {
+        uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return upipe;
+    }
+    uref_free(flow_def);
+
     return upipe;
 }
 
@@ -2551,10 +2621,6 @@ static int upipe_ts_demux_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
-    if (upipe_ts_demux->input != NULL) {
-        UBASE_RETURN(upipe_set_flow_def(upipe_ts_demux->input, flow_def));
-    }
-
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
@@ -2562,16 +2628,11 @@ static int upipe_ts_demux_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
-
-    if (upipe_ts_demux->flow_def_input != NULL)
-        uref_free(upipe_ts_demux->flow_def_input);
+    uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux->flow_def_input = flow_def_dup;
-    if (upipe_ts_demux->input != NULL)
-        return UBASE_ERR_NONE;
 
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe->mgr);
-    bool ret;
     struct upipe *input;
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF_SYNC)) {
         if (!ubase_ncmp(def, EXPECTED_FLOW_DEF_CHECK))
@@ -2590,107 +2651,16 @@ static int upipe_ts_demux_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        ret = ubase_check(upipe_set_flow_def(input, flow_def));
-        assert(ret);
         upipe_ts_demux_store_first_inner(upipe, input);
+        upipe_set_output(input, upipe_ts_demux->setrap);
 
-        upipe_ts_demux->setrap =
-            upipe_void_alloc_output(upipe_ts_demux->input,
-                         ts_demux_mgr->setrap_mgr,
-                         uprobe_pfx_alloc(
-                             uprobe_use(&upipe_ts_demux->proxy_probe),
-                             UPROBE_LOG_VERBOSE, "setrap"));
-        if (unlikely(upipe_ts_demux->setrap == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
     } else {
-        upipe_ts_demux->setrap =
-            upipe_void_alloc(ts_demux_mgr->setrap_mgr,
-                             uprobe_pfx_alloc(
-                                 uprobe_use(&upipe_ts_demux->proxy_probe),
-                                 UPROBE_LOG_VERBOSE, "setrap"));
-        if (unlikely(upipe_ts_demux->setrap == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        ret = ubase_check(upipe_set_flow_def(upipe_ts_demux->setrap, flow_def));
-        assert(ret);
-
         upipe_ts_demux_store_first_inner(upipe,
                                          upipe_use(upipe_ts_demux->setrap));
         upipe_ts_demux_sync_acquired(upipe);
     }
 
-    upipe_ts_demux->split =
-        upipe_void_alloc_output(upipe_ts_demux->setrap,
-                   ts_demux_mgr->ts_split_mgr,
-                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->split_probe),
-                                    UPROBE_LOG_VERBOSE, "split"));
-    if (unlikely(upipe_ts_demux->split == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    upipe_ts_demux->null =
-        upipe_void_alloc(ts_demux_mgr->null_mgr,
-                         uprobe_pfx_alloc(
-                             uprobe_use(&upipe_ts_demux->proxy_probe),
-                             UPROBE_LOG_NOTICE, "null"));
-    if (unlikely(upipe_ts_demux->null == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    /* get psi_split inner pipe */
-    upipe_ts_demux->psi_pid_pat = upipe_ts_demux_psi_pid_use(upipe, PAT_PID);
-    if (unlikely(upipe_ts_demux->psi_pid_pat == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    /* set filter on table 0, current */
-    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
-    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
-    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
-    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
-    psi_set_syntax(filter);
-    psi_set_syntax(mask);
-    psi_set_tableid(filter, PAT_TABLE_ID);
-    psi_set_tableid(mask, 0xff);
-    psi_set_current(filter);
-    psi_set_current(mask);
-    flow_def = uref_alloc_control(upipe_ts_demux->flow_def_input->mgr);
-    if (unlikely(flow_def == NULL ||
-                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtspat.")) ||
-                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
-                                              PSI_HEADER_SIZE_SYNTAX1)) ||
-                 !ubase_check(uref_ts_flow_set_pid(flow_def, PAT_PID)) ||
-                 (upipe_ts_demux->psi_split_output_pat =
-                      upipe_flow_alloc_sub(
-                          upipe_ts_demux->psi_pid_pat->psi_split,
-                          uprobe_pfx_alloc(
-                              uprobe_use(&upipe_ts_demux->proxy_probe),
-                              UPROBE_LOG_VERBOSE, "psi_split output pat"),
-                          flow_def)) == NULL)) {
-        if (flow_def != NULL)
-            uref_free(flow_def);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-    uref_free(flow_def);
-
-    /* allocate PAT decoder */
-    upipe_ts_demux->patd =
-        upipe_void_alloc_output(upipe_ts_demux->psi_split_output_pat,
-                   ts_demux_mgr->ts_patd_mgr,
-                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->patd_probe),
-                                    UPROBE_LOG_VERBOSE, "patd"));
-    if (unlikely(upipe_ts_demux->patd == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-    return UBASE_ERR_NONE;
+    return upipe_set_flow_def(upipe_ts_demux->input, flow_def);
 }
 
 /** @internal @This iterates over flow definition.
@@ -2848,6 +2818,7 @@ static void upipe_ts_demux_free(struct urefcount *urefcount_real)
     uref_free(upipe_ts_demux->flow_def_input);
     upipe_ts_demux_clean_sub_programs(upipe);
     upipe_ts_demux_clean_sync(upipe);
+    upipe_ts_demux_clean_uref_mgr(upipe);
     urefcount_clean(urefcount_real);
     upipe_ts_demux_clean_urefcount(upipe);
     upipe_ts_demux_free_void(upipe);
