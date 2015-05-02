@@ -2295,7 +2295,7 @@ static int upipe_ts_demux_patd_update(struct upipe *upipe,
         struct uref *flow_def = NULL;
         uint64_t id = 0, pid = 0;
         while (ubase_check(upipe_split_iterate(patd, &flow_def)) &&
-               flow_def == NULL)
+               flow_def != NULL)
             if (ubase_check(uref_flow_get_id(flow_def, &id)) &&
                 id == program->program &&
                 ubase_check(uref_ts_flow_get_pid(flow_def, &pid)) &&
