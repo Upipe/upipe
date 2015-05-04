@@ -42,7 +42,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_sine_wave_source.c \
 	upipe_worker_linear.c \
 	upipe_worker_sink.c \
-	upipe_worker_source.c
+	upipe_worker_source.c \
+	upipe_rtp_h264.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
