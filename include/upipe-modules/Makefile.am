@@ -35,6 +35,7 @@ myinclude_HEADERS = \
 	upipe_rtp_decaps.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
+	upipe_rtcp.h \
 	upipe_blit.h \
 	upipe_audio_split.h \
 	upipe_videocont.h \
