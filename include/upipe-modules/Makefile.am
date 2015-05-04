@@ -40,4 +40,5 @@ myinclude_HEADERS = \
 	upipe_videocont.h \
 	upipe_audiocont.h \
 	upipe_blank_source.h \
-	upipe_sine_wave_source.h
+	upipe_sine_wave_source.h \
+	upipe_stream_switcher.h
