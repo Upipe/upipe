@@ -36,6 +36,7 @@ myinclude_HEADERS = \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
 	upipe_rtp_h264.h \
+	upipe_rtp_mpeg4.h \
 	upipe_blit.h \
 	upipe_audio_split.h \
 	upipe_videocont.h \
