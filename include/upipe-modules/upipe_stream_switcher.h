@@ -10,6 +10,10 @@ extern "C" {
 #define UPIPE_STREAM_SWITCHER_SIGNATURE UBASE_FOURCC('s','t','s','w')
 #define UPIPE_STREAM_SWITCHER_SUB_SIGNATURE UBASE_FOURCC('s','t','s','s')
 
+/** @This returns the management structure for all stream switchers.
+ *
+ * @return pointer to manager
+ */
 struct upipe_mgr *upipe_stream_switcher_mgr_alloc(void);
 
 #ifdef __cplusplus

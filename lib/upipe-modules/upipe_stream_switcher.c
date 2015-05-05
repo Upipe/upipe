@@ -13,28 +13,29 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_stream_switcher.h>
 
+/** @internal @This is the private context of a stream switcher pipe. */
 struct upipe_stream_switcher {
-    /* for urefcount helper */
+    /** for urefcount helper */
     struct urefcount urefcount;
 
-    /* for subpipe helper */
+    /** for subpipe helper */
     struct uchain sub_pipes;
     struct upipe_mgr sub_mgr;
 
-    /* for output helper */
+    /** for output helper */
     struct upipe *output;
     struct uref *flow_def;
     enum upipe_helper_output_state output_state;
     struct uchain request_list;
 
-    /* private */
+    /** private */
     struct upipe *selected;
     struct upipe *waiting;
     uint64_t pts_orig;
     uint64_t rebase_timestamp;
     bool rebase_timestamp_set;
 
-    /* for upipe helper */
+    /** for upipe helper */
     struct upipe upipe;
 };
 
@@ -46,35 +47,37 @@ UPIPE_HELPER_VOID(upipe_stream_switcher)
 UPIPE_HELPER_OUTPUT(upipe_stream_switcher, output, flow_def, output_state,
                     request_list)
 
+/** @internal @This is the private context for stream switcher sub pipes. */
 struct upipe_stream_switcher_input {
-    /* for urefcount helper */
+    /** for urefcount helper */
     struct urefcount urefcount;
 
-    /* for subpipe helper */
+    /** for subpipe helper */
     struct uchain uchain;
 
-    /* for input helper */
+    /** for input helper */
     struct uchain urefs;
     unsigned int nb_urefs;
     unsigned int max_urefs;
     struct uchain blockers;
 
-    /* private */
+    /** private */
     bool destroyed;
 
-    /* super pipe ref */
+    /** super pipe ref */
     struct upipe *super;
-    /* for upipe helper */
+    /** for upipe helper */
     struct upipe upipe;
 };
+
+static bool upipe_stream_switcher_input_output(struct upipe *, struct uref *,
+                                               struct upump **);
 
 UPIPE_HELPER_UPIPE(upipe_stream_switcher_input, upipe,
                    UPIPE_STREAM_SWITCHER_SUB_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_stream_switcher_input, urefcount,
                        upipe_stream_switcher_input_free)
 UPIPE_HELPER_VOID(upipe_stream_switcher_input)
-static bool upipe_stream_switcher_input_output(struct upipe *, struct uref *,
-                                               struct upump **);
 UPIPE_HELPER_INPUT(upipe_stream_switcher_input, urefs, nb_urefs, max_urefs,
                    blockers, upipe_stream_switcher_input_output)
 
@@ -231,6 +234,11 @@ static bool upipe_stream_switcher_wait(struct upipe_stream_switcher *super,
     return false;
 }
 
+/** @internal @This switch to a different sub pipe.
+ *
+ * @param super stream switcher super pipe.
+ * @param upipe new sub pipe to switch on.
+ */
 static void upipe_stream_switcher_switch(struct upipe_stream_switcher *super,
                                          struct upipe *upipe,
                                          struct uref *uref)
@@ -253,6 +261,16 @@ static void upipe_stream_switcher_switch(struct upipe_stream_switcher *super,
     upipe_throw_sink_end(upipe);
 }
 
+/** @internal @This forward, drop or switch the uref.
+ * This function only forwards the uref of the selected sub pipe.
+ * If another sub pipe is waiting, this function will switch between the
+ * selected and waiting stream at the date of the first key frame found
+ * in the waiting stream.
+ *
+ * @param upipe sub pipe asking for output.
+ * @param uref uref to output.
+ * @param upump_p
+ */
 static bool upipe_stream_switcher_input_output(struct upipe *upipe,
                                                struct uref *uref,
                                                struct upump **upump_p)
@@ -321,6 +339,12 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
     return upipe_stream_switcher_drop(uref);
 }
 
+/** @internal @This hold and block stream uref if necessary.
+ *
+ * @param upipe the sub pipe.
+ * @param uref uref to hold.
+ * @param upump_p
+ */
 static void upipe_stream_switcher_input_input(struct upipe *upipe,
                                               struct uref *uref,
                                               struct upump **upump_p)
@@ -331,6 +355,10 @@ static void upipe_stream_switcher_input_input(struct upipe *upipe,
     }
 }
 
+/** @internal @This initialize the manager for sub stream pipes.
+ *
+ * @param upipe stream switcher pipe.
+ */
 static void upipe_stream_switcher_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_stream_switcher *upipe_stream_switcher =
@@ -349,6 +377,14 @@ static void upipe_stream_switcher_init_sub_mgr(struct upipe *upipe)
  * super pipe
  */
 
+/** @internal @This allocates a stream switcher pipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
+ * @return pointer to upipe or NULL in case of allocation error
+ */
 static struct upipe *upipe_stream_switcher_alloc(struct upipe_mgr *mgr,
                                                  struct uprobe *uprobe,
                                                  uint32_t signature,
@@ -374,6 +410,10 @@ static struct upipe *upipe_stream_switcher_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @This frees a stream switcher pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
 static void upipe_stream_switcher_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
@@ -405,6 +445,14 @@ static int upipe_stream_switcher_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This processes control commands on a stream switcher pipe,
+ * and checks the status of the pipe afterwards.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
 static int upipe_stream_switcher_control(struct upipe *upipe,
                                          int command, va_list args)
 {
@@ -448,12 +496,17 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
     }
 }
 
+/** module manager static descriptor */
 struct upipe_mgr upipe_stream_switcher_mgr = {
     .signature = UPIPE_STREAM_SWITCHER_SIGNATURE,
     .upipe_alloc = upipe_stream_switcher_alloc,
     .upipe_control = upipe_stream_switcher_control,
 };
 
+/** @This returns the management structure for all stream switcher pipes.
+ *
+ * @return pointer to manager
+ */
 struct upipe_mgr *upipe_stream_switcher_mgr_alloc(void)
 {
     return &upipe_stream_switcher_mgr;
