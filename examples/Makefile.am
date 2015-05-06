@@ -40,11 +40,15 @@ noinst_PROGRAMS += upipe_duration
 endif
 
 if HAVE_AVFORMAT
+if HAVE_SWSCALE
+if HAVE_SWRESAMPLE
 noinst_PROGRAMS += transcode
 
 if HAVE_DLFCN_H
 noinst_PROGRAMS += blackmagic
 endif
+endif # swresample
+endif # swscale
 
 if HAVE_BITSTREAM
 if HAVE_WRITEV
