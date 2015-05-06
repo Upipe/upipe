@@ -893,7 +893,7 @@ static int _upipe_http_src_control(struct upipe *upipe,
         case UPIPE_HTTP_SRC_SET_RANGE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
             uint64_t offset = va_arg(args, uint64_t);
-            int64_t length = va_arg(args, uint64_t);
+            uint64_t length = va_arg(args, uint64_t);
             return _upipe_http_src_set_range(upipe, offset, length);
         }
 
