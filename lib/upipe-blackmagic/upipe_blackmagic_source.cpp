@@ -272,6 +272,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
     mode->GetFrameRate(&frameDuration, &timeScale);
     fps.num = timeScale;
     fps.den = frameDuration;
+    urational_simplify(&fps);
+    uref_pic_flow_set_fps(flow_def_video, fps);
 
     BMDFieldDominance field = mode->GetFieldDominance();
     switch (field) {
@@ -280,7 +282,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             uref_pic_delete_progressive(flow_def_video);
             upipe_bmd_src->tff = false;
             upipe_bmd_src->progressive = false;
-            fps.num /= 2;
             break;
         default:
         case bmdUnknownFieldDominance:
@@ -290,7 +291,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             uref_pic_delete_progressive(flow_def_video);
             upipe_bmd_src->tff = true;
             upipe_bmd_src->progressive = false;
-            fps.num /= 2;
             break;
         case bmdProgressiveFrame:
         case bmdProgressiveSegmentedFrame:
@@ -301,8 +301,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             break;
     }
 
-    urational_simplify(&fps);
-    uref_pic_flow_set_fps(flow_def_video, fps);
     uref_attr_set_priv(flow_def_video, UPIPE_BMD_SRC_PIC);
 
     if (unlikely(!uqueue_push(&upipe_bmd_src->uqueue, flow_def_video)))
