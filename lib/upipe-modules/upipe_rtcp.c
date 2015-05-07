@@ -17,7 +17,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
-#include "rtcp.h"
+#include <bitstream/ietf/rtcp.h>
 
 #define ATTR_PACKED __attribute__((packed))
 #define RTCP_SR_SIZE    28
