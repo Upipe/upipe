@@ -37,6 +37,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -58,13 +59,20 @@
 
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp3551.h>
+#include <bitstream/ietf/rtp6184.h>
+
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a)  (sizeof (a) / sizeof ((a)[0]))
+#endif
 
 #define EXPECTED_FLOW_DEF "block."
 #define OUT_FLOW "block.rtp."
 
-#define DEFAULT_RATE 90000 /* (90kHz, see rfc 2250 and 3551) */
+#define DEFAULT_TYPE            96 /* first dynamic rtp type */
+#define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
+#define RTP_TYPE_INVALID        UINT8_MAX
 
-/** upipe_rtp_prepend structure */ 
+/** upipe_rtp_prepend structure */
 struct upipe_rtp_prepend {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -80,12 +88,18 @@ struct upipe_rtp_prepend {
 
     /** sync timestamp to */
     enum upipe_rtp_prepend_ts_sync ts_sync;
+    /** timestamp sync is overwrite by user */
+    bool ts_sync_overwrite;
     /** rtp sequence number */
     uint16_t seqnum;
     /** timestamp clockrate */
     uint32_t clockrate;
-    /** rtp type */ 
+    /** timestamp is overwrited by user */
+    bool clockrate_overwrite;
+    /** rtp type */
     uint8_t type;
+    /** rtp type is overwrite by user */
+    bool type_overwrite;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -95,19 +109,6 @@ UPIPE_HELPER_UPIPE(upipe_rtp_prepend, upipe, UPIPE_RTP_PREPEND_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_rtp_prepend, urefcount, upipe_rtp_prepend_free)
 UPIPE_HELPER_VOID(upipe_rtp_prepend);
 UPIPE_HELPER_OUTPUT(upipe_rtp_prepend, output, flow_def, output_state, request_list);
-
-static enum upipe_rtp_prepend_ts_sync
-upipe_rtp_prepend_ts_sync_auto(struct upipe *upipe)
-{
-    struct upipe_rtp_prepend *upipe_rtp_prepend = upipe_rtp_prepend_from_upipe(upipe);
-
-    switch (upipe_rtp_prepend->type) {
-    case RTP_TYPE_TS:
-        return UPIPE_RTP_PREPEND_TS_SYNC_CR;
-    default:
-        return UPIPE_RTP_PREPEND_TS_SYNC_PTS;
-    }
-}
 
 /** @internal @This handles data.
  *
@@ -126,30 +127,30 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     lldiv_t div;
     int size = -1;
 
-    enum upipe_rtp_prepend_ts_sync sync = upipe_rtp_prepend->ts_sync;
-    if (sync == UPIPE_RTP_PREPEND_TS_SYNC_AUTO)
-        sync = upipe_rtp_prepend_ts_sync_auto(upipe);
-
-    if (sync == UPIPE_RTP_PREPEND_TS_SYNC_PTS) {
+    switch (upipe_rtp_prepend->ts_sync) {
+    case UPIPE_RTP_PREPEND_TS_SYNC_PTS:
         /* timestamp (synced to program pts, fallback to system pts) */
         if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr)))) {
             uref_clock_get_pts_sys(uref, &cr);
         }
-    }
-    else if (sync == UPIPE_RTP_PREPEND_TS_SYNC_CR) {
+        break;
+
+    case UPIPE_RTP_PREPEND_TS_SYNC_CR:
         /* timestamp (synced to program clock ref,
          * fallback to system clock ref) */
         if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
             uref_clock_get_cr_sys(uref, &cr);
         }
-    }
-    else
+        break;
+
+    default:
         upipe_warn(upipe, "invalid ts sync");
+    }
 
     div = lldiv(cr, UCLOCK_FREQ);
     ts = div.quot * upipe_rtp_prepend->clockrate
          + ((uint64_t)div.rem * upipe_rtp_prepend->clockrate)/UCLOCK_FREQ;
-    
+
     /* alloc header */
     header = ubuf_block_alloc(uref->ubuf->mgr, RTP_HEADER_SIZE);
     if (unlikely(!header)) {
@@ -182,6 +183,156 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     upipe_rtp_prepend_output(upipe, uref, upump_p);
 }
 
+/* @internal @This try to infer RTP playload type.
+ * Do nothing if RTP type was set by user
+ * (i.e. by calling upipe_rtp_prepend_set_type).
+ * Use hard coded values defined here.
+ *
+ * @param upipe description structure of the pipe
+ * @param def flow definition attribute of the input flow def
+ * @return an error code
+ */
+static int upipe_rtp_prepend_infer_type(struct upipe *upipe, const char *def)
+{
+    static const struct {
+        const char *match;
+        uint8_t type;
+    } values[] = {
+        { "mpegts", RTP_TYPE_MP2T },
+    };
+
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+
+    if (upipe_rtp_prepend->type_overwrite)
+        return UBASE_ERR_NONE;
+
+    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+        char match[strlen(values[i].match) + 2];
+        snprintf(match, sizeof (match), ".%s.", values[i].match);
+
+        if (ubase_ncmp(def, match + 1) && !strstr(def, match))
+            continue;
+
+        upipe_rtp_prepend->type = values[i].type;
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_warn_va(upipe, "cannot infer rtp type from %s", def);
+    upipe_rtp_prepend->type = DEFAULT_TYPE;
+
+    return UBASE_ERR_NONE;
+}
+
+/* @internal @This try to infer timestamp clock sync.
+ * Do nothing if clock sync was defined by user
+ * (i.e. by calling upipe_rtp_prepend_set_ts_sync).
+ * Use hard coded values defined here.
+ *
+ * @param upipe description structure of the pipe
+ * @param def flow definition attribute of the input flow def
+ * @return an error code
+ */
+static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
+{
+    static const struct {
+        const char *match;
+        enum upipe_rtp_prepend_ts_sync sync;
+    } values[] = {
+        { "h264.pic", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "aac.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "mpegts", UPIPE_RTP_PREPEND_TS_SYNC_CR },
+    };
+
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+
+    if (upipe_rtp_prepend->ts_sync_overwrite)
+        return UBASE_ERR_NONE;
+
+    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+        char match[strlen(values[i].match) + 2];
+        snprintf(match, sizeof (match), ".%s.", values[i].match);
+
+        if (ubase_ncmp(def, match + 1) && !strstr(def, match))
+            continue;
+
+        upipe_rtp_prepend->ts_sync = values[i].sync;
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_warn_va(upipe, "cannot infer timestamp sync from %s", def);
+    upipe_rtp_prepend->ts_sync = DEFAULT_TS_SYNC;
+
+    return UBASE_ERR_NONE;
+}
+
+/* @internal @This try to infer clock rate.
+ * Do nothing if clockrate was defined by user
+ * (i.e. by calling upipe_rtp_prepend_set_clock_rate).
+ * First try clock rate for RTP type defined in rfc 3551.
+ * Then use the sound flow rate if possible.
+ * Finally use hard coded value.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def input flow definition format.
+ * @return an error code
+ */
+static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
+                                             struct uref *flow_def)
+{
+    static const struct {
+        const char *match;
+        uint32_t clockrate;
+    } values[] = {
+        { "h264.pic", RTP_6184_CLOCKRATE },
+    };
+
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+
+    /* user defined? */
+    if (upipe_rtp_prepend->clockrate_overwrite)
+        return UBASE_ERR_NONE;
+
+    /* clock rate is defined in rtp 3551? */
+    uint32_t clockrate = rtp_3551_get_clock_rate(upipe_rtp_prepend->type);
+    if (clockrate) {
+        upipe_rtp_prepend->clockrate = clockrate;
+        return UBASE_ERR_NONE;
+    }
+
+    /* sound flow rate is defined? */
+    uint64_t rate;
+    int ret = uref_sound_flow_get_rate(flow_def, &rate);
+    if (ubase_check(ret)) {
+        if (rate > UINT32_MAX) {
+            upipe_err_va(upipe, "invalid rate: %"PRIu64, rate);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_rtp_prepend->clockrate = rate;
+        return UBASE_ERR_NONE;
+    }
+
+    /* clock rate is defined here? */
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+        char match[strlen(values[i].match) + 2];
+        snprintf(match, sizeof (match), ".%s.", values[i].match);
+
+        if (ubase_ncmp(def, match + 1) && !strstr(def, match))
+            continue;
+
+        upipe_rtp_prepend->clockrate = values[i].clockrate;
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_warn_va(upipe, "cannot infer rtp clock rate from %s", def);
+    upipe_rtp_prepend->clockrate = 0;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -197,6 +348,11 @@ static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
+
+    UBASE_RETURN(upipe_rtp_prepend_infer_type(upipe, def))
+    UBASE_RETURN(upipe_rtp_prepend_infer_ts_sync(upipe, def))
+    UBASE_RETURN(upipe_rtp_prepend_infer_clockrate(upipe, flow_def))
+
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
@@ -205,33 +361,23 @@ static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
         uref_free(flow_def_dup);
         return UBASE_ERR_ALLOC;
     }
+
     upipe_rtp_prepend_store_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the rtp type and clock rate.
+/** @internal @This sets the rtp payload type.
  *
  * @param upipe description structure of the pipe
- * @param type rtp payload type
- * @param clockrate rtp timestamp and clock rate (optional, set
- * according to rfc 3551 if null)
+ * @param type rtp payload type according to rfc 3551 if null)
  * @return an error code
  */
-static int _upipe_rtp_prepend_set_type(struct upipe *upipe,
-                                       uint8_t type, uint32_t clockrate)
+static int _upipe_rtp_prepend_set_type(struct upipe *upipe, uint8_t type)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend =
         upipe_rtp_prepend_from_upipe(upipe);
-    type = 0x7f & type;
-    if (!clockrate) {
-        clockrate = rtp_3551_get_clock_rate(type);
-    }
-    if (unlikely(!clockrate)) {
-        /* fallback to default rate in case of unspecified and unknown rate */
-        clockrate = DEFAULT_RATE;
-    }
-    upipe_rtp_prepend->clockrate = clockrate;
-    upipe_rtp_prepend->type = type;
+    upipe_rtp_prepend->type_overwrite = true;
+    upipe_rtp_prepend->type = type & 0x7f;
     return UBASE_ERR_NONE;
 }
 
@@ -239,20 +385,48 @@ static int _upipe_rtp_prepend_set_type(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param type_p rtp type
- * @param rate_p rtp timestamp clock rate
  * @return an error code
  */
-static int _upipe_rtp_prepend_get_type(struct upipe *upipe,
-                                       uint8_t *type, uint32_t *clockrate)
+static int _upipe_rtp_prepend_get_type(struct upipe *upipe, uint8_t *type)
 {
     struct upipe_rtp_prepend *upipe_rtp_prepend =
                        upipe_rtp_prepend_from_upipe(upipe);
-    if (type) {
+    if (type)
         *type = upipe_rtp_prepend->type;
-    }
-    if (clockrate) {
-        *clockrate = upipe_rtp_prepend->clockrate;
-    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This overwrite the RTP clock rate value.
+ *
+ * @param upipe description structure of the pipe
+ * @param clockrate rtp clock rate value
+ * @return an error code
+ */
+static int _upipe_rtp_prepend_set_clockrate(struct upipe *upipe,
+                                            uint32_t clockrate)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+
+    upipe_rtp_prepend->clockrate_overwrite = true;
+    upipe_rtp_prepend->clockrate = clockrate;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This get the current RTP clock rate value.
+ *
+ * @param upipe description structure of the pipe
+ * @param clockrate_p rtp clock rate value
+ * @return an error code
+ */
+static int _upipe_rtp_prepend_get_clockrate(struct upipe *upipe,
+                                            uint32_t *clockrate_p)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+
+    if (clockrate_p)
+        *clockrate_p = upipe_rtp_prepend->clockrate;
     return UBASE_ERR_NONE;
 }
 
@@ -274,6 +448,7 @@ _upipe_rtp_prepend_set_ts_sync(struct upipe *upipe,
     struct upipe_rtp_prepend *upipe_rtp_prepend =
                        upipe_rtp_prepend_from_upipe(upipe);
 
+    upipe_rtp_prepend->ts_sync_overwrite = true;
     upipe_rtp_prepend->ts_sync = ts_sync;
     return UBASE_ERR_NONE;
 }
@@ -315,24 +490,31 @@ static int upipe_rtp_prepend_control(struct upipe *upipe,
         }
 
         case UPIPE_RTP_PREPEND_GET_TYPE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTP_PREPEND_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE)
             uint8_t *type_p = va_arg(args, uint8_t *);
-            uint32_t *rate_p = va_arg(args, uint32_t *);
-            return _upipe_rtp_prepend_get_type(upipe, type_p, rate_p);
+            return _upipe_rtp_prepend_get_type(upipe, type_p);
         }
         case UPIPE_RTP_PREPEND_SET_TYPE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTP_PREPEND_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE)
             uint8_t type = (uint8_t) va_arg(args, int);
-            uint32_t rate = va_arg(args, uint32_t);
-            return _upipe_rtp_prepend_set_type(upipe, type, rate);
+            return _upipe_rtp_prepend_set_type(upipe, type);
+        }
+
+        case UPIPE_RTP_PREPEND_SET_CLOCKRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE)
+            uint32_t clockrate = va_arg(args, uint32_t);
+            return _upipe_rtp_prepend_set_clockrate(upipe, clockrate);
+        }
+        case UPIPE_RTP_PREPEND_GET_CLOCKRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE)
+            uint32_t *clockrate_p = va_arg(args, uint32_t *);
+            return _upipe_rtp_prepend_get_clockrate(upipe, clockrate_p);
         }
 
         case UPIPE_RTP_PREPEND_GET_TS_SYNC: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_PREPEND_SIGNATURE);
             enum upipe_rtp_prepend_ts_sync *ts_sync =
-		    va_arg(args, enum upipe_rtp_prepend_ts_sync *);
+                va_arg(args, enum upipe_rtp_prepend_ts_sync *);
             return _upipe_rtp_prepend_get_ts_sync(upipe, ts_sync);
         }
         case UPIPE_RTP_PREPEND_SET_TS_SYNC: {
@@ -369,11 +551,13 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend_init_urefcount(upipe);
     upipe_rtp_prepend_init_output(upipe);
 
-    upipe_rtp_prepend->ts_sync = UPIPE_RTP_PREPEND_TS_SYNC_AUTO;
+    upipe_rtp_prepend->ts_sync_overwrite = false;
+    upipe_rtp_prepend->ts_sync = DEFAULT_TS_SYNC;
+    upipe_rtp_prepend->clockrate_overwrite = false;
+    upipe_rtp_prepend->clockrate = 0;
+    upipe_rtp_prepend->type_overwrite = false;
+    upipe_rtp_prepend->type = RTP_TYPE_INVALID;
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
-
-    /* transport TS by default (FIXME) */
-    _upipe_rtp_prepend_set_type(upipe, RTP_TYPE_TS, 0);
 
     upipe_throw_ready(upipe);
     return upipe;
