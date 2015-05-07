@@ -19,7 +19,6 @@
 
 #include <bitstream/ietf/rtcp.h>
 
-#define ATTR_PACKED __attribute__((packed))
 #define RTCP_SR_SIZE    28
 
 struct upipe_rtcp {
