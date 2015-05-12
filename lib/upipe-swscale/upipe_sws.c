@@ -246,6 +246,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    upipe_verbose_va(upipe, "%s -> %s",
+        av_get_pix_fmt_name(upipe_sws->input_pix_fmt),
+        av_get_pix_fmt_name(upipe_sws->output_pix_fmt));
+
     /* map input */
     const uint8_t *input_planes[UPIPE_AV_MAX_PLANES + 1];
     int input_strides[UPIPE_AV_MAX_PLANES + 1];
@@ -265,6 +269,8 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         }
         input_planes[i] = data;
         input_strides[i] = stride * (1+!progressive);
+        upipe_verbose_va(upipe, "input_stride[%d] %d",
+                         i, input_strides[i]);
     }
     input_planes[i] = NULL;
     input_strides[i] = 0;
@@ -302,6 +308,8 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         }
         output_planes[i] = data;
         output_strides[i] = stride * (1+!progressive);
+        upipe_verbose_va(upipe, "output_stride[%d] %d",
+                         i, output_strides[i]);
     }
     output_planes[i] = NULL;
     output_strides[i] = 0;
@@ -318,10 +326,11 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
                         input_planes, input_strides, 0, (input_vsize+1)/2,
                         output_planes, output_strides);
 
-        for (i = 0; i < UPIPE_AV_MAX_PLANES &&
-                    upipe_sws->input_chroma_map[i] != NULL; i++) {
-            input_planes[i] += input_strides[i] >> 1;
-            output_planes[i] += output_strides[i] >> 1;
+        for (i = 0; i < UPIPE_AV_MAX_PLANES && input_planes[i]; i++) {
+                input_planes[i] += input_strides[i] >> 1;
+        }
+        for (i = 0; i < UPIPE_AV_MAX_PLANES && output_planes[i]; i++) {
+                output_planes[i] += output_strides[i] >> 1;
         }
 
         ret2 = sws_scale(upipe_sws->convert_ctx[2],
