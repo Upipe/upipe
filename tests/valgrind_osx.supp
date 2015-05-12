@@ -7,3 +7,25 @@
    fun:posix_memalign
    obj:*
 }
+
+{
+   osx_init__zone0_leak1
+   Memcheck:Leak
+   fun:malloc_zone_malloc
+   fun:malloc_set_zone_name
+   fun:init__zone0
+   fun:setenv
+   obj:*
+}
+
+{
+   osx_init__zone0_leak2
+   Memcheck:Leak
+   fun:malloc_zone_malloc
+   fun:malloc_set_zone_name
+   fun:_malloc_initialize
+   fun:malloc_create_zone
+   fun:init__zone0
+   obj:*
+}
+
