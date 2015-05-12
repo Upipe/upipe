@@ -330,6 +330,11 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_EXTERNAL;
     }
 
+    uint64_t id;
+    if (likely(ubase_check(uref_flow_get_id(flow_def, &id)))) {
+        stream->id = id;
+    }
+
     uint8_t languages;
     const char *lang;
     if (ubase_check(uref_flow_get_languages(flow_def, &languages)) &&
