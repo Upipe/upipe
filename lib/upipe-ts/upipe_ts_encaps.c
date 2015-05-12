@@ -502,6 +502,10 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
+    uref_block_set_start(uref);
+    uref_block_set_end(uref);
+    uref_attr_set_priv(uref, 0);
+
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_ts_encaps_hold_input(upipe, uref);
@@ -534,9 +538,6 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uref_block_set_start(uref);
-    uref_block_set_end(uref);
-    uref_attr_set_priv(uref, 0);
     upipe_ts_encaps_hold_input(upipe, uref);
     upipe_ts_encaps_block_input(upipe, upump_p);
     if (encaps->uref == NULL)
