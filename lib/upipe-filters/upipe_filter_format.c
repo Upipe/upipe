@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -290,19 +290,17 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     if (!ubase_ncmp(def, "pic.")) {
         /* check aspect ratio */
         struct urational sar, dar;
-        uint64_t hsize, vsize;
         if (ubase_check(uref_pic_flow_get_sar(upipe_ffmt->flow_def_wanted,
                                               &sar))) {
             uref_pic_flow_set_sar(flow_def, sar);
         } else if (ubase_check(uref_ffmt_flow_get_dar(
-                        upipe_ffmt->flow_def_wanted, &dar)) &&
-                   ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
-                   ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
-            sar.num = vsize * dar.num;
-            sar.den = hsize * dar.den;
-            urational_simplify(&sar);
-            uref_pic_flow_set_sar(flow_def, sar);
+                        upipe_ffmt->flow_def_wanted, &dar))) {
+            if (ubase_check(uref_pic_flow_get_overscan(
+                            upipe_ffmt->flow_def_wanted)))
+                uref_pic_flow_set_overscan(flow_def);
+            uref_pic_flow_infer_sar(flow_def, dar);
         }
+
         /* delete sar and dar to let sws set it */
         uref_pic_flow_delete_sar(flow_def_dup);
         uref_ffmt_flow_delete_dar(flow_def_dup);

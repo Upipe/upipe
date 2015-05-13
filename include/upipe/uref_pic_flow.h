@@ -271,6 +271,62 @@ static inline bool uref_pic_flow_compare_format(struct uref *uref1,
     return true;
 }
 
+/** @This infers the SAR from the DAR.
+ *
+ * @param uref uref control packet
+ * @param dar display aspect ratio
+ * @return an error code
+ */
+static inline int uref_pic_flow_infer_sar(struct uref *uref,
+                                          struct urational dar)
+{
+    uint64_t width, height;
+    UBASE_RETURN(uref_pic_flow_get_hsize(uref, &width))
+    UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
+    bool overscan = ubase_check(uref_pic_flow_get_overscan(uref));
+
+    struct urational sar;
+    sar.num = width * dar.num;
+    sar.den = height * dar.den;
+    if (overscan) {
+        if (width == 720 && height == 576 &&
+            dar.num == 4 && dar.den == 3) {
+            sar.num = 12;
+            sar.den = 11;
+        } else if (width == 720 && height == 480 &&
+                   dar.num == 4 && dar.den == 3) {
+            sar.num = 10;
+            sar.den = 11;
+        } else if (width == 720 && height == 576 &&
+                   dar.num == 16 && dar.den == 9) {
+            sar.num = 16;
+            sar.den = 11;
+        } else if (width == 720 && height == 480 &&
+                   dar.num == 16 && dar.den == 9) {
+            sar.num = 40;
+            sar.den = 33;
+        } else if (width == 480 && height == 576 &&
+                   dar.num == 16 && dar.den == 9) {
+            sar.num = 24;
+            sar.den = 11;
+        } else if (width == 480 && height == 480 &&
+                   dar.num == 16 && dar.den == 9) {
+            sar.num = 20;
+            sar.den = 11;
+        } else if (width == 480 && height == 576 &&
+                   dar.num == 4 && dar.den == 3) {
+            sar.num = 18;
+            sar.den = 11;
+        } else if (width == 480 && height == 480 &&
+                   dar.num == 4 && dar.den == 3) {
+            sar.num = 15;
+            sar.den = 11;
+        }
+    }
+    urational_simplify(&sar);
+    return uref_pic_flow_set_sar(uref, sar);
+}
+
 #ifdef __cplusplus
 }
 #endif
