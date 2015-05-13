@@ -70,6 +70,7 @@
 
 #define DEFAULT_TYPE            96 /* first dynamic rtp type */
 #define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
+#define DEFAULT_CLOCKRATE	90000
 #define RTP_TYPE_INVALID        UINT8_MAX
 
 /** upipe_rtp_prepend structure */
@@ -329,7 +330,7 @@ static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
     }
 
     upipe_warn_va(upipe, "cannot infer rtp clock rate from %s", def);
-    upipe_rtp_prepend->clockrate = 0;
+    upipe_rtp_prepend->clockrate = DEFAULT_CLOCKRATE;
     return UBASE_ERR_NONE;
 }
 
