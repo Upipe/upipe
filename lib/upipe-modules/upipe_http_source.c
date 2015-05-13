@@ -681,11 +681,13 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     http_parser_settings *settings = &upipe_http_src->parser_settings;
     struct http_parser_url parsed_url;
     const char *url = upipe_http_src->url;
-
     struct addrinfo *info = NULL, *res;
     struct addrinfo hints;
     char *service;
     int ret, fd = -1;
+
+    if (!url)
+        return -1;
 
     /* check url size */
     if (unlikely(strnlen(url, MAX_URL_SIZE + 1) > MAX_URL_SIZE)) {
@@ -721,7 +723,13 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     } else {
         service = strdup("http");
     }
-    upipe_http_src->path = url + parsed_url.field_data[UF_PATH].off;
+
+    if (parsed_url.field_set & (1 << UF_PATH)) {
+        upipe_http_src->path = url + parsed_url.field_data[UF_PATH].off;
+    }
+    else {
+        upipe_http_src->path = "/";
+    }
 
     /* get socket information */
     memset(&hints, 0, sizeof(struct addrinfo));
