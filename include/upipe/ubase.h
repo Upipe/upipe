@@ -184,6 +184,27 @@ enum ubase_err {
     UBASE_ERR_LOCAL = 0x8000
 };
 
+/** @This return the corresponding error string.
+ *
+ * @param err the error value
+ * @return the error string
+ */
+static inline const char *ubase_err_str(int err)
+{
+    switch (err) {
+    case UBASE_ERR_NONE: return "UBASE_ERR_NONE";
+    case UBASE_ERR_UNKNOWN: return "UBASE_ERR_UNKNOWN";
+    case UBASE_ERR_ALLOC: return "UBASE_ERR_ALLOC";
+    case UBASE_ERR_UPUMP: return "UBASE_ERR_UPUMP";
+    case UBASE_ERR_UNHANDLED: return "UBASE_ERR_UNHANDLED";
+    case UBASE_ERR_INVALID: return "UBASE_ERR_INVALID";
+    case UBASE_ERR_EXTERNAL: return "UBASE_ERR_EXTERNAL";
+    case UBASE_ERR_BUSY: return "UBASE_ERR_BUSY";
+    case UBASE_ERR_LOCAL: break;
+    }
+    return NULL;
+}
+
 /** @This returns true if no error happened in an error code.
  *
  * @param err error code

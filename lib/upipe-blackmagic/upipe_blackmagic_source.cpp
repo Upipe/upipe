@@ -1082,6 +1082,10 @@ static struct upipe_mgr upipe_bmd_src_mgr = {
     /* .refcount = */ NULL,
     /* .signature = */ UPIPE_BMD_SRC_SIGNATURE,
 
+    /* .upipe_err_str = */ NULL,
+    /* .upipe_command_str = */ NULL,
+    /* .upipe_event_str = */ NULL,
+
     /* .upipe_alloc = */ _upipe_bmd_src_alloc,
     /* .upipe_input = */ NULL,
     /* .upipe_control = */ upipe_bmd_src_control,
