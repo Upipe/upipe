@@ -35,6 +35,7 @@
 extern "C" {
 #endif
 
+#include <upipe/uref_sound_flow.h>
 #include <libavutil/samplefmt.h>
 
 /** @internal @This lists av's native audio formats and translates them to flow
