@@ -203,6 +203,7 @@ check_PROGRAMS += \
 	upipe_ts_sync_test \
 	upipe_ts_demux_test \
 	upipe_ts_encaps_test \
+	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
 	upipe_ts_tstd_test \
@@ -230,6 +231,7 @@ TESTS += \
 	upipe_ts_sync_test \
 	upipe_ts_demux_test \
 	upipe_ts_encaps_test \
+	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
 	upipe_ts_tstd_test \
@@ -324,6 +326,7 @@ upipe_ts_eit_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe
 upipe_ts_encaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_nit_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pes_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_pes_encaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_join_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_psi_merge_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
