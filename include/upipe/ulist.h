@@ -59,7 +59,7 @@ static inline void ulist_init(struct uchain *ulist)
  */
 static inline bool ulist_is_first(struct uchain *ulist, struct uchain *element)
 {
-    return element == ulist;
+    return element->prev == ulist;
 }
 
 /** @This checks if the element is the last of the list.
