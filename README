@@ -15,5 +15,5 @@ Upipe core libraries are distributed under the MIT license.
 The Upipe framers library (which contains code typically used by demuxes)
 is distributed under the LGPLv2.1+ license.
 The Upipe filters library is distributed under the LGPLv2.1+ license.
-The Upipe transport stream library is distributed under the GPLv2+ license.
-For non-GPL or non-LGPL uses, please contact info@openheadend.tv.
+The Upipe transport stream library is distributed under the LGPLv2.1+ license.
+For non-LGPL uses, please contact info@openheadend.tv.
