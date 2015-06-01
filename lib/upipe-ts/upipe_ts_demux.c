@@ -1454,7 +1454,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
         upipe_flow_alloc_sub(demux->split,
                      uprobe_pfx_alloc_va(
                          uprobe_use(&demux->proxy_probe),
-                         UPROBE_LOG_VERBOSE, "split output PCR %"PRIu64,
+                         UPROBE_LOG_VERBOSE, "split output PCR %"PRIu16,
                          upipe_ts_demux_program->pcr_pid),
                      flow_def);
     uref_free(flow_def);
@@ -1469,7 +1469,7 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
                            uprobe_pfx_alloc_va(
                              uprobe_use(&upipe_ts_demux_program->pcr_probe),
                              UPROBE_LOG_VERBOSE,
-                             "decaps PCR %"PRIu64,
+                             "decaps PCR %"PRIu16,
                              upipe_ts_demux_program->pcr_pid));
     if (unlikely(decaps == NULL ||
                  !ubase_check(upipe_set_output(decaps, demux->null)))) {
