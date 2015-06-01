@@ -33,3 +33,19 @@
    ...
 }
 
+{
+   32bits_libev
+   Memcheck:Addr1
+   fun:ev_run
+   fun:main
+}
+
+{
+   32bits_libev_pthread
+   Memcheck:Addr1
+   fun:ev_run
+   ...
+   fun:start_thread
+   fun:clone
+}
+

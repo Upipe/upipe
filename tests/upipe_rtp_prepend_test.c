@@ -143,7 +143,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
     /* timestamp */
     result = rtp_get_timestamp(buf);
-    upipe_dbg_va(upipe, "timestamp expected: %"PRIu64" \t result: %"PRIu64,
+    upipe_dbg_va(upipe, "timestamp expected: %"PRIu32" \t result: %"PRIu32,
                  expected, result);
     assert(expected == result);
 
