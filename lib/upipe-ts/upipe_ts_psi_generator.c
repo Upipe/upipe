@@ -352,7 +352,7 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
     }
 
     upipe_notice_va(upipe,
-            " * ES pid=%"PRIu16" streamtype=0x%"PRIx8" def=\"%s\"",
+            " * ES pid=%"PRIu64" streamtype=0x%"PRIx8" def=\"%s\"",
             pid, stream_type, raw_def);
 
     pmtn_init(es);
