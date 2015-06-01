@@ -53,11 +53,12 @@ static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
     if (event != UPROBE_LOG)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
-    if (uprobe_stdio->min_level > level)
+    struct ulog *ulog = va_arg(args, struct ulog *);
+
+    if (uprobe_stdio->min_level > ulog->level)
         return UBASE_ERR_NONE;
     const char *level_name;
-    switch (level) {
+    switch (ulog->level) {
         case UPROBE_LOG_VERBOSE: level_name = "verbose"; break;
         case UPROBE_LOG_DEBUG: level_name = "debug"; break;
         case UPROBE_LOG_NOTICE: level_name = "notice"; break;
@@ -66,8 +67,22 @@ static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
         default: level_name = "unknown"; break;
     }
 
-    const char *msg = va_arg(args, const char *);
-    fprintf(uprobe_stdio->stream, "%s: %s\n", level_name, msg);
+    size_t len = 0;
+    struct uchain *uchain;
+    ulist_foreach_reverse(&ulog->prefixes, uchain) {
+        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
+        len += strlen(ulog_pfx->tag) + 3;
+    }
+
+    char buffer[len + 1];
+    memset(buffer, 0, sizeof (buffer));
+    char *tmp = buffer;
+    ulist_foreach_reverse(&ulog->prefixes, uchain) {
+        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
+        tmp += sprintf(tmp, "[%s] ", ulog_pfx->tag);
+    }
+
+    fprintf(uprobe_stdio->stream, "%s: %s%s\n", level_name, buffer, ulog->msg);
     return UBASE_ERR_NONE;
 }
 

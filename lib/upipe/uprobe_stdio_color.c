@@ -110,51 +110,34 @@ static int uprobe_stdio_color_throw(struct uprobe *uprobe,
     if (event != UPROBE_LOG)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    enum uprobe_log_level log_level = va_arg(args, enum uprobe_log_level);
-    const char *msg = va_arg(args, const char *);
-
-    if (uprobe_stdio_color->min_level > log_level)
+    struct ulog *ulog = va_arg(args, struct ulog *);
+    if (uprobe_stdio_color->min_level > ulog->level)
         return UBASE_ERR_NONE;
 
-    const char *cur = msg;
     size_t len = 0;
-    while (*cur == '[') {
-        cur++;
-
-        const char *end = strstr(cur, "] ");
-        if (!end)
-            break;
-        len += strlen(TAG()) + 1 + (end - cur);
-        cur = end + 2;
+    struct uchain *uchain;
+    ulist_foreach_reverse(&ulog->prefixes, uchain) {
+        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
+        len += strlen(TAG() " ") + strlen(ulog_pfx->tag);
     }
 
-    cur = msg;
     char buffer[len + 1];
-    char *tmp = buffer;
     memset(buffer, 0, sizeof (buffer));
-    while (*cur == '[') {
-        cur++;
-
-        const char *end = strstr(cur, "] ");
-        if (!end)
-            break;
-
-        int ret = snprintf(tmp, buffer + sizeof (buffer) - tmp,
-                           TAG("%.*s") " ", (int)(end - cur), cur);
-        assert(ret >= 0 && ret < buffer + sizeof (buffer) - tmp);
-        tmp += ret;
-        cur = end + 2;
+    char *tmp = buffer;
+    ulist_foreach_reverse(&ulog->prefixes, uchain) {
+        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
+        tmp += sprintf(tmp, TAG("%s") " ", ulog_pfx->tag);
     }
 
     struct level level = level_unknown;
     for (size_t i = 0; i < ARRAY_SIZE(levels); i++)
-        if (levels[i].log_level == log_level) {
+        if (levels[i].log_level == ulog->level) {
             level = levels[i];
             break;
         }
 
-    fprintf(uprobe_stdio_color->stream, LEVEL("%s", "%*s") ": %s%s\n",
-            level.color, LEVEL_NAME_LEN, level.name, buffer, cur);
+    fprintf(uprobe_stdio_color->stream, LEVEL("%s", "%*s") ": %s %s\n",
+            level.color, LEVEL_NAME_LEN, level.name, buffer, ulog->msg);
 
     return UBASE_ERR_NONE;
 }
