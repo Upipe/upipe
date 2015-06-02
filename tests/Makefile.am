@@ -17,9 +17,11 @@ dist_check_DATA = \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
-	upipe_ts_test.ts
+	upipe_ts_test.ts \
+	uref_uri_flow_test.txt
 
 check_PROGRAMS = \
+	ulist_test \
 	uprobe_stdio_test \
 	uprobe_syslog_test \
 	uprobe_prefix_test \
@@ -62,6 +64,7 @@ check_PROGRAMS = \
 	upipe_filter_blend_test
 
 TESTS = \
+	ulist_test \
 	umem_alloc_test \
 	umem_pool_test \
 	udict_inline_test.sh \
