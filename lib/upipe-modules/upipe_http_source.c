@@ -365,7 +365,7 @@ static int upipe_http_src_message_complete(http_parser *parser)
 
     switch (parser->status_code) {
     case 302:
-        upipe_notice_va(upipe, "redirect to %s", upipe_http_src->location);
+        upipe_http_src_throw_redirect(upipe, upipe_http_src->location);
         upipe_set_uri(upipe, upipe_http_src->location);
         return 0;
     }

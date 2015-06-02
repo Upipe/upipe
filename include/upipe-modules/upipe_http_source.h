@@ -93,6 +93,23 @@ static inline int upipe_http_src_set_range(struct upipe *upipe,
                          UPIPE_HTTP_SRC_SIGNATURE, offset, length);
 }
 
+/** @This extends uprobe_event with specific events for http source. */
+enum upipe_http_src_event {
+    UPROBE_HTTP_SRC_SENTINEL = UPROBE_LOCAL,
+
+    /** request receive a redirect (302) response
+     * with the url (const char *) */
+    UPROBE_HTTP_SRC_REDIRECT,
+};
+
+static inline int upipe_http_src_throw_redirect(struct upipe *upipe,
+                                                const char *uri)
+{
+    upipe_notice_va(upipe, "throw redirect to %s", uri);
+    return upipe_throw(upipe, UPROBE_HTTP_SRC_REDIRECT,
+                       UPIPE_HTTP_SRC_SIGNATURE, uri);
+}
+
 /** @This returns the management structure for all http sources.
  *
  * @return pointer to manager
