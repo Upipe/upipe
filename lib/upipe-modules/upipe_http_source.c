@@ -392,7 +392,7 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
         systime = uclock_now(upipe_http_src->uclock);
     }
 
-    upipe_dbg_va(upipe, "received %zu bytes of body", len);
+    upipe_verbose_va(upipe, "received %zu bytes of body", len);
 
     /* alloc, map, copy, unmap */
     uref = uref_block_alloc(upipe_http_src->uref_mgr,
