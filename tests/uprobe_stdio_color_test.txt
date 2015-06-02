@@ -1,0 +1,5 @@
+[;31m  error[m:  This is an error
+[;33mwarning[m:  This is a composite warning with 66
+[;34m notice[m:  This is a notice
+[;32m  debug[m:  This is a debug
+[;31m  error[m:  This is another error with 67
